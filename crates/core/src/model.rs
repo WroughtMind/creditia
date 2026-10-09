@@ -194,14 +194,22 @@ pub struct Registry {
     by_id: HashMap<String, usize>,
 }
 
+/// 不同工具记录的同一模型名不一样：去掉 `provider/` 前缀、统一小写；Claude 系列官方 id 用横线
+/// （`anthropic/claude-fable-5.1` → `claude-fable-5-1`），GPT 系列官方名本身带点（`gpt-5.6-sol`），保留
+pub fn normalize_model(m: &str) -> String {
+    let m = m.trim().to_lowercase();
+    let m = m.rsplit('/').next().unwrap_or(&m).to_string();
+    if m.starts_with("claude") { m.replace('.', "-") } else { m }
+}
+
 impl Registry {
     pub fn agent(&mut self, harness: &str, model: Option<&str>) -> usize {
-        let model = model.filter(|m| !m.is_empty());
-        let id = match model {
+        let model = model.filter(|m| !m.is_empty()).map(normalize_model);
+        let id = match &model {
             Some(m) => format!("a:{harness}/{m}"),
             None => format!("a:{harness}"),
         };
-        self.get(id, |id| Who { id, kind: "agent", harness: Some(harness.into()), model: model.map(String::from), name: None })
+        self.get(id, |id| Who { id, kind: "agent", harness: Some(harness.into()), model: model.clone(), name: None })
     }
     pub fn human(&mut self, id: &str, name: &str) -> usize {
         self.get(id.into(), |id| Who { id, kind: "human", harness: None, model: None, name: Some(name.into()) })
@@ -305,5 +313,33 @@ impl PathMap {
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_names_unify() {
+        assert_eq!(normalize_model("anthropic/claude-fable-5.1"), "claude-fable-5-1");
+        assert_eq!(normalize_model("claude-fable-5-1"), "claude-fable-5-1");
+        assert_eq!(normalize_model("gpt-5.6-sol"), "gpt-5.6-sol");
+        assert_eq!(normalize_model("GPT-6"), "gpt-6");
+        let mut r = Registry::default();
+        let a = r.agent("claude-code", Some("anthropic/claude-fable-5.1"));
+        let b = r.agent("claude-code", Some("claude-fable-5-1"));
+        assert_eq!(a, b);
+        assert_eq!(r.list[a].id, "a:claude-code/claude-fable-5-1");
+    }
+
+    #[test]
+    fn path_map_boundaries() {
+        let pm = PathMap { known: ["src/a.rs".to_string()].into_iter().collect(), markers: vec!["/weibei/".into(), "/weibei-".into()], excludes: vec!["/weibei-launch-film/".into()] };
+        assert!(pm.in_project("/Users/x/projects/weibei"));
+        assert!(pm.in_project("/private/tmp/weibei-task1/src/a.rs"));
+        assert!(pm.in_project("github.com/org/weibei.git"));
+        assert!(!pm.in_project("/Users/x/projects/weibei-launch-film/src/a.rs"));
+        assert_eq!(pm.to_rel("C:\\Users\\x\\weibei\\src\\a.rs").as_deref(), Some("src/a.rs"));
     }
 }

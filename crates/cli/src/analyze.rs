@@ -406,7 +406,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     }
     if reviews > 0 {
         let by_model: BTreeMap<String, usize> = sessions.iter().filter(|s| s.reviewer).fold(BTreeMap::new(), |mut m, s| {
-            *m.entry(format!("{}/{}", s.src.harness(), s.model)).or_default() += 1;
+            *m.entry(format!("{}/{}", s.src.harness(), creditia_core::model::normalize_model(&s.model))).or_default() += 1;
             m
         });
         for (k, n) in by_model {
@@ -433,7 +433,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         v.sort_by_key(|s| s.start);
         v.iter()
             .map(|s| {
-                let id = if s.model.is_empty() { format!("a:{}", s.src.harness()) } else { format!("a:{}/{}", s.src.harness(), s.model) };
+                let id = if s.model.is_empty() { format!("a:{}", s.src.harness()) } else { format!("a:{}/{}", s.src.harness(), creditia_core::model::normalize_model(&s.model)) };
                 json!({ "contributor": id, "start": s.start, "end": s.end, "tokens": s.tokens, "review": s.reviewer })
             })
             .collect()
