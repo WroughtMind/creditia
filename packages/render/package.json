@@ -1,0 +1,22 @@
+{
+  "name": "@creditia/render",
+  "version": "0.1.0",
+  "description": "creditia 渲染器：credits.json → Satori → SVG → resvg PNG",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "gallery": "node src/gallery.ts ../../spike/out gallery"
+  },
+  "dependencies": {
+    "@expo-google-fonts/instrument-serif": "^0.4.1",
+    "@expo-google-fonts/inter": "^0.4.2",
+    "@expo-google-fonts/jetbrains-mono": "^0.4.1",
+    "@expo-google-fonts/newsreader": "^0.4.1",
+    "@expo-google-fonts/noto-sans-sc": "^0.4.4",
+    "@expo-google-fonts/noto-serif-sc": "^0.4.4",
+    "@resvg/resvg-js": "^2.6.2",
+    "satori": "^0.38.2"
+  }
+}

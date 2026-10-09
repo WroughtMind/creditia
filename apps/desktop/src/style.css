@@ -1,0 +1,53 @@
+/* 界面几乎无色：黑白灰加一个强调色；成片的颜色只来自贡献方。 */
+:root {
+  --bg: #f4f3f0;
+  --panel: #ffffff;
+  --ink: #161514;
+  --soft: #76726b;
+  --line: rgba(22, 21, 20, 0.08);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0d0c;
+    --panel: #171716;
+    --ink: #f0eee9;
+    --soft: #8f8b84;
+    --line: rgba(240, 238, 233, 0.08);
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.6 Inter, -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
+}
+#side { border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+#side header { padding: 22px 20px 10px; display: flex; flex-direction: column; gap: 2px; }
+#side header b { font-size: 16px; letter-spacing: 0.01em; }
+#side header span { color: var(--soft); font-size: 12px; }
+#projects { list-style: none; margin: 8px 0 0; padding: 0 10px; overflow: auto; flex: 1; }
+#projects li { padding: 10px 12px; border-radius: 10px; cursor: default; display: flex; flex-direction: column; gap: 2px; }
+#projects li:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+#projects li.on { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+#projects li b { font-weight: 600; font-size: 13.5px; }
+#projects li span { color: var(--soft); font-size: 12px; }
+#lib { padding: 12px 20px; border-top: 1px solid var(--line); color: var(--soft); font-size: 12px; }
+#main { padding: 28px 36px; overflow: auto; }
+#empty { color: var(--soft); margin-top: 40vh; text-align: center; }
+#bar { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+#bar #name { font-size: 18px; font-weight: 600; }
+.grow { flex: 1; }
+#bar select, #bar button, #bar label {
+  font: inherit; font-size: 12.5px; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+}
+#bar button { cursor: pointer; }
+#bar button:hover { border-color: color-mix(in srgb, var(--ink) 30%, transparent); }
+#bar label { display: flex; gap: 6px; align-items: center; padding: 6px 10px; }
+#card-wrap { max-width: 420px; }
+#meta { color: var(--soft); font-size: 12.5px; margin-top: 16px; }

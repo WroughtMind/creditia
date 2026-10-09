@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://creditia.dev/schema/v0.json",
+  "title": "creditia credits.json v0",
+  "description": "一个作品的 AI 协作档案：谁（人、agent、模型）写了多少，证据等级如何。只含聚合数字、commit hash、PR 标题，不含代码和 prompt。",
+  "type": "object",
+  "required": ["schemaVersion", "project", "generatedAt", "contributors", "totals", "breakdown", "units"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "integer", "const": 0 },
+    "project": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "repos": { "type": "array", "items": { "type": "string" }, "description": "远程地址，不带协议和 .git" },
+        "range": { "$ref": "#/$defs/range" }
+      }
+    },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "level": { "type": "string", "enum": ["strict", "standard", "loose"], "description": "用户选择的口径" },
+    "head": { "type": "string", "description": "分析时的 HEAD" },
+    "versions": { "type": "array", "items": { "type": "object", "required": ["tag", "date"], "properties": { "tag": { "type": "string" }, "date": { "$ref": "#/$defs/date" } } } },
+    "coverage": {
+      "type": "array",
+      "description": "各时段的证据覆盖情况",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "best"],
+        "properties": {
+          "name": { "type": "string" },
+          "from": { "$ref": "#/$defs/date" },
+          "to": { "$ref": "#/$defs/date" },
+          "best": { "$ref": "#/$defs/evidence" },
+          "verifiedShare": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+    "directors": { "type": "array", "items": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "string" }, "name": { "type": "string" } } } },
+    "contributors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "roles"],
+        "properties": {
+          "id": { "type": "string", "description": "a:<harness>/<model>、a:<harness>、h:<人>、unattributed" },
+          "kind": { "type": "string", "enum": ["agent", "human", "unattributed"] },
+          "harness": { "type": "string", "description": "codex、cursor、claude-code、grok、kimi、gemini、github-actions…" },
+          "model": { "type": ["string", "null"] },
+          "family": { "type": ["string", "null"] },
+          "where": { "type": "string", "enum": ["local", "cloud"] },
+          "name": { "type": "string" },
+          "roles": { "type": "array", "items": { "type": "string", "enum": ["director", "author", "reviewer", "planner"] } },
+          "reviews": { "type": "integer" }
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "properties": {
+        "commits": { "type": "integer" },
+        "units": { "type": "integer" },
+        "linesAdded": { "type": "integer" },
+        "linesSurviving": { "type": "integer" },
+        "linesWritten": { "type": "integer", "description": "日志里 agent 写出的行（去重）" },
+        "tokens": { "type": "integer" },
+        "sessions": { "type": "integer" },
+        "days": { "type": "integer", "description": "有提交的天数" },
+        "binaryFiles": { "type": "integer" }
+      }
+    },
+    "breakdown": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["contributor", "linesAdded"],
+        "properties": {
+          "contributor": { "type": "string" },
+          "linesAdded": { "type": "integer" },
+          "linesSurviving": { "type": "integer" },
+          "byEvidence": { "type": "object", "additionalProperties": { "type": "object", "properties": { "linesAdded": { "type": "integer" }, "units": { "type": "integer" } } } },
+          "byArea": { "type": "object", "additionalProperties": { "type": "integer" } },
+          "byVersion": { "type": "object", "additionalProperties": { "type": "integer" } }
+        }
+      }
+    },
+    "human": {
+      "type": "object",
+      "description": "人的参与，只记数字",
+      "properties": {
+        "prompts": { "type": "integer" },
+        "plans": { "type": "integer" },
+        "reviews": { "type": "integer" },
+        "tabAssistedLines": { "type": "integer" },
+        "agentReviews": { "type": "integer" }
+      }
+    },
+    "timeline": { "type": "array", "items": { "type": "object", "required": ["week", "byContributor"], "properties": { "week": { "type": "string", "pattern": "^\\d{4}-W\\d{2}$" }, "byContributor": { "type": "object", "additionalProperties": { "type": "integer" } } } } },
+    "days": { "type": "array", "items": { "type": "object", "required": ["date", "by"], "properties": { "date": { "$ref": "#/$defs/date" }, "by": { "type": "object", "additionalProperties": { "type": "integer" } } } } },
+    "clock": { "type": "array", "minItems": 7, "maxItems": 7, "items": { "type": "array", "minItems": 24, "maxItems": 24, "items": { "type": "integer" } }, "description": "星期（周一起）× 小时的提交数" },
+    "files": { "type": "array", "items": { "type": "object", "required": ["lines", "by"], "properties": { "path": { "type": "string" }, "lines": { "type": "integer" }, "by": { "type": "object", "additionalProperties": { "type": "integer" } } } } },
+    "sessions": { "type": "array", "items": { "type": "object", "required": ["contributor", "start", "end"], "properties": { "contributor": { "type": "string" }, "start": { "type": "integer" }, "end": { "type": "integer" }, "tokens": { "type": "integer" }, "review": { "type": "boolean" } } } },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "date", "commits", "shares"],
+        "properties": {
+          "id": { "type": "string", "description": "pr:<N>、merge:<hash>、c:<hash>" },
+          "title": { "type": "string" },
+          "date": { "$ref": "#/$defs/date" },
+          "version": { "type": ["string", "null"] },
+          "commits": { "type": "array", "items": { "type": "string" } },
+          "areas": { "type": "array", "items": { "type": "string" } },
+          "lines": { "type": "integer" },
+          "shares": { "type": "array", "items": { "type": "object", "required": ["contributor", "share", "evidence"], "properties": { "contributor": { "type": "string" }, "share": { "type": "number" }, "evidence": { "$ref": "#/$defs/evidence" } } } }
+        }
+      }
+    },
+    "conflictLines": { "type": "integer" }
+  },
+  "$defs": {
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "range": { "type": "object", "properties": { "from": { "$ref": "#/$defs/date" }, "to": { "$ref": "#/$defs/date" } } },
+    "evidence": { "type": "string", "enum": ["verified", "manual", "declared", "inferred", "unattributed"] }
+  }
+}

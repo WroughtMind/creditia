@@ -1,0 +1,16 @@
+{
+  "name": "@creditia/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5183",
+    "build": "vite build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "vite": "^8.3.0",
+    "typescript": "^5.6.0",
+    "@tauri-apps/cli": "^2.12.1"
+  }
+}

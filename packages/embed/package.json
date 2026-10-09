@@ -1,0 +1,15 @@
+{
+  "name": "@creditia/embed",
+  "version": "0.1.0",
+  "description": "<creditia-card>：一行代码把 credits 嵌进网页",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/creditia-card.js",
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "esbuild src/creditia-card.ts --bundle --format=esm --minify --outfile=dist/creditia-card.js && mkdir -p dist/logos && cp ../render/assets/logos/*.svg dist/logos/"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

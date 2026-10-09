@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh">
+<meta charset="utf-8">
+<title>creditia</title>
+<link rel="stylesheet" href="/src/style.css">
+<body>
+  <aside id="side">
+    <header>
+      <b>creditia</b>
+      <span id="hint">本机检测到的项目</span>
+    </header>
+    <ul id="projects"></ul>
+    <footer id="lib"></footer>
+  </aside>
+  <main id="main">
+    <div id="empty">选一个项目看它的 credits</div>
+    <div id="view" hidden>
+      <div id="bar">
+        <span id="name"></span>
+        <div class="grow"></div>
+        <select id="theme"></select>
+        <button id="copy-embed">复制嵌入代码</button>
+        <button id="export-hint">导出</button>
+        <label id="director-wrap"><input type="checkbox" id="director"> 显示主导者</label>
+      </div>
+      <div id="card-wrap"></div>
+      <p id="meta"></p>
+    </div>
+  </main>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

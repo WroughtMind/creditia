@@ -1,0 +1,13 @@
+{
+  "name": "@creditia/schema",
+  "version": "0.1.0",
+  "description": "credits.json v0 的 JSON Schema 与 TypeScript 类型",
+  "license": "MIT",
+  "type": "module",
+  "main": "types.ts",
+  "files": ["credits.schema.json", "types.ts"],
+  "exports": {
+    ".": "./types.ts",
+    "./schema": "./credits.schema.json"
+  }
+}

@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/adapters", "crates/store", "crates/cli"]
+# App 单独成一个 workspace：Tauri 依赖大、需要图标，不拖累核心的日常编译
+exclude = ["spike", "apps/desktop/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/WroughtMind/creditia"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.37", features = ["bundled"] }
+zstd = "0.13"
+walkdir = "2.5"
+regex = "1"
+
+[profile.release]
+debug = false
+strip = true
+lto = "thin"
+codegen-units = 4
