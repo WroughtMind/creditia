@@ -1,0 +1,22 @@
+spike/target/
+spike/out/
+
+# packages/render
+packages/render/node_modules/
+packages/render/out/
+packages/render/out-real/
+packages/render/out-v2/
+.DS_Store
+
+# Rust 工作区
+target/
+apps/desktop/src-tauri/gen/
+
+# Node
+node_modules/
+packages/render/gallery/
+packages/embed/dist/
+apps/desktop/dist/
+
+# 编辑器 / 工具状态
+.cursor/

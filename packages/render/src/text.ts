@@ -1,0 +1,153 @@
+// 文本形式：CREDITS.md、Release notes、PR 评论、终端名片、逐行溯源。都读同一份 credits.json。
+import type { Model } from './data.ts';
+import { fmt, pct, compact, nameOf } from './data.ts';
+import type { Seg } from './forms.ts';
+
+const harnessOf = (raw: any, id: string) => (raw.contributors ?? []).find((x: any) => x.id === id)?.harness ?? (id === 'unattributed' ? 'unattributed' : 'human');
+const labelOf = (raw: any, id: string) => {
+  const c = (raw.contributors ?? []).find((x: any) => x.id === id);
+  if (!c || id === 'unattributed') return nameOf('unattributed');
+  if (c.kind === 'human') return c.name ?? id;
+  const n = nameOf(c.harness);
+  return c.model ? `${n}（${c.model === 'auto' ? 'Auto' : c.model}）` : n;
+};
+const clean = (s: string) => s.replace(/\s*\(#\d+\)\s*$/, '');
+
+/** 一项的主要贡献方：先按工具合并取最大，再取该工具下占比最大的模型 */
+function lead(raw: any, u: any) {
+  const by = new Map<string, number>();
+  for (const s of u.shares ?? []) by.set(harnessOf(raw, s.contributor), (by.get(harnessOf(raw, s.contributor)) ?? 0) + s.share);
+  const top = [...by.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (!top || top[0] === 'unattributed') return nameOf('unattributed');
+  const best = (u.shares ?? []).filter((s: any) => harnessOf(raw, s.contributor) === top[0]).sort((a: any, b: any) => b.share - a.share)[0];
+  return labelOf(raw, best.contributor);
+}
+
+/** 某版本内各工具占比 */
+function versionLine(raw: any, tag: string) {
+  const directors = new Set((raw.directors ?? []).map((d: any) => d.id));
+  const by = new Map<string, number>();
+  for (const b of raw.breakdown ?? []) {
+    if (directors.has(b.contributor)) continue;
+    const k = harnessOf(raw, b.contributor);
+    by.set(k === 'human' ? 'other' : k, (by.get(k === 'human' ? 'other' : k) ?? 0) + (b.byVersion?.[tag] ?? 0));
+  }
+  const tot = [...by.values()].reduce((a, b) => a + b, 0);
+  if (!tot) return '';
+  return [...by.entries()].filter(([, v]) => v / tot >= 0.001)
+    .sort((a, b) => (a[0] === 'unattributed' ? 1 : b[0] === 'unattributed' ? -1 : b[1] - a[1]))
+    .map(([k, v]) => `${nameOf(k)} ${pct((v / tot) * 100)}`).join(' · ');
+}
+
+export const MARK_START = '<!-- creditia:start -->';
+export const MARK_END = '<!-- creditia:end -->';
+
+/** CREDITS.md 标记区间里的内容 */
+export function creditsBlock(m: Model, maxPerSection = 10): string {
+  const raw = m.raw;
+  const out: string[] = [];
+  const head = [m.project, m.director && `由 ${m.director} 主导`, `${fmt(m.commits)} 次提交`, `${fmt(m.units)} 项`, `+${fmt(m.linesAdded)} 行`].filter(Boolean).join(' · ');
+  out.push(head, '');
+  out.push('| 贡献方 | 占比 | 新增行 | 至今仍在 |', '|---|---:|---:|---:|');
+  const surv = new Map<string, number>();
+  for (const b of raw.breakdown ?? []) { const k = harnessOf(raw, b.contributor); surv.set(k, (surv.get(k) ?? 0) + (b.linesSurviving ?? 0)); }
+  for (const r of m.rows) out.push(`| ${r.name} | ${pct(r.pct)} | +${fmt(r.lines)} | ${r.kind === 'other' ? '—' : fmt(surv.get(r.kind === 'human' ? 'human' : r.key) ?? 0)} |`);
+  out.push('');
+  const weak = (raw.coverage ?? []).filter((c: any) => c.best !== 'verified');
+  if (weak.length) out.push(`> ${weak[0].from} – ${weak[weak.length - 1].to} 的大部分代码没有逐行日志，按提交信息和分支推断。`, '');
+  const units: any[] = raw.units ?? [];
+  const groups: [string, string, string, any[]][] = [];
+  const unrel = units.filter((u) => !u.version);
+  if (unrel.length) groups.push(['未发布', '', 'unreleased', unrel]);
+  for (const v of [...(raw.versions ?? [])].reverse()) groups.push([v.tag, v.date, v.tag, units.filter((u) => u.version === v.tag)]);
+  for (const [title, date, key, us] of groups) {
+    if (!us.length) continue;
+    out.push(`## ${title}${date ? ` · ${date}` : ''}`, '');
+    const vl = versionLine(raw, key);
+    if (vl) out.push(vl, '');
+    const prs = us.filter((u) => u.id.startsWith('pr:')).sort((a, b) => b.date.localeCompare(a.date));
+    for (const u of prs.slice(0, maxPerSection)) out.push(`- #${u.id.slice(3)} ${clean(u.title)} — ${lead(raw, u)}`);
+    if (prs.length > maxPerSection) out.push(`- 另有 ${prs.length - maxPerSection} 个 PR`);
+    const direct = us.length - prs.length;
+    if (direct) out.push(`- ${direct} 个直接提交`);
+    out.push('');
+  }
+  out.push(`<sub>由 creditia 生成 · ${String(raw.generatedAt ?? '').slice(0, 10)}</sub>`);
+  return out.join('\n');
+}
+
+/** 合并进已有 CREDITS.md：只改写标记区间，区间外的手写内容原样保留 */
+export function mergeCreditsMd(existing: string | null, block: string): string {
+  const body = `${MARK_START}\n\n${block}\n\n${MARK_END}`;
+  if (!existing) return `# Credits\n\n${body}\n`;
+  const a = existing.indexOf(MARK_START), b = existing.indexOf(MARK_END);
+  if (a >= 0 && b > a) return existing.slice(0, a) + body + existing.slice(b + MARK_END.length);
+  return existing.replace(/\s*$/, '\n\n') + body + '\n';
+}
+
+export function releaseNotes(m: Model, tag: string, max = 8): string {
+  const raw = m.raw;
+  const us = (raw.units ?? []).filter((u: any) => (tag === 'unreleased' ? !u.version : u.version === tag) && u.id.startsWith('pr:'))
+    .sort((a: any, b: any) => b.date.localeCompare(a.date));
+  const lines = ['### Credits', ''];
+  const vl = versionLine(raw, tag);
+  if (vl) lines.push(vl, '');
+  for (const u of us.slice(0, max)) lines.push(`- #${u.id.slice(3)} ${clean(u.title)} — ${lead(raw, u)}`);
+  if (us.length > max) lines.push(`- 另有 ${us.length - max} 个 PR，见 CREDITS.md`);
+  return lines.join('\n') + '\n';
+}
+
+export function prComment(m: Model, id: string): string {
+  const raw = m.raw;
+  const u = (raw.units ?? []).find((x: any) => x.id === id);
+  if (!u) return '';
+  const by = new Map<string, { share: number; models: string[] }>();
+  for (const s of u.shares) {
+    const k = harnessOf(raw, s.contributor);
+    const e = by.get(k) ?? { share: 0, models: [] };
+    e.share += s.share;
+    const c = (raw.contributors ?? []).find((x: any) => x.id === s.contributor);
+    if (c?.model && s.share >= 0.01) e.models.push(c.model === 'auto' ? 'Auto' : c.model);
+    by.set(k, e);
+  }
+  const parts = [...by.entries()].filter(([, v]) => v.share >= 0.01).sort((a, b) => b[1].share - a[1].share)
+    .map(([k, v]) => `**${k === 'human' ? '人' : nameOf(k)}** ${Math.round(v.share * 100)}%${v.models.length ? `（${v.models.join('、')}）` : ''}`);
+  return `这个 PR 的 ${fmt(u.lines)} 行新增代码：${parts.join('，')}。\n`;
+}
+
+/** creditia fetch */
+export function fetchSegs(m: Model): Seg[][] {
+  const w = 12;
+  const kv = (k: string, v: string): Seg[] => [{ text: k.padEnd(8, ' '), dim: true }, { text: v }];
+  const blocks = (p: number) => '■'.repeat(Math.max(1, Math.round(p / 3.5)));
+  return [
+    [{ text: m.project, bold: true }, ...(m.director ? [{ text: `  ${m.director}`, dim: true }] : [])],
+    [{ text: '' }],
+    kv('工期', `${m.spanDays} 天   ${m.range.from} → ${m.range.to}`),
+    kv('提交', `${fmt(m.commits)}`),
+    kv('代码', `${fmt(m.linesAdded)} 行，留下 ${fmt(m.linesSurviving)}`),
+    ...(m.tokens ? [kv('Token', compact(m.tokens))] : []),
+    [{ text: '' }],
+    ...m.rows.map((r) => [
+      { text: r.name.padEnd(w + (r.key === 'unattributed' ? -1 : 0), ' '), dim: r.key === 'unattributed' },
+      { text: blocks(r.pct), color: r.key === 'unattributed' ? undefined : r.key, dim: r.key === 'unattributed' },
+      { text: `  ${pct(r.pct)}`, dim: true },
+    ]),
+  ];
+}
+
+/** creditia blame */
+export function blameSegs(b: any): Seg[][] {
+  const who = b.harness ? nameOf(b.harness) : b.name ?? nameOf('unattributed');
+  const t = b.sessionTime ? new Date((b.sessionTime + 8 * 3600) * 1000).toISOString().replace('T', ' ').slice(0, 16) : '';
+  const ev: Record<string, string> = { verified: '日志里的编辑与这一行逐字对上', declared: '提交信息或会话时间吻合', inferred: '按分支名推断', unattributed: '没有证据' };
+  const kv = (k: string, v: Seg[]): Seg[] => [{ text: k.padEnd(6, ' '), dim: true }, ...v];
+  return [
+    kv('作者', [{ text: who, color: b.harness, bold: true }, ...(b.model ? [{ text: `  ${b.model}`, dim: true }] : [])]),
+    ...(b.session ? [kv('会话', [{ text: `${b.session.slice(0, 8)}  ` }, { text: t, dim: true }])] : []),
+    kv('提交', [{ text: `${b.commit}  ` }, { text: b.date ?? '', dim: true }]),
+    kv('', [{ text: b.subject ?? '' }]),
+    ...(b.unit ? [kv('PR', [{ text: `#${b.unit.replace('pr:', '')}  ` }, { text: clean(b.unitTitle ?? ''), dim: true }])] : []),
+    kv('证据', [{ text: ev[b.evidence] ?? '' }]),
+  ];
+}

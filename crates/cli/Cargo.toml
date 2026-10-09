@@ -1,0 +1,19 @@
+[package]
+name = "creditia-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "creditia-core"
+path = "src/main.rs"
+
+[dependencies]
+creditia-core = { path = "../core" }
+creditia-adapters = { path = "../adapters" }
+creditia-store = { path = "../store" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+rusqlite.workspace = true

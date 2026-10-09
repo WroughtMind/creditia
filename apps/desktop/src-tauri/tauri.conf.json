@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "creditia",
+  "version": "0.1.0",
+  "identifier": "dev.creditia.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5183",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      { "title": "creditia", "label": "main", "width": 1120, "height": 740, "minWidth": 880, "minHeight": 600, "titleBarStyle": "Overlay" }
+    ],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.icns", "icons/icon.ico", "icons/icon.png"],
+    "category": "DeveloperTool",
+    "shortDescription": "为你和 AI 一起做出的作品署名"
+  }
+}
