@@ -1049,7 +1049,7 @@ export function receipt(m: Model, t: Theme, variant?: string): Out {
   }
 
   // slip：干净的纸质清单
-  const rule = box({ height: 0, borderTop: `1.5px dashed ${t.line}`, margin: '8px 0' });
+  const rule = box({ height: 2, borderTop: `1.5px dashed ${t.line}`, margin: '7px 0 8px' }); // height 0 时 satori 会生成负高度的 mask，浏览器报错
   const paper = col({ width: 620, padding: '64px 56px 56px', ...surface(t, { borderRadius: Math.min(t.radius, 10) }), gap: 0 },
     col({ alignItems: 'center', gap: 14, marginBottom: 40 },
       label(t, 'Receipt', 13),
