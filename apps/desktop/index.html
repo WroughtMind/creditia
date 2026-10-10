@@ -8,18 +8,18 @@
 <body>
 <aside id="side">
   <div class="brand" data-tauri-drag-region><span class="seal">名</span><b>creditia</b></div>
-  <input id="q" class="search" placeholder="搜索项目">
+  <input id="q" class="search" placeholder="搜索">
   <ul id="projects"></ul>
   <footer id="lib"></footer>
 </aside>
 <main>
   <header id="top" data-tauri-drag-region>
-    <div class="headline"><h1 id="name">creditia</h1><div id="sub" class="sub">为你和 AI 一起做出的作品署名</div></div>
-    <div id="themes" class="themes"></div>
+    <div class="headline"><h1 id="name">creditia</h1><div id="sub" class="sub"></div></div>
+    <nav id="nav" class="seg"></nav>
   </header>
-  <nav id="tabs" class="seg"></nav>
   <section id="view"></section>
 </main>
+<div id="sheet" hidden></div>
 <div id="toast" hidden></div>
 <script type="module" src="/src/main.ts"></script>
 </body>

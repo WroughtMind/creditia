@@ -55,6 +55,44 @@ export function mark(key: string, t: Theme, size: number, color?: string): Node 
   return box({ width: size, height: size, flexShrink: 0 });
 }
 
+const alpha = (hex: string, a: string) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + a : hex);
+
+/** 装饰分隔：每个体裁用自己熟悉的符号（胶片菱形、剧院星、报纸花叶、终端等号线…） */
+export function ornament(t: Theme, size = 14, style: Record<string, any> = {}): Node {
+  const ch: Record<string, string> = {
+    cinema: '◆', playbill: '★', gala: '◆', broadsheet: '§', crt: '═', arcade: '▲', neon: '★', poster: '■', film: '·', editorial: '▪',
+  };
+  const n = t.family === 'poster' || t.family === 'crt' ? 8 : 5;
+  return txt({ fontFamily: t.deco ?? t.display, fontSize: size, color: t.accent, letterSpacing: size * 0.85, ...style }, Array(n).fill(ch[t.family] ?? '·').join(''));
+}
+
+/** 底板的边距与描边总宽，算高度时要用 */
+export function plateMetrics(t: Theme): { pad: number; border: number } {
+  switch (t.frame) {
+    case 'double': return { pad: 35, border: 4 };
+    case 'ornate': return { pad: 33, border: 10 };
+    case 'rule': return { pad: 18, border: 10 };
+    case 'thick': return { pad: 28, border: 14 };
+    case 'pixel': return { pad: 24, border: 12 };
+    default: return { pad: 28, border: 0 };
+  }
+}
+
+/** 底板：每个体裁的框线语汇不同（金框双线、剧院花框、报刊上下粗线、海报粗黑框、像素框） */
+export function plate(t: Theme, style: Record<string, any>, kids: any[], inner: Record<string, any> = {}): Node {
+  const pat = t.pattern ? { backgroundImage: t.pattern } : {};
+  const base = { boxSizing: 'border-box' as const, backgroundColor: t.surface, ...pat, ...style };
+  const wrap = (extra: Record<string, any>) => col({ ...extra, width: '100%', flexGrow: 1, ...inner }, ...kids);
+  switch (t.frame) {
+    case 'double': return col({ ...base, border: `1px solid ${t.accent}`, padding: 9 }, wrap({ border: `1px solid ${t.edge}`, padding: 26 }));
+    case 'ornate': return col({ ...base, border: `2px solid ${t.edge}`, padding: 7 }, wrap({ border: `3px solid ${t.accent}`, padding: 26 }));
+    case 'rule': return col({ ...base, borderTop: `5px solid ${t.ink}`, borderBottom: `5px solid ${t.ink}`, padding: '18px 0' }, wrap({ padding: '0 36px' }));
+    case 'thick': return col({ ...base, border: `7px solid ${t.ink}` }, wrap({ padding: 28 }));
+    case 'pixel': return col({ ...base, border: `4px solid ${t.edge}`, padding: 4 }, wrap({ border: `2px solid ${alpha(t.accent, '66')}`, padding: 20 }));
+    default: return col({ ...base, padding: 28 }, wrap({}));
+  }
+}
+
 export function bar(t: Theme, c: Contributor, rank: number, height = t.barH, minW = 3): Node {
   return box({ height, borderRadius: t.barRadius, backgroundColor: t.track, width: '100%' },
     box({ width: `${Math.max(c.pct, 0)}%`, minWidth: minW, height: '100%', borderRadius: t.barRadius, ...fill(c, t, rank, Math.max(2, height / 2)) }));

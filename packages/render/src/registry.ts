@@ -8,12 +8,12 @@ import { fetchSegs, blameSegs } from './text.ts';
 export interface Ctx { lang: 'zh' | 'en'; projects?: Model[]; person?: string; blame?: any; variant?: string }
 
 /** null 表示数据不够，不出图。variants 是可选的版式 */
-export const FORMS: Record<string, { name: string; q: string; size: string; variants?: string[]; render: (m: Model, t: Theme, ctx: Ctx) => Out | null }> = {
+export const FORMS: Record<string, { name: string; q: string; size: string; variants?: string[]; def?: (t: Theme) => string; render: (m: Model, t: Theme, ctx: Ctx) => Out | null }> = {
   tier: { name: 'Tier', q: '谁做的、各占多少', size: '800×自适应', render: (m, t) => F.tier(m, t) },
   share: { name: '分享图', q: '链接预览、社交媒体', size: '1200×630', render: (m, t) => F.share(m, t) },
   byline: { name: '署名行', q: '页脚、关于页', size: '1200×120', render: (m, t, c) => F.byline(m, t, c.lang) },
-  receipt: { name: '精力小票', q: '花了多少精力', size: '1080×1350', variants: F.RECEIPT_VARIANTS, render: (m, t, c) => F.receipt(m, t, c.variant) },
-  roll: { name: '片尾字幕', q: '谁担任了什么角色', size: '1080×1350', variants: F.ROLL_VARIANTS, render: (m, t, c) => F.roll(m, t, c.variant) },
+  receipt: { name: '精力小票', q: '花了多少精力', size: '1080×1350', variants: F.RECEIPT_VARIANTS, def: (t) => F.RECEIPT_DEFAULT[t.family] ?? 'slip', render: (m, t, c) => F.receipt(m, t, c.variant) },
+  roll: { name: '片尾字幕', q: '谁担任了什么角色', size: '1080×1350', variants: F.ROLL_VARIANTS, def: (t) => F.ROLL_DEFAULT[t.family] ?? 'classic', render: (m, t, c) => F.roll(m, t, c.variant) },
   ribbon: { name: '时间织带', q: '怎么一步步做出来的', size: '1200×500', render: (m, t) => F.ribbon(m, t) },
   mosaic: { name: '代码马赛克', q: '现在由谁构成', size: '1200×860', render: (m, t) => F.mosaic(m, t) },
   profile: { name: '个人履历卡', q: '我和 AI 一起做了什么', size: '1200×自适应', render: (m, t, c) => (c.projects?.length ? F.profile(c.person ?? m.director, c.projects, t) : null) },

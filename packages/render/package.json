@@ -13,12 +13,28 @@
     "test": "node --test test/*.test.ts"
   },
   "dependencies": {
+    "@expo-google-fonts/anton": "^0.4.2",
+    "@expo-google-fonts/archivo-black": "^0.4.1",
+    "@expo-google-fonts/cinzel": "^0.4.2",
+    "@expo-google-fonts/cinzel-decorative": "^0.4.1",
     "@expo-google-fonts/instrument-serif": "^0.4.1",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
+    "@expo-google-fonts/libre-baskerville": "^0.4.3",
+    "@expo-google-fonts/limelight": "^0.4.1",
+    "@expo-google-fonts/ma-shan-zheng": "^0.4.3",
+    "@expo-google-fonts/monoton": "^0.4.1",
     "@expo-google-fonts/newsreader": "^0.4.1",
     "@expo-google-fonts/noto-sans-sc": "^0.4.4",
     "@expo-google-fonts/noto-serif-sc": "^0.4.4",
+    "@expo-google-fonts/oswald": "^0.4.2",
+    "@expo-google-fonts/playfair-display": "^0.4.2",
+    "@expo-google-fonts/poiret-one": "^0.4.1",
+    "@expo-google-fonts/press-start-2p": "^0.4.1",
+    "@expo-google-fonts/unifrakturmaguntia": "^0.4.1",
+    "@expo-google-fonts/vt323": "^0.4.1",
+    "@expo-google-fonts/zcool-qingke-huangyou": "^0.4.1",
+    "@expo-google-fonts/zcool-xiaowei": "^0.4.1",
     "@resvg/resvg-js": "^2.6.2",
     "satori": "^0.38.2"
   }

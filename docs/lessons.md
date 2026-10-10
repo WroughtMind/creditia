@@ -41,3 +41,21 @@
 - **本机没有 Chrome 就用 Playwright 做视觉回归。** chrome-devtools MCP 起不来，改用 Playwright + Chromium headless shell 截图和 DOM 探针，逐页核对，再配合同一数据在 Node 侧渲染的 SVG 逐元素比对，定位差异快很多。
 - **satori 不支持 dotted 边框和 conic-gradient。** 未确认的虚线纹理、环形图的环，都用内联 SVG 字符串经 base64 data URI 以 `<img>` 嵌入。
 - **在 creditia 仓库提交前先盖章。** 没跑 `target/release/creditia-core stamp --harness claude-code --model claude-fable-5-1` 的提交只有 `Creditia-Harness` 行、没有 `Creditia-Model` 行：hook 只能从环境变量认出工具，模型要靠 stamp 文件。另外 hook 原来用 `contains(": ")` 判断已有 trailer 块，`fix: xxx` 这种主题行单行提交时被误判、trailer 贴在主题后面没空行；判断改为「至少两段 + 键只含 ASCII 字母数字横线」。
+
+## 2026-10-10（第二轮验收：风格不必禁欲）
+
+- **「现代」是对 App 的要求，不是对出图风格的要求。** 我把七套风格全做成了克制、极简、现代的同一种气质，用户说「风格你没必要一定这么禁欲这么简约现代」。出图的风格要像真实世界里的片尾字幕、戏院海报、颁奖礼、报纸、游戏通关画面那样各有各的装饰和戏剧感；克制只是其中一种口味，不是默认。
+- **片尾字幕要先看真电影再画。** 五个版式都是「居中排一排」的变体，用户问「你真没看过电影吗」。做任何有真实世界原型的形式，先找原型（art of the title、海报 billing block、滚屏字幕），把结构规则抄下来再动手。
+- **App 文案只留标签和动作。** 解释性句子（「颜色越深，证据越直接」「分析由 CLI 完成，App 只读结果」「用右上角的七块色板切换」）全是灌水；功能要靠界面自明，说明文字一句都不要。
+- **App 的主线是「挑一张图拿走」。** 概览、统计、导出三个页签里反复出现同一批图，用户要先看、再去导出页重新找一遍，这就是「使用逻辑很傻」。应该是图库 → 点一张 → 换风格 / 版式 / 尺寸 → 复制或保存，一条线走完。
+
+## 2026-10-10（第二轮：体裁扩充）
+
+- **追加，不要替换。** 这轮加体裁、加版式、重做 App，用户特别交代「现有的也没必要删掉」。旧主题、旧版式、旧形式一律原样保留，新内容全部是追加；重构 App 时也是重排和删文案，不是砍功能。
+- **写死「版式 → 主题」的表要跟着版式一起长。** gallery.ts 里 `HOME` 只覆盖四个旧小票版式，新增 ticket / ledger / scroll 后取到 `undefined`，`THEMES.find` 返回 undefined，直接 `Cannot read properties of undefined (reading 'dark')`。凡是「新枚举 → 某个映射」的地方，加值时必须同时补映射；或者干脆在 registry 里放 `def(t)`，让默认值只有一处。
+- **satori 里 `box()` 是横排、`col()` 是竖排。** 账簿那张卡把纸张容器写成了 `box`，表头和正文并排、卡片被压扁还向右溢出。竖着堆的容器（纸张、面板、卡片）一律用 `col`。
+- **装饰字符先确认字体有字形。** ✦ ✷ ❦ 在所装字体里没有，渲染成方块；改名后统一只留 ◆ ★ § ═ ▲ ■ · ▪ ─。加任何符号前先在字体里确认覆盖。
+- **超宽/像素字体要按家族缩放字号。** Arcade 的像素字在 classic 版式下把名字挤出画面，加 `rollScale`（arcade 0.68）并把所有版式字号乘系数，比逐个改字号省事。
+- **ImageMagick montage 必须显式给字体。** 不加 `-font /System/Library/Fonts/Helvetica.ttc` 就报 unable to read font。
+- **工作目录会被重置。** 每条命令都用绝对路径；用相对路径的 python/sed 会 FileNotFoundError，或悄悄改错地方。
+- **App 自查用 Playwright 抓 console。** 本机没有 Chrome，chrome-devtools MCP 起不来；Playwright 的 chromium 缓存在 `~/Library/Caches/ms-playwright`，只装 `playwright` 包（`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`）即可复用。截图脚本要顺便挂 `pageerror` / `console` error 监听，这轮靠它确认了「no errors」。

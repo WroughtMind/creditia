@@ -21,7 +21,9 @@ const require = createRequire(import.meta.url);
 let fontsCache: any[] | null = null;
 function fonts() {
   if (fontsCache) return fontsCache;
-  const f = (pkg: string, file: string) => readFileSync(require.resolve(`@expo-google-fonts/${pkg}/${file}/${pkg.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join('')}_${file}.ttf`));
+  // prefix 用于包名与字体文件大小写不一致的包（ZCOOLXiaoWei、UnifrakturMaguntia）
+  const f = (pkg: string, file: string, prefix?: string) =>
+    readFileSync(require.resolve(`@expo-google-fonts/${pkg}/${file}/${prefix ?? pkg.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join('')}_${file}.ttf`));
   fontsCache = [
     ...[[400, '400Regular'], [500, '500Medium'], [600, '600SemiBold'], [700, '700Bold']].map(([w, x]) => ({ name: 'Inter', weight: w, data: f('inter', x as string) })),
     ...[[400, '400Regular'], [700, '700Bold']].map(([w, x]) => ({ name: 'JetBrains Mono', weight: w, data: f('jetbrains-mono', x as string) })),
@@ -29,6 +31,23 @@ function fonts() {
     ...[[400, '400Regular'], [500, '500Medium']].map(([w, x]) => ({ name: 'Newsreader', weight: w, data: f('newsreader', x as string) })),
     ...[[400, '400Regular'], [500, '500Medium'], [700, '700Bold']].map(([w, x]) => ({ name: 'Noto Sans SC', weight: w, data: f('noto-sans-sc', x as string) })),
     ...[[400, '400Regular'], [500, '500Medium']].map(([w, x]) => ({ name: 'Noto Serif SC', weight: w, data: f('noto-serif-sc', x as string) })),
+    // ── 第二轮体裁的字体 ──
+    ...[[500, '500Medium'], [700, '700Bold']].map(([w, x]) => ({ name: 'Cinzel', weight: w, data: f('cinzel', x as string) })),
+    { name: 'Cinzel Decorative', weight: 700, data: f('cinzel-decorative', '700Bold') },
+    ...[[500, '500Medium'], [700, '700Bold'], [900, '900Black']].map(([w, x]) => ({ name: 'Playfair Display', weight: w, data: f('playfair-display', x as string) })),
+    ...[[400, '400Regular'], [700, '700Bold']].map(([w, x]) => ({ name: 'Libre Baskerville', weight: w, data: f('libre-baskerville', x as string) })),
+    ...[[400, '400Regular'], [600, '600SemiBold']].map(([w, x]) => ({ name: 'Oswald', weight: w, data: f('oswald', x as string) })),
+    { name: 'Poiret One', weight: 400, data: f('poiret-one', '400Regular') },
+    { name: 'Limelight', weight: 400, data: f('limelight', '400Regular') },
+    { name: 'UnifrakturMaguntia', weight: 400, data: f('unifrakturmaguntia', '400Regular', 'UnifrakturMaguntia') },
+    { name: 'VT323', weight: 400, data: f('vt323', '400Regular') },
+    { name: 'Press Start 2P', weight: 400, data: f('press-start-2p', '400Regular') },
+    { name: 'Monoton', weight: 400, data: f('monoton', '400Regular') },
+    { name: 'Archivo Black', weight: 400, data: f('archivo-black', '400Regular') },
+    { name: 'Anton', weight: 400, data: f('anton', '400Regular') },
+    { name: 'ZCOOL XiaoWei', weight: 400, data: f('zcool-xiaowei', '400Regular', 'ZCOOLXiaoWei') },
+    { name: 'ZCOOL QingKe HuangYou', weight: 400, data: f('zcool-qingke-huangyou', '400Regular', 'ZCOOLQingKeHuangYou') },
+    { name: 'Ma Shan Zheng', weight: 400, data: f('ma-shan-zheng', '400Regular') },
   ];
   return fontsCache;
 }

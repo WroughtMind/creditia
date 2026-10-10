@@ -53,10 +53,26 @@ export function colorOf(key: string, t: Theme, rank = 0): string {
 const CREAM = ['#EDE6D8', '#D3CAB7', '#B8AE9B', '#978E7C', '#787162', '#5B554A'];
 const INKSTEPS = ['#121110', '#48423A', '#7A7266', '#A59D90', '#CBC4B8', '#E2DBCF'];
 const GRAYS = ['#000000', '#3D3D3D', '#6E6E6E', '#9A9A9A', '#BEBEBE', '#D9D9D9'];
+// 第二轮体裁的家族色阶
+const GOLD = ['#D6B26A', '#B99549', '#8F7233', '#6B5526', '#4A3A1A', '#332812'];
+const GALA_RAMP = ['#D4AF37', '#A99BE8', '#7E6FD0', '#5B4F9E', '#3E3670', '#2A2450'];
+const REDS = ['#8C1C13', '#A8352A', '#C0503F', '#D2796A', '#E0A79B', '#EBD0C9'];
+const PHOSPHOR = ['#8CFFB0', '#5CD98A', '#3FAF6B', '#2C8450', '#1F5C38', '#164026'];
+const ARCADE_RAMP = ['#FF4FA3', '#4FE3FF', '#FFE066', '#8CFF6B', '#B06BFF', '#FF9F45'];
+const NEON_RAMP = ['#FF5D8F', '#4FE3FF', '#B06BFF', '#FFD166', '#7CFFB2', '#FF8A5B'];
+const POSTER_RAMP = ['#E23B2E', '#141414', '#5A5A5A', '#8C8C8C', '#C4C4C4', '#E0E0E0'];
 export function famColor(key: string, t: Theme, rank = 0): string {
   if (key === 'unattributed' || key === 'other') return t.faint;
   if (t.family === 'film') return CREAM[Math.min(rank, 5)];
   if (t.family === 'editorial') return INKSTEPS[Math.min(rank, 5)];
   if (t.family === 'mono') return GRAYS[Math.min(rank, 5)];
+  if (t.family === 'cinema') return GOLD[Math.min(rank, 5)];
+  if (t.family === 'gala') return GALA_RAMP[Math.min(rank, 5)];
+  if (t.family === 'playbill') return REDS[Math.min(rank, 5)];
+  if (t.family === 'broadsheet') return INKSTEPS[Math.min(rank, 5)];
+  if (t.family === 'crt') return PHOSPHOR[Math.min(rank, 5)];
+  if (t.family === 'arcade') return ARCADE_RAMP[Math.min(rank, 5)];
+  if (t.family === 'neon') return NEON_RAMP[Math.min(rank, 5)];
+  if (t.family === 'poster') return POSTER_RAMP[Math.min(rank, 5)];
   return colorOf(key, t, rank);
 }
