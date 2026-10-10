@@ -3,7 +3,7 @@
 > 为你和 AI 一起做出的作品署名。
 > Credits for work made with agents.
 
-**状态：开发中。** 方案见 [`docs/plans/2026-10-08-creditia-plan.md`](docs/plans/2026-10-08-creditia-plan.md)。
+**状态：开发中。**
 
 ## 做什么
 
@@ -64,4 +64,4 @@ creditia hook install          # 之后每次提交自动盖章，不再依赖�
 
 ## 协议
 
-MIT
+MIT，见 [LICENSE](LICENSE)。

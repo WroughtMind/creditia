@@ -331,7 +331,7 @@ pub fn detect_config(repo: &Path) -> Config {
 
 /// 判断日志路径是否属于本项目的关键词：目录名、各 worktree 目录、远程仓库名。
 /// `/name/` 按目录边界匹配；`/name-` 匹配 Codex 等工具的临时克隆（如 `/tmp/demo-<任务>/`），
-/// 同名前缀的无关目录（如 `demo-launch-film`）由 `detect_excludes` 排除
+/// 同名前缀的无关目录（如 `demo-film`）由 `detect_excludes` 排除
 pub fn derive_markers(repo: &Path, remotes: &[String]) -> Vec<String> {
     let mut m: Vec<String> = vec![];
     let mut push = |s: String| {
@@ -357,7 +357,7 @@ pub fn derive_markers(repo: &Path, remotes: &[String]) -> Vec<String> {
     m
 }
 
-/// 同级目录里名字以仓库名开头、但不是本仓库的克隆或 worktree 的目录（如 `demo-launch-film`），自动排除
+/// 同级目录里名字以仓库名开头、但不是本仓库的克隆或 worktree 的目录（如 `demo-film`），自动排除
 pub fn detect_excludes(repo: &Path, remotes: &[String]) -> Vec<String> {
     let (root, _) = ad::git::identity(repo);
     let mut prefixes: Vec<String> = vec![];
@@ -381,7 +381,7 @@ pub fn detect_excludes(repo: &Path, remotes: &[String]) -> Vec<String> {
         if !prefixes.iter().any(|x| name.starts_with(x.as_str()) && name != *x) {
             continue;
         }
-        // 本身是同一仓库的克隆 / worktree，或者下一级目录里有（如 `示例项目-worktrees/<分支>`），都算相关
+        // 本身是同一仓库的克隆 / worktree，或者下一级目录里有（如 `demo-worktrees/<分支>`），都算相关
         let related = same_repo(&p) || std::fs::read_dir(&p).into_iter().flatten().flatten().any(|s| s.path().is_dir() && same_repo(&s.path()));
         if !related {
             out.push(format!("/{name}/"));

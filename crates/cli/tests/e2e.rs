@@ -49,7 +49,7 @@ fn commit(repo: &Path, msg: &str, email: &str, date: &str) -> String {
 fn setup() -> Env {
     let root = tmp();
     // 中文路径的仓库
-    let repo = root.join("projects/示例项目测试");
+    let repo = root.join("projects/示例项目");
     fs::create_dir_all(&repo).unwrap();
     git(&repo, &["init", "-q", "-b", "main"]);
     let mut vars = HashMap::new();
@@ -267,7 +267,7 @@ fn end_to_end() {
     // discover 能找到这个项目
     let (ok, v) = run(&env, &["discover"]);
     assert!(ok, "{v}");
-    assert!(v["projects"].as_array().unwrap().iter().any(|p| p["name"] == "示例项目测试"), "{v}");
+    assert!(v["projects"].as_array().unwrap().iter().any(|p| p["name"] == "示例项目"), "{v}");
 
     let _ = fs::remove_dir_all(&env.root);
 }

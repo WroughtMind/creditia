@@ -4,7 +4,7 @@
 
 | 文件 | 来源 |
 |---|---|
-| openai.svg、cursor.svg、claude.svg、anthropic.svg、deepseek.svg、x.svg | 示例项目官网 `website/assets/credits/`（源自 simple-icons，CC0） |
+| openai.svg、cursor.svg、claude.svg、anthropic.svg、deepseek.svg、x.svg | simple-icons（CC0） |
 | kimi.svg、gemini.svg、github-actions.svg | simple-icons 16.x（CC0） |
 
-Grok 暂用 xAI 所属的 X 标志（与示例项目官网一致）；xAI 官方 Grok 标志待核对后替换。
+Grok 暂用 xAI 所属的 X 标志；xAI 官方 Grok 标志待核对后替换。

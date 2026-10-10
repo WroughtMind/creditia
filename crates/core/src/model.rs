@@ -290,8 +290,8 @@ pub struct PathMap {
 }
 
 impl PathMap {
-    /// 关键词形如 `/示例项目/`：末尾补一个 `/` 再匹配，这样目录 `…/示例项目` 和文件 `…/示例项目/src/a.rs` 都能命中，
-    /// 而 `…/demo-launch-film/` 不会被 `/demo/` 误认
+    /// 关键词形如 `/demo/`：末尾补一个 `/` 再匹配，这样目录 `…/demo` 和文件 `…/demo/src/a.rs` 都能命中，
+    /// 而 `…/demo-film/` 不会被 `/demo/` 误认
     pub fn in_project(&self, s: &str) -> bool {
         // Windows 日志里的反斜杠先统一成 `/`；远程地址去掉 .git 后缀
         let s = s.replace('\\', "/");
@@ -335,11 +335,11 @@ mod tests {
 
     #[test]
     fn path_map_boundaries() {
-        let pm = PathMap { known: ["src/a.rs".to_string()].into_iter().collect(), markers: vec!["/demo/".into(), "/demo-".into()], excludes: vec!["/demo-launch-film/".into()] };
+        let pm = PathMap { known: ["src/a.rs".to_string()].into_iter().collect(), markers: vec!["/demo/".into(), "/demo-".into()], excludes: vec!["/demo-film/".into()] };
         assert!(pm.in_project("/Users/x/projects/demo"));
         assert!(pm.in_project("/private/tmp/demo-task1/src/a.rs"));
         assert!(pm.in_project("github.com/org/demo.git"));
-        assert!(!pm.in_project("/Users/x/projects/demo-launch-film/src/a.rs"));
+        assert!(!pm.in_project("/Users/x/projects/demo-film/src/a.rs"));
         assert_eq!(pm.to_rel("C:\\Users\\x\\demo\\src\\a.rs").as_deref(), Some("src/a.rs"));
     }
 }

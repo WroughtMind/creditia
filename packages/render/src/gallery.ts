@@ -1,5 +1,5 @@
 // 样张：每种形式 × 每种风格，片尾字幕和小票的全部版式。node src/gallery.ts <spike out 目录> <输出目录>
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { FORMS, renderSvg, svgToPng, buildModel, THEMES, type Ctx } from './index.ts';
 import { badge, ROLL_VARIANTS, RECEIPT_VARIANTS } from './forms.ts';
@@ -8,9 +8,15 @@ import { creditsBlock, mergeCreditsMd, releaseNotes, prComment } from './text.ts
 const [, , dataDir = '../../spike/out', outDir = 'gallery'] = process.argv;
 const load = (p: string) => JSON.parse(readFileSync(path.join(dataDir, p), 'utf8'));
 const opt = { director: process.env.DIRECTOR === '1', lang: 'zh' as const };
-const m = buildModel(load('demo/credits.json'), opt);
-const projects = [m, ...['sample-a', 'sample-b'].map((n) => buildModel(load(`${n}/credits.json`), opt))];
-const ctx: Ctx = { lang: 'zh', projects, person: load('demo/credits.json').directors?.[0]?.name, blame: load('demo/blame-sample.json') };
+// 项目列表：PROJECTS=a,b 指定，否则自动发现 dataDir 下的 */credits.json；有 blame 样本的当主项目
+const names = process.env.PROJECTS?.split(',').map((s) => s.trim()).filter(Boolean)
+  ?? readdirSync(dataDir).filter((d) => existsSync(path.join(dataDir, d, 'credits.json')));
+if (!names.length) throw new Error(`${dataDir} 下没有 */credits.json，可用 PROJECTS=<项目,……> 指定`);
+const primary = names.find((n) => existsSync(path.join(dataDir, n, 'blame-sample.json'))) ?? names[0];
+const credits = (n: string) => load(`${n}/credits.json`);
+const m = buildModel(credits(primary), opt);
+const projects = [m, ...names.filter((n) => n !== primary).map((n) => buildModel(credits(n), opt))];
+const ctx: Ctx = { lang: 'zh', projects, person: credits(primary).directors?.[0]?.name, blame: existsSync(path.join(dataDir, primary, 'blame-sample.json')) ? load(`${primary}/blame-sample.json`) : undefined };
 
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
