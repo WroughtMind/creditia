@@ -607,9 +607,7 @@ fn cmd_hook_trailers(a: &Args) -> R<(Value, Vec<String>)> {
     // 在注释行之前插入 trailer（git 会在 # 开头的注释后截断）
     let (body, comments) = split_comments(&msg);
     let mut out = body.trim_end().to_string();
-    let last_para = out.rsplit("\n\n").next().unwrap_or("");
-    let has_trailers = !last_para.is_empty() && last_para.lines().all(|l| l.contains(": ") || l.trim().is_empty());
-    out.push_str(if has_trailers { "\n" } else { "\n\n" });
+    out.push_str(if ends_with_trailers(&out) { "\n" } else { "\n\n" });
     out.push_str(&format!("Creditia-Harness: {h}\n"));
     if let Some(m) = &model {
         out.push_str(&format!("Creditia-Model: {m}\n"));
@@ -623,6 +621,17 @@ fn cmd_hook_trailers(a: &Args) -> R<(Value, Vec<String>)> {
     }
     std::fs::write(msgfile, out).map_err(|e| e.to_string())?;
     Ok((json!({ "added": true, "harness": h, "model": model, "summary": "" }), vec![]))
+}
+
+/// 正文最后一段是不是已有的 trailer 块（如 Signed-off-by），是的话新 trailer 直接接在后面。
+/// 只有一段时那是主题行，不算；`fix: xxx` 这类 conventional commit 主题也含 `: `，所以键必须只含 ASCII 字母数字和横线
+fn ends_with_trailers(body: &str) -> bool {
+    let Some((_, last)) = body.rsplit_once("\n\n") else { return false };
+    let is_trailer = |l: &str| {
+        let l = l.trim();
+        l.is_empty() || l.split_once(": ").map(|(k, _)| !k.is_empty() && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')).unwrap_or(false)
+    };
+    !last.trim().is_empty() && last.lines().all(is_trailer)
 }
 
 /// 把提交信息拆成正文和 git 注释块（末尾连续的 `#` 行，中间允许空行）
@@ -690,3 +699,16 @@ fn cmd_projects(_a: &Args) -> R<(Value, Vec<String>)> {
 
 #[allow(dead_code)]
 fn _src(_: Src) {}
+
+
+#[cfg(test)]
+mod hook_tests {
+    use super::ends_with_trailers;
+
+    #[test]
+    fn conventional_subject_is_not_a_trailer_block() {
+        assert!(!ends_with_trailers("fix: 模型名归一"));
+        assert!(!ends_with_trailers("feat: x\n\n说明: 这是正文"));
+        assert!(ends_with_trailers("feat: x\n\nSigned-off-by: a <a@b.c>\nCo-authored-by: b <b@c.d>"));
+    }
+}

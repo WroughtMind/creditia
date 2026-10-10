@@ -40,4 +40,4 @@
 - **浏览器里跑 satori 要用 `satori/standalone`。** Node 入口在 WebView 里报 `Buffer is not defined`；standalone 要 `init(await fetch(layout.wasm))`，wasm 走 `satori/layout.wasm?url` 导入。
 - **本机没有 Chrome 就用 Playwright 做视觉回归。** chrome-devtools MCP 起不来，改用 Playwright + Chromium headless shell 截图和 DOM 探针，逐页核对，再配合同一数据在 Node 侧渲染的 SVG 逐元素比对，定位差异快很多。
 - **satori 不支持 dotted 边框和 conic-gradient。** 未确认的虚线纹理、环形图的环，都用内联 SVG 字符串经 base64 data URI 以 `<img>` 嵌入。
-
+- **在 creditia 仓库提交前先盖章。** 没跑 `target/release/creditia-core stamp --harness claude-code --model claude-fable-5-1` 的提交只有 `Creditia-Harness` 行、没有 `Creditia-Model` 行：hook 只能从环境变量认出工具，模型要靠 stamp 文件。另外 hook 原来用 `contains(": ")` 判断已有 trailer 块，`fix: xxx` 这种主题行单行提交时被误判、trailer 贴在主题后面没空行；判断改为「至少两段 + 键只含 ASCII 字母数字横线」。
