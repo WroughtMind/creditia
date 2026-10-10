@@ -21,6 +21,10 @@ struct Thread {
 
 fn threads(base: &Path) -> Result<Vec<Thread>, String> {
     let db = base.join("state_5.sqlite");
+    // 没装 Codex 或从没用过：不是错误，安静跳过
+    if !db.exists() {
+        return Ok(vec![]);
+    }
     let conn = open_ro(&db).map_err(|e| format!("codex: 线程索引不可读 {e}"))?;
     let mut stmt = conn
         .prepare("select id, rollout_path, created_at, updated_at, tokens_used, coalesce(model,''), git_branch, cwd, coalesce(git_origin_url,'') from threads")

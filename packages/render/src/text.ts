@@ -49,9 +49,9 @@ export const MARK_END = '<!-- creditia:end -->';
 export function creditsBlock(m: Model, maxPerSection = 10): string {
   const raw = m.raw;
   const out: string[] = [];
-  const head = [m.project, m.director && `由 ${m.director} 主导`, `${fmt(m.commits)} 次提交`, `${fmt(m.units)} 项`, `+${fmt(m.linesAdded)} 行`].filter(Boolean).join(' · ');
+  const head = [m.project, m.director && `由 ${m.director} 主导`, `${fmt(m.commits)} 次提交`, `${fmt(m.units)} 个 PR / 直接提交`, `+${fmt(m.linesAdded)} 行`].filter(Boolean).join(' · ');
   out.push(head, '');
-  out.push('| 贡献方 | 占比 | 新增行 | 至今仍在 |', '|---|---:|---:|---:|');
+  out.push('| 谁写的 | 占比 | 写了多少行 | 现在还在的代码 |', '|---|---:|---:|---:|');
   const surv = new Map<string, number>();
   for (const b of raw.breakdown ?? []) { const k = harnessOf(raw, b.contributor); surv.set(k, (surv.get(k) ?? 0) + (b.linesSurviving ?? 0)); }
   for (const r of m.rows) {
@@ -63,7 +63,7 @@ export function creditsBlock(m: Model, maxPerSection = 10): string {
   }
   out.push('');
   const weak = (raw.coverage ?? []).filter((c: any) => c.best !== 'verified');
-  if (weak.length) out.push(`> ${weak[0].from} – ${weak[weak.length - 1].to} 的大部分代码没有逐行日志，按提交信息和分支推断。`, '');
+  if (weak.length) out.push(`> ${weak[0].from} – ${weak[weak.length - 1].to} 的大部分代码没有逐行日志，只能按提交信息和分支名推断，不一定准。`, '');
   const units: any[] = raw.units ?? [];
   const groups: [string, string, string, any[]][] = [];
   const unrel = units.filter((u) => !u.version);
@@ -135,7 +135,7 @@ export function fetchSegs(m: Model): Seg[][] {
     [{ text: '' }],
     kv('工期', `${m.spanDays} 天   ${m.range.from} → ${m.range.to}`),
     kv('提交', `${fmt(m.commits)}`),
-    kv('代码', `${fmt(m.linesAdded)} 行，留下 ${fmt(m.linesSurviving)}`),
+    kv('代码', `写了 ${fmt(m.linesAdded)} 行，现在还在 ${fmt(m.linesSurviving)} 行`),
     ...(m.tokens ? [kv('Token', compact(m.tokens))] : []),
     [{ text: '' }],
     ...ranked.map((r, i) => [
@@ -147,11 +147,16 @@ export function fetchSegs(m: Model): Seg[][] {
   ];
 }
 
+/** 秒级时间戳 → 本机时区的「YYYY-MM-DD HH:mm」（以前写死了 UTC+8） */
+export function localTime(sec: number, offsetMin = -new Date(sec * 1000).getTimezoneOffset()): string {
+  return new Date((sec + offsetMin * 60) * 1000).toISOString().replace('T', ' ').slice(0, 16);
+}
+
 /** creditia blame */
 export function blameSegs(b: any): Seg[][] {
   const who = b.harness ? nameOf(b.harness) : b.name ?? nameOf('unattributed');
-  const t = b.sessionTime ? new Date((b.sessionTime + 8 * 3600) * 1000).toISOString().replace('T', ' ').slice(0, 16) : '';
-  const ev: Record<string, string> = { verified: '日志里的编辑与这一行逐字对上', declared: '提交信息或会话时间吻合', inferred: '按分支名推断', unattributed: '没有证据' };
+  const t = b.sessionTime ? localTime(b.sessionTime) : '';
+  const ev: Record<string, string> = { verified: 'agent 日志里的编辑和这一行逐字对得上', declared: '提交信息里写明了，或和会话时间吻合', inferred: '按分支名推断', manual: '手动标注', unattributed: '认不出来' };
   const kv = (k: string, v: Seg[]): Seg[] => [{ text: k.padEnd(6, ' '), dim: true }, ...v];
   return [
     kv('作者', [{ text: who, color: b.harness, bold: true }, ...(b.model ? [{ text: `  ${b.model}`, dim: true }] : [])]),
@@ -159,6 +164,6 @@ export function blameSegs(b: any): Seg[][] {
     kv('提交', [{ text: `${b.commit}  ` }, { text: b.date ?? '', dim: true }]),
     kv('', [{ text: b.subject ?? '' }]),
     ...(b.unit ? [kv('PR', [{ text: `#${b.unit.replace('pr:', '')}  ` }, { text: clean(b.unitTitle ?? ''), dim: true }])] : []),
-    kv('证据', [{ text: ev[b.evidence] ?? '' }]),
+    kv('怎么认的', [{ text: ev[b.evidence] ?? '' }]),
   ];
 }

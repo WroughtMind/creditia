@@ -94,9 +94,14 @@ pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>
             let hash = p[0].to_string();
             // 盖章 trailer 若重复出现，取第一个
             let harness = p.get(7).and_then(|s| s.split('|').next()).map(|s| s.trim()).filter(|s| !s.is_empty());
+            let mut subject = p[5].to_string();
             if let Some(h) = harness {
                 let model = p.get(8).and_then(|s| s.split('|').next()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
                 stamps.insert(hash.clone(), (h.to_lowercase(), model));
+            } else if let Some((clean, h, m)) = glued_stamp(&subject) {
+                // 旧版 hook 在单行提交里把 trailer 粘进了主题行，git 认不出来；从主题行里捞回来
+                stamps.insert(hash.clone(), (h, m));
+                subject = clean;
             }
             out.push(Commit {
                 hash,
@@ -104,7 +109,7 @@ pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>
                 name: p[2].into(),
                 author_ts: p[3].parse().unwrap_or(0),
                 commit_ts: p[4].parse().unwrap_or(0),
-                subject: p[5].into(),
+                subject,
                 coauthors: p[6].split('|').filter(|x| !x.is_empty()).map(|x| x.to_lowercase()).collect(),
                 files: vec![],
             });
@@ -333,4 +338,26 @@ pub fn mailmap_emails(repo: &Path, canonical: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// 主题行里粘着的盖章：`fix: x Creditia-Harness: claude-code Creditia-Model: m`
+pub fn glued_stamp(subject: &str) -> Option<(String, String, Option<String>)> {
+    let i = subject.find("Creditia-Harness:")?;
+    let rest = &subject[i + "Creditia-Harness:".len()..];
+    let (hpart, model) = match rest.find("Creditia-Model:") {
+        Some(j) => (&rest[..j], rest[j + "Creditia-Model:".len()..].split_whitespace().next().map(String::from)),
+        None => (rest, None),
+    };
+    let h = hpart.split_whitespace().next()?.to_lowercase();
+    Some((subject[..i].trim_end().to_string(), h, model))
+}
+
+#[cfg(test)]
+mod glued_tests {
+    #[test]
+    fn glued() {
+        let (s, h, m) = super::glued_stamp("fix: a b Creditia-Harness: claude-code Creditia-Model: claude-fable-5-1").unwrap();
+        assert_eq!((s.as_str(), h.as_str(), m.as_deref()), ("fix: a b", "claude-code", Some("claude-fable-5-1")));
+        assert!(super::glued_stamp("plain subject").is_none());
+    }
 }

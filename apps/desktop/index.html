@@ -8,19 +8,26 @@
 <body>
 <aside id="side">
   <div class="brand" data-tauri-drag-region><span class="seal">名</span><b>creditia</b></div>
-  <input id="q" class="search" placeholder="搜索">
+  <div class="side-label">我的项目</div>
+  <input id="q" class="search" placeholder="找项目" hidden>
   <ul id="projects"></ul>
-  <footer id="lib"></footer>
+  <footer class="side-foot">
+    <button class="link" id="add">＋ 添加项目</button>
+    <button class="link" id="gear">设置与数据来源</button>
+  </footer>
 </aside>
-<main>
+<main id="main">
   <header id="top" data-tauri-drag-region>
-    <div class="headline"><h1 id="name">creditia</h1><div id="sub" class="sub"></div></div>
-    <nav id="nav" class="seg"></nav>
+    <div class="headline"><h1 id="name">creditia</h1><p id="sum" class="sum"></p></div>
+    <nav id="nav" class="seg" hidden>
+      <button data-view="make" class="on">做一张图</button>
+      <button data-view="detail">逐条明细</button>
+    </nav>
   </header>
   <section id="view"></section>
 </main>
 <div id="sheet" hidden></div>
-<div id="toast" hidden></div>
+<div id="toast" role="status" hidden></div>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

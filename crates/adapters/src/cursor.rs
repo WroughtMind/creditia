@@ -20,6 +20,10 @@ struct Row {
 }
 
 fn rows() -> Result<Vec<Row>, String> {
+    // 没装 Cursor 或从没用过：不是错误，安静跳过
+    if !db_path().exists() {
+        return Ok(vec![]);
+    }
     let conn = open_ro(&db_path()).map_err(|e| format!("cursor: 行级记录不可读 {e}"))?;
     let mut stmt = conn
         .prepare("select hash, source, coalesce(fileName,''), coalesce(conversationId,''), coalesce(timestamp,createdAt), coalesce(model,'') from ai_code_hashes")
