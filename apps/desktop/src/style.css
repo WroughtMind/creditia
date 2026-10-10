@@ -61,40 +61,54 @@ svg { flex: none; }
 .icon:hover, .icon.open { background: var(--line2); color: var(--ink); }
 #view { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
 
-/* ── 图：左边大图 + 下方全部图的缩略条；右边一列全部选项。都不加框 ── */
-.make { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
-.canvas { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.stage { flex: 1; min-height: 0; display: grid; place-items: center; padding: var(--s4) var(--s6); transition: opacity .15s; }
+/* ── 图的种类：一行纯文字 ── */
+.kinds { flex: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; padding: 0 var(--s6) var(--s3); }
+.kinds button { border: 0; background: none; padding: var(--s1) var(--s3); border-radius: 6px; font-size: var(--t-sm); color: var(--faint); cursor: pointer; white-space: nowrap; }
+.kinds button:hover { color: var(--ink); }
+.kinds button.on { color: var(--ink); background: var(--line); }
+.pane { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+
+/* ── 风格墙：每张图就是唯一的「卡片」 ── */
+.wall-head { display: flex; align-items: flex-end; gap: var(--s5); flex-wrap: wrap; padding: var(--s5) var(--s6) var(--s4); max-width: 1600px; width: 100%; margin: 0 auto; }
+.wall-head h2 { margin: 0; font-size: var(--t-xl); }
+.wall-head .meta { margin-top: 2px; }
+.wall-head .chips { margin-left: auto; align-items: center; }
+.chips .k { font-size: var(--t-xs); color: var(--faint); margin-right: var(--s1); }
+.wall { columns: var(--min); column-gap: var(--s5); padding: 0 var(--s6) var(--s6); max-width: 1600px; width: 100%; margin: 0 auto; }
+.tile { break-inside: avoid; margin-bottom: var(--s5); width: 100%; display: flex; flex-direction: column; gap: var(--s2); border: 0; background: none; padding: 0; cursor: pointer; text-align: left; min-width: 0; }
+.shot { display: grid; place-items: center; min-height: 120px; }
+.shot svg { width: 100%; height: auto; display: block; border-radius: 4px; box-shadow: 0 8px 28px rgba(0,0,0,.35); transition: transform .15s, box-shadow .15s; }
+.tile:hover .shot svg { transform: translateY(-2px); box-shadow: 0 0 0 2px var(--accent), 0 12px 32px rgba(0,0,0,.4); }
+.cap { display: flex; align-items: baseline; gap: var(--s2); font-size: var(--t-sm); }
+.cap b { font-weight: 500; }
+.cap span { color: var(--faint); font-size: var(--t-xs); }
+
+/* ── 选中一张：大图 + 右侧尺寸与导出 ── */
+.focus { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 280px; }
+.focus-main { position: relative; display: flex; flex-direction: column; min-height: 0; }
+.back { align-self: flex-start; margin: var(--s2) 0 0 var(--s6); border: 0; background: none; padding: var(--s1) var(--s2); border-radius: 6px; font-size: var(--t-sm); color: var(--soft); cursor: pointer; }
+.back:hover { color: var(--ink); background: var(--line2); }
+.stage { flex: 1; min-height: 0; display: grid; place-items: center; padding: var(--s4) var(--s6) var(--s6); transition: opacity .15s; }
 .stage.busy { opacity: .5; }
 .stage > svg { max-width: 100%; max-height: 100%; width: auto; height: auto; border-radius: 6px; box-shadow: var(--shadow); }
 .empty-card { display: flex; flex-direction: column; gap: var(--s2); text-align: center; color: var(--soft); }
 .loading, .ph { color: var(--faint); font-size: var(--t-sm); }
-.strip { flex: none; display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: var(--s2) var(--s3); padding: var(--s3) var(--s6) var(--s4); }
-.strip .thumb { flex: none; width: 80px; display: flex; flex-direction: column; align-items: center; gap: var(--s1); padding: 0; border: 0; background: none; cursor: pointer; }
-.strip .tstage { width: 80px; height: 48px; display: flex; align-items: flex-end; justify-content: center; }
-.strip .tstage svg { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; border-radius: 2px; opacity: .65; transition: opacity .12s; }
-.strip .thumb:hover svg { opacity: 1; }
-.strip .thumb.on svg { opacity: 1; box-shadow: 0 0 0 2px var(--accent); }
-.strip .tname { font-size: var(--t-xs); color: var(--faint); white-space: nowrap; max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
-.strip .thumb.on .tname { color: var(--ink); }
 
-.side { overflow: auto; padding: var(--s4) var(--s5) var(--s5) var(--s2); display: flex; flex-direction: column; gap: var(--s5); }
+.side { overflow: auto; padding: var(--s5) var(--s5) var(--s5) var(--s2); display: flex; flex-direction: column; gap: var(--s5); }
 .side .head h2 { margin: 0; font-size: var(--t-lg); }
 .side .head p { margin-top: 2px; }
 .grp { display: flex; flex-direction: column; gap: var(--s2); }
 .grp h3 { margin: 0; font-size: var(--t-xs); color: var(--faint); font-weight: 500; }
-.themes { display: grid; grid-template-columns: 1fr 1fr; gap: 2px var(--s1); }
-.themes button { display: flex; align-items: center; gap: var(--s2); border: 0; background: none; padding: 5px var(--s2); margin-left: calc(-1 * var(--s2)); border-radius: 6px; font-size: var(--t-sm); color: var(--soft); text-align: left; cursor: pointer; }
-.themes button:hover { color: var(--ink); background: var(--line2); }
-.themes button.on { color: var(--ink); background: var(--line2); }
 .chips { display: flex; flex-wrap: wrap; gap: var(--s1); }
-.chip { border: 0; background: none; padding: 4px var(--s2); border-radius: 6px; font-size: var(--t-sm); color: var(--soft); cursor: pointer; }
-.chip small { color: var(--faint); font-size: var(--t-xs); margin-left: var(--s1); }
+.chips.col { flex-direction: column; align-items: stretch; }
+.chips.col .chip { display: flex; justify-content: space-between; margin-left: calc(-1 * var(--s2)); }
+.chip { border: 0; background: none; padding: 4px var(--s2); border-radius: 6px; font-size: var(--t-sm); color: var(--soft); cursor: pointer; white-space: nowrap; }
+.chip small { color: var(--faint); font-size: var(--t-xs); margin-left: var(--s2); }
 .chip:hover { color: var(--ink); background: var(--line2); }
 .chip.on { color: var(--ink); background: var(--line); }
 .switch { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-sm); color: var(--soft); cursor: pointer; }
 .switch input { accent-color: var(--accent); margin: 0; }
-.actions { margin-top: auto; display: flex; flex-direction: column; gap: var(--s3); padding-top: var(--s2); }
+.actions { margin-top: auto; display: flex; flex-direction: column; gap: var(--s3); }
 .actions .primary { padding: var(--s2); font-size: var(--t-md); }
 .links { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); }
 .links button { border: 0; background: none; padding: 0; font-size: var(--t-sm); color: var(--soft); cursor: pointer; }
