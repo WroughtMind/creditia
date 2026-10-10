@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderSvg, buildModel, THEMES } from '../src/index.ts';
-import { badge, ROLL_VARIANTS } from '../src/forms.ts';
+import { badge, ROLL_VARIANTS, RECEIPT_VARIANTS } from '../src/forms.ts';
 
 const fixture = {
   project: { name: 'Fixture', range: { from: '2026-01-01', to: '2026-02-15' } },
@@ -36,7 +36,22 @@ test('人不和 agent 同级：合并成一行，另有单独的名单', () => {
   assert.equal(m.humans[0].name, 'Friend');
 });
 
-test('七种风格的 tier 互不相同', async () => {
+test('体裁与版式清单：15 个主题、11 种片尾版式、7 种小票版式', () => {
+  assert.equal(THEMES.length, 15, '主题总数');
+  assert.deepEqual(
+    THEMES.map((t) => t.id),
+    [
+      'minimal-light', 'minimal-dark', 'film', 'terminal', 'glass', 'editorial', 'mono',
+      'cinema', 'playbill', 'gala', 'broadsheet', 'crt', 'arcade', 'neon', 'poster',
+    ],
+  );
+  assert.deepEqual(ROLL_VARIANTS, [
+    'classic', 'columns', 'billing', 'title', 'crawl', 'cast', 'scroll', 'cards', 'end', 'block', 'program',
+  ]);
+  assert.deepEqual(RECEIPT_VARIANTS, ['slip', 'thermal', 'folio', 'stub', 'ticket', 'ledger', 'scroll']);
+});
+
+test('十五种风格的 tier 互不相同', async () => {
   const svgs = new Map<string, string>();
   for (const t of THEMES) {
     const svg = await renderSvg('tier', m, t);
@@ -46,7 +61,7 @@ test('七种风格的 tier 互不相同', async () => {
   assert.equal(new Set(svgs.values()).size, THEMES.length);
 });
 
-test('片尾字幕五种版式互不相同', async () => {
+test('片尾字幕十一种版式互不相同', async () => {
   const film = THEMES.find((t) => t.id === 'film')!;
   const svgs: string[] = [];
   for (const v of ROLL_VARIANTS) {
@@ -61,4 +76,20 @@ test('徽章每种风格画法不同', () => {
   const out = THEMES.map((t) => badge(m, t));
   out.forEach((svg, i) => assert.ok(svg.startsWith('<svg'), THEMES[i].id));
   assert.equal(new Set(out).size, THEMES.length);
+});
+
+test('15 个主题 × 代表形式冒烟：返回字符串或 null，不抛异常', async () => {
+  const forms = ['tier', 'roll', 'receipt', 'share', 'byline'];
+  for (const t of THEMES) {
+    for (const form of forms) {
+      let svg: string | null;
+      try {
+        svg = await renderSvg(form, m, t, { lang: 'zh' });
+      } catch (e) {
+        throw new Error(`${t.id}/${form} 渲染抛异常：${(e as Error).message}`, { cause: e });
+      }
+      assert.ok(svg === null || typeof svg === 'string', `${t.id}/${form} 应返回字符串或 null`);
+    }
+    assert.ok(badge(m, t).startsWith('<svg'), `${t.id}/badge`);
+  }
 });

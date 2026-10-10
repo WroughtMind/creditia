@@ -27,6 +27,28 @@ const FILES = [
   ['noto-sans-sc/400Regular/NotoSansSC_400Regular.ttf', 'NotoSansSC-400.ttf', true],
   ['noto-sans-sc/700Bold/NotoSansSC_700Bold.ttf', 'NotoSansSC-700.ttf', true],
   ['noto-serif-sc/400Regular/NotoSerifSC_400Regular.ttf', 'NotoSerifSC-400.ttf', true],
+  // ── 第二轮体裁的字体 ──
+  ['cinzel/500Medium/Cinzel_500Medium.ttf', 'Cinzel-500.ttf'],
+  ['cinzel/700Bold/Cinzel_700Bold.ttf', 'Cinzel-700.ttf'],
+  ['cinzel-decorative/700Bold/CinzelDecorative_700Bold.ttf', 'CinzelDecorative-700.ttf'],
+  ['playfair-display/500Medium/PlayfairDisplay_500Medium.ttf', 'PlayfairDisplay-500.ttf'],
+  ['playfair-display/700Bold/PlayfairDisplay_700Bold.ttf', 'PlayfairDisplay-700.ttf'],
+  ['playfair-display/900Black/PlayfairDisplay_900Black.ttf', 'PlayfairDisplay-900.ttf'],
+  ['libre-baskerville/400Regular/LibreBaskerville_400Regular.ttf', 'LibreBaskerville-400.ttf'],
+  ['libre-baskerville/700Bold/LibreBaskerville_700Bold.ttf', 'LibreBaskerville-700.ttf'],
+  ['oswald/400Regular/Oswald_400Regular.ttf', 'Oswald-400.ttf'],
+  ['oswald/600SemiBold/Oswald_600SemiBold.ttf', 'Oswald-600.ttf'],
+  ['poiret-one/400Regular/PoiretOne_400Regular.ttf', 'PoiretOne-400.ttf'],
+  ['limelight/400Regular/Limelight_400Regular.ttf', 'Limelight-400.ttf'],
+  ['unifrakturmaguntia/400Regular/UnifrakturMaguntia_400Regular.ttf', 'UnifrakturMaguntia-400.ttf'],
+  ['vt323/400Regular/VT323_400Regular.ttf', 'VT323-400.ttf'],
+  ['press-start-2p/400Regular/PressStart2P_400Regular.ttf', 'PressStart2P-400.ttf'],
+  ['monoton/400Regular/Monoton_400Regular.ttf', 'Monoton-400.ttf'],
+  ['archivo-black/400Regular/ArchivoBlack_400Regular.ttf', 'ArchivoBlack-400.ttf'],
+  ['anton/400Regular/Anton_400Regular.ttf', 'Anton-400.ttf'],
+  ['zcool-xiaowei/400Regular/ZCOOLXiaoWei_400Regular.ttf', 'ZCOOLXiaoWei-400.ttf', true],
+  ['zcool-qingke-huangyou/400Regular/ZCOOLQingKeHuangYou_400Regular.ttf', 'ZCOOLQingKeHuangYou-400.ttf', true],
+  ['ma-shan-zheng/400Regular/MaShanZheng_400Regular.ttf', 'MaShanZheng-400.ttf', true],
 ];
 for (const [src, name, cjk] of FILES) {
   const input = require.resolve(`@expo-google-fonts/${src}`);
