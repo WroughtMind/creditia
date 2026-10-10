@@ -39,7 +39,7 @@ const state = {
   view: 'make' as View,
   theme: (localStorage.creditiaTheme as string) || 'cinema',
   form: (localStorage.creditiaForm as string) || 'tier',
-  variant: undefined as string | undefined, size: 'native',
+  variant: undefined as string | undefined, size: 'native', picked: false, wallVar: undefined as string | undefined,
   svg: '', token: 0, thumbToken: 0,
 };
 if (!ORDER.includes(state.form)) state.form = 'tier';
@@ -136,7 +136,7 @@ function summary(m: Model) {
 }
 
 async function openProject(p: any) {
-  state.current = p; state.raw = null; state.model = null; state.variant = undefined;
+  state.current = p; state.picked = false; state.raw = null; state.model = null; state.variant = undefined;
   $('#name').textContent = p.name;
   try {
     state.raw = await api('credits', { projectId: p.id });
@@ -162,81 +162,127 @@ function renderView() {
 
 // ───────────────────────── 主界面：做一张图 ─────────────────────────
 const curVariant = () => state.variant ?? FORMS[state.form].def?.(theme());
+const DEFAULT_VAR = '';  // 版式行里的「各风格默认」
 
+// ───────────────────────── 图：先选图的种类 → 风格墙（全部风格真实渲染）→ 点一张放大导出 ─────────────────────────
 function viewMake(v: HTMLElement) {
   v.innerHTML = `
-  <div class="make">
-    <div class="canvas">
+  <nav class="kinds" id="kinds">${ORDER.map((id) => `<button data-form="${id}" class="${id === state.form ? 'on' : ''}">${esc(FORMS[id].name)}</button>`).join('')}</nav>
+  <div class="pane" id="pane"></div>`;
+  $('#kinds').onclick = (e) => {
+    const b = (e.target as HTMLElement).closest('[data-form]') as HTMLElement | null; if (!b) return;
+    state.form = b.dataset.form!; localStorage.creditiaForm = state.form; state.variant = undefined; state.picked = false; state.wallVar = undefined;
+    $('#kinds').querySelectorAll('[data-form]').forEach((x) => x.classList.toggle('on', x === b));
+    paintPane();
+  };
+  paintPane();
+}
+function paintPane() { if (state.picked) viewFocus(); else viewWall(); }
+
+/** 风格墙：当前这种图在 15 个风格下的真实样子，按真实比例，滚到眼前才画 */
+let io: IntersectionObserver | null = null;
+const cache = new Map<string, string | null>();
+function viewWall() {
+  const f = FORMS[state.form]; const pane = $('#pane'); pane.scrollTop = 0;
+  const vs = f.variants ?? [];
+  const wall = state.wallVar ?? DEFAULT_VAR;
+  pane.innerHTML = `
+    <header class="wall-head">
+      <div><h2>${esc(f.name)}</h2><p class="meta">${esc(f.q)} · ${THEMES.length} 种风格，点一张放大、保存</p></div>
+      ${vs.length ? `<div class="chips" id="wall-var"><span class="k">版式</span><button class="chip ${wall === DEFAULT_VAR ? 'on' : ''}" data-v="">各风格默认</button>${vs.map((x) => `<button class="chip ${x === wall ? 'on' : ''}" data-v="${x}">${esc(VARIANT_ZH[state.form]?.[x] ?? x)}</button>`).join('')}</div>` : ''}
+    </header>
+    <div class="wall" id="wall" style="--min:${minCol(state.form)}px">${THEMES.map((t) => {
+      const vv = wall || f.def?.(t);
+      return `<button class="tile" data-theme="${t.id}" data-var="${vv ?? ''}">
+        <span class="shot" data-shot="${t.id}"><span class="ph">正在画…</span></span>
+        <span class="cap"><b>${esc(THEME_ZH[t.id] ?? t.name)}</b>${vv ? `<span>${esc(VARIANT_ZH[state.form]?.[vv] ?? vv)}</span>` : ''}</span>
+      </button>`;
+    }).join('')}</div>`;
+  $('#wall-var')?.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('[data-v]') as HTMLElement | null; if (!b) return;
+    state.wallVar = b.dataset.v!; viewWall();
+  });
+  $('#wall').onclick = (e) => {
+    const b = (e.target as HTMLElement).closest('[data-theme]') as HTMLElement | null; if (!b) return;
+    state.theme = b.dataset.theme!; localStorage.creditiaTheme = state.theme;
+    state.variant = b.dataset.var || undefined; state.picked = true; state.size = 'native'; viewFocus();
+  };
+  const token = ++state.thumbToken; io?.disconnect();
+  const queue: HTMLElement[] = []; let busy = 0;
+  const pump = () => {
+    while (busy < 2 && queue.length) {
+      const el = queue.shift()!; busy++;
+      const tile = el.closest('.tile') as HTMLElement; const t = themeById(tile.dataset.theme!)!; const vv = tile.dataset.var || undefined;
+      const key = `${state.current?.id}|${state.form}|${t.id}|${vv}|${!!state.config.display?.director}`;
+      (async () => {
+        let svg = cache.get(key);
+        if (svg === undefined) { try { svg = await renderSvg(state.form, state.model!, t, await ctxOf(state.form, vv)); } catch { svg = null; } cache.set(key, svg); }
+        busy--;
+        if (token === state.thumbToken) el.innerHTML = svg ?? `<span class="ph">${esc(whyEmpty(state.form))}</span>`;
+        pump();
+      })();
+    }
+  };
+  io = new IntersectionObserver((ents) => {
+    for (const e of ents) if (e.isIntersecting) { io!.unobserve(e.target); queue.push(e.target as HTMLElement); }
+    pump();
+  }, { root: pane, rootMargin: '400px' });
+  pane.querySelectorAll('[data-shot]').forEach((el) => io!.observe(el));
+}
+/** 风格墙每列最小宽度：横图宽一点，竖图窄一点，保证看得清 */
+function minCol(id: string) {
+  const m = /^(\d+)×(\d+)$/.exec(FORMS[id].size);
+  const r = m ? Number(m[1]) / Number(m[2]) : 1.6;
+  return r > 4 ? 560 : r > 1.3 ? 400 : 300;
+}
+
+/** 选中一张：放大，旁边只放尺寸和导出 */
+function viewFocus() {
+  const f = FORMS[state.form]; const v = curVariant(); const pane = $('#pane');
+  pane.innerHTML = `
+  <div class="focus">
+    <div class="focus-main">
+      <button class="back" id="back">← 全部风格</button>
       <div class="stage" id="stage"><div class="loading">正在画…</div></div>
-      <div class="strip" id="strip">${ORDER.map((id) => `
-        <button class="thumb ${id === state.form ? 'on' : ''}" data-form="${id}" title="${esc(FORMS[id].q)}">
-          <span class="tstage" data-tstage="${id}"></span>
-          <span class="tname">${esc(FORMS[id].name)}</span>
-        </button>`).join('')}</div>
     </div>
     <aside class="side">
-      <div class="head"><h2 id="f-name"></h2><p id="f-q" class="meta"></p></div>
-      <div class="grp"><h3>风格</h3><div class="themes" id="themes">${THEMES.map((t) => `
-        <button data-theme="${t.id}"><span class="sw" style="background:${t.bg}"><i style="background:${t.accent}"></i></span>${esc(THEME_ZH[t.id] ?? t.name)}</button>`).join('')}</div></div>
-      <div class="grp" id="g-var"><h3>版式</h3><div class="chips" id="variants"></div></div>
-      <div class="grp"><h3>尺寸</h3><div class="chips" id="sizes">${SIZES.map(([k, n]) => `<button class="chip" data-size="${k}" title="${esc(n)}">${esc(n.replace(/ (\d+×\d+)$/, '<small>$1</small>'))}</button>`).join('').replace(/&lt;small&gt;/g, '<small>').replace(/&lt;\/small&gt;/g, '</small>')}</div></div>
-      <label class="switch" id="b-dir"><input type="checkbox" id="dir"><span>在图上写明我是主导者</span></label>
+      <div class="head"><h2>${esc(f.name)}</h2><p class="meta">${esc(THEME_ZH[state.theme] ?? state.theme)}${v ? ` · ${esc(VARIANT_ZH[state.form]?.[v] ?? v)}` : ''}</p></div>
+      ${f.variants?.length ? `<div class="grp"><h3>换个版式</h3><div class="chips" id="variants">${f.variants.map((x) => `<button class="chip ${x === v ? 'on' : ''}" data-var="${x}">${esc(VARIANT_ZH[state.form]?.[x] ?? x)}</button>`).join('')}</div></div>` : ''}
+      <div class="grp"><h3>尺寸</h3><div class="chips col" id="sizes">${SIZES.map(([k, n]) => { const [a, b] = n.split(' '); return `<button class="chip ${k === state.size ? 'on' : ''}" data-size="${k}">${esc(a)}${b ? `<small>${esc(b)}</small>` : ''}</button>`; }).join('')}</div></div>
+      ${state.form === 'tier' ? `<label class="switch"><input type="checkbox" id="dir" ${state.config.display?.director ? 'checked' : ''}><span>在图上写明我是主导者</span></label>` : ''}
       <div class="actions">
         <button class="btn primary" id="sv-png">保存图片</button>
         <div class="links">
           <button id="cp-png">复制图片</button>
           <button id="cp-svg">复制 SVG</button>
-          <button id="cp-embed">网页嵌入代码</button>
+          ${state.form === 'tier' ? '<button id="cp-embed">网页嵌入代码</button>' : ''}
           <button id="cp-md">复制 CREDITS.md</button>
         </div>
       </div>
     </aside>
   </div>`;
-  $('#strip').onclick = (e) => {
-    const b = (e.target as HTMLElement).closest('[data-form]') as HTMLElement | null; if (!b) return;
-    state.form = b.dataset.form!; localStorage.creditiaForm = state.form; state.variant = undefined;
-    renderOptions(); paintFocus();
-  };
-  $('#themes').onclick = (e) => {
-    const b = (e.target as HTMLElement).closest('[data-theme]') as HTMLElement | null; if (!b) return;
-    state.theme = b.dataset.theme!; localStorage.creditiaTheme = state.theme; renderOptions(); paintFocus(); paintThumbs($('#strip'));
-  };
-  $('#variants').onclick = (e) => {
+  $('#back').onclick = () => { state.picked = false; viewWall(); };
+  ($('#variants') as HTMLElement | null)?.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest('[data-var]') as HTMLElement | null; if (!b) return;
-    state.variant = b.dataset.var; renderOptions(); paintFocus();
-  };
+    state.variant = b.dataset.var; viewFocus();
+  });
   $('#sizes').onclick = (e) => {
     const b = (e.target as HTMLElement).closest('[data-size]') as HTMLElement | null; if (!b) return;
-    state.size = b.dataset.size!; renderOptions(); paintFocus();
+    state.size = b.dataset.size!; $('#sizes').querySelectorAll('[data-size]').forEach((x) => x.classList.toggle('on', x === b)); paintFocus();
   };
-  $('#sv-png').onclick = savePng;
-  $('#cp-png').onclick = copyPng;
-  $('#cp-svg').onclick = () => copy(state.svg, 'SVG 已复制');
-  $('#cp-embed').onclick = copyEmbed;
-  $('#cp-md').onclick = () => copy(mergeCreditsMd(null, creditsBlock(state.model!)), 'CREDITS.md 已复制');
-  ($('#dir') as HTMLInputElement).addEventListener('change', async (e) => {
+  ($('#dir') as HTMLInputElement | null)?.addEventListener('change', async (e) => {
     const on = (e.target as HTMLInputElement).checked;
     state.config.display = { ...(state.config.display ?? {}), director: on };
     state.model = buildModel(state.raw, { director: on, lang: 'zh' });
     await api('set_display_director', { projectId: state.current.id, on }).catch(() => {});
     paintFocus();
   });
-  renderOptions(); paintFocus(); paintThumbs($('#strip'));
-}
-
-/** 所有选项都直接摆出来，这里只负责高亮当前选择 */
-function renderOptions() {
-  const f = FORMS[state.form]; const v = curVariant();
-  $('#f-name').textContent = f.name; $('#f-q').textContent = f.q;
-  document.querySelectorAll('#strip [data-form]').forEach((x) => x.classList.toggle('on', (x as HTMLElement).dataset.form === state.form));
-  document.querySelector('#strip .on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  document.querySelectorAll('#themes [data-theme]').forEach((x) => x.classList.toggle('on', (x as HTMLElement).dataset.theme === state.theme));
-  document.querySelectorAll('#sizes [data-size]').forEach((x) => x.classList.toggle('on', (x as HTMLElement).dataset.size === state.size));
-  $('#g-var').hidden = !f.variants?.length;
-  $('#variants').innerHTML = (f.variants ?? []).map((x) => `<button class="chip ${x === v ? 'on' : ''}" data-var="${x}">${esc(VARIANT_ZH[state.form]?.[x] ?? x)}</button>`).join('');
-  $('#b-dir').hidden = state.form !== 'tier';
-  ($('#dir') as HTMLInputElement).checked = !!state.config.display?.director;
-  ($('#cp-embed') as HTMLElement).hidden = state.form !== 'tier';
+  $('#sv-png').onclick = savePng;
+  $('#cp-png').onclick = copyPng;
+  $('#cp-svg').onclick = () => copy(state.svg, 'SVG 已复制');
+  ($('#cp-embed') as HTMLElement | null)?.addEventListener('click', copyEmbed);
+  $('#cp-md').onclick = () => copy(mergeCreditsMd(null, creditsBlock(state.model!)), 'CREDITS.md 已复制');
+  paintFocus();
 }
 
 /** profile 要全部项目的模型；其余只要语言和版式 */
@@ -274,36 +320,6 @@ function whyEmpty(id: string) {
   if (id === 'lanes') return '需要本机有 agent 会话记录。';
   if (id === 'versions') return '需要项目打过版本 tag。';
   return '数据太少，换一张图试试。';
-}
-
-/** 缩略图：滚到眼前才画，大小按每张图的真实比例 */
-let io: IntersectionObserver | null = null;
-function paintThumbs(root: HTMLElement) {
-  const token = ++state.thumbToken;
-  io?.disconnect();
-  if (!state.model) return;
-  const queue: string[] = []; let busy = 0;
-  const pump = async () => {
-    while (busy < 2 && queue.length) {
-      const id = queue.shift()!; busy++;
-      (async () => {
-        let svg: string | null = null;
-        try { svg = await renderSvg(id, state.model!, theme(), await ctxOf(id)); } catch { svg = null; }
-        busy--;
-        if (token !== state.thumbToken) return;
-        const el = root.querySelector(`[data-tstage="${id}"]`) as HTMLElement | null;
-        if (el) {
-          el.innerHTML = svg ?? '<span class="ph">—</span>';
-        }
-        pump();
-      })();
-    }
-  };
-  io = new IntersectionObserver((ents) => {
-    for (const e of ents) if (e.isIntersecting) { io!.unobserve(e.target); queue.push((e.target as HTMLElement).dataset.tstage!); }
-    pump();
-  }, { root, rootMargin: '200px' });
-  root.querySelectorAll('[data-tstage]').forEach((el) => io!.observe(el));
 }
 
 const fileName = () => `${state.model!.project || 'credits'}-${state.form}${state.variant ? '-' + state.variant : ''}.png`;
