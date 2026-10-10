@@ -6,26 +6,18 @@
 <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
-<aside id="side">
-  <div class="brand" data-tauri-drag-region><span class="seal">名</span><b>creditia</b></div>
-  <div class="side-label">我的项目</div>
-  <input id="q" class="search" placeholder="找项目" hidden>
-  <ul id="projects"></ul>
-  <footer class="side-foot">
-    <button class="link" id="add">＋ 添加项目</button>
-    <button class="link" id="gear">设置与数据来源</button>
-  </footer>
-</aside>
-<main id="main">
-  <header id="top" data-tauri-drag-region>
-    <div class="headline"><h1 id="name">creditia</h1><p id="sum" class="sum"></p></div>
-    <nav id="nav" class="seg" hidden>
-      <button data-view="make" class="on">做一张图</button>
-      <button data-view="detail">逐条明细</button>
-    </nav>
-  </header>
-  <section id="view"></section>
-</main>
+<header id="top" data-tauri-drag-region>
+  <div class="top-l"></div>
+  <div class="top-c">
+    <button id="proj" class="proj" aria-haspopup="menu"><b id="name">creditia</b><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="top-r">
+    <nav id="nav" class="seg" hidden><button data-view="make" class="on">图</button><button data-view="detail">明细</button></nav>
+    <button id="gear" class="icon" title="设置与数据来源"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></button>
+  </div>
+</header>
+<main id="view"></main>
+<div id="pop" hidden></div>
 <div id="sheet" hidden></div>
 <div id="toast" role="status" hidden></div>
 <script type="module" src="/src/main.ts"></script>

@@ -54,24 +54,63 @@ const analyzeCmd = (path = '你的项目文件夹') => `cd "${path}" && creditia
 // ───────────────────────── 启动 ─────────────────────────
 async function boot() {
   $('#gear').onclick = settingsSheet;
-  $('#add').onclick = addSheet;
+  $('#proj').onclick = (e) => projectMenu(e.currentTarget as HTMLElement);
   $('#nav').onclick = (e) => {
     const b = (e.target as HTMLElement).closest('button[data-view]') as HTMLElement | null; if (!b) return;
     state.view = b.dataset.view as View; renderView();
   };
-  $('#q').addEventListener('input', renderProjects);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
   try { state.projects = await api('projects'); } catch (e: any) { return firstRun(`没能读取项目列表：${e?.message ?? e}`); }
-  renderProjects();
   if (state.projects.length) openProject(state.projects[0]); else firstRun();
+}
+
+// ───────────────────────── 弹出菜单（项目、图、风格、版式、尺寸、更多） ─────────────────────────
+function closePop() { const p = $('#pop'); p.hidden = true; p.innerHTML = ''; document.querySelectorAll('.open').forEach((x) => x.classList.remove('open')); }
+function openPop(anchor: HTMLElement, html: string, opts: { up?: boolean; width?: number } = {}) {
+  const was = anchor.classList.contains('open');
+  closePop(); if (was) return null;
+  anchor.classList.add('open');
+  const p = $('#pop'); p.hidden = false;
+  p.innerHTML = `<div class="pop-back"></div><div class="menu" style="${opts.width ? `width:${opts.width}px;` : ''}">${html}</div>`;
+  const m = p.querySelector('.menu') as HTMLElement; const r = anchor.getBoundingClientRect();
+  const w = m.offsetWidth;
+  m.style.left = `${Math.max(12, Math.min(window.innerWidth - w - 12, r.left + r.width / 2 - w / 2))}px`;
+  if (opts.up) m.style.bottom = `${window.innerHeight - r.top + 8}px`; else m.style.top = `${r.bottom + 8}px`;
+  (p.querySelector('.pop-back') as HTMLElement).onclick = closePop;
+  return m;
+}
+function projectMenu(anchor: HTMLElement) {
+  const m = openPop(anchor, `
+    ${state.model ? `<p class="menu-sum">${esc(summary(state.model))}</p>` : ''}
+    ${state.projects.length > 6 ? '<input class="menu-q" placeholder="找项目">' : ''}
+    <div class="menu-list" id="plist"></div>
+    <div class="menu-sep"></div>
+    <button class="menu-item" id="padd">添加项目…</button>`, { width: 340 });
+  if (!m) return;
+  const list = () => {
+    const q = (m.querySelector('.menu-q') as HTMLInputElement | null)?.value.trim().toLowerCase() ?? '';
+    m.querySelector('#plist')!.innerHTML = state.projects.filter((p) => !q || String(p.name).toLowerCase().includes(q)).map((p) => {
+      const when = p.lastAnalyzed ? new Date(p.lastAnalyzed * 1000).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' }) + '分析' : '还没分析';
+      return `<button class="menu-item ${p.id === state.current?.id ? 'on' : ''}" data-pid="${esc(p.id)}" title="${esc(p.path)}"><span>${esc(p.name)}</span><span class="dim">${when}</span></button>`;
+    }).join('');
+  };
+  list();
+  m.querySelector('.menu-q')?.addEventListener('input', list);
+  m.onclick = (e) => {
+    const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
+    if (b.id === 'padd') { closePop(); return addSheet(); }
+    const p = state.projects.find((x) => x.id === b.dataset.pid); if (p) { closePop(); openProject(p); }
+  };
 }
 
 /** 第一次打开、还没有任何项目时：说清楚这是什么、下一步做什么 */
 function firstRun(err?: string) {
-  $('#name').textContent = '欢迎使用 creditia';
-  $('#sum').textContent = '它会看你项目的 git 提交和本机 AI 编程工具的记录，算出每段代码是谁写的，再做成能分享的图。';
+  $('#name').textContent = '还没有项目';
   $('#nav').hidden = true;
   $('#view').innerHTML = `
   <div class="welcome">
+    <h1>creditia</h1>
+    <p class="lead">看你项目的 git 提交和本机 AI 编程工具的记录，算出每段代码是谁写的，做成能分享的图。</p>
     ${err ? `<p class="warn">${esc(err)}</p>` : ''}
     <ol class="steps">
       <li><b>分析一个项目</b><span>在终端里进入项目文件夹，运行下面这行。只在本机读，不上传任何东西。</span>
@@ -83,21 +122,6 @@ function firstRun(err?: string) {
   </div>`;
   $('#cp-first').onclick = () => copy(analyzeCmd(), '命令已复制');
   $('#reload').onclick = () => location.reload();
-}
-
-function renderProjects() {
-  const q = ($('#q') as HTMLInputElement).value.trim().toLowerCase();
-  ($('#q') as HTMLInputElement).hidden = state.projects.length < 6;
-  const ul = $('#projects'); ul.innerHTML = '';
-  for (const p of state.projects.filter((p) => !q || String(p.name).toLowerCase().includes(q))) {
-    const li = document.createElement('li');
-    li.className = p.id === state.current?.id ? 'on' : '';
-    const when = p.lastAnalyzed ? new Date(p.lastAnalyzed * 1000).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' }) : '';
-    li.innerHTML = `<b>${esc(p.name)}</b><span>${when ? `${when}分析` : '还没分析'}</span>`;
-    li.title = p.path;
-    li.onclick = () => openProject(p);
-    ul.append(li);
-  }
 }
 
 /** 一句话说清这个项目：谁写的、多少 */
@@ -113,20 +137,18 @@ function summary(m: Model) {
 
 async function openProject(p: any) {
   state.current = p; state.raw = null; state.model = null; state.variant = undefined;
-  $('#name').textContent = p.name; $('#sum').textContent = '正在读取…';
-  renderProjects();
+  $('#name').textContent = p.name;
   try {
     state.raw = await api('credits', { projectId: p.id });
     state.config = await api('config_of', { projectId: p.id }).catch(() => ({}));
   } catch (e: any) {
-    $('#sum').textContent = '';
     $('#view').innerHTML = `<div class="empty"><p>这个项目还没有分析结果。</p><div class="row"><code>${esc(analyzeCmd(p.path))}</code><button class="btn" id="cp-an">复制</button></div><p class="meta">${esc(e?.message ?? e)}</p></div>`;
     $('#cp-an').onclick = () => copy(analyzeCmd(p.path), '命令已复制');
     return;
   }
   state.model = buildModel(state.raw, { director: !!state.config.display?.director, lang: 'zh' });
   $('#name').textContent = state.model.project || p.name;
-  $('#sum').textContent = summary(state.model);
+  $('#proj').title = summary(state.model);
   $('#nav').hidden = false;
   renderView();
 }
@@ -146,86 +168,89 @@ function aspectOf(id: string) {
 }
 const curVariant = () => state.variant ?? FORMS[state.form].def?.(theme());
 
+const chev = '<svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
 function viewMake(v: HTMLElement) {
   v.innerHTML = `
-  <div class="make">
-    <div class="canvas">
-      <div class="stage" id="stage"><div class="loading">正在画…</div></div>
-      <div class="caption" id="caption"></div>
-    </div>
-    <aside class="rail">
-      <section>
-        <h3><i>1</i>选一张图</h3>
-        <div class="thumbs" id="thumbs">${GROUPS.map(([g, ids]) => {
-          const list = ids.filter((id) => ORDER.includes(id));
-          return list.length ? `<div class="tgroup"><h4>${esc(g)}</h4><div class="tgrid">${list.map((id) => `
-            <button class="thumb ${id === state.form ? 'on' : ''}" data-form="${id}" title="${esc(FORMS[id].q)}">
-              <span class="tstage" style="aspect-ratio:${aspectOf(id)}" data-tstage="${id}"></span>
-              <span class="tname">${esc(FORMS[id].name)}</span>
-            </button>`).join('')}</div></div>` : '';
-        }).join('')}</div>
-      </section>
-      <section>
-        <h3><i>2</i>选风格</h3>
-        <div class="themes" id="themes">${THEMES.map((t) => `
-          <button data-theme="${t.id}" class="${t.id === state.theme ? 'on' : ''}">
-            <span class="sw" style="background:${t.bg}"><i style="background:${t.accent}"></i></span>
-            <span>${esc(THEME_ZH[t.id] ?? t.name)}</span>
-          </button>`).join('')}</div>
-        <div id="variants"></div>
-        <label class="field"><span>尺寸</span><select id="size">${SIZES.map(([k, n]) => `<option value="${k}" ${k === state.size ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-        <div id="dir-slot"></div>
-      </section>
-      <section class="save">
-        <h3><i>3</i>拿走</h3>
-        <button class="btn primary big" id="sv-png">保存图片</button>
-        <div class="more">
-          <button class="btn" id="cp-png">复制图片</button>
-          <button class="btn" id="cp-svg">复制 SVG</button>
-          <button class="btn" id="cp-embed" title="贴到网页里，会自动读取 credits.json 显示这张图">网页嵌入代码</button>
-        </div>
-      </section>
-    </aside>
+  <div class="stage" id="stage"><div class="loading">正在画…</div></div>
+  <div class="bar" id="bar">
+    <button class="pick" id="b-form"></button>
+    <button class="pick" id="b-theme"></button>
+    <button class="pick" id="b-var"></button>
+    <button class="pick" id="b-size"></button>
+    <label class="pick toggle" id="b-dir" title="在图上写明谁是主导者"><input type="checkbox" id="dir"><span>署主导者</span></label>
+    <span class="bar-sep"></span>
+    <button class="btn primary" id="sv-png">保存图片</button>
+    <button class="icon" id="b-more" title="更多导出方式"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
   </div>`;
-  v.querySelector('#thumbs')!.addEventListener('click', (e) => {
-    const b = (e.target as HTMLElement).closest('[data-form]') as HTMLElement | null; if (!b) return;
-    state.form = b.dataset.form!; localStorage.creditiaForm = state.form; state.variant = undefined;
-    v.querySelectorAll('[data-form]').forEach((x) => x.classList.toggle('on', x === b));
-    renderOptions(); paintFocus();
-  });
-  $('#themes').onclick = (e) => {
-    const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
-    state.theme = b.dataset.theme!; localStorage.creditiaTheme = state.theme;
-    $('#themes').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-    renderOptions(); paintFocus(); paintThumbs();
-  };
-  ($('#size') as HTMLSelectElement).onchange = (e) => { state.size = (e.target as HTMLSelectElement).value; paintFocus(); };
+  $('#b-form').onclick = (e) => formMenu(e.currentTarget as HTMLElement);
+  $('#b-theme').onclick = (e) => themeMenu(e.currentTarget as HTMLElement);
+  $('#b-var').onclick = (e) => listMenu(e.currentTarget as HTMLElement, (FORMS[state.form].variants ?? []).map((x) => [x, VARIANT_ZH[state.form]?.[x] ?? x]), curVariant(), (x) => { state.variant = x; });
+  $('#b-size').onclick = (e) => listMenu(e.currentTarget as HTMLElement, SIZES, state.size, (x) => { state.size = x; });
+  $('#b-more').onclick = (e) => moreMenu(e.currentTarget as HTMLElement);
   $('#sv-png').onclick = savePng;
-  $('#cp-png').onclick = copyPng;
-  $('#cp-svg').onclick = () => copy(state.svg, 'SVG 已复制');
-  $('#cp-embed').onclick = copyEmbed;
-  renderOptions(); paintFocus(); paintThumbs();
-}
-
-/** 版式与主导者开关：跟着当前图走 */
-function renderOptions() {
-  const f = FORMS[state.form];
-  const vs = f.variants ?? []; const cur = curVariant();
-  $('#variants').innerHTML = vs.length ? `<div class="field"><span>版式</span><div class="chips">${vs.map((x) => `<button class="chip ${x === cur ? 'on' : ''}" data-var="${x}">${esc(VARIANT_ZH[state.form]?.[x] ?? x)}</button>`).join('')}</div></div>` : '';
-  $('#variants').onclick = (e) => {
-    const b = (e.target as HTMLElement).closest('[data-var]') as HTMLElement | null; if (!b) return;
-    state.variant = b.dataset.var; $('#variants').querySelectorAll('[data-var]').forEach((x) => x.classList.toggle('on', x === b)); paintFocus();
-  };
-  const tierLike = state.form === 'tier';
-  $('#dir-slot').innerHTML = tierLike ? `<label class="switch"><input type="checkbox" id="dir" ${state.config.display?.director ? 'checked' : ''}><span>在图上写明我是主导者</span></label>` : '';
-  ($('#dir') as HTMLInputElement | null)?.addEventListener('change', async (e) => {
+  ($('#dir') as HTMLInputElement).addEventListener('change', async (e) => {
     const on = (e.target as HTMLInputElement).checked;
     state.config.display = { ...(state.config.display ?? {}), director: on };
     state.model = buildModel(state.raw, { director: on, lang: 'zh' });
     await api('set_display_director', { projectId: state.current.id, on }).catch(() => {});
     paintFocus();
   });
-  ($('#cp-embed') as HTMLButtonElement).hidden = state.form !== 'tier';
+  renderOptions(); paintFocus();
+}
+
+/** 底部工具条上的按钮文字跟着当前选择走；没有版式的图不显示版式 */
+function renderOptions() {
+  const f = FORMS[state.form]; const v = curVariant();
+  $('#b-form').innerHTML = `<span class="k">图</span>${esc(f.name)}${chev}`;
+  $('#b-theme').innerHTML = `<span class="k">风格</span><span class="sw" style="background:${theme().bg}"><i style="background:${theme().accent}"></i></span>${esc(THEME_ZH[state.theme] ?? state.theme)}${chev}`;
+  const bv = $('#b-var'); bv.hidden = !f.variants?.length;
+  if (v) bv.innerHTML = `<span class="k">版式</span>${esc(VARIANT_ZH[state.form]?.[v] ?? v)}${chev}`;
+  $('#b-size').innerHTML = `<span class="k">尺寸</span>${esc((SIZES.find(([k]) => k === state.size)?.[1] ?? '').replace(/ \d.*/, ''))}${chev}`;
+  $('#b-dir').hidden = state.form !== 'tier';
+  ($('#dir') as HTMLInputElement).checked = !!state.config.display?.director;
+}
+
+function listMenu(anchor: HTMLElement, items: [string, string][], cur: string | undefined, set: (x: string) => void) {
+  const m = openPop(anchor, items.map(([k, n]) => `<button class="menu-item ${k === cur ? 'on' : ''}" data-k="${esc(k)}"><span>${esc(n)}</span></button>`).join(''), { up: true, width: 220 });
+  if (!m) return;
+  m.onclick = (e) => { const b = (e.target as HTMLElement).closest('[data-k]') as HTMLElement | null; if (!b) return; set(b.dataset.k!); closePop(); renderOptions(); paintFocus(); };
+}
+function themeMenu(anchor: HTMLElement) {
+  const m = openPop(anchor, `<div class="theme-grid">${THEMES.map((t) => `<button class="menu-item ${t.id === state.theme ? 'on' : ''}" data-k="${t.id}"><span class="sw" style="background:${t.bg}"><i style="background:${t.accent}"></i></span><span>${esc(THEME_ZH[t.id] ?? t.name)}</span></button>`).join('')}</div>`, { up: true, width: 340 });
+  if (!m) return;
+  m.onclick = (e) => {
+    const b = (e.target as HTMLElement).closest('[data-k]') as HTMLElement | null; if (!b) return;
+    state.theme = b.dataset.k!; localStorage.creditiaTheme = state.theme; closePop(); renderOptions(); paintFocus();
+  };
+}
+function formMenu(anchor: HTMLElement) {
+  const m = openPop(anchor, GROUPS.map(([g, ids]) => {
+    const list = ids.filter((id) => ORDER.includes(id));
+    return list.length ? `<h4>${esc(g)}</h4><div class="tgrid">${list.map((id) => `
+      <button class="thumb ${id === state.form ? 'on' : ''}" data-form="${id}" title="${esc(FORMS[id].q)}">
+        <span class="tstage" style="aspect-ratio:${aspectOf(id)}" data-tstage="${id}"></span>
+        <span class="tname">${esc(FORMS[id].name)}</span><span class="tq">${esc(FORMS[id].q)}</span>
+      </button>`).join('')}</div>` : '';
+  }).join(''), { up: true, width: Math.min(760, window.innerWidth - 24) });
+  if (!m) return;
+  m.classList.add('forms');
+  m.onclick = (e) => {
+    const b = (e.target as HTMLElement).closest('[data-form]') as HTMLElement | null; if (!b) return;
+    state.form = b.dataset.form!; localStorage.creditiaForm = state.form; state.variant = undefined;
+    closePop(); renderOptions(); paintFocus();
+  };
+  paintThumbs(m);
+}
+function moreMenu(anchor: HTMLElement) {
+  const items: [string, string][] = [['png', '复制图片'], ['svg', '复制 SVG'], ...(state.form === 'tier' ? [['embed', '复制网页嵌入代码'] as [string, string]] : []), ['md', '复制 CREDITS.md']];
+  const m = openPop(anchor, items.map(([k, n]) => `<button class="menu-item" data-k="${k}"><span>${n}</span></button>`).join(''), { up: true, width: 200 });
+  if (!m) return;
+  m.onclick = (e) => {
+    const k = ((e.target as HTMLElement).closest('[data-k]') as HTMLElement | null)?.dataset.k; if (!k) return;
+    closePop();
+    if (k === 'png') copyPng(); else if (k === 'svg') copy(state.svg, 'SVG 已复制'); else if (k === 'embed') copyEmbed();
+    else copy(mergeCreditsMd(null, creditsBlock(state.model!)), 'CREDITS.md 已复制');
+  };
 }
 
 /** profile 要全部项目的模型；其余只要语言和版式 */
@@ -244,7 +269,7 @@ async function ctxOf(id: string, variant?: string): Promise<Ctx> {
 async function paintFocus() {
   const out = $('#stage'); if (!out) return;
   const token = ++state.token;
-  const id = state.form; const f = FORMS[id];
+  const id = state.form;
   out.classList.add('busy');
   let svg: string | null = null;
   try {
@@ -256,9 +281,7 @@ async function paintFocus() {
   out.classList.remove('busy');
   state.svg = svg ?? '';
   out.innerHTML = svg ?? `<div class="empty-card"><b>这个项目的数据画不出这张图</b><span>${esc(whyEmpty(id))}</span></div>`;
-  const v = curVariant();
-  $('#caption').innerHTML = `<b>${esc(f.name)}</b><span>${esc(f.q)}</span><span class="dim">${esc(THEME_ZH[state.theme] ?? state.theme)}${v ? ` · ${esc(VARIANT_ZH[id]?.[v] ?? v)}` : ''}</span>`;
-  for (const id2 of ['sv-png', 'cp-png', 'cp-svg']) ($(`#${id2}`) as HTMLButtonElement).disabled = !svg;
+  ($('#sv-png') as HTMLButtonElement).disabled = !svg;
 }
 function whyEmpty(id: string) {
   if (id === 'profile') return '需要至少一个分析过的项目。';
@@ -269,9 +292,10 @@ function whyEmpty(id: string) {
 
 /** 缩略图：滚到眼前才画，大小按每张图的真实比例 */
 let io: IntersectionObserver | null = null;
-function paintThumbs() {
+function paintThumbs(root: HTMLElement) {
   const token = ++state.thumbToken;
   io?.disconnect();
+  if (!state.model) return;
   const queue: string[] = []; let busy = 0;
   const pump = async () => {
     while (busy < 2 && queue.length) {
@@ -281,7 +305,7 @@ function paintThumbs() {
         try { svg = await renderSvg(id, state.model!, theme(), await ctxOf(id)); } catch { svg = null; }
         busy--;
         if (token !== state.thumbToken) return;
-        const el = document.querySelector(`[data-tstage="${id}"]`) as HTMLElement | null;
+        const el = root.querySelector(`[data-tstage="${id}"]`) as HTMLElement | null;
         if (el) {
           el.innerHTML = svg ?? '<span class="ph">—</span>';
           const vb = svg && /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg);
@@ -294,8 +318,8 @@ function paintThumbs() {
   io = new IntersectionObserver((ents) => {
     for (const e of ents) if (e.isIntersecting) { io!.unobserve(e.target); queue.push((e.target as HTMLElement).dataset.tstage!); }
     pump();
-  }, { root: document.querySelector('.rail'), rootMargin: '200px' });
-  document.querySelectorAll('[data-tstage]').forEach((el) => { el.innerHTML = ''; io!.observe(el); });
+  }, { root, rootMargin: '200px' });
+  root.querySelectorAll('[data-tstage]').forEach((el) => io!.observe(el));
 }
 
 const fileName = () => `${state.model!.project || 'credits'}-${state.form}${state.variant ? '-' + state.variant : ''}.png`;
@@ -349,7 +373,7 @@ function viewDetail(v: HTMLElement) {
       </div>`).join('')}
     </div>`).join('');
   v.innerHTML = `
-  <div class="panel detail">
+  <div class="detail">
     <div class="phead">
       <div><h2>每个 PR / 提交是谁写的</h2><p class="meta">${prs ? `${prs} 个 PR，` : ''}${units.length - prs} 个直接提交。色条是这一条里各方写的代码占比。</p></div>
       <div class="grow"></div>
