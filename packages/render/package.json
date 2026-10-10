@@ -5,9 +5,12 @@
   "license": "MIT",
   "type": "module",
   "private": true,
-  "engines": { "node": ">=22.18" },
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
-    "gallery": "node src/gallery.ts ../../spike/out gallery"
+    "gallery": "node src/gallery.ts ../../spike/out/core gallery",
+    "test": "node --test test/*.test.ts"
   },
   "dependencies": {
     "@expo-google-fonts/instrument-serif": "^0.4.1",

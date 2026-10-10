@@ -39,10 +39,13 @@ function versionLine(raw: any, tag: string) {
     .map(([k, v]) => `${nameOf(k)} ${pct((v / tot) * 100)}`).join(' · ');
 }
 
+/** 给 App 的档案页用：某一项的主要贡献方 */
+export const unitLead = lead;
+
 export const MARK_START = '<!-- creditia:start -->';
 export const MARK_END = '<!-- creditia:end -->';
 
-/** CREDITS.md 标记区间里的内容 */
+/** CREDITS.md 标记区间里的内容。人按名字逐条列出，不和 agent 并排算百分比排名 */
 export function creditsBlock(m: Model, maxPerSection = 10): string {
   const raw = m.raw;
   const out: string[] = [];
@@ -51,7 +54,13 @@ export function creditsBlock(m: Model, maxPerSection = 10): string {
   out.push('| 贡献方 | 占比 | 新增行 | 至今仍在 |', '|---|---:|---:|---:|');
   const surv = new Map<string, number>();
   for (const b of raw.breakdown ?? []) { const k = harnessOf(raw, b.contributor); surv.set(k, (surv.get(k) ?? 0) + (b.linesSurviving ?? 0)); }
-  for (const r of m.rows) out.push(`| ${r.name} | ${pct(r.pct)} | +${fmt(r.lines)} | ${r.kind === 'other' ? '—' : fmt(surv.get(r.kind === 'human' ? 'human' : r.key) ?? 0)} |`);
+  for (const r of m.rows) {
+    if (r.key === 'human') {
+      for (const h of m.humans) out.push(`| ${h.name}（人） | ${pct(h.pct)} | +${fmt(h.lines)} | — |`);
+      continue;
+    }
+    out.push(`| ${r.name} | ${pct(r.pct)} | +${fmt(r.lines)} | ${r.kind === 'other' ? '—' : fmt(surv.get(r.key) ?? 0)} |`);
+  }
   out.push('');
   const weak = (raw.coverage ?? []).filter((c: any) => c.best !== 'verified');
   if (weak.length) out.push(`> ${weak[0].from} – ${weak[weak.length - 1].to} 的大部分代码没有逐行日志，按提交信息和分支推断。`, '');
@@ -115,11 +124,12 @@ export function prComment(m: Model, id: string): string {
   return `这个 PR 的 ${fmt(u.lines)} 行新增代码：${parts.join('，')}。\n`;
 }
 
-/** creditia fetch */
+/** creditia fetch：agent 排百分比，人单独一行 */
 export function fetchSegs(m: Model): Seg[][] {
   const w = 12;
   const kv = (k: string, v: string): Seg[] => [{ text: k.padEnd(8, ' '), dim: true }, { text: v }];
   const blocks = (p: number) => '■'.repeat(Math.max(1, Math.round(p / 3.5)));
+  const ranked = m.rows.filter((r) => r.key !== 'human');
   return [
     [{ text: m.project, bold: true }, ...(m.director ? [{ text: `  ${m.director}`, dim: true }] : [])],
     [{ text: '' }],
@@ -128,11 +138,12 @@ export function fetchSegs(m: Model): Seg[][] {
     kv('代码', `${fmt(m.linesAdded)} 行，留下 ${fmt(m.linesSurviving)}`),
     ...(m.tokens ? [kv('Token', compact(m.tokens))] : []),
     [{ text: '' }],
-    ...m.rows.map((r) => [
+    ...ranked.map((r, i) => [
       { text: r.name.padEnd(w + (r.key === 'unattributed' ? -1 : 0), ' '), dim: r.key === 'unattributed' },
-      { text: blocks(r.pct), color: r.key === 'unattributed' ? undefined : r.key, dim: r.key === 'unattributed' },
+      { text: blocks(r.pct), color: r.key === 'unattributed' ? undefined : r.key, rank: i, dim: r.key === 'unattributed' },
       { text: `  ${pct(r.pct)}`, dim: true },
     ]),
+    ...(m.humans.length ? [[{ text: '人'.padEnd(w, ' '), dim: true }, { text: m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　'), dim: true }] as Seg[]] : []),
   ];
 }
 

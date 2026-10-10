@@ -20,8 +20,10 @@ export interface Model {
   project: string;
   director: string;
   range: { from: string; to: string };
-  /** 最多 6 个具名贡献方 +"其他"+"未确认" */
+  /** 排行榜：agent（含「其他」）+ 合并的「人」+「未确认」。人不单独参与 agent 排名 */
   rows: Contributor[];
+  /** 每个非主导的人，用来在署名处单独写（不与 agent 同级） */
+  humans: Contributor[];
   agents: Contributor[];
   unknown: Contributor | null;
   commits: number;
@@ -38,9 +40,9 @@ export interface Model {
 
 export const NAMES: Record<string, string> = {
   codex: 'Codex', cursor: 'Cursor', grok: 'Grok', 'claude-code': 'Claude Code', deepseek: 'DeepSeek', kimi: 'Kimi',
-  gemini: 'Gemini', 'github-actions': 'GitHub Actions', other: '其他', unattributed: '未确认',
+  gemini: 'Gemini', 'github-actions': 'GitHub Actions', other: '其他', unattributed: '未确认', human: '人',
 };
-const EN: Record<string, string> = { other: 'Others', unattributed: 'Unattributed' };
+const EN: Record<string, string> = { other: 'Others', unattributed: 'Unattributed', human: 'People' };
 export const nameOf = (k: string, lang: 'zh' | 'en' = 'zh') => (lang === 'en' && EN[k]) || NAMES[k] || k;
 
 const n = (x: unknown) => (typeof x === 'number' && isFinite(x) && x > 0 ? x : 0);
@@ -78,12 +80,17 @@ export function buildModel(c: any, opt: Options = DEFAULTS): Model {
     e.models = [...(modelLines.get(e.key) ?? new Map()).entries()].sort((a, b) => b[1] - a[1]).map(([m]) => (m === 'auto' ? 'Auto' : m));
   }
   const unknown = acc.get('unattributed') ?? null;
-  const named = [...acc.values()].filter((x) => x.kind !== 'unknown').sort((a, b) => b.pct - a.pct);
-  // agent 之外的人只在占比够大时单列，否则并入"其他"
-  const shown = named.filter((x) => x.pct >= 0.5 || (x.kind === 'agent' && x.pct >= 0.1)).slice(0, 6);
-  const restPct = named.filter((x) => !shown.includes(x)).reduce((s, x) => s + x.pct, 0);
-  const rows = [...shown];
-  if (restPct >= 0.1) rows.push({ key: 'other', name: nameOf('other', opt.lang), pct: restPct, lines: 0, models: [], kind: 'other' });
+  const agentsAll = [...acc.values()].filter((x) => x.kind === 'agent').sort((a, b) => b.pct - a.pct);
+  const humans = [...acc.values()].filter((x) => x.kind === 'human').sort((a, b) => b.pct - a.pct);
+  // agent 排百分比：最多 6 个具名，其余并入「其他」
+  const shown = agentsAll.filter((x) => x.pct >= 0.1).slice(0, 6);
+  const rest = agentsAll.filter((x) => !shown.includes(x));
+  const rows: Contributor[] = [...shown];
+  const restPct = rest.reduce((s, x) => s + x.pct, 0);
+  if (restPct >= 0.1) rows.push({ key: 'other', name: nameOf('other', opt.lang), pct: restPct, lines: rest.reduce((s, x) => s + x.lines, 0), models: [], kind: 'other' });
+  // 人不和 agent 同级：合并成一行放在「未确认」前面，个体名字在 humans 里单独写
+  const humanPct = humans.reduce((s, x) => s + x.pct, 0);
+  if (humanPct >= 0.01) rows.push({ key: 'human', name: nameOf('human', opt.lang), pct: humanPct, lines: humans.reduce((s, x) => s + x.lines, 0), models: [], kind: 'human' });
   if (unknown && unknown.pct >= 0.05) rows.push({ ...unknown, name: nameOf('unattributed', opt.lang) });
 
   const range = c.project?.range ?? {};
@@ -97,7 +104,8 @@ export function buildModel(c: any, opt: Options = DEFAULTS): Model {
     director: opt.director ? (c.directors?.[0]?.name ?? '') : '',
     range: { from: range.from ?? '', to: range.to ?? '' },
     rows,
-    agents: named.filter((x) => x.kind === 'agent'),
+    humans,
+    agents: agentsAll,
     unknown,
     commits: n(t.commits), units: n(t.units), linesAdded: n(t.linesAdded), linesSurviving: n(t.linesSurviving),
     tokens: n(t.tokens), sessions: n(t.sessions), activeDays: n(t.days), spanDays: span,
@@ -107,7 +115,7 @@ export function buildModel(c: any, opt: Options = DEFAULTS): Model {
 }
 
 export const fmt = (x: number) => Math.round(x).toLocaleString('en-US');
-export const pct = (p: number) => (p > 0 && p < 0.1 ? '<0.1%' : p >= 10 ? `${p.toFixed(1)}%` : `${p.toFixed(1)}%`);
+export const pct = (p: number) => (p > 0 && p < 0.1 ? '<0.1%' : `${p.toFixed(1)}%`);
 export function compact(x: number) {
   if (x >= 1e9) return `${(x / 1e9).toFixed(x >= 1e10 ? 0 : 1)}B`;
   if (x >= 1e6) return `${(x / 1e6).toFixed(x >= 1e7 ? 0 : 1)}M`;

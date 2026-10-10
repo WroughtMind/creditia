@@ -20,3 +20,7 @@ apps/desktop/dist/
 
 # 编辑器 / 工具状态
 .cursor/
+
+# App 预览字体子集：npm run fonts 生成
+apps/desktop/src/fonts/
+apps/desktop/tools/icon.png
