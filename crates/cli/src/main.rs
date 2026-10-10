@@ -461,7 +461,7 @@ fn cmd_doctor(_a: &Args) -> R<(Value, Vec<String>)> {
         lines.push(format!(
             "{:<12} {}  {}{}{}",
             h.source,
-            if h.readable { "可读" } else { "不可读" },
+            if !std::path::Path::new(&h.path).exists() { "没找到（没装或没用过）" } else if h.readable { "可读" } else { "读不了" },
             if h.records > 0 { format!("{} 条", h.records) } else { String::new() },
             match (&h.earliest, &h.latest) {
                 (Some(a), Some(b)) => format!("  {a} → {b}"),
@@ -473,7 +473,7 @@ fn cmd_doctor(_a: &Args) -> R<(Value, Vec<String>)> {
     lines.push(format!("git          {}", if git_ok { "可用" } else { "未找到" }));
     lines.push(format!("gh           {}", if gh_ok { "已登录" } else { "未登录或未安装（PR 元数据会缺少分支名）" }));
     lines.push(format!("作品库       {lib_path}  {n_proj} 个项目"));
-    let warnings: Vec<String> = hs.iter().filter(|h| !h.readable).map(|h| format!("{} 不可读：{}", h.source, h.path)).collect();
+    let warnings: Vec<String> = hs.iter().filter(|h| !h.readable && std::path::Path::new(&h.path).exists()).map(|h| format!("{} 的记录读不了：{}", h.source, h.path)).collect();
     Ok((json!({ "sources": hs, "git": git_ok, "gh": gh_ok, "library": { "path": lib_path, "projects": n_proj }, "summary": lines.join("\n") }), warnings))
 }
 
@@ -492,14 +492,20 @@ fn cmd_blame(a: &Args) -> R<(Value, Vec<String>)> {
     let opts = analyze::Opts { fresh: false, github: false, out: None, blame: Some((rel.clone(), line)), config: a.flags.get("config").map(PathBuf::from) };
     let r = analyze::run(&repo, &opts)?;
     let b = r.blame.ok_or(format!("没找到 {rel}:{line}"))?;
-    let who = b["harness"].as_str().map(|h| h.to_string()).or(b["name"].as_str().map(String::from)).unwrap_or("未确认".into());
+    let who = b["harness"].as_str().map(harness_name).or(b["name"].as_str().map(String::from)).unwrap_or("未确认".into());
     let summary = format!(
-        "{rel}:{line}\n作者  {who}{}\n提交  {} {}\n{}证据  {}",
+        "{rel}:{line}\n作者    {who}{}\n提交    {} {}\n{}怎么认出来的  {}",
         b["model"].as_str().map(|m| format!("  {m}")).unwrap_or_default(),
         b["commit"].as_str().unwrap_or(""),
         b["date"].as_str().unwrap_or(""),
-        b["unit"].as_str().map(|u| format!("项    {u}  {}\n", b["unitTitle"].as_str().unwrap_or(""))).unwrap_or_default(),
-        b["evidence"].as_str().unwrap_or("")
+        b["unit"].as_str().map(|u| format!("PR/提交 {}  {}\n", u.strip_prefix("pr:").map(|n| format!("#{n}")).unwrap_or_else(|| u.trim_start_matches("c:").to_string()), b["unitTitle"].as_str().unwrap_or(""))).unwrap_or_default(),
+        match b["evidence"].as_str().unwrap_or("") {
+            "verified" => "agent 日志里的编辑和这一行逐字对得上",
+            "declared" => "提交信息里写明了（盖章或 Co-authored-by），或和会话时间吻合",
+            "inferred" => "按分支名推断",
+            "manual" => "手动标注",
+            _ => "没有证据",
+        }
     );
     let mut v = b;
     v["summary"] = json!(summary);
@@ -711,4 +717,13 @@ mod hook_tests {
         assert!(!ends_with_trailers("feat: x\n\n说明: 这是正文"));
         assert!(ends_with_trailers("feat: x\n\nSigned-off-by: a <a@b.c>\nCo-authored-by: b <b@c.d>"));
     }
+}
+
+/// 终端里给人看的工具名
+fn harness_name(h: &str) -> String {
+    match h {
+        "claude-code" => "Claude Code", "codex" => "Codex", "cursor" => "Cursor", "grok" => "Grok", "kimi" => "Kimi", "copilot" => "GitHub Copilot",
+        other => return other.to_string(),
+    }
+    .to_string()
 }

@@ -93,3 +93,10 @@ test('15 个主题 × 代表形式冒烟：返回字符串或 null，不抛异�
     assert.ok(badge(m, t).startsWith('<svg'), `${t.id}/badge`);
   }
 });
+
+test('blame 时间按本机时区，不写死 UTC+8', async () => {
+  const { localTime } = await import('../src/text.ts');
+  assert.equal(localTime(0, 0), '1970-01-01 00:00');
+  assert.equal(localTime(0, 480), '1970-01-01 08:00');
+  assert.equal(localTime(0, -300), '1969-12-31 19:00');
+});

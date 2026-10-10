@@ -1,5 +1,5 @@
 // 渲染入口：credits.json → SVG / PNG。CLI、批量样张都走这里；App 在浏览器端直接用 forms。
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import satori from 'satori';
@@ -22,8 +22,13 @@ let fontsCache: any[] | null = null;
 function fonts() {
   if (fontsCache) return fontsCache;
   // prefix 用于包名与字体文件大小写不一致的包（ZCOOLXiaoWei、UnifrakturMaguntia）
-  const f = (pkg: string, file: string, prefix?: string) =>
-    readFileSync(require.resolve(`@expo-google-fonts/${pkg}/${file}/${prefix ?? pkg.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join('')}_${file}.ttf`));
+  // Linux 文件系统区分大小写：按目录里的真实文件名不分大小写地找（JetBrainsMono、NotoSansSC 都和包名拼法不同）
+  const f = (pkg: string, file: string, prefix?: string) => {
+    const want = `${prefix ?? pkg.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join('')}_${file}.ttf`;
+    const dir = path.dirname(require.resolve(`@expo-google-fonts/${pkg}/package.json`));
+    const real = readdirSync(path.join(dir, file)).find((n) => n.toLowerCase() === want.toLowerCase()) ?? want;
+    return readFileSync(path.join(dir, file, real));
+  };
   fontsCache = [
     ...[[400, '400Regular'], [500, '500Medium'], [600, '600SemiBold'], [700, '700Bold']].map(([w, x]) => ({ name: 'Inter', weight: w, data: f('inter', x as string) })),
     ...[[400, '400Regular'], [700, '700Bold']].map(([w, x]) => ({ name: 'JetBrains Mono', weight: w, data: f('jetbrains-mono', x as string) })),

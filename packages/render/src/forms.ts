@@ -249,7 +249,7 @@ export function share(m: Model, t: Theme): Out {
           colOf(ranked.slice(0, half)), colOf(ranked.slice(half))),
         m.humans.length ? box({ marginTop: 10, alignItems: 'baseline', gap: 8 }, label(t, '人', 10), txt({ fontSize: 13, color: t.soft }, m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　'))) : null,
         box({ borderTop: `3px solid ${t.ink}`, paddingTop: 10, alignItems: 'baseline', justifyContent: 'space-between' },
-          txt({ fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase' }, [m.commits && `${fmt(m.commits)} 次提交`, m.units && `${fmt(m.units)} 项`, m.linesAdded && `+${fmt(m.linesAdded)} 行`].filter(Boolean).join('  ·  ')),
+          txt({ fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase' }, [m.commits && `${fmt(m.commits)} 次提交`, m.units && `${fmt(m.units)} 个 PR / 提交`, m.linesAdded && `+${fmt(m.linesAdded)} 行`].filter(Boolean).join('  ·  ')),
           m.director ? txt({ fontFamily: t.display, fontSize: 16 }, m.director) : null)) };
     }
     case 'mono': {
@@ -883,12 +883,13 @@ export function receipt(m: Model, t: Theme, variant?: string): Out {
   const W = 1080, H = 1350;
   const items: [string, string, string?][] = [];
   if (m.spanDays) items.push(['工期', `${m.spanDays} 天`, `${m.range.from.replaceAll('-', '.')} — ${m.range.to.replaceAll('-', '.')}`]);
-  if (m.activeDays) items.push(['动工', `${m.activeDays} 天`]);
+  // 「实际动工」和「工期」相同时不重复列
+  if (m.activeDays && m.activeDays !== m.spanDays) items.push(['实际动工', `${m.activeDays} 天`]);
   if (m.sessions) items.push(['会话', fmt(m.sessions)]);
   if (m.tokens) items.push(['Token', compact(m.tokens)]);
   if (m.commits) items.push(['提交', fmt(m.commits)]);
   if (m.linesAdded) items.push(['写下', `${fmt(m.linesAdded)} 行`]);
-  if (m.linesSurviving) items.push(['留下', `${fmt(m.linesSurviving)} 行`]);
+  if (m.linesSurviving) items.push(['现在还在', `${fmt(m.linesSurviving)} 行`]);
   if (m.director) items.push(['主导', m.director]);
 
   if (v === 'thermal') {
@@ -984,7 +985,7 @@ export function receipt(m: Model, t: Theme, variant?: string): Out {
             txt({ fontFamily: t.display, fontSize: 30, color: red, letterSpacing: 2 }, 'ADMIT ONE'),
             txt({ fontFamily: t.num, fontSize: 46, color: pInk }, compact(m.linesAdded || m.commits)),
             txt({ fontSize: 14, color: dim('88') }, m.linesAdded ? '行' : '次提交')),
-          m.director ? txt({ fontSize: 14, color: dim('88') }, `主导 ${m.director}`) : null),
+          null),
         box({ borderTop: `2px dashed ${dim('55')}` }),
         box({ padding: '24px 52px 40px', gap: 60 },
           col({ flex: 1 }, ...items.slice(0, mid).map(([k, val]) => row(k, val))),
@@ -1434,7 +1435,7 @@ export function settle(m: Model, t: Theme): Out | null {
       box({ alignItems: 'baseline', gap: 14 },
         txt({ fontFamily: MONO_FONT, fontSize: 18, color: t.accent }, '❯'),
         txt({ fontFamily: MONO_FONT, fontSize: 18 }, 'creditia survive'),
-        txt({ fontFamily: MONO_FONT, fontSize: 15, color: t.faint }, '# 写下的代码留下多少')),
+        txt({ fontFamily: MONO_FONT, fontSize: 15, color: t.faint }, '# 写下的代码现在还剩多少')),
       col({ flex: 1, justifyContent: 'center', gap: 36 },
         row('写下', bar(100, t.ink), fmt(m.linesAdded)),
         row('至今仍在', bar(keep, t.accent), `${fmt(m.linesSurviving)}  ·  ${Math.round(keep)}%`))) };

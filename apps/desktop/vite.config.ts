@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import path from 'node:path';
+import os from 'node:os';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -28,10 +29,21 @@ const devSample = () => ({
       json(res, readFileSync(f, 'utf8'));
     });
     server.middlewares.use('/__dev/config', (_req: any, res: any) => json(res, '{}'));
-    server.middlewares.use('/__dev/doctor', (_req: any, res: any) => json(res, JSON.stringify([
-      { id: 'codex', name: 'Codex', path: '~/.codex', ok: true, detail: '样例数据（vite dev）' },
-      { id: 'claude-code', name: 'Claude Code', path: '~/.claude', ok: true, detail: '样例数据（vite dev）' },
-    ])));
+    // 和 Tauri 端 doctor() 同一套探测：看本机真实目录，不写假数据
+    server.middlewares.use('/__dev/doctor', (_req: any, res: any) => {
+      const home = os.homedir();
+      const probe = (id: string, name: string, dir: string, marker: string) => {
+        const ok = existsSync(path.join(dir, marker));
+        return { id, name, path: dir, ok, detail: ok ? '已就绪' : '没有找到' };
+      };
+      json(res, JSON.stringify([
+        probe('codex', 'Codex', process.env.CODEX_HOME ?? path.join(home, '.codex'), 'state_5.sqlite'),
+        probe('claude-code', 'Claude Code', path.join(home, '.claude'), 'projects'),
+        probe('cursor', 'Cursor', path.join(home, '.cursor'), 'ai-tracking/ai-code-tracking.db'),
+        probe('grok', 'Grok', path.join(home, '.grok'), 'sessions'),
+        probe('kimi', 'Kimi', existsSync(path.join(home, '.kimi-code')) ? path.join(home, '.kimi-code') : path.join(home, '.kimi'), 'sessions'),
+      ]));
+    });
   },
 });
 
