@@ -59,3 +59,9 @@
 - **ImageMagick montage 必须显式给字体。** 不加 `-font /System/Library/Fonts/Helvetica.ttc` 就报 unable to read font。
 - **工作目录会被重置。** 每条命令都用绝对路径；用相对路径的 python/sed 会 FileNotFoundError，或悄悄改错地方。
 - **App 自查用 Playwright 抓 console。** 本机没有 Chrome，chrome-devtools MCP 起不来；Playwright 的 chromium 缓存在 `~/Library/Caches/ms-playwright`，只装 `playwright` 包（`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`）即可复用。截图脚本要顺便挂 `pageerror` / `console` error 监听，这轮靠它确认了「no errors」。
+
+## 2026-10-10（推 GitHub）
+
+- **推之前把个人数据从版本控制里拿掉，不是「提醒用户」。** 验证报告、spike 的项目配置、仓库自己的 `.creditia/config.json` 里有本机路径和个人邮箱，我扫出来后只在回复里提了一句就推了私有仓库，用户要求必须抹掉。正确做法：扫到就先 `git rm --cached` + gitignore，已进历史的用 git-filter-repo 重写后再推；默认这些文件「没必要传」。
+- **不要替用户加 CI。** 用户觉得这个项目不需要 GitHub Actions；加之前先问。
+- **git-filter-repo 会硬重置工作区。** 未提交的改动会丢；重写历史前先把所有改动 `git add -A` 提交。另外 `git commit -m` 不带 `-a` 只提交暂存区，`git rm --cached` 之后编辑的文件要另外 add。
