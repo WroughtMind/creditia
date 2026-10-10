@@ -24,3 +24,8 @@ apps/desktop/dist/
 # App 预览字体子集：npm run fonts 生成
 apps/desktop/src/fonts/
 apps/desktop/tools/icon.png
+
+# 不进仓库：带本机路径与个人邮箱的档案、验证报告、样例项目配置
+/.creditia/
+docs/validation/
+spike/projects/

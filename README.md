@@ -3,7 +3,7 @@
 > 为你和 AI 一起做出的作品署名。
 > Credits for work made with agents.
 
-**状态：MVP 开发中。** 方案见 [`docs/plans/2026-10-08-creditia-plan.md`](docs/plans/2026-10-08-creditia-plan.md)，阶段 0 验证见 [`docs/validation/`](docs/validation/)。
+**状态：开发中。** 方案见 [`docs/plans/2026-10-08-creditia-plan.md`](docs/plans/2026-10-08-creditia-plan.md)。
 
 ## 做什么
 
