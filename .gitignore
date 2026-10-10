@@ -25,7 +25,8 @@ apps/desktop/dist/
 apps/desktop/src/fonts/
 apps/desktop/tools/icon.png
 
-# 不进仓库：内部工作文档（plans、lessons、验证报告）、带本机路径与个人邮箱的档案、样例项目配置
+# 不进仓库：内部工作文档（AGENTS.md、plans、lessons、验证报告）、带本机路径与个人邮箱的档案、样例项目配置
+AGENTS.md
 /docs/
 /.creditia/
 spike/projects/
