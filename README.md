@@ -9,6 +9,8 @@
 
 读 git 历史和本机 agent 日志（Codex、Claude Code、Cursor、Grok、Kimi），逐行归因：哪段代码是哪个工具、哪个模型在哪次会话里写的。产出一份档案（`credits.json` + `CREDITS.md`），再从同一份档案画出多种展示：tier 榜单、片尾字幕、精力小票、徽章、统计图。
 
+同一形式在六个版式家族下有不同结构（极简 / 电影 / 终端 / 玻璃 / 杂志 / 等宽）：片尾字幕五种版式、精力小票四种版式，七套主题跟着家族换肤。人不和 agent 排同一个百分比，而是单独署名。
+
 - **本地优先**：扫描和计算都在本机；只存行哈希和元数据，不存代码和 prompt。
 - **诚实**：证据不够就归入「未确认」；每段数字标出证据覆盖情况；每条归因都能回查到 commit。
 - **人单独署名**：人不和 agent 排代码行百分比，而是作为主导者单独署名（可关闭）。
@@ -45,7 +47,7 @@ node src/gallery.ts ../../spike/out gallery    # 全部形式 × 全部风格
 # CLI（Node 侧）
 cd packages/cli && node bin/creditia.mjs --help
 
-# App（需要 Rust + tauri 依赖；图标待用 `tauri icon` 生成）
+# App（需要 Rust + tauri 依赖；图标与预览字体子集：npm run icon / npm run fonts）
 cd apps/desktop && npm i && npm run tauri dev
 ```
 

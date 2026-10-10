@@ -31,3 +31,13 @@
 
 - **魏碑只是测试数据。** 用户明确说魏碑和 creditia 没有关系：不要为了 creditia 去改魏碑的官网、README 或任何文件，也不要把魏碑写成 creditia 的"第一个真实案例"。真实案例等用户自己定。
 - **发布要等用户整体验收。** 代码和测试通过不等于可以开源；在 WroughtMind 下开源、发 npm、发 Releases 都由用户发起。
+
+## 2026-10-10（验收重构）
+
+- **「风格不同」要落在排版结构上。** 七套风格第一版只是换颜色换字体，被用户一句「完全拉不开距离」退回。改法是引入版式家族：左对齐榜单、居中叠放、树形连接、卡片组、杂志分栏、等宽表格，同一形式在不同家族下的骨架不同。颜色和字体只是最后一层皮，不是差异本身。
+- **跨端渲染差异先怀疑依赖版本。** App 里 tier 的根容器比 CLI 输出宽 114px（正好 2×57 内边距），逐元素比对后确认是 satori 0.47.1 的 standalone 把根容器 `width` 当 content-box，而渲染器依赖 0.38.2 是 border-box。把 App 的 satori 钉到与渲染器一致的版本后逐像素一致。渲染管线在哪儿跑都要锁同一个版本。
+- **同页内联多张 satori SVG 会互相顶掉。** 每张 SVG 的 clipPath / mask id 都是 `satori_` 开头，统计页九张图内联后 261 个重复 id，环形图、面积图被别张图的 clip 裁没。内联前统一换成独有前缀。
+- **浏览器里跑 satori 要用 `satori/standalone`。** Node 入口在 WebView 里报 `Buffer is not defined`；standalone 要 `init(await fetch(layout.wasm))`，wasm 走 `satori/layout.wasm?url` 导入。
+- **本机没有 Chrome 就用 Playwright 做视觉回归。** chrome-devtools MCP 起不来，改用 Playwright + Chromium headless shell 截图和 DOM 探针，逐页核对，再配合同一数据在 Node 侧渲染的 SVG 逐元素比对，定位差异快很多。
+- **satori 不支持 dotted 边框和 conic-gradient。** 未确认的虚线纹理、环形图的环，都用内联 SVG 字符串经 base64 data URI 以 `<img>` 嵌入。
+

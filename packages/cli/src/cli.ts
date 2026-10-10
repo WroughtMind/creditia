@@ -48,7 +48,7 @@ const USAGE = `用法：creditia <命令> [选项]
   doc            [--repo P] [--out CREDITS.md]           生成或更新 CREDITS.md（只改标记区间）
   release-notes  <tag|unreleased>                        该版本的 credits 段落
   pr-comment     <N>                                     该 PR 的一句话归因
-  export         --form F [--theme T] [--format F] [--out FILE] [--size WxH] [--lang zh|en] [--director]
+  export         --form F [--theme T] [--variant V] [--format F] [--out FILE] [--size WxH] [--lang zh|en] [--director]
   export         --list                                  全部形式和风格
   fetch          [--repo P]                              终端名片
   app            open [--form F] [--theme T]             在 App 里打开
@@ -171,9 +171,9 @@ async function main() {
 
 async function exportCmd() {
   if (on.has('list')) {
-    const rows = Object.entries(FORMS).map(([id, f]) => `${id.padEnd(10)} ${f.name.padEnd(8)} ${f.q.padEnd(16)} ${f.size}`);
+    const rows = Object.entries(FORMS).map(([id, f]) => `${id.padEnd(10)} ${f.name.padEnd(8)} ${f.q.padEnd(16)} ${f.size}${f.variants ? `  版式：${f.variants.join(' / ')}` : ''}`);
     const themes = THEMES.map((t) => `${t.id.padEnd(14)} ${t.name}`);
-    if (json) return console.log(JSON.stringify({ forms: Object.entries(FORMS).map(([id, f]) => ({ id, name: f.name, question: f.q, size: f.size })), themes: THEMES.map((t) => ({ id: t.id, name: t.name })) }));
+    if (json) return console.log(JSON.stringify({ forms: Object.entries(FORMS).map(([id, f]) => ({ id, name: f.name, question: f.q, size: f.size, variants: f.variants ?? [] })), themes: THEMES.map((t) => ({ id: t.id, name: t.name })) }));
     console.log(`形式\n${rows.join('\n')}\n\n风格\n${themes.join('\n')}\n\n格式：svg png embed html md json（徽章：--form badge --format svg|md）`);
     return;
   }
@@ -205,7 +205,7 @@ async function exportCmd() {
   if (!FORMS[form]) die(`未知形式：${form}；creditia export --list 查看`);
 
   // 需要额外数据的形式
-  const ctx: Ctx = { lang };
+  const ctx: Ctx = { lang, variant: flags.variant };
   if (form === 'profile') {
     const r = core(['projects', '--json'], false);
     const list: any[] = r.code === 1 ? [] : JSON.parse(r.out).projects ?? [];
