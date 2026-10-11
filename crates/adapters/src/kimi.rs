@@ -5,7 +5,7 @@ use crate::{any_ts, home, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
 use creditia_core::util::date_cn;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 struct Sess {
@@ -17,7 +17,7 @@ struct Sess {
 fn sessions() -> Vec<Sess> {
     let base = source_dir(Src::Kimi);
     let mut out = vec![];
-    // 全局索引：sessionDir → workDir（有 15/28 个 state.json 缺 cwd 时用）
+    // 全局索引：sessionDir → workDir（state.json 缺少 cwd 时仍有索引字段可核对）
     let mut index: HashMap<String, String> = HashMap::new();
     if let Ok(t) = std::fs::read_to_string(base.join("session_index.jsonl")) {
         for l in t.lines() {
@@ -55,62 +55,62 @@ fn sessions() -> Vec<Sess> {
 }
 
 /// 解析一组 wire.jsonl，返回（起、止、模型、token、prompt 数）
-fn parse_wires(s: &Sess, pm: &PathMap, g: &mut FileGroup, id: &str) -> (i64, i64, String, i64, i64) {
+fn parse_wires(s: &Sess, pm: &PathMap, g: &mut FileGroup, id: &str) -> (i64, i64, String, Option<String>, i64, i64) {
     let (mut start, mut end, mut tokens, mut prompts) = (i64::MAX, 0i64, 0i64, 0i64);
-    let mut models: HashMap<String, usize> = HashMap::new();
-    let mut model = String::new();
+    let mut models = HashSet::new();
+    let mut providers = HashSet::new();
     for w in &s.wires {
         let text = std::fs::read_to_string(w).unwrap_or_default();
+        let mut model = String::new();
+        let mut provider = None;
+        let mut pending: HashMap<String, (String, String, String, Option<String>)> = HashMap::new();
         for line in text.lines() {
             let Ok(o) = serde_json::from_str::<Value>(line) else { continue };
-            let ts = any_ts(&o["time"]).or(any_ts(&o["timestamp"])).unwrap_or(0);
-            if ts > 0 {
-                start = start.min(ts);
-                end = end.max(ts);
-            }
-            let ty = o["type"].as_str().unwrap_or("");
-            let p = &o["payload"];
-            match ty {
+            let ts = any_ts(&o["time"]).unwrap_or(0);
+            if ts > 0 { start = start.min(ts); end = end.max(ts); }
+            match o["type"].as_str().unwrap_or("") {
                 "turn.prompt" => prompts += 1,
                 "llm.request" => {
-                    if let Some(m) = p["model"].as_str().or(p["modelAlias"].as_str()) {
-                        model = m.to_string();
-                        *models.entry(model.clone()).or_default() += 1;
-                    }
+                    model = o["model"].as_str().unwrap_or("").to_string();
+                    provider = o["provider"].as_str().filter(|p| !p.is_empty()).map(String::from);
+                    if !model.is_empty() { models.insert(model.clone()); }
+                    if let Some(p) = &provider { providers.insert(p.clone()); }
                 }
                 "usage.record" => {
-                    let u = &p["usage"];
-                    tokens += ["inputOther", "output", "inputCacheRead", "inputCacheCreation", "input_tokens", "output_tokens"].iter().map(|k| u[*k].as_i64().unwrap_or(0)).sum::<i64>();
-                    if let Some(m) = p["model"].as_str() {
-                        if model.is_empty() {
-                            model = m.to_string();
+                    let u = &o["usage"];
+                    tokens += ["inputOther", "output", "inputCacheRead", "inputCacheCreation"].iter().map(|k| u[*k].as_i64().unwrap_or(0)).sum::<i64>();
+                }
+                "context.append_loop_event" => {
+                    let ev = &o["event"];
+                    match ev["type"].as_str().unwrap_or("") {
+                        "tool.call" => {
+                            let a = &ev["args"];
+                            let path = a["path"].as_str().unwrap_or("");
+                            let content = match ev["name"].as_str().unwrap_or("") { "Edit" => a["new_string"].as_str(), "Write" => a["content"].as_str(), _ => None };
+                            if let (Some(content), Some(call)) = (content, ev["toolCallId"].as_str()) {
+                                let path = if std::path::Path::new(path).is_absolute() { PathBuf::from(path) } else { PathBuf::from(&s.cwd).join(path) };
+                                pending.insert(call.into(), (path.to_string_lossy().into(), content.into(), model.clone(), provider.clone()));
+                            }
                         }
+                        "tool.result" => {
+                            let Some((path, content, model, provider)) = ev["toolCallId"].as_str().and_then(|key| pending.remove(key)) else { continue };
+                            let result = &ev["result"];
+                            let output = result["output"].as_str().unwrap_or("");
+                            if result.get("error").is_some() || result["isError"] == true || !(output.starts_with("Wrote ") || output.starts_with("Replaced ")) { continue; }
+                            let before = g.evs.len();
+                            crate::push_text(&mut g.evs, pm, &path, &content, Src::Kimi, &model, id, ts);
+                            for evidence in &mut g.evs[before..] { evidence.provider = provider.clone(); }
+                        }
+                        _ => {}
                     }
                 }
                 _ => {}
             }
-            // 工具调用：context.append_loop_event 里的 tool.call
-            let ev = if ty == "context.append_loop_event" { &p["event"] } else { p };
-            let ev_ty = ev["type"].as_str().unwrap_or("");
-            if ev_ty == "tool.call" || ty == "tool.call" {
-                let call = if ev["call"].is_object() { &ev["call"] } else { ev };
-                let name = call["name"].as_str().unwrap_or("");
-                let a = &call["args"];
-                let a = if a.is_object() { a.clone() } else { call["arguments"].clone() };
-                let path = a["path"].as_str().or(a["file_path"].as_str()).unwrap_or("");
-                let content = match name {
-                    "Edit" => a["new_string"].as_str(),
-                    "Write" => a["content"].as_str(),
-                    _ => None,
-                };
-                if let Some(c) = content {
-                    crate::push_text(&mut g.evs, pm, path, c, Src::Kimi, &model, id, if ts > 0 { ts } else { end });
-                }
-            }
         }
     }
-    let main_model = models.into_iter().max_by_key(|(_, n)| *n).map(|(m, _)| m).unwrap_or(model);
-    (if start == i64::MAX { 0 } else { start }, end, main_model, tokens, prompts)
+    let model = if models.len() == 1 { models.into_iter().next().unwrap() } else { String::new() };
+    let provider = if providers.len() == 1 { providers.into_iter().next() } else { None };
+    (if start == i64::MAX { 0 } else { start }, end, model, provider, tokens, prompts)
 }
 
 pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
@@ -127,9 +127,9 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         }
         let mut g = FileGroup { fp, ..Default::default() };
         let id = s.dir.file_name().map(|x| x.to_string_lossy().trim_start_matches("session_").to_string()).unwrap_or_default();
-        let (start, end, model, tokens, prompts) = parse_wires(&s, pm, &mut g, &id);
+        let (start, end, model, provider, tokens, prompts) = parse_wires(&s, pm, &mut g, &id);
         if end > 0 {
-            g.sessions.push(Session { src: Src::Kimi, id, model, start, end, tokens, branch: None, prompts, reviewer: false, has_content: !s.wires.is_empty() });
+            g.sessions.push(Session { provider, src: Src::Kimi, id, model, start, end, tokens, branch: None, prompts, reviewer: false, has_content: !s.wires.is_empty() });
         }
         store.groups.insert(gk, g);
     }
@@ -165,6 +165,6 @@ pub fn doctor() -> Health {
         records: ss.len() as u64,
         earliest: mt.iter().min().copied().map(date_cn),
         latest: mt.iter().max().copied().map(date_cn),
-        note: format!("{no_cwd} 个会话无 cwd（已用 session_index 回退）"),
+        note: format!("{no_cwd} 个会话无 cwd（仅可由明确的项目索引补充）"),
     }
 }

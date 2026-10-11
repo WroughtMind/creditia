@@ -1,10 +1,10 @@
 //! 分析流水线：git → 日志证据 → 归因 → 存活代码 → credits.json。增量：提交按 base..head，日志按文件指纹。
 
-use crate::detect_config;
+use crate::project::detect_config;
 use creditia_adapters as ad;
 use creditia_core::config::Config;
 use creditia_core::engine::{self, Engine};
-use creditia_core::model::{area, Attr, BlameLine, Commit, CommitAttr, FileGroup, Index, Level, PathMap, PrMeta, Session, Store, STORE_VERSION, UNATTR};
+use creditia_core::model::{area, Attr, BlameLine, Commit, CommitAttr, FileGroup, Index, Level, PathMap, PrMeta, Registry, Session, Store, STORE_VERSION, UNATTR};
 use creditia_core::util::{date_cn, iso_week, now_iso};
 use creditia_store::{cache_dir, load_json, save_json, Library, Project};
 use serde_json::{json, Value};
@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 pub struct Opts {
+    pub branch: Option<String>,
     pub fresh: bool,
     pub github: bool,
     pub out: Option<PathBuf>,
@@ -45,9 +46,9 @@ struct CommitCache {
 }
 
 /// 读配置：指定了就用指定的；仓库里有就用仓库的；都没有就现场探测（不落盘）。空着的字段自动补
-pub fn load_config(repo: &Path, override_path: Option<&Path>) -> Config {
+pub fn load_config(repo: &Path, override_path: Option<&Path>) -> Result<Config, String> {
     let p = override_path.map(|x| x.to_path_buf()).unwrap_or(repo.join(".creditia/config.json"));
-    let mut c = Config::load(&p).unwrap_or_else(|_| detect_config(repo));
+    let mut c = if p.exists() || override_path.is_some() { Config::load(&p)? } else { detect_config(repo) };
     c.repo = repo.display().to_string();
     if c.name.is_empty() {
         c.name = repo.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
@@ -55,23 +56,33 @@ pub fn load_config(repo: &Path, override_path: Option<&Path>) -> Config {
     if c.remotes.is_empty() {
         c.remotes = ad::git::identity(repo).1;
     }
-    if c.markers.is_empty() {
-        c.markers = crate::derive_markers(repo, &c.remotes);
-    }
-    if c.exclude_markers.is_empty() {
-        c.exclude_markers = crate::detect_excludes(repo, &c.remotes);
-    }
-    c
+    Ok(c)
 }
 
 pub fn project_of(repo: &Path, cfg: &Config) -> Project {
     let (root, remotes) = ad::git::identity(repo);
-    let id = if root.is_empty() { cfg.name.clone() } else { root[..12.min(root.len())].to_string() };
+    let primary = ad::git::git(repo, &["remote", "get-url", "origin"]).trim().to_string();
+    let identity = if primary.is_empty() {
+        ad::git::git(repo, &["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim().to_string()
+    } else { ad::git::normalize_remote(&primary) };
+    let id = format!("{:08x}-{}", creditia_core::hash::murmur_js(&identity), root.get(..12).unwrap_or(&root));
     Project { id, name: cfg.name.clone(), path: repo.display().to_string(), root_commit: root, remotes, last_head: None, last_analyzed: None }
 }
 
 fn path_map(repo: &Path, head: &str, cfg: &Config) -> PathMap {
-    PathMap { known: ad::git::known_paths(repo, head), markers: cfg.markers.iter().map(|m| m.to_lowercase()).collect(), excludes: cfg.exclude_markers.iter().map(|m| m.to_lowercase()).collect() }
+    let origin = ad::git::normalize_remote(ad::git::git(repo, &["remote", "get-url", "origin"]).trim());
+    let remotes = if origin.is_empty() { vec![] } else { vec![origin.clone()] };
+    let mut roots = crate::project::derive_markers(repo, &remotes);
+    roots.extend(cfg.paths.iter().cloned());
+    if let Ok(library) = Library::open() { roots.extend(library.paths(&project_of(repo, cfg).id).unwrap_or_default()); }
+    // 同一远程的会话可证明旧工作路径；仅相同根提交不足以合并 fork。
+    for activity in ad::codex::discover() {
+        if activity.remote.as_deref().map(ad::git::normalize_remote).map(|r| !origin.is_empty() && r == origin).unwrap_or(false) {
+            roots.push(activity.cwd);
+        }
+    }
+    roots.sort(); roots.dedup();
+    PathMap { known: ad::git::known_paths(repo, head), markers: roots, excludes: vec![] }
 }
 
 fn scan_all(store: &mut Store, pm: &PathMap, st: &mut ad::Stats) {
@@ -80,19 +91,22 @@ fn scan_all(store: &mut Store, pm: &PathMap, st: &mut ad::Stats) {
     ad::cursor::scan(store, pm, st);
     ad::grok::scan(store, pm, st);
     ad::kimi::scan(store, pm, st);
+    ad::opencode::scan(store, pm, st);
+    ad::gemini::scan(store, pm, st);
 }
 
 /// collect：只采集证据进证据库
 pub fn collect(repo: &Path, lib: &mut Library, config: Option<&Path>) -> Result<(usize, Vec<String>, String), String> {
-    let cfg = load_config(repo, config);
+    let cfg = load_config(repo, config)?;
     let proj = project_of(repo, &cfg);
-    let head = ad::git::git(repo, &["rev-parse", &cfg.branch]).trim().to_string();
-    let head = if head.is_empty() { ad::git::git(repo, &["rev-parse", "HEAD"]).trim().to_string() } else { head };
+    let head=ad::git::git(repo,&["rev-parse","--verify","--end-of-options",&format!("{}^{{commit}}",cfg.branch)]).trim().to_string();
+    if head.is_empty(){return Err(format!("找不到分支或提交 {}",cfg.branch));}
     let pm = path_map(repo, &head, &cfg);
     let cache = cache_dir(&proj.id);
     let mut store: Store = load_json(&cache.join("store.json"));
-    if store.version != STORE_VERSION {
-        store = Store { version: STORE_VERSION, ..Default::default() };
+    let mut scope=pm.markers.clone(); scope.extend(pm.known.iter().map(|p|format!("file:{p}"))); scope.sort();
+    if store.version != STORE_VERSION || store.scope != scope {
+        store = Store { version: STORE_VERSION, scope, ..Default::default() };
     }
     let mut st = ad::Stats::default();
     scan_all(&mut store, &pm, &mut st);
@@ -104,7 +118,8 @@ pub fn collect(repo: &Path, lib: &mut Library, config: Option<&Path>) -> Result<
 
 pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let t0 = Instant::now();
-    let cfg = load_config(repo, opts.config.as_deref());
+    let mut cfg = load_config(repo, opts.config.as_deref())?;
+    if let Some(branch)=&opts.branch { cfg.branch=branch.clone(); }
     let proj = project_of(repo, &cfg);
     let cache = cache_dir(&proj.id);
     if opts.fresh {
@@ -115,13 +130,8 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
 
     // ---- git：提交（增量）
     let rev = cfg.branch.clone();
-    let mut head = ad::git::git(repo, &["rev-parse", &rev]).trim().to_string();
-    if head.is_empty() {
-        head = ad::git::git(repo, &["rev-parse", "HEAD"]).trim().to_string();
-    }
-    if head.is_empty() {
-        return Err("仓库没有提交".into());
-    }
+    let head=ad::git::git(repo,&["rev-parse","--verify","--end-of-options",&format!("{rev}^{{commit}}")]).trim().to_string();
+    if head.is_empty(){return Err(format!("找不到分支或提交 {rev}，请确认配置或使用 --branch HEAD"));}
     let mut cc: CommitCache = load_json(&cache.join("commits.json"));
     let base = cc.head.clone().filter(|h| ad::git::git_ok(repo, &["merge-base", "--is-ancestor", h, &head]));
     let (new_commits, new_stamps) = if let Some(b) = base {
@@ -133,6 +143,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     };
     let n_new = new_commits.len();
     cc.commits.extend(new_commits);
+    cc.commits.sort_by(|a,b| a.commit_ts.cmp(&b.commit_ts).then(a.hash.cmp(&b.hash)));
     cc.stamps.extend(new_stamps);
     cc.head = Some(head.clone());
 
@@ -140,13 +151,9 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let prs_path = cache.join("prs.json");
     let mut prs: Vec<PrMeta> = load_json::<Vec<Value>>(&prs_path).into_iter().filter_map(|v| serde_json::from_value(v).ok()).collect();
     if opts.github {
-        let fresh = ad::git::github_prs(repo);
-        if fresh.is_empty() {
-            warnings.push("gh 没有返回 PR 列表（未安装、未登录或仓库不在 GitHub）".into());
-        } else {
-            prs = fresh;
-            let v: Vec<Value> = prs.iter().map(|p| json!({ "source": p.source, "number": p.number, "title": p.title, "branch": p.branch, "author": p.author, "reviews": p.reviews })).collect();
-            save_json(&prs_path, &v)?;
+        match ad::git::github_prs(repo) {
+            Ok(fresh) => { prs = fresh; save_json(&prs_path, &prs)?; }
+            Err(error) => warnings.push(format!("GitHub 元数据读取失败，现有缓存时间未更新：{error}")),
         }
     }
     let (units, parents) = ad::git::units(repo, &head, &prs);
@@ -155,8 +162,9 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     // ---- 证据：日志（增量）+ 证据库（日志被清理后仍在）
     let pm = path_map(repo, &head, &cfg);
     let mut store: Store = load_json(&cache.join("store.json"));
-    if store.version != STORE_VERSION {
-        store = Store { version: STORE_VERSION, ..Default::default() };
+    let mut scope=pm.markers.clone(); scope.extend(pm.known.iter().map(|p|format!("file:{p}"))); scope.sort();
+    if store.version != STORE_VERSION || store.scope != scope {
+        store = Store { version: STORE_VERSION, scope, ..Default::default() };
     }
     let mut st = ad::Stats::default();
     scan_all(&mut store, &pm, &mut st);
@@ -167,15 +175,15 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     lib.save_evidence(&proj.id, &store)?;
     let (db_evs, db_sessions) = lib.load_evidence(&proj.id)?;
     // 合并：证据库里有、当前日志里没有的（已清理）补进来
-    let mut have: HashSet<(String, u32, String, String)> = HashSet::new();
+    let mut have: HashSet<(String, u32, String, String, String, Option<String>, i64, bool)> = HashSet::new();
     for g in store.groups.values() {
         for e in &g.evs {
-            have.insert((e.rel.clone(), e.key, e.src.harness().into(), e.session.clone()));
+            have.insert((e.rel.clone(), e.key, e.src.harness().into(), e.session.clone(), e.model.clone(), e.provider.clone(), e.ts, e.tab));
         }
     }
     let mut extra = FileGroup::default();
     for e in db_evs {
-        if !have.contains(&(e.rel.clone(), e.key, e.src.harness().into(), e.session.clone())) {
+        if !have.contains(&(e.rel.clone(), e.key, e.src.harness().into(), e.session.clone(), e.model.clone(), e.provider.clone(), e.ts, e.tab)) {
             extra.evs.push(e);
         }
     }
@@ -186,7 +194,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         }
     }
     let restored = extra.evs.len();
-    if restored > 0 {
+    if restored > 0 || !extra.sessions.is_empty() {
         st.notes.push(format!("证据库补回 {restored} 条已不在日志里的证据"));
         store.groups.insert("library".into(), extra);
     }
@@ -265,6 +273,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     struct Agg {
         long: usize,
         verified: usize,
+        declared: usize,
         from: String,
         to: String,
     }
@@ -276,7 +285,6 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let mut seg: BTreeMap<String, Agg> = BTreeMap::new();
     let mut binary_files: BTreeMap<String, usize> = BTreeMap::new();
     let (mut conflicts, mut tab_total) = (0usize, 0usize);
-    let mut doc_lines_director = 0usize;
     let mut clock = vec![vec![0usize; 24]; 7];
     for c in &cc.commits {
         let a = &attrs[&c.hash];
@@ -285,7 +293,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         let ver = ver_of.get(&c.hash).cloned().unwrap_or("unreleased".into());
         conflicts += a.conflicts;
         tab_total += a.tab_lines;
-        let t = c.author_ts + 8 * 3600;
+        let t = c.author_ts;
         let wd = ((t.div_euclid(86400) + 3).rem_euclid(7)) as usize;
         clock[wd][(t.rem_euclid(86400) / 3600) as usize] += 1;
         let e = seg.entry(sg.clone()).or_default();
@@ -313,10 +321,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
                     e.long += 1;
                     if at.level == Level::Verified {
                         e.verified += 1;
-                    }
-                }
-                if at.who == 0 && ar == "docs" {
-                    doc_lines_director += 1;
+                    } else if at.level == Level::Declared { e.declared += 1; }
                 }
             }
         }
@@ -358,7 +363,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
                 for at in fl {
                     let e = cnt.entry(at.who).or_insert((0, at.level));
                     e.0 += 1;
-                    e.1 = e.1.min(at.level);
+                    e.1 = e.1.max(at.level);
                     total += 1;
                 }
             }
@@ -382,13 +387,10 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let reviews = sessions.iter().filter(|s| s.reviewer).count();
     let mut contributors = vec![];
     for (i, w) in reg.list.iter().enumerate() {
-        if !by_who.contains_key(&i) && i != 0 {
+        if !by_who.contains_key(&i) {
             continue;
         }
         let mut roles = vec![];
-        if i == 0 {
-            roles.push("director");
-        }
         if by_who.contains_key(&i) && w.kind != "unattributed" {
             roles.push("author");
         }
@@ -396,22 +398,30 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         if let Some(h) = &w.harness {
             c["harness"] = json!(h);
             c["model"] = json!(w.model);
+            c["provider"] = json!(w.provider);
             c["family"] = json!(w.model.as_deref().map(family));
-            c["where"] = json!("local");
+            c["where"] = json!("unknown");
         }
         if let Some(n) = &w.name {
             c["name"] = json!(cfg.display_name(n));
         }
         contributors.push(c);
     }
-    if reviews > 0 {
-        let by_model: BTreeMap<String, usize> = sessions.iter().filter(|s| s.reviewer).fold(BTreeMap::new(), |mut m, s| {
-            *m.entry(format!("{}/{}", s.src.harness(), creditia_core::model::normalize_model(&s.model))).or_default() += 1;
-            m
-        });
-        for (k, n) in by_model {
-            let (h, m) = k.split_once('/').unwrap();
-            contributors.push(json!({ "id": format!("a:{h}/{m}"), "kind": "agent", "harness": h, "model": m, "roles": ["reviewer"], "reviews": n }));
+    let mut session_registry = Registry::default();
+    let mut review_counts: BTreeMap<usize, usize> = BTreeMap::new();
+    for session in &sessions {
+        if session.reviewer {
+            let who = session_registry.agent_via(session.src.harness(), Some(&session.model), session.provider.as_deref());
+            *review_counts.entry(who).or_default() += 1;
+        }
+    }
+    for (who, count) in review_counts {
+        let author = &session_registry.list[who];
+        if let Some(existing) = contributors.iter_mut().find(|c| c["id"].as_str() == Some(&author.id)) {
+            existing["roles"].as_array_mut().unwrap().push(json!("reviewer"));
+            existing["reviews"] = json!(count);
+        } else {
+            contributors.push(json!({ "id": author.id, "kind": "agent", "harness": author.harness, "model": author.model, "provider": author.provider, "roles": ["reviewer"], "reviews": count }));
         }
     }
     let breakdown: Vec<Value> = by_who
@@ -422,7 +432,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
                 "contributor": reg.list[*w].id,
                 "linesAdded": lv.values().sum::<usize>(),
                 "linesSurviving": surv_by.get(w).copied().unwrap_or(0),
-                "byEvidence": { "verified": { "linesAdded": ev(Level::Verified) }, "manual": { "linesAdded": ev(Level::Manual) }, "declared": { "linesAdded": ev(Level::Declared) }, "inferred": { "linesAdded": ev(Level::Inferred) }, "unattributed": { "linesAdded": ev(Level::Unattributed) } },
+                "byEvidence": { "verified": { "linesAdded": ev(Level::Verified) }, "declared": { "linesAdded": ev(Level::Declared) }, "unattributed": { "linesAdded": ev(Level::Unattributed) } },
                 "byArea": by_area.get(w), "byVersion": by_ver.get(w),
             })
         })
@@ -433,8 +443,9 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         v.sort_by_key(|s| s.start);
         v.iter()
             .map(|s| {
-                let id = if s.model.is_empty() { format!("a:{}", s.src.harness()) } else { format!("a:{}/{}", s.src.harness(), creditia_core::model::normalize_model(&s.model)) };
-                json!({ "contributor": id, "start": s.start, "end": s.end, "tokens": s.tokens, "review": s.reviewer })
+                let mut id = if s.model.is_empty() { format!("a:{}", s.src.harness()) } else { format!("a:{}/{}", s.src.harness(), creditia_core::model::normalize_model(&s.model)) };
+                if let Some(p) = &s.provider { id.push_str(&format!("@{p}")); }
+                json!({ "contributor": id, "tool": s.src.harness(), "model": s.model, "provider": s.provider, "start": s.start, "end": s.end, "tokens": s.tokens, "review": s.reviewer })
             })
             .collect()
     };
@@ -444,51 +455,33 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let first = cc.commits.iter().map(|c| c.author_ts).min().unwrap_or(0);
     let last = cc.commits.iter().map(|c| c.author_ts).max().unwrap_or(0);
     let prompts: i64 = sessions.iter().filter(|s| !s.reviewer).map(|s| s.prompts).sum();
-    // GitHub PR review：主导者本人的 review 计入人的参与，bot（如 chatgpt-codex-connector）计入 agent 审阅
-    let director_logins: HashSet<String> = cfg
-        .directors
-        .iter()
-        .flat_map(|d| d.emails.iter())
-        .filter_map(|e| {
-            let local = e.split('@').next()?;
-            Some(local.split_once('+').map(|(_, l)| l).unwrap_or(local).to_lowercase())
-        })
-        .chain(cfg.directors.iter().map(|d| d.name.to_lowercase()))
-        .collect();
-    let (human_reviews, bot_reviews) = prs.iter().flat_map(|p| p.reviews.iter()).fold((0usize, 0usize), |(h, b), r| {
-        let r = r.to_lowercase();
-        if director_logins.contains(&r) {
-            (h + 1, b)
-        } else if r.contains("codex") || r.contains("bot") || r.contains("copilot") {
-            (h, b + 1)
-        } else {
-            (h, b)
-        }
-    });
+    // 评论者身份不等于真实写作者；不从账号名猜测人的贡献。
+    let review_records = prs.iter().map(|p| p.reviews.len()).sum::<usize>();
     let lines_written: usize = store.groups.values().flat_map(|g| g.evs.iter()).filter(|e| !e.tab).map(|e| (e.rel.as_str(), e.key, e.session.as_str())).collect::<HashSet<_>>().len();
     let coverage: Vec<Value> = seg
         .iter()
         .map(|(n, s)| {
-            let best = if s.long > 0 && s.verified * 10 >= s.long { "verified" } else { "declared" };
+            let best = if s.verified > 0 { "verified" } else if s.declared > 0 { "declared" } else { "unattributed" };
             json!({ "name": n, "from": s.from, "to": s.to, "best": best, "verifiedShare": if s.long == 0 { 0.0 } else { (s.verified as f64 / s.long as f64 * 1000.0).round() / 1000.0 } })
         })
         .collect();
-    let directors: Vec<Value> = cfg.directors.iter().map(|d| json!({ "id": d.id, "name": cfg.display_name(&d.name) })).collect();
     let generated_at = now_iso();
     let credits = json!({
         "$schema": "https://creditia.dev/schema/v0.json",
         "schemaVersion": 0,
-        "project": { "name": cfg.name, "repos": cfg.remotes, "range": { "from": date_cn(first), "to": date_cn(last) } },
+        "project": { "id": proj.id, "name": cfg.name, "repos": cfg.remotes, "range": { "from": date_cn(first), "to": date_cn(last) } },
         "generatedAt": generated_at,
-        "level": "standard",
-        "head": head,
+                "head": head,
+        "branch": cfg.branch,
         "versions": tags.iter().map(|(t, ts)| json!({ "tag": t, "date": date_cn(*ts) })).collect::<Vec<_>>(),
         "coverage": coverage,
-        "directors": directors,
+        "people": if cfg.display.people { cfg.people.iter().map(|p| json!({"name": cfg.display_name(&p.name), "roles": p.roles, "note": p.note})).collect::<Vec<_>>() } else { vec![] },
+        "measurement": { "metric": "added-lines", "scope": "git-history", "timezone": "UTC", "humanValueEstimated": false, "aiInference": false },
+        "sources": st.notes,
         "contributors": contributors,
         "totals": { "commits": cc.commits.len(), "units": unit_json.len(), "linesAdded": total_lines, "linesSurviving": surv.len(), "linesWritten": lines_written, "tokens": tokens, "sessions": sessions.iter().filter(|s| !s.reviewer).count(), "days": days.len(), "binaryFiles": binary_files.values().sum::<usize>() },
         "breakdown": breakdown,
-        "human": { "prompts": prompts, "plans": doc_lines_director, "reviews": human_reviews, "tabAssistedLines": tab_total, "agentReviews": reviews + bot_reviews },
+        "human": { "prompts": prompts, "reviewRecords": review_records, "tabAssistedLines": tab_total, "agentReviews": reviews },
         "timeline": timeline,
         "days": by_day.iter().map(|(d, m)| json!({ "date": d, "by": m })).collect::<Vec<_>>(),
         "clock": clock,

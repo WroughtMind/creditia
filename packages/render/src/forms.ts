@@ -1,5 +1,5 @@
 // 全部展示形式。规则：一条信息只出现一次；不写凑数的话；没有真数据、真素材的元素不出现；
-// 主导者只在 opt.director 打开时出现。
+// 人员只在 opt.people 打开时出现。
 //
 // 风格之间靠 family 拉开距离：同一种形式在六个家族里是不同的排版结构，而不是换个颜色。
 // 片尾字幕和小票另有可选的版式变体（variant）。
@@ -14,31 +14,31 @@ const keysOf = (m: Model) => m.rows.map((r) => r.key);
 const castOf = (m: Model, n: number) => m.rows.filter((r) => r.kind === 'agent' && isAi(r.key)).slice(0, n).map((r) => r.name);
 const rankOf = (m: Model, key: string) => Math.max(0, m.rows.findIndex((r) => r.key === key));
 /** 真正的 AI 工具（CI 机器人不算）*/
-const isAi = (k: string) => !!BRANDS[k]?.logo && k !== 'github-actions';
+const isAi = (k: string) => !['github-actions', 'unattributed', 'human', 'other'].includes(k);
 /** 细线：杂志和单色风格的 line 是纯黑，只适合描边，分隔线要调淡 */
 const hair = (t: Theme) => (t.family === 'editorial' ? 'rgba(18,17,16,0.28)' : t.family === 'mono' ? 'rgba(0,0,0,0.18)' : t.line);
 const hexA = (hex: string, a: string) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + a : hex);
 /** satori 不支持 dotted 边框；点线引导用 repeating-linear-gradient 画 */
 const dotline = (t: Theme, color?: string) => ({ height: 2, alignSelf: 'center' as const, backgroundImage: `repeating-linear-gradient(90deg, ${color ?? t.faint} 0px, ${color ?? t.faint} 2px, transparent 2px, transparent 7px)` });
 
-/** 人：不和 agent 同级。单独一行小字写名字和占比，不放条形 */
+/** 人：不和 agent 同级。单独一行小字写姓名和用户确认的角色，不放条形 */
 function humanLine(m: Model, t: Theme, s = 1): Node | null {
-  if (!m.humans.length) return null;
-  const text = m.humans.slice(0, 4).map((x) => `${x.name} ${pct(x.pct)}`).join('　') + (m.humans.length > 4 ? ` 等 ${m.humans.length} 人` : '');
+  if (!m.people.length) return null;
+  const text = m.people.map((x) => [x.name, x.roles.join(' / ')].filter(Boolean).join(' · ')).join('　');
   switch (t.family) {
     case 'film':
-      return box({ justifyContent: 'center', marginTop: 16 * s }, txt({ fontFamily: t.display, fontSize: 15 * s, color: t.soft }, `— 人 · ${text} —`));
+      return box({ justifyContent: 'center', marginTop: 16 * s }, txt({ fontFamily: t.display, fontSize: 15 * s, color: t.soft }, text));
     case 'terminal':
-      return txt({ fontFamily: MONO_FONT, fontSize: 11 * s, color: t.faint, marginTop: 10 * s }, `# 人写的部分：${text}`);
+      return txt({ fontFamily: MONO_FONT, fontSize: 11 * s, color: t.faint, marginTop: 10 * s }, `# ${text}`);
     case 'editorial':
       return box({ marginTop: 14 * s, alignItems: 'flex-start', gap: 10 * s },
         label(t, '人', 10 * s, { marginTop: 2 * s }), txt({ fontSize: 13 * s, color: t.soft }, text));
     case 'mono':
       return box({ marginTop: 12 * s, alignItems: 'center', gap: 8 * s },
         box({ width: 8 * s, height: 8 * s, backgroundColor: t.ink }),
-        txt({ fontSize: 10.5 * s, letterSpacing: 1 * s, textTransform: 'uppercase', color: t.soft }, `人 · ${text}`));
+        txt({ fontSize: 10.5 * s, letterSpacing: 1 * s, textTransform: 'uppercase', color: t.soft }, text));
     case 'glass':
-      return txt({ fontSize: 12 * s, color: '#5E6472', marginTop: 12 * s }, `人 · ${text}`);
+      return txt({ fontSize: 12 * s, color: '#5E6472', marginTop: 12 * s }, text);
     default:
       return box({ marginTop: 12 * s, alignItems: 'flex-start', gap: 10 * s },
         label(t, '人', 10 * s, { marginTop: 2 * s }), txt({ fontSize: 12.5 * s, color: t.soft }, text));
@@ -66,8 +66,8 @@ export function tier(m: Model, t: Theme, s = 2, withTitle = true): Out {
 function tierMinimal(m: Model, t: Theme, s: number, withTitle: boolean): Out {
   const W = 400 * s, rowH = 52;
   const rows = m.rows.filter((r) => r.key !== 'human');
-  const head = (withTitle ? 64 : 44) + (m.director ? 22 : 0);
-  const H = (28 + head + rows.length * rowH + 46 + 28 + (m.humans.length ? 30 : 0)) * s;
+  const head = (withTitle ? 64 : 44) + (m.signature ? 22 : 0);
+  const H = (28 + head + rows.length * rowH + 46 + 28 + (m.people.length ? 30 : 0)) * s;
   const row = (r: Contributor) => col({ height: rowH * s, justifyContent: 'center', gap: 9 * s },
     box({ alignItems: 'center', gap: 10 * s },
       mark(r.key, t, 16 * s),
@@ -79,7 +79,7 @@ function tierMinimal(m: Model, t: Theme, s: number, withTitle: boolean): Out {
       box({ alignItems: 'baseline', justifyContent: withTitle ? 'space-between' : 'flex-end' },
         withTitle ? txt({ fontFamily: t.display, fontSize: 18 * s, fontWeight: t.displayWeight, color: t.ink }, m.project) : null,
         label(t, 'Credits', 10 * s)),
-      m.director ? txt({ fontSize: 12 * s, color: t.soft }, m.director) : null),
+      m.signature ? txt({ fontSize: 12 * s, color: t.soft }, m.signature) : null),
     col({}, ...rows.map(row)),
     humanLine(m, t, s),
     box({ height: 46 * s, alignItems: 'flex-end', borderTop: `1px solid ${t.line}`, paddingBottom: 2 * s },
@@ -90,8 +90,8 @@ function tierMinimal(m: Model, t: Theme, s: number, withTitle: boolean): Out {
 function tierFilm(m: Model, t: Theme, s: number, withTitle: boolean): Out {
   const W = 400 * s, rowH = 46;
   const rows = m.rows.filter((r) => r.key !== 'human');
-  const head = (withTitle ? 118 : 40) + (m.director ? 24 : 0);
-  const H = (32 + head + rows.length * rowH + 44 + 32 + (m.humans.length ? 30 : 0)) * s;
+  const head = (withTitle ? 118 : 40) + (m.signature ? 24 : 0);
+  const H = (32 + head + rows.length * rowH + 44 + 32 + (m.people.length ? 30 : 0)) * s;
   const row = (r: Contributor) => box({ height: rowH * s, alignItems: 'baseline', justifyContent: 'center', gap: 12 * s },
     mark(r.key, t, 15 * s),
     txt({ fontFamily: t.display, fontSize: 26 * s, fontWeight: 400, color: r.key === 'unattributed' ? t.soft : t.ink }, r.name),
@@ -100,7 +100,7 @@ function tierFilm(m: Model, t: Theme, s: number, withTitle: boolean): Out {
     col({ height: head * s, alignItems: 'center', justifyContent: 'center', gap: 10 * s },
       label(t, 'Credits', 10 * s, { color: t.accent, letterSpacing: 4 * s }),
       withTitle ? txt({ fontFamily: t.display, fontSize: 36 * s, color: t.ink, lineHeight: 1.05, textAlign: 'center' }, m.project) : null,
-      m.director ? txt({ fontFamily: t.display, fontSize: 15 * s, color: t.soft }, `由 ${m.director} 主导`) : null,
+      m.signature ? txt({ fontFamily: t.display, fontSize: 15 * s, color: t.soft }, m.signature) : null,
       txt({ fontSize: 11 * s, color: t.accent, letterSpacing: 5 * s, marginTop: 2 * s }, '· · ·')),
     col({ width: '100%' }, ...rows.map(row)),
     humanLine(m, t, s),
@@ -112,7 +112,7 @@ function tierFilm(m: Model, t: Theme, s: number, withTitle: boolean): Out {
 function tierTerminal(m: Model, t: Theme, s: number, withTitle: boolean): Out {
   const W = 400 * s, rowH = 40;
   const rows = m.rows.filter((r) => r.key !== 'human');
-  const H = (34 + 16 + (withTitle ? 26 : 0) + (m.director ? 20 : 0) + rows.length * rowH + 16 + 22 + 16 + (m.humans.length ? 30 : 0)) * s;
+  const H = (34 + 16 + (withTitle ? 26 : 0) + (m.signature ? 20 : 0) + rows.length * rowH + 16 + 22 + 16 + (m.people.length ? 30 : 0)) * s;
   const row = (r: Contributor, last: boolean) => box({ height: rowH * s, alignItems: 'center', gap: 10 * s },
     txt({ fontFamily: MONO_FONT, fontSize: 13 * s, color: t.faint }, last ? '└─' : '├─'),
     mark(r.key, t, 14 * s),
@@ -125,7 +125,7 @@ function tierTerminal(m: Model, t: Theme, s: number, withTitle: boolean): Out {
       txt({ fontFamily: MONO_FONT, fontSize: 13 * s }, 'creditia cred'),
       txt({ marginLeft: 'auto', fontFamily: MONO_FONT, fontSize: 12 * s, color: t.faint }, withTitle ? m.project : '')),
     col({ padding: `${14 * s}px ${18 * s}px ${16 * s}px` },
-      m.director ? txt({ fontFamily: MONO_FONT, fontSize: 12 * s, color: t.faint, marginBottom: 8 * s }, `# 由 ${m.director} 主导`) : null,
+      m.signature ? txt({ fontFamily: MONO_FONT, fontSize: 12 * s, color: t.faint, marginBottom: 8 * s }, `# ${m.signature}`) : null,
       ...rows.map((r, i) => row(r, i === rows.length - 1)),
       humanLine(m, t, s),
       txt({ fontFamily: MONO_FONT, fontSize: 11 * s, color: t.faint, marginTop: 12 * s }, [
@@ -137,8 +137,8 @@ function tierTerminal(m: Model, t: Theme, s: number, withTitle: boolean): Out {
 function tierEditorial(m: Model, t: Theme, s: number, withTitle: boolean): Out {
   const W = 400 * s, rowH = 54;
   const rows = m.rows.filter((r) => r.key !== 'human');
-  const head = (withTitle ? 92 : 40) + (m.director ? 26 : 0);
-  const H = (28 + head + rows.length * rowH + 8 + 42 + 24 + (m.humans.length ? 30 : 0)) * s;
+  const head = (withTitle ? 92 : 40) + (m.signature ? 26 : 0);
+  const H = (28 + head + rows.length * rowH + 8 + 42 + 24 + (m.people.length ? 30 : 0)) * s;
   const leader = box({ flex: 1, margin: `0 ${10 * s}px`, ...dotline(t) });
   const row = (r: Contributor) => box({ height: rowH * s, alignItems: 'baseline', borderBottom: `1px solid ${hair(t)}` },
     txt({ fontSize: 16 * s, fontWeight: 500, color: r.key === 'unattributed' ? t.soft : t.ink, fontFamily: t.sans }, r.name),
@@ -149,7 +149,7 @@ function tierEditorial(m: Model, t: Theme, s: number, withTitle: boolean): Out {
       box({ alignItems: 'baseline', justifyContent: 'space-between' },
         withTitle ? txt({ fontFamily: t.display, fontSize: 40 * s, fontWeight: t.displayWeight, lineHeight: 1 }, m.project) : null,
         label(t, 'Credits', 10 * s, { color: t.soft })),
-      m.director ? txt({ fontFamily: t.display, fontSize: 15 * s, color: t.soft }, `由 ${m.director} 主导`) : null,
+      m.signature ? txt({ fontFamily: t.display, fontSize: 15 * s, color: t.soft }, m.signature) : null,
       box({ height: 3 * s, backgroundColor: t.ink, marginTop: 4 * s })),
     col({}, ...rows.map(row)),
     humanLine(m, t, s),
@@ -162,7 +162,7 @@ function tierEditorial(m: Model, t: Theme, s: number, withTitle: boolean): Out {
 function tierMono(m: Model, t: Theme, s: number, withTitle: boolean): Out {
   const W = 400 * s, rowH = 52;
   const rows = m.rows.filter((r) => r.key !== 'human');
-  const H = ((withTitle ? 46 : 0) + rows.length * rowH + (m.director ? 26 : 0) + 46 + (m.humans.length ? 34 : 0)) * s;
+  const H = ((withTitle ? 46 : 0) + rows.length * rowH + (m.signature ? 26 : 0) + 46 + (m.humans.length ? 34 : 0)) * s;
   const row = (r: Contributor) => box({ height: rowH * s, alignItems: 'center', gap: 12 * s, borderBottom: `1px solid ${hair(t)}` },
     box({ width: 44 * s, height: 26 * s, backgroundColor: r.key === 'unattributed' ? t.faint : t.ink, alignItems: 'center', justifyContent: 'center' },
       txt({ fontFamily: t.num, fontSize: 12 * s, fontWeight: 700, color: '#FFFFFF' }, pct(r.pct))),
@@ -172,7 +172,7 @@ function tierMono(m: Model, t: Theme, s: number, withTitle: boolean): Out {
     withTitle ? box({ height: 46 * s, backgroundColor: t.ink, alignItems: 'center', padding: `0 ${16 * s}px` },
       txt({ color: '#FFFFFF', fontSize: 15 * s, fontWeight: 700, letterSpacing: 1 * s, textTransform: 'uppercase', fontFamily: t.display }, m.project),
       txt({ marginLeft: 'auto', color: 'rgba(255,255,255,0.72)', fontSize: 10 * s, letterSpacing: 2 * s, textTransform: 'uppercase' }, 'Credits')) : null,
-    m.director ? txt({ padding: `${6 * s}px ${16 * s}px 0`, fontSize: 12 * s, color: t.soft }, m.director) : null,
+    m.signature ? txt({ padding: `${6 * s}px ${16 * s}px 0`, fontSize: 12 * s, color: t.soft }, m.signature) : null,
     col({ padding: `0 ${16 * s}px`, flexGrow: 1 }, ...rows.map(row), humanLine(m, t, s)),
     box({ height: 46 * s, backgroundColor: t.ink, alignItems: 'center', padding: `0 ${16 * s}px` },
       txt({ color: '#FFFFFF', fontSize: 11 * s, letterSpacing: 1.2 * s, textTransform: 'uppercase' }, [m.commits && `${fmt(m.commits)} 次提交`, m.linesAdded && `${fmt(m.linesAdded)} 行`].filter(Boolean).join('  ·  ')))) };
@@ -182,8 +182,8 @@ function tierMono(m: Model, t: Theme, s: number, withTitle: boolean): Out {
 function tierGlass(m: Model, t: Theme, s: number, withTitle: boolean): Out {
   const W = 400 * s, rowH = 64;
   const rows = m.rows.filter((r) => r.key !== 'human');
-  const head = (withTitle ? 76 : 40) + (m.director ? 22 : 0);
-  const H = (24 + head + rows.length * rowH - 8 + 44 + 24 + (m.humans.length ? 30 : 0)) * s;
+  const head = (withTitle ? 76 : 40) + (m.signature ? 22 : 0);
+  const H = (24 + head + rows.length * rowH - 8 + 44 + 24 + (m.people.length ? 30 : 0)) * s;
   const pill = (r: Contributor) => col({ height: rowH * s - 8 * s, marginBottom: 8 * s, padding: `${10 * s}px ${14 * s}px`, borderRadius: 18 * s, backgroundColor: 'rgba(255,255,255,0.66)', border: '1px solid rgba(255,255,255,0.9)', boxShadow: '0 1px 2px rgba(20,22,28,0.05), 0 6px 16px rgba(20,22,28,0.05)', justifyContent: 'center', gap: 7 * s },
     box({ alignItems: 'center', gap: 10 * s },
       box({ width: 26 * s, height: 26 * s, borderRadius: 99, alignItems: 'center', justifyContent: 'center', backgroundColor: r.key === 'unattributed' ? 'rgba(255,255,255,0.6)' : hexA(famColor(r.key, t), '26') },
@@ -196,7 +196,7 @@ function tierGlass(m: Model, t: Theme, s: number, withTitle: boolean): Out {
       box({ alignItems: 'baseline', justifyContent: 'space-between' },
         withTitle ? txt({ fontFamily: t.display, fontSize: 20 * s, fontWeight: t.displayWeight, color: '#14161C' }, m.project) : null,
         label(t, 'Credits', 10 * s, { color: '#5E6472' })),
-      m.director ? txt({ fontSize: 12 * s, color: '#5E6472' }, m.director) : null),
+      m.signature ? txt({ fontSize: 12 * s, color: '#5E6472' }, m.signature) : null),
     col({}, ...rows.map(pill)),
     humanLine(m, t, s),
     box({ height: 44 * s, alignItems: 'flex-end', justifyContent: 'space-between', paddingTop: 12 * s },
@@ -250,7 +250,7 @@ export function share(m: Model, t: Theme): Out {
         m.humans.length ? box({ marginTop: 10, alignItems: 'baseline', gap: 8 }, label(t, '人', 10), txt({ fontSize: 13, color: t.soft }, m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　'))) : null,
         box({ borderTop: `3px solid ${t.ink}`, paddingTop: 10, alignItems: 'baseline', justifyContent: 'space-between' },
           txt({ fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase' }, [m.commits && `${fmt(m.commits)} 次提交`, m.units && `${fmt(m.units)} 个 PR / 提交`, m.linesAdded && `+${fmt(m.linesAdded)} 行`].filter(Boolean).join('  ·  ')),
-          m.director ? txt({ fontFamily: t.display, fontSize: 16 }, m.director) : null)) };
+          m.signature ? txt({ fontFamily: t.display, fontSize: 16 }, m.signature) : null)) };
     }
     case 'mono': {
       const ranked = m.rows.filter((r) => r.key !== 'human');
@@ -265,7 +265,7 @@ export function share(m: Model, t: Theme): Out {
           col({ gap: 12 },
             txt({ color: 'rgba(255,255,255,0.62)', fontSize: 11, letterSpacing: 2.4, textTransform: 'uppercase' }, 'Credits'),
             txt({ color: '#FFFFFF', fontSize: 13, letterSpacing: 1.2 }, [range, m.commits && `${fmt(m.commits)} commits`].filter(Boolean).join('  ·  ')),
-            m.director ? txt({ color: '#FFFFFF', fontSize: 15 }, m.director) : null)),
+            m.signature ? txt({ color: '#FFFFFF', fontSize: 15 }, m.signature) : null)),
         col({ flex: 1, padding: '46px 44px 30px' },
           box({ flex: 1 }, col({ width: '100%' }, ...ranked.map(row), m.humans.length ? txt({ marginTop: 10, fontSize: 12, color: '#6B6B6B', letterSpacing: 0.6 }, `人 · ${m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　')}`) : null)),
           box({ alignItems: 'center', justifyContent: 'space-between', paddingTop: 14 },
@@ -292,7 +292,7 @@ export function share(m: Model, t: Theme): Out {
             txt({ fontFamily: t.display, fontSize: 42, fontWeight: 900, color: t.surface, lineHeight: 1.08 }, m.project),
             ornament(t, 12, { color: t.surface })),
           col({ flex: 1, gap: 6 },
-            box({ marginBottom: 8, alignItems: 'baseline', justifyContent: 'space-between' }, label(t, '今晚演出', 12), label(t, m.director || 'creditia', 11)),
+            box({ marginBottom: 8, alignItems: 'baseline', justifyContent: 'space-between' }, label(t, '今晚演出', 12), label(t, m.signature || 'creditia', 11)),
             box({ height: 3, backgroundColor: t.ink, marginBottom: 12 }),
             ...rows.map((r, i) => box({ alignItems: 'baseline', padding: '10px 0', borderBottom: `1px solid ${hair(t)}` },
               txt({ width: 34, fontFamily: t.num, fontSize: 18, color: t.accent }, String(i + 1).padStart(2, '0')),
@@ -310,7 +310,7 @@ export function share(m: Model, t: Theme): Out {
         txt({ fontFamily: t.display, fontSize: 92, color: t.ink, textAlign: 'center', lineHeight: 1.05, letterSpacing: 4 }, m.project),
         box({ width: 420, height: 1, backgroundColor: t.accent, opacity: 0.6 }),
         box({ gap: 18, alignItems: 'center' }, ...names.flatMap((n, i) => (i ? [txt({ fontFamily: t.deco, color: t.accent, fontSize: 14 }, '◆')] : []).concat(txt({ fontFamily: t.labelFont, fontSize: 22, color: t.ink, letterSpacing: 3 }, n)))),
-        txt({ fontFamily: t.labelFont, fontSize: 11, color: t.soft, letterSpacing: 5, textTransform: 'uppercase', marginTop: 6 }, m.director ? `授予 ${m.director}` : totals)) };
+        txt({ fontFamily: t.labelFont, fontSize: 11, color: t.soft, letterSpacing: 5, textTransform: 'uppercase', marginTop: 6 }, m.signature ? `授予 ${m.signature}` : totals)) };
     }
     case 'broadsheet': {
       const ranked = m.rows.filter((r) => r.key !== 'human');
@@ -326,7 +326,7 @@ export function share(m: Model, t: Theme): Out {
         box({ borderBottom: `5px solid ${t.ink}`, marginBottom: 12 }),
         box({ flex: 1, gap: 54 }, col({ flex: 1 }, ...ranked.slice(0, half).map(line)), col({ flex: 1 }, ...ranked.slice(half).map(line))),
         box({ borderTop: `5px solid ${t.ink}`, paddingTop: 9, justifyContent: 'space-between', alignItems: 'baseline' },
-          label(t, totals, 11), label(t, m.director || 'creditia', 11))) };
+          label(t, totals, 11), label(t, m.signature || 'creditia', 11))) };
     }
     case 'crt': {
       const ranked = m.rows.filter((r) => r.key !== 'human');
@@ -360,7 +360,7 @@ export function share(m: Model, t: Theme): Out {
           txt({ position: 'absolute', fontFamily: t.display, fontSize: 92, color: t.accent, letterSpacing: 4, opacity: 0.55 }, m.project),
           txt({ fontFamily: t.display, fontSize: 92, color: t.ink, letterSpacing: 4 }, m.project)),
         box({ gap: 20, alignItems: 'center' }, ...names.flatMap((n, i) => (i ? [txt({ fontFamily: t.deco, color: t.accent, fontSize: 16 }, '★')] : []).concat(txt({ fontFamily: t.sans, fontSize: 26, color: t.ink, letterSpacing: 3 }, n)))),
-        box({ padding: '6px 22px', border: `1px solid ${t.accent}`, borderRadius: 999 }, txt({ fontFamily: t.sans, fontSize: 13, color: t.accent, letterSpacing: 5 }, m.director ? `主理 ${m.director}` : totals))) };
+        box({ padding: '6px 22px', border: `1px solid ${t.accent}`, borderRadius: 999 }, txt({ fontFamily: t.sans, fontSize: 13, color: t.accent, letterSpacing: 5 }, m.signature ? m.signature : totals))) };
     }
     case 'poster': {
       const ranked = m.rows.filter((r) => r.key !== 'human').slice(0, 5);
@@ -393,8 +393,8 @@ export function share(m: Model, t: Theme): Out {
 export function byline(m: Model, t: Theme, lang: 'zh' | 'en'): Out {
   const tools = m.rows.filter((r) => r.kind === 'agent' && isAi(r.key)).map((r) => r.name);
   const list = (a: string[], and: string, sep: string) => (a.length < 2 ? a.join('') : `${a.slice(0, -1).join(sep)}${and}${a[a.length - 1]}`);
-  const who = m.director;
-  const s = lang === 'zh'
+  const who = m.signature;
+  const s = !tools.length ? (who || m.project) : lang === 'zh'
     ? (who ? `${who} 与 ${list(tools, ' 和 ', '、')} 共同完成` : `与 ${list(tools, ' 和 ', '、')} 共同完成`)
     : (who ? `Made by ${who} with ${list(tools, ' & ', ', ')}` : `Made with ${list(tools, ' & ', ', ')}`);
   const W = 1200, H = 120;
@@ -643,10 +643,10 @@ function rollBlocks(m: Model): { role: string; people: RollPerson[] }[] {
   const authors = m.rows.filter((r) => r.kind === 'agent' && isAi(r.key));
   const lead = authors[0], rest = authors.slice(1);
   return [
-    m.director ? { role: '主导', people: [{ name: m.director }] } : null,
+    ...m.people.map((p) => ({ role: p.roles.join(' / ') || '制作', people: [{ name: p.name }] })),
     lead ? { role: '主笔', people: [{ key: lead.key, name: lead.name, model: lead.models[0] }] } : null,
     rest.length ? { role: '协作', people: rest.map((r) => ({ key: r.key, name: r.name, model: r.models[0] })) } : null,
-    m.humans.length ? { role: '参与', people: m.humans.map((r) => ({ name: r.name })) } : null,
+
     m.reviewers.length ? { role: '审阅', people: m.reviewers.map((r) => ({ key: r.key, name: r.name, model: r.model })) } : null,
   ].filter(Boolean) as { role: string; people: RollPerson[] }[];
 }
@@ -727,7 +727,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
       ...stars.flatMap((name, i) => (i ? [txt({ color: t.accent, fontSize: 22 }, '·')] : []).concat(txt({ fontFamily: t.display, fontSize: serif ? 30 : 26, color: t.ink }, name))));
     return { w: W, h: H, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', gap: 30, ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
       label(t, 'creditia presents', 11, { color: t.soft, letterSpacing: 5 }),
-      m.director ? label(t, `a project by ${m.director}`, 11, { color: t.soft, letterSpacing: 3 }) : null,
+      m.signature ? label(t, `a project by ${m.signature}`, 11, { color: t.soft, letterSpacing: 3 }) : null,
       txt({ fontFamily: t.display, fontSize: serif ? 128 : 96, fontWeight: t.displayWeight, letterSpacing: serif ? 2 : -2, lineHeight: 1.05, textAlign: 'center' }, m.project),
       box({ width: 90, height: 2, backgroundColor: t.accent }),
       namesRow,
@@ -818,7 +818,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
       txt({ fontFamily: t.display, fontSize: 150 * fs, fontWeight: t.displayWeight, lineHeight: 1, textAlign: 'center', letterSpacing: serif ? 2 : -3 }, 'The End'),
       ornament(t, 14),
       txt({ fontFamily: t.display, fontSize: 40 * fs, textAlign: 'center' }, m.project),
-      m.director ? label(t, `a project by ${m.director}`, 13, { letterSpacing: 4 }) : null,
+      m.signature ? label(t, `a project by ${m.signature}`, 13, { letterSpacing: 4 }) : null,
       names.length ? txt({ fontSize: 18, color: t.soft, textAlign: 'center', marginTop: 6 }, `with ${names.join(' · ')}`) : null,
       label(t, totals, 11, { marginTop: 50, color: t.faint })) };
   }
@@ -833,7 +833,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
       txt({ fontFamily: t.display, fontSize: 104 * fs, fontWeight: t.displayWeight, lineHeight: 1.08, textAlign: 'center' }, m.project),
       col({ alignItems: 'center', gap: 8, marginTop: 6 },
         txt({ fontFamily: COND, fontSize: 12, color: t.faint, letterSpacing: 4, textTransform: 'uppercase' }, 'creditia presents'),
-        m.director ? txt({ fontFamily: COND, fontSize: 15, color: t.soft, letterSpacing: 2, textTransform: 'uppercase' }, `a ${m.director} production`) : null,
+        m.signature ? txt({ fontFamily: COND, fontSize: 15, color: t.soft, letterSpacing: 2, textTransform: 'uppercase' }, `a ${m.signature} production`) : null,
         ornament(t, 13)),
       box({ flexWrap: 'wrap', justifyContent: 'center', alignItems: 'baseline', width: 940, rowGap: 10 }, ...blocks.map((b) => seg(b.role, b.people.map((p) => p.name)))),
       txt({ fontFamily: COND, fontSize: 12, color: t.faint, letterSpacing: 2.4, textTransform: 'uppercase', marginTop: 4 }, totals)) };
@@ -852,7 +852,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
       col({ alignItems: 'center', gap: 10 },
         label(t, 'programme 节目单', 13, { letterSpacing: 6 }),
         txt({ fontFamily: t.display, fontSize: 64 * fs, fontWeight: t.displayWeight, textAlign: 'center' }, m.project),
-        m.director ? txt({ fontSize: 16, color: t.soft }, `导演 ${m.director}`) : null,
+        m.signature ? txt({ fontSize: 16, color: t.soft }, m.signature) : null,
         ornament(t, 12, { marginTop: 6 })),
       col({ marginTop: 40, flexGrow: 1, justifyContent: 'center' }, ...acts.map(act), box({ borderTop: `1px solid ${hair(t)}` })),
       col({ alignItems: 'center', gap: 8, marginTop: 30 },
@@ -890,7 +890,7 @@ export function receipt(m: Model, t: Theme, variant?: string): Out {
   if (m.commits) items.push(['提交', fmt(m.commits)]);
   if (m.linesAdded) items.push(['写下', `${fmt(m.linesAdded)} 行`]);
   if (m.linesSurviving) items.push(['现在还在', `${fmt(m.linesSurviving)} 行`]);
-  if (m.director) items.push(['主导', m.director]);
+  if (m.signature) items.push(['制作', m.signature]);
 
   if (v === 'thermal') {
     const paper = '#FCFBF6', ink = '#1A1713';
@@ -1112,7 +1112,7 @@ export function term(cmd: string, lines: Seg[][], t: Theme, m?: Model): Out {
 export function appPage(m: Model, t: Theme): Out {
   const s = 2, W = 390 * s;
   const rows = m.rows.filter((r) => r.key !== 'human');
-  const H = (54 + 44 + 20 + (m.director ? 92 : 0) + 30 + rows.length * 50 + (m.humans.length ? 40 : 0) + 40 + 40) * s;
+  const H = (54 + 44 + 20 + (m.signature ? 92 : 0) + 30 + rows.length * 50 + (m.people.length ? 40 : 0) + 40 + 40) * s;
   const ios = t.dark ? { bg: '#000000', cell: '#1C1C1E', sep: 'rgba(84,84,88,0.6)', blue: '#0A84FF' } : { bg: '#F2F2F7', cell: '#FFFFFF', sep: 'rgba(60,60,67,0.18)', blue: '#007AFF' };
   const head = (s2: string) => txt({ fontSize: 13 * s, color: t.soft, margin: `${22 * s}px ${16 * s}px ${7 * s}px`, letterSpacing: 0.4 }, s2);
   const cellRow = (r: Contributor, border: boolean) => box({ alignItems: 'center', gap: 12 * s, height: 50 * s, paddingRight: 16 * s, borderBottom: border ? `${0.5 * s}px solid ${ios.sep}` : 'none' },
@@ -1123,8 +1123,8 @@ export function appPage(m: Model, t: Theme): Out {
     box({ height: 44 * s, alignItems: 'center', position: 'relative' },
       txt({ fontSize: 17 * s, color: ios.blue }, '‹ 关于'),
       txt({ position: 'absolute', left: 0, right: 0, justifyContent: 'center', fontSize: 17 * s, fontWeight: 600 }, '致谢')),
-    m.director ? head('主导') : null,
-    m.director ? box({ backgroundColor: ios.cell, borderRadius: 10 * s, padding: `${13 * s}px ${16 * s}px` }, txt({ fontSize: 17 * s }, m.director)) : null,
+    m.signature ? head('制作') : null,
+    m.signature ? box({ backgroundColor: ios.cell, borderRadius: 10 * s, padding: `${13 * s}px ${16 * s}px` }, txt({ fontSize: 17 * s }, m.signature)) : null,
     head(m.project),
     col({ backgroundColor: ios.cell, borderRadius: 10 * s, paddingLeft: 16 * s },
       ...rows.map((r, i) => cellRow(r, i < rows.length - 1))),
@@ -1403,7 +1403,6 @@ export function versions(m: Model, t: Theme): Out | null {
   const by: Record<string, Record<string, number>> = {};
   for (const b of m.raw.breakdown ?? []) {
     const k = g(b.contributor);
-    if ((m.raw.directors ?? []).some((d: any) => d.id === b.contributor)) continue;
     for (const [v, num] of Object.entries<number>(b.byVersion ?? {})) { by[v] ??= {}; by[v][k] = (by[v][k] ?? 0) + num; }
   }
   const order = [...tags.map((x) => x.tag), 'unreleased'].filter((v) => by[v]);
@@ -1639,7 +1638,7 @@ export function tierStyled(m: Model, t: Theme, s: number, withTitle: boolean): O
 }
 
 function tierHead(kind: TierHead, m: Model, t: Theme, s: number, on: boolean): Node {
-  const dir = m.director;
+  const dir = m.signature;
   switch (kind) {
     case 'marquee':
       return col({ height: (on ? 152 : 32) * s, alignItems: 'center', justifyContent: 'center', gap: 12 * s },
@@ -1673,7 +1672,7 @@ function tierHead(kind: TierHead, m: Model, t: Theme, s: number, on: boolean): N
     case 'board':
       return col({ height: (on ? 96 : 32) * s, gap: 6 * s, justifyContent: 'center' },
         on ? txt({ fontFamily: t.sans, fontSize: 22 * s, color: t.ink }, `> creditia tier ${m.project}`) : null,
-        dir ? txt({ fontFamily: t.sans, fontSize: 18 * s, color: t.soft }, `> 主导：${dir}`) : null,
+        dir ? txt({ fontFamily: t.sans, fontSize: 18 * s, color: t.soft }, `> ${dir}`) : null,
         txt({ fontFamily: t.sans, fontSize: 18 * s, color: t.faint, whiteSpace: 'pre' }, '─'.repeat(48)));
     case 'scoreboard':
       return col({ height: (on ? 140 : 32) * s, alignItems: 'center', justifyContent: 'center', gap: 12 * s },

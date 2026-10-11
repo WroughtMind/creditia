@@ -36,6 +36,8 @@
     "@expo-google-fonts/zcool-qingke-huangyou": "^0.4.1",
     "@expo-google-fonts/zcool-xiaowei": "^0.4.1",
     "@resvg/resvg-js": "^2.6.2",
+    "gifenc": "^1.0.3",
+    "pdf-lib": "^1.17.1",
     "satori": "^0.38.2"
   }
 }

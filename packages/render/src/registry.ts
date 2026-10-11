@@ -16,7 +16,7 @@ export const FORMS: Record<string, { name: string; q: string; size: string; vari
   roll: { name: '片尾字幕', q: '谁担任了什么角色', size: '1080×1350', variants: F.ROLL_VARIANTS, def: (t) => F.ROLL_DEFAULT[t.family] ?? 'classic', render: (m, t, c) => F.roll(m, t, c.variant) },
   ribbon: { name: '时间织带', q: '怎么一步步做出来的', size: '1200×500', render: (m, t) => F.ribbon(m, t) },
   mosaic: { name: '代码马赛克', q: '现在由谁构成', size: '1200×860', render: (m, t) => F.mosaic(m, t) },
-  profile: { name: '个人履历卡', q: '我和 AI 一起做了什么', size: '1200×自适应', render: (m, t, c) => (c.projects?.length ? F.profile(c.person ?? m.director, c.projects, t) : null) },
+  profile: { name: '个人履历卡', q: '我和 AI 一起做了什么', size: '1200×自适应', render: (m, t, c) => (c.projects?.length ? F.profile(c.person ?? m.signature, c.projects, t) : null) },
   fetch: { name: '终端名片', q: '在终端里一眼看完', size: '1200×自适应', render: (m, t) => F.term('creditia fetch', fetchSegs(m), t, m) },
   blame: { name: '逐行溯源', q: '某一行是谁写的', size: '1200×自适应', render: (m, t, c) => (c.blame ? F.term(`creditia blame ${c.blame.file.split('/').pop()}:${c.blame.line}`, blameSegs(c.blame), t, m) : null) },
   app: { name: 'App 内致谢页', q: '放进 App 的「关于」页', size: '780×自适应', render: (m, t) => F.appPage(m, t) },

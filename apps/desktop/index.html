@@ -1,25 +1,17 @@
 <!doctype html>
-<html lang="zh">
-<head>
-<meta charset="utf-8">
-<title>creditia</title>
-<link rel="stylesheet" href="/src/style.css">
-</head>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>creditia · 作品工作台</title><link rel="icon" href="/creditia/icon.png"><link rel="stylesheet" href="/src/style.css"></head>
 <body>
-<header id="top" data-tauri-drag-region>
-  <div class="top-l"></div>
-  <div class="top-c">
-    <button id="proj" class="proj" aria-haspopup="menu"><b id="name">creditia</b><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
-  </div>
-  <div class="top-r">
-    <nav id="nav" class="seg" hidden><button data-view="make" class="on">图</button><button data-view="detail">明细</button></nav>
-    <button id="gear" class="icon" title="设置与数据来源"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></button>
-  </div>
-</header>
-<main id="view"></main>
-<div id="pop" hidden></div>
-<div id="sheet" hidden></div>
-<div id="toast" role="status" hidden></div>
-<script type="module" src="/src/main.ts"></script>
-</body>
-</html>
+  <header class="app-header" data-tauri-drag-region>
+    <a class="wordmark" href="#" aria-label="creditia 作品工作台"><img src="/creditia/icon.png" width="25" height="25" alt=""><span>creditia</span></a>
+    <button id="project-button" class="project-button glass" aria-haspopup="dialog"><span id="project-name">选择项目</span><span id="project-chevron"></span></button>
+    <nav class="header-actions"><button id="people-button" class="icon-button" aria-label="制作人员" title="制作人员"></button><button id="info-button" class="icon-button" aria-label="查看记录" title="查看记录"></button><button id="refresh-button" class="icon-button" aria-label="重新分析" title="重新分析"></button></nav>
+  </header>
+  <main id="workspace" aria-label="作品工作台"><div class="loading-state">正在打开作品库…</div></main>
+  <footer class="bottom-bar">
+    <div class="style-control"><div id="style-name" class="style-name"></div><nav id="styles" class="styles glass" aria-label="作品风格"></nav></div>
+    <div class="export-control"><div id="selection-name" class="selection-name">选择作品，或拖到这里导出</div><nav id="exports" class="exports glass" aria-label="导出格式"></nav></div>
+  </footer>
+  <dialog id="panel" class="panel glass"></dialog><dialog id="project-menu" class="project-menu glass"></dialog>
+  <div id="toast" role="status" aria-live="polite" hidden></div><script type="module" src="/src/main.ts"></script>
+</body></html>

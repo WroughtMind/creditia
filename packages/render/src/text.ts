@@ -25,16 +25,14 @@ function lead(raw: any, u: any) {
 
 /** 某版本内各工具占比 */
 function versionLine(raw: any, tag: string) {
-  const directors = new Set((raw.directors ?? []).map((d: any) => d.id));
   const by = new Map<string, number>();
   for (const b of raw.breakdown ?? []) {
-    if (directors.has(b.contributor)) continue;
     const k = harnessOf(raw, b.contributor);
     by.set(k === 'human' ? 'other' : k, (by.get(k === 'human' ? 'other' : k) ?? 0) + (b.byVersion?.[tag] ?? 0));
   }
   const tot = [...by.values()].reduce((a, b) => a + b, 0);
   if (!tot) return '';
-  return [...by.entries()].filter(([, v]) => v / tot >= 0.001)
+  return [...by.entries()].filter(([, v]) => v > 0)
     .sort((a, b) => (a[0] === 'unattributed' ? 1 : b[0] === 'unattributed' ? -1 : b[1] - a[1]))
     .map(([k, v]) => `${nameOf(k)} ${pct((v / tot) * 100)}`).join(' · ');
 }
@@ -46,24 +44,29 @@ export const MARK_START = '<!-- creditia:start -->';
 export const MARK_END = '<!-- creditia:end -->';
 
 /** CREDITS.md 标记区间里的内容。人按名字逐条列出，不和 agent 并排算百分比排名 */
-export function creditsBlock(m: Model, maxPerSection = 10): string {
+export function creditsBlock(m: Model): string {
   const raw = m.raw;
   const out: string[] = [];
-  const head = [m.project, m.director && `由 ${m.director} 主导`, `${fmt(m.commits)} 次提交`, `${fmt(m.units)} 个 PR / 直接提交`, `+${fmt(m.linesAdded)} 行`].filter(Boolean).join(' · ');
+  const head = [m.project, m.signature && m.signature, `${fmt(m.commits)} 次提交`, `${fmt(m.units)} 个 PR / 直接提交`, `+${fmt(m.linesAdded)} 行`].filter(Boolean).join(' · ');
   out.push(head, '');
   out.push('| 谁写的 | 占比 | 写了多少行 | 现在还在的代码 |', '|---|---:|---:|---:|');
   const surv = new Map<string, number>();
   for (const b of raw.breakdown ?? []) { const k = harnessOf(raw, b.contributor); surv.set(k, (surv.get(k) ?? 0) + (b.linesSurviving ?? 0)); }
   for (const r of m.rows) {
     if (r.key === 'human') {
-      for (const h of m.humans) out.push(`| ${h.name}（人） | ${pct(h.pct)} | +${fmt(h.lines)} | — |`);
+      out.push(`| 人的代码记录 | ${pct(r.pct)} | +${fmt(r.lines)} | ${fmt(surv.get('human') ?? 0)} |`);
       continue;
     }
     out.push(`| ${r.name} | ${pct(r.pct)} | +${fmt(r.lines)} | ${r.kind === 'other' ? '—' : fmt(surv.get(r.key) ?? 0)} |`);
   }
-  out.push('');
-  const weak = (raw.coverage ?? []).filter((c: any) => c.best !== 'verified');
-  if (weak.length) out.push(`> ${weak[0].from} – ${weak[weak.length - 1].to} 的大部分代码没有逐行日志，只能按提交信息和分支名推断，不一定准。`, '');
+  out.push('', '> 占比按历史新增代码行计算，不代表劳动时间、项目价值或人的贡献份额。', '');
+  if (m.people.length) {
+    out.push('## 制作人员', '');
+    for (const p of m.people) out.push(`- ${p.name}${p.roles.length ? ` · ${p.roles.join('、')}` : ''}${p.note ? ` — ${p.note}` : ''}`);
+    out.push('');
+  }
+  const weak = (raw.coverage ?? []).filter((c: any) => c.verifiedShare === undefined ? c.best !== 'verified' : c.verifiedShare < 1);
+  if (weak.length) out.push(`> ${weak[0].from} – ${weak[weak.length - 1].to} 有部分代码没有逐行日志。提交声明单列，证据不足或冲突的部分保留为未确认；不按分支名或相近时间猜测作者。`, '');
   const units: any[] = raw.units ?? [];
   const groups: [string, string, string, any[]][] = [];
   const unrel = units.filter((u) => !u.version);
@@ -75,8 +78,7 @@ export function creditsBlock(m: Model, maxPerSection = 10): string {
     const vl = versionLine(raw, key);
     if (vl) out.push(vl, '');
     const prs = us.filter((u) => u.id.startsWith('pr:')).sort((a, b) => b.date.localeCompare(a.date));
-    for (const u of prs.slice(0, maxPerSection)) out.push(`- #${u.id.slice(3)} ${clean(u.title)} — ${lead(raw, u)}`);
-    if (prs.length > maxPerSection) out.push(`- 另有 ${prs.length - maxPerSection} 个 PR`);
+    for (const u of prs) out.push(`- #${u.id.slice(3)} ${clean(u.title)} — ${lead(raw, u)}`);
     const direct = us.length - prs.length;
     if (direct) out.push(`- ${direct} 个直接提交`);
     out.push('');
@@ -94,15 +96,14 @@ export function mergeCreditsMd(existing: string | null, block: string): string {
   return existing.replace(/\s*$/, '\n\n') + body + '\n';
 }
 
-export function releaseNotes(m: Model, tag: string, max = 8): string {
+export function releaseNotes(m: Model, tag: string): string {
   const raw = m.raw;
   const us = (raw.units ?? []).filter((u: any) => (tag === 'unreleased' ? !u.version : u.version === tag) && u.id.startsWith('pr:'))
     .sort((a: any, b: any) => b.date.localeCompare(a.date));
   const lines = ['### Credits', ''];
   const vl = versionLine(raw, tag);
   if (vl) lines.push(vl, '');
-  for (const u of us.slice(0, max)) lines.push(`- #${u.id.slice(3)} ${clean(u.title)} — ${lead(raw, u)}`);
-  if (us.length > max) lines.push(`- 另有 ${us.length - max} 个 PR，见 CREDITS.md`);
+  for (const u of us) lines.push(`- #${u.id.slice(3)} ${clean(u.title)} — ${lead(raw, u)}`);
   return lines.join('\n') + '\n';
 }
 
@@ -116,11 +117,11 @@ export function prComment(m: Model, id: string): string {
     const e = by.get(k) ?? { share: 0, models: [] };
     e.share += s.share;
     const c = (raw.contributors ?? []).find((x: any) => x.id === s.contributor);
-    if (c?.model && s.share >= 0.01) e.models.push(c.model === 'auto' ? 'Auto' : c.model);
+    if (c?.model && s.share > 0) e.models.push(c.model === 'auto' ? 'Auto' : c.model);
     by.set(k, e);
   }
-  const parts = [...by.entries()].filter(([, v]) => v.share >= 0.01).sort((a, b) => b[1].share - a[1].share)
-    .map(([k, v]) => `**${k === 'human' ? '人' : nameOf(k)}** ${Math.round(v.share * 100)}%${v.models.length ? `（${v.models.join('、')}）` : ''}`);
+  const parts = [...by.entries()].filter(([, v]) => v.share > 0).sort((a, b) => b[1].share - a[1].share)
+    .map(([k, v]) => `**${k === 'human' ? '人' : nameOf(k)}** ${pct(v.share * 100)}${v.models.length ? `（${v.models.join('、')}）` : ''}`);
   return `这个 PR 的 ${fmt(u.lines)} 行新增代码：${parts.join('，')}。\n`;
 }
 
@@ -131,7 +132,7 @@ export function fetchSegs(m: Model): Seg[][] {
   const blocks = (p: number) => '■'.repeat(Math.max(1, Math.round(p / 3.5)));
   const ranked = m.rows.filter((r) => r.key !== 'human');
   return [
-    [{ text: m.project, bold: true }, ...(m.director ? [{ text: `  ${m.director}`, dim: true }] : [])],
+    [{ text: m.project, bold: true }, ...(m.signature ? [{ text: `  ${m.signature}`, dim: true }] : [])],
     [{ text: '' }],
     kv('工期', `${m.spanDays} 天   ${m.range.from} → ${m.range.to}`),
     kv('提交', `${fmt(m.commits)}`),
@@ -156,7 +157,7 @@ export function localTime(sec: number, offsetMin = -new Date(sec * 1000).getTime
 export function blameSegs(b: any): Seg[][] {
   const who = b.harness ? nameOf(b.harness) : b.name ?? nameOf('unattributed');
   const t = b.sessionTime ? localTime(b.sessionTime) : '';
-  const ev: Record<string, string> = { verified: 'agent 日志里的编辑和这一行逐字对得上', declared: '提交信息里写明了，或和会话时间吻合', inferred: '按分支名推断', manual: '手动标注', unattributed: '认不出来' };
+  const ev: Record<string, string> = { verified: '编辑成功记录的路径、行哈希和时间匹配', declared: '提交盖章或明确的工具署名' , unattributed: '认不出来' };
   const kv = (k: string, v: Seg[]): Seg[] => [{ text: k.padEnd(6, ' '), dim: true }, ...v];
   return [
     kv('作者', [{ text: who, color: b.harness, bold: true }, ...(b.model ? [{ text: `  ${b.model}`, dim: true }] : [])]),

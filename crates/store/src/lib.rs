@@ -52,13 +52,14 @@ impl Library {
              create table if not exists projects(
                id text primary key, name text not null, path text not null, root_commit text not null,
                remotes text not null default '[]', last_head text, last_analyzed integer);
-             create table if not exists evidence(
-               project text not null, rel text not null, key integer not null, src text not null, model text not null,
+             create table if not exists project_paths(project text not null, path text not null, primary key(project,path));
+             create table if not exists evidence_records(
+               project text not null, rel text not null, key integer not null, src text not null, model text not null, provider text not null default '',
                session text not null, ts integer not null, tab integer not null default 0,
-               primary key(project, rel, key, src, session));
-             create index if not exists idx_ev_project on evidence(project);
-             create table if not exists sessions(
-               project text not null, src text not null, id text not null, model text not null, start integer not null, end integer not null,
+               primary key(project, rel, key, src, model, provider, session, ts, tab));
+             create index if not exists idx_records_project on evidence_records(project);
+             create table if not exists activity_sessions(
+               project text not null, src text not null, id text not null, model text not null, provider text not null default '', start integer not null, end integer not null,
                tokens integer not null, branch text, prompts integer not null, reviewer integer not null, has_content integer not null,
                primary key(project, src, id));
              create table if not exists snapshots(
@@ -70,6 +71,7 @@ impl Library {
     }
 
     pub fn upsert_project(&self, p: &Project) -> Result<(), String> {
+        self.register_path(&p.id, &p.path)?;
         self.conn
             .execute(
                 "insert into projects(id,name,path,root_commit,remotes,last_head,last_analyzed) values(?1,?2,?3,?4,?5,?6,?7)
@@ -79,6 +81,16 @@ impl Library {
             )
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    pub fn register_path(&self, project: &str, path: &str) -> Result<(), String> {
+        self.conn.execute("insert or ignore into project_paths(project,path) values(?1,?2)", params![project,path]).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    pub fn paths(&self, project: &str) -> Result<Vec<String>, String> {
+        let mut statement = self.conn.prepare("select path from project_paths where project=?1 order by path").map_err(|e| e.to_string())?;
+        let paths = statement.query_map([project], |row| row.get(0)).map_err(|e| e.to_string())?.collect::<rusqlite::Result<Vec<String>>>().map_err(|e| e.to_string())?;
+        Ok(paths)
     }
 
     pub fn projects(&self) -> Result<Vec<Project>, String> {
@@ -107,17 +119,17 @@ impl Library {
         let mut n = 0;
         {
             let mut ins = tx
-                .prepare("insert or ignore into evidence(project,rel,key,src,model,session,ts,tab) values(?1,?2,?3,?4,?5,?6,?7,?8)")
+                .prepare("insert or ignore into evidence_records(project,rel,key,src,model,session,ts,tab,provider) values(?1,?2,?3,?4,?5,?6,?7,?8,?9)")
                 .map_err(|e| e.to_string())?;
             let mut ses = tx
-                .prepare("insert or replace into sessions(project,src,id,model,start,end,tokens,branch,prompts,reviewer,has_content) values(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
+                .prepare("insert or replace into activity_sessions(project,src,id,model,start,end,tokens,branch,prompts,reviewer,has_content,provider) values(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)")
                 .map_err(|e| e.to_string())?;
             for g in store.groups.values() {
                 for e in &g.evs {
-                    n += ins.execute(params![project, e.rel, e.key as i64, e.src.harness(), e.model, e.session, e.ts, e.tab as i64]).map_err(|x| x.to_string())?;
+                    n += ins.execute(params![project, e.rel, e.key as i64, e.src.harness(), e.model, e.session, e.ts, e.tab as i64, e.provider.as_deref().unwrap_or("")]).map_err(|x| x.to_string())?;
                 }
                 for s in &g.sessions {
-                    ses.execute(params![project, s.src.harness(), s.id, s.model, s.start, s.end, s.tokens, s.branch, s.prompts, s.reviewer as i64, s.has_content as i64]).map_err(|x| x.to_string())?;
+                    ses.execute(params![project, s.src.harness(), s.id, s.model, s.start, s.end, s.tokens, s.branch, s.prompts, s.reviewer as i64, s.has_content as i64, s.provider.as_deref().unwrap_or("")]).map_err(|x| x.to_string())?;
                 }
             }
         }
@@ -128,24 +140,24 @@ impl Library {
     /// 从证据库读回（日志已被清理时仍能归因）
     pub fn load_evidence(&self, project: &str) -> Result<(Vec<Ev>, Vec<Session>), String> {
         let src_of = |s: &str| Src::all().into_iter().find(|x| x.harness() == s);
-        let mut st = self.conn.prepare("select rel,key,src,model,session,ts,tab from evidence where project=?1").map_err(|e| e.to_string())?;
+        let mut st = self.conn.prepare("select rel,key,src,model,session,ts,tab,provider from evidence_records where project=?1").map_err(|e| e.to_string())?;
         let evs = st
             .query_map([project], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?, r.get::<_, i64>(5)?, r.get::<_, i64>(6)?))
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?, r.get::<_, i64>(5)?, r.get::<_, i64>(6)?, r.get::<_, String>(7)?))
             })
             .map_err(|e| e.to_string())?
             .flatten()
-            .filter_map(|(rel, key, src, model, session, ts, tab)| src_of(&src).map(|src| Ev { rel, key: key as u32, src, model, session, ts, tab: tab != 0 }))
+            .filter_map(|(rel, key, src, model, session, ts, tab, provider)| src_of(&src).map(|src| Ev { provider: if provider.is_empty() { None } else { Some(provider) }, rel, key: key as u32, src, model, session, ts, tab: tab != 0 }))
             .collect();
-        let mut st2 = self.conn.prepare("select src,id,model,start,end,tokens,branch,prompts,reviewer,has_content from sessions where project=?1").map_err(|e| e.to_string())?;
+        let mut st2 = self.conn.prepare("select src,id,model,start,end,tokens,branch,prompts,reviewer,has_content,provider from activity_sessions where project=?1").map_err(|e| e.to_string())?;
         let sessions = st2
             .query_map([project], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?, r.get::<_, i64>(4)?, r.get::<_, i64>(5)?, r.get::<_, Option<String>>(6)?, r.get::<_, i64>(7)?, r.get::<_, i64>(8)?, r.get::<_, i64>(9)?))
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?, r.get::<_, i64>(4)?, r.get::<_, i64>(5)?, r.get::<_, Option<String>>(6)?, r.get::<_, i64>(7)?, r.get::<_, i64>(8)?, r.get::<_, i64>(9)?, r.get::<_, String>(10)?))
             })
             .map_err(|e| e.to_string())?
             .flatten()
-            .filter_map(|(src, id, model, start, end, tokens, branch, prompts, reviewer, has_content)| {
-                src_of(&src).map(|src| Session { src, id, model, start, end, tokens, branch, prompts, reviewer: reviewer != 0, has_content: has_content != 0 })
+            .filter_map(|(src, id, model, start, end, tokens, branch, prompts, reviewer, has_content, provider)| {
+                src_of(&src).map(|src| Session { provider: if provider.is_empty() { None } else { Some(provider) }, src, id, model, start, end, tokens, branch, prompts, reviewer: reviewer != 0, has_content: has_content != 0 })
             })
             .collect();
         Ok((evs, sessions))
@@ -175,16 +187,8 @@ impl Library {
             .or_else(|e| if matches!(e, rusqlite::Error::QueryReturnedNoRows) { Ok(None) } else { Err(e.to_string()) })
     }
 
-    /// 改仓库配置里的展示选项（App 设置页用）。只动 display 段，其他原样保留。
-    pub fn set_display_director(repo: &Path, on: bool) -> Result<(), String> {
-        let p = repo.join(".creditia/config.json");
-        let mut v: serde_json::Value = std::fs::read_to_string(&p).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
-        v["display"] = serde_json::json!({ "director": on });
-        std::fs::write(&p, serde_json::to_string_pretty(&v).map_err(|e| e.to_string())? + "\n").map_err(|e| e.to_string())
-    }
-
     pub fn evidence_count(&self, project: &str) -> u64 {
-        self.conn.query_row("select count(*) from evidence where project=?1", [project], |r| r.get::<_, i64>(0)).unwrap_or(0) as u64
+        self.conn.query_row("select count(*) from evidence_records where project=?1", [project], |r| r.get::<_, i64>(0)).unwrap_or(0) as u64
     }
 
     pub fn path(&self) -> PathBuf {

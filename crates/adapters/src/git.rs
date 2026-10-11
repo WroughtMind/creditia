@@ -33,10 +33,14 @@ pub fn identity(repo: &Path) -> (String, Vec<String>) {
 }
 
 pub fn normalize_remote(url: &str) -> String {
-    let u = url.trim().trim_end_matches('/').trim_end_matches(".git");
-    let u = u.strip_prefix("https://").or(u.strip_prefix("http://")).or(u.strip_prefix("ssh://")).unwrap_or(u);
-    let u = u.strip_prefix("git@").unwrap_or(u).replacen(':', "/", if u.starts_with("git@") || !u.contains("://") && u.contains(':') { 1 } else { 0 });
-    u.to_lowercase()
+    let value = url.trim().trim_end_matches('/').trim_end_matches(".git");
+    if let Some((_, rest)) = value.split_once("://") {
+        let (authority, path) = rest.split_once('/').unwrap_or((rest, ""));
+        let host = authority.rsplit('@').next().unwrap_or(authority);
+        return format!("{host}/{path}").trim_end_matches('/').to_lowercase();
+    }
+    if let Some((_, rest)) = value.rsplit_once('@') { return rest.replacen(':', "/", 1).to_lowercase(); }
+    value.to_lowercase()
 }
 
 /// 主 worktree 的 git 公共目录；worktree 内调用也能映射回主仓库
@@ -294,50 +298,27 @@ pub fn known_paths(repo: &Path, rev: &str) -> HashSet<String> {
     known
 }
 
-/// 用 gh 只读拉取 PR 元数据（没有 gh 或未登录就返回空）
-pub fn github_prs(repo: &Path) -> Vec<PrMeta> {
-    let out = Command::new("gh")
-        .current_dir(repo)
-        .args(["pr", "list", "--state", "all", "--limit", "1000", "--json", "number,headRefName,title,reviews,author"])
-        .output();
-    let Ok(o) = out else { return vec![] };
-    if !o.status.success() {
-        return vec![];
+/// 用 GitHub CLI 分页读取，页大小由服务端协议决定，不截断项目历史。
+pub fn github_prs(repo: &Path) -> Result<Vec<PrMeta>, String> {
+    fn pages(repo: &Path, endpoint: &str) -> Result<Vec<serde_json::Value>, String> {
+        let result = Command::new("gh").current_dir(repo).args(["api", "--paginate", "--slurp", endpoint]).output().map_err(|e| format!("无法启动 GitHub CLI：{e}"))?;
+        if !result.status.success() { return Err(String::from_utf8_lossy(&result.stderr).trim().to_string()); }
+        let value: Vec<Vec<serde_json::Value>> = serde_json::from_slice(&result.stdout).map_err(|e| format!("GitHub 返回格式无法解析：{e}"))?;
+        Ok(value.into_iter().flatten().collect())
     }
-    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap_or_default();
-    v.as_array()
-        .map(|a| {
-            a.iter()
-                .map(|x| PrMeta {
-                    source: "github".into(),
-                    number: x["number"].as_u64().unwrap_or(0),
-                    title: x["title"].as_str().unwrap_or("").into(),
-                    branch: x["headRefName"].as_str().unwrap_or("").into(),
-                    author: x["author"]["login"].as_str().map(String::from),
-                    reviews: x["reviews"].as_array().map(|r| r.iter().filter_map(|y| y["author"]["login"].as_str().map(String::from)).collect()).unwrap_or_default(),
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// `.mailmap` 支持交给 git 本身：`%ae`/`%an` 已经应用 mailmap 吗？没有，用 `%aE`/`%aN` 才会。
-/// 这里提供一个读取函数，把 mailmap 的邮箱映射并进 config 的 director 邮箱。
-pub fn mailmap_emails(repo: &Path, canonical: &str) -> Vec<String> {
-    let s = std::fs::read_to_string(repo.join(".mailmap")).unwrap_or_default();
     let mut out = vec![];
-    for l in s.lines() {
-        let l = l.trim();
-        if l.is_empty() || l.starts_with('#') {
-            continue;
-        }
-        // 形式：Proper Name <proper@email> [Commit Name] <commit@email>
-        let emails: Vec<&str> = l.split('<').skip(1).filter_map(|x| x.split('>').next()).collect();
-        if emails.first().map(|e| e.eq_ignore_ascii_case(canonical)).unwrap_or(false) {
-            out.extend(emails.iter().skip(1).map(|e| e.to_lowercase()));
-        }
+    for pull in pages(repo, "repos/{owner}/{repo}/pulls?state=all&per_page=100")? {
+        let number = pull["number"].as_u64().ok_or("GitHub PR 缺少编号")?;
+        let reviews = pages(repo, &format!("repos/{{owner}}/{{repo}}/pulls/{number}/reviews?per_page=100"))?;
+        out.push(PrMeta {
+            source: "github".into(), number,
+            title: pull["title"].as_str().unwrap_or("").into(),
+            branch: pull["head"]["ref"].as_str().unwrap_or("").into(),
+            author: pull["user"]["login"].as_str().map(String::from),
+            reviews: reviews.iter().filter_map(|review| review["user"]["login"].as_str().map(String::from)).collect(),
+        });
     }
-    out
+    Ok(out)
 }
 
 /// 主题行里粘着的盖章：`fix: x Creditia-Harness: claude-code Creditia-Model: m`

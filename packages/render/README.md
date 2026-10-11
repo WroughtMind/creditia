@@ -8,7 +8,7 @@
 cd packages/render && npm install
 node src/gallery.ts ../../spike/out gallery     # 全部形式 × 全部风格 → gallery/index.html
 FORMS=tier,roll THEMES=minimal-light,film node src/gallery.ts ../../spike/out gallery
-DIRECTOR=1 node src/gallery.ts ...              # 显示主导者署名（默认不显示）
+PEOPLE=1 node src/gallery.ts ...              # 显示用户确认的人员署名（默认不显示）
 ```
 
 需要 Node ≥ 22.18（直接运行 .ts）。`gallery/` 已被忽略。
@@ -17,7 +17,7 @@ DIRECTOR=1 node src/gallery.ts ...              # 显示主导者署名（默认
 
 ```ts
 import { buildModel, renderSvg, svgToPng, themeById, FORMS } from '@creditia/render/src/index.ts';
-const m = buildModel(credits, { director: false, lang: 'zh' });
+const m = buildModel(credits, { people: false, lang: 'zh' });
 const svg = await renderSvg('tier', m, themeById('minimal-light')!, { lang: 'zh' });
 ```
 
@@ -26,14 +26,14 @@ const svg = await renderSvg('tier', m, themeById('minimal-light')!, { lang: 'zh'
 | 文件 | 作用 |
 |---|---|
 | `src/index.ts` | 入口：`FORMS` 清单、`renderSvg` / `renderSized` / `svgToPng`、字体加载 |
-| `src/data.ts` | `credits.json` → 展示模型：按工具聚合、最多 6 个具名贡献方 + 其他 + 未确认、主要模型按新增行排序 |
-| `src/themes.ts` | 7 套设计 token：Minimal 亮 / 暗、Film Credits、Terminal、Glass、Editorial、Mono |
+| `src/data.ts` | `credits.json` → 展示模型：按工具聚合、保留各贡献方和未确认项、主要模型按新增行排序 |
+| `src/themes.ts` | 原有 15 套主题 |
 | `src/brand.ts` | 各家 logo（`assets/logos/`）与熟悉的品牌色 |
 | `src/ui.ts` | Satori 对象树的最小工具：标签、条、logo、背景、面板 |
 | `src/forms.ts` | 18 种形式的版式 |
 | `src/text.ts` | 文本形式：`CREDITS.md`（只改标记区间）、Release notes、PR 评论、终端名片、逐行溯源 |
 | `src/gallery.ts` | 样张总览页 |
-| `render.mjs`、`src/main.ts`、`src/model.ts`、`src/theme.ts`、`src/v2/` | 阶段 0b 的旧样张代码，待删除 |
+| `src/export.ts` | 共享 PNG、SVG、PDF、GIF 和自包含 HTML 编码 |
 
 ## 形式
 
@@ -48,7 +48,7 @@ const svg = await renderSvg('tier', m, themeById('minimal-light')!, { lang: 'zh'
 - 不写凑数的话；不放占位（字母 logo、"暂无数据"、水印都不出现）。
 - 每种形式只回答它那一个问题：占比只在 tier、华夫饼、环形图里出现；小票只列投入；片尾字幕只写角色和名字。
 - 数据不可信就不画。
-- 主导者署名默认不显示（`director: true` 才出现）。
+- 人员署名默认不显示（`people: true` 才出现）。
 
 ## 字体（均为 npm 包内 .ttf，Satori 可用，SIL OFL 1.1）
 

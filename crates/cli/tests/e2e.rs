@@ -109,8 +109,8 @@ fn fake_codex(env: &Env, ts: i64) {
     let lines = [
         serde_json::json!({ "timestamp": iso(ts - 500), "type": "turn_context", "payload": { "model": "gpt-test", "cwd": env.repo.display().to_string() } }),
         serde_json::json!({ "timestamp": iso(ts - 400), "type": "event_msg", "payload": { "type": "task_started" } }),
-        serde_json::json!({ "timestamp": iso(ts - 300), "type": "event_msg", "payload": { "type": "item_completed", "item": { "type": "FileChange", "changes": { abs.clone(): { "type": "add", "content": content } } } } }),
-        serde_json::json!({ "timestamp": iso(ts - 200), "type": "event_msg", "payload": { "type": "item_completed", "item": { "type": "FileChange", "changes": { abs: { "type": "update", "unified_diff": format!("@@ -20,0 +21,10 @@\n{diff_added}"), "move_path": null } } } } }),
+        serde_json::json!({ "timestamp": iso(ts - 300), "type": "event_msg", "payload": { "type": "item_completed", "item": { "type": "FileChange", "status":"completed", "changes": { abs.clone(): { "type": "add", "content": content } } } } }),
+        serde_json::json!({ "timestamp": iso(ts - 200), "type": "event_msg", "payload": { "type": "item_completed", "item": { "type": "FileChange", "status":"completed", "changes": { abs: { "type": "update", "unified_diff": format!("@@ -20,0 +21,10 @@\n{diff_added}"), "move_path": null } } } } }),
     ];
     fs::write(&rollout, lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n") + "\n").unwrap();
     let _ = AGENT_FILE;
@@ -128,8 +128,10 @@ fn fake_claude(env: &Env, ts: i64) {
     let doc = (0..12).map(|i| format!("- 第 {i} 条说明，写得足够长以便哈希")).collect::<Vec<_>>().join("\n") + "\n";
     let lines = [
         serde_json::json!({ "type": "user", "cwd": env.repo.display().to_string(), "sessionId": "s1", "timestamp": iso(ts - 100), "message": { "role": "user", "content": "写个文档" } }),
-        serde_json::json!({ "type": "assistant", "cwd": env.repo.display().to_string(), "sessionId": "s1", "timestamp": iso(ts - 50), "message": { "id": "m1", "model": "claude-test", "usage": { "input_tokens": 100, "output_tokens": 50 }, "content": [{ "type": "tool_use", "name": "Write", "input": { "file_path": env.repo.join("docs/plan.md").display().to_string(), "content": doc } }] } }),
+        serde_json::json!({ "type": "assistant", "cwd": env.repo.display().to_string(), "sessionId": "s1", "timestamp": iso(ts - 50), "message": { "id": "m1", "model": "claude-test", "usage": { "input_tokens": 100, "output_tokens": 50 }, "content": [{ "type": "tool_use", "id":"tool1", "name": "Write", "input": { "file_path": env.repo.join("docs/plan.md").display().to_string(), "content": doc } }] } }),
     ];
+    let mut lines=lines.to_vec();
+    lines.push(serde_json::json!({"type":"user","cwd":env.repo.display().to_string(),"sessionId":"s1","timestamp":iso(ts-40),"message":{"content":[{"type":"tool_result","tool_use_id":"tool1","content":"ok","is_error":false}]}}));
     fs::write(dir.join("s1.jsonl"), lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n") + "\n").unwrap();
 }
 
@@ -147,12 +149,12 @@ fn fake_cursor(env: &Env, ts: i64) {
         let source = if i < 3 { "tab" } else { "composer" };
         conn.execute("insert into ai_code_hashes(hash,source,fileExtension,fileName,requestId,conversationId,timestamp,model,createdAt) values(?1,?2,'ts',?3,'r','conv1',?4,?5,?4)", rusqlite::params![h, source, abs, (ts - 100) * 1000, if i % 2 == 0 { "grok-test" } else { "default" }]).unwrap();
     }
-    // 对话库：default 回退到 grok-test
+    // 消息库：requestId 精确对应模型；对话级模型不参与推断
     let sdir = env.root.join("cursor-storage");
     fs::create_dir_all(&sdir).unwrap();
     let c2 = rusqlite::Connection::open(sdir.join("state.vscdb")).unwrap();
     c2.execute_batch("create table cursorDiskKV(key text primary key, value text);").unwrap();
-    c2.execute("insert into cursorDiskKV values('composerData:conv1', ?1)", [r#"{"modelConfig":{"modelName":"grok-test"}}"#]).unwrap();
+    c2.execute("insert into cursorDiskKV values('bubbleId:conv1:b1', ?1)", [r#"{"requestId":"r","modelInfo":{"modelName":"grok-test"}}"#]).unwrap();
 }
 
 #[test]
@@ -162,7 +164,7 @@ fn end_to_end() {
     let base_ts: i64 = 1_787_000_000; // 2026-08
     let d = |t: i64| format!("@{t} +0800");
 
-    // 1. 人写的第一个提交（主导者，无证据 → 未确认）
+    // 1. 人写的第一个提交（没有逐行证据 → 未确认）
     fs::create_dir_all(repo.join("src")).unwrap();
     fs::write(repo.join("src/main.rs"), (0..10).map(|i| format!("fn human_written_{i}() {{}}")).collect::<Vec<_>>().join("\n") + "\n").unwrap();
     fs::write(repo.join("package-lock.json"), (0..50).map(|i| format!("  \"dep-{i}\": \"1.0.{i}\",")).collect::<Vec<_>>().join("\n") + "\n").unwrap();
@@ -193,7 +195,7 @@ fn end_to_end() {
     // init
     let (ok, v) = run(&env, &["init", "--repo", &repo.display().to_string()]);
     assert!(ok, "{v}");
-    assert_eq!(v["config"]["directors"][0]["emails"][0], "me@example.com");
+    assert_eq!(v["config"]["people"], serde_json::json!([]));
     assert!(repo.join(".creditia/config.json").exists());
 
     // analyze
@@ -206,7 +208,7 @@ fn end_to_end() {
     // Codex：30 行全部逐行对上（add 20 + diff 10）
     assert_eq!(lines("a:codex/gpt-test"), 30, "{}", credits["breakdown"]);
     assert_eq!(verified("a:codex/gpt-test"), 30);
-    // Cursor：17 行 composer（模型 default 回退到 grok-test）+ 3 行 Tab 归人
+    // Cursor：17 行 composer（模型 default 由同请求记录补齐）+ 3 行 Tab 保留未确认
     assert_eq!(lines("a:cursor/grok-test"), 17, "{}", credits["breakdown"]);
     assert_eq!(credits["human"]["tabAssistedLines"], 3);
     // Claude：12 行文档
@@ -215,8 +217,8 @@ fn end_to_end() {
     assert_eq!(lines("a:cursor"), 8);
     // 盖章 → kimi/k3
     assert_eq!(lines("a:kimi/k3"), 6);
-    // 人写的 10 行 → 未确认；lockfile 被排除；3 行 Tab 补全归主导者
-    assert_eq!(lines("unattributed"), 10, "{}", credits["breakdown"]);
+    // 人写的 10 行 → 未确认；lockfile 被排除；3 行 Tab 补全不猜测键盘使用者
+    assert_eq!(lines("unattributed"), 13, "{}", credits["breakdown"]);
     assert_eq!(credits["totals"]["linesAdded"], 86);
     // 项：(#7) squash 识别为 pr:7
     assert!(credits["units"].as_array().unwrap().iter().any(|u| u["id"] == "pr:7"));
@@ -251,7 +253,7 @@ fn end_to_end() {
 
     // doctor 能跑
     let (_, v) = run(&env, &["doctor"]);
-    assert!(v["sources"].as_array().unwrap().len() == 5);
+    for source in ["codex","claude-code","cursor","grok","kimi","opencode","gemini"] { assert!(v["sources"].as_array().unwrap().iter().any(|s|s["source"]==source)); }
 
     // hook：安装后提交信息自动带 trailer（用盖章文件触发）
     let (ok, _) = run(&env, &["hook", "install", "--repo", &repo.display().to_string()]);

@@ -17,6 +17,7 @@ useLogoSource({
   },
 });
 
+
 const require = createRequire(import.meta.url);
 let fontsCache: any[] | null = null;
 function fonts() {
@@ -78,11 +79,16 @@ export async function renderSized(form: string, m: Model, theme: Theme, w: numbe
   const f = FORMS[form];
   const out = f.render(m, theme, ctx);
   if (!out) return null;
-  const scale = Math.min((w * 0.92) / out.w, (hh * 0.92) / out.h, 1.6);
-  const bg = theme.glow ? undefined : theme.bg;
+  const scale = Math.min((w * 0.92) / out.w, (hh * 0.92) / out.h);
+  const bg = theme.bg;
   const tree = { type: 'div', props: { style: { display: 'flex', width: w, height: hh, alignItems: 'center', justifyContent: 'center', backgroundColor: bg }, children: { type: 'div', props: { style: { display: 'flex', transform: `scale(${scale})` }, children: out.tree } } } };
   return satori(tree as any, { width: w, height: hh, fonts: fonts() });
 }
 
 export { buildModel, THEMES, themeById, DEFAULTS, F };
 export type { Model, Options, Theme };
+
+export function svgToRaster(svg: string, width?: number) {
+  const rendered = new Resvg(svg, width ? { fitTo: { mode: 'width', value: width } } : undefined).render();
+  return { png: rendered.asPng(), rgba: rendered.pixels, width: rendered.width, height: rendered.height };
+}

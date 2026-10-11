@@ -1,4 +1,4 @@
-// <creditia-card src="credits.json" form="tier" theme="minimal-light" lang="zh" director href="CREDITS.md" logos="./logos/">
+// <creditia-card src="credits.json" form="tier" theme="minimal-light" lang="zh" people href="CREDITS.md" logos="./logos/">
 // 读同一份 credits.json，在页面里画 tier。六种风格家族六种排版，和导出图同一套设计语言。不依赖任何库；
 // logo 从脚本同目录的 logos/ 取（mask 上色）。
 import { buildModel, fmt, pct, type Model } from '../../render/src/data.ts';
@@ -79,7 +79,7 @@ a{color:inherit;text-decoration:none;border-bottom:1px solid var(--line)}
 `;
 
 class CreditiaCard extends HTMLElement {
-  static observedAttributes = ['src', 'theme', 'form', 'lang', 'director', 'href', 'logos'];
+  static observedAttributes = ['src', 'theme', 'form', 'lang', 'people', 'href', 'logos'];
   private root = this.attachShadow({ mode: 'open' });
   connectedCallback() { this.render(); }
   attributeChangedCallback() { if (this.isConnected) this.render(); }
@@ -107,7 +107,7 @@ class CreditiaCard extends HTMLElement {
     }
     const lang = (this.getAttribute('lang') ?? 'zh') as 'zh' | 'en';
     const t = themeById(this.themeId())!;
-    const m = buildModel(data, { director: this.hasAttribute('director'), lang });
+    const m = buildModel(data, { people: this.hasAttribute('people'), lang });
     const logos = this.getAttribute('logos') ?? new URL('./logos/', import.meta.url).href;
     const vars = `--bg:${t.bg};--surface:${t.surface};--ink:${t.ink};--soft:${t.soft};--faint:${t.faint};--line:${t.line};--track:${t.track};--edge:${t.edge};--radius:${t.radius}px;--accent:${t.accent};--sans:${t.family === 'terminal' ? '"JetBrains Mono",ui-monospace,Menlo,monospace' : 'Inter,-apple-system,"PingFang SC","Noto Sans SC",sans-serif'};--display:${t.family === 'film' ? '"Instrument Serif",Georgia,serif' : t.family === 'editorial' ? 'Newsreader,Georgia,serif' : 'inherit'};--weight:${t.displayWeight};--sa:${t.stripeA};--sb:${t.stripeB}`;
     this.root.innerHTML = `<style>${CSS}</style>${this.tierHtml(m, t, logos, lang)}`;
@@ -132,17 +132,17 @@ class CreditiaCard extends HTMLElement {
     const stripe = `repeating-linear-gradient(45deg,var(--sa) 0 3px,var(--sb) 3px 6px)`;
     switch (t.family) {
       case 'film':
-        return `<div class="card film"><div class="fhead"><span class="flab">Credits</span><div class="ftitle">${m.project}</div>${m.director ? `<div class="fdir">由 ${m.director} 主导</div>` : ''}<div class="fdots">· · ·</div></div>${rows.map((r) => `<div class="frow">${this.mark(r.key, t, logos)}<span class="fname">${r.name}</span><span class="fp">${pct(r.pct)}</span></div>`).join('')}${hum ? `<div class="fhum">— 人 · ${hum} —</div>` : ''}${foot}</div>`;
+        return `<div class="card film"><div class="fhead"><span class="flab">Credits</span><div class="ftitle">${m.project}</div>${m.signature ? `<div class="fdir">${m.signature}</div>` : ''}<div class="fdots">· · ·</div></div>${rows.map((r) => `<div class="frow">${this.mark(r.key, t, logos)}<span class="fname">${r.name}</span><span class="fp">${pct(r.pct)}</span></div>`).join('')}${hum ? `<div class="fhum">— 人 · ${hum} —</div>` : ''}${foot}</div>`;
       case 'terminal':
-        return `<div class="card term"><div class="tbar"><span class="tprompt">❯</span> creditia cred <span class="tproj">${m.project}</span></div><div class="tbody">${m.director ? `<div class="tnote"># 由 ${m.director} 主导</div>` : ''}${rows.map((r, i) => { const k = Math.max(r.pct >= 0.05 ? 1 : 0, Math.round((r.pct / 100) * 9)); const c = r.key === 'unattributed' ? 'var(--faint)' : famColor(r.key, t); return `<div class="trow"><span class="tconn">${i === rows.length - 1 ? '└─' : '├─'}</span>${this.mark(r.key, t, logos)}<span class="tn">${r.name}</span><span class="tb"><i style="color:${c}">${'■'.repeat(k)}</i><i style="color:var(--faint)">${'·'.repeat(9 - k)}</i></span><span class="tp">${pct(r.pct)}</span></div>`; }).join('')}${hum ? `<div class="tnote"># 人写的部分：${hum}</div>` : ''}${foot}</div></div>`;
+        return `<div class="card term"><div class="tbar"><span class="tprompt">❯</span> creditia cred <span class="tproj">${m.project}</span></div><div class="tbody">${m.signature ? `<div class="tnote"># ${m.signature}</div>` : ''}${rows.map((r, i) => { const k = Math.max(r.pct >= 0.05 ? 1 : 0, Math.round((r.pct / 100) * 9)); const c = r.key === 'unattributed' ? 'var(--faint)' : famColor(r.key, t); return `<div class="trow"><span class="tconn">${i === rows.length - 1 ? '└─' : '├─'}</span>${this.mark(r.key, t, logos)}<span class="tn">${r.name}</span><span class="tb"><i style="color:${c}">${'■'.repeat(k)}</i><i style="color:var(--faint)">${'·'.repeat(9 - k)}</i></span><span class="tp">${pct(r.pct)}</span></div>`; }).join('')}${hum ? `<div class="tnote"># 人写的部分：${hum}</div>` : ''}${foot}</div></div>`;
       case 'glass':
-        return `<div class="card glass"><div class="hd"><span class="t">${m.project}</span><span class="lb">Credits</span></div>${m.director ? `<div class="d">${m.director}</div>` : ''}${rows.map((r) => { const c = r.key === 'unattributed' ? t.faint : famColor(r.key, t); return `<div class="gpill"><div class="grow"><span class="gchip" style="background:${c}22">${this.mark(r.key, t, logos, c)}</span><span class="gn">${r.name}</span><span class="gp">${pct(r.pct)}</span></div><div class="gbar"><i data-w="${Math.max(r.pct, 0)}%" style="background:${r.key === 'unattributed' ? stripe : c}"></i></div></div>`; }).join('')}${hum ? `<div class="hum">人 · ${hum}</div>` : ''}${foot}</div>`;
+        return `<div class="card glass"><div class="hd"><span class="t">${m.project}</span><span class="lb">Credits</span></div>${m.signature ? `<div class="d">${m.signature}</div>` : ''}${rows.map((r) => { const c = r.key === 'unattributed' ? t.faint : famColor(r.key, t); return `<div class="gpill"><div class="grow"><span class="gchip" style="background:${c}22">${this.mark(r.key, t, logos, c)}</span><span class="gn">${r.name}</span><span class="gp">${pct(r.pct)}</span></div><div class="gbar"><i data-w="${Math.max(r.pct, 0)}%" style="background:${r.key === 'unattributed' ? stripe : c}"></i></div></div>`; }).join('')}${hum ? `<div class="hum">人 · ${hum}</div>` : ''}${foot}</div>`;
       case 'editorial':
         return `<div class="card ed"><div class="ehead"><span class="etitle">${m.project}</span><span class="lb">Credits</span></div><div class="erule"></div>${rows.map((r) => `<div class="erow"><span class="en">${r.name}</span><span class="eleader"></span><span class="ep">${pct(r.pct)}</span></div>`).join('')}${hum ? `<div class="ehum"><span class="lb">人</span>${hum}</div>` : ''}<div class="erule2"></div>${foot}</div>`;
       case 'mono':
-        return `<div class="card mono"><div class="mhead">${m.project}<span>Credits</span></div>${m.director ? `<div class="mdir">${m.director}</div>` : ''}<div class="mbody">${rows.map((r) => `<div class="mrow"><span class="mb" style="background:${r.key === 'unattributed' ? 'var(--faint)' : 'var(--ink)'}">${pct(r.pct)}</span><span class="mn">${r.name}</span>${this.mark(r.key, t, logos)}</div>`).join('')}${hum ? `<div class="mhum"><i></i>人 · ${hum}</div>` : ''}</div><div class="mfoot">${totals}</div></div>`;
+        return `<div class="card mono"><div class="mhead">${m.project}<span>Credits</span></div>${m.signature ? `<div class="mdir">${m.signature}</div>` : ''}<div class="mbody">${rows.map((r) => `<div class="mrow"><span class="mb" style="background:${r.key === 'unattributed' ? 'var(--faint)' : 'var(--ink)'}">${pct(r.pct)}</span><span class="mn">${r.name}</span>${this.mark(r.key, t, logos)}</div>`).join('')}${hum ? `<div class="mhum"><i></i>人 · ${hum}</div>` : ''}</div><div class="mfoot">${totals}</div></div>`;
       default:
-        return `<div class="card"><div class="hd"><span class="t">${m.project}</span><span class="lb">Credits</span></div>${m.director ? `<div class="d">${m.director}</div>` : ''}${rows.map((r) => { const c = r.key === 'unattributed' ? t.faint : famColor(r.key, t); return `<div class="row"><div class="l">${this.mark(r.key, t, logos)}<span class="n">${r.name}</span><span class="p">${pct(r.pct)}</span></div><div class="tr"><i data-w="${Math.max(r.pct, 0)}%" style="background:${r.key === 'unattributed' ? stripe : c}"></i></div></div>`; }).join('')}${hum ? `<div class="hum"><span class="lb">人</span>${hum}</div>` : ''}${foot}</div>`;
+        return `<div class="card"><div class="hd"><span class="t">${m.project}</span><span class="lb">Credits</span></div>${m.signature ? `<div class="d">${m.signature}</div>` : ''}${rows.map((r) => { const c = r.key === 'unattributed' ? t.faint : famColor(r.key, t); return `<div class="row"><div class="l">${this.mark(r.key, t, logos)}<span class="n">${r.name}</span><span class="p">${pct(r.pct)}</span></div><div class="tr"><i data-w="${Math.max(r.pct, 0)}%" style="background:${r.key === 'unattributed' ? stripe : c}"></i></div></div>`; }).join('')}${hum ? `<div class="hum"><span class="lb">人</span>${hum}</div>` : ''}${foot}</div>`;
     }
   }
 }

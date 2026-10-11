@@ -1,48 +1,28 @@
-# creditia（CLI）
+# Creditia 命令行
 
-`creditia` 是面向人和 agent 的命令行入口：分析交给 Rust 核心 `creditia-core`，档案、导出、终端展示在这里完成。
+分析调用共享 Rust 核心；文档、终端输出、图片和动态导出调用共享渲染器。开发期先在仓库根目录执行 `cargo build --release`，安装渲染器依赖，再运行 `node packages/cli/bin/creditia.mjs --help`。
 
-## 安装（开发期）
+| 命令 | 作用 |
+|---|---|
+| `discover` / `projects` | 查找本机项目 / 列出已分析的作品 |
+| `init` / `analyze` / `update` | 初始化 / 分析 / 更新；`--branch HEAD` 选择当前分支 |
+| `collect` / `evidence export` / `evidence import` | 采集和跨机器合并证据 |
+| `link --path P` | 明确关联项目的其他完整路径 |
+| `people --file F --show` | 保存已确认的姓名、角色、说明，选择公开署名 |
+| `doctor` / `blame 文件:行号` | 检查数据源 / 查看归因证据 |
+| `doc` / `release-notes` / `pr-comment` | 生成文本；只输出内容，不自动发布评论 |
+| `export --list` | 查看原版形式与风格 |
+| `export --form F --format png --out FILE` | 导出作品，格式为 SVG、PNG、PDF、GIF、HTML、Markdown 或 JSON |
+| `fetch` | 显示终端名片 |
+| `stamp` / `hook` | 为提交写入工具与模型声明 |
+| `app open` | 打开已构建或安装的桌面 App；可用 `CREDITIA_APP` 指定路径 |
 
-```bash
-cargo build --release                    # 产出 target/release/creditia-core
-cd packages/render && npm i              # 渲染器依赖（字体等）
-alias creditia='node ~/projects/creditia/packages/cli/bin/creditia.mjs'
+所有分析命令支持 `--json`，退出码为 0 成功、1 失败、2 带警告完成。导出与 `--json` 一起使用时须提供 `--out`，返回文件路径与字节数。核心可用 `CREDITIA_CORE` 明确指定；默认依次查找仓库 release/debug、包内二进制和 PATH。
+
+`--size 1200x630` 指定画布，`--width` 指定栅格输出宽度；不静默裁剪或缩小。PDF 当前是图片文档，矢量用途使用 SVG。HTML 自包含，无需线上组件包。人员通过 `--people` 或配置 `display.people` 开启；姓名别名继续应用。`privacy.hideTitles` 与 `privacy.hidePaths` 在分析生成档案时生效。
+
+人员文件示例：
+
+```json
+[{ "name": "署名", "roles": ["构思", "设计", "开发"], "note": "想留下的说明" }]
 ```
-
-找核心二进制的顺序：`CREDITIA_CORE` 环境变量 → 仓库 `target/release|debug` → 包内 `bin/<platform>-<arch>/` → `PATH`。
-
-## 命令
-
-```
-creditia discover                 本机有 agent 活动的项目
-creditia init                     写 .creditia/config.json（主导者、邮箱、排除规则）
-creditia analyze --github         分析，写 .creditia/credits.json
-creditia update                   增量
-creditia doc                      写 CREDITS.md（只改 <!-- creditia:start/end --> 区间）
-creditia release-notes v1.0.0     该版本的 credits 段落
-creditia pr-comment 519           该 PR 的一句话归因
-creditia export --list            全部形式、风格、格式
-creditia export --form tier --theme film --format png --out tier.png
-creditia export --form badge --format md       # 写 assets/creditia-badge.svg 并打印 Markdown
-creditia export --form tier --format embed     # <creditia-card> 片段
-creditia fetch                    终端名片
-creditia blame src/a.ts:42        这一行是谁写的
-creditia doctor                   各数据源是否可读
-creditia hook install             之后每次提交自动盖章
-creditia stamp --harness codex --model gpt-5.6-sol    给下一次提交盖章（agent 调用）
-creditia app open --form tier     在 App 里打开
-```
-
-所有命令支持 `--json`。退出码：0 成功，1 失败，2 有警告。
-
-## 展示选项
-
-- `--director`：在图上写出主导者（默认不写）
-- `--lang zh|en`
-- `--size 1200x630`：把形式居中放进指定画布（社交媒体尺寸）
-- `--theme`：minimal-light、minimal-dark、film、terminal、glass、editorial、mono
-
-## 隐私
-
-`.creditia/config.json` 里 `privacy.hideTitles`、`privacy.hidePaths`、`privacy.aliases` 生效后，`credits.json` 本身就不含 PR 标题、文件名和真名，所有导出自然也没有。

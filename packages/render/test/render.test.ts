@@ -7,7 +7,7 @@ import { badge, ROLL_VARIANTS, RECEIPT_VARIANTS } from '../src/forms.ts';
 const fixture = {
   project: { name: 'Fixture', range: { from: '2026-01-01', to: '2026-02-15' } },
   generatedAt: '2026-02-15T00:00:00+08:00',
-  directors: [{ id: 'h:boss', name: 'Boss' }],
+  people: [{ name: 'Boss', roles: ['设计'] }, { name: 'Friend', roles: ['审阅'] }],
   contributors: [
     { id: 'a:codex/gpt-5.6', kind: 'agent', harness: 'codex', model: 'gpt-5.6' },
     { id: 'a:cursor/auto', kind: 'agent', harness: 'cursor', model: 'auto' },
@@ -28,12 +28,13 @@ const fixture = {
   units: [],
 };
 
-const m = buildModel(fixture, { director: true, lang: 'zh' });
+const m = buildModel(fixture, { people: true, lang: 'zh' });
 
 test('人不和 agent 同级：合并成一行，另有单独的名单', () => {
   assert.deepEqual(m.rows.map((r) => r.key), ['codex', 'cursor', 'human', 'unattributed']);
-  assert.equal(m.humans.length, 1);
-  assert.equal(m.humans[0].name, 'Friend');
+  assert.deepEqual(m.humans.map(h => h.name), ['Boss', 'Friend']);
+  assert.equal(m.signature, 'Boss · Friend');
+  assert.equal(buildModel(fixture).signature, '');
 });
 
 test('体裁与版式清单：15 个主题、11 种片尾版式、7 种小票版式', () => {

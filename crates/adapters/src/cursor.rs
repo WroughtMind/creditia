@@ -1,4 +1,4 @@
-//! Cursor：行级记录 `ai-tracking/ai-code-tracking.db`（逐行哈希 → 模型、对话、来源），模型为 `default` 时回退到对话库的对话级模型。
+//! Cursor：行级记录 `ai-tracking/ai-code-tracking.db`（逐行哈希 → 模型、对话、来源），模型为 `default` 时按 requestId 关联消息中的模型；无法对应时保留 Auto。
 
 use crate::{cursor_global_storage, open_ro, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, Ev, FileGroup, PathMap, Session, Src, Store};
@@ -15,6 +15,7 @@ struct Row {
     source: String,
     file: String,
     conv: String,
+    request: String,
     ts_ms: i64,
     model: String,
 }
@@ -26,42 +27,34 @@ fn rows() -> Result<Vec<Row>, String> {
     }
     let conn = open_ro(&db_path()).map_err(|e| format!("cursor: 行级记录不可读 {e}"))?;
     let mut stmt = conn
-        .prepare("select hash, source, coalesce(fileName,''), coalesce(conversationId,''), coalesce(timestamp,createdAt), coalesce(model,'') from ai_code_hashes")
+        .prepare("select hash, source, coalesce(fileName,''), coalesce(conversationId,''), coalesce(timestamp,createdAt), coalesce(model,''), coalesce(requestId,'') from ai_code_hashes")
         .map_err(|e| format!("cursor: ai_code_hashes 表结构不认识 {e}"))?;
     let r = stmt
-        .query_map([], |r| Ok(Row { hash: r.get(0)?, source: r.get(1)?, file: r.get(2)?, conv: r.get(3)?, ts_ms: r.get(4)?, model: r.get(5)? }))
+        .query_map([], |r| Ok(Row { hash: r.get(0)?, source: r.get(1)?, file: r.get(2)?, conv: r.get(3)?, ts_ms: r.get(4)?, model: r.get(5)?, request: r.get(6)? }))
         .map_err(|e| e.to_string())?
         .flatten()
         .collect();
     Ok(r)
 }
 
-/// Auto 模式记为 default：回退到对话库里的对话级模型，仍然没有就记 `auto`
+/// 对话中可能切换模型，只有同一个请求的消息才用于补齐行级模型。
 struct ModelResolver {
     conn: Option<rusqlite::Connection>,
-    cache: HashMap<String, String>,
+    cache: HashMap<String, HashMap<String, std::collections::HashSet<String>>>,
 }
-
 impl ModelResolver {
-    fn new() -> Self {
-        ModelResolver { conn: open_ro(&cursor_global_storage().join("state.vscdb")).ok(), cache: HashMap::new() }
-    }
-    fn resolve(&mut self, conv: &str, m: &str) -> String {
-        if m != "default" && !m.is_empty() {
-            return m.to_string();
-        }
-        if let Some(x) = self.cache.get(conv) {
-            return x.clone();
-        }
-        let got: Option<String> = self.conn.as_ref().and_then(|c| {
-            c.query_row("select json_extract(value,'$.modelConfig.modelName') from cursorDiskKV where key = ?1", [format!("composerData:{conv}")], |r| r.get::<_, Option<String>>(0)).ok().flatten()
+    fn new() -> Self { Self { conn: open_ro(&cursor_global_storage().join("state.vscdb")).ok(), cache: HashMap::new() } }
+    fn resolve(&mut self, conv: &str, request: &str, m: &str) -> String {
+        if !matches!(m,"default"|"auto"|""){return m.into()}
+        let requests=self.cache.entry(conv.into()).or_insert_with(|| {
+            let mut result:HashMap<String,std::collections::HashSet<String>>=HashMap::new();
+            if let Some(c)=&self.conn { if let Ok(mut q)=c.prepare("select json_extract(value,'$.requestId'),json_extract(value,'$.modelInfo.modelName') from cursorDiskKV where key like ?1") {
+                if let Ok(rows)=q.query_map([format!("bubbleId:{conv}:%")], |r|Ok((r.get::<_,Option<String>>(0)?,r.get::<_,Option<String>>(1)?))) {
+                    for (request,model) in rows.flatten(){if let (Some(request),Some(model))=(request,model){if !matches!(model.as_str(),"default"|"auto"|""){result.entry(request).or_default().insert(model);}}}
+                }
+            }}result
         });
-        let x = match got.as_deref() {
-            Some(v) if v != "default" && !v.is_empty() => v.to_string(),
-            _ => "auto".to_string(),
-        };
-        self.cache.insert(conv.to_string(), x.clone());
-        x
+        requests.get(request).filter(|models|models.len()==1).and_then(|models|models.iter().next()).cloned().unwrap_or_else(||"auto".into())
     }
 }
 
@@ -69,9 +62,6 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
     let db = db_path();
     let fp = fingerprint(&db);
     let gk = "cursor:ai-code-tracking".to_string();
-    if store.groups.get(&gk).map(|g| g.fp == fp).unwrap_or(false) {
-        return;
-    }
     let all = match rows() {
         Ok(r) => r,
         Err(e) => return st.warnings.push(e),
@@ -91,14 +81,15 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         };
         let Ok(key) = u32::from_str_radix(&r.hash, 16) else { continue };
         let ts = r.ts_ms / 1000;
-        let model = res.resolve(&r.conv, &r.model);
+        let model = res.resolve(&r.conv, &r.request, &r.model);
         let e = conv.entry(r.conv.clone()).or_insert((ts, ts, model.clone()));
         e.0 = e.0.min(ts);
         e.1 = e.1.max(ts);
-        g.evs.push(Ev { rel, key, src: Src::Cursor, model, session: r.conv, ts, tab: r.source == "tab" });
+        if e.2 != model { e.2.clear(); }
+        g.evs.push(Ev { provider: None, rel, key, src: Src::Cursor, model, session: r.conv, ts, tab: r.source == "tab" });
     }
     for (id, (start, end, model)) in conv {
-        g.sessions.push(Session { src: Src::Cursor, id, model, start, end, tokens: 0, branch: None, prompts: 0, reviewer: false, has_content: true });
+        g.sessions.push(Session { provider: None, src: Src::Cursor, id, model, start, end, tokens: 0, branch: None, prompts: 0, reviewer: false, has_content: true });
     }
     st.notes.push(format!("cursor: 行级记录 {total} 条，无法映射到仓库路径 {unmapped} 条"));
     store.groups.insert(gk, g);
@@ -142,13 +133,13 @@ pub fn doctor() -> Health {
     let mut h = Health { source: "cursor".into(), path: db.display().to_string(), format: "ai-code-tracking.db / ai_code_hashes".into(), ..Default::default() };
     match rows() {
         Ok(r) => {
-            h.readable = true;
+            h.readable = db.exists();
             h.records = r.len() as u64;
             h.earliest = r.iter().map(|x| x.ts_ms / 1000).min().map(date_cn);
             h.latest = r.iter().map(|x| x.ts_ms / 1000).max().map(date_cn);
             let auto = r.iter().filter(|x| x.model == "default").count();
             let vscdb = cursor_global_storage().join("state.vscdb");
-            h.note = format!("只保留 30 天；{auto} 条模型为 Auto；对话库 {}", if vscdb.exists() { "可用" } else { "未找到" });
+            h.note = format!("{auto} 条模型为 Auto；对话库 {}", if vscdb.exists() { "可用" } else { "未找到" });
         }
         Err(e) => h.note = e,
     }

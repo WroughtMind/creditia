@@ -6,7 +6,9 @@ import { creditsBlock, mergeCreditsMd, MARK_START, MARK_END } from '../../render
 function fakeModel(): any {
   return {
     project: '示例项目',
-    director: '',
+    signature: '',
+    people: [],
+    humans: [],
     rows: [
       { key: 'codex', name: 'Codex', pct: 81.2, lines: 312045, kind: 'agent', models: ['gpt-5.6-sol'] },
       { key: 'unattributed', name: '未确认', pct: 9.9, lines: 45871, kind: 'unknown', models: [] },
@@ -17,13 +19,13 @@ function fakeModel(): any {
     range: { from: '2025-03-01', to: '2025-08-31' },
     raw: {
       generatedAt: '2025-09-01T12:00:00+08:00',
-      directors: [{ id: 'h:me' }],
+      people: [],
       breakdown: [
         { contributor: 'a:codex/gpt-5.6-sol', linesAdded: 312045, linesSurviving: 97531, byVersion: { v1: 100 }, byEvidence: {} },
         { contributor: 'unattributed', linesAdded: 45871, linesSurviving: 12240, byVersion: {}, byEvidence: {} },
       ],
       contributors: [
-        { id: 'h:me', kind: 'human', name: 'me', roles: ['director'] },
+        { id: 'h:me', kind: 'human', name: 'me', roles: ['author'] },
         { id: 'a:codex/gpt-5.6-sol', kind: 'agent', harness: 'codex', model: 'gpt-5.6-sol', roles: ['author'] },
       ],
       coverage: [{ from: '2025-03-01', to: '2025-03-31', best: 'inferred' }],

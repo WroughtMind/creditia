@@ -6,11 +6,12 @@ use std::path::Path;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct Director {
-    pub id: String,
+pub struct Person {
     pub name: String,
     #[serde(default)]
-    pub emails: Vec<String>,
+    pub roles: Vec<String>,
+    #[serde(default)]
+    pub note: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -30,9 +31,9 @@ pub struct Privacy {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Display {
-    /// 是否在展示里写出主导者（默认不写，用户觉得土）
+    /// 是否公开展示用户确认的人员署名
     #[serde(default)]
-    pub director: bool,
+    pub people: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -43,21 +44,17 @@ pub struct Config {
     pub branch: String,
     #[serde(default)]
     pub remotes: Vec<String>,
-    /// 判断路径是否属于本项目（小写匹配）
+    /// 用户明确关联的其他工作副本或已移动的旧路径。
     #[serde(default)]
-    pub markers: Vec<String>,
+    pub paths: Vec<String>,
+    /// 由用户确认的人员署名；不由提交数推断角色。
     #[serde(default)]
-    pub exclude_markers: Vec<String>,
-    #[serde(default)]
-    pub directors: Vec<Director>,
+    pub people: Vec<Person>,
     /// agent 邮箱 → harness
     #[serde(default)]
     pub agent_emails: HashMap<String, String>,
     #[serde(default)]
     pub bot_emails: Vec<String>,
-    /// 分支前缀 → harness（如 `codex/`）
-    #[serde(default)]
-    pub branch_prefixes: HashMap<String, String>,
     /// 证据覆盖分段 [(名称, 起, 止)]
     #[serde(default)]
     pub segments: Vec<(String, String, String)>,
@@ -65,7 +62,7 @@ pub struct Config {
     pub privacy: Privacy,
     #[serde(default)]
     pub display: Display,
-    /// schema 版本，升级时迁移
+    /// 配置结构版本
     #[serde(default = "one")]
     pub version: u32,
 }
@@ -79,13 +76,10 @@ impl Default for Config {
             repo: String::new(),
             branch: "main".into(),
             remotes: vec![],
-            markers: vec![],
-            exclude_markers: vec![],
-            directors: vec![],
+            paths: vec![],
+            people: vec![],
             agent_emails: default_agent_emails(),
             bot_emails: vec!["41898282+github-actions[bot]@users.noreply.github.com".into()],
-            branch_prefixes: [("codex/", "codex"), ("cursor/", "cursor"), ("claude/", "claude-code"), ("grok/", "grok"), ("kimi/", "kimi")]
-                .iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(),
             segments: vec![],
             privacy: Privacy::default(),
             display: Display::default(),
@@ -118,9 +112,6 @@ impl Config {
         }
         let s = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
         std::fs::write(path, s + "\n").map_err(|e| e.to_string())
-    }
-    pub fn director_emails(&self) -> Vec<String> {
-        self.directors.iter().flat_map(|d| d.emails.iter().map(|e| e.to_lowercase())).collect()
     }
     /// 展示用的人名：别名优先
     pub fn display_name(&self, name: &str) -> String {

@@ -13,6 +13,8 @@ pub enum Src {
     Cursor,
     Grok,
     Kimi,
+    Opencode,
+    Gemini,
 }
 
 impl Src {
@@ -23,10 +25,12 @@ impl Src {
             Src::Cursor => "cursor",
             Src::Grok => "grok",
             Src::Kimi => "kimi",
+            Src::Opencode => "opencode",
+            Src::Gemini => "gemini",
         }
     }
-    pub fn all() -> [Src; 5] {
-        [Src::Codex, Src::Claude, Src::Cursor, Src::Grok, Src::Kimi]
+    pub fn all() -> [Src; 7] {
+        [Src::Codex, Src::Claude, Src::Cursor, Src::Grok, Src::Kimi, Src::Opencode, Src::Gemini]
     }
 }
 
@@ -37,6 +41,8 @@ pub struct Ev {
     pub key: u32,
     pub src: Src,
     pub model: String,
+    #[serde(default)]
+    pub provider: Option<String>,
     pub session: String,
     pub ts: i64,
     /// Cursor 的 Tab 补全算人的 AI 补全，不算 agent
@@ -50,6 +56,8 @@ pub struct Session {
     pub src: Src,
     pub id: String,
     pub model: String,
+    #[serde(default)]
+    pub provider: Option<String>,
     pub start: i64,
     pub end: i64,
     pub tokens: i64,
@@ -71,10 +79,12 @@ pub struct FileGroup {
 #[derive(Serialize, Deserialize, Default)]
 pub struct Store {
     pub version: u32,
+    #[serde(default)]
+    pub scope: Vec<String>,
     pub groups: HashMap<String, FileGroup>,
 }
 
-pub const STORE_VERSION: u32 = 1;
+pub const STORE_VERSION: u32 = 3;
 
 pub fn fingerprint(path: &std::path::Path) -> (u64, u64) {
     match std::fs::metadata(path) {
@@ -139,7 +149,7 @@ pub struct Unit {
     pub commits: Vec<String>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PrMeta {
     pub source: String,
     pub number: u64,
@@ -165,9 +175,7 @@ pub struct BlameLine {
 #[serde(rename_all = "lowercase")]
 pub enum Level {
     Verified,
-    Manual,
     Declared,
-    Inferred,
     Unattributed,
 }
 
@@ -183,6 +191,7 @@ pub struct Who {
     pub kind: &'static str,
     pub harness: Option<String>,
     pub model: Option<String>,
+    pub provider: Option<String>,
     pub name: Option<String>,
 }
 
@@ -198,24 +207,29 @@ pub struct Registry {
 /// （`anthropic/claude-fable-5.1` → `claude-fable-5-1`），GPT 系列官方名本身带点（`gpt-5.6-sol`），保留
 pub fn normalize_model(m: &str) -> String {
     let m = m.trim().to_lowercase();
-    let m = m.rsplit('/').next().unwrap_or(&m).to_string();
+    let m = ["anthropic/", "openai/", "google/", "x-ai/", "moonshotai/"].iter().find_map(|p| m.strip_prefix(p)).unwrap_or(&m).to_string();
     if m.starts_with("claude") { m.replace('.', "-") } else { m }
 }
 
 impl Registry {
     pub fn agent(&mut self, harness: &str, model: Option<&str>) -> usize {
+        self.agent_via(harness, model, None)
+    }
+    pub fn agent_via(&mut self, harness: &str, model: Option<&str>, provider: Option<&str>) -> usize {
+        let provider = provider.filter(|p| !p.is_empty()).map(String::from);
         let model = model.filter(|m| !m.is_empty()).map(normalize_model);
-        let id = match &model {
+        let mut id = match &model {
             Some(m) => format!("a:{harness}/{m}"),
             None => format!("a:{harness}"),
         };
-        self.get(id, |id| Who { id, kind: "agent", harness: Some(harness.into()), model: model.clone(), name: None })
+        if let Some(p) = &provider { id.push_str(&format!("@{p}")); }
+        self.get(id, |id| Who { id, kind: "agent", harness: Some(harness.into()), model: model.clone(), provider, name: None })
     }
     pub fn human(&mut self, id: &str, name: &str) -> usize {
-        self.get(id.into(), |id| Who { id, kind: "human", harness: None, model: None, name: Some(name.into()) })
+        self.get(id.into(), |id| Who { id, kind: "human", harness: None, model: None, provider: None, name: Some(name.into()) })
     }
     pub fn unattributed(&mut self) -> usize {
-        self.get(UNATTR.into(), |id| Who { id, kind: "unattributed", harness: None, model: None, name: None })
+        self.get(UNATTR.into(), |id| Who { id, kind: "unattributed", harness: None, model: None, provider: None, name: None })
     }
     pub fn find(&self, id: &str) -> Option<usize> {
         self.by_id.get(id).copied()
@@ -290,26 +304,42 @@ pub struct PathMap {
 }
 
 impl PathMap {
-    /// 关键词形如 `/demo/`：末尾补一个 `/` 再匹配，这样目录 `…/demo` 和文件 `…/demo/src/a.rs` 都能命中，
-    /// 而 `…/demo-film/` 不会被 `/demo/` 误认
+    /// 路径使用完整根目录；远程使用完整地址，不把同名目录或 fork 混在一起。
     pub fn in_project(&self, s: &str) -> bool {
-        // Windows 日志里的反斜杠先统一成 `/`；远程地址去掉 .git 后缀
-        let s = s.replace('\\', "/");
-        let s = s.trim_end_matches('/').trim_end_matches(".git");
-        let lower = format!("{}/", s.to_lowercase());
-        self.markers.iter().any(|m| lower.contains(m.as_str())) && !self.excludes.iter().any(|m| lower.contains(m.as_str()))
-    }
-    /// 取能在仓库历史路径集合里找到的最长后缀
-    pub fn to_rel(&self, abs: &str) -> Option<String> {
-        if !self.in_project(abs) {
-            return None;
+        fn normalized(s: &str) -> String {
+            let resolved = std::fs::canonicalize(s).ok();
+            let s = resolved.as_ref().map(|p|p.to_string_lossy().into_owned()).unwrap_or_else(||s.to_string()).replace('\\', "/");
+            let s = s.strip_prefix("//?/").unwrap_or(&s);
+            let s = s.trim_end_matches('/').trim_end_matches(".git");
+            let s = s.strip_prefix("https://").or_else(|| s.strip_prefix("http://")).or_else(|| s.strip_prefix("ssh://")).unwrap_or(s);
+            let s = s.strip_prefix("git@").map(|s| s.replacen(':', "/", 1)).unwrap_or_else(|| s.to_string());
+            if s.as_bytes().get(1) == Some(&b':') { s.to_lowercase() } else { s }
         }
-        let abs = abs.replace('\\', "/");
-        let parts: Vec<&str> = abs.split('/').filter(|s| !s.is_empty()).collect();
-        for i in 0..parts.len() {
-            let cand = parts[i..].join("/");
-            if self.known.contains(&cand) {
-                return Some(cand);
+        let s = normalized(s);
+        let matches = |root: &String| {
+            let root = normalized(root);
+            !root.is_empty() && (s == root || s.strip_prefix(&root).map(|tail| tail.starts_with('/')).unwrap_or(false))
+        };
+        self.markers.iter().any(matches) && !self.excludes.iter().any(matches)
+    }
+    pub fn to_rel(&self, abs: &str) -> Option<String> {
+        if !self.in_project(abs) { return None; }
+        let abs = std::fs::canonicalize(abs).map(|p|p.to_string_lossy().into_owned()).unwrap_or_else(|_|abs.into()).replace('\\', "/");
+        let abs = abs.strip_prefix("//?/").unwrap_or(&abs);
+        let mut roots: Vec<&String> = self.markers.iter().collect();
+        roots.sort_by_key(|r| std::cmp::Reverse(r.len()));
+        for root in roots {
+            let root = std::fs::canonicalize(root).map(|p|p.to_string_lossy().into_owned()).unwrap_or_else(|_|root.clone()).replace('\\', "/").trim_end_matches('/').to_string();
+            let root = root.strip_prefix("//?/").unwrap_or(&root);
+            let prefix = format!("{root}/");
+            let rel = if abs.starts_with(&prefix) {
+                Some(&abs[prefix.len()..])
+            } else if abs.as_bytes().get(1) == Some(&b':') && abs.to_lowercase().starts_with(&prefix.to_lowercase()) {
+                Some(&abs[prefix.len()..])
+            } else { None };
+            if let Some(rel) = rel {
+                if self.known.contains(rel) { return Some(rel.to_string()); }
+                if abs.as_bytes().get(1) == Some(&b':') { if let Some(path) = self.known.iter().find(|path| path.eq_ignore_ascii_case(rel)) { return Some(path.clone()); } }
             }
         }
         None
@@ -335,11 +365,13 @@ mod tests {
 
     #[test]
     fn path_map_boundaries() {
-        let pm = PathMap { known: ["src/a.rs".to_string()].into_iter().collect(), markers: vec!["/demo/".into(), "/demo-".into()], excludes: vec!["/demo-film/".into()] };
+        let pm = PathMap { known: ["src/a.rs".to_string()].into_iter().collect(), markers: vec!["/Users/x/projects/demo".into(), "/private/tmp/demo-task1".into(), "C:\\Users\\x\\demo".into(), "github.com/org/demo".into()], excludes: vec![] };
         assert!(pm.in_project("/Users/x/projects/demo"));
         assert!(pm.in_project("/private/tmp/demo-task1/src/a.rs"));
         assert!(pm.in_project("github.com/org/demo.git"));
         assert!(!pm.in_project("/Users/x/projects/demo-film/src/a.rs"));
+        assert!(!pm.in_project("/Users/another/projects/demo/src/a.rs"));
+        assert!(!pm.in_project("github.com/another/demo.git"));
         assert_eq!(pm.to_rel("C:\\Users\\x\\demo\\src\\a.rs").as_deref(), Some("src/a.rs"));
     }
 }

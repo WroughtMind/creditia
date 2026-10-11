@@ -16,6 +16,8 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
+creditia-cli = { path = "../../../crates/cli" }
+creditia-core = { path = "../../../crates/core" }
 creditia-store = { path = "../../../crates/store" }
 
 [profile.release]

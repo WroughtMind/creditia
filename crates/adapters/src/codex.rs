@@ -14,20 +14,29 @@ struct Thread {
     end: i64,
     tokens: i64,
     model: String,
+    provider: Option<String>,
     branch: Option<String>,
     cwd: String,
     origin: String,
 }
 
 fn threads(base: &Path) -> Result<Vec<Thread>, String> {
-    let db = base.join("state_5.sqlite");
+    let db = std::fs::read_dir(base).into_iter().flatten().flatten().filter_map(|e| {
+        let name=e.file_name().to_string_lossy().to_string();
+        let version=name.strip_prefix("state_")?.strip_suffix(".sqlite")?.parse::<u32>().ok()?;
+        Some((version,e.path()))
+    }).max_by_key(|x|x.0).map(|x|x.1).unwrap_or_else(||base.join("state_5.sqlite"));
     // 没装 Codex 或从没用过：不是错误，安静跳过
     if !db.exists() {
-        return Ok(vec![]);
+        return rollout_threads(base);
     }
     let conn = open_ro(&db).map_err(|e| format!("codex: 线程索引不可读 {e}"))?;
+    let mut cols=conn.prepare("pragma table_info(threads)").map_err(|e|e.to_string())?;
+    let columns:std::collections::HashSet<String>=cols.query_map([],|r|r.get(1)).map_err(|e|e.to_string())?.collect::<rusqlite::Result<_>>().map_err(|e|e.to_string())?;
+    let optional=|name:&str,empty:&str|if columns.contains(name){name.to_string()}else{empty.into()};
+    let query=format!("select id,rollout_path,created_at,updated_at,{},coalesce({},''),{},cwd,coalesce({},''),{} from threads",optional("tokens_used","0"),optional("model","NULL"),optional("git_branch","NULL"),optional("git_origin_url","NULL"),optional("model_provider","NULL"));
     let mut stmt = conn
-        .prepare("select id, rollout_path, created_at, updated_at, tokens_used, coalesce(model,''), git_branch, cwd, coalesce(git_origin_url,'') from threads")
+        .prepare(&query)
         .map_err(|e| format!("codex: threads 表结构不认识 {e}"))?;
     let rows = stmt
         .query_map([], |r| {
@@ -41,12 +50,28 @@ fn threads(base: &Path) -> Result<Vec<Thread>, String> {
                 branch: r.get(6)?,
                 cwd: r.get(7)?,
                 origin: r.get(8)?,
+                provider: r.get::<_,Option<String>>(9)?.filter(|p|!p.is_empty()),
             })
         })
         .map_err(|e| e.to_string())?
         .flatten()
         .collect();
     Ok(rows)
+}
+
+fn rollout_threads(base:&Path)->Result<Vec<Thread>,String>{
+    let mut out=vec![];
+    for file in rollout_files(base).into_values(){
+        let text=read_maybe_zst(&file);let mut thread=None;
+        for line in text.lines(){
+            let Ok(o)=serde_json::from_str::<Value>(line) else {continue};let p=&o["payload"];let ts=o["timestamp"].as_str().and_then(parse_iso).unwrap_or(0);
+            if o["type"]=="session_meta" {
+                thread=Some(Thread{id:p["id"].as_str().unwrap_or("").into(),rollout:file.display().to_string(),start:ts,end:ts,tokens:0,model:String::new(),provider:p["model_provider"].as_str().map(String::from),branch:p["git"]["branch"].as_str().map(String::from),cwd:p["cwd"].as_str().unwrap_or("").into(),origin:p["git"]["repository_url"].as_str().unwrap_or("").into()});
+            }
+            if let Some(t)=thread.as_mut(){t.end=t.end.max(ts);if o["type"]=="turn_context"{if let Some(m)=p["model"].as_str(){t.model=m.into();}}if p["type"]=="token_count"{if let Some(n)=p["info"]["total_token_usage"]["total_tokens"].as_i64(){t.tokens=n;}}}
+        }
+        if let Some(t)=thread{out.push(t);}
+    }Ok(out)
 }
 
 /// 会话文件索引：文件名 → 实际路径（可能已压缩、已归档）
@@ -78,35 +103,47 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         let gk = format!("codex:{}", t.id);
         let fp = file.map(|f| fingerprint(f)).unwrap_or((0, 0));
         if file.is_some() { found += 1 } else { missing += 1 }
-        if store.groups.get(&gk).map(|g| g.fp == fp).unwrap_or(false) {
-            continue;
-        }
         let mut g = FileGroup { fp, ..Default::default() };
         let mut prompts = 0;
         if let Some(f) = file {
             let data = read_maybe_zst(f);
-            let mut cur_model = t.model.clone();
+            let mut cur_model = String::new();
+            let mut provider = t.provider.clone();
+            let mut pending:HashMap<String,(String,String,Option<String>)>=HashMap::new();
             for line in data.lines() {
                 if line.contains("\"task_started\"") {
                     prompts += 1;
                 }
-                let is_ctx = line.contains("\"turn_context\"");
-                if !line.contains("\"FileChange\"") && !is_ctx {
-                    continue;
-                }
                 let Ok(o) = serde_json::from_str::<Value>(line) else { continue };
                 let p = &o["payload"];
                 if o["type"] == "turn_context" {
+                    if let Some(p) = p["model_provider"].as_str() {provider=Some(p.into());}
                     if let Some(m) = p["model"].as_str() {
                         cur_model = m.to_string();
                     }
                     continue;
                 }
+                if matches!(p["type"].as_str(),Some("custom_tool_call")|Some("function_call")) && p["name"].as_str().map(|n|n.ends_with("apply_patch")).unwrap_or(false) {
+                    if let Some(call)=p["call_id"].as_str(){
+                        let patch=p["input"].as_str().or(p["arguments"].as_str()).unwrap_or("");
+                        pending.insert(call.into(),(patch.into(),cur_model.clone(),provider.clone()));
+                    }
+                }
+                if matches!(p["type"].as_str(),Some("custom_tool_call_output")|Some("function_call_output")) {
+                    if let Some((patch,model,provider))=p["call_id"].as_str().and_then(|id|pending.remove(id)) {
+                        let output=if let Some(s)=p["output"].as_str(){s.to_string()}else{p["output"].as_array().into_iter().flatten().filter_map(|v|v["text"].as_str()).collect::<Vec<_>>().join("\n")};
+                        if output.contains("Success. Updated the following files:") {
+                            let before=g.evs.len();crate::push_patch(&mut g.evs,pm,&t.cwd,&patch,Src::Codex,&model,&t.id,o["timestamp"].as_str().and_then(parse_iso).unwrap_or(0));
+                            for ev in &mut g.evs[before..]{ev.provider=provider.clone();}
+                        }
+                    }
+                }
                 let it = &p["item"];
-                if it["type"] != "FileChange" {
+                if it["type"] != "FileChange" || it["status"]!="completed" {
                     continue;
                 }
-                let ts = o["timestamp"].as_str().and_then(parse_iso).unwrap_or(t.start);
+                let ts = o["timestamp"].as_str().and_then(parse_iso).unwrap_or(0);
+                let ev_start=g.evs.len();
                 if let Some(ch) = it["changes"].as_object() {
                     for (path, v) in ch {
                         let target = v["move_path"].as_str().unwrap_or(path);
@@ -128,12 +165,13 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
                         }
                     }
                 }
+                for ev in &mut g.evs[ev_start..]{ev.provider=provider.clone();}
             }
         }
         if reviewer {
             g.evs.clear();
         }
-        g.sessions.push(Session { src: Src::Codex, id: t.id.clone(), model: t.model, start: t.start, end: t.end, tokens: t.tokens, branch: t.branch, prompts, reviewer, has_content: file.is_some() });
+        g.sessions.push(Session { provider: t.provider, src: Src::Codex, id: t.id.clone(), model: t.model, start: t.start, end: t.end, tokens: t.tokens, branch: t.branch, prompts, reviewer, has_content: file.is_some() });
         store.groups.insert(gk, g);
     }
     st.notes.push(format!("codex: 线程 {} 个，内容文件存在 {found}，缺失 {missing}", found + missing));
@@ -156,10 +194,10 @@ pub fn discover() -> Vec<Activity> {
 
 pub fn doctor() -> Health {
     let base = source_dir(Src::Codex);
-    let mut h = Health { source: "codex".into(), path: base.display().to_string(), format: "state_5.sqlite + rollout jsonl".into(), ..Default::default() };
+    let mut h = Health { source: "codex".into(), path: base.display().to_string(), format: "state_*.sqlite / rollout jsonl".into(), ..Default::default() };
     match threads(&base) {
         Ok(rows) => {
-            h.readable = true;
+            h.readable = base.exists();
             h.records = rows.len() as u64;
             h.earliest = rows.iter().map(|t| t.start).min().map(date_cn);
             h.latest = rows.iter().map(|t| t.end).max().map(date_cn);

@@ -1,12 +1,11 @@
 //! creditia-core：Rust 核心的命令行入口。所有命令非交互，支持 `--json`。
 //! 退出码：0 成功，1 失败，2 部分成功（有警告）。
 
-mod analyze;
+use creditia_cli::{analyze, project::detect_config};
 
 use creditia_adapters as ad;
-use creditia_core::config::{Config, Director};
 use creditia_core::model::Src;
-use creditia_store::{Library, Project};
+use creditia_store::Library;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -29,7 +28,7 @@ fn parse_args() -> Args {
         if let Some(k) = x.strip_prefix("--") {
             if let Some((k, v)) = k.split_once('=') {
                 a.flags.insert(k.into(), v.into());
-            } else if i + 1 < raw.len() && !raw[i + 1].starts_with("--") && !matches!(k, "json" | "fresh" | "force" | "github" | "all" | "yes") {
+            } else if i + 1 < raw.len() && !raw[i + 1].starts_with("--") && !matches!(k, "json" | "fresh" | "force" | "github" | "all" | "yes" | "show") {
                 a.flags.insert(k.into(), raw[i + 1].clone());
                 i += 1;
             } else {
@@ -53,8 +52,8 @@ impl Args {
         if !ad::git::git_ok(&p, &["rev-parse", "--git-dir"]) {
             return Err(format!("不是 git 仓库：{}", p.display()));
         }
-        // worktree 映射回主仓库
-        Ok(ad::git::main_worktree(&p).unwrap_or(p))
+        let top = ad::git::git(&p, &["rev-parse", "--show-toplevel"]);
+        Ok(PathBuf::from(top.trim()))
     }
 }
 
@@ -71,6 +70,8 @@ const USAGE: &str = "用法：creditia-core <命令> [选项]
   hook      install|uninstall [--repo P]           安装提交盖章 hook
   hook-trailers <msgfile>          （hook 调用）追加 Creditia-* trailer
   evidence  export [--out F] | import <文件>   多台电脑之间合并证据库
+  link --path P [--repo P]         关联另一个工作副本或旧路径
+  people --file F [--show]          保存人员署名
   projects                         作品库里的项目
 
 所有命令支持 --json。退出码：0 成功，1 失败，2 有警告。";
@@ -79,6 +80,9 @@ fn main() {
     let a = parse_args();
     let json = a.on("json");
     let r: R<(Value, Vec<String>)> = match a.cmd.as_str() {
+        "desktop-api" => cmd_desktop(&a),
+        "link" => cmd_link(&a),
+        "people" => cmd_people(&a),
         "discover" => cmd_discover(&a),
         "init" => cmd_init(&a),
         "analyze" | "update" => cmd_analyze(&a),
@@ -127,16 +131,18 @@ fn main() {
 
 // ───────────────────────── discover ─────────────────────────
 
-fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
+fn cmd_discover(_a: &Args) -> R<(Value, Vec<String>)> {
     let mut acts: Vec<ad::Activity> = vec![];
     acts.extend(ad::codex::discover());
     acts.extend(ad::claude::discover());
     acts.extend(ad::cursor::discover());
     acts.extend(ad::grok::discover());
-    acts.extend(ad::kimi::discover());
-    // 把 cwd 归到 git 仓库：存在的目录用根提交；不存在的用远程地址或目录名
+    acts.extend(ad::kimi::discover().into_iter().chain(ad::opencode::discover()).chain(ad::gemini::discover()).collect::<Vec<_>>());
+    // 项目发现与分析共用身份；不同 fork 不因原始提交相同而合并。
     #[derive(Default)]
     struct P {
+        id: String,
+        origin: String,
         name: String,
         path: String,
         root: String,
@@ -147,26 +153,30 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
     }
     let mut by_key: HashMap<String, P> = HashMap::new();
     let lib = Library::open().ok();
-    let known: HashMap<String, Project> = lib.as_ref().and_then(|l| l.projects().ok()).unwrap_or_default().into_iter().map(|p| (p.root_commit.clone(), p)).collect();
+    let known: std::collections::HashSet<String> = lib.as_ref().and_then(|l| l.projects().ok()).unwrap_or_default().into_iter().map(|p| p.id).collect();
     for act in acts {
         let cwd = PathBuf::from(&act.cwd);
         let (key, p) = if cwd.is_dir() && ad::git::git_ok(&cwd, &["rev-parse", "--git-dir"]) {
             let main = ad::git::main_worktree(&cwd).unwrap_or(cwd.clone());
             let (root, remotes) = ad::git::identity(&main);
-            let key = if root.is_empty() { main.display().to_string() } else { root.clone() };
-            (key, P { name: main.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(), path: main.display().to_string(), root, remotes, exists: true, ..Default::default() })
+            let key = analyze::project_of(&main, &detect_config(&main)).id;
+            let origin = ad::git::normalize_remote(ad::git::git(&main, &["remote", "get-url", "origin"]).trim());
+            (key.clone(), P { id: key, origin, name: main.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(), path: main.display().to_string(), root, remotes, exists: true, ..Default::default() })
         } else {
             let remote = act.remote.as_deref().map(ad::git::normalize_remote);
             let name = remote.as_deref().and_then(|r| r.rsplit('/').next()).map(String::from).unwrap_or_else(|| cwd.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or(act.cwd.clone()));
             let key = remote.clone().unwrap_or(format!("path:{}", act.cwd));
-            (key, P { name, path: act.cwd.clone(), remotes: remote.into_iter().collect(), ..Default::default() })
+            (key.clone(), P { id: key, origin: remote.clone().unwrap_or_default(), name, path: act.cwd.clone(), remotes: remote.into_iter().collect(), ..Default::default() })
         };
         let e = by_key.entry(key).or_insert(p);
         *e.tools.entry(act.src.harness().into()).or_default() += act.sessions;
         e.last = e.last.max(act.last);
     }
     // 不存在的目录如果远程地址和某个存在的项目一致，并进去
-    let remote_to_key: HashMap<String, String> = by_key.iter().filter(|(_, p)| p.exists).flat_map(|(k, p)| p.remotes.iter().map(move |r| (r.clone(), k.clone()))).collect();
+    let mut remote_to_keys: HashMap<String, Vec<String>> = HashMap::new();
+    for (key, project) in &by_key {
+        if project.exists && !project.origin.is_empty() { remote_to_keys.entry(project.origin.clone()).or_default().push(key.clone()); }
+    }
     let mut merged: Vec<P> = vec![];
     let mut pending: Vec<P> = vec![];
     for (_, p) in by_key.drain() {
@@ -177,8 +187,8 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
         }
     }
     for p in pending {
-        if let Some(k) = p.remotes.iter().find_map(|r| remote_to_key.get(r)) {
-            if let Some(t) = merged.iter_mut().find(|x| &x.root == k || &x.path == k) {
+        if let Some(keys) = remote_to_keys.get(&p.origin).filter(|keys| keys.len() == 1) {
+            if let Some(t) = merged.iter_mut().find(|x| x.id == keys[0]) {
                 for (s, n) in p.tools {
                     *t.tools.entry(s).or_default() += n;
                 }
@@ -189,9 +199,6 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
         merged.push(p);
     }
     merged.sort_by(|a, b| b.last.cmp(&a.last));
-    // 已经不存在、又只有零星活动的临时目录默认不列（--all 列出）
-    let show_all = a.on("all");
-    merged.retain(|p| show_all || p.exists || p.tools.values().sum::<u64>() >= 3);
     let status = |p: &P| if p.exists { p.path.clone() } else if PathBuf::from(&p.path).is_dir() { format!("{}  (不是 git 仓库)", p.path) } else { format!("{}  (目录已不存在)", p.path) };
     let list: Vec<Value> = merged
         .iter()
@@ -199,7 +206,7 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
             json!({
                 "name": p.name, "path": p.path, "rootCommit": p.root, "remotes": p.remotes, "exists": p.exists,
                 "tools": p.tools, "lastActive": creditia_core::util::date_cn(p.last),
-                "inLibrary": known.contains_key(&p.root),
+                "id": p.id, "inLibrary": known.contains(&p.id),
             })
         })
         .collect();
@@ -213,184 +220,6 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
 
 // ───────────────────────── init ─────────────────────────
 
-/// 自动探测项目配置：主分支、主导者（最常见的人类提交者）、远程、路径关键词
-pub fn detect_config(repo: &Path) -> Config {
-    let mut c = Config::default();
-    c.repo = repo.display().to_string();
-    c.name = repo.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-    let cur = ad::git::git(repo, &["rev-parse", "--abbrev-ref", "HEAD"]).trim().to_string();
-    c.branch = if !cur.is_empty() && cur != "HEAD" {
-        cur
-    } else if ad::git::git_ok(repo, &["rev-parse", "--verify", "main"]) {
-        "main".into()
-    } else {
-        "master".into()
-    };
-    let (_, remotes) = ad::git::identity(repo);
-    c.remotes = remotes.clone();
-    // 主导者：把 (名字, 邮箱) 聚成"同一个人"——同名、同邮箱、同 GitHub 登录名（123+login@users.noreply）、
-    // 名字等于某个邮箱的用户名，都视为同一人；提交最多的那个人是主导者，收集 TA 用过的全部邮箱
-    let log = ad::git::git(repo, &["log", "--format=%aN%x00%aE", &c.branch]);
-    let mut pairs: Vec<(String, String)> = vec![];
-    let mut count: HashMap<(String, String), usize> = HashMap::new();
-    for l in log.lines() {
-        let Some((n, e)) = l.split_once('\0') else { continue };
-        let e = e.to_lowercase();
-        if c.agent_emails.contains_key(&e) || c.bot_emails.contains(&e) || e.ends_with("@cursor.com") || e.contains("[bot]") {
-            continue;
-        }
-        let k = (n.to_string(), e);
-        *count.entry(k.clone()).or_default() += 1;
-        if !pairs.contains(&k) {
-            pairs.push(k);
-        }
-    }
-    fn find(p: &mut Vec<usize>, i: usize) -> usize {
-        if p[i] != i {
-            let r = find(p, p[i]);
-            p[i] = r;
-        }
-        p[i]
-    }
-    let login = |e: &str| -> String {
-        let local = e.split('@').next().unwrap_or("");
-        if e.ends_with("@users.noreply.github.com") { local.split_once('+').map(|(_, l)| l).unwrap_or(local).to_string() } else { local.to_string() }
-    };
-    let norm = |s: &str| s.to_lowercase().replace([' ', '-', '_', '.'], "");
-    let n = pairs.len();
-    let mut parent: Vec<usize> = (0..n).collect();
-    for i in 0..n {
-        for j in (i + 1)..n {
-            let (ni, ei) = &pairs[i];
-            let (nj, ej) = &pairs[j];
-            let same = norm(ni) == norm(nj) || ei == ej || login(ei) == login(ej) || norm(ni) == norm(&login(ej)) || norm(nj) == norm(&login(ei));
-            if same {
-                let (a, b) = (find(&mut parent, i), find(&mut parent, j));
-                parent[a] = b;
-            }
-        }
-    }
-    let mut clusters: HashMap<usize, (usize, Vec<String>, HashMap<String, usize>)> = HashMap::new();
-    for (i, k) in pairs.iter().enumerate() {
-        let r = find(&mut parent, i);
-        let e = clusters.entry(r).or_default();
-        let cnt = count[k];
-        e.0 += cnt;
-        if !e.1.contains(&k.1) {
-            e.1.push(k.1.clone());
-        }
-        *e.2.entry(k.0.clone()).or_default() += cnt;
-    }
-    if let Some((_, (_, emails, names))) = clusters.into_iter().max_by_key(|(_, (n, _, _))| *n) {
-        let name = names.into_iter().max_by_key(|(_, n)| *n).map(|(n, _)| n).unwrap_or_default();
-        let mut emails = emails;
-        for e in emails.clone() {
-            emails.extend(ad::git::mailmap_emails(repo, &e));
-        }
-        emails.sort();
-        emails.dedup();
-        c.directors.push(Director { id: format!("h:{}", name.to_lowercase().replace(' ', "-")), name, emails });
-    }
-    // 把仓库里见过的 agent 邮箱补进映射：邮箱用户名里带工具名的（codex-acceptance@、cursoragent@…）按工具归类，[bot] 归 bot
-    for l in log.lines() {
-        if let Some((_, e)) = l.split_once('\0') {
-            let e = e.to_lowercase();
-            if c.agent_emails.contains_key(&e) || c.bot_emails.contains(&e) {
-                continue;
-            }
-            let local = e.split('@').next().unwrap_or("");
-            let h = if e.contains("[bot]") {
-                c.bot_emails.push(e.clone());
-                continue;
-            } else if local.contains("codex") || e.ends_with("@openai.com") {
-                "codex"
-            } else if local.contains("cursor") || e.ends_with("@cursor.com") {
-                "cursor"
-            } else if local.contains("claude") || e.ends_with("@anthropic.com") {
-                "claude-code"
-            } else if local.contains("copilot") {
-                "github-copilot"
-            } else if local.contains("devin") {
-                "devin"
-            } else if local.contains("kimi") {
-                "kimi"
-            } else if local.contains("grok") {
-                "grok"
-            } else if local.contains("gemini") || local.contains("jules") {
-                "gemini"
-            } else {
-                continue;
-            };
-            c.agent_emails.insert(e, h.into());
-        }
-    }
-    c.markers = derive_markers(repo, &remotes);
-    c.exclude_markers = detect_excludes(repo, &remotes);
-    c
-}
-
-/// 判断日志路径是否属于本项目的关键词：目录名、各 worktree 目录、远程仓库名。
-/// `/name/` 按目录边界匹配；`/name-` 匹配 Codex 等工具的临时克隆（如 `/tmp/demo-<任务>/`），
-/// 同名前缀的无关目录（如 `demo-film`）由 `detect_excludes` 排除
-pub fn derive_markers(repo: &Path, remotes: &[String]) -> Vec<String> {
-    let mut m: Vec<String> = vec![];
-    let mut push = |s: String| {
-        let s = s.to_lowercase();
-        if s.len() >= 4 && !m.contains(&s) {
-            m.push(s);
-        }
-    };
-    if let Some(n) = repo.file_name() {
-        let n = n.to_string_lossy();
-        push(format!("/{n}/"));
-        push(format!("/{n}-"));
-    }
-    for w in ad::git::worktrees(repo) {
-        push(format!("{}/", w.trim_end_matches('/')));
-    }
-    for r in remotes {
-        if let Some(n) = r.rsplit('/').next() {
-            push(format!("/{n}/"));
-            push(format!("/{n}-"));
-        }
-    }
-    m
-}
-
-/// 同级目录里名字以仓库名开头、但不是本仓库的克隆或 worktree 的目录（如 `demo-film`），自动排除
-pub fn detect_excludes(repo: &Path, remotes: &[String]) -> Vec<String> {
-    let (root, _) = ad::git::identity(repo);
-    let mut prefixes: Vec<String> = vec![];
-    if let Some(n) = repo.file_name() {
-        prefixes.push(n.to_string_lossy().to_lowercase());
-    }
-    for r in remotes {
-        if let Some(n) = r.rsplit('/').next() {
-            prefixes.push(n.to_lowercase());
-        }
-    }
-    let Some(parent) = repo.parent() else { return vec![] };
-    let same_repo = |d: &Path| !root.is_empty() && ad::git::git_ok(d, &["rev-parse", "--git-dir"]) && ad::git::identity(d).0 == root;
-    let mut out = vec![];
-    for e in std::fs::read_dir(parent).into_iter().flatten().flatten() {
-        let p = e.path();
-        if p == repo || !p.is_dir() {
-            continue;
-        }
-        let name = e.file_name().to_string_lossy().to_lowercase();
-        if !prefixes.iter().any(|x| name.starts_with(x.as_str()) && name != *x) {
-            continue;
-        }
-        // 本身是同一仓库的克隆 / worktree，或者下一级目录里有（如 `demo-worktrees/<分支>`），都算相关
-        let related = same_repo(&p) || std::fs::read_dir(&p).into_iter().flatten().flatten().any(|s| s.path().is_dir() && same_repo(&s.path()));
-        if !related {
-            out.push(format!("/{name}/"));
-        }
-    }
-    out.sort();
-    out
-}
-
 fn cmd_init(a: &Args) -> R<(Value, Vec<String>)> {
     let repo = a.repo()?;
     let path = repo.join(".creditia/config.json");
@@ -401,11 +230,10 @@ fn cmd_init(a: &Args) -> R<(Value, Vec<String>)> {
     c.save(&path)?;
     let v = serde_json::to_value(&c).unwrap();
     let summary = format!(
-        "已写入 {}\n项目 {} · 分支 {} · 主导者 {}\n可在该文件里调整主导者邮箱、排除规则、隐私选项。",
+        "已写入 {}\n项目 {} · 分支 {}\n人员署名、关联路径和隐私选项由你确认。",
         path.display(),
         c.name,
-        c.branch,
-        c.directors.first().map(|d| d.name.as_str()).unwrap_or("（未识别）")
+        c.branch
     );
     Ok((json!({ "path": path, "config": v, "summary": summary }), vec![]))
 }
@@ -414,7 +242,7 @@ fn cmd_init(a: &Args) -> R<(Value, Vec<String>)> {
 
 fn cmd_analyze(a: &Args) -> R<(Value, Vec<String>)> {
     let repo = a.repo()?;
-    let opts = analyze::Opts { fresh: a.on("fresh"), github: a.on("github"), out: a.flags.get("out").map(PathBuf::from), blame: None, config: a.flags.get("config").map(PathBuf::from) };
+    let opts = analyze::Opts { branch: a.flags.get("branch").cloned(), fresh: a.on("fresh"), github: a.on("github"), out: a.flags.get("out").map(PathBuf::from), blame: None, config: a.flags.get("config").map(PathBuf::from) };
     let r = analyze::run(&repo, &opts)?;
     let summary = format!(
         "{}：{} 个提交（新增 {}），{} 项，{} 行；{:.1}s\n{}\n写入 {}",
@@ -450,7 +278,7 @@ fn cmd_collect(a: &Args) -> R<(Value, Vec<String>)> {
 // ───────────────────────── doctor ─────────────────────────
 
 fn cmd_doctor(_a: &Args) -> R<(Value, Vec<String>)> {
-    let hs = vec![ad::codex::doctor(), ad::claude::doctor(), ad::cursor::doctor(), ad::grok::doctor(), ad::kimi::doctor()];
+    let hs = vec![ad::codex::doctor(), ad::claude::doctor(), ad::cursor::doctor(), ad::grok::doctor(), ad::kimi::doctor(), ad::opencode::doctor(), ad::gemini::doctor()];
     let git_ok = std::process::Command::new("git").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
     let gh_ok = std::process::Command::new("gh").args(["auth", "status"]).output().map(|o| o.status.success()).unwrap_or(false);
     let lib = Library::open().ok();
@@ -489,7 +317,7 @@ fn cmd_blame(a: &Args) -> R<(Value, Vec<String>)> {
         let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
         cwd.join(&file).canonicalize().ok().and_then(|p| p.strip_prefix(&repo).ok().map(|p| p.display().to_string())).unwrap_or(file.clone())
     };
-    let opts = analyze::Opts { fresh: false, github: false, out: None, blame: Some((rel.clone(), line)), config: a.flags.get("config").map(PathBuf::from) };
+    let opts = analyze::Opts { branch: None, fresh: false, github: false, out: None, blame: Some((rel.clone(), line)), config: a.flags.get("config").map(PathBuf::from) };
     let r = analyze::run(&repo, &opts)?;
     let b = r.blame.ok_or(format!("没找到 {rel}:{line}"))?;
     let who = b["harness"].as_str().map(harness_name).or(b["name"].as_str().map(String::from)).unwrap_or("未确认".into());
@@ -500,10 +328,8 @@ fn cmd_blame(a: &Args) -> R<(Value, Vec<String>)> {
         b["date"].as_str().unwrap_or(""),
         b["unit"].as_str().map(|u| format!("PR/提交 {}  {}\n", u.strip_prefix("pr:").map(|n| format!("#{n}")).unwrap_or_else(|| u.trim_start_matches("c:").to_string()), b["unitTitle"].as_str().unwrap_or(""))).unwrap_or_default(),
         match b["evidence"].as_str().unwrap_or("") {
-            "verified" => "agent 日志里的编辑和这一行逐字对得上",
-            "declared" => "提交信息里写明了（盖章或 Co-authored-by），或和会话时间吻合",
-            "inferred" => "按分支名推断",
-            "manual" => "手动标注",
+            "verified" => "编辑成功记录的路径、行哈希和时间匹配",
+            "declared" => "提交盖章或明确的工具署名",
             _ => "没有证据",
         }
     );
@@ -658,7 +484,7 @@ fn split_comments(msg: &str) -> (String, String) {
 
 fn cmd_evidence(a: &Args) -> R<(Value, Vec<String>)> {
     let repo = a.repo()?;
-    let cfg = analyze::load_config(&repo, a.flags.get("config").map(Path::new));
+    let cfg = analyze::load_config(&repo, a.flags.get("config").map(Path::new))?;
     let proj = analyze::project_of(&repo, &cfg);
     let mut lib = Library::open()?;
     match a.pos.first().map(String::as_str) {
@@ -726,4 +552,39 @@ fn harness_name(h: &str) -> String {
         other => return other.to_string(),
     }
     .to_string()
+}
+
+fn cmd_desktop(a: &Args) -> R<(Value, Vec<String>)> {
+    let args: Value = serde_json::from_reader(std::io::stdin()).map_err(|e| e.to_string())?;
+    let id = args["projectId"].as_str().unwrap_or("");
+    let path = args["path"].as_str().unwrap_or("");
+    let value = match a.pos.first().map(String::as_str) {
+        Some("projects") => creditia_cli::desktop::projects()?,
+        Some("library_credits") => creditia_cli::desktop::library_credits()?,
+        Some("credits") => creditia_cli::desktop::credits(id)?,
+        Some("config_of") => creditia_cli::desktop::config_of(id)?,
+        Some("doctor") => creditia_cli::desktop::doctor(),
+        Some("analyze_project") => creditia_cli::desktop::analyze_project(path, args["branch"].as_str())?,
+        Some("set_people") => creditia_cli::desktop::set_people(id, serde_json::from_value(args["people"].clone()).map_err(|e| e.to_string())?, args["show"].as_bool().unwrap_or(false))?,
+        Some("link_path") => creditia_cli::desktop::link_path(id, path)?,
+        _ => return Err("未知桌面操作".into()),
+    };
+    Ok((value, vec![]))
+}
+fn cmd_link(a: &Args) -> R<(Value, Vec<String>)> {
+    let repo = a.repo()?;
+    let config = analyze::load_config(&repo, None)?;
+    let project = analyze::project_of(&repo, &config);
+    Library::open()?.upsert_project(&project)?;
+    let path = a.flags.get("path").ok_or("用法：creditia link --path <工作副本或旧路径>")?;
+    Ok((creditia_cli::desktop::link_path(&project.id, path)?, vec![]))
+}
+fn cmd_people(a: &Args) -> R<(Value, Vec<String>)> {
+    let repo = a.repo()?;
+    let config = analyze::load_config(&repo, None)?;
+    let project = analyze::project_of(&repo, &config);
+    Library::open()?.upsert_project(&project)?;
+    let file = a.flags.get("file").ok_or("用法：creditia people --file <人员署名 JSON> [--show]")?;
+    let people = serde_json::from_reader(std::fs::File::open(file).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    Ok((creditia_cli::desktop::set_people(&project.id, people, a.on("show"))?, vec![]))
 }

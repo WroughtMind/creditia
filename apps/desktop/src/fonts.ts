@@ -33,7 +33,7 @@ import zcoolXiaoWei400 from './fonts/ZCOOLXiaoWei-400.ttf?url';
 import zcoolQingKe400 from './fonts/ZCOOLQingKeHuangYou-400.ttf?url';
 import maShanZheng400 from './fonts/MaShanZheng-400.ttf?url';
 
-export const FONT_FILES: { name: string; weight: number; url: string }[] = [
+export const FONT_FILES: { name: string; weight: 400 | 500 | 600 | 700 | 900; url: string }[] = [
   { name: 'Inter', weight: 400, url: inter400 },
   { name: 'Inter', weight: 500, url: inter500 },
   { name: 'Inter', weight: 600, url: inter600 },

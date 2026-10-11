@@ -1,67 +1,58 @@
 # creditia
 
 > 为你和 AI 一起做出的作品署名。
-> Credits for work made with agents.
 
-**状态：开发中。**
+**开发中，尚未发布。** 读取 Git 和本机编程工具记录，整理为 `credits.json` 与 `CREDITS.md`；同一份档案用于排行、片尾字幕、小票、徽章和统计图。保留原有 15 套主题及各形式的可选版式。
 
-## 做什么
+人的构思、设计、开发、审阅和决策采用用户确认的独立署名。代码行占比不代表人的价值或劳动时间。证据不足时保留“未确认”，不依赖大模型推断。口径、多路径和各数据源边界见 [产品说明](PRODUCT.md)，原版视觉保护范围见 [工作台说明](DESIGN.md)。
 
-读 git 历史和本机 agent 日志（Codex、Claude Code、Cursor、Grok、Kimi），逐行归因：哪段代码是哪个工具、哪个模型在哪次会话里写的。产出一份档案（`credits.json` + `CREDITS.md`），再从同一份档案画出多种展示：tier 榜单、片尾字幕、精力小票、徽章、统计图。
+## 本地开发
 
-同一形式在十四个版式家族下有不同结构（极简 / 电影 / 终端 / 玻璃 / 杂志 / 等宽 / 黄金时代片尾 / 剧院节目单 / 颁奖礼 / 老报纸 / CRT 磷光 / 街机高分榜 / 霓虹招牌 / 海报）：片尾字幕十一种版式（卡司表、双栏滚屏、卡串、终卡、billing block、节目单……）、精力小票七种版式（电影票、账簿、长卷纸……），十五套主题跟着家族换肤。人不和 agent 排同一个百分比，而是单独署名。
-
-- **本地优先**：扫描和计算都在本机；只存行哈希和元数据，不存代码和 prompt。
-- **诚实**：证据不够就归入「未确认」；每段数字标出证据覆盖情况；每条归因都能回查到 commit。
-- **人单独署名**：人不和 agent 排代码行百分比，而是作为主导者单独署名（可关闭）。
-
-## 仓库结构
-
-```
-crates/
-  core/       归因引擎、行哈希、时间、配置
-  adapters/   git、Codex、Claude Code、Cursor、Grok、Kimi 的日志读取
-  store/      作品库：项目、证据库、快照（SQLite）
-  cli/        二进制 creditia-core
-packages/
-  schema/     credits.json v0 的 JSON Schema 与类型
-  render/     展示渲染器：credits.json → SVG / PNG（Satori + resvg）
-  cli/        npm 包 creditia：档案、导出、终端名片
-  embed/      <creditia-card> Web Component
-apps/desktop/ Tauri 2 App（预览与导出中心）
-skills/       给 Claude Code / Codex / Cursor 的 agent skill
-spike/        阶段 0 验证工程（保留作记录）
-```
-
-## 开发
+需要 Git、Rust、Node 22.18 或以上，以及对应平台的 Tauri 系统依赖。
 
 ```bash
-# Rust 核心
-cargo build --release         # 产出 target/release/creditia-core
-cargo test                    # 单元 + 端到端（用临时 HOME 的假日志）
-
-# 渲染器
-cd packages/render && npm i
-node src/gallery.ts ../../spike/out gallery    # 全部形式 × 全部风格
-
-# CLI（Node 侧）
-cd packages/cli && node bin/creditia.mjs --help
-
-# App（需要 Rust + tauri 依赖；图标与预览字体子集：npm run icon / npm run fonts）
-cd apps/desktop && npm i && npm run tauri dev
+cargo build --release
+npm ci --prefix packages/render
+npm ci --prefix apps/desktop
+node packages/cli/bin/creditia.mjs --help
 ```
 
-## 快速上手
+桌面首次构建还需生成随 App 打包的本地字体：
 
 ```bash
-cd 你的仓库
-creditia init                  # 写 .creditia/config.json
-creditia analyze --github      # 分析，写 .creditia/credits.json
-creditia doc                   # 写 CREDITS.md（只改标记区间）
-creditia export --form tier --theme minimal-light --format png --out tier.png
-creditia hook install          # 之后每次提交自动盖章，不再依赖日志
+cd apps/desktop
+npm run fonts
+npm run tauri dev
 ```
 
-## 协议
+## 使用
 
-MIT，见 [LICENSE](LICENSE)。
+开发期可将 `creditia` 命令指向本仓库的 `packages/cli/bin/creditia.mjs`。
+
+```bash
+creditia init --repo /path/to/project
+creditia analyze --repo /path/to/project --branch HEAD --json
+creditia doc --repo /path/to/project
+creditia export --repo /path/to/project --form tier --theme minimal-light --format png --out tier.png
+creditia export --repo /path/to/project --form roll --theme film --format html --out credits.html
+creditia link --repo /path/to/project --path /another/project-copy
+creditia doctor --json
+```
+
+添加 `--github` 时才通过已登录的 GitHub CLI 读取 PR 元数据。盖章属于提交声明，不代替逐行证据。默认不公开人员姓名；使用 App 的“制作人员”，或 `creditia people --file people.json --show` 保存用户确认的署名。
+
+## 组成
+
+| 目录 | 职责 |
+|---|---|
+| `crates/core` | 归因规则、配置、行哈希 |
+| `crates/adapters` | Git 与七类工具记录的只读解析 |
+| `crates/store` | 本地作品库、证据、路径关联和快照 |
+| `crates/cli` | CLI 与桌面共用的分析服务 |
+| `packages/render` | 原版作品与五种导出格式 |
+| `packages/cli` | 文档、导出、终端与 App 启动命令 |
+| `packages/schema` | 档案格式及类型 |
+| `apps/desktop` | Tauri 桌面工作台 |
+| `skills/creditia` | 面向 agent 的操作说明 |
+
+MIT，见 [协议文件](LICENSE)。

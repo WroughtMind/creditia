@@ -1,26 +1,28 @@
 // credits.json v0 的 TypeScript 类型。与 credits.schema.json 同步维护。
-export type Evidence = 'verified' | 'manual' | 'declared' | 'inferred' | 'unattributed';
+export type Evidence = 'verified' | 'declared' | 'unattributed';
 export type DateStr = `${number}-${number}-${number}`;
 
 export interface Credits {
   $schema?: string;
   schemaVersion: 0;
-  project: { name: string; repos?: string[]; range?: { from?: DateStr; to?: DateStr } };
+  project: { id?: string; name: string; repos?: string[]; range?: { from?: DateStr; to?: DateStr } };
   generatedAt: string;
-  level?: 'strict' | 'standard' | 'loose';
+  branch?: string;
+  measurement?: { metric: 'added-lines'; scope: 'git-history'; timezone: 'UTC'; humanValueEstimated: false; aiInference: false };
+  sources?: string[];
   head?: string;
   versions?: { tag: string; date: DateStr }[];
   coverage?: { name?: string; from: DateStr; to: DateStr; best: Evidence; verifiedShare?: number }[];
-  directors?: { id: string; name: string }[];
+  people?: { name: string; roles: string[]; note?: string }[];
   contributors: Contributor[];
   totals: Partial<Totals>;
   breakdown: Breakdown[];
-  human?: Partial<{ prompts: number; plans: number; reviews: number; tabAssistedLines: number; agentReviews: number }>;
+  human?: Partial<{ prompts: number; reviewRecords: number; tabAssistedLines: number; agentReviews: number }>;
   timeline?: { week: string; byContributor: Record<string, number> }[];
   days?: { date: DateStr; by: Record<string, number> }[];
   clock?: number[][];
   files?: { path?: string; lines: number; by: Record<string, number> }[];
-  sessions?: { contributor: string; start: number; end: number; tokens?: number; review?: boolean }[];
+  sessions?: { contributor: string; tool?: string; model?: string; provider?: string | null; start: number; end: number; tokens?: number; review?: boolean }[];
   units: Unit[];
   conflictLines?: number;
 }
@@ -31,9 +33,10 @@ export interface Contributor {
   harness?: string;
   model?: string | null;
   family?: string | null;
-  where?: 'local' | 'cloud';
+  provider?: string | null;
+  where?: 'local' | 'cloud' | 'unknown';
   name?: string;
-  roles: ('director' | 'author' | 'reviewer' | 'planner')[];
+  roles: string[];
   reviews?: number;
 }
 

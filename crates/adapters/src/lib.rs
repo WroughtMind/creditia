@@ -6,6 +6,8 @@ pub mod cursor;
 pub mod git;
 pub mod grok;
 pub mod kimi;
+pub mod opencode;
+pub mod gemini;
 
 use creditia_core::hash::{ext_of, line_key, normalize};
 use creditia_core::model::{Ev, PathMap, Src};
@@ -31,6 +33,8 @@ pub fn source_dir(src: Src) -> PathBuf {
         Src::Claude => env("CLAUDE_CONFIG_DIR").unwrap_or_else(|| home().join(".claude")),
         Src::Cursor => env("CREDITIA_CURSOR_DIR").unwrap_or_else(|| home().join(".cursor")),
         Src::Grok => env("CREDITIA_GROK_DIR").unwrap_or_else(|| home().join(".grok")),
+        Src::Opencode => env("CREDITIA_OPENCODE_DIR").unwrap_or_else(|| env("XDG_DATA_HOME").unwrap_or_else(|| home().join(".local/share")).join("opencode")),
+        Src::Gemini => env("CREDITIA_GEMINI_DIR").unwrap_or_else(|| home().join(".gemini")),
         Src::Kimi => env("CREDITIA_KIMI_DIR").unwrap_or_else(|| home().join(".kimi-code")),
     }
 }
@@ -63,7 +67,7 @@ pub fn push_text(out: &mut Vec<Ev>, pm: &PathMap, abs: &str, text: &str, src: Sr
         if n.chars().count() < 4 {
             continue;
         }
-        out.push(Ev { rel: rel.clone(), key: line_key(&rel, &n), src, model: model.to_string(), session: session.to_string(), ts, tab: false });
+        out.push(Ev { provider: None, rel: rel.clone(), key: line_key(&rel, &n), src, model: model.to_string(), session: session.to_string(), ts, tab: false });
     }
     true
 }
@@ -128,4 +132,22 @@ pub fn any_ts(v: &serde_json::Value) -> Option<i64> {
         serde_json::Value::String(s) => creditia_core::util::parse_iso(s).or_else(|| s.parse::<i64>().ok().map(|x| if x > 10_000_000_000 { x / 1000 } else { x })),
         _ => None,
     }
+}
+
+/// 成功的 apply_patch 调用：只提取新增文本，不把上下文行视作写作证据。
+pub fn push_patch(out: &mut Vec<Ev>, pm: &PathMap, cwd: &str, patch: &str, src: Src, model: &str, session: &str, ts: i64) {
+    let mut path=String::new();let mut added=String::new();
+    let flush=|out:&mut Vec<Ev>,path:&str,added:&str| {
+        if path.is_empty(){return}
+        let abs=if Path::new(path).is_absolute()||path.as_bytes().get(1)==Some(&b':'){path.into()}else{format!("{cwd}/{path}")};
+        push_text(out,pm,&abs,added,src,model,session,ts);
+    };
+    for line in patch.lines(){
+        if let Some(next)=line.strip_prefix("*** Add File: ").or_else(||line.strip_prefix("*** Update File: ")){
+            flush(out,&path,&added);path=next.into();added.clear();
+        }else if let Some(next)=line.strip_prefix("*** Move to: "){path=next.into();}
+        else if line.starts_with("*** Delete File: "){flush(out,&path,&added);path.clear();added.clear();}
+        else if let Some(text)=line.strip_prefix('+'){added.push_str(text);added.push('\n');}
+    }
+    flush(out,&path,&added);
 }

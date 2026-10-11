@@ -1,4 +1,4 @@
-//! 时间工具：ISO 8601 解析、公历转换、周编号、北京时间日期。
+//! 时间工具：ISO 8601 解析、公历转换、周编号、UTC 日期。
 
 /// 公历日期 → 1970-01-01 起的天数（Howard Hinnant 算法）
 pub fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
@@ -44,15 +44,15 @@ pub fn parse_iso(s: &str) -> Option<i64> {
     Some(t)
 }
 
-/// epoch 秒 → 北京时间日期 `YYYY-MM-DD`
+/// epoch 秒 → UTC 日期 `YYYY-MM-DD`
 pub fn date_cn(ts: i64) -> String {
-    let (y, m, d) = civil_from_days((ts + 8 * 3600).div_euclid(86400));
+    let (y, m, d) = civil_from_days(ts.div_euclid(86400));
     format!("{y:04}-{m:02}-{d:02}")
 }
 
-/// epoch 秒 → ISO 周 `2026-W27`（北京时间）
+/// epoch 秒 → ISO 周 `2026-W27`（UTC）
 pub fn iso_week(ts: i64) -> String {
-    let days = (ts + 8 * 3600).div_euclid(86400);
+    let days = ts.div_euclid(86400);
     let wd = (days + 3).rem_euclid(7);
     let thu = days - wd + 3;
     let (y, _, _) = civil_from_days(thu);
@@ -60,12 +60,12 @@ pub fn iso_week(ts: i64) -> String {
     format!("{y}-W{week:02}")
 }
 
-/// 当前时间的 ISO 8601（+08:00）
+/// 当前时间的 ISO 8601（UTC）
 pub fn now_iso() -> String {
     let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
-    let (y, m, d) = civil_from_days((t + 8 * 3600).div_euclid(86400));
-    let s = (t + 8 * 3600).rem_euclid(86400);
-    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}+08:00", s / 3600, s / 60 % 60, s % 60)
+    let (y, m, d) = civil_from_days(t.div_euclid(86400));
+    let s = t.rem_euclid(86400);
+    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", s / 3600, s / 60 % 60, s % 60)
 }
 
 #[cfg(test)]

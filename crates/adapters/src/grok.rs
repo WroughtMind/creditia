@@ -4,13 +4,12 @@ use crate::{any_ts, percent_decode, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
 use creditia_core::util::date_cn;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 struct Sess {
     dir: PathBuf,
     cwd: String,
-    model: String,
     start: i64,
     end: i64,
     branch: Option<String>,
@@ -34,11 +33,10 @@ fn sessions() -> Vec<Sess> {
             }
             let v: Value = std::fs::read_to_string(&summary).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
             let cwd = v["info"]["cwd"].as_str().or(v["cwd"].as_str()).map(String::from).unwrap_or_else(|| decoded.clone());
-            let model = v["current_model_id"].as_str().unwrap_or("").to_string();
             let start = any_ts(&v["created_at"]).unwrap_or(0);
             let end = any_ts(&v["updated_at"]).or(any_ts(&v["last_active_at"])).unwrap_or(start);
             let branch = v["head_branch"].as_str().map(String::from);
-            out.push(Sess { dir, cwd, model, start, end, branch });
+            out.push(Sess { dir, cwd, start, end, branch });
         }
     }
     out
@@ -82,36 +80,38 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         let mut g = FileGroup { fp, ..Default::default() };
         let id = s.dir.file_name().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();
         let mut prompts = 0;
-        let mut model = s.model.clone();
+        let mut models = HashSet::new();
+        let mut pending: HashMap<String, (String, String, String)> = HashMap::new();
         let text = std::fs::read_to_string(&hist).unwrap_or_default();
         for line in text.lines() {
             let Ok(o) = serde_json::from_str::<Value>(line) else { continue };
-            let role = o["role"].as_str().unwrap_or("");
-            if role == "user" {
-                prompts += 1;
-            }
-            if role != "assistant" {
-                continue;
-            }
-            if let Some(m) = o["model_id"].as_str() {
-                model = m.to_string();
-            }
-            let ts = any_ts(&o["ts"]).or(any_ts(&o["timestamp"])).or(any_ts(&o["created_at"])).unwrap_or(s.end);
-            for tc in o["tool_calls"].as_array().into_iter().flatten() {
-                let name = tc["name"].as_str().or(tc["function"]["name"].as_str()).unwrap_or("");
-                let a = args_of(tc);
-                let path = a["file_path"].as_str().or(a["path"].as_str()).unwrap_or("");
-                let content = match name {
-                    "search_replace" | "edit" | "str_replace" => a["new_string"].as_str(),
-                    "write" | "create_file" | "write_file" => a["content"].as_str(),
-                    _ => None,
-                };
-                if let Some(c) = content {
-                    crate::push_text(&mut g.evs, pm, path, c, Src::Grok, &model, &id, ts);
+            let role = o["type"].as_str().unwrap_or("");
+            if role == "user" { prompts += 1; }
+            if role == "assistant" {
+                let model = o["model_id"].as_str().unwrap_or("").to_string();
+                if !model.is_empty() { models.insert(model.clone()); }
+                for tc in o["tool_calls"].as_array().into_iter().flatten() {
+                    let name = tc["name"].as_str().unwrap_or("");
+                    let a = args_of(tc);
+                    let path = a["file_path"].as_str().or(a["path"].as_str()).unwrap_or("");
+                    let content = match name { "search_replace" => a["new_string"].as_str(), "write" => a["content"].as_str(), _ => None };
+                    if let (Some(content), Some(call_id)) = (content, tc["id"].as_str()) {
+                        let path = if Path::new(path).is_absolute() { PathBuf::from(path) } else { PathBuf::from(&s.cwd).join(path) };
+                        pending.insert(call_id.into(), (path.to_string_lossy().into(), content.into(), model.clone()));
+                    }
                 }
+            } else if role == "tool_result" {
+                let Some((path, content, model)) = o["tool_call_id"].as_str().and_then(|key| pending.remove(key)) else { continue };
+                let result = o["content"].as_str().unwrap_or("");
+                let success = result.starts_with("Wrote file successfully to ") || (result.starts_with("The file ") && result.contains(" has been updated successfully."));
+                if !success { continue; }
+                // 该格式通常不记录逐条时间：会话结束时间仅作最晚发生时间，不猜测事件时间。
+                let ts = any_ts(&o["ts"]).or(any_ts(&o["timestamp"])).unwrap_or(s.end);
+                crate::push_text(&mut g.evs, pm, &path, &content, Src::Grok, &model, &id, ts);
             }
         }
-        g.sessions.push(Session { src: Src::Grok, id, model, start: s.start, end: s.end, tokens: 0, branch: s.branch, prompts, reviewer: false, has_content: hist.exists() });
+        let model = if models.len() == 1 { models.into_iter().next().unwrap() } else { String::new() };
+        g.sessions.push(Session { provider: None, src: Src::Grok, id, model, start: s.start, end: s.end, tokens: 0, branch: s.branch, prompts, reviewer: false, has_content: hist.exists() });
         store.groups.insert(gk, g);
     }
     if n > 0 {
@@ -140,7 +140,7 @@ pub fn doctor() -> Health {
         records: ss.len() as u64,
         earliest: ss.iter().map(|s| s.start).filter(|&t| t > 0).min().map(date_cn),
         latest: ss.iter().map(|s| s.end).max().filter(|&t| t > 0).map(date_cn),
-        note: "无逐请求 token".into(),
+        note: "无逐请求 token；编辑按调用与成功结果配对，缺事件时间时使用会话结束上界".into(),
     }
 }
 

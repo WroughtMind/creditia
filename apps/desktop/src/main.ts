@@ -1,424 +1,167 @@
-// creditia App：一个主界面——左边选项目，中间是大图，右边三步：选图 → 选风格 → 保存。
-// 渲染和 CLI 共用同一套 forms（satori → SVG，resvg-wasm → PNG）。
 import { THEMES, themeById } from '../../../packages/render/src/themes.ts';
-import { buildModel, fmt, pct, type Model } from '../../../packages/render/src/data.ts';
-import { FORMS, GROUPS, type Ctx } from '../../../packages/render/src/registry.ts';
-import { creditsBlock, mergeCreditsMd, unitLead } from '../../../packages/render/src/text.ts';
-import { famColor } from '../../../packages/render/src/brand.ts';
-import { renderSvg, renderSized, toPng } from './preview.ts';
-import { THEME_ZH, VARIANT_ZH, SIZES, revealLabel } from './labels.ts';
+import { buildModel, fmt, type Model } from '../../../packages/render/src/data.ts';
+import { FORMS, type Ctx } from '../../../packages/render/src/registry.ts';
+import { encodeExport, EXPORTS, motionSpec, type ExportFormat } from '../../../packages/render/src/export.ts';
+import { renderSvg, renderSized, toRaster } from './preview.ts';
+import { api, saveExport, launchContext, type Project } from './api.ts';
+import { $, esc, icon, toast } from './dom.ts';
+import { initPanels, showPanel, closePanel, type PanelController } from './panels.ts';
+import { VARIANT_ZH, THEME_ZH } from './labels.ts';
 
-// ───────────────────────── Tauri 桥 ─────────────────────────
-const native = (window as any).__TAURI__?.core?.invoke as ((cmd: string, args?: any) => Promise<any>) | undefined;
-async function api(cmd: string, args: any = {}): Promise<any> {
-  if (native) return native(cmd, args);
-  switch (cmd) {
-    case 'projects': return (await fetch('/__dev/projects')).json();
-    case 'credits': return (await fetch(`/__dev/credits?id=${encodeURIComponent(args.projectId)}`)).json();
-    case 'config_of': return (await fetch('/__dev/config')).json();
-    case 'doctor': return (await fetch('/__dev/doctor')).json();
-    case 'set_display_director': return null;
-    case 'reveal': case 'open_path': toast('浏览器预览里打不开文件夹，要在 App 里用'); return null;
-    case 'save_file': {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([b64bytes(args.bytes)], { type: args.mime ?? 'application/octet-stream' }));
-      a.download = args.name; a.click(); URL.revokeObjectURL(a.href);
-      return `下载文件夹/${args.name}`;
-    }
-    default: throw new Error('浏览器预览里没有这个功能：' + cmd);
-  }
-}
-
-// ───────────────────────── 状态 ─────────────────────────
-type View = 'make' | 'detail';
-const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
-const ORDER = GROUPS.flatMap(([, ids]) => ids).filter((id) => id !== 'blame'); // blame 要指定某一行，只在 CLI 里用
+type Preference = { variant?: string; size?: string };
+const ORDER = ['tier', 'receipt', 'roll', 'share', 'byline', 'donut', 'ribbon', 'mosaic', 'waffle', 'area', 'lanes', 'clock', 'versions', 'settle', 'app', 'fetch', 'profile'];
 const state = {
-  projects: [] as any[], current: null as any, config: {} as any,
-  raw: null as any, model: null as Model | null, library: null as Model[] | null,
-  view: 'make' as View,
-  theme: (localStorage.creditiaTheme as string) || 'cinema',
-  form: (localStorage.creditiaForm as string) || 'tier',
-  variant: undefined as string | undefined, size: 'native', picked: false, wallVar: undefined as string | undefined,
-  svg: '', token: 0, thumbToken: 0,
+  projects: [] as Project[], library: [] as any[], current: null as Project | null, raw: null as any, config: {} as any, model: null as Model | null,
+  theme: themeById(localStorage.getItem('creditiaStudioTheme') ?? '')?.id ?? 'minimal-light', selected: '', epoch: 0,
+  preferences: {} as Record<string, Preference>, svgs: new Map<string, string>(), unavailable: [] as string[], exporting: false,
 };
-if (!ORDER.includes(state.form)) state.form = 'tier';
-const theme = () => themeById(state.theme) ?? THEMES[0];
-const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-function toast(msg: string) { const el = $('#toast'); el.textContent = msg; el.hidden = false; clearTimeout((toast as any)._t); (toast as any)._t = setTimeout(() => (el.hidden = true), 2800); }
-async function copy(text: string, ok = '已复制') { try { await navigator.clipboard.writeText(text); toast(ok); } catch { toast('没能复制，系统不让访问剪贴板'); } }
-const b64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
-const b64bytes = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-const analyzeCmd = (path = '你的项目文件夹') => `cd "${path}" && creditia analyze`;
+const theme = () => themeById(state.theme)!;
+const preferenceKey = () => `creditiaStudio:${state.current?.id}`;
+const context = (id: string): Ctx => ({ lang: 'zh', variant: state.preferences[id]?.variant, ...(id === 'profile' ? { projects: state.library.map(raw => raw.project?.id === state.raw.project?.id ? state.model! : buildModel(raw)), person: state.model!.signature } : {}) });
+const errorMessage = (e: unknown) => e instanceof Error ? e.message : String(e);
+const remember = () => localStorage.setItem(preferenceKey(), JSON.stringify(state.preferences));
+function rebuildModel() { state.model = buildModel({ ...state.raw, people: (state.config.people ?? state.raw.people ?? []).map((p: any) => ({ ...p, name: state.config.privacy?.aliases?.[p.name] ?? p.name })) }, { people: !!state.config.display?.people, lang: 'zh' }); }
+const panels = initPanels({ state, openProject, paintWorkspace, rebuildModel, empty } as PanelController);
 
-// ───────────────────────── 启动 ─────────────────────────
-async function boot() {
-  $('#gear').onclick = settingsSheet;
-  $('#proj').onclick = (e) => projectMenu(e.currentTarget as HTMLElement);
-  $('#nav').onclick = (e) => {
-    const b = (e.target as HTMLElement).closest('button[data-view]') as HTMLElement | null; if (!b) return;
-    state.view = b.dataset.view as View; renderView();
-  };
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
-  try { state.projects = await api('projects'); } catch (e: any) { return firstRun(`没能读取项目列表：${e?.message ?? e}`); }
-  if (state.projects.length) openProject(state.projects[0]); else firstRun();
-}
-
-// ───────────────────────── 弹出菜单（项目、图、风格、版式、尺寸、更多） ─────────────────────────
-function closePop() { const p = $('#pop'); p.hidden = true; p.innerHTML = ''; document.querySelectorAll('.open').forEach((x) => x.classList.remove('open')); }
-function openPop(anchor: HTMLElement, html: string, opts: { up?: boolean; width?: number } = {}) {
-  const was = anchor.classList.contains('open');
-  closePop(); if (was) return null;
-  anchor.classList.add('open');
-  const p = $('#pop'); p.hidden = false;
-  p.innerHTML = `<div class="pop-back"></div><div class="menu" style="${opts.width ? `width:${opts.width}px;` : ''}">${html}</div>`;
-  const m = p.querySelector('.menu') as HTMLElement; const r = anchor.getBoundingClientRect();
-  const w = m.offsetWidth;
-  m.style.left = `${Math.max(12, Math.min(window.innerWidth - w - 12, r.left + r.width / 2 - w / 2))}px`;
-  if (opts.up) m.style.bottom = `${window.innerHeight - r.top + 8}px`; else m.style.top = `${r.bottom + 8}px`;
-  (p.querySelector('.pop-back') as HTMLElement).onclick = closePop;
-  return m;
-}
-function projectMenu(anchor: HTMLElement) {
-  const m = openPop(anchor, `
-    ${state.model ? `<p class="menu-sum">${esc(summary(state.model))}</p>` : ''}
-    ${state.projects.length > 6 ? '<input class="menu-q" placeholder="找项目">' : ''}
-    <div class="menu-list" id="plist"></div>
-    <div class="menu-sep"></div>
-    <button class="menu-item" id="padd">添加项目…</button>`, { width: 340 });
-  if (!m) return;
-  const list = () => {
-    const q = (m.querySelector('.menu-q') as HTMLInputElement | null)?.value.trim().toLowerCase() ?? '';
-    m.querySelector('#plist')!.innerHTML = state.projects.filter((p) => !q || String(p.name).toLowerCase().includes(q)).map((p) => {
-      const when = p.lastAnalyzed ? new Date(p.lastAnalyzed * 1000).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' }) + '分析' : '还没分析';
-      return `<button class="menu-item ${p.id === state.current?.id ? 'on' : ''}" data-pid="${esc(p.id)}" title="${esc(p.path)}"><span>${esc(p.name)}</span><span class="dim">${when}</span></button>`;
-    }).join('');
-  };
-  list();
-  m.querySelector('.menu-q')?.addEventListener('input', list);
-  m.onclick = (e) => {
-    const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
-    if (b.id === 'padd') { closePop(); return addSheet(); }
-    const p = state.projects.find((x) => x.id === b.dataset.pid); if (p) { closePop(); openProject(p); }
-  };
-}
-
-/** 第一次打开、还没有任何项目时：说清楚这是什么、下一步做什么 */
-function firstRun(err?: string) {
-  $('#name').textContent = '还没有项目';
-  $('#nav').hidden = true;
-  $('#view').innerHTML = `
-  <div class="welcome">
-    <h1>creditia</h1>
-    <p class="lead">看你项目的 git 提交和本机 AI 编程工具的记录，算出每段代码是谁写的，做成能分享的图。</p>
-    ${err ? `<p class="warn">${esc(err)}</p>` : ''}
-    <ol class="steps">
-      <li><b>分析一个项目</b><span>在终端里进入项目文件夹，运行下面这行。只在本机读，不上传任何东西。</span>
-        <div class="row"><code>${esc(analyzeCmd())}</code><button class="btn" id="cp-first">复制</button></div></li>
-      <li><b>回到这里</b><span>分析完的项目会出现在左边。</span></li>
-      <li><b>挑一张图保存</b><span>排行榜、片尾字幕、小票……选一个风格，点「保存图片」。</span></li>
-    </ol>
-    <button class="btn primary" id="reload">我已经分析好了，刷新</button>
-  </div>`;
-  $('#cp-first').onclick = () => copy(analyzeCmd(), '命令已复制');
-  $('#reload').onclick = () => location.reload();
-}
-
-/** 一句话说清这个项目：谁写的、多少 */
-function summary(m: Model) {
-  const agents = m.rows.filter((r) => r.key !== 'human' && r.key !== 'unattributed').slice(0, 3).map((r) => `${r.name} ${pct(r.pct)}`);
-  const bits = [
-    `${fmt(m.commits)} 次提交`,
-    m.spanDays ? `做了 ${m.spanDays} 天` : '',
-    `写了 ${fmt(m.linesAdded)} 行，现在还在 ${fmt(m.linesSurviving)} 行`,
-  ].filter(Boolean).join(' · ');
-  return `${bits}${agents.length ? `。主要由 ${agents.join('、')} 写成` : ''}${m.director ? `，${m.director} 主导` : ''}。`;
-}
-
-async function openProject(p: any) {
-  state.current = p; state.picked = false; state.raw = null; state.model = null; state.variant = undefined;
-  $('#name').textContent = p.name;
+async function openProject(project: Project) {
+  if (!project) throw new Error('分析结果没有对应的项目记录');
+  const epoch = ++state.epoch; state.current = project; state.selected = ''; state.svgs.clear(); state.model = null;
+  $('#project-name').textContent = project.name; $('#workspace').innerHTML = '<div class="loading-state">正在读取项目记录…</div>'; updateDock();
   try {
-    state.raw = await api('credits', { projectId: p.id });
-    state.config = await api('config_of', { projectId: p.id }).catch(() => ({}));
-  } catch (e: any) {
-    $('#view').innerHTML = `<div class="empty"><p>这个项目还没有分析结果。</p><div class="row"><code>${esc(analyzeCmd(p.path))}</code><button class="btn" id="cp-an">复制</button></div><p class="meta">${esc(e?.message ?? e)}</p></div>`;
-    $('#cp-an').onclick = () => copy(analyzeCmd(p.path), '命令已复制');
-    return;
-  }
-  state.model = buildModel(state.raw, { director: !!state.config.display?.director, lang: 'zh' });
-  $('#name').textContent = state.model.project || p.name;
-  $('#proj').title = summary(state.model);
-  $('#nav').hidden = false;
-  renderView();
+    const [raw, config, library] = await Promise.all([api('credits', { projectId: project.id }), api('config_of', { projectId: project.id }), api('library_credits')]);
+    if (epoch !== state.epoch) return;
+    state.raw = raw; state.config = config; state.library = library.projects;
+    try { state.preferences = JSON.parse(localStorage.getItem(preferenceKey()) ?? '{}'); } catch { state.preferences = {}; }
+    rebuildModel(); paintStyles(); localStorage.setItem('creditiaStudioProject', project.id); await paintWorkspace();
+  } catch (e) { if (epoch === state.epoch) empty(errorMessage(e), project.path); }
 }
-
-function renderView() {
-  $('#nav').querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', (b as HTMLElement).dataset.view === state.view));
-  const v = $('#view'); v.innerHTML = ''; v.scrollTop = 0;
+function empty(message = '把项目的制作过程，变成一套作品。', path = '') {
+  $('#workspace').innerHTML = `<section class="welcome"><img src="/creditia/icon.png" width="76" height="76" alt="creditia"><h1>每一份投入，都留下名字。</h1><p>${esc(message)}</p><button class="primary" id="add-first">打开一个项目 ${icon('plus')}</button><span>读取本机记录 · 无需模型 · 无需上传</span></section>`;
+  $('#add-first').onclick = () => panels.addProject(path);
+}
+async function paintWorkspace() {
   if (!state.model) return;
-  if (state.view === 'detail') viewDetail(v); else viewMake(v);
-}
-
-// ───────────────────────── 主界面：做一张图 ─────────────────────────
-const curVariant = () => state.variant ?? FORMS[state.form].def?.(theme());
-const DEFAULT_VAR = '';  // 版式行里的「各风格默认」
-
-// ───────────────────────── 图：先选图的种类 → 风格墙（全部风格真实渲染）→ 点一张放大导出 ─────────────────────────
-function viewMake(v: HTMLElement) {
-  v.innerHTML = `
-  <nav class="kinds" id="kinds">${ORDER.map((id) => `<button data-form="${id}" class="${id === state.form ? 'on' : ''}">${esc(FORMS[id].name)}</button>`).join('')}</nav>
-  <div class="pane" id="pane"></div>`;
-  $('#kinds').onclick = (e) => {
-    const b = (e.target as HTMLElement).closest('[data-form]') as HTMLElement | null; if (!b) return;
-    state.form = b.dataset.form!; localStorage.creditiaForm = state.form; state.variant = undefined; state.picked = false; state.wallVar = undefined;
-    $('#kinds').querySelectorAll('[data-form]').forEach((x) => x.classList.toggle('on', x === b));
-    paintPane();
-  };
-  paintPane();
-}
-function paintPane() { if (state.picked) viewFocus(); else viewWall(); }
-
-/** 风格墙：当前这种图在 15 个风格下的真实样子，按真实比例，滚到眼前才画 */
-let io: IntersectionObserver | null = null;
-const cache = new Map<string, string | null>();
-function viewWall() {
-  const f = FORMS[state.form]; const pane = $('#pane'); pane.scrollTop = 0;
-  const vs = f.variants ?? [];
-  const wall = state.wallVar ?? DEFAULT_VAR;
-  pane.innerHTML = `
-    <header class="wall-head">
-      <div><h2>${esc(f.name)}</h2><p class="meta">${esc(f.q)} · ${THEMES.length} 种风格，点一张放大、保存</p></div>
-      ${vs.length ? `<div class="chips" id="wall-var"><span class="k">版式</span><button class="chip ${wall === DEFAULT_VAR ? 'on' : ''}" data-v="">各风格默认</button>${vs.map((x) => `<button class="chip ${x === wall ? 'on' : ''}" data-v="${x}">${esc(VARIANT_ZH[state.form]?.[x] ?? x)}</button>`).join('')}</div>` : ''}
-    </header>
-    <div class="wall" id="wall" style="--min:${minCol(state.form)}px">${THEMES.map((t) => {
-      const vv = wall || f.def?.(t);
-      return `<button class="tile" data-theme="${t.id}" data-var="${vv ?? ''}">
-        <span class="shot" data-shot="${t.id}"><span class="ph">正在画…</span></span>
-        <span class="cap"><b>${esc(THEME_ZH[t.id] ?? t.name)}</b>${vv ? `<span>${esc(VARIANT_ZH[state.form]?.[vv] ?? vv)}</span>` : ''}</span>
-      </button>`;
-    }).join('')}</div>`;
-  $('#wall-var')?.addEventListener('click', (e) => {
-    const b = (e.target as HTMLElement).closest('[data-v]') as HTMLElement | null; if (!b) return;
-    state.wallVar = b.dataset.v!; viewWall();
+  const epoch = ++state.epoch, model = state.model, selectedTheme = theme();
+  state.svgs.clear(); state.unavailable = []; updateDock();
+  $('#workspace').innerHTML = `<div class="workspace-heading"><div><span class="eyebrow">制作档案</span><h1>${esc(model.project)}</h1></div><p>${fmt(model.commits)} 次提交<span>·</span>${model.activeDays} 个活跃日<span>·</span>${esc(model.range.from)} — ${esc(model.range.to)}</p></div><div class="work-board">${ORDER.map((id, i) => `<article class="artwork artwork-${id}" data-artifact="${id}" tabindex="0" aria-label="${esc(FORMS[id].name)}" aria-busy="true"><div class="art-caption"><span>${String(i + 1).padStart(2, '0')} / ${esc(FORMS[id].name)}</span><div class="art-actions"><button data-action="adjust" aria-label="调整${esc(FORMS[id].name)}" title="调整">${icon('adjust', 15)}</button><button data-action="expand" aria-label="放大${esc(FORMS[id].name)}" title="放大">${icon('expand', 15)}</button></div></div><div class="art-stage"><span class="rendering">正在排版</span></div></article>`).join('')}</div><button class="missing-info" id="missing-info" hidden></button>`;
+  const board = $('.work-board');
+  board.addEventListener('click', e => {
+    const target = e.target as HTMLElement, item = target.closest<HTMLElement>('[data-artifact]'); if (!item) return;
+    select(item.dataset.artifact!);
+    const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
+    if (action === 'adjust') adjust(state.selected); if (action === 'expand') enlarge(state.selected);
   });
-  $('#wall').onclick = (e) => {
-    const b = (e.target as HTMLElement).closest('[data-theme]') as HTMLElement | null; if (!b) return;
-    state.theme = b.dataset.theme!; localStorage.creditiaTheme = state.theme;
-    state.variant = b.dataset.var || undefined; state.picked = true; state.size = 'native'; viewFocus();
-  };
-  const token = ++state.thumbToken; io?.disconnect();
-  const queue: HTMLElement[] = []; let busy = 0;
-  const pump = () => {
-    while (busy < 2 && queue.length) {
-      const el = queue.shift()!; busy++;
-      const tile = el.closest('.tile') as HTMLElement; const t = themeById(tile.dataset.theme!)!; const vv = tile.dataset.var || undefined;
-      const key = `${state.current?.id}|${state.form}|${t.id}|${vv}|${!!state.config.display?.director}`;
-      (async () => {
-        let svg = cache.get(key);
-        if (svg === undefined) { try { svg = await renderSvg(state.form, state.model!, t, await ctxOf(state.form, vv)); } catch { svg = null; } cache.set(key, svg); }
-        busy--;
-        if (token === state.thumbToken) el.innerHTML = svg ?? `<span class="ph">${esc(whyEmpty(state.form))}</span>`;
-        pump();
-      })();
+  board.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { const item = (e.target as HTMLElement).closest<HTMLElement>('[data-artifact]'); if (item && e.target === item) { e.preventDefault(); select(item.dataset.artifact!); } } });
+  board.addEventListener('dragstart', e => {
+    const item = (e.target as HTMLElement).closest<HTMLElement>('[data-artifact]');
+    if (!item || !state.svgs.has(item.dataset.artifact!)) { e.preventDefault(); return; }
+    select(item.dataset.artifact!); e.dataTransfer!.setData('application/x-creditia-form', state.selected); e.dataTransfer!.effectAllowed = 'copy';
+    document.body.classList.add('dragging'); item.classList.add('drag-source');
+  });
+  board.addEventListener('dragend', endDrag);
+  for (const id of ORDER) {
+    if (epoch !== state.epoch) return;
+    const item = board.querySelector<HTMLElement>(`[data-artifact="${id}"]`)!;
+    try {
+      const svg = await renderArtifact(id, model, selectedTheme, context(id), state.preferences[id]?.size);
+      if (epoch !== state.epoch) return;
+      if (!svg) { item.hidden = true; state.unavailable.push(id); continue; }
+      state.svgs.set(id, svg); showSvg(item, svg, id); item.draggable = true; item.setAttribute('aria-busy', 'false');
+    } catch (e) {
+      if (epoch !== state.epoch) return;
+      item.querySelector('.art-stage')!.innerHTML = `<div class="render-error">这张作品未能排版<br>${esc(errorMessage(e))}<button data-action="adjust">调整版式</button></div>`; item.setAttribute('aria-busy', 'false');
     }
-  };
-  io = new IntersectionObserver((ents) => {
-    for (const e of ents) if (e.isIntersecting) { io!.unobserve(e.target); queue.push(e.target as HTMLElement); }
-    pump();
-  }, { root: pane, rootMargin: '400px' });
-  pane.querySelectorAll('[data-shot]').forEach((el) => io!.observe(el));
-}
-/** 风格墙每列最小宽度：横图宽一点，竖图窄一点，保证看得清 */
-function minCol(id: string) {
-  const m = /^(\d+)×(\d+)$/.exec(FORMS[id].size);
-  const r = m ? Number(m[1]) / Number(m[2]) : 1.6;
-  return r > 4 ? 560 : r > 1.3 ? 400 : 300;
-}
-
-/** 选中一张：放大，旁边只放尺寸和导出 */
-function viewFocus() {
-  const f = FORMS[state.form]; const v = curVariant(); const pane = $('#pane');
-  pane.innerHTML = `
-  <div class="focus">
-    <div class="focus-main">
-      <button class="back" id="back">← 全部风格</button>
-      <div class="stage" id="stage"><div class="loading">正在画…</div></div>
-    </div>
-    <aside class="side">
-      <div class="head"><h2>${esc(f.name)}</h2><p class="meta">${esc(THEME_ZH[state.theme] ?? state.theme)}${v ? ` · ${esc(VARIANT_ZH[state.form]?.[v] ?? v)}` : ''}</p></div>
-      ${f.variants?.length ? `<div class="grp"><h3>换个版式</h3><div class="chips" id="variants">${f.variants.map((x) => `<button class="chip ${x === v ? 'on' : ''}" data-var="${x}">${esc(VARIANT_ZH[state.form]?.[x] ?? x)}</button>`).join('')}</div></div>` : ''}
-      <div class="grp"><h3>尺寸</h3><div class="chips col" id="sizes">${SIZES.map(([k, n]) => { const [a, b] = n.split(' '); return `<button class="chip ${k === state.size ? 'on' : ''}" data-size="${k}">${esc(a)}${b ? `<small>${esc(b)}</small>` : ''}</button>`; }).join('')}</div></div>
-      ${state.form === 'tier' ? `<label class="switch"><input type="checkbox" id="dir" ${state.config.display?.director ? 'checked' : ''}><span>在图上写明我是主导者</span></label>` : ''}
-      <div class="actions">
-        <button class="btn primary" id="sv-png">保存图片</button>
-        <div class="links">
-          <button id="cp-png">复制图片</button>
-          <button id="cp-svg">复制 SVG</button>
-          ${state.form === 'tier' ? '<button id="cp-embed">网页嵌入代码</button>' : ''}
-          <button id="cp-md">复制 CREDITS.md</button>
-        </div>
-      </div>
-    </aside>
-  </div>`;
-  $('#back').onclick = () => { state.picked = false; viewWall(); };
-  ($('#variants') as HTMLElement | null)?.addEventListener('click', (e) => {
-    const b = (e.target as HTMLElement).closest('[data-var]') as HTMLElement | null; if (!b) return;
-    state.variant = b.dataset.var; viewFocus();
-  });
-  $('#sizes').onclick = (e) => {
-    const b = (e.target as HTMLElement).closest('[data-size]') as HTMLElement | null; if (!b) return;
-    state.size = b.dataset.size!; $('#sizes').querySelectorAll('[data-size]').forEach((x) => x.classList.toggle('on', x === b)); paintFocus();
-  };
-  ($('#dir') as HTMLInputElement | null)?.addEventListener('change', async (e) => {
-    const on = (e.target as HTMLInputElement).checked;
-    state.config.display = { ...(state.config.display ?? {}), director: on };
-    state.model = buildModel(state.raw, { director: on, lang: 'zh' });
-    await api('set_display_director', { projectId: state.current.id, on }).catch(() => {});
-    paintFocus();
-  });
-  $('#sv-png').onclick = savePng;
-  $('#cp-png').onclick = copyPng;
-  $('#cp-svg').onclick = () => copy(state.svg, 'SVG 已复制');
-  ($('#cp-embed') as HTMLElement | null)?.addEventListener('click', copyEmbed);
-  $('#cp-md').onclick = () => copy(mergeCreditsMd(null, creditsBlock(state.model!)), 'CREDITS.md 已复制');
-  paintFocus();
-}
-
-/** profile 要全部项目的模型；其余只要语言和版式 */
-async function ctxOf(id: string, variant?: string): Promise<Ctx> {
-  const ctx: Ctx = { lang: 'zh', variant };
-  if (id !== 'profile') return ctx;
-  if (!state.library) {
-    const all = await Promise.all(state.projects.map(async (p) => { try { return buildModel(await api('credits', { projectId: p.id }), { director: false, lang: 'zh' }); } catch { return null; } }));
-    state.library = all.filter(Boolean) as Model[];
+    if (id === state.selected) updateDock();
+    await new Promise(resolve => requestAnimationFrame(resolve));
   }
-  ctx.projects = state.library.length ? state.library : [state.model!];
-  ctx.person = state.raw?.directors?.[0]?.name ?? '';
-  return ctx;
+  if (state.unavailable.length) { const missing = $('#missing-info'); missing.hidden = false; missing.textContent = `${state.unavailable.length} 种作品还缺少对应记录`; missing.onclick = () => showPanel('等待记录', `<p>有对应记录后，这些作品会直接出现在这里。</p><ul>${state.unavailable.map(id => `<li><b>${esc(FORMS[id].name)}</b> · ${esc(FORMS[id].q)}</li>`).join('')}</ul>`); }
 }
-
-async function paintFocus() {
-  const out = $('#stage'); if (!out) return;
-  const token = ++state.token;
-  const id = state.form;
-  out.classList.add('busy');
-  let svg: string | null = null;
-  try {
-    const ctx = await ctxOf(id, state.variant);
-    if (state.size === 'native') svg = await renderSvg(id, state.model!, theme(), ctx);
-    else { const [w, h] = state.size.split('x').map(Number); svg = await renderSized(id, state.model!, theme(), w, h, ctx); }
-  } catch (e) { console.error(e); }
-  if (token !== state.token) return;
-  out.classList.remove('busy');
-  state.svg = svg ?? '';
-  out.innerHTML = svg ?? `<div class="empty-card"><b>这个项目的数据画不出这张图</b><span>${esc(whyEmpty(id))}</span></div>`;
-  for (const x of ['sv-png', 'cp-png', 'cp-svg']) ($(`#${x}`) as HTMLButtonElement).disabled = !svg;
+async function renderArtifact(id: string, model: Model, selectedTheme: ReturnType<typeof theme>, ctx: Ctx, size?: string) {
+  if (size && size !== 'native') { const [w, h] = size.split('x').map(Number); if (!(Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0)) throw new Error('请输入有效的宽和高'); return renderSized(id, model, selectedTheme, w, h, ctx); }
+  return renderSvg(id, model, selectedTheme, ctx);
 }
-function whyEmpty(id: string) {
-  if (id === 'profile') return '需要至少一个分析过的项目。';
-  if (id === 'lanes') return '需要本机有 agent 会话记录。';
-  if (id === 'versions') return '需要项目打过版本 tag。';
-  return '数据太少，换一张图试试。';
+function showSvg(item: HTMLElement, svg: string, id: string) {
+  const stage = item.querySelector<HTMLElement>('.art-stage')!, spec = motionSpec(svg, id); stage.style.aspectRatio = `${spec.width}/${spec.viewport}`;
+  stage.innerHTML = `<div class="art-motion" style="--travel:-${spec.travel / spec.height * 100}%">${svg}</div>`;
 }
-
-const fileName = () => `${state.model!.project || 'credits'}-${state.form}${state.variant ? '-' + state.variant : ''}.png`;
-async function savePng() {
-  if (!state.svg) return;
-  const png = await toPng(state.svg);
-  const path = await api('save_file', { name: fileName(), bytes: b64(png), mime: 'image/png' });
-  toast(`已保存到 ${path}`);
+function select(id: string) { state.selected = id; document.querySelectorAll<HTMLElement>('[data-artifact]').forEach(el => el.classList.toggle('selected', el.dataset.artifact === id)); updateDock(); }
+function updateDock() {
+  const ready = !!state.svgs.get(state.selected); $('#selection-name').textContent = state.selected ? `${FORMS[state.selected].name} · ${THEME_ZH[state.theme] ?? theme().name}` : '选择作品，或拖到这里导出';
+  document.querySelectorAll<HTMLButtonElement>('[data-format]').forEach(b => b.disabled = !ready || state.exporting);
 }
-async function copyPng() {
-  try {
-    const png = await toPng(state.svg);
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([png as BlobPart], { type: 'image/png' }) })]);
-    toast('图片已复制，可以直接粘贴');
-  } catch { toast('这里不能直接复制图片，请用「保存图片」'); }
+function endDrag() { document.body.classList.remove('dragging'); document.querySelectorAll('.drag-source,.drop-active').forEach(el => el.classList.remove('drag-source', 'drop-active')); }
+function paintStyles() {
+  $('#style-name').textContent = THEME_ZH[state.theme] ?? theme().name;
+  $('#styles').innerHTML = THEMES.map(t => `<button class="style-dot ${t.id === state.theme ? 'active' : ''}" data-theme="${t.id}" aria-label="${esc(THEME_ZH[t.id] ?? t.name)}" aria-pressed="${t.id === state.theme}" style="--swatch:${`linear-gradient(130deg,${t.bg} 0% 45%,${t.accent} 47% 52%,${t.surface} 54%)`};--dot-ink:${t.ink}"><span class="dot-art" style="font-family:${esc(t.display)}">${t.family === 'terminal' || t.family === 'crt' ? '>_' : 'Aa'}</span><span class="dot-label">${esc(THEME_ZH[t.id] ?? t.name)}</span></button>`).join('');
+  const model = state.model; if (model) void paintStylePreviews(model);
+  $('#styles').onclick = e => { const button = (e.target as HTMLElement).closest<HTMLElement>('[data-theme]'); if (!button || button.dataset.theme === state.theme) return; state.theme = button.dataset.theme!; localStorage.setItem('creditiaStudioTheme', state.theme); closePanel(); paintStyles(); paintWorkspace(); };
 }
-async function copyEmbed() {
-  const director = !!state.config.display?.director;
-  const s = native
-    ? await api('embed_snippet', { projectId: state.current.id, form: state.form, theme: state.theme, director })
-    : `<script type="module" src="https://cdn.jsdelivr.net/npm/@creditia/embed@0/dist/creditia-card.js"><\/script>\n<creditia-card src=".creditia/credits.json" form="${state.form}" theme="${state.theme}"${director ? ' director' : ''}></creditia-card>`;
-  copy(s, '嵌入代码已复制，贴到网页 HTML 里即可');
+let styleGeneration = 0;
+async function paintStylePreviews(model: Model) {
+  const generation = ++styleGeneration;
+  for (const t of THEMES) {
+    if (generation !== styleGeneration) return;
+    try {
+      const svg = await renderSvg('tier', model, t, { lang: 'zh' });
+      if (generation !== styleGeneration) return;
+      const dot = document.querySelector(`[data-theme="${t.id}"] .dot-art`);
+      if (svg && dot) dot.innerHTML = svg;
+    } catch { /* 圆点保留该主题的真实底色，作品区展示排版错误。 */ }
+  }
 }
-
-// ───────────────────────── 逐条明细 ─────────────────────────
-function viewDetail(v: HTMLElement) {
-  const raw = state.raw, m = state.model!;
-  const units: any[] = raw.units ?? [];
-  const groups: { title: string; date?: string; units: any[] }[] = [];
-  const unrel = units.filter((u) => !u.version);
-  if (unrel.length) groups.push({ title: raw.versions?.length ? '还没发版的' : '全部', units: unrel });
-  for (const ver of [...(raw.versions ?? [])].reverse()) { const us = units.filter((u) => u.version === ver.tag); if (us.length) groups.push({ title: ver.tag, date: ver.date, units: us }); }
-  const uid = (id: string) => (id.startsWith('pr:') ? `PR #${id.slice(3)}` : `提交 ${id.slice(2, 9)}`);
-  const legend = new Map<string, string>();
-  const shareBar = (u: any) => {
-    const by = new Map<string, number>();
-    for (const s of u.shares ?? []) { const c = (raw.contributors ?? []).find((x: any) => x.id === s.contributor); const k = c?.harness ?? (s.contributor === 'unattributed' ? 'unattributed' : 'human'); by.set(k, (by.get(k) ?? 0) + s.share); }
-    return `<div class="ubar">${[...by.entries()].sort((a, b) => b[1] - a[1]).map(([k, s]) => {
-      const name = k === 'unattributed' ? '认不出来' : k === 'human' ? '人' : (m.rows.find((r) => r.key === k)?.name ?? k);
-      const bg = k === 'unattributed' ? 'var(--unknown)' : famColor(k, theme());
-      legend.set(name, bg);
-      return `<i style="width:${(s * 100).toFixed(1)}%;background:${bg}" title="${esc(name)} ${Math.round(s * 100)}%"></i>`;
-    }).join('')}</div>`;
+function enlarge(id: string) { const svg = state.svgs.get(id); if (!svg) return; const panel = showPanel(FORMS[id].name, `<div class="large-preview">${svg}</div>`, 'preview-panel'); panel.querySelector('.large-preview')!.setAttribute('style', `background:${theme().bg}`); }
+function adjust(id: string) {
+  const form = FORMS[id], p = state.preferences[id] ?? {}, projectId = state.current?.id, epoch = state.epoch;
+  const variants = form.variants ?? [], sizes = [['native','作品原始比例'],['1200x630','横版 · 链接预览'],['1080x1350','竖版 · 社交帖子'],['1080x1920','手机全屏'],['1080x1080','正方形'],['custom','自定尺寸']];
+  const selectedSize = sizes.some(([v]) => v === (p.size ?? 'native')) ? (p.size ?? 'native') : 'custom';
+  const panel = showPanel(form.name, `${variants.length ? `<label>版式<select id="variant"><option value="">随风格</option>${variants.map(v => `<option value="${v}" ${v === p.variant ? 'selected' : ''}>${esc(VARIANT_ZH[id]?.[v] ?? v)}</option>`).join('')}</select></label>` : ''}<label>画幅<select id="size">${sizes.map(([v,n]) => `<option value="${v}" ${v === selectedSize ? 'selected' : ''}>${n}</option>`).join('')}</select></label><div class="custom-size" id="custom-size" hidden><label>宽<input id="width" type="number" value="${p.size?.split('x')[0] ?? 1200}"></label><span>×</span><label>高<input id="height" type="number" value="${p.size?.split('x')[1] ?? 800}"></label></div><p class="field-error" id="adjust-error" hidden></p><button class="primary" id="apply">应用到这张作品</button>`);
+  const size = panel.querySelector<HTMLSelectElement>('#size')!; const toggle = () => $('#custom-size').hidden = size.value !== 'custom'; size.onchange = toggle; toggle();
+  $('#apply').onclick = async () => {
+    const button = $('#apply') as HTMLButtonElement; button.disabled = true;
+    try {
+      const next = { variant: panel.querySelector<HTMLSelectElement>('#variant')?.value || undefined, size: size.value === 'custom' ? `${$<HTMLInputElement>('#width').value}x${$<HTMLInputElement>('#height').value}` : size.value };
+      const svg = await renderArtifact(id, state.model!, theme(), { ...context(id), variant: next.variant }, next.size);
+      if (!svg) throw new Error('还没有这种作品需要的记录');
+      if (state.current?.id !== projectId || state.epoch !== epoch || !button.isConnected || !panel.open) return;
+      state.preferences[id] = next; remember(); state.svgs.set(id, svg); const item = document.querySelector<HTMLElement>(`[data-artifact="${id}"]`); if (item) showSvg(item, svg, id); closePanel(); updateDock();
+    } catch (e) { if (button.isConnected) { $('#adjust-error').textContent = errorMessage(e); $('#adjust-error').hidden = false; } } finally { button.disabled = false; }
   };
-  const prs = units.filter((u) => String(u.id).startsWith('pr:')).length;
-  const body = groups.map((g) => `<div class="ver"><h3>${esc(g.title)}${g.date ? ` <span class="dim">${g.date}</span>` : ''}<span class="count">${g.units.length} 条</span></h3>
-      ${[...g.units].sort((a, b) => String(b.date).localeCompare(String(a.date))).map((u) => `
-      <div class="unit">
-        <div class="uinfo"><span class="uid mono">${esc(uid(String(u.id)))}</span><span class="utitle">${esc(String(u.title ?? '').replace(/\s*\(#\d+\)\s*$/, '').replace(/\s*Creditia-Harness:.*$/, ''))}</span><span class="ulead">${esc(unitLead(raw, u))}</span><span class="udate mono">${u.date}</span></div>
-        ${shareBar(u)}
-      </div>`).join('')}
-    </div>`).join('');
-  v.innerHTML = `
-  <div class="detail">
-    <div class="phead">
-      <div><h2>每个 PR / 提交是谁写的</h2><p class="meta">${prs ? `${prs} 个 PR，` : ''}${units.length - prs} 个直接提交。色条是这一条里各方写的代码占比。</p></div>
-      <div class="grow"></div>
-      <button class="btn" id="cp-md" title="可以贴进仓库根目录的 CREDITS.md">复制 CREDITS.md</button>
-      <button class="btn" id="finder">${revealLabel()}</button>
-    </div>
-    <div class="legend" id="legend"></div>
-    ${groups.length ? body : '<div class="empty">还没有记录。</div>'}
-  </div>`;
-  $('#legend').innerHTML = [...legend.entries()].map(([n, c]) => `<span><i style="background:${c}"></i>${esc(n)}</span>`).join('');
-  $('#cp-md').onclick = () => copy(mergeCreditsMd(null, creditsBlock(m)), 'CREDITS.md 已复制');
-  $('#finder').onclick = () => api('reveal', { path: state.current.path });
 }
-
-// ───────────────────────── 浮层：添加项目 / 设置 ─────────────────────────
-function sheet(html: string) {
-  const el = $('#sheet'); el.hidden = false;
-  el.innerHTML = `<div class="sheet-back" id="sheet-back"></div><div class="sheet" role="dialog">${html}<button class="x" id="sheet-x" title="关闭">×</button></div>`;
-  const close = () => { el.hidden = true; el.innerHTML = ''; document.removeEventListener('keydown', onKey); };
-  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
-  document.addEventListener('keydown', onKey);
-  $('#sheet-back').onclick = close; $('#sheet-x').onclick = close;
+async function exportSelected(format: ExportFormat) {
+  const svg = state.svgs.get(state.selected); if (!svg || state.exporting || !state.model) return;
+  const snapshot = { svg, form: state.selected, title: `${state.model.project} · ${FORMS[state.selected].name}`, theme: theme(), project: state.model.project };
+  state.exporting = true; updateDock(); toast(`正在制作 ${format.toUpperCase()}…`, true);
+  try {
+    const bytes = await encodeExport(snapshot.svg, format, toRaster, { title: snapshot.title, form: snapshot.form, background: snapshot.theme.bg, progress: value => toast(`正在制作动图 ${Math.round(value * 100)}%`, true) });
+    const file = `${snapshot.project}-${snapshot.form}-${snapshot.theme.id}.${format}`.replace(/[\\/:*?"<>|]/g, '-');
+    toast(await saveExport(file, bytes, EXPORTS.find(f => f.id === format)!.mime));
+  } catch (e) { toast(`导出失败：${errorMessage(e)}`, true); } finally { state.exporting = false; updateDock(); }
 }
-function addSheet() {
-  sheet(`<h2>添加项目</h2>
-    <p class="meta">在终端里进入项目文件夹运行这行，分析完会自动出现在左边。之后有新提交，再跑一次就会更新。</p>
-    <div class="row"><code id="cmd">${esc(analyzeCmd())}</code><button class="btn" id="cp-cmd">复制</button></div>`);
-  $('#cp-cmd').onclick = () => copy(analyzeCmd(), '命令已复制');
+async function boot() {
+  $('#project-chevron').innerHTML = icon('chevron',14); $('#people-button').innerHTML = icon('people'); $('#info-button').innerHTML = icon('info'); $('#refresh-button').innerHTML = icon('refresh');
+  $('#project-button').onclick = panels.projectMenu; $('#people-button').onclick = panels.peoplePanel; $('#info-button').onclick = panels.archivePanel; $('#refresh-button').onclick = panels.refresh;
+  $('.wordmark').onclick = e => { e.preventDefault(); $('#workspace').scrollTo({ top: 0, behavior: 'smooth' }); };
+  $('#exports').innerHTML = EXPORTS.map(f => `<button data-format="${f.id}" title="${f.description}" disabled>${icon('export',16)}<span>${f.label}</span></button>`).join('');
+  $('#exports').onclick = e => { const button = (e.target as HTMLElement).closest<HTMLElement>('[data-format]'); if (button) exportSelected(button.dataset.format as ExportFormat); };
+  $('#exports').addEventListener('dragover', e => { if (!e.dataTransfer?.types.includes('application/x-creditia-form')) return; e.preventDefault(); const button = (e.target as HTMLElement).closest<HTMLElement>('[data-format]'); document.querySelectorAll('.drop-active').forEach(x => x.classList.remove('drop-active')); button?.classList.add('drop-active'); e.dataTransfer.dropEffect = 'copy'; });
+  $('#exports').addEventListener('drop', e => { e.preventDefault(); const form = e.dataTransfer?.getData('application/x-creditia-form'); const button = (e.target as HTMLElement).closest<HTMLElement>('[data-format]'); endDrag(); if (form && state.svgs.has(form) && button) { select(form); exportSelected(button.dataset.format as ExportFormat); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') endDrag(); }); window.addEventListener('blur', endDrag);
+  for (const dialog of document.querySelectorAll('dialog')) dialog.addEventListener('click', e => { if (e.target === dialog) { const rect = dialog.getBoundingClientRect(); if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) dialog.close(); } });
+  paintStyles();
+  try {
+    const launch = await launchContext();
+    if (launch.theme && themeById(launch.theme)) { state.theme = launch.theme; paintStyles(); }
+    state.projects = await api('projects');
+    if (launch.repo) {
+      let project = state.projects.find(p => p.path === launch.repo || p.paths?.includes(launch.repo!));
+      if (!project) { const result = await api('analyze_project', { path: launch.repo }); state.projects = await api('projects'); project = state.projects.find(p => p.id === result.id); }
+      if (!project) throw new Error('项目尚未写入作品库');
+      await openProject(project);
+    } else {
+      const initial = state.projects.find(p => p.id === localStorage.getItem('creditiaStudioProject')) ?? state.projects[0];
+      if (initial) await openProject(initial); else empty();
+    }
+    if (launch.form && state.svgs.has(launch.form)) { select(launch.form); document.querySelector(`[data-artifact="${launch.form}"]`)?.scrollIntoView({ block: 'center' }); }
+  } catch (e) { empty(errorMessage(e)); }
 }
-async function settingsSheet() {
-  sheet(`<h2>设置与数据来源</h2>
-    <h3>从哪里认出 AI 写的代码</h3>
-    <p class="meta">creditia 只读本机这些工具的记录，不上传，也不保存你的代码和提示词。</p>
-    <div id="doc"><div class="loading">检查中…</div></div>
-    <h3>项目数据存在哪</h3><div class="row"><code id="libpath">…</code><button class="btn" id="lib-open">打开</button></div>
-    ${state.current ? `<h3>更新当前项目</h3><div class="row"><code id="cmd">${esc(analyzeCmd(state.current.path))}</code><button class="btn" id="cp-cmd">复制</button></div>` : ''}
-    <p class="meta foot">creditia 0.1.0</p>`);
-  ($('#cp-cmd') as HTMLElement | null)?.addEventListener('click', () => copy(analyzeCmd(state.current.path), '命令已复制'));
-  const lp = await api('library_path').catch(() => '');
-  $('#libpath').textContent = lp || '浏览器预览里没有';
-  $('#lib-open').onclick = () => (lp ? api('open_path', { path: lp }) : toast('浏览器预览里没有'));
-  const doc: any[] = await api('doctor').catch(() => []);
-  $('#doc').innerHTML = doc.length
-    ? doc.map((d) => `<div class="src"><i class="dot ${d.ok ? 'ok' : ''}"></i><b>${esc(d.name)}</b><span class="path">${esc(d.path)}</span><span class="q">${d.ok ? '能读到' : '没找到'}</span></div>`).join('')
-    : '<div class="meta">本机没找到任何 AI 编程工具的记录，只能按 git 提交信息推断。</div>';
-}
-
 boot();

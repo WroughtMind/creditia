@@ -1,9 +1,11 @@
 // creditia CLI：Rust 核心负责分析（透传），这里负责档案、导出、终端展示、打开 App。
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FORMS, renderSvg, renderSized, svgToPng, buildModel, THEMES, themeById, type Ctx, type Model } from '../../render/src/index.ts';
+import { FORMS, renderSvg, renderSized, svgToRaster, buildModel, THEMES, themeById, type Ctx, type Model } from '../../render/src/index.ts';
+import { encodeExport, EXPORTS, type ExportFormat } from '../../render/src/export.ts';
 import { badge } from '../../render/src/forms.ts';
 import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, fetchSegs } from '../../render/src/text.ts';
 import { BRANDS } from '../../render/src/brand.ts';
@@ -12,7 +14,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../..');
 
 // ───────────────────────── 参数 ─────────────────────────
-const SWITCHES = new Set(['json', 'fresh', 'force', 'github', 'all', 'yes', 'list', 'director', 'no-color', 'refresh']);
+const SWITCHES = new Set(['json', 'fresh', 'force', 'github', 'all', 'yes', 'list', 'people', 'show', 'no-color', 'refresh']);
 const argv = process.argv.slice(2);
 const cmd = argv[0] ?? '';
 const pos: string[] = [];
@@ -43,17 +45,19 @@ const USAGE = `用法：creditia <命令> [选项]
   stamp     --harness H [--model M] 给下一次提交盖章
   hook      install|uninstall       提交盖章 hook
   projects                          作品库里的项目
+  link      --path P [--repo P]   关联同一项目的副本或旧路径
+  people    --file FILE [--show]   保存用户确认的人员署名
 
 档案与展示
   doc            [--repo P] [--out CREDITS.md]           生成或更新 CREDITS.md（只改标记区间）
   release-notes  <tag|unreleased>                        该版本的 credits 段落
   pr-comment     <N>                                     该 PR 的一句话归因
-  export         --form F [--theme T] [--variant V] [--format F] [--out FILE] [--size WxH] [--lang zh|en] [--director]
+  export         --form F [--theme T] [--variant V] [--format svg|png|pdf|gif|html|md|json] [--out FILE] [--size WxH] [--lang zh|en] [--people]
   export         --list                                  全部形式和风格
   fetch          [--repo P]                              终端名片
   app            open [--form F] [--theme T]             在 App 里打开
 
-所有命令支持 --json。`;
+导出配合 --json 时须指定 --out，返回文件信息。分析可用 --branch 指定分支。`;
 
 // ───────────────────────── 核心二进制 ─────────────────────────
 function corePath(): string {
@@ -63,7 +67,7 @@ function corePath(): string {
   return exe;
 }
 function core(args: string[], inherit = true): { code: number; out: string } {
-  const r = spawnSync(corePath(), args, { stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'inherit'], encoding: 'utf8' });
+  const r = spawnSync(corePath(), args, { stdio: inherit ? 'inherit' : ['pipe', 'pipe', 'inherit'], input: args[0] === 'desktop-api' ? '{}' : undefined, encoding: 'utf8' });
   if (r.error) die(`找不到 creditia-core：${(r.error as any).message}\n先 cargo build --release，或设置 CREDITIA_CORE`);
   return { code: r.status ?? 1, out: r.stdout ?? '' };
 }
@@ -82,9 +86,7 @@ function repoOf(): string {
   const start = path.resolve(flags.repo ?? process.cwd());
   const top = sh(start, ['rev-parse', '--show-toplevel']);
   if (!top) die(`不是 git 仓库：${start}`);
-  const common = sh(top, ['rev-parse', '--git-common-dir']);
-  const main = common.endsWith('/.git') ? path.dirname(path.resolve(top, common)) : top;
-  return main;
+  return top;
 }
 function loadConfig(repo: string): any {
   const p = path.join(repo, '.creditia/config.json');
@@ -102,20 +104,24 @@ function loadCredits(repo: string, refresh = false): any {
 function modelOf(repo: string, refresh = false): { m: Model; cfg: any; raw: any } {
   const cfg = loadConfig(repo);
   const raw = loadCredits(repo, refresh);
-  const m = buildModel(raw, { director: on.has('director') || !!cfg.display?.director, lang: (flags.lang as 'zh' | 'en') ?? 'zh' });
+  const showPeople = on.has('people') || !!cfg.display?.people;
+  raw.people = showPeople ? (cfg.people ?? raw.people ?? []).map((p: any) => ({ ...p, name: cfg.privacy?.aliases?.[p.name] ?? p.name })) : [];
+  const m = buildModel(raw, { people: showPeople, lang: (flags.lang as 'zh' | 'en') ?? 'zh' });
   return { m, cfg, raw };
 }
 function write(out: string | undefined, data: string | Buffer) {
   if (!out) {
-    process.stdout.write(data);
+    if (json) console.log(JSON.stringify({ content: data.toString() }));
+    else process.stdout.write(data);
     return;
   }
   mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
   writeFileSync(out, data);
+  if (json) console.log(JSON.stringify({ path: path.resolve(out), bytes: Buffer.byteLength(data) }));
 }
 
 // ───────────────────────── 命令 ─────────────────────────
-const PASS = new Set(['discover', 'init', 'analyze', 'update', 'collect', 'doctor', 'blame', 'projects', 'stamp', 'hook', 'hook-trailers']);
+const PASS = new Set(['discover', 'init', 'analyze', 'update', 'collect', 'doctor', 'blame', 'projects', 'stamp', 'hook', 'hook-trailers', 'link', 'people']);
 
 async function main() {
   if (!cmd || cmd === 'help' || cmd === '-h' || cmd === '--help') return console.log(USAGE);
@@ -151,17 +157,24 @@ async function main() {
       return exportCmd();
     case 'fetch': {
       const { m } = modelOf(repoOf());
-      console.log(ansi(fetchSegs(m)));
+      console.log(json ? JSON.stringify({ project: m.project, lines: fetchSegs(m).map(line => line.map(s => s.text).join('')) }) : ansi(fetchSegs(m)));
       return;
     }
     case 'app': {
       const repo = repoOf();
-      const q = new URLSearchParams({ repo, form: flags.form ?? 'tier', theme: flags.theme ?? 'minimal-light' });
-      const url = `creditia://open?${q}`;
-      const opener = process.platform === 'darwin' ? ['open', url] : process.platform === 'win32' ? ['cmd', '/c', 'start', '', url] : ['xdg-open', url];
-      const r = spawnSync(opener[0], opener.slice(1), { stdio: 'ignore' });
-      const ok = r.status === 0;
-      console.log(json ? JSON.stringify({ url, opened: ok }) : ok ? `已打开 ${url}` : `无法打开 ${url}；请安装 creditia App，或用 creditia export 导出图片`);
+      if (pos[0] && pos[0] !== 'open') die('用法：creditia app open');
+      const appArgs = ['--repo', repo, '--form', flags.form ?? 'tier', '--theme', flags.theme ?? 'minimal-light'];
+      const target = path.join(ROOT, 'apps/desktop/src-tauri/target/release');
+      const candidates = [process.env.CREDITIA_APP, ...(process.platform === 'darwin' ? [path.join(target, 'bundle/macos/creditia.app'), '/Applications/creditia.app', path.join(homedir(), 'Applications/creditia.app')] : []), path.join(target, process.platform === 'win32' ? 'creditia-app.exe' : 'creditia-app')];
+      const app = candidates.find(p => p && existsSync(p));
+      if (!app) die('没有找到桌面 App。请先构建或安装，并可用 CREDITIA_APP 指定应用完整路径。');
+      if (process.platform === 'darwin' && app.endsWith('.app')) {
+        const result = spawnSync('open', ['-n', app, '--args', ...appArgs], { stdio: 'pipe', encoding: 'utf8' });
+        if (result.status !== 0) die(result.stderr || '启动桌面 App 失败');
+      } else {
+        await new Promise<void>((resolve, reject) => { const child = spawn(app, appArgs, { detached: true, stdio: 'ignore' }); child.once('error', reject); child.once('spawn', () => { child.unref(); resolve(); }); });
+      }
+      console.log(json ? JSON.stringify({ path: app, repo, opened: true }) : `已打开 ${repo}`);
       return;
     }
     default:
@@ -174,7 +187,7 @@ async function exportCmd() {
     const rows = Object.entries(FORMS).map(([id, f]) => `${id.padEnd(10)} ${f.name.padEnd(8)} ${f.q.padEnd(16)} ${f.size}${f.variants ? `  版式：${f.variants.join(' / ')}` : ''}`);
     const themes = THEMES.map((t) => `${t.id.padEnd(14)} ${t.name}`);
     if (json) return console.log(JSON.stringify({ forms: Object.entries(FORMS).map(([id, f]) => ({ id, name: f.name, question: f.q, size: f.size, variants: f.variants ?? [] })), themes: THEMES.map((t) => ({ id: t.id, name: t.name })) }));
-    console.log(`形式\n${rows.join('\n')}\n\n风格\n${themes.join('\n')}\n\n格式：svg png embed html md json（徽章：--form badge --format svg|md）`);
+    console.log(`形式\n${rows.join('\n')}\n\n风格\n${themes.join('\n')}\n\n格式：svg png pdf gif html md json（徽章：--form badge --format svg|md）`);
     return;
   }
   const repo = repoOf();
@@ -183,35 +196,31 @@ async function exportCmd() {
   const format = flags.format ?? (form === 'badge' ? 'svg' : 'svg');
   const { m, raw } = modelOf(repo, on.has('refresh'));
   const lang = (flags.lang as 'zh' | 'en') ?? 'zh';
+  if (json && !flags.out) die('导出配合 --json 时请指定 --out；结果将返回文件路径');
 
   if (form === 'badge') {
+    if (!['svg', 'md'].includes(format)) die('徽章支持 svg 或 md 格式');
     const svg = badge(m, theme);
     if (format === 'md') {
       const file = flags.out ?? 'assets/creditia-badge.svg';
       write(file, svg);
-      console.log(`![built with](${file})`);
+      if (!json) console.log(`![built with](${file})`);
       return;
     }
     return write(flags.out, svg);
   }
   if (format === 'json') return write(flags.out, JSON.stringify(raw, null, 2) + '\n');
   if (format === 'md') return write(flags.out, creditsBlock(m) + '\n');
-  if (format === 'embed') {
-    const src = flags.src ?? '/.creditia/credits.json';
-    const snippet = `<script type="module" src="https://cdn.jsdelivr.net/npm/@creditia/embed@0/dist/creditia-card.js"></script>\n<creditia-card src="${src}" form="${form}" theme="${theme.id}"${on.has('director') ? ' director' : ''}></creditia-card>\n`;
-    if (json) return console.log(JSON.stringify({ html: snippet, src, form, theme: theme.id }));
-    return write(flags.out, snippet);
-  }
+  if (!EXPORTS.some(f => f.id === format)) die(`未知格式：${format}；使用 svg、png、pdf、gif、html、md 或 json`);
   if (!FORMS[form]) die(`未知形式：${form}；creditia export --list 查看`);
 
   // 需要额外数据的形式
   const ctx: Ctx = { lang, variant: flags.variant };
   if (form === 'profile') {
-    const r = core(['projects', '--json'], false);
-    const list: any[] = r.code === 1 ? [] : JSON.parse(r.out).projects ?? [];
-    ctx.projects = list.map((p) => path.join(p.path, '.creditia/credits.json')).filter(existsSync).map((p) => buildModel(JSON.parse(readFileSync(p, 'utf8')), { director: false, lang }));
-    if (!ctx.projects.length) ctx.projects = [m];
-    ctx.person = raw.directors?.[0]?.name ?? '';
+    const r = core(['desktop-api', 'library_credits', '--json'], false);
+    if (r.code === 1) die('无法读取作品库');
+    ctx.projects = JSON.parse(r.out).projects.map((record: any) => buildModel(record, { people: false, lang }));
+    ctx.person = m.signature;
   }
   if (form === 'blame') {
     const q = flags.line ?? die('逐行溯源需要 --line <路径>:<行号>');
@@ -223,16 +232,16 @@ async function exportCmd() {
   let svg: string | null;
   if (flags.size) {
     const [w, h] = flags.size.split(/[x×]/).map(Number);
-    if (!w || !h) die('--size 形如 1200x630');
+    if (!(Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0)) die('--size 需要有效的正数尺寸，例如 1200x630');
     svg = await renderSized(form, m, theme, w, h, ctx);
   } else {
     svg = await renderSvg(form, m, theme, ctx);
   }
   if (!svg) die(`${form} 需要的数据不够（例如没有 tag、没有会话记录），没有出图`);
-  if (format === 'svg') return write(flags.out, svg);
-  if (format === 'png') return write(flags.out, svgToPng(svg, flags.width ? Number(flags.width) : undefined));
-  if (format === 'html') return write(flags.out, `<!doctype html><meta charset="utf-8"><style>body{margin:0;display:grid;place-items:center;min-height:100vh;background:${theme.bg}}svg{max-width:100%;height:auto}</style>${svg}`);
-  die(`未知格式：${format}`);
+  const width = flags.width ? Number(flags.width) : undefined;
+  if (width !== undefined && !(Number.isFinite(width) && width > 0)) die('--width 需要有效的正数');
+  const bytes = await encodeExport(svg, format as ExportFormat, svgToRaster, { title: `${m.project} · ${FORMS[form].name}`, form, background: theme.bg, width });
+  return write(flags.out, Buffer.from(bytes));
 }
 
 // ───────────────────────── 终端颜色 ─────────────────────────
