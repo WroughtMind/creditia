@@ -4,20 +4,52 @@
   "description": "Credits for work made with agents. 给人和 AI agent 一起做出的作品署名。",
   "license": "MIT",
   "type": "module",
-  "bin": { "creditia": "./bin/creditia.mjs" },
-  "engines": { "node": ">=22.18" },
-  "files": ["bin", "src", "../render/src", "../render/assets"],
+  "bin": {
+    "creditia": "./bin/creditia.mjs"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "files": [
+    "bin",
+    "src",
+    "../render/src",
+    "../render/assets",
+    "../render/fixtures"
+  ],
   "scripts": {
     "test": "node --test test/*.test.ts"
   },
   "dependencies": {
-    "@expo-google-fonts/instrument-serif": "^0.4.1",
+    "@expo-google-fonts/anton": "^0.4.2",
+    "@expo-google-fonts/bangers": "^0.4.1",
+    "@expo-google-fonts/chakra-petch": "^0.4.1",
+    "@expo-google-fonts/cinzel": "^0.4.2",
+    "@expo-google-fonts/cormorant-garamond": "^0.4.1",
+    "@expo-google-fonts/courier-prime": "^0.4.1",
+    "@expo-google-fonts/dela-gothic-one": "^0.4.1",
+    "@expo-google-fonts/dotgothic16": "^0.4.2",
+    "@expo-google-fonts/im-fell-english": "^0.4.0",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
-    "@expo-google-fonts/newsreader": "^0.4.1",
+    "@expo-google-fonts/jost": "^0.4.2",
+    "@expo-google-fonts/klee-one": "^0.4.2",
+    "@expo-google-fonts/long-cang": "^0.4.1",
+    "@expo-google-fonts/ma-shan-zheng": "^0.4.3",
     "@expo-google-fonts/noto-sans-sc": "^0.4.4",
     "@expo-google-fonts/noto-serif-sc": "^0.4.4",
+    "@expo-google-fonts/oswald": "^0.4.2",
+    "@expo-google-fonts/pinyon-script": "^0.4.1",
+    "@expo-google-fonts/pirata-one": "^0.4.1",
+    "@expo-google-fonts/rajdhani": "^0.4.1",
+    "@expo-google-fonts/share-tech-mono": "^0.4.1",
+    "@expo-google-fonts/shippori-mincho-b1": "^0.4.1",
+    "@expo-google-fonts/unifrakturmaguntia": "^0.4.1",
+    "@expo-google-fonts/zcool-xiaowei": "^0.4.1",
+    "@expo-google-fonts/zen-antique": "^0.4.2",
+    "@expo-google-fonts/zen-maru-gothic": "^0.4.2",
+    "@expo-google-fonts/zhi-mang-xing": "^0.4.1",
     "@resvg/resvg-js": "^2.6.2",
-    "satori": "^0.38.2"
+    "gifenc": "^1.0.3"
   }
 }
