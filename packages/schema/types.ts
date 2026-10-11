@@ -11,7 +11,6 @@ export interface Credits {
   head?: string;
   versions?: { tag: string; date: DateStr }[];
   coverage?: { name?: string; from: DateStr; to: DateStr; best: Evidence; verifiedShare?: number }[];
-  directors?: { id: string; name: string }[];
   contributors: Contributor[];
   totals: Partial<Totals>;
   breakdown: Breakdown[];
@@ -20,7 +19,7 @@ export interface Credits {
   days?: { date: DateStr; by: Record<string, number> }[];
   clock?: number[][];
   files?: { path?: string; lines: number; by: Record<string, number> }[];
-  sessions?: { contributor: string; start: number; end: number; tokens?: number; review?: boolean }[];
+  sessions?: { contributor: string; start: number; end: number; tokens?: number; review?: boolean; prompts?: number }[];
   units: Unit[];
   conflictLines?: number;
 }
@@ -33,7 +32,9 @@ export interface Contributor {
   family?: string | null;
   where?: 'local' | 'cloud';
   name?: string;
-  roles: ('director' | 'author' | 'reviewer' | 'planner')[];
+  roles: ('author' | 'reviewer' | 'planner')[];
+  /** 谁提供的模型：anthropic、aws-bedrock、google-vertex、openrouter、relay、自定义渠道名 */
+  provider?: string;
   reviews?: number;
 }
 

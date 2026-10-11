@@ -1,67 +1,44 @@
 # @creditia/render
 
-`credits.json` → 对象树 → Satori → SVG → @resvg/resvg-js → PNG。纯本地，无网络请求。CLI 导出、App 预览、批量样张都走这里。
+`credits.json` → 展示模型 → **SVG 场景**（风格 × 作品）→ PNG / SVG / PDF / GIF / HTML。纯本地，无网络请求。CLI、App、网页组件、样张都走这里。
 
 ## 用法
 
 ```bash
 cd packages/render && npm install
-node src/gallery.ts ../../spike/out gallery     # 全部形式 × 全部风格 → gallery/index.html
-FORMS=tier,roll THEMES=minimal-light,film node src/gallery.ts ../../spike/out gallery
-DIRECTOR=1 node src/gallery.ts ...              # 显示主导者署名（默认不显示）
+npm test                         # 全部作品 × 全部版式 × 全部风格
+npm run gallery                  # 样张 → gallery/index.html（fixtures/lumen.json 是虚构的样例档案）
+node src/gallery.ts my/credits.json out ink,cinema   # 指定档案、输出目录、风格
 ```
 
-需要 Node ≥ 22.18（直接运行 .ts）。`gallery/` 已被忽略。
-
-程序里用：
+需要 Node ≥ 22.18（直接运行 .ts）。
 
 ```ts
-import { buildModel, renderSvg, svgToPng, themeById, FORMS } from '@creditia/render/src/index.ts';
-const m = buildModel(credits, { director: false, lang: 'zh' });
-const svg = await renderSvg('tier', m, themeById('minimal-light')!, { lang: 'zh' });
+import { buildModel, styleById, art, frames, exporter } from '@creditia/render/src/index.ts';
+const m = buildModel(credits, { lang: 'zh', named: false, sign: '' });
+const a = art('roll', m, styleById('ukiyoe')!, { variant: 'vertical' });   // { w, h, svg, hits, bg, title }
+writeFileSync('roll.png', exporter.png(a, 2));
+writeFileSync('roll.svg', exporter.svg(a));                              // 文字已转成路径
+writeFileSync('tier.gif', exporter.gif(frames('tier', m, styleById('cyber')!)));
+writeFileSync('roll.html', exporter.html([a], { title: a.title }));      // 单文件，悬停看细节
 ```
 
 ## 结构
 
 | 文件 | 作用 |
 |---|---|
-| `src/index.ts` | 入口：`FORMS` 清单、`renderSvg` / `renderSized` / `svgToPng`、字体加载 |
-| `src/data.ts` | `credits.json` → 展示模型：按工具聚合、最多 6 个具名贡献方 + 其他 + 未确认、主要模型按新增行排序 |
-| `src/themes.ts` | 7 套设计 token：Minimal 亮 / 暗、Film Credits、Terminal、Glass、Editorial、Mono |
-| `src/brand.ts` | 各家 logo（`assets/logos/`）与熟悉的品牌色 |
-| `src/ui.ts` | Satori 对象树的最小工具：标签、条、logo、背景、面板 |
-| `src/forms.ts` | 18 种形式的版式 |
-| `src/text.ts` | 文本形式：`CREDITS.md`（只改标记区间）、Release notes、PR 评论、终端名片、逐行溯源 |
-| `src/gallery.ts` | 样张总览页 |
-| `render.mjs`、`src/main.ts`、`src/model.ts`、`src/theme.ts`、`src/v2/` | 阶段 0b 的旧样张代码，待删除 |
+| `src/data.ts` | `credits.json` → 展示模型：agent 按工具归组（含模型、渠道、留存、逐行证据比例）；人的部分（指令、审阅、亲手写的、取舍）；不再有「主导者」 |
+| `src/svg.ts` | SVG 场景：文字度量（`metrics.json`）、竖排、交互区域（hits）、基础图形 |
+| `src/style.ts` | 风格接口：底、卡片面、标题、条形、标记、分隔、斜纹、配色；`reserve` 声明底图占用的边距 |
+| `src/styles/*.ts` | 16 个风格：极简、暗室、液态玻璃、水墨、浮世绘、古籍、黄金时代、巴洛克、魔典、手稿、对称、剪纸、夏日、漫画、赛博、终端 |
+| `src/pieces/*.ts` | 作品：署名榜（6 种版式）、片尾字幕（7 种）、分享图、人的部分、小票（2 种）、徽章（3 种）、署名行、9 种统计图 |
+| `src/registry.ts` | 作品清单、版式名、`art()` / `frames()` |
+| `src/export.ts` | 导出：PNG、扁平 SVG、PDF（无依赖的写入器）、GIF（gifenc）、HTML 单文件、常用画幅 |
+| `src/interact.ts` | 悬停交互（App 与导出的 HTML 共用一份代码） |
+| `src/text.ts` | CREDITS.md、版本说明、PR 评论、嵌入代码、终端名片 |
+| `src/fonts.ts` | 字体清单；Node 端按目录查找 .ttf（不依赖文件名大小写） |
+| `tools/` | 生成度量表、logo 模块、样例档案 |
 
-## 形式
+## 加一个风格
 
-一眼看懂：tier、share（分享图）、byline（署名行）、badge（徽章，原生 SVG）
-有情绪：roll（片尾字幕）、receipt（精力小票）、ribbon（时间织带）、mosaic（代码马赛克）、profile（个人履历卡）、fetch（终端名片）
-融进工作流：CREDITS.md、PR 评论、Release notes、blame（逐行溯源）、app（App 内致谢页）
-统计图：waffle、donut、area、lanes、clock、versions、settle
-
-## 收敛规则
-
-- 一张图里，每条信息只出现一次。
-- 不写凑数的话；不放占位（字母 logo、"暂无数据"、水印都不出现）。
-- 每种形式只回答它那一个问题：占比只在 tier、华夫饼、环形图里出现；小票只列投入；片尾字幕只写角色和名字。
-- 数据不可信就不画。
-- 主导者署名默认不显示（`director: true` 才出现）。
-
-## 字体（均为 npm 包内 .ttf，Satori 可用，SIL OFL 1.1）
-
-| 用途 | 字体 | 包 |
-|---|---|---|
-| 正文、标签 | Inter | `@expo-google-fonts/inter` |
-| 中文 | Noto Sans SC / Noto Serif SC | `@expo-google-fonts/noto-sans-sc`、`noto-serif-sc` |
-| 数字、等宽 | JetBrains Mono | `@expo-google-fonts/jetbrains-mono` |
-| Film Credits 大字 | Instrument Serif | `@expo-google-fonts/instrument-serif` |
-| Editorial 大字 | Newsreader | `@expo-google-fonts/newsreader` |
-
-Noto SC 每个字重 10 MB 以上，正式发布前要子集化。
-
-## Logo
-
-单色 SVG 放在 `assets/logos/`，来源见 `assets/logos/SOURCES.md`。只用于识别对应工具，各家使用规范发布前逐家核对。暗色底下 Grok（X）、Kimi 用浅色。
+在 `src/styles/` 里 `defineStyle({...})`：给出配色、字体、`dot()`（App 左下角的小圆点）和需要的钩子（`ground`、`plate`、`title`、`bar`、`mark`、`rule`……），再加进 `styles/index.ts`。字体加进 `src/fonts.ts` 后运行 `npm run metrics`。`npm test` 会把它和每一种作品、每一种版式都画一遍。
