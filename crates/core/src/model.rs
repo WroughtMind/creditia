@@ -13,6 +13,12 @@ pub enum Src {
     Cursor,
     Grok,
     Kimi,
+    Gemini,
+    Qwen,
+    OpenCode,
+    Cline,
+    Roo,
+    Kilo,
 }
 
 impl Src {
@@ -23,10 +29,19 @@ impl Src {
             Src::Cursor => "cursor",
             Src::Grok => "grok",
             Src::Kimi => "kimi",
+            Src::Gemini => "gemini",
+            Src::Qwen => "qwen",
+            Src::OpenCode => "opencode",
+            Src::Cline => "cline",
+            Src::Roo => "roo",
+            Src::Kilo => "kilo",
         }
     }
-    pub fn all() -> [Src; 5] {
-        [Src::Codex, Src::Claude, Src::Cursor, Src::Grok, Src::Kimi]
+    pub fn all() -> [Src; 11] {
+        [Src::Codex, Src::Claude, Src::Cursor, Src::Grok, Src::Kimi, Src::Gemini, Src::Qwen, Src::OpenCode, Src::Cline, Src::Roo, Src::Kilo]
+    }
+    pub fn from_harness(h: &str) -> Option<Src> {
+        Src::all().into_iter().find(|s| s.harness() == h)
     }
 }
 
@@ -58,6 +73,9 @@ pub struct Session {
     /// codex-auto-review 这类只审阅不写代码的会话
     pub reviewer: bool,
     pub has_content: bool,
+    /// 谁提供的模型：官方、云厂商（bedrock / vertex / azure）、聚合（openrouter）、中转站（relay:<主机>）
+    #[serde(default)]
+    pub provider: Option<String>,
 }
 
 /// 按来源文件分组缓存，文件没变就不重新解析
@@ -194,12 +212,61 @@ pub struct Registry {
     by_id: HashMap<String, usize>,
 }
 
-/// 不同工具记录的同一模型名不一样：去掉 `provider/` 前缀、统一小写；Claude 系列官方 id 用横线
-/// （`anthropic/claude-fable-5.1` → `claude-fable-5-1`），GPT 系列官方名本身带点（`gpt-5.6-sol`），保留
+/// 不同工具、不同渠道记录的同一模型名不一样，统一成官方 id：
+/// - 去掉渠道前缀：`anthropic/`、`openrouter/anthropic/`、`bedrock/`、`us.anthropic.`、`vertex_ai/`……
+/// - 去掉渠道后缀：Bedrock 的 `-v1:0`、Vertex 的 `@20250514`、OpenRouter 的 `:free` / `:thinking`、中转站常见的 `-thinking`
+/// - Claude 系列官方 id 用横线（`claude-fable-5.1` → `claude-fable-5-1`），去掉 8 位日期后缀；GPT 系列官方名本身带点（`gpt-5.6-sol`），保留
 pub fn normalize_model(m: &str) -> String {
-    let m = m.trim().to_lowercase();
-    let m = m.rsplit('/').next().unwrap_or(&m).to_string();
-    if m.starts_with("claude") { m.replace('.', "-") } else { m }
+    let mut m = m.trim().to_lowercase();
+    // 中转站常见的方括号标签：`[逆向]claude-…`、`【官方】gpt-…`
+    while let Some(end) = m.find(']').or_else(|| m.find('】')) {
+        if m.starts_with('[') || m.starts_with('【') { m = m[end + m[end..].chars().next().unwrap().len_utf8()..].trim().to_string(); } else { break; }
+    }
+    m = m.rsplit('/').next().unwrap_or(&m).to_string();
+    for p in ["us.anthropic.", "eu.anthropic.", "apac.anthropic.", "global.anthropic.", "anthropic.", "openai.", "google.", "xai.", "moonshotai.", "deepseek."] {
+        if let Some(x) = m.strip_prefix(p) { m = x.to_string(); }
+    }
+    if let Some((a, _)) = m.split_once('@') { m = a.to_string(); }
+    if let Some((a, _)) = m.split_once(':') { m = a.to_string(); }
+    for suf in ["-v1", "-v2", "-thinking", "-latest"] {
+        if let Some(x) = m.strip_suffix(suf) { m = x.to_string(); }
+    }
+    if m.starts_with("claude") {
+        m = m.replace('.', "-");
+        // 去掉日期后缀 claude-sonnet-4-5-20250929 → claude-sonnet-4-5
+        if let Some((a, d)) = m.rsplit_once('-') { if d.len() == 8 && d.chars().all(|c| c.is_ascii_digit()) { m = a.to_string(); } }
+    }
+    m
+}
+
+/// 从模型串本身能看出的渠道（看不出就 None，不猜）
+pub fn provider_hint(raw: &str) -> Option<String> {
+    let l = raw.trim().to_lowercase();
+    if l.starts_with("openrouter/") || l.contains(":free") { return Some("openrouter".into()); }
+    if l.starts_with("bedrock/") || l.starts_with("us.anthropic.") || l.starts_with("eu.anthropic.") || l.starts_with("apac.anthropic.") || l.starts_with("global.anthropic.") || l.starts_with("anthropic.") || l.ends_with("-v1:0") { return Some("aws-bedrock".into()); }
+    if l.starts_with("vertex_ai/") || l.starts_with("vertex/") || (l.starts_with("claude") && l.contains('@')) { return Some("google-vertex".into()); }
+    if l.starts_with("azure/") { return Some("azure".into()); }
+    None
+}
+
+/// 模型出自哪家（不是谁提供的）：用于分组和配色，按名字规则判断，不调用任何服务
+pub fn vendor(model: &str) -> &'static str {
+    let m = normalize_model(model);
+    let has = |s: &str| m.contains(s);
+    if m.starts_with("gpt") || has("codex") || m.starts_with("o1") || m.starts_with("o3") || m.starts_with("o4") || has("chatgpt") { "openai" }
+    else if has("claude") || has("opus") || has("sonnet") || has("fable") || has("haiku") { "anthropic" }
+    else if has("gemini") || has("gemma") { "google" }
+    else if has("grok") { "xai" }
+    else if has("kimi") || m.starts_with("k2") || m.starts_with("k3") || has("moonshot") { "moonshot" }
+    else if has("deepseek") { "deepseek" }
+    else if has("qwen") || has("qwq") { "alibaba" }
+    else if has("glm") || has("zhipu") { "zhipu" }
+    else if has("minimax") || m.starts_with("abab") { "minimax" }
+    else if has("doubao") || has("seed") { "bytedance" }
+    else if has("mistral") || has("codestral") || has("devstral") { "mistral" }
+    else if has("llama") { "meta" }
+    else if has("composer") || m == "auto" || m == "default" { "cursor" }
+    else { "unknown" }
 }
 
 impl Registry {
@@ -274,7 +341,12 @@ pub fn area(rel: &str, binary: bool) -> &'static str {
 /// 默认排除：lockfile、构建产物、压缩产物
 pub fn excluded(rel: &str) -> bool {
     let f = rel.rsplit('/').next().unwrap_or(rel);
-    matches!(f, "package-lock.json" | "yarn.lock" | "pnpm-lock.yaml" | "Package.resolved" | "Cargo.lock" | "bun.lockb")
+    matches!(f, "package-lock.json" | "yarn.lock" | "pnpm-lock.yaml" | "Package.resolved" | "Cargo.lock" | "bun.lockb" | "bun.lock" | "go.sum" | "poetry.lock" | "uv.lock" | "Gemfile.lock" | "composer.lock" | "Podfile.lock" | "pubspec.lock" | "flake.lock")
+        || f.ends_with(".pb.go")
+        || f.ends_with("_pb2.py")
+        || rel.starts_with("vendor/")
+        || rel.contains("/vendor/")
+        || rel.starts_with("third_party/")
         || rel.contains("/dist/")
         || rel.starts_with("dist/")
         || rel.contains("/build/")
@@ -326,6 +398,17 @@ mod tests {
         assert_eq!(normalize_model("claude-fable-5-1"), "claude-fable-5-1");
         assert_eq!(normalize_model("gpt-5.6-sol"), "gpt-5.6-sol");
         assert_eq!(normalize_model("GPT-6"), "gpt-6");
+        assert_eq!(normalize_model("us.anthropic.claude-sonnet-4-5-20250929-v1:0"), "claude-sonnet-4-5");
+        assert_eq!(normalize_model("openrouter/anthropic/claude-opus-5.5"), "claude-opus-5-5");
+        assert_eq!(normalize_model("claude-opus-4@20250514"), "claude-opus-4");
+        assert_eq!(normalize_model("[逆向]claude-fable-5-1-thinking"), "claude-fable-5-1");
+        assert_eq!(normalize_model("deepseek/deepseek-chat:free"), "deepseek-chat");
+        assert_eq!(provider_hint("us.anthropic.claude-sonnet-4-5-20250929-v1:0").as_deref(), Some("aws-bedrock"));
+        assert_eq!(provider_hint("openrouter/x/y").as_deref(), Some("openrouter"));
+        assert_eq!(provider_hint("claude-opus-5-5"), None);
+        assert_eq!(vendor("kimi-k3"), "moonshot");
+        assert_eq!(vendor("qwen3-coder-plus"), "alibaba");
+        assert_eq!(vendor("glm-5"), "zhipu");
         let mut r = Registry::default();
         let a = r.agent("claude-code", Some("anthropic/claude-fable-5.1"));
         let b = r.agent("claude-code", Some("claude-fable-5-1"));

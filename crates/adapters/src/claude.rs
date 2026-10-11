@@ -44,6 +44,7 @@ fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
     let (mut sid, mut start, mut end, mut prompts, mut tokens) = (String::new(), i64::MAX, 0i64, 0i64, 0i64);
     let mut models: HashMap<String, usize> = HashMap::new();
     let mut seen_msg: HashSet<String> = HashSet::new();
+    let mut providers: HashMap<String, usize> = HashMap::new();
     for line in text.lines() {
         let Ok(o) = serde_json::from_str::<Value>(line) else { continue };
         if let Some(cwd) = o["cwd"].as_str() {
@@ -76,6 +77,9 @@ fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
             continue;
         }
         if let Some(id) = m["id"].as_str() {
+            if let Some(p) = claude_provider(id, model) {
+                *providers.entry(p).or_default() += 1;
+            }
             if seen_msg.insert(id.to_string()) {
                 let u = &m["usage"];
                 tokens += ["input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"].iter().map(|k| u[*k].as_i64().unwrap_or(0)).sum::<i64>();
@@ -110,7 +114,25 @@ fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
     }
     let model = models.into_iter().max_by_key(|(_, n)| *n).map(|(m, _)| m).unwrap_or_default();
     if start <= end {
-        g.sessions.push(Session { src: Src::Claude, id: sid, model, start, end, tokens, branch: None, prompts, reviewer: false, has_content: true });
+        let provider = providers.into_iter().max_by_key(|(_, n)| *n).map(|(p, _)| p);
+        g.sessions.push(Session { src: Src::Claude, id: sid, model, start, end, tokens, branch: None, prompts, reviewer: false, has_content: true, provider });
+    }
+}
+
+/// Claude Code 的渠道：Bedrock、Vertex 返回的消息 id 有固定前缀；不是 `msg_` 开头说明经过了改写响应的中转站。
+/// 其余（含透传官方响应的中转站）看不出来，就不写，不猜
+fn claude_provider(id: &str, model: &str) -> Option<String> {
+    if let Some(p) = creditia_core::model::provider_hint(model) {
+        return Some(p);
+    }
+    if id.starts_with("msg_bdrk_") {
+        Some("aws-bedrock".into())
+    } else if id.starts_with("msg_vrtx_") {
+        Some("google-vertex".into())
+    } else if !id.starts_with("msg_") {
+        Some("relay".into())
+    } else {
+        None
     }
 }
 

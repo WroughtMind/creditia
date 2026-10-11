@@ -7,8 +7,25 @@ use std::collections::{HashMap, HashSet};
 const WINDOW_BEFORE: i64 = 14 * 86400;
 const WINDOW_AFTER: i64 = 3600;
 
+/// 归因口径
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Strictness {
+    /// 只认逐行证据和明确声明（盖章、agent 邮箱、Co-authored-by、bot）
+    Strict,
+    /// 默认：再加同一提交内的延伸（同提交里有逐行证据的 agent 认领没对上的行）和分支前缀（标为推断）
+    Standard,
+    /// 再加同时间窗口的会话（标为推断）
+    Loose,
+}
+impl Strictness {
+    pub fn parse(s: &str) -> Strictness {
+        match s { "strict" => Strictness::Strict, "loose" => Strictness::Loose, _ => Strictness::Standard }
+    }
+}
+
 pub struct Engine<'a> {
     pub cfg: &'a Config,
+    pub strictness: Strictness,
     pub idx: &'a Index,
     pub sessions: &'a [Session],
     pub reg: Registry,
@@ -26,7 +43,7 @@ impl<'a> Engine<'a> {
         }
         if cfg.directors.is_empty() {
             // 没有配置主导者时仍保留 0 号位，避免 director() 越界
-            reg.human("h:unknown", "");
+            reg.human("h:me", "me");
         }
         reg.unattributed();
         let director_emails = cfg.director_emails().into_iter().collect();
@@ -38,7 +55,7 @@ impl<'a> Engine<'a> {
                 }
             }
         }
-        Engine { cfg, idx, sessions, reg, director_emails, unit_branch, stamps }
+        Engine { cfg, strictness: Strictness::parse(&cfg.level), idx, sessions, reg, director_emails, unit_branch, stamps }
     }
 
     fn director(&self) -> usize {
@@ -122,18 +139,20 @@ impl<'a> Engine<'a> {
         CommitAttr { lines: out, hits, conflicts, main, tab_lines, reason }
     }
 
-    /// 没有逐行证据时的降级：同提交的 verified 主力 → 盖章 trailer → 提交者 / Co-authored-by → bot →
-    /// 其他人 → 同时间窗口会话 → 分支前缀 → 未确认
+    /// 没有逐行证据时的降级。每一步都写明依据，按口径开关：
+    /// 同提交的逐行证据（standard）→ 盖章 trailer → agent 提交邮箱 → Co-authored-by → bot → aider 的作者名 →
+    /// 别人的提交（算那个人）→ 同时间窗口的会话（loose，推断）→ 分支前缀（standard，推断）→ 未确认
     fn fallback(&mut self, c: &Commit, top_verified: Option<usize>) -> (Attr, String) {
         if let Some(w) = top_verified {
-            return (Attr { who: w, level: Level::Declared }, "同提交内有逐行证据".into());
+            if self.strictness != Strictness::Strict {
+                return (Attr { who: w, level: Level::Declared }, "同一提交内有逐行证据".into());
+            }
         }
         if let Some((h, m)) = self.stamps.get(&c.hash).cloned() {
             return (Attr { who: self.reg.agent(&h, m.as_deref()), level: Level::Declared }, "Creditia 盖章".into());
         }
         if let Some(h) = self.cfg.agent_emails.get(&c.email).cloned() {
-            let model = self.session_at(c, Some(&h)).map(|s| s.model.clone());
-            return (Attr { who: self.reg.agent(&h, model.as_deref()), level: Level::Declared }, format!("提交者邮箱 {}", c.email));
+            return (Attr { who: self.reg.agent(&h, None), level: Level::Declared }, format!("agent 提交邮箱 {}", c.email));
         }
         for co in &c.coauthors {
             if let Some((_, h)) = self.cfg.agent_emails.iter().find(|(e, _)| co.contains(e.as_str())) {
@@ -141,26 +160,34 @@ impl<'a> Engine<'a> {
                 return (Attr { who: self.reg.agent(&h, None), level: Level::Declared }, format!("Co-authored-by {co}"));
             }
         }
-        if self.cfg.bot_emails.contains(&c.email) {
-            return (Attr { who: self.reg.agent("github-actions", None), level: Level::Declared }, "bot 账号".into());
+        if self.cfg.bot_emails.contains(&c.email) || c.email.contains("[bot]") {
+            let h = if c.email.contains("dependabot") { "dependabot" } else if c.email.contains("renovate") { "renovate" } else { "github-actions" };
+            return (Attr { who: self.reg.agent(h, None), level: Level::Declared }, "bot 账号".into());
+        }
+        if c.name.trim_end().ends_with("(aider)") {
+            return (Attr { who: self.reg.agent("aider", None), level: Level::Declared }, "aider 署名的作者".into());
         }
         if !self.director_emails.contains(&c.email) {
             // 以邮箱为身份，显示 git 作者名
             let name = if c.name.is_empty() { c.email.clone() } else { c.name.clone() };
             let name = self.cfg.display_name(&name);
-            return (Attr { who: self.reg.human(&format!("h:{}", c.email), &name), level: Level::Declared }, "其他人提交".into());
+            return (Attr { who: self.reg.human(&format!("h:{}", c.email), &name), level: Level::Declared }, "其他人的提交".into());
         }
-        if let Some(s) = self.session_at(c, None) {
-            let (h, m) = (s.src.harness(), s.model.clone());
-            return (Attr { who: self.reg.agent(h, Some(&m)), level: Level::Declared }, format!("同时间窗口有 {h} 会话"));
-        }
-        if let Some(b) = self.unit_branch.get(&c.hash) {
-            if let Some((_, h)) = self.cfg.branch_prefixes.iter().find(|(p, _)| b.starts_with(p.as_str())) {
-                let h = h.clone();
-                return (Attr { who: self.reg.agent(&h, None), level: Level::Inferred }, format!("分支前缀 {b}"));
+        if self.strictness == Strictness::Loose {
+            if let Some(s) = self.session_at(c, None) {
+                let (h, m) = (s.src.harness(), s.model.clone());
+                return (Attr { who: self.reg.agent(h, Some(&m)), level: Level::Inferred }, format!("提交时 {h} 会话正在进行（推断）"));
             }
         }
-        (Attr { who: self.reg.unattributed(), level: Level::Unattributed }, "无证据".into())
+        if self.strictness != Strictness::Strict {
+            if let Some(b) = self.unit_branch.get(&c.hash) {
+                if let Some((_, h)) = self.cfg.branch_prefixes.iter().find(|(p, _)| b.starts_with(p.as_str())) {
+                    let h = h.clone();
+                    return (Attr { who: self.reg.agent(&h, None), level: Level::Inferred }, format!("分支前缀 {b}（推断）"));
+                }
+            }
+        }
+        (Attr { who: self.reg.unattributed(), level: Level::Unattributed }, "没有证据".into())
     }
 
     /// 提交时间落在某个写代码会话里（会话结束后 30 分钟内也算）；分支一致的优先
@@ -204,7 +231,7 @@ pub fn parse_stamp(trailers: &str) -> Option<(String, Option<String>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Ev, FileAdd, Store};
+    use crate::model::{Ev, FileAdd, Session, Store};
 
     fn cfg() -> Config {
         let mut c = Config::default();
@@ -253,6 +280,37 @@ mod tests {
         let mut e = Engine::new(&cfg, &idx, &[], &[], stamps);
         let a = e.attribute(&commit("cursoragent@cursor.com", vec![1]));
         assert_eq!(e.reg.list[a.lines[0][0].who].id, "a:kimi/k3");
+        // aider 改写的作者名
+        let mut cm = commit("me@x.com", vec![1]);
+        cm.name = "Me (aider)".into();
+        cm.hash = "b".repeat(40);
+        let a = e.attribute(&cm);
+        assert_eq!(e.reg.list[a.lines[0][0].who].harness.as_deref(), Some("aider"));
+    }
+
+    #[test]
+    fn strictness_gates_guesses() {
+        // 自己的提交，没有证据，但提交时有 codex 会话在跑：只有 loose 才认
+        let store = Store::default();
+        let idx = Index::build(&store);
+        let sess = vec![Session { src: Src::Codex, id: "s".into(), model: "gpt-x".into(), start: 900, end: 1100, tokens: 0, branch: None, prompts: 1, reviewer: false, has_content: true, provider: None }];
+        for (lv, want) in [("strict", Level::Unattributed), ("standard", Level::Unattributed), ("loose", Level::Inferred)] {
+            let mut c = cfg();
+            c.level = lv.into();
+            let mut e = Engine::new(&c, &idx, &sess, &[], HashMap::new());
+            let a = e.attribute(&commit("me@x.com", vec![1]));
+            assert_eq!(a.lines[0][0].level, want, "{lv}");
+        }
+        // strict 下，同提交里没对上的行不延伸给有逐行证据的 agent
+        let mut store = Store::default();
+        store.groups.entry("x".into()).or_default().evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false });
+        let idx = Index::build(&store);
+        let mut c = cfg();
+        c.level = "strict".into();
+        let mut e = Engine::new(&c, &idx, &[], &[], HashMap::new());
+        let a = e.attribute(&commit("me@x.com", vec![7, 9]));
+        assert_eq!(a.lines[0][0].level, Level::Verified);
+        assert_eq!(a.lines[0][1].level, Level::Unattributed);
     }
 
     #[test]

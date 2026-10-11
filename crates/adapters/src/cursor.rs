@@ -63,6 +63,9 @@ impl ModelResolver {
 
 pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
     let db = db_path();
+    if !db.exists() {
+        return; // 没装 Cursor 不是问题
+    }
     let fp = fingerprint(&db);
     let gk = "cursor:ai-code-tracking".to_string();
     if store.groups.get(&gk).map(|g| g.fp == fp).unwrap_or(false) {
@@ -94,7 +97,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         g.evs.push(Ev { rel, key, src: Src::Cursor, model, session: r.conv, ts, tab: r.source == "tab" });
     }
     for (id, (start, end, model)) in conv {
-        g.sessions.push(Session { src: Src::Cursor, id, model, start, end, tokens: 0, branch: None, prompts: 0, reviewer: false, has_content: true });
+        g.sessions.push(Session { src: Src::Cursor, id, model, start, end, tokens: 0, branch: None, prompts: 0, reviewer: false, has_content: true, provider: None });
     }
     st.notes.push(format!("cursor: 行级记录 {total} 条，无法映射到仓库路径 {unmapped} 条"));
     store.groups.insert(gk, g);

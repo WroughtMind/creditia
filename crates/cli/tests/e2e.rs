@@ -61,6 +61,10 @@ fn setup() -> Env {
     vars.insert("CREDITIA_CURSOR_STORAGE".into(), root.join("cursor-storage").display().to_string());
     vars.insert("CREDITIA_GROK_DIR".into(), root.join("grok").display().to_string());
     vars.insert("CREDITIA_KIMI_DIR".into(), root.join("kimi").display().to_string());
+    vars.insert("CREDITIA_GEMINI_DIR".into(), root.join("gemini").display().to_string());
+    vars.insert("CREDITIA_QWEN_DIR".into(), root.join("qwen").display().to_string());
+    vars.insert("CREDITIA_OPENCODE_DIR".into(), root.join("opencode").display().to_string());
+    vars.insert("CREDITIA_VSCODE_STORAGE".into(), root.join("vscode").display().to_string());
     Env { root, repo, vars }
 }
 
@@ -251,7 +255,7 @@ fn end_to_end() {
 
     // doctor 能跑
     let (_, v) = run(&env, &["doctor"]);
-    assert!(v["sources"].as_array().unwrap().len() == 5);
+    assert_eq!(v["sources"].as_array().unwrap().len(), 11);
 
     // hook：安装后提交信息自动带 trailer（用盖章文件触发）
     let (ok, _) = run(&env, &["hook", "install", "--repo", &repo.display().to_string()]);
@@ -269,5 +273,115 @@ fn end_to_end() {
     assert!(ok, "{v}");
     assert!(v["projects"].as_array().unwrap().iter().any(|p| p["name"] == "示例项目"), "{v}");
 
+    let _ = fs::remove_dir_all(&env.root);
+}
+
+fn iso(ts: i64) -> String {
+    let (y, m, d) = creditia_core::util::civil_from_days(ts.div_euclid(86400));
+    let s = ts.rem_euclid(86400);
+    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}.000Z", s / 3600, s / 60 % 60, s % 60)
+}
+
+/// Gemini CLI、OpenCode、Cline 三种新数据源；口径开关；一个项目多处路径
+#[test]
+fn new_sources_levels_and_paths() {
+    use sha2::{Digest, Sha256};
+    let env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base: i64 = 1_788_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    let gem: Vec<String> = (0..12).map(|i| format!("def gemini_helper_{i}(x): return x * {i} + 1")).collect();
+    let oc: Vec<String> = (0..10).map(|i| format!("pub fn opencode_part_{i}() -> usize {{ {i} + 100 }}")).collect();
+    let rejected: Vec<String> = (0..5).map(|i| format!("pub fn rejected_attempt_{i}() -> usize {{ {i} }}")).collect();
+    let cl: Vec<String> = (0..8).map(|i| format!("export const clineThing{i} = () => {i} * 2;")).collect();
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join("README.md"), "# demo project for the new adapters\n").unwrap();
+    commit(&repo, "init", "me@example.com", &d(base - 86400));
+    fs::write(repo.join("src/gem.py"), gem.join("\n") + "\n").unwrap();
+    commit(&repo, "gemini work", "me@example.com", &d(base + 60));
+    // 被拒绝的编辑和成功的编辑写在同一个文件里：被拒绝的那 5 行最后人自己也写了，不能算 OpenCode 的
+    fs::write(repo.join("src/oc.rs"), [oc.clone(), rejected.clone()].concat().join("\n") + "\n").unwrap();
+    commit(&repo, "opencode work", "me@example.com", &d(base + 160));
+    fs::write(repo.join("src/cl.ts"), cl.join("\n") + "\n").unwrap();
+    commit(&repo, "cline work", "me@example.com", &d(base + 260));
+
+    // Gemini：目录名是项目路径的 SHA-256
+    let hash: String = Sha256::digest(rs.as_bytes()).iter().map(|b| format!("{b:02x}")).collect();
+    let gdir = env.root.join("gemini/tmp").join(&hash).join("chats");
+    fs::create_dir_all(&gdir).unwrap();
+    let chat = serde_json::json!({ "sessionId": "g1", "projectHash": hash, "startTime": iso(base - 600), "lastUpdated": iso(base),
+        "messages": [
+            { "type": "user", "timestamp": iso(base - 590), "content": "write helpers" },
+            { "type": "gemini", "timestamp": iso(base - 500), "model": "gemini-test", "tokens": { "total": 4321 },
+              "toolCalls": [{ "name": "write_file", "status": "success", "timestamp": iso(base - 500), "args": { "file_path": format!("{rs}/src/gem.py"), "content": gem.join("\n") } }] }
+        ] });
+    fs::write(gdir.join("session-1.json"), chat.to_string()).unwrap();
+
+    // OpenCode：会话 → 消息 → 片段；渠道是自定义中转站
+    let st = env.root.join("opencode/storage");
+    fs::create_dir_all(st.join("session/p1")).unwrap();
+    fs::create_dir_all(st.join("message/s1")).unwrap();
+    fs::create_dir_all(st.join("part/m1")).unwrap();
+    fs::write(st.join("session/p1/s1.json"), serde_json::json!({ "id": "s1", "directory": rs, "time": { "created": (base - 100) * 1000, "updated": (base + 100) * 1000 } }).to_string()).unwrap();
+    fs::write(st.join("message/s1/m0.json"), serde_json::json!({ "id": "m0", "role": "user", "time": { "created": (base - 90) * 1000 } }).to_string()).unwrap();
+    fs::write(st.join("message/s1/m1.json"), serde_json::json!({ "id": "m1", "role": "assistant", "modelID": "claude-opus-test", "providerID": "my-relay", "time": { "created": (base + 100) * 1000 }, "tokens": { "input": 100, "output": 50, "cache": { "read": 10, "write": 0 } }, "path": { "cwd": rs } }).to_string()).unwrap();
+    fs::write(st.join("part/m1/a.json"), serde_json::json!({ "type": "tool", "tool": "write", "state": { "status": "completed", "input": { "filePath": format!("{rs}/src/oc.rs"), "content": oc.join("\n") }, "time": { "end": (base + 100) * 1000 } } }).to_string()).unwrap();
+    fs::write(st.join("part/m1/b.json"), serde_json::json!({ "type": "tool", "tool": "edit", "state": { "status": "error", "input": { "filePath": format!("{rs}/src/oc.rs"), "oldString": "x", "newString": rejected.join("\n") }, "time": { "end": (base + 100) * 1000 } } }).to_string()).unwrap();
+
+    // Cline：路径相对于工作目录；模型与渠道在 task_metadata
+    let t = env.root.join("vscode/saoudrizwan.claude-dev/tasks/t1");
+    fs::create_dir_all(&t).unwrap();
+    fs::write(t.join("api_conversation_history.json"), serde_json::json!([{ "role": "user", "content": [{ "type": "text", "text": format!("<environment_details>\n# Current Working Directory ({rs}) Files\nsrc/\n</environment_details>") }] }]).to_string()).unwrap();
+    fs::write(t.join("ui_messages.json"), serde_json::json!([
+        { "ts": (base + 200) * 1000, "type": "say", "say": "task", "text": "add things" },
+        { "ts": (base + 250) * 1000, "type": "ask", "ask": "tool", "text": serde_json::json!({ "tool": "newFileCreated", "path": "src/cl.ts", "content": cl.join("\n") }).to_string() }
+    ]).to_string()).unwrap();
+    fs::write(t.join("task_metadata.json"), serde_json::json!({ "model_usage": [{ "ts": (base + 200) * 1000, "model_id": "claude-sonnet-test", "model_provider_id": "openrouter" }] }).to_string()).unwrap();
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    let b = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).cloned().unwrap_or_default();
+    assert_eq!(b("a:gemini/gemini-test")["byEvidence"]["verified"]["linesAdded"], 12, "{}", credits["breakdown"]);
+    assert_eq!(b("a:opencode/claude-opus-test")["byEvidence"]["verified"]["linesAdded"], 10, "{}", credits["breakdown"]);
+    assert_eq!(b("a:cline/claude-sonnet-test")["byEvidence"]["verified"]["linesAdded"], 8, "{}", credits["breakdown"]);
+    let c = |id: &str| credits["contributors"].as_array().unwrap().iter().find(|c| c["id"] == id).cloned().unwrap_or_default();
+    assert_eq!(c("a:opencode/claude-opus-test")["provider"], "my-relay");
+    assert_eq!(c("a:cline/claude-sonnet-test")["provider"], "openrouter");
+    assert_eq!(c("a:gemini/gemini-test")["family"], "google");
+    // 没有「主导者」
+    assert!(credits.get("directors").is_none());
+    assert!(!credits.to_string().contains("director"));
+    // 会话里人发的指令
+    assert!(credits["human"]["prompts"].as_i64().unwrap() >= 2);
+    // standard：失败的那次编辑写的 5 行跟随同提交里的 OpenCode（声明，不是逐行证据）
+    assert_eq!(b("a:opencode/claude-opus-test")["byEvidence"]["declared"]["linesAdded"], 5);
+    // strict：同提交延伸不算，这 5 行未确认
+    let out = env.root.join("strict.json");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs, "--level", "strict", "--out", &out.display().to_string()]);
+    assert!(ok, "{v}");
+    let strict: serde_json::Value = serde_json::from_str(&fs::read_to_string(&out).unwrap()).unwrap();
+    assert_eq!(strict["level"], "strict");
+    let sb = |id: &str| strict["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+    assert_eq!(sb("a:opencode/claude-opus-test"), 10);
+
+    // 一个项目多处路径：关联一个已经不存在的旧路径；paths 列出主仓库和它
+    let (ok, v) = run(&env, &["link", "/old/machine/demo", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["paths", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let ps: Vec<String> = v["paths"].as_array().unwrap().iter().map(|p| p["path"].as_str().unwrap().to_string()).collect();
+    assert!(ps.contains(&rs) && ps.contains(&"/old/machine/demo".to_string()), "{v}");
+    // 另一个仓库不能关联进来
+    let other = env.root.join("other");
+    fs::create_dir_all(&other).unwrap();
+    git(&other, &["init", "-q"]);
+    fs::write(other.join("a.txt"), "x\n").unwrap();
+    commit(&other, "x", "me@example.com", &d(base));
+    let (ok, _) = run(&env, &["link", &other.display().to_string(), "--repo", &rs]);
+    assert!(!ok);
     let _ = fs::remove_dir_all(&env.root);
 }

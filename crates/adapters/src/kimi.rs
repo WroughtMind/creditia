@@ -129,7 +129,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         let id = s.dir.file_name().map(|x| x.to_string_lossy().trim_start_matches("session_").to_string()).unwrap_or_default();
         let (start, end, model, tokens, prompts) = parse_wires(&s, pm, &mut g, &id);
         if end > 0 {
-            g.sessions.push(Session { src: Src::Kimi, id, model, start, end, tokens, branch: None, prompts, reviewer: false, has_content: !s.wires.is_empty() });
+            g.sessions.push(Session { src: Src::Kimi, id, model, start, end, tokens, branch: None, prompts, reviewer: false, has_content: !s.wires.is_empty(), provider: None });
         }
         store.groups.insert(gk, g);
     }

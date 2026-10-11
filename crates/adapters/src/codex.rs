@@ -61,6 +61,9 @@ fn rollout_files(base: &Path) -> HashMap<String, PathBuf> {
 
 pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
     let base = source_dir(Src::Codex);
+    if !base.join("state_5.sqlite").exists() {
+        return; // 没装 Codex 不是问题
+    }
     let rows = match threads(&base) {
         Ok(r) => r,
         Err(e) => return st.warnings.push(e),
@@ -79,12 +82,18 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         }
         let mut g = FileGroup { fp, ..Default::default() };
         let mut prompts = 0;
+        let mut provider: Option<String> = None;
         if let Some(f) = file {
             let data = read_maybe_zst(f);
             let mut cur_model = t.model.clone();
             for line in data.lines() {
                 if line.contains("\"task_started\"") {
                     prompts += 1;
+                }
+                if provider.is_none() && line.contains("\"session_meta\"") {
+                    if let Ok(o) = serde_json::from_str::<Value>(line) {
+                        provider = o["payload"]["model_provider"].as_str().filter(|p| !p.is_empty()).map(String::from);
+                    }
                 }
                 let is_ctx = line.contains("\"turn_context\"");
                 if !line.contains("\"FileChange\"") && !is_ctx {
@@ -129,7 +138,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         if reviewer {
             g.evs.clear();
         }
-        g.sessions.push(Session { src: Src::Codex, id: t.id.clone(), model: t.model, start: t.start, end: t.end, tokens: t.tokens, branch: t.branch, prompts, reviewer, has_content: file.is_some() });
+        g.sessions.push(Session { src: Src::Codex, id: t.id.clone(), model: t.model, start: t.start, end: t.end, tokens: t.tokens, branch: t.branch, prompts, reviewer, has_content: file.is_some(), provider });
         store.groups.insert(gk, g);
     }
     st.notes.push(format!("codex: 线程 {} 个，内容文件存在 {found}，缺失 {missing}", found + missing));

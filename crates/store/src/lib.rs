@@ -61,11 +61,16 @@ impl Library {
                project text not null, src text not null, id text not null, model text not null, start integer not null, end integer not null,
                tokens integer not null, branch text, prompts integer not null, reviewer integer not null, has_content integer not null,
                primary key(project, src, id));
+             create table if not exists paths(
+               project text not null, path text not null, kind text not null, last_seen integer not null,
+               primary key(project, path));
              create table if not exists snapshots(
                project text not null, head text not null, generated_at text not null, json text not null,
                primary key(project, head));",
         )
         .map_err(|e| e.to_string())?;
+        // 旧库补列：会话的渠道
+        let _ = conn.execute("alter table sessions add column provider text", []);
         Ok(Library { conn })
     }
 
@@ -110,14 +115,14 @@ impl Library {
                 .prepare("insert or ignore into evidence(project,rel,key,src,model,session,ts,tab) values(?1,?2,?3,?4,?5,?6,?7,?8)")
                 .map_err(|e| e.to_string())?;
             let mut ses = tx
-                .prepare("insert or replace into sessions(project,src,id,model,start,end,tokens,branch,prompts,reviewer,has_content) values(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
+                .prepare("insert or replace into sessions(project,src,id,model,start,end,tokens,branch,prompts,reviewer,has_content,provider) values(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)")
                 .map_err(|e| e.to_string())?;
             for g in store.groups.values() {
                 for e in &g.evs {
                     n += ins.execute(params![project, e.rel, e.key as i64, e.src.harness(), e.model, e.session, e.ts, e.tab as i64]).map_err(|x| x.to_string())?;
                 }
                 for s in &g.sessions {
-                    ses.execute(params![project, s.src.harness(), s.id, s.model, s.start, s.end, s.tokens, s.branch, s.prompts, s.reviewer as i64, s.has_content as i64]).map_err(|x| x.to_string())?;
+                    ses.execute(params![project, s.src.harness(), s.id, s.model, s.start, s.end, s.tokens, s.branch, s.prompts, s.reviewer as i64, s.has_content as i64, s.provider]).map_err(|x| x.to_string())?;
                 }
             }
         }
@@ -127,7 +132,7 @@ impl Library {
 
     /// 从证据库读回（日志已被清理时仍能归因）
     pub fn load_evidence(&self, project: &str) -> Result<(Vec<Ev>, Vec<Session>), String> {
-        let src_of = |s: &str| Src::all().into_iter().find(|x| x.harness() == s);
+        let src_of = Src::from_harness;
         let mut st = self.conn.prepare("select rel,key,src,model,session,ts,tab from evidence where project=?1").map_err(|e| e.to_string())?;
         let evs = st
             .query_map([project], |r| {
@@ -137,15 +142,15 @@ impl Library {
             .flatten()
             .filter_map(|(rel, key, src, model, session, ts, tab)| src_of(&src).map(|src| Ev { rel, key: key as u32, src, model, session, ts, tab: tab != 0 }))
             .collect();
-        let mut st2 = self.conn.prepare("select src,id,model,start,end,tokens,branch,prompts,reviewer,has_content from sessions where project=?1").map_err(|e| e.to_string())?;
+        let mut st2 = self.conn.prepare("select src,id,model,start,end,tokens,branch,prompts,reviewer,has_content,provider from sessions where project=?1").map_err(|e| e.to_string())?;
         let sessions = st2
             .query_map([project], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?, r.get::<_, i64>(4)?, r.get::<_, i64>(5)?, r.get::<_, Option<String>>(6)?, r.get::<_, i64>(7)?, r.get::<_, i64>(8)?, r.get::<_, i64>(9)?))
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?, r.get::<_, i64>(4)?, r.get::<_, i64>(5)?, r.get::<_, Option<String>>(6)?, r.get::<_, i64>(7)?, r.get::<_, i64>(8)?, (r.get::<_, i64>(9)?, r.get::<_, Option<String>>(10)?)))
             })
             .map_err(|e| e.to_string())?
             .flatten()
-            .filter_map(|(src, id, model, start, end, tokens, branch, prompts, reviewer, has_content)| {
-                src_of(&src).map(|src| Session { src, id, model, start, end, tokens, branch, prompts, reviewer: reviewer != 0, has_content: has_content != 0 })
+            .filter_map(|(src, id, model, start, end, tokens, branch, prompts, reviewer, (has_content, provider))| {
+                src_of(&src).map(|src| Session { src, id, model, start, end, tokens, branch, prompts, reviewer: reviewer != 0, has_content: has_content != 0, provider })
             })
             .collect();
         Ok((evs, sessions))
@@ -175,12 +180,34 @@ impl Library {
             .or_else(|e| if matches!(e, rusqlite::Error::QueryReturnedNoRows) { Ok(None) } else { Err(e.to_string()) })
     }
 
-    /// 改仓库配置里的展示选项（App 设置页用）。只动 display 段，其他原样保留。
-    pub fn set_display_director(repo: &Path, on: bool) -> Result<(), String> {
+    /// 改仓库配置里的展示选项（App 设置页用）：是否写出人名、落款。只动 display 段，其他原样保留。
+    pub fn set_display(repo: &Path, named: bool, sign: &str) -> Result<(), String> {
         let p = repo.join(".creditia/config.json");
         let mut v: serde_json::Value = std::fs::read_to_string(&p).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
-        v["display"] = serde_json::json!({ "director": on });
+        v["display"] = serde_json::json!({ "named": named, "sign": sign });
+        if let Some(d) = p.parent() {
+            std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
+        }
         std::fs::write(&p, serde_json::to_string_pretty(&v).map_err(|e| e.to_string())? + "\n").map_err(|e| e.to_string())
+    }
+
+    /// 登记项目出现过的路径：主仓库、worktree、临时克隆、搬过家的旧路径、手动关联的路径。
+    /// 日志里的路径靠这份清单认出属于哪个项目（目录不在了也能认）
+    pub fn add_path(&self, project: &str, path: &str, kind: &str) -> Result<(), String> {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+        self.conn
+            .execute("insert into paths(project,path,kind,last_seen) values(?1,?2,?3,?4) on conflict(project,path) do update set last_seen=excluded.last_seen, kind=case when paths.kind='manual' then 'manual' else excluded.kind end", params![project, path, kind, now])
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    pub fn remove_path(&self, project: &str, path: &str) -> Result<usize, String> {
+        self.conn.execute("delete from paths where project=?1 and path=?2", params![project, path]).map_err(|e| e.to_string())
+    }
+    /// (路径, 类型)
+    pub fn paths(&self, project: &str) -> Result<Vec<(String, String)>, String> {
+        let mut st = self.conn.prepare("select path, kind from paths where project=?1 order by last_seen desc").map_err(|e| e.to_string())?;
+        let v = st.query_map([project], |r| Ok((r.get(0)?, r.get(1)?))).map_err(|e| e.to_string())?.flatten().collect();
+        Ok(v)
     }
 
     pub fn evidence_count(&self, project: &str) -> u64 {

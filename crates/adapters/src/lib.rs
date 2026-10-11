@@ -1,11 +1,15 @@
-//! 各数据源 adapter：git、Codex、Claude Code、Cursor、Grok、Kimi。只读打开，输出统一的行级证据和会话元数据。
+//! 各数据源 adapter：git、Codex、Claude Code、Cursor、Grok、Kimi、Gemini CLI、Qwen Code、OpenCode、Cline / Roo / Kilo。
+//! 只读打开，输出统一的行级证据和会话元数据。只认「成功写进文件」的编辑；路径映射回仓库内相对路径。
 
 pub mod claude;
+pub mod cline;
 pub mod codex;
 pub mod cursor;
+pub mod gemini;
 pub mod git;
 pub mod grok;
 pub mod kimi;
+pub mod opencode;
 
 use creditia_core::hash::{ext_of, line_key, normalize};
 use creditia_core::model::{Ev, PathMap, Src};
@@ -32,6 +36,11 @@ pub fn source_dir(src: Src) -> PathBuf {
         Src::Cursor => env("CREDITIA_CURSOR_DIR").unwrap_or_else(|| home().join(".cursor")),
         Src::Grok => env("CREDITIA_GROK_DIR").unwrap_or_else(|| home().join(".grok")),
         Src::Kimi => env("CREDITIA_KIMI_DIR").unwrap_or_else(|| home().join(".kimi-code")),
+        Src::Gemini => env("CREDITIA_GEMINI_DIR").or_else(|| env("GEMINI_CLI_HOME").map(|p| p.join(".gemini"))).unwrap_or_else(|| home().join(".gemini")),
+        Src::Qwen => env("CREDITIA_QWEN_DIR").unwrap_or_else(|| home().join(".qwen")),
+        Src::OpenCode => env("CREDITIA_OPENCODE_DIR").unwrap_or_else(|| xdg_data().join("opencode")),
+        // VS Code 扩展：真实位置有多个（Code、Cursor、Windsurf……），见 cline::roots
+        Src::Cline | Src::Roo | Src::Kilo => env("CREDITIA_VSCODE_STORAGE").unwrap_or_else(vscode_storage),
     }
 }
 
@@ -46,6 +55,65 @@ pub fn cursor_global_storage() -> PathBuf {
     { PathBuf::from(std::env::var("APPDATA").unwrap_or_default()).join("Cursor/User/globalStorage") }
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     { home().join(".config/Cursor/User/globalStorage") }
+}
+
+/// XDG 数据目录（OpenCode 等用）；Windows / macOS 上 OpenCode 也用 ~/.local/share
+pub fn xdg_data() -> PathBuf {
+    std::env::var("XDG_DATA_HOME").ok().filter(|s| !s.is_empty()).map(PathBuf::from).unwrap_or_else(|| home().join(".local/share"))
+}
+
+/// VS Code 系编辑器的 globalStorage（默认 Code；其他编辑器在 cline::roots 里一起找）
+pub fn vscode_storage() -> PathBuf {
+    vscode_user_dirs().into_iter().next().unwrap_or_default().join("globalStorage")
+}
+/// 各个 VS Code 系编辑器的 User 目录：Code、Code - Insiders、Cursor、Windsurf、VSCodium、Trae
+pub fn vscode_user_dirs() -> Vec<PathBuf> {
+    let names = ["Code", "Code - Insiders", "Cursor", "Windsurf", "VSCodium", "Trae"];
+    #[cfg(target_os = "macos")]
+    let base = home().join("Library/Application Support");
+    #[cfg(target_os = "windows")]
+    let base = PathBuf::from(std::env::var("APPDATA").unwrap_or_default());
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    let base = std::env::var("XDG_CONFIG_HOME").ok().filter(|s| !s.is_empty()).map(PathBuf::from).unwrap_or_else(|| home().join(".config"));
+    names.iter().map(|n| base.join(n).join("User")).collect()
+}
+
+/// 编辑工具的参数里新写下的文本：write 类取 content，edit / replace 类取 new_string（各家字段名不同）
+pub fn new_text(name: &str, args: &serde_json::Value) -> Option<String> {
+    let n = name.to_lowercase();
+    let get = |ks: &[&str]| ks.iter().find_map(|k| args[*k].as_str().map(String::from));
+    if n.contains("write") || n.contains("create") {
+        return get(&["content", "file_text", "contents", "text"]);
+    }
+    if n.contains("edit") || n.contains("replace") || n.contains("patch") {
+        if let Some(edits) = args["edits"].as_array() {
+            let all: Vec<String> = edits.iter().filter_map(|e| e["new_string"].as_str().or(e["newString"].as_str()).map(String::from)).collect();
+            if !all.is_empty() { return Some(all.join("\n")); }
+        }
+        return get(&["new_string", "newString", "new_str", "replacement", "content"]);
+    }
+    None
+}
+
+/// 文件路径参数（各家字段名不同）
+pub fn path_arg(args: &serde_json::Value) -> Option<String> {
+    ["file_path", "filePath", "path", "absolute_path", "target_file"].iter().find_map(|k| args[*k].as_str().map(String::from))
+}
+
+/// 统一 diff / SEARCH-REPLACE 块里新增的行
+pub fn added_from_diff(diff: &str) -> String {
+    if diff.contains(">>>>>>> REPLACE") || diff.contains("+++++++ REPLACE") {
+        let mut out = String::new();
+        let mut on = false;
+        for l in diff.lines() {
+            let t = l.trim();
+            if t == "=======" { on = true; continue; }
+            if t.starts_with(">>>>>>>") || t.starts_with("+++++++") || t.starts_with("<<<<<<<") || t.starts_with("-------") { on = false; continue; }
+            if on { out.push_str(l); out.push('\n'); }
+        }
+        return out;
+    }
+    diff.lines().filter(|l| l.starts_with('+') && !l.starts_with("+++")).map(|l| format!("{}\n", &l[1..])).collect()
 }
 
 pub fn open_ro(p: &Path) -> rusqlite::Result<Connection> {

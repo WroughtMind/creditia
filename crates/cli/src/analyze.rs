@@ -4,7 +4,7 @@ use crate::detect_config;
 use creditia_adapters as ad;
 use creditia_core::config::Config;
 use creditia_core::engine::{self, Engine};
-use creditia_core::model::{area, Attr, BlameLine, Commit, CommitAttr, FileGroup, Index, Level, PathMap, PrMeta, Session, Store, STORE_VERSION, UNATTR};
+use creditia_core::model::{area, vendor, Attr, BlameLine, Commit, CommitAttr, FileGroup, Index, Level, PathMap, PrMeta, Session, Store, STORE_VERSION, UNATTR};
 use creditia_core::util::{date_cn, iso_week, now_iso};
 use creditia_store::{cache_dir, load_json, save_json, Library, Project};
 use serde_json::{json, Value};
@@ -19,6 +19,10 @@ pub struct Opts {
     pub blame: Option<(String, usize)>,
     /// 用仓库外的配置文件（测试、不想往仓库里写的时候）
     pub config: Option<PathBuf>,
+    /// 覆盖配置里的口径：strict / standard / loose
+    pub level: Option<String>,
+    /// 命令是在哪个目录里运行的（worktree、临时克隆），登记成本项目的路径
+    pub invoked: Option<PathBuf>,
 }
 
 pub struct Report {
@@ -64,48 +68,106 @@ pub fn load_config(repo: &Path, override_path: Option<&Path>) -> Config {
     c
 }
 
-pub fn project_of(repo: &Path, cfg: &Config) -> Project {
+/// 项目身份：根提交 + 远程地址。同一仓库的不同克隆、worktree、搬过家的目录认作同一个项目；
+/// 根提交相同但远程地址完全不同的（fork）分开记
+pub fn project_of(repo: &Path, cfg: &Config, lib: Option<&Library>) -> Project {
     let (root, remotes) = ad::git::identity(repo);
-    let id = if root.is_empty() { cfg.name.clone() } else { root[..12.min(root.len())].to_string() };
+    let base = if root.is_empty() { cfg.name.clone() } else { root[..12.min(root.len())].to_string() };
+    let mut id = base.clone();
+    if !root.is_empty() {
+        let same: Vec<Project> = lib.and_then(|l| l.projects().ok()).unwrap_or_default().into_iter().filter(|p| p.root_commit == root).collect();
+        let fits = |p: &Project| p.remotes.is_empty() || remotes.is_empty() || p.remotes.iter().any(|r| remotes.contains(r));
+        if let Some(p) = same.iter().find(|p| fits(p)) {
+            id = p.id.clone();
+        } else if !same.is_empty() {
+            // fork：根提交一样，远程不一样
+            let h = remotes.first().map(|r| r.bytes().fold(2166136261u32, |h, b| (h ^ b as u32).wrapping_mul(16777619))).unwrap_or(0);
+            id = format!("{base}-{:06x}", h & 0xffffff);
+        }
+    }
     Project { id, name: cfg.name.clone(), path: repo.display().to_string(), root_commit: root, remotes, last_head: None, last_analyzed: None }
 }
 
-fn path_map(repo: &Path, head: &str, cfg: &Config) -> PathMap {
-    PathMap { known: ad::git::known_paths(repo, head), markers: cfg.markers.iter().map(|m| m.to_lowercase()).collect(), excludes: cfg.exclude_markers.iter().map(|m| m.to_lowercase()).collect() }
+/// 本项目所有已知的根路径：当前目录、各 worktree、作品库登记过的路径、配置里手写的路径
+pub fn known_roots(repo: &Path, cfg: &Config, lib: Option<&Library>, project: &str) -> Vec<String> {
+    let mut v: Vec<String> = vec![repo.display().to_string()];
+    v.extend(ad::git::worktrees(repo));
+    if let Some(l) = lib {
+        v.extend(l.paths(project).unwrap_or_default().into_iter().map(|(p, _)| p));
+    }
+    v.extend(cfg.paths.iter().cloned());
+    let mut seen = HashSet::new();
+    v.retain(|p| !p.is_empty() && seen.insert(p.trim_end_matches('/').to_string()));
+    v
 }
 
-fn scan_all(store: &mut Store, pm: &PathMap, st: &mut ad::Stats) {
+fn path_map(repo: &Path, head: &str, cfg: &Config, roots: &[String]) -> PathMap {
+    let mut markers: Vec<String> = cfg.markers.iter().map(|m| m.to_lowercase()).collect();
+    for r in roots {
+        let m = format!("{}/", r.replace('\\', "/").trim_end_matches('/').to_lowercase());
+        if m.len() > 4 && !markers.contains(&m) {
+            markers.push(m);
+        }
+    }
+    PathMap { known: ad::git::known_paths(repo, head), markers, excludes: cfg.exclude_markers.iter().map(|m| m.to_lowercase()).collect() }
+}
+
+fn scan_all(store: &mut Store, pm: &PathMap, roots: &[String], st: &mut ad::Stats) {
     ad::codex::scan(store, pm, st);
     ad::claude::scan(store, pm, st);
     ad::cursor::scan(store, pm, st);
     ad::grok::scan(store, pm, st);
     ad::kimi::scan(store, pm, st);
+    ad::gemini::scan(store, pm, roots, st);
+    ad::opencode::scan(store, pm, st);
+    ad::cline::scan(store, pm, st);
+}
+
+/// 把这次见到的路径登记进作品库：以后这些目录删了、日志里还留着它们，也能认出是本项目
+fn register_paths(lib: &Library, project: &str, repo: &Path, invoked: Option<&Path>) {
+    let _ = lib.add_path(project, &repo.display().to_string(), "main");
+    for w in ad::git::worktrees(repo) {
+        let _ = lib.add_path(project, &w, "worktree");
+    }
+    if let Some(p) = invoked {
+        if p != repo {
+            let _ = lib.add_path(project, &p.display().to_string(), "clone");
+        }
+    }
 }
 
 /// collect：只采集证据进证据库
 pub fn collect(repo: &Path, lib: &mut Library, config: Option<&Path>) -> Result<(usize, Vec<String>, String), String> {
     let cfg = load_config(repo, config);
-    let proj = project_of(repo, &cfg);
+    let proj = project_of(repo, &cfg, Some(lib));
     let head = ad::git::git(repo, &["rev-parse", &cfg.branch]).trim().to_string();
     let head = if head.is_empty() { ad::git::git(repo, &["rev-parse", "HEAD"]).trim().to_string() } else { head };
-    let pm = path_map(repo, &head, &cfg);
+    lib.upsert_project(&proj)?;
+    register_paths(lib, &proj.id, repo, None);
+    let roots = known_roots(repo, &cfg, Some(lib), &proj.id);
+    let pm = path_map(repo, &head, &cfg, &roots);
     let cache = cache_dir(&proj.id);
     let mut store: Store = load_json(&cache.join("store.json"));
     if store.version != STORE_VERSION {
         store = Store { version: STORE_VERSION, ..Default::default() };
     }
     let mut st = ad::Stats::default();
-    scan_all(&mut store, &pm, &mut st);
+    scan_all(&mut store, &pm, &roots, &mut st);
     save_json(&cache.join("store.json"), &store)?;
-    lib.upsert_project(&proj)?;
     let n = lib.save_evidence(&proj.id, &store)?;
     Ok((n, st.warnings, proj.id))
 }
 
 pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let t0 = Instant::now();
-    let cfg = load_config(repo, opts.config.as_deref());
-    let proj = project_of(repo, &cfg);
+    let mut cfg = load_config(repo, opts.config.as_deref());
+    if let Some(lv) = &opts.level {
+        cfg.level = lv.clone();
+    }
+    let mut lib = Library::open()?;
+    let proj = project_of(repo, &cfg, Some(&lib));
+    lib.upsert_project(&proj)?;
+    register_paths(&lib, &proj.id, repo, opts.invoked.as_deref());
     let cache = cache_dir(&proj.id);
     if opts.fresh {
         let _ = std::fs::remove_dir_all(&cache);
@@ -133,6 +195,17 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     };
     let n_new = new_commits.len();
     cc.commits.extend(new_commits);
+    // .gitattributes 里标成生成物、第三方的文件不算谁写的（linguist-generated / linguist-vendored / -diff）
+    let gen = ad::git::generated_patterns(repo, &head);
+    let gen_hit = |rel: &str| gen.iter().any(|re| re.is_match(rel));
+    let mut skipped_generated = 0usize;
+    if !gen.is_empty() {
+        for c in cc.commits.iter_mut() {
+            let before = c.files.len();
+            c.files.retain(|f| !gen_hit(&f.rel));
+            skipped_generated += before - c.files.len();
+        }
+    }
     cc.stamps.extend(new_stamps);
     cc.head = Some(head.clone());
 
@@ -153,17 +226,16 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let (tags, ver_of) = ad::git::versions(repo, &parents);
 
     // ---- 证据：日志（增量）+ 证据库（日志被清理后仍在）
-    let pm = path_map(repo, &head, &cfg);
+    let roots = known_roots(repo, &cfg, Some(&lib), &proj.id);
+    let pm = path_map(repo, &head, &cfg, &roots);
     let mut store: Store = load_json(&cache.join("store.json"));
     if store.version != STORE_VERSION {
         store = Store { version: STORE_VERSION, ..Default::default() };
     }
     let mut st = ad::Stats::default();
-    scan_all(&mut store, &pm, &mut st);
+    scan_all(&mut store, &pm, &roots, &mut st);
     save_json(&cache.join("store.json"), &store)?;
     warnings.extend(st.warnings.clone());
-    let mut lib = Library::open()?;
-    lib.upsert_project(&proj)?;
     lib.save_evidence(&proj.id, &store)?;
     let (db_evs, db_sessions) = lib.load_evidence(&proj.id)?;
     // 合并：证据库里有、当前日志里没有的（已清理）补进来
@@ -202,7 +274,13 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
 
     // ---- 存活代码
     let mut bc: HashMap<String, Vec<BlameLine>> = load_json(&cache.join("blame.json"));
-    let blame = ad::git::blame_head(repo, &head, &mut bc);
+    let mut blame = ad::git::blame_head(repo, &head, &mut bc);
+    if !gen.is_empty() {
+        blame.retain(|(p, _)| !gen_hit(p));
+    }
+    if skipped_generated > 0 {
+        st.notes.push(format!(".gitattributes 标为生成物、第三方的文件改动 {skipped_generated} 处不计入"));
+    }
     let commit_by_hash: HashMap<&str, &Commit> = cc.commits.iter().map(|c| (c.hash.as_str(), c)).collect();
     let per_commit: HashMap<String, (HashMap<(String, u32), Attr>, Option<Attr>)> = attrs
         .iter()
@@ -315,7 +393,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
                         e.verified += 1;
                     }
                 }
-                if at.who == 0 && ar == "docs" {
+                if reg.list[at.who].kind == "human" && ar == "docs" {
                     doc_lines_director += 1;
                 }
             }
@@ -381,23 +459,30 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     // 贡献方
     let reviews = sessions.iter().filter(|s| s.reviewer).count();
     let mut contributors = vec![];
+    // 每个 (工具, 模型) 最常见的渠道
+    let mut prov: HashMap<(String, String), BTreeMap<String, usize>> = HashMap::new();
+    for s2 in &sessions {
+        if let Some(p) = &s2.provider {
+            *prov.entry((s2.src.harness().to_string(), creditia_core::model::normalize_model(&s2.model))).or_default().entry(p.clone()).or_default() += 1;
+        }
+    }
     for (i, w) in reg.list.iter().enumerate() {
-        if !by_who.contains_key(&i) && i != 0 {
+        if !by_who.contains_key(&i) {
             continue;
         }
         let mut roles = vec![];
-        if i == 0 {
-            roles.push("director");
-        }
-        if by_who.contains_key(&i) && w.kind != "unattributed" {
+        if w.kind != "unattributed" {
             roles.push("author");
         }
         let mut c = json!({ "id": w.id, "kind": w.kind, "roles": roles });
         if let Some(h) = &w.harness {
             c["harness"] = json!(h);
             c["model"] = json!(w.model);
-            c["family"] = json!(w.model.as_deref().map(family));
+            c["family"] = json!(w.model.as_deref().map(vendor));
             c["where"] = json!("local");
+            if let Some(p) = w.model.as_ref().and_then(|m| prov.get(&(h.clone(), m.clone()))).and_then(|m| m.iter().max_by_key(|(_, n)| **n)).map(|(p, _)| p.clone()) {
+                c["provider"] = json!(p);
+            }
         }
         if let Some(n) = &w.name {
             c["name"] = json!(cfg.display_name(n));
@@ -434,7 +519,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         v.iter()
             .map(|s| {
                 let id = if s.model.is_empty() { format!("a:{}", s.src.harness()) } else { format!("a:{}/{}", s.src.harness(), creditia_core::model::normalize_model(&s.model)) };
-                json!({ "contributor": id, "start": s.start, "end": s.end, "tokens": s.tokens, "review": s.reviewer })
+                json!({ "contributor": id, "start": s.start, "end": s.end, "tokens": s.tokens, "review": s.reviewer, "prompts": s.prompts })
             })
             .collect()
     };
@@ -473,18 +558,16 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
             json!({ "name": n, "from": s.from, "to": s.to, "best": best, "verifiedShare": if s.long == 0 { 0.0 } else { (s.verified as f64 / s.long as f64 * 1000.0).round() / 1000.0 } })
         })
         .collect();
-    let directors: Vec<Value> = cfg.directors.iter().map(|d| json!({ "id": d.id, "name": cfg.display_name(&d.name) })).collect();
     let generated_at = now_iso();
     let credits = json!({
         "$schema": "https://creditia.dev/schema/v0.json",
         "schemaVersion": 0,
         "project": { "name": cfg.name, "repos": cfg.remotes, "range": { "from": date_cn(first), "to": date_cn(last) } },
         "generatedAt": generated_at,
-        "level": "standard",
+        "level": cfg.level,
         "head": head,
         "versions": tags.iter().map(|(t, ts)| json!({ "tag": t, "date": date_cn(*ts) })).collect::<Vec<_>>(),
         "coverage": coverage,
-        "directors": directors,
         "contributors": contributors,
         "totals": { "commits": cc.commits.len(), "units": unit_json.len(), "linesAdded": total_lines, "linesSurviving": surv.len(), "linesWritten": lines_written, "tokens": tokens, "sessions": sessions.iter().filter(|s| !s.reviewer).count(), "days": days.len(), "binaryFiles": binary_files.values().sum::<usize>() },
         "breakdown": breakdown,
@@ -523,16 +606,4 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         .collect::<Vec<_>>()
         .join(" · ");
     Ok(Report { name: cfg.name.clone(), head, commits: cc.commits.len(), new_commits: n_new, units: unit_json.len(), lines: total_lines, secs: t0.elapsed().as_secs_f64(), out, tier, notes: st.notes, warnings, blame: blame_out })
-}
-
-fn family(m: &str) -> &'static str {
-    let m = m.to_lowercase();
-    if m.starts_with("gpt") || m.contains("codex") || m.starts_with("o1") || m.starts_with("o3") { "gpt" }
-    else if m.contains("claude") || m.contains("opus") || m.contains("sonnet") || m.contains("fable") || m.contains("haiku") { "claude" }
-    else if m.contains("grok") { "grok" }
-    else if m.contains("kimi") || m.starts_with("k3") || m.starts_with("k2") { "kimi" }
-    else if m.contains("gemini") { "gemini" }
-    else if m.contains("deepseek") { "deepseek" }
-    else if m.contains("composer") || m == "auto" { "cursor" }
-    else { "unknown" }
 }

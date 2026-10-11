@@ -12,3 +12,4 @@ rusqlite.workspace = true
 zstd.workspace = true
 walkdir.workspace = true
 regex.workspace = true
+sha2 = "0.10"
