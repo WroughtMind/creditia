@@ -1,4 +1,5 @@
-//! creditia App：项目列表、档案浏览、统计、导出。分析在 CLI（Rust 核心）里做，App 只读作品库和仓库里的档案。
+//! creditia App 的本机桥：项目列表、档案、分析、保存导出文件、数据源体检。
+//! 分析交给同一个 Rust 核心二进制（creditia-core），App 不调用任何大模型。
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use base64::Engine as _;
@@ -15,8 +16,9 @@ fn projects() -> Result<Value, String> {
         .into_iter()
         .map(|p| {
             let credits = PathBuf::from(&p.path).join(".creditia/credits.json");
+            let paths: Vec<String> = lib.paths(&p.id).unwrap_or_default().into_iter().map(|(x, _)| x).collect();
             json!({
-                "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes,
+                "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "paths": paths,
                 "lastHead": p.last_head,
                 "lastAnalyzed": p.last_analyzed,
                 "evidence": lib.evidence_count(&p.id),
@@ -57,21 +59,68 @@ fn config_of(project_id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
-fn set_display_director(project_id: String, on: bool) -> Result<(), String> {
+fn set_display(project_id: String, named: bool, sign: String) -> Result<(), String> {
     let lib = Library::open()?;
     let Some(p) = lib.projects()?.into_iter().find(|p| p.id == project_id) else { return Err("项目不在作品库里".into()) };
-    creditia_store::Library::set_display_director(std::path::Path::new(&p.path), on)
+    creditia_store::Library::set_display(std::path::Path::new(&p.path), named, &sign)
+}
+
+/// 核心二进制：和 App 一起打包（sidecar 同目录），开发时用 PATH 里的
+fn core_bin() -> PathBuf {
+    if let Ok(p) = std::env::var("CREDITIA_CORE") {
+        return PathBuf::from(p);
+    }
+    let exe = if cfg!(windows) { "creditia-core.exe" } else { "creditia-core" };
+    if let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
+        let cand = dir.join(exe);
+        if cand.exists() {
+            return cand;
+        }
+    }
+    PathBuf::from(exe)
+}
+
+fn run_core(args: &[&str]) -> Result<Value, String> {
+    let out = Command::new(core_bin()).args(args).arg("--json").output().map_err(|e| format!("找不到 creditia-core：{e}"))?;
+    let v: Value = serde_json::from_slice(&out.stdout).map_err(|_| String::from_utf8_lossy(&out.stderr).to_string())?;
+    if out.status.code() == Some(1) {
+        return Err(v["error"].as_str().unwrap_or("分析失败").to_string());
+    }
+    Ok(v)
+}
+
+/// 重新分析一个项目（在它的仓库目录里跑核心）
+#[tauri::command]
+async fn analyze(project_id: String) -> Result<Value, String> {
+    let lib = Library::open()?;
+    let Some(p) = lib.projects()?.into_iter().find(|p| p.id == project_id) else { return Err("项目不在作品库里".into()) };
+    if !PathBuf::from(&p.path).is_dir() {
+        return Err(format!("目录已经不在了：{}", p.path));
+    }
+    tauri::async_runtime::spawn_blocking(move || run_core(&["analyze", "--repo", &p.path])).await.map_err(|e| e.to_string())?
+}
+
+/// 选一个文件夹加进作品库：先分析一遍
+#[tauri::command]
+async fn add_project(app: tauri::AppHandle) -> Result<Value, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let Some(dir) = app.dialog().file().blocking_pick_folder() else { return Ok(Value::Null) };
+    let path = dir.into_path().map_err(|e| e.to_string())?;
+    let p = path.display().to_string();
+    let v = tauri::async_runtime::spawn_blocking(move || run_core(&["analyze", "--repo", &p])).await.map_err(|e| e.to_string())??;
+    let lib = Library::open()?;
+    let repo = path.canonicalize().unwrap_or(path);
+    let id = lib.projects()?.into_iter().find(|x| PathBuf::from(&x.path) == repo).map(|x| x.id).unwrap_or_default();
+    Ok(json!({ "id": id, "result": v }))
 }
 
 #[tauri::command]
-fn embed_snippet(project_id: String, form: String, theme: String, director: bool) -> Result<String, String> {
+fn embed_snippet(project_id: String, piece: String, theme: String) -> Result<String, String> {
     let lib = Library::open()?;
     let Some(p) = lib.projects()?.into_iter().find(|p| p.id == project_id) else { return Err("项目不在作品库里".into()) };
     let rel = PathBuf::from(&p.path).join(".creditia/credits.json");
-    let src = if rel.exists() { "/.creditia/credits.json".to_string() } else { "credits.json".to_string() };
-    Ok(format!(
-        "<script type=\"module\" src=\"https://cdn.jsdelivr.net/npm/@creditia/embed@0/dist/creditia-card.js\"></script>\n<creditia-card src=\"{src}\" form=\"{form}\" theme=\"{theme}\"{director}/>\n"
-    ))
+    let src = if rel.exists() { "/.creditia/credits.json" } else { "credits.json" };
+    Ok(format!("<script type=\"module\" src=\"https://cdn.jsdelivr.net/npm/@creditia/embed@0/dist/creditia-card.js\"></script>\n<creditia-card src=\"{src}\" piece=\"{piece}\" theme=\"{theme}\"></creditia-card>\n"))
 }
 
 #[tauri::command]
@@ -133,9 +182,18 @@ fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// 数据源体检：和 CLI 的 creditia doctor 同一份路径规则
+/// 数据源体检：交给核心（和 CLI 的 creditia doctor 完全一致）；核心不在时退回本地探测
 #[tauri::command]
 fn doctor() -> Value {
+    if let Ok(v) = run_core(&["doctor"]) {
+        if let Some(a) = v["sources"].as_array() {
+            return json!(a.iter().map(|h| json!({ "id": h["source"], "name": h["source"], "path": h["path"], "ok": h["readable"], "detail": if h["readable"] == true { format!("{} 条", h["records"]) } else { "没有找到".into() } })).collect::<Vec<_>>());
+        }
+    }
+    doctor_local()
+}
+
+fn doctor_local() -> Value {
     let h = home().unwrap_or_default();
     let env_dir = |k: &str, d: &str| std::env::var_os(k).map(PathBuf::from).unwrap_or_else(|| h.join(d));
     let mut out: Vec<Value> = vec![];
@@ -161,8 +219,9 @@ fn doctor() -> Value {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            projects, credits, config_of, set_display_director, embed_snippet,
+            projects, credits, config_of, set_display, analyze, add_project, embed_snippet,
             library_path, save_file, reveal, open_path, doctor
         ])
         .run(tauri::generate_context!())

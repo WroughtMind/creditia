@@ -2,25 +2,38 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>creditia</title>
 <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
-<aside id="side">
-  <div class="brand" data-tauri-drag-region><span class="seal">名</span><b>creditia</b></div>
-  <input id="q" class="search" placeholder="搜索">
-  <ul id="projects"></ul>
-  <footer id="lib"></footer>
-</aside>
-<main>
-  <header id="top" data-tauri-drag-region>
-    <div class="headline"><h1 id="name">creditia</h1><div id="sub" class="sub"></div></div>
-    <nav id="nav" class="seg"></nav>
-  </header>
-  <section id="view"></section>
-</main>
+<header id="top" data-tauri-drag-region>
+  <div class="brand" data-tauri-drag-region><span class="logo" id="logo"></span><span class="word">creditia</span></div>
+  <div class="pill glass" id="project" role="button" tabindex="0" aria-haspopup="listbox">
+    <span class="pname" id="pname">…</span><span class="pmeta" id="pmeta"></span>
+    <svg class="chev" width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+  </div>
+  <div class="tools">
+    <button class="round glass" id="lang" title="中文 / English">中</button>
+    <button class="round glass" id="gear" title="设置"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button>
+  </div>
+</header>
+<div id="menu" class="menu glass" hidden></div>
+
+<main id="stage"><div id="board"></div><div id="empty" hidden></div></main>
+
+<nav id="dots" class="glass" aria-label="风格"></nav>
+<div id="dock" class="glass">
+  <div class="hint" id="hint">拖动作品到这里导出</div>
+  <div class="targets" id="targets"></div>
+  <div class="sizes" id="sizes"></div>
+</div>
+
+<div id="focus" hidden></div>
 <div id="sheet" hidden></div>
-<div id="toast" hidden></div>
+<div id="ghost" hidden></div>
+<div id="toast" class="glass" hidden></div>
+<div id="tipname" hidden></div>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

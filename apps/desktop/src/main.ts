@@ -1,300 +1,424 @@
-// creditia App：本机作品库 → 图库 → 单张导出。渲染和 CLI 共用同一套 forms（satori → SVG，resvg-wasm → PNG）。
-import { THEMES, themeById } from '../../../packages/render/src/themes.ts';
-import { buildModel, fmt, compact, type Model } from '../../../packages/render/src/data.ts';
-import { FORMS, GROUPS, type Ctx } from '../../../packages/render/src/registry.ts';
-import { creditsBlock, mergeCreditsMd, unitLead } from '../../../packages/render/src/text.ts';
-import { famColor } from '../../../packages/render/src/brand.ts';
-import { renderSvg, renderSized, toPng } from './preview.ts';
+// creditia App：一面展墙。顶部切换项目，左下角圆点切换风格，所有作品直接摆出来；
+// 悬停看细节、换版式、选格式导出；拖到右下角的导出坞也能导出。
+import { STYLES, styleById } from '../../../packages/render/src/styles/index.ts';
+import { buildModel, fmt, type Model } from '../../../packages/render/src/data.ts';
+import { PIECES, art, frames, variantName } from '../../../packages/render/src/registry.ts';
+import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts';
+import { INTERACT_CSS, mountHits } from '../../../packages/render/src/interact.ts';
+import { creditsBlock, mergeCreditsMd, embedSnippet } from '../../../packages/render/src/text.ts';
+import type { Style } from '../../../packages/render/src/style.ts';
+import { registerFonts, ready } from './fonts.ts';
+import { exportArt, type Format } from './engine.ts';
+import { LOGO_SVG } from './logo.ts';
 
-// ───────────────────────── Tauri 桥 ─────────────────────────
+// ───────────────────────── 桥：Tauri 或浏览器调试 ─────────────────────────
 const native = (window as any).__TAURI__?.core?.invoke as ((cmd: string, args?: any) => Promise<any>) | undefined;
 async function api(cmd: string, args: any = {}): Promise<any> {
   if (native) return native(cmd, args);
+  const get = (u: string) => fetch(u).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
   switch (cmd) {
-    case 'projects': return (await fetch('/__dev/projects')).json();
-    case 'credits': return (await fetch(`/__dev/credits?id=${encodeURIComponent(args.projectId)}`)).json();
-    case 'config_of': return (await fetch('/__dev/config')).json();
-    case 'doctor': return (await fetch('/__dev/doctor')).json();
-    case 'set_display_director': return null;
-    case 'reveal': case 'open_path': toast('这一步要在 App 里运行'); return null;
+    case 'projects': return get('/__dev/projects');
+    case 'credits': return get(`/__dev/credits?id=${encodeURIComponent(args.projectId)}`);
+    case 'config_of': return {};
+    case 'doctor': return get('/__dev/doctor');
     case 'save_file': {
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([b64bytes(args.bytes)], { type: args.mime ?? 'application/octet-stream' }));
-      a.download = args.name; a.click(); URL.revokeObjectURL(a.href);
+      a.href = URL.createObjectURL(new Blob([b64bytes(args.bytes) as BlobPart], { type: args.mime ?? 'application/octet-stream' }));
+      a.download = args.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
       return `~/Downloads/${args.name}`;
     }
-    default: throw new Error('浏览器调试模式里没有 ' + cmd);
+    case 'set_display': return null;
+    default: throw new Error(L('这一步要在 App 里运行', 'Only available in the desktop app'));
   }
 }
-
-// ───────────────────────── 状态 ─────────────────────────
-type View = 'gallery' | 'focus' | 'archive';
-const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
-const SIZES = ['原生', '1200×630', '1080×1350', '1080×1920', '1080×1080'];
-const state = {
-  projects: [] as any[], current: null as any, config: {} as any,
-  raw: null as any, model: null as Model | null,
-  view: 'gallery' as View, library: null as Model[] | null, theme: (localStorage.creditiaTheme as string) || 'cinema',
-  focus: null as string | null, variant: undefined as string | undefined, size: '原生',
-  svg: '', doctor: [] as any[], token: 0,
-};
-const theme = () => themeById(state.theme) ?? THEMES[0];
-const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-function toast(msg: string) { const el = $('#toast'); el.textContent = msg; el.hidden = false; clearTimeout((toast as any)._t); (toast as any)._t = setTimeout(() => (el.hidden = true), 2600); }
-async function copy(text: string, ok = '已复制') { try { await navigator.clipboard.writeText(text); toast(ok); } catch { toast('复制失败'); } }
 const b64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
 const b64bytes = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
+// ───────────────────────── 状态 ─────────────────────────
+const store = { get: (k: string) => { try { return localStorage.getItem('creditia.' + k); } catch { return null; } }, set: (k: string, v: string) => { try { localStorage.setItem('creditia.' + k, v); } catch { /* 没有存储也能用 */ } } };
+const state = {
+  projects: [] as any[], current: null as any, raw: null as any, model: null as Model | null,
+  style: styleById(store.get('style') ?? '') ?? STYLES[0],
+  lang: (store.get('lang') as 'zh' | 'en') ?? 'zh',
+  named: store.get('named') === '1', sign: store.get('sign') ?? '',
+  variants: {} as Record<string, string>,
+  size: store.get('size') ?? 'native',
+  arts: new Map<string, Art>(),
+  token: 0,
+};
+const L = (zh: string, en: string) => (state.lang === 'zh' ? zh : en);
+const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
+const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+function toast(msg: string, ms = 2600) { const el = $('#toast'); el.textContent = msg; el.hidden = false; clearTimeout((toast as any)._t); (toast as any)._t = setTimeout(() => (el.hidden = true), ms); }
+
+/** 展墙上的作品与顺序。span 2 = 横跨两栏 */
+const BOARD: { id: string; variant?: string; span?: number }[] = [
+  { id: 'share', span: 2 }, { id: 'tier' }, { id: 'roll' }, { id: 'hand' }, { id: 'receipt' }, { id: 'donut' },
+  { id: 'stream', span: 2 }, { id: 'waffle' }, { id: 'survival' }, { id: 'versions' }, { id: 'lanes', span: 2 }, { id: 'clock', span: 2 },
+  { id: 'mosaic' }, { id: 'calendar', span: 2 }, { id: 'badge', variant: 'emblem' }, { id: 'badge', variant: 'stack' }, { id: 'badge', variant: 'flat' }, { id: 'byline', span: 2 },
+];
+const keyOf = (b: { id: string; variant?: string }, i: number) => `${b.id}#${i}`;
+
 // ───────────────────────── 启动 ─────────────────────────
 async function boot() {
-  wireNav();
-  try { state.projects = await api('projects'); } catch (e: any) { $('#lib').textContent = String(e?.message ?? e); return; }
-  renderProjects();
-  $('#lib').textContent = state.projects.length ? `${state.projects.length} 个项目` : '作品库为空';
-  if (state.projects.length) openProject(state.projects[0]);
-  else showEmpty('作品库为空');
-  $('#q').addEventListener('input', renderProjects);
+  registerFonts();
+  const st = document.createElement('style'); st.textContent = INTERACT_CSS; document.head.appendChild(st);
+  $('#logo').innerHTML = LOGO_SVG;
+  renderDots(); renderDock(); wireTop();
+  try { state.projects = await api('projects'); } catch (e: any) { return empty(L('读不到作品库', 'Cannot read the library'), String(e?.message ?? e)); }
+  if (!state.projects.length) return empty(L('还没有分析过的项目', 'No analyzed projects yet'), '', 'creditia analyze');
+  const last = state.projects.find((p) => p.id === store.get('project')) ?? state.projects[0];
+  await openProject(last);
+  addEventListener('resize', () => layout());
 }
-function renderProjects() {
-  const q = ($('#q') as HTMLInputElement).value.trim().toLowerCase();
-  const ul = $('#projects'); ul.innerHTML = '';
-  for (const p of state.projects.filter((p) => !q || String(p.name).toLowerCase().includes(q))) {
-    const li = document.createElement('li');
-    li.className = p.id === state.current?.id ? 'on' : '';
-    li.innerHTML = `<b>${esc(p.name)}</b><span>${p.lastAnalyzed ? new Date(p.lastAnalyzed * 1000).toLocaleDateString('zh-CN') : '—'} · ${fmt(p.evidence)} 条证据</span>`;
-    li.onclick = () => openProject(p);
-    ul.append(li);
-  }
+function empty(title: string, detail = '', cmd = '') {
+  $('#board').innerHTML = '';
+  const el = $('#empty'); el.hidden = false;
+  el.innerHTML = `<div><b>${esc(title)}</b>${esc(detail)}${cmd ? `<br><span>${L('在项目目录里运行', 'Run in your project')}</span><br><code>${esc(cmd)}</code>` : ''}</div>`;
+  $('#pname').textContent = 'creditia'; $('#pmeta').textContent = '';
 }
+
 async function openProject(p: any) {
-  state.current = p; state.raw = null; state.model = null; state.variant = undefined; state.focus = null; state.view = 'gallery';
-  $('#name').textContent = p.name;
-  $('#sub').textContent = `${p.path} · 读取中…`;
-  renderProjects();
-  try {
-    state.raw = await api('credits', { projectId: p.id });
-    state.config = await api('config_of', { projectId: p.id }).catch(() => ({}));
-  } catch (e: any) { showEmpty(String(e?.message ?? e)); return; }
-  state.model = buildModel(state.raw, { director: !!state.config.display?.director, lang: 'zh' });
-  $('#name').textContent = state.model.project || p.name;
-  $('#sub').textContent = p.path;
-  renderView();
+  state.current = p; store.set('project', p.id);
+  $('#pname').textContent = p.name; $('#pmeta').textContent = L('读取中…', 'Loading…');
+  try { state.raw = await api('credits', { projectId: p.id }); }
+  catch (e: any) { return empty(L('这个项目还没有档案', 'No credits for this project yet'), '', `cd ${p.path} && creditia analyze`); }
+  $('#empty').hidden = true;
+  rebuildModel();
+  await paint();
 }
-function showEmpty(msg: string) { $('#nav').innerHTML = ''; $('#view').innerHTML = `<div class="empty">${esc(msg)}</div>`; }
-
-// ───────────────────────── 顶部导航 ─────────────────────────
-const NAV: [View, string][] = [['gallery', '图库'], ['archive', '档案']];
-function wireNav() {
-  const el = $('#nav');
-  el.innerHTML = NAV.map(([id, n]) => `<button data-view="${id}">${n}</button>`).join('') + '<button class="gear" id="gear" title="设置"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>';
-  el.onclick = (e) => {
-    const b = (e.target as HTMLElement).closest('button'); if (!b) return;
-    if (b.id === 'gear') return settingsSheet();
-    state.view = (b as any).dataset.view; renderView();
-  };
-}
-function renderView() {
-  $('#nav').querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', (b as any).dataset.view === state.view));
-  const v = $('#view'); v.innerHTML = ''; v.scrollTop = 0;
-  if (!state.model) return;
-  if (state.view === 'focus') viewFocus(v);
-  else if (state.view === 'archive') viewArchive(v);
-  else viewGallery(v);
+function rebuildModel() {
+  state.model = buildModel(state.raw, { lang: state.lang, named: state.named, sign: state.sign });
+  const m = state.model;
+  $('#pname').textContent = m.project || state.current?.name;
+  $('#pmeta').textContent = `${fmt(m.commits)} ${L('次提交', 'commits')} · ${fmt(m.linesAdded)} ${L('行', 'lines')}`;
 }
 
-// ───────────────────────── 图库 ─────────────────────────
-function viewGallery(v: HTMLElement) {
-  const m = state.model!;
-  const forms = (ids: string[]) => ids.filter((id) => id !== 'blame');
-  const kpi: [string, string][] = [['提交', fmt(m.commits)], ['项', fmt(m.units)], ['新增行', fmt(m.linesAdded)], ['留下', fmt(m.linesSurviving)], ['会话', m.sessions ? fmt(m.sessions) : '—'], ['Token', m.tokens ? compact(m.tokens) : '—'], ['工期', m.spanDays ? `${m.spanDays} 天` : '—']];
-  v.innerHTML = `
-    <div class="strip">${kpi.map(([k, x]) => `<div class="cell"><b>${x}</b><span>${k}</span></div>`).join('')}</div>
-    ${GROUPS.map(([g, ids]) => `<div class="sec"><h2>${g}</h2><div class="grid">${forms(ids).map((id) => `
-      <button class="card" data-form="${id}">
-        <div class="stage" data-stage="${id}"><span class="ph">…</span></div>
-        <div class="cap"><b>${FORMS[id].name}</b><span>${FORMS[id].variants ? FORMS[id].variants!.length + ' 版式' : FORMS[id].size}</span></div>
-      </button>`).join('')}</div></div>`).join('')}`;
-  v.querySelectorAll('[data-form]').forEach((b) => ((b as HTMLElement).onclick = () => openFocus((b as any).dataset.form)));
-  paintGrid(v);
-}
-/** profile 要全作品库的模型；其余只要语言和版式 */
-async function ctxOf(id: string, variant?: string): Promise<Ctx> {
-  const ctx: Ctx = { lang: 'zh', variant };
-  if (id !== 'profile') return ctx;
-  if (!state.library) {
-    const all = await Promise.all(state.projects.map(async (p) => { try { return buildModel(await api('credits', { projectId: p.id }), { director: false, lang: 'zh' }); } catch { return null; } }));
-    state.library = all.filter(Boolean) as Model[];
-  }
-  ctx.projects = state.library.length ? state.library : [state.model!];
-  ctx.person = state.raw?.directors?.[0]?.name ?? '';
-  return ctx;
-}
-function openFocus(id: string) { state.focus = id; state.variant = undefined; state.view = 'focus'; renderView(); }
-async function paintGrid(v: HTMLElement) {
+// ───────────────────────── 展墙 ─────────────────────────
+async function paint() {
+  const m = state.model; if (!m) return;
+  const st = state.style;
   const token = ++state.token;
-  const ids = GROUPS.flatMap(([, x]) => x).filter((id) => id !== 'blame');
-  let i = 0;
-  const worker = async () => {
-    while (i < ids.length) {
-      const id = ids[i++];
-      let svg: string | null = null;
-      try { svg = await renderSvg(id, state.model!, theme(), await ctxOf(id)); } catch { svg = null; }
-      if (token !== state.token) return;
-      const el = v.querySelector(`[data-stage="${id}"]`);
-      if (el) el.innerHTML = svg ?? '<span class="ph">—</span>';
-    }
-  };
-  await Promise.all([worker(), worker(), worker()]);
-}
-
-// ───────────────────────── 单张 ─────────────────────────
-function viewFocus(v: HTMLElement) {
-  const id = state.focus!; const f = FORMS[id];
-  const variants = f.variants ?? [];
-  const cur = state.variant ?? f.def?.(theme());
-  v.innerHTML = `
-  <div class="focus">
-    <div class="stage big">
-      <button class="back" id="back">← 图库</button>
-      <div class="out" id="ex-out"><div class="loading">渲染中…</div></div>
-    </div>
-    <aside class="rail">
-      <h2>${f.name}<span>${f.size}</span></h2>
-      <h3>风格</h3><div class="swatches" id="themes"></div>
-      ${variants.length ? `<h3>版式</h3><div class="chips">${variants.map((x) => `<button class="chip ${x === cur ? 'on' : ''}" data-var="${x}">${x}</button>`).join('')}</div>` : ''}
-      <h3>尺寸</h3><select id="size">${SIZES.map((s) => `<option ${s === state.size ? 'selected' : ''}>${s}</option>`).join('')}</select>
-      ${id === 'tier' ? `<label class="switch"><input type="checkbox" id="dir" ${state.config.display?.director ? 'checked' : ''}>主导者署名</label>` : ''}
-      <div class="actions">
-        <button class="btn primary" id="sv-png">保存 PNG</button>
-        <button class="btn" id="cp-png">复制 PNG</button>
-        <button class="btn" id="cp-svg">复制 SVG</button>
-        ${id === 'tier' ? '<button class="btn" id="cp-embed">嵌入代码</button>' : ''}
-        <button class="btn" id="cp-md">CREDITS.md</button>
-      </div>
-      <div class="meta" id="meta"></div>
-    </aside>
-  </div>`;
-  $('#back').onclick = () => { state.view = 'gallery'; renderView(); };
-  renderSwatches();
-  v.querySelectorAll('[data-var]').forEach((b) => ((b as HTMLElement).onclick = () => {
-    state.variant = (b as any).dataset.var;
-    v.querySelectorAll('[data-var]').forEach((x) => x.classList.toggle('on', x === b));
-    paintFocus();
-  }));
-  ($('#size') as HTMLSelectElement).onchange = (e) => { state.size = (e.target as HTMLSelectElement).value; paintFocus(); };
-  ($('#dir') as HTMLInputElement | null)?.addEventListener('change', async (e) => {
-    const on = (e.target as HTMLInputElement).checked;
-    state.config.display = { ...(state.config.display ?? {}), director: on };
-    state.model = buildModel(state.raw, { director: on, lang: 'zh' });
-    await api('set_display_director', { projectId: state.current.id, on }).catch(() => {});
-    paintFocus();
-  });
-  $('#cp-svg').onclick = () => copy(state.svg, 'SVG 已复制');
-  $('#cp-png').onclick = async () => {
-    try {
-      const png = await toPng(state.svg);
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([png as BlobPart], { type: 'image/png' }) })]);
-      toast('PNG 已复制');
-    } catch { toast('这个环境不能复制图片，用保存 PNG'); }
-  };
-  $('#sv-png').onclick = async () => {
-    const png = await toPng(state.svg);
-    const name = `${state.model!.project || 'credits'}-${id}${state.variant ? '-' + state.variant : ''}.png`;
-    const path = await api('save_file', { name, bytes: b64(png), mime: 'image/png' });
-    toast(path);
-  };
-  const embed = $('#cp-embed');
-  if (embed) embed.onclick = async () => {
-    const director = !!state.config.display?.director;
-    const s = native
-      ? await api('embed_snippet', { projectId: state.current.id, form: id, theme: state.theme, director })
-      : `<script type="module" src="https://cdn.jsdelivr.net/npm/@creditia/embed@0/dist/creditia-card.js"><\/script>\n<creditia-card src=".creditia/credits.json" form="${id}" theme="${state.theme}"${director ? ' director' : ''}></creditia-card>`;
-    copy(s, '嵌入代码已复制');
-  };
-  $('#cp-md').onclick = () => copy(creditsBlock(state.model!), 'CREDITS.md 区块已复制');
-  paintFocus();
-}
-function renderSwatches() {
-  const el = $('#themes');
-  el.innerHTML = THEMES.map((t) => `<button data-theme="${t.id}" title="${esc(t.name)}" class="${t.id === state.theme ? 'on' : ''}"><i style="background:${t.bg}"></i><i style="background:${t.accent}"></i></button>`).join('');
-  el.onclick = (e) => {
-    const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
-    state.theme = b.dataset.theme!; localStorage.creditiaTheme = state.theme;
-    el.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-    const cur = state.variant ?? FORMS[state.focus!].def?.(theme());
-    document.querySelectorAll('[data-var]').forEach((x) => x.classList.toggle('on', (x as HTMLElement).dataset.var === cur));
-    paintFocus();
-  };
-}
-async function paintFocus() {
-  const out = $('#ex-out'); if (!out) return;
-  const token = ++state.token;
-  const id = state.focus!;
-  const ctx = await ctxOf(id, state.variant);
-  let svg: string | null;
-  if (state.size === '原生') svg = await renderSvg(id, state.model!, theme(), ctx);
-  else { const [w, h] = state.size.split('×').map(Number); svg = await renderSized(id, state.model!, theme(), w, h, ctx); }
+  await ready(st);
   if (token !== state.token) return;
-  state.svg = svg ?? '';
-  out.innerHTML = svg ?? '<span class="ph">—</span>';
-  $('#meta').textContent = svg ? `${state.theme} · ${state.size}` : '';
+  const board = $('#board');
+  board.innerHTML = '';
+  state.arts.clear();
+  BOARD.forEach((b, i) => {
+    const k = keyOf(b, i);
+    const variant = state.variants[k] ?? b.variant;
+    let a: Art | null = null;
+    try { a = art(b.id, m, st, { variant }); } catch (e) { console.error(b.id, e); }
+    if (!a) return;
+    state.arts.set(k, a);
+    const tile = document.createElement('div');
+    tile.className = 'tile';
+    tile.dataset.k = k;
+    tile.dataset.span = String(b.span ?? (a.w / a.h > 1.7 ? 2 : 1));
+    tile.style.animationDelay = `${Math.min(i * 35, 500)}ms`;
+    const def = PIECES[b.id];
+    const vs = def.variants ?? [];
+    const cur = variant ?? st.prefer[b.id] ?? vs[0];
+    tile.innerHTML = `<div class="name">${esc(state.lang === 'zh' ? def.name : def.en)}</div>
+      <div class="bar glass">${vs.length > 1 ? `<button data-act="prev" title="${L('上一种版式', 'Previous layout')}">‹</button><span class="vname">${esc(variantName(cur, state.lang))}</span><button data-act="next" title="${L('下一种版式', 'Next layout')}">›</button>` : ''}<button data-act="export" title="${L('导出', 'Export')}">${L('导出', 'Export')} ↓</button></div>
+      <div class="art"></div>`;
+    const artEl = tile.querySelector('.art') as HTMLElement;
+    artEl.innerHTML = a.svg;
+    mountHits(artEl, a.hits, a.w, a.h);
+    wireTile(tile, b.id, k, vs, cur);
+    board.appendChild(tile);
+  });
+  layout();
 }
 
-// ───────────────────────── 档案 ─────────────────────────
-function viewArchive(v: HTMLElement) {
-  const raw = state.raw, m = state.model!;
-  const units: any[] = raw.units ?? [];
-  const groups: { key: string; title: string; date?: string; units: any[] }[] = [];
-  const unrel = units.filter((u) => !u.version);
-  if (unrel.length) groups.push({ key: 'unreleased', title: '未发布', units: unrel });
-  for (const ver of [...(raw.versions ?? [])].reverse()) { const us = units.filter((u) => u.version === ver.tag); if (us.length) groups.push({ key: ver.tag, title: ver.tag, date: ver.date, units: us }); }
-  const uid = (id: string) => (id.startsWith('pr:') ? `#${id.slice(3)}` : id.slice(2));
-  const shareBar = (u: any) => {
-    const by = new Map<string, number>();
-    for (const s of u.shares ?? []) { const c = (raw.contributors ?? []).find((x: any) => x.id === s.contributor); const k = c?.harness ?? (s.contributor === 'unattributed' ? 'unattributed' : 'human'); by.set(k, (by.get(k) ?? 0) + s.share); }
-    return `<div class="ubar">${[...by.entries()].sort((a, b) => b[1] - a[1]).map(([k, s]) => `<i style="width:${(s * 100).toFixed(1)}%;background:${k === 'unattributed' ? 'repeating-linear-gradient(45deg,#CFCBC3 0 2px,#ECEAE5 2px 4px)' : famColor(k, theme())}" title="${esc(k)} ${Math.round(s * 100)}%"></i>`).join('')}</div>`;
+/** 瀑布流：一栏宽度跟着窗口变，横向作品跨两栏，小件不放大 */
+function layout() {
+  const board = $('#board');
+  const tiles = [...board.querySelectorAll('.tile')] as HTMLElement[];
+  const W = Math.min(innerWidth - 120, 1680);
+  const gap = 44;
+  const cols = Math.max(1, Math.min(5, Math.floor((W + gap) / (360 + gap))));
+  const cw = (W - gap * (cols - 1)) / cols;
+  const hs = new Array(cols).fill(0);
+  for (const t of tiles) {
+    const a = state.arts.get(t.dataset.k!)!;
+    let span = Math.min(cols, Number(t.dataset.span) || 1);
+    const full = cw * span + gap * (span - 1);
+    const w = Math.min(full, a.w * (a.w < 500 ? 1.15 : 1));
+    const h = (w / a.w) * a.h;
+    // 找能放下的最矮位置
+    let best = 0, bestY = Infinity;
+    for (let c = 0; c + span <= cols; c++) { const y = Math.max(...hs.slice(c, c + span)); if (y < bestY - 1) { bestY = y; best = c; } }
+    const x = best * (cw + gap) + (full - w) / 2;
+    t.style.left = `${x}px`; t.style.top = `${bestY}px`; t.style.width = `${w}px`;
+    for (let c = best; c < best + span; c++) hs[c] = bestY + h + gap + 18;
+  }
+  board.style.width = `${W}px`;
+  board.style.height = `${Math.max(...hs)}px`;
+}
+
+function wireTile(tile: HTMLElement, id: string, k: string, vs: string[], cur: string) {
+  tile.querySelector('.bar')!.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('button'); if (!b) return;
+    e.stopPropagation();
+    const act = b.dataset.act;
+    if (act === 'prev' || act === 'next') {
+      const i = vs.indexOf(cur);
+      state.variants[k] = vs[(i + (act === 'next' ? 1 : vs.length - 1)) % vs.length];
+      return repaintTile(tile, id, k);
+    }
+    if (act === 'export') toggleFormats(tile, id, k);
+  });
+  const artEl = tile.querySelector('.art') as HTMLElement;
+  artEl.addEventListener('pointerdown', (e) => startDrag(e, tile, id, k));
+}
+/** 只重画一张（换版式） */
+function repaintTile(tile: HTMLElement, id: string, k: string) {
+  const i = Number(k.split('#')[1]);
+  const b = BOARD[i];
+  const a = art(id, state.model!, state.style, { variant: state.variants[k] ?? b.variant });
+  if (!a) return;
+  state.arts.set(k, a);
+  const vs = PIECES[id].variants ?? [];
+  const cur = state.variants[k] ?? b.variant ?? state.style.prefer[id] ?? vs[0];
+  const fresh = document.createElement('div');
+  fresh.className = 'tile'; fresh.dataset.k = k; fresh.dataset.span = String(b.span ?? (a.w / a.h > 1.7 ? 2 : 1)); fresh.style.animation = 'none';
+  fresh.innerHTML = tile.innerHTML;
+  (fresh.querySelector('.vname') as HTMLElement | null)?.replaceChildren(document.createTextNode(variantName(cur, state.lang)));
+  const artEl = fresh.querySelector('.art') as HTMLElement;
+  artEl.innerHTML = a.svg;
+  mountHits(artEl, a.hits, a.w, a.h);
+  wireTile(fresh, id, k, vs, cur);
+  tile.replaceWith(fresh);
+  layout();
+}
+
+// ───────────────────────── 导出 ─────────────────────────
+function toggleFormats(tile: HTMLElement, id: string, k: string) {
+  const open = tile.querySelector('.fmts');
+  document.querySelectorAll('.tile .fmts').forEach((x) => { x.parentElement!.classList.remove('menuopen'); x.remove(); });
+  if (open) return;
+  const box = document.createElement('div');
+  box.className = 'fmts glass';
+  const animated = PIECES[id].animated;
+  box.innerHTML = FORMATS.filter((f) => f.id !== 'gif' || animated).map((f) => `<button data-f="${f.id}">${f.name}<span>${esc(fmtNote(f.id))}</span></button>`).join('');
+  box.onclick = (e) => { const b = (e.target as HTMLElement).closest('button'); if (!b) return; e.stopPropagation(); box.remove(); tile.classList.remove('menuopen'); doExport(b.dataset.f!, id, k); };
+  tile.appendChild(box); tile.classList.add('menuopen');
+  setTimeout(() => document.addEventListener('click', function off() { box.remove(); tile.classList.remove('menuopen'); document.removeEventListener('click', off); }), 0);
+}
+const fmtNote = (f: string) => ({
+  png: L('社交、聊天', 'social, chat'), svg: L('README、网页', 'README, web'), pdf: L('打印、作品集', 'print, portfolio'), gif: L('会动', 'animated'),
+  html: L('可交互、离线', 'interactive, offline'), md: 'CREDITS.md', embed: L('网页组件', 'web component'),
+} as Record<string, string>)[f] ?? '';
+
+async function doExport(fmtId: string, id: string, k: string) {
+  const a = state.arts.get(k)!;
+  const m = state.model!;
+  const i = Number(k.split('#')[1]);
+  const variant = state.variants[k] ?? BOARD[i].variant;
+  const base = `${m.project || 'credits'}-${id}${variant ? '-' + variant : ''}-${state.style.id}`;
+  try {
+    if (fmtId === 'md') { await navigator.clipboard.writeText(mergeCreditsMd(null, creditsBlock(m))).catch(() => null); return toast(L('CREDITS.md 区块已复制', 'CREDITS.md block copied')); }
+    if (fmtId === 'embed') { await navigator.clipboard.writeText(embedSnippet(id, state.style.id, undefined, variant)).catch(() => null); return toast(L('嵌入代码已复制', 'Embed code copied')); }
+    toast(fmtId === 'gif' ? L('正在逐帧生成 GIF…', 'Rendering GIF frames…') : L('正在导出…', 'Exporting…'), 60000);
+    await new Promise((r) => setTimeout(r, 30));
+    const out = await exportArt(fmtId as Format, state.style, a, state.size, () => frames(id, m, state.style, { variant }, 24));
+    const sz = state.size !== 'native' && fmtId !== 'html' ? `-${state.size}` : '';
+    const path = await api('save_file', { name: `${base}${sz}.${out.ext}`, bytes: b64(out.bytes), mime: out.mime });
+    toast(L(`已保存 ${path}`, `Saved ${path}`));
+  } catch (e: any) { console.error(e); toast(L(`导出失败：${e?.message ?? e}`, `Export failed: ${e?.message ?? e}`), 5000); }
+}
+
+function renderDock() {
+  const dock = $('#targets');
+  dock.innerHTML = FORMATS.map((f) => `<button data-f="${f.id}">${f.name}<span>${esc(fmtNote(f.id))}</span></button>`).join('');
+  dock.onclick = () => toast(L('把作品拖到这里，或悬停作品点「导出」', 'Drag a piece here, or hover it and click Export'));
+  $('#hint').textContent = L('拖动作品到这里导出', 'Drag a piece here to export');
+  const sizes = $('#sizes');
+  sizes.innerHTML = SIZES.filter((s) => s.id !== 'a4').map((s) => `<button data-s="${s.id}" class="${s.id === state.size ? 'on' : ''}">${s.w ? `${s.w}×${s.h}` : L('原尺寸', 'Native')}</button>`).join('');
+}
+
+// ───────────────────────── 拖动 ─────────────────────────
+function startDrag(e: PointerEvent, tile: HTMLElement, id: string, k: string) {
+  if (e.button !== 0) return;
+  const x0 = e.clientX, y0 = e.clientY;
+  let dragging = false;
+  const ghost = $('#ghost');
+  let over: HTMLElement | null = null;
+  const move = (ev: PointerEvent) => {
+    if (!dragging && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 6) {
+      dragging = true;
+      document.body.classList.add('dragging');
+      const a = state.arts.get(k)!;
+      const w = Math.min(280, a.w);
+      ghost.style.width = `${w}px`;
+      ghost.innerHTML = a.svg;
+      ghost.hidden = false;
+      $('#hint').textContent = L('松手导出 · 选好尺寸', 'Drop to export · pick a size');
+      document.querySelector('.ct-tip')?.classList.remove('on');
+    }
+    if (!dragging) return;
+    ghost.style.transform = `translate(${ev.clientX - ghost.offsetWidth - 18}px, ${ev.clientY - ghost.offsetHeight * 0.6}px) rotate(-2deg)`;
+    const t = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest('#targets button, #sizes button') as HTMLElement | null;
+    if (t?.dataset.s) { state.size = t.dataset.s; store.set('size', state.size); document.querySelectorAll('#sizes button').forEach((b) => b.classList.toggle('on', b === t)); }
+    const tb = t?.dataset.f ? t : null;
+    if (tb !== over) { over?.classList.remove('over'); over = tb; over?.classList.add('over'); }
   };
-  v.innerHTML = `
-  <div class="panel">
-    <div class="phead"><h2>${esc(m.project)}</h2><span class="meta">${units.length} 项</span><div class="grow"></div>
-      <button class="btn" id="cp-md">复制 CREDITS.md</button>
-      <button class="btn" id="finder">在访达中显示</button></div>
-    ${groups.length ? groups.map((g) => `<div class="ver"><h3>${esc(g.title)}${g.date ? ` · ${g.date}` : ''}<span>${g.units.length} 项</span></h3>
-      ${[...g.units].sort((a, b) => String(b.date).localeCompare(String(a.date))).map((u) => `
-      <div class="unit">
-        <div class="uinfo"><span class="uid mono">${esc(uid(String(u.id)))}</span><span class="utitle">${esc(String(u.title ?? '').replace(/\s*\(#\d+\)\s*$/, ''))}</span><span class="ulead">${esc(unitLead(raw, u))}</span><span class="udate mono">${u.date}</span></div>
-        ${shareBar(u)}
-      </div>`).join('')}
-    </div>`).join('') : '<div class="empty" style="margin-top:60px">还没有按项整理的记录</div>'}
-  </div>`;
-  $('#cp-md').onclick = () => copy(mergeCreditsMd(null, creditsBlock(m)), 'CREDITS.md 区块已复制');
-  $('#finder').onclick = () => api('reveal', { path: state.current.path });
+  const up = () => {
+    removeEventListener('pointermove', move); removeEventListener('pointerup', up);
+    if (!dragging) return openFocus(id, k);
+    document.body.classList.remove('dragging');
+    ghost.hidden = true; ghost.innerHTML = '';
+    $('#hint').textContent = L('拖动作品到这里导出', 'Drag a piece here to export');
+    if (over) { const f = over.dataset.f!; over.classList.remove('over'); doExport(f, id, k); }
+  };
+  addEventListener('pointermove', move); addEventListener('pointerup', up);
 }
 
-// ───────────────────────── 设置 ─────────────────────────
-async function settingsSheet() {
+// ───────────────────────── 聚焦：大图 + 全部版式 ─────────────────────────
+function openFocus(id: string, k: string) {
+  const el = $('#focus');
+  const def = PIECES[id];
+  const vs = def.variants ?? [];
+  const i = Number(k.split('#')[1]);
+  const draw = () => {
+    const variant = state.variants[k] ?? BOARD[i].variant;
+    const a = art(id, state.model!, state.style, { variant })!;
+    state.arts.set(k, a);
+    const cur = variant ?? state.style.prefer[id] ?? vs[0];
+    el.innerHTML = `<button class="round glass close" data-act="close">✕</button>
+      <div class="big"><div class="art"></div></div>
+      <div class="strip glass">
+        <b style="padding:0 8px">${esc(state.lang === 'zh' ? def.name : def.en)}</b><span style="color:var(--soft)">${esc(state.lang === 'zh' ? def.q : '')}</span>
+        ${vs.length > 1 ? `<span class="sep"></span>${vs.map((v) => `<button data-v="${v}" class="${v === cur ? 'on' : ''}">${esc(variantName(v, state.lang))}</button>`).join('')}` : ''}
+        <span class="sep"></span>${FORMATS.filter((f) => f.id !== 'gif' || def.animated).map((f) => `<button data-f="${f.id}">${f.name}</button>`).join('')}
+      </div>`;
+    const artEl = el.querySelector('.art') as HTMLElement;
+    artEl.innerHTML = a.svg;
+    (el.querySelector('.big') as HTMLElement).style.width = `${Math.max(320, Math.min(a.w, 1100, ((innerHeight - 240) * a.w) / a.h))}px`;
+    mountHits(artEl, a.hits, a.w, a.h);
+  };
+  draw();
+  el.hidden = false;
+  el.onclick = (e) => {
+    const b = (e.target as HTMLElement).closest('button') as HTMLElement | null;
+    if (!b) { if (e.target === el) close(); return; }
+    if (b.dataset.act === 'close') return close();
+    if (b.dataset.v) { state.variants[k] = b.dataset.v; draw(); return; }
+    if (b.dataset.f) doExport(b.dataset.f, id, k);
+  };
+  const close = () => { el.hidden = true; el.innerHTML = ''; document.removeEventListener('keydown', key); paint(); };
+  const key = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', key);
+}
+
+// ───────────────────────── 风格圆点 ─────────────────────────
+function renderDots() {
+  const nav = $('#dots');
+  nav.innerHTML = STYLES.map((s) => `<button data-s="${s.id}" class="${s.id === state.style.id ? 'on' : ''}" aria-label="${esc(s.name)}"><svg viewBox="0 0 24 24">${s.dot()}</svg></button>`).join('');
+  const tipEl = $('#tipname');
+  nav.onmouseover = (e) => {
+    const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
+    const s = styleById(b.dataset.s!)!;
+    tipEl.innerHTML = `<b>${esc(state.lang === 'zh' ? s.name : s.en)}</b><span>${esc(s.note)}</span>`;
+    tipEl.hidden = false;
+    const r = b.getBoundingClientRect();
+    tipEl.style.left = `${Math.max(8, r.left - 10)}px`; tipEl.style.top = `${r.top - tipEl.offsetHeight - 12}px`;
+  };
+  nav.onmouseleave = () => (tipEl.hidden = true);
+  nav.onclick = async (e) => {
+    const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
+    const s = styleById(b.dataset.s!) as Style;
+    if (s.id === state.style.id) return;
+    state.style = s; store.set('style', s.id);
+    nav.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    state.variants = {};
+    await paint();
+  };
+}
+
+// ───────────────────────── 顶栏：项目、语言、设置 ─────────────────────────
+function wireTop() {
+  const pill = $('#project');
+  pill.onclick = () => toggleMenu();
+  pill.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') toggleMenu(); };
+  const lang = $('#lang');
+  lang.textContent = state.lang === 'zh' ? '中' : 'EN';
+  lang.onclick = async () => {
+    state.lang = state.lang === 'zh' ? 'en' : 'zh'; store.set('lang', state.lang);
+    lang.textContent = state.lang === 'zh' ? '中' : 'EN';
+    document.documentElement.lang = state.lang;
+    renderDock();
+    if (state.raw) { rebuildModel(); await paint(); }
+  };
+  $('#gear').onclick = () => settings();
+}
+function toggleMenu() {
+  const menu = $('#menu'), pill = $('#project');
+  if (!menu.hidden) { menu.hidden = true; pill.setAttribute('aria-expanded', 'false'); return; }
+  pill.setAttribute('aria-expanded', 'true');
+  menu.hidden = false;
+  menu.innerHTML = `<input id="q" placeholder="${L('搜索项目', 'Search projects')}" autocomplete="off"><div class="list" id="plist"></div>
+    <div class="foot"><button id="add">＋ ${L('添加项目', 'Add project')}</button><button id="re">↻ ${L('重新分析', 'Re-analyze')}</button></div>`;
+  const draw = () => {
+    const q = ($('#q') as HTMLInputElement).value.trim().toLowerCase();
+    $('#plist').innerHTML = state.projects.filter((p) => !q || `${p.name} ${p.path}`.toLowerCase().includes(q)).map((p) => `
+      <div class="item ${p.id === state.current?.id ? 'on' : ''}" data-id="${esc(p.id)}">
+        <b>${esc(p.name)}</b><span class="r">${p.lastAnalyzed ? new Date(p.lastAnalyzed * 1000).toLocaleDateString(state.lang === 'zh' ? 'zh-CN' : 'en-US') : L('未分析', 'not analyzed')}</span>
+        <span>${esc(p.path)}</span><span class="r">${p.evidence ? `${fmt(p.evidence)} ${L('条证据', 'evidence')}` : ''}</span>
+        ${p.paths?.length > 1 ? `<span class="paths">${L('还在', 'also at')} ${esc(p.paths.slice(1, 3).join('、'))}${p.paths.length > 3 ? ' …' : ''}</span>` : ''}
+      </div>`).join('') || `<div class="item"><span>${L('没有匹配的项目', 'No match')}</span></div>`;
+  };
+  draw();
+  ($('#q') as HTMLInputElement).oninput = draw;
+  ($('#q') as HTMLInputElement).focus();
+  $('#plist').onclick = (e) => {
+    const it = (e.target as HTMLElement).closest('.item') as HTMLElement | null; if (!it?.dataset.id) return;
+    menu.hidden = true; pill.setAttribute('aria-expanded', 'false');
+    const p = state.projects.find((x) => x.id === it.dataset.id);
+    if (p && p !== state.current) openProject(p);
+  };
+  $('#add').onclick = async () => {
+    try { const r = await api('add_project'); if (r) { state.projects = await api('projects'); const p = state.projects.find((x) => x.id === r.id); if (p) openProject(p); menu.hidden = true; } }
+    catch (e: any) { toast(String(e?.message ?? e)); }
+  };
+  $('#re').onclick = async () => {
+    if (!state.current) return;
+    toast(L('正在分析，不调用任何大模型…', 'Analyzing locally, no LLM involved…'), 120000);
+    try { await api('analyze', { projectId: state.current.id }); state.projects = await api('projects'); await openProject(state.projects.find((x) => x.id === state.current.id) ?? state.current); toast(L('已更新', 'Updated')); }
+    catch (e: any) { toast(String(e?.message ?? e), 5000); }
+  };
+  setTimeout(() => document.addEventListener('click', function off(e) { if (!menu.contains(e.target as Node) && !pill.contains(e.target as Node)) { menu.hidden = true; pill.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', off); } }), 0);
+}
+
+async function settings() {
   const el = $('#sheet');
   el.hidden = false;
-  el.innerHTML = `<div class="sheet-back" id="sheet-back"></div>
-  <div class="sheet">
-    <h2>设置</h2>
-    <h3>数据源</h3><div id="doc"><div class="loading">检查中…</div></div>
-    <h3>作品库</h3><div class="row"><code id="libpath">…</code><button class="btn" id="lib-open">打开</button></div>
-    <h3>分析</h3><div class="row"><code id="cmd">cd ${esc(state.current?.path ?? '…')} && creditia analyze</code><button class="btn" id="cp-cmd">复制</button></div>
-    <div class="meta">creditia 0.1.0 · 证据库只存行哈希与元数据</div>
+  el.innerHTML = `<div class="panel glass">
+    <h2>${L('设置', 'Settings')}</h2>
+    <h3>${L('人的署名', 'People')}</h3>
+    <p>${L('默认只写人做了什么（指令、审阅、取舍），不写人名。你可以选择写出名字，或者留一个落款。', 'By default people are described by what they did — prompts, reviews, choices — without names. You can opt in to names or add a signature.')}</p>
+    <div class="row"><span class="k">${L('人名', 'Names')}</span><span class="seg" id="named"><button data-v="0" class="${state.named ? '' : 'on'}">${L('不写', 'Hidden')}</button><button data-v="1" class="${state.named ? 'on' : ''}">${L('写出', 'Shown')}</button></span></div>
+    <div class="row"><span class="k">${L('落款', 'Signature')}</span><input type="text" id="sign" value="${esc(state.sign)}" placeholder="${L('留空则不落款', 'Leave empty for none')}"></div>
+    <h3>${L('数据源', 'Data sources')}</h3><div id="doc"><p>${L('检查中…', 'Checking…')}</p></div>
+    <h3>${L('关于', 'About')}</h3>
+    <p>${L('全部在本机分析：只读各工具的日志和 git 历史，只存行哈希与元数据，不存代码与 prompt，不调用任何大模型。', 'Everything runs locally: reads tool logs and git history, stores only line hashes and metadata, never code or prompts, and never calls an LLM.')}</p>
   </div>`;
-  const close = () => { el.hidden = true; el.innerHTML = ''; document.removeEventListener('keydown', onKey); };
-  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
-  document.addEventListener('keydown', onKey);
-  $('#sheet-back').onclick = close;
-  $('#cp-cmd').onclick = () => copy(($('#cmd') as HTMLElement).textContent ?? '', '命令已复制');
-  const lp = await api('library_path').catch(() => '');
-  $('#libpath').textContent = lp || '浏览器调试模式没有作品库';
-  $('#lib-open').onclick = () => (lp ? api('open_path', { path: lp }) : toast('浏览器调试模式没有作品库'));
-  state.doctor = await api('doctor').catch(() => []);
-  $('#doc').innerHTML = state.doctor.length
-    ? state.doctor.map((d) => `<div class="src"><i class="dot ${d.ok ? 'ok' : ''}"></i><b>${esc(d.name)}</b><span class="path">${esc(d.path)}</span><span class="q">${esc(d.detail)}</span></div>`).join('')
-    : '<div class="meta">没有可用的数据源</div>';
+  el.onclick = (e) => { if (e.target === el) { el.hidden = true; el.innerHTML = ''; } };
+  $('#named').onclick = async (e) => {
+    const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
+    state.named = b.dataset.v === '1'; store.set('named', state.named ? '1' : '0');
+    $('#named').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    api('set_display', { projectId: state.current?.id, named: state.named, sign: state.sign }).catch(() => null);
+    rebuildModel(); await paint();
+  };
+  ($('#sign') as HTMLInputElement).onchange = async (e) => {
+    state.sign = (e.target as HTMLInputElement).value.trim(); store.set('sign', state.sign);
+    api('set_display', { projectId: state.current?.id, named: state.named, sign: state.sign }).catch(() => null);
+    rebuildModel(); await paint();
+  };
+  const doc = await api('doctor').catch(() => []);
+  $('#doc').innerHTML = doc.length ? doc.map((d: any) => `<div class="row"><i class="dot ${d.ok ? 'ok' : ''}"></i><span class="k">${esc(d.name)}</span><span class="v">${esc(d.detail)}</span></div>`).join('') : `<p>${L('没有可用的数据源', 'No data sources found')}</p>`;
 }
 
 boot();

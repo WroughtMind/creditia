@@ -16,7 +16,6 @@
     "vite": "^8.3.0"
   },
   "dependencies": {
-    "@resvg/resvg-wasm": "^2.6.2",
-    "satori": "0.38.2"
+    "@resvg/resvg-wasm": "^2.6.2"
   }
 }
