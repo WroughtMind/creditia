@@ -125,7 +125,7 @@ h2 { margin: 18px 0 0; font-size: clamp(38px, 5vw, 72px); line-height: 1.04; let
 :lang(zh) h2 { font-size: clamp(32px, 4vw, 56px); line-height: 1.22; letter-spacing: .01em; }
 .lead { margin: 22px 0 0; color: var(--soft); font-size: 17.5px; max-width: 34em; text-wrap: pretty; }
 
-/* ───────── 十六种样子 ───────── */
+/* ───────── 风格 ───────── */
 .studio { margin-top: 64px; display: grid; grid-template-columns: 300px 1fr; gap: 56px; align-items: start; }
 .picker { position: sticky; top: 96px; }
 .picker h4 { margin: 22px 0 8px; font-size: 11.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--faint); font-weight: 500; }
@@ -183,7 +183,7 @@ h2 { margin: 18px 0 0; font-size: clamp(38px, 5vw, 72px); line-height: 1.04; let
 .ln .no { text-align: right; padding-right: 14px; color: var(--faint); font-size: 12px; }
 .ln .mark { align-self: stretch; }
 .ln .tx { padding-left: 16px; white-space: pre; }
-.ln .who { font-size: 12px; color: var(--soft); font-family: Inter, sans-serif; opacity: 0; transition: opacity .15s; }
+.ln .who { font-size: 12px; color: var(--soft); font-family: Inter, sans-serif; opacity: 0; transition: opacity .15s; white-space: nowrap; }
 .ln:hover { background: var(--line2); }
 .ln:hover .who, .ln.lit .who { opacity: 1; }
 .code.focus .ln:not(.lit) { opacity: .28; }
@@ -240,9 +240,20 @@ footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
   .picker h4 { display: none; }
   .picker button { width: auto; margin: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 99px; font-size: 13.5px; }
   .picker .en { display: none; }
-  #screen .reel-view { left: 12%; right: 12%; width: auto; opacity: .3; }
-  #screen::after { content: ""; position: absolute; inset: 35% 0 0; z-index: 1; pointer-events: none; background: linear-gradient(transparent, #08080B 45%); }
+  /* 手机：字幕只在上半屏滚，往下渐隐成黑，标题和说明压在纯黑上 */
+  #screen .reel-view { left: 12%; right: 12%; bottom: 40%; width: auto; opacity: .34; }
+  #screen::after { content: ""; position: absolute; inset: 22% 0 0; z-index: 1; pointer-events: none; background: linear-gradient(transparent, #08080B 38%); }
   .intro { width: auto; right: 24px; }
+  /* 风格：一行横向滑动，不占一整屏 */
+  .picker { flex-wrap: nowrap; overflow-x: auto; margin: 0 -24px; padding: 2px 24px 10px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .picker::-webkit-scrollbar { display: none; }
+  .picker button { flex: none; white-space: nowrap; }
+  .studio { margin-top: 36px; gap: 22px; }
+  /* 画册：按屏宽放，不超出屏幕 */
+  .album { padding: 8px 24px 30px; gap: 18px; align-items: center; }
+  /* 宽度取「屏宽」和「限高 × 宽高比」里小的那个，高度跟着宽高比走：竖图不会太高，横图不会出屏 */
+  .album .plate { height: auto; width: min(86vw, calc(min(50vh, 460px) * var(--ar))); }
+  .album .plate svg { width: 100%; height: 100%; }
 }
 /*__INTERACT_CSS__*/
 </style>
@@ -283,7 +294,7 @@ footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
   <section id="styles">
     <div class="wrap">
       <div class="kicker rise" data-i="styles.k">风格</div>
-      <h2 class="serif rise" data-i="styles.t">同一份数据，十六种样子</h2>
+      <h2 class="serif rise" data-i="styles.t">同一份数据，二十六种样子</h2>
       <p class="lead rise" data-i="styles.l">每种风格不只是换颜色，排版也跟着变：古籍是竖排的，赛博是一块块面板，漫画是能力图。下面是同一个示例项目，选一种看看，鼠标放在图上能看到每一块的数字。</p>
       <div class="studio">
         <div class="picker rise" id="picker"></div>
@@ -319,7 +330,7 @@ footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
           <div class="code mono" id="code"></div>
         </div>
       </div>
-      <p class="after rise" data-i="lines.after">人的工作没法按行数算，所以单独写几个数：发给 AI 多少条消息、review 多少次、人写了多少行；名字默认不出现。被拒绝、写失败的编辑不算。<a href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md">完整的规则和已知的局限 →</a></p>
+      <p class="after rise" data-i="lines.after">署名里只有 AI 工具和模型，不写人名。被拒绝、写失败的编辑不算。<a href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md">完整的规则和已知的局限 →</a></p>
     </div>
   </section>
 
@@ -384,13 +395,13 @@ const EN = {
   'hero.title': 'Which AI wrote<br>which part of your code',
   'hero.sub': 'It reads your git history and the logs left by Claude Code, Codex, Cursor and others, matches them line by line, works out how much each tool and model wrote, and turns it into end credits like these.',
   'hero.copy': 'Copy', 'hero.copied': 'Copied', 'hero.fine': 'Sample project, made-up numbers · hover to pause',
-  'styles.k': 'Styles', 'styles.t': 'One set of numbers, sixteen looks',
+  'styles.k': 'Styles', 'styles.t': 'One set of numbers, twenty-six looks',
   'styles.l': 'A style changes the layout, not just the colors: the woodblock book is vertical, cyber is a set of panels, manga is a stats chart. Same sample project throughout. Pick one and hover the image for the numbers behind each part.',
   'album.k': 'Album', 'album.t': 'End credits, receipts, charts',
   'album.l': 'Beyond the credits list there are a dozen more pieces. Each exports to an image, PDF, GIF, or a web page you can hover for the numbers.',
   'lines.k': 'How it works', 'lines.t': 'Every line has a source',
   'lines.l': 'There are four kinds. Hover one on the left to see which lines it covers. Everything is computed on your machine; no code is uploaded and no model is called.',
-  'lines.after': 'People’s work can’t be counted in lines, so it gets a few separate numbers: messages sent to AI, reviews, lines written by people. Names are hidden by default. Rejected or failed edits don’t count. <a href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md">Full rules and known limits →</a>',
+  'lines.after': 'The credits list AI tools and models only, never people’s names. Rejected or failed edits don’t count. <a href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md">Full rules and known limits →</a>',
   'use.k': 'Usage', 'use.t': 'Run it in your repo',
   'use.c1': '# analyze (the first run downloads the analyzer for your platform)', 'use.c2': '# export: pick any piece, style and format', 'use.c3': '# put it on GitHub, refreshed on every push',
   'use.f1t': 'Let your agent do it', 'use.f1p': 'The repo ships a skill. Agents like Claude Code and Codex go step by step and ask before publishing anything.',
@@ -405,7 +416,15 @@ document.querySelectorAll('[data-i]').forEach((el) => (ZH[el.dataset.i] = el.inn
 ZH['hero.copied'] = '已复制';
 const lang = () => (document.documentElement.lang === 'en' ? 'en' : 'zh');
 const t = (k) => (lang() === 'en' ? EN[k] : ZH[k]) ?? k;
-const GROUPS = [['基础', 'Basics', ['minimal', 'noir', 'glass']], ['东方', 'East Asian', ['ink', 'ukiyoe', 'woodblock']], ['西方古典', 'Classical', ['cinema', 'baroque', 'grimoire']], ['电影与文学', 'Film & books', ['manuscript', 'pastel', 'cutout', 'meadow']], ['流行', 'Pop', ['manga', 'cyber', 'terminal']]];
+const GROUPS = [
+  ['基础', 'Basics', ['minimal-light', 'minimal-dark', 'glass', 'mono']],
+  ['电影与舞台', 'Film & stage', ['film', 'cinema', 'gala', 'playbill', 'cutout', 'pastel']],
+  ['纸面', 'Paper', ['editorial', 'broadsheet', 'poster', 'manuscript']],
+  ['东方', 'East Asian', ['ink', 'ukiyoe', 'woodblock']],
+  ['西方古典', 'Classical', ['baroque', 'grimoire']],
+  ['屏幕', 'Screens', ['terminal', 'crt', 'neon', 'arcade', 'cyber']],
+  ['动画与漫画', 'Animation & comics', ['meadow', 'manga']],
+];
 const PIECE = { tier: ['署名榜', 'Credits'], roll: ['片尾字幕', 'End credits'], receipt: ['小票', 'Receipt'], hand: ['人', 'People'], stream: ['每周新增', 'Weekly'], waffle: ['百格', 'Waffle'], donut: ['占比', 'Share'], clock: ['提交时间', 'Commit times'], calendar: ['日历', 'Calendar'] };
 const VAR = { vertical: ['竖排', 'vertical'], hud: ['面板', 'HUD'], ed: ['动画片尾', 'anime ED'], stats: ['能力', 'stats'], podium: ['领奖台', 'podium'], billing: ['海报', 'billing'], ticket: ['电影票', 'ticket'] };
 const S = (id) => DATA.styles.find((s) => s.id === id);
@@ -434,7 +453,7 @@ async function reel() {
   r.style.animation = `roll ${Math.round((h - view.height * 0.18) / 30)}s linear infinite`;
 }
 
-// ───────── 十六种样子 ─────────
+// ───────── 风格 ─────────
 let style = 'ukiyoe';
 function picker() {
   const L = lang();
@@ -446,14 +465,14 @@ async function easel() {
   const card = document.getElementById('easelcard');
   card.style.background = meta.bg;
   card.classList.remove('fade-in'); void card.offsetWidth; card.classList.add('fade-in');
-  document.getElementById('easelnote').innerHTML = `<b>${sname(style)}</b><span>${lang() === 'en' ? '' : S(style).note}</span>`;
+  document.getElementById('easelnote').innerHTML = `<b>${sname(style)}</b><span>${lang() === 'en' ? S(style).noteEn ?? '' : S(style).note}</span>`;
 }
 
 // ───────── 画册 ─────────
 function album() {
   const L = lang();
   const row = document.getElementById('albumrow');
-  row.innerHTML = DATA.album.map((a) => `<figure><div class="plate" style="aspect-ratio:${a.w}/${a.h};background:${a.bg}"><div class="ct-art" data-src="assets/album/${L}/${a.name}"></div></div><figcaption><b>${(PIECE[a.piece] ?? [a.piece, a.piece])[L === 'en' ? 1 : 0]}${a.variant && VAR[a.variant] ? ' · ' + VAR[a.variant][L === 'en' ? 1 : 0] : ''}</b><span>${sname(a.style)}</span></figcaption></figure>`).join('');
+  row.innerHTML = DATA.album.map((a) => `<figure><div class="plate" style="aspect-ratio:${a.w}/${a.h};--ar:${(a.w / a.h).toFixed(4)};background:${a.bg}"><div class="ct-art" data-src="assets/album/${L}/${a.name}"></div></div><figcaption><b>${(PIECE[a.piece] ?? [a.piece, a.piece])[L === 'en' ? 1 : 0]}${a.variant && VAR[a.variant] ? ' · ' + VAR[a.variant][L === 'en' ? 1 : 0] : ''}</b><span>${sname(a.style)}</span></figcaption></figure>`).join('');
   const io = new IntersectionObserver((es) => es.forEach((x) => { if (x.isIntersecting) { load(x.target, x.target.dataset.src); io.unobserve(x.target); } }), { root: row, rootMargin: '0px 800px' });
   row.querySelectorAll('[data-src]').forEach((el) => io.observe(el));
 }

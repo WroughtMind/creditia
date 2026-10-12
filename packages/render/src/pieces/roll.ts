@@ -52,7 +52,7 @@ export function creditsOf(m: Model): Section[] {
   if (minor.length) out.push({ head: T(m, '参与', 'With'), credits: minor.map((a) => ({ name: a.name, sub: a.models[0]?.name, key: a.key })) });
   // 审阅
   const rev: Credit[] = m.reviewers.map((x) => ({ name: x.name, sub: x.reviews ? T(m, `自动 review ${x.reviews} 次`, `${x.reviews} automated reviews`) : x.model, key: x.key }));
-  if (m.hand.reviews) rev.push({ name: peopleNames(m, 2) || T(m, '人', 'People'), sub: T(m, `review ${m.hand.reviews} 次`, `${m.hand.reviews} reviews`), key: 'human' });
+  if (m.showHand && m.hand.reviews) rev.push({ name: peopleNames(m, 2) || T(m, '人', 'People'), sub: T(m, `review ${m.hand.reviews} 次`, `${m.hand.reviews} reviews`), key: 'human' });
   if (rev.length) out.push({ head: 'Review', credits: rev });
   // 人的部分
   const hf = handFacts(m);

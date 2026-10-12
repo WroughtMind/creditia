@@ -1,5 +1,5 @@
 // 官网构建：node site/build.ts [输出目录]
-// 页面上的每一张图都是渲染器现画的：首屏的片尾字幕、十六种风格的署名榜、画册里的作品、creditia 自己的署名。
+// 页面上的每一张图都是渲染器现画的：首屏的片尾字幕、二十六种风格的署名榜、画册里的作品、creditia 自己的署名。
 // 演示用虚构的样例项目；creditia 自己那一块用仓库里的 credits.json。
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -10,6 +10,8 @@ import { LOGOS } from '../packages/render/src/logos.ts';
 import { LOGO_OF } from '../packages/render/src/style.ts';
 import { TOOL_NAMES } from '../packages/render/src/data.ts';
 import { mountHits, INTERACT_CSS } from '../packages/render/src/interact.ts';
+import * as C from '../packages/render/src/classic/index.ts';
+import { ORDERED_THEMES, themeDot, themeName, themeNote } from '../packages/render/src/classic/catalog.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const OUT = path.resolve(process.argv[2] ?? path.join(ROOT, '_site'));
@@ -30,6 +32,15 @@ function put(dir: string, name: string, a: Art) {
 
 const meta: any = { styles: {}, album: [], roll: {}, self: null };
 
+// creditia 自己的完整署名页：交给命令行生成。放在最前面跑，这时本进程还没载入字体，两个进程加起来不会太占内存
+if (own) {
+  for (const lang of LANGS) {
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'packages/cli/bin/creditia.mjs'), 'site', '--credits', path.join(ROOT, 'credits.json'), '--style', 'minimal', '--lang', lang, '--out', path.join(OUT, lang === 'zh' ? 'self' : 'self/en')], { stdio: 'inherit' });
+    if (r.status !== 0) throw new Error('creditia site 失败');
+  }
+  console.log('✓ self');
+}
+
 // 首屏：黄金时代风格的片尾字幕，整张长图在银幕里滚
 for (const lang of LANGS) {
   const m = buildModel(sample, { lang });
@@ -37,10 +48,19 @@ for (const lang of LANGS) {
 }
 console.log('✓ roll');
 
-// 十六种风格：各用自己最合适的署名榜版式
+// 风格：原版的十五个主题（satori 排版）+ 新做的十一种（和原版重名、或原版已有对应的不重复）
+const V2_SKIP = new Set(['minimal', 'noir', 'glass', 'cinema', 'terminal']);
+const V2_STYLES = STYLES.filter((s) => !V2_SKIP.has(s.id));
 for (const lang of LANGS) {
   const m = buildModel(sample, { lang });
-  for (const st of STYLES) meta.styles[st.id] = put(path.join(OUT, 'assets/styles', lang), st.id, art('tier', m, st)!);
+  for (const st of V2_STYLES) meta.styles[st.id] = put(path.join(OUT, 'assets/styles', lang), st.id, art('tier', m, st)!);
+  const cm = C.buildModel(sample, { director: false, lang });
+  for (const t of ORDERED_THEMES) {
+    const a = (await C.art('tier', cm, t, { lang }))!;
+    mkdirSync(path.join(OUT, 'assets/styles', lang), { recursive: true });
+    writeFileSync(path.join(OUT, 'assets/styles', lang, `${t.id}.svg`), a.svg);
+    writeFileSync(path.join(OUT, 'assets/styles', lang, `${t.id}.json`), JSON.stringify({ w: a.w, h: a.h, bg: a.bg, hits: a.hits }));
+  }
   console.log('✓ styles', lang);
 }
 
@@ -48,7 +68,7 @@ for (const lang of LANGS) {
 const ALBUM: [string, string, string?][] = [
   ['roll', 'woodblock', 'vertical'], ['tier', 'cyber', 'hud'], ['roll', 'meadow', 'ed'], ['hand', 'ink'],
   ['tier', 'manga', 'stats'], ['receipt', 'manuscript'], ['donut', 'grimoire'], ['tier', 'baroque', 'podium'],
-  ['stream', 'glass'], ['clock', 'cinema'], ['roll', 'cutout', 'billing'], ['waffle', 'pastel'],
+  ['stream', 'meadow'], ['clock', 'cyber'], ['roll', 'cutout', 'billing'], ['waffle', 'pastel'],
 ];
 for (const lang of LANGS) {
   const m = buildModel(sample, { lang });
@@ -60,14 +80,8 @@ for (const lang of LANGS) {
   console.log('✓ album', lang);
 }
 
-// creditia 自己：一张真实数据的署名榜 + 完整的署名页
-if (own) {
-  for (const lang of LANGS) {
-    meta.self = put(path.join(OUT, 'assets/self'), lang, art('tier', buildModel(own, { lang }), styleById('minimal')!)!);
-    const r = spawnSync(process.execPath, [path.join(ROOT, 'packages/cli/bin/creditia.mjs'), 'site', '--credits', path.join(ROOT, 'credits.json'), '--style', 'minimal', '--lang', lang, '--out', path.join(OUT, lang === 'zh' ? 'self' : 'self/en')], { stdio: 'inherit' });
-    if (r.status !== 0) throw new Error('creditia site 失败');
-  }
-}
+// creditia 自己：一张真实数据的署名榜
+if (own) for (const lang of LANGS) meta.self = put(path.join(OUT, 'assets/self'), lang, art('tier', buildModel(own, { lang }), styleById('minimal')!)!);
 
 // 社交预览图
 for (const lang of LANGS) writeFileSync(path.join(OUT, `assets/og-${lang}.png`), exporter.png(art('share', buildModel(sample, { lang }), styleById('cinema')!)!, 1));
@@ -77,7 +91,10 @@ const tools = ['claude-code', 'codex', 'cursor', 'gemini', 'qwen', 'opencode', '
   const name = TOOL_NAMES[k] ?? k;
   return { name, svg: lg ? `<svg viewBox="${lg.vb}" aria-hidden="true"><path d="${lg.d}"/></svg>` : `<b>${name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2)}</b>` };
 });
-const styles = STYLES.map((s) => ({ id: s.id, name: s.name, en: s.en, note: s.note, dot: s.dot() }));
+const styles = [
+  ...ORDERED_THEMES.map((t) => ({ id: t.id, name: themeName(t, 'zh'), en: themeName(t, 'en'), note: themeNote(t, 'zh'), noteEn: themeNote(t, 'en'), dot: themeDot(t) })),
+  ...V2_STYLES.map((s) => ({ id: s.id, name: s.name, en: s.en, note: s.note, noteEn: '', dot: s.dot() })),
+];
 const logo = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo.svg'), 'utf8').replace(/#0E0E0E/g, 'currentColor').replace('<svg ', '<svg aria-hidden="true" ');
 
 let html = readFileSync(path.join(import.meta.dirname, 'index.html'), 'utf8');
