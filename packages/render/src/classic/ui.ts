@@ -28,7 +28,24 @@ export function dataUri(svg: string): string {
 }
 export const svgImage = (svg: string, w: number, hh: number, style: Record<string, any> = {}) => image(dataUri(svg), w, hh, style);
 
-export interface Out { tree: Node; w: number; h: number }
+/** 画布四周留白（放大内容时用）。没有就不放大 */
+export interface Out { tree: Node; w: number; h: number; fit?: { padX: number; padY: number } }
+
+/** 内容少时整体放大填满画面：出图时先量一遍这个节点，再按画布留白之内的空间等比放大，最多 max 倍。
+ *  版式、字号之间的比例都不变，只是不再缩在画面中间一小块 */
+export const FIT_KEY = 'creditia-fit';
+/** 同一组的节点出图时量出各自的自然宽度，再统一设成最宽的那个（两栏对齐、中缝居中用）。不靠估算字宽 */
+let eqSeq = 0;
+export function eq(group: string, n: Node): Node { n.key = `creditia-eq:${group}:${eqSeq++}`; n.eqGroup = group; return n; }
+/** 放大到宽度到顶以后，竖向还空着的部分分给这个节点里各项之间的间距（最多加到 spread 倍）。
+ *  片尾字幕本来就是行距很宽的长名单，这样名单会铺开，不会挤在画面中间 */
+export function spread(times: number, n: Node): Node { n.fitSpread = times; return n; }
+export function fit(max: number, style: Record<string, any>, ...kids: any[]): Node {
+  const n = col(style, ...kids);
+  n.key = FIT_KEY;
+  n.fitMax = max;
+  return n;
+}
 
 /** Satori 的 CSS 解析器不接受浮点误差产生的长小数，数值统一保留两位 */
 const r2 = (x: number) => Math.round(x * 100) / 100;
