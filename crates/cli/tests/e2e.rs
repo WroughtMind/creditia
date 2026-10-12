@@ -341,7 +341,7 @@ fn new_sources_levels_and_paths() {
     fs::create_dir_all(&t).unwrap();
     fs::write(t.join("api_conversation_history.json"), serde_json::json!([
         { "role": "user", "content": [{ "type": "text", "text": format!("<environment_details>\n# Current Working Directory ({rs}) Files\nsrc/\n</environment_details>") }] },
-        { "role": "user", "content": [{ "type": "text", "text": "[write_to_file for 'src/cl.ts'] Result:\nThe content was successfully saved to src/cl.ts." }] },
+        { "role": "user", "content": [{ "type": "text", "text": "[write_to_file for 'src/cl.ts'] Result:\nThe content was successfully saved to src/cl.ts.\n\n<final_file_content path=\"src/cl.ts\">\n// throws an error when the input failed validation\n</final_file_content>" }] },
         { "role": "user", "content": [{ "type": "text", "text": "[write_to_file for 'src/denied.ts'] Result:\nThe user denied this operation." }] }
     ]).to_string()).unwrap();
     fs::write(t.join("ui_messages.json"), serde_json::json!([

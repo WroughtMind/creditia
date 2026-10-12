@@ -21,10 +21,10 @@ export interface PieceDef {
 }
 
 export const PIECES: Record<string, PieceDef> = {
-  tier: { name: '署名榜', en: 'Tier', q: '谁写的，各占多少', variants: TIER_VARIANTS, animated: true, render: tier },
+  tier: { name: '署名榜', en: 'Credits', q: '各工具写了多少', variants: TIER_VARIANTS, animated: true, render: tier },
   share: { name: '分享图', en: 'Share Card', q: '链接预览、社交媒体', animated: true, render: share },
-  hand: { name: '人的部分', en: 'The Human Hand', q: '人做了什么：方向、取舍、审阅', animated: true, render: hand },
-  receipt: { name: '精力小票', en: 'Receipt', q: '花了多少精力', variants: RECEIPT_VARIANTS, render: receipt },
+  hand: { name: '人', en: 'People', q: '人做了多少：消息、review、人写的代码', animated: true, render: hand },
+  receipt: { name: '小票', en: 'Receipt', q: '花了多少时间、会话和 token', variants: RECEIPT_VARIANTS, render: receipt },
   badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', variants: BADGE_VARIANTS, render: badge },
   byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', render: byline },
   roll: { name: '片尾字幕', en: 'Credits Roll', q: '谁担任了什么角色', variants: ROLL_VARIANTS, animated: true, render: roll },
@@ -34,7 +34,7 @@ export const PIECES: Record<string, PieceDef> = {
   lanes: { name: '会话泳道', en: 'Sessions', q: '各工具什么时候在干活', animated: true, render: lanes },
   clock: { name: '作息打卡', en: 'Punch Card', q: '星期 × 小时', animated: true, render: clock },
   versions: { name: '版本柱状图', en: 'Releases', q: '每个版本谁写的', animated: true, render: versions },
-  survival: { name: '沉淀', en: 'What Stayed', q: '写下的留下多少', animated: true, render: survival },
+  survival: { name: '留存', en: 'Retention', q: '写的代码现在还剩多少', animated: true, render: survival },
   mosaic: { name: '文件马赛克', en: 'File Mosaic', q: '现在的代码由谁构成', animated: true, render: mosaic },
   calendar: { name: '日历', en: 'Calendar', q: '哪天谁在写', animated: true, render: calendar },
 };

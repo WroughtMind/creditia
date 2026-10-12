@@ -45,6 +45,10 @@ fn cwd_of(task: &Path) -> Option<String> {
     Some(rest[..j].replace("\\\\", "/").to_string())
 }
 
+/// Cline / Roo / Kilo 写入成功时工具结果的原话（不同版本措辞略有不同）
+const SUCCESS: [&str; 5] = ["successfully saved to", "has been successfully saved", "Changes successfully applied", "The user made the following updates", "successfully applied"];
+const DENIED: [&str; 2] = ["The user denied this operation", "user denied"];
+
 /// 对话记录里每个文件的编辑结果，按出现顺序：true = 写入成功
 fn outcomes(task: &Path) -> HashMap<String, std::collections::VecDeque<bool>> {
     let mut out: HashMap<String, std::collections::VecDeque<bool>> = HashMap::new();
@@ -53,10 +57,11 @@ fn outcomes(task: &Path) -> HashMap<String, std::collections::VecDeque<bool>> {
     let re = regex::Regex::new(r"\[(write_to_file|replace_in_file|apply_diff|insert_content|search_and_replace|edit_file|new_rule) for '([^']+)'\] Result:").unwrap();
     let marks: Vec<(usize, usize, String)> = re.captures_iter(&t).map(|c| { let m = c.get(0).unwrap(); (m.start(), m.end(), c[2].trim_start_matches("./").to_string()) }).collect();
     for (i, (_, end, path)) in marks.iter().enumerate() {
-        let stop = marks.get(i + 1).map(|m| m.0).unwrap_or(t.len()).min(end + 600);
-        let body = t[*end..stop].to_lowercase();
-        let failed = body.contains("denied") || body.contains("rejected") || body.contains("error") || body.contains("failed") || body.contains("did not") || body.contains("not found");
-        out.entry(path.clone()).or_default().push_back(!failed);
+        // 只看结果开头那一句：成功的结果后面会附上文件全文，全文里出现 error 之类的词不能当成失败
+        let stop = marks.get(i + 1).map(|m| m.0).unwrap_or(t.len()).min(end + 240);
+        let head = &t[*end..stop];
+        let ok = SUCCESS.iter().any(|p| head.contains(p)) && !DENIED.iter().any(|p| head.contains(p));
+        out.entry(path.clone()).or_default().push_back(ok);
     }
     out
 }

@@ -2,46 +2,39 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { creditsBlock, mergeCreditsMd, MARK_START, MARK_END } from '../../render/src/text.ts';
+import { buildModel } from '../../render/src/data.ts';
 
-function fakeModel(): any {
-  return {
-    project: '示例项目',
-    director: '',
-    rows: [
-      { key: 'codex', name: 'Codex', pct: 81.2, lines: 312045, kind: 'agent', models: ['gpt-5.6-sol'] },
-      { key: 'unattributed', name: '未确认', pct: 9.9, lines: 45871, kind: 'unknown', models: [] },
+function fakeModel() {
+  return buildModel({
+    project: { name: '示例项目', range: { from: '2025-03-01', to: '2025-08-31' } },
+    generatedAt: '2025-09-01T12:00:00+08:00',
+    totals: { commits: 1240, units: 355, linesAdded: 357916 },
+    breakdown: [
+      { contributor: 'a:codex/gpt-5.6-sol', linesAdded: 312045, linesSurviving: 97531, byVersion: { 'v0.1.0': 100 }, byEvidence: {} },
+      { contributor: 'unattributed', linesAdded: 45871, linesSurviving: 12240, byVersion: {}, byEvidence: {} },
     ],
-    commits: 1240,
-    units: 355,
-    linesAdded: 421520,
-    range: { from: '2025-03-01', to: '2025-08-31' },
-    raw: {
-      generatedAt: '2025-09-01T12:00:00+08:00',
-      directors: [{ id: 'h:me' }],
-      breakdown: [
-        { contributor: 'a:codex/gpt-5.6-sol', linesAdded: 312045, linesSurviving: 97531, byVersion: { v1: 100 }, byEvidence: {} },
-        { contributor: 'unattributed', linesAdded: 45871, linesSurviving: 12240, byVersion: {}, byEvidence: {} },
-      ],
-      contributors: [
-        { id: 'h:me', kind: 'human', name: 'me', roles: ['director'] },
-        { id: 'a:codex/gpt-5.6-sol', kind: 'agent', harness: 'codex', model: 'gpt-5.6-sol', roles: ['author'] },
-      ],
-      coverage: [{ from: '2025-03-01', to: '2025-03-31', best: 'inferred' }],
-      versions: [{ tag: 'v0.1.0', date: '2025-04-02' }],
-      units: [
-        { id: 'pr:12', title: '修一个并发 bug (#12)', date: '2025-03-28', version: 'v0.1.0', commits: ['x'], areas: ['core'], lines: 40, shares: [{ contributor: 'a:codex/gpt-5.6-sol', share: 1, evidence: 'verified' }] },
-      ],
-    },
-  };
+    contributors: [
+      { id: 'a:codex/gpt-5.6-sol', kind: 'agent', harness: 'codex', model: 'gpt-5.6-sol', roles: ['author'] },
+      { id: 'unattributed', kind: 'unattributed', roles: [] },
+    ],
+    human: { prompts: 12, reviews: 3 },
+    coverage: [{ from: '2025-03-01', to: '2025-03-31', best: 'inferred' }],
+    versions: [{ tag: 'v0.1.0', date: '2025-04-02' }],
+    units: [
+      { id: 'pr:12', title: '修一个并发 bug (#12)', date: '2025-03-28', version: 'v0.1.0', commits: ['x'], areas: ['core'], lines: 40, shares: [{ contributor: 'a:codex/gpt-5.6-sol', share: 1, evidence: 'verified' }] },
+    ],
+  });
 }
 
-test('creditsBlock 有占比表、版本段落和标记说明', () => {
+test('creditsBlock：工具表、人、版本段落、证据说明', () => {
   const s = creditsBlock(fakeModel());
-  assert.match(s, /\| Codex \| 81\.2% \| \+312,045 \| 97,531 \|/);
-  assert.match(s, /未确认 \| 9\.9%/);
+  assert.match(s, /\| Codex \| GPT-5\.6 Sol \| 87\.2% \| \+312,045 \| 97,531 \|/);
+  assert.match(s, /未确认 \| — \| 12\.8%/);
+  assert.match(s, /\*\*人\*\*：发了 12 条消息，review 3 次/);
   assert.match(s, /## v0\.1\.0 · 2025-04-02/);
-  assert.match(s, /- #12 修一个并发 bug — Codex（gpt-5\.6-sol）/);
+  assert.match(s, /- #12 修一个并发 bug — Codex/);
   assert.match(s, /没有逐行日志/);
+  assert.ok(!s.includes('主导'));
 });
 
 test('mergeCreditsMd 只改标记区间，区间外的手写内容原样保留', () => {

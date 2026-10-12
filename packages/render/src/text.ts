@@ -27,12 +27,12 @@ export function unitLead(m: Model, u: any): string {
 export function creditsBlock(m: Model, maxPerSection = 10): string {
   const out: string[] = [];
   out.push([m.project, T(m, `${fmt(m.commits)} 次提交`, `${fmt(m.commits)} commits`), `+${fmt(m.linesAdded)} ${T(m, '行', 'lines')}`, m.spanDays ? T(m, `${m.spanDays} 天`, `${m.spanDays} days`) : ''].filter(Boolean).join(' · '), '');
-  out.push(T(m, '| 工具 | 模型 | 占比 | 新增行 | 至今仍在 |', '| Tool | Models | Share | Lines | Still here |'), '|---|---|---:|---:|---:|');
+  out.push(T(m, '| 工具 | 模型 | 占比 | 新增行 | 现在还在 |', '| Tool | Models | Share | Lines | Still here |'), '|---|---|---:|---:|---:|');
   for (const a of m.rows) out.push(`| ${a.name} | ${a.models.map((x) => x.name).join(', ') || '—'} | ${pct(a.pct)} | +${fmt(a.lines)} | ${a.kind === 'other' ? '—' : fmt(a.surviving)} |`);
   out.push('');
   const hf = handFacts(m);
   if (hf.length) {
-    out.push(T(m, `**人的部分**：${hf.map((f) => `${f.v} ${f.k}`).join('，')}${peopleNames(m) ? `（${peopleNames(m)}）` : ''}。`, `**The human hand**: ${hf.map((f) => `${f.v} ${f.k}`).join(', ')}${peopleNames(m) ? ` (${peopleNames(m)})` : ''}.`), '');
+    out.push(T(m, `**人**：${hf.map((f) => f.text).join('，')}${peopleNames(m) ? `（${peopleNames(m)}）` : ''}。`, `**People**: ${hf.map((f) => f.text).join(', ')}${peopleNames(m) ? ` (${peopleNames(m)})` : ''}.`), '');
   }
   const weak = (m.raw.coverage ?? []).filter((c: any) => c.best !== 'verified');
   if (weak.length) out.push(T(m, `> ${weak[0].from} – ${weak[weak.length - 1].to} 的大部分代码没有逐行日志，按提交信息推断。`, `> Most code from ${weak[0].from} – ${weak[weak.length - 1].to} has no line-level logs; attributed from commit metadata.`), '');
@@ -105,6 +105,6 @@ export function fetchSegs(m: Model): Seg[][] {
   lines.push([]);
   lines.push([{ text: T(m, '提交 ', 'commits '), dim: true }, { text: fmt(m.commits) }, { text: T(m, '  行 ', '  lines '), dim: true }, { text: fmt(m.linesAdded) }, { text: m.tokens ? T(m, '  token ', '  tokens ') : '', dim: true }, { text: m.tokens ? compact(m.tokens) : '' }]);
   const hf = handFacts(m);
-  if (hf.length) lines.push([{ text: T(m, '人  ', 'human  '), dim: true }, { text: hf.map((f) => `${f.v} ${f.k}`).join(' · ') }]);
+  if (hf.length) lines.push([{ text: T(m, '人  ', 'people  '), dim: true }, { text: hf.map((f) => f.text).join(' · ') }]);
   return lines;
 }

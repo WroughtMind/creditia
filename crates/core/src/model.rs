@@ -262,7 +262,7 @@ pub fn vendor(model: &str) -> &'static str {
     else if has("qwen") || has("qwq") { "alibaba" }
     else if has("glm") || has("zhipu") { "zhipu" }
     else if has("minimax") || m.starts_with("abab") { "minimax" }
-    else if has("doubao") || has("seed") { "bytedance" }
+    else if has("doubao") || m.starts_with("seed-") { "bytedance" }
     else if has("mistral") || has("codestral") || has("devstral") { "mistral" }
     else if has("llama") { "meta" }
     else if has("composer") || m == "auto" || m == "default" { "cursor" }
@@ -317,25 +317,39 @@ pub struct CommitAttr {
     pub reason: String,
 }
 
-/// 板块分类：按路径规则（可在 config 里覆盖，二期）
+/// 板块分类：按通行的目录与文件命名约定（不是关键词猜测），只用于片尾字幕里的分工
 pub fn area(rel: &str, binary: bool) -> &'static str {
     let l = rel.to_lowercase();
-    if binary {
+    let segs: Vec<&str> = l.split('/').collect();
+    let file = *segs.last().unwrap_or(&"");
+    let dirs = &segs[..segs.len().saturating_sub(1)];
+    let ext = file.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
+    let in_dir = |names: &[&str]| dirs.iter().any(|d| names.contains(d));
+    if binary || matches!(ext, "png" | "jpg" | "jpeg" | "gif" | "webp" | "ico" | "icns" | "svg" | "ttf" | "otf" | "woff" | "woff2" | "mp3" | "mp4" | "wav") {
         return "assets";
     }
-    if l.starts_with("tests/") || l.contains("selfcheck") || l.contains("/tests/") || l.contains("check/") || l.ends_with("tests.swift") {
-        "tests"
-    } else if l.ends_with(".md") || l.starts_with("docs/") {
-        "docs"
-    } else if l.starts_with("scripts/") || l.ends_with(".sh") || l.ends_with("package.swift") || l.ends_with(".yml") || l.ends_with(".yaml") || l.starts_with(".github/") {
-        "build"
-    } else if l.contains("/views/") || l.starts_with("website") || l.contains("/resources/editor/") || l.ends_with(".css") || l.ends_with(".html") || l.contains("theme") || l.starts_with("app/") {
-        "frontend"
-    } else if l.ends_with(".svg") || l.contains("/assets/") {
-        "assets"
-    } else {
-        "core"
+    // 测试：测试目录，或者各语言约定的测试文件名
+    if in_dir(&["test", "tests", "__tests__", "spec", "specs", "e2e", "testdata", "fixtures"])
+        || file.contains(".test.") || file.contains(".spec.") || file.contains("_test.") || file.starts_with("test_") || file.ends_with("tests.swift") || file.ends_with("test.java") || file.ends_with("test.kt")
+    {
+        return "tests";
     }
+    if matches!(ext, "md" | "mdx" | "rst" | "adoc" | "txt") || in_dir(&["docs", "doc"]) {
+        return "docs";
+    }
+    // 构建与发布：CI、容器、脚本、包管理清单
+    if segs.first() == Some(&".github") || in_dir(&["scripts", ".circleci", "ci"]) || matches!(ext, "yml" | "yaml" | "toml" | "sh" | "ps1" | "nix" | "gradle" | "cmake" | "mk")
+        || matches!(file, "dockerfile" | "makefile" | "justfile" | "package.json" | "cargo.toml" | "pyproject.toml" | "go.mod" | "package.swift" | "podfile" | "gemfile" | "build.rs" | "vite.config.ts" | "tsconfig.json")
+    {
+        return "build";
+    }
+    // 界面：前端文件类型，或者常见的界面目录
+    if matches!(ext, "css" | "scss" | "sass" | "less" | "html" | "vue" | "svelte" | "astro" | "tsx" | "jsx" | "xib" | "storyboard")
+        || in_dir(&["components", "views", "pages", "ui", "styles", "layouts", "screens", "widgets"])
+    {
+        return "frontend";
+    }
+    "core"
 }
 
 /// 默认排除：lockfile、构建产物、压缩产物
@@ -424,5 +438,23 @@ mod tests {
         assert!(pm.in_project("github.com/org/demo.git"));
         assert!(!pm.in_project("/Users/x/projects/demo-film/src/a.rs"));
         assert_eq!(pm.to_rel("C:\\Users\\x\\demo\\src\\a.rs").as_deref(), Some("src/a.rs"));
+    }
+}
+
+#[cfg(test)]
+mod area_tests {
+    use super::area;
+    #[test]
+    fn conventions() {
+        assert_eq!(area("src/theme.rs", false), "core"); // 文件名里有 theme 不再算界面
+        assert_eq!(area("web/components/Button.tsx", false), "frontend");
+        assert_eq!(area("pkg/foo_test.go", false), "tests");
+        assert_eq!(area("src/a.test.ts", false), "tests");
+        assert_eq!(area("tests/e2e.rs", false), "tests");
+        assert_eq!(area("README.md", false), "docs");
+        assert_eq!(area(".github/workflows/ci.yml", false), "build");
+        assert_eq!(area("Dockerfile", false), "build");
+        assert_eq!(area("crates/core/src/engine.rs", false), "core");
+        assert_eq!(area("assets/logo.svg", false), "assets");
     }
 }

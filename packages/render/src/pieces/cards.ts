@@ -12,15 +12,15 @@ export const RECEIPT_VARIANTS = ['slip', 'ticket'];
 function effort(m: Model): { k: string; v: string; d?: string }[] {
   const h = m.hand;
   const items: { k: string; v: string; d?: string }[] = [];
-  if (m.spanDays) items.push({ k: T(m, '工期', 'Span'), v: T(m, `${m.spanDays} 天`, `${m.spanDays} days`), d: range(m) });
-  if (m.activeDays) items.push({ k: T(m, '动工', 'Active days'), v: T(m, `${m.activeDays} 天`, `${m.activeDays} days`) });
+  if (m.spanDays) items.push({ k: T(m, '历时', 'Span'), v: T(m, `${m.spanDays} 天`, `${m.spanDays} days`), d: range(m) });
+  if (m.activeDays) items.push({ k: T(m, '有提交的天数', 'Days with commits'), v: T(m, `${m.activeDays} 天`, `${m.activeDays} days`) });
   if (m.sessions) items.push({ k: T(m, '会话', 'Sessions'), v: fmt(m.sessions) });
   if (m.tokens) items.push({ k: 'Token', v: compact(m.tokens) });
-  if (h.prompts) items.push({ k: T(m, '指令', 'Prompts'), v: fmt(h.prompts) });
+  if (h.prompts) items.push({ k: T(m, '发给 AI 的消息', 'Messages to AI'), v: fmt(h.prompts) });
   items.push({ k: T(m, '提交', 'Commits'), v: fmt(m.commits) });
-  if (h.written) items.push({ k: T(m, 'agent 写下', 'Generated'), v: T(m, `${fmt(h.written)} 行`, `${fmt(h.written)} lines`) });
-  items.push({ k: T(m, '进入仓库', 'Committed'), v: T(m, `${fmt(m.linesAdded)} 行`, `${fmt(m.linesAdded)} lines`) });
-  if (m.linesSurviving) items.push({ k: T(m, '至今仍在', 'Still here'), v: T(m, `${fmt(m.linesSurviving)} 行`, `${fmt(m.linesSurviving)} lines`) });
+  if (h.written) items.push({ k: T(m, 'AI 写的', 'Written by AI'), v: T(m, `${fmt(h.written)} 行`, `${fmt(h.written)} lines`) });
+  items.push({ k: T(m, '提交了的', 'Committed'), v: T(m, `${fmt(m.linesAdded)} 行`, `${fmt(m.linesAdded)} lines`) });
+  if (m.linesSurviving) items.push({ k: T(m, '现在还在', 'Still here'), v: T(m, `${fmt(m.linesSurviving)} 行`, `${fmt(m.linesSurviving)} lines`) });
   return items;
 }
 
@@ -40,7 +40,7 @@ export function receipt(m: Model, st: Style, o: PieceOpts): Scene | null {
   s.add(path(d + 'Z', { fill: paper, opacity: st.dark ? 0.92 : 0.96 }));
   const x0 = px + P - 30, x1 = px + pw - P + 30, cx = W / 2;
   let y = py + 70;
-  st.label(s, T(m, '精 力 小 票', 'RECEIPT'), cx, y, { anchor: 'middle', size: 14 });
+  st.label(s, T(m, '小票', 'RECEIPT'), cx, y, { anchor: 'middle', size: 14 });
   st.title(s, m.project || 'Untitled', cx, y + 66, 46, 'middle', { maxW: pw - 80 });
   y += 108;
   const dash = (yy: number) => s.add(line(x0, yy, x1, yy, { stroke: st.c.ink, strokeOpacity: 0.35, strokeDasharray: '5 5' }));
@@ -75,7 +75,7 @@ export function receipt(m: Model, st: Style, o: PieceOpts): Scene | null {
   s.add(g({ opacity: 0.85 }, ...bars));
   s.text(`${m.project.toUpperCase()}-${m.commits}-${m.linesAdded}`, cx, y + 76, { font: mono, size: 12, fill: st.c.soft, anchor: 'middle', track: 0.2 });
   const hf = handFacts(m);
-  if (hf.length) { s.text(T(m, `人：${hf.slice(0, 2).map((f) => `${f.v} ${f.k}`).join('，')}`, `Human: ${hf.slice(0, 2).map((f) => `${f.v} ${f.k}`).join(', ')}`), cx, y + 112, { font: st.f.body, size: 14, fill: st.c.soft, anchor: 'middle', maxW: pw - 80 }); s.hit(x0, y + 92, x1 - x0, 28, handTip(m)); }
+  if (hf.length) { s.text(hf.slice(0, 2).map((f) => f.text).join(T(m, '，', ', ')), cx, y + 112, { font: st.f.body, size: 14, fill: st.c.soft, anchor: 'middle', maxW: pw - 80 }); s.hit(x0, y + 92, x1 - x0, 28, handTip(m)); }
   return s;
 }
 
@@ -89,12 +89,12 @@ function ticket(m: Model, st: Style, _o: PieceOpts): Scene {
   const notch = 22;
   s.add(path(`M${r(x)} ${r(y)}H${r(x + w - stub - notch)}a${notch} ${notch} 0 0 0 ${notch * 2} 0H${r(x + w)}V${r(y + h)}H${r(x + w - stub + notch)}a${notch} ${notch} 0 0 0 ${-notch * 2} 0H${r(x)}Z`, { fill: paper, stroke: st.c.ink, strokeOpacity: 0.2 }));
   s.add(line(x + w - stub, y + notch + 6, x + w - stub, y + h - notch - 6, { stroke: st.c.ink, strokeOpacity: 0.4, strokeDasharray: '6 6' }));
-  st.label(s, T(m, '一张票 · 一部作品', 'ADMIT ONE'), x + 50, y + 62, { size: 14 });
+  st.label(s, 'ADMIT ONE', x + 50, y + 62, { size: 14 });
   st.title(s, m.project || 'Untitled', x + 50, y + 150, 76, 'start', { maxW: w - stub - 100 });
   const lead = m.rows.filter((a) => a.kind === 'agent').slice(0, 3);
-  s.text(T(m, `主演　${lead.map((a) => a.name).join('　')}`, `STARRING  ${lead.map((a) => a.name).join('  ')}`), x + 50, y + 210, { font: st.f.body, size: 22, fill: st.c.ink, maxW: w - stub - 100 });
+  s.text(T(m, `参与　${lead.map((a) => a.name).join('　')}`, `WITH  ${lead.map((a) => a.name).join('  ')}`), x + 50, y + 210, { font: st.f.body, size: 22, fill: st.c.ink, maxW: w - stub - 100 });
   lead.forEach((a, i) => s.hit(x + 40, y + 182, w - stub - 80, 40, tip(m, a)).hits.length && i);
-  const facts = [[T(m, '片长', 'RUNTIME'), T(m, `${m.spanDays} 天`, `${m.spanDays} days`)], [T(m, '场次', 'SESSIONS'), fmt(m.sessions)], [T(m, '提交', 'COMMITS'), fmt(m.commits)], [T(m, '行', 'LINES'), fmt(m.linesAdded)]];
+  const facts = [[T(m, '历时', 'DAYS'), T(m, `${m.spanDays} 天`, `${m.spanDays} days`)], [T(m, '会话', 'SESSIONS'), fmt(m.sessions)], [T(m, '提交', 'COMMITS'), fmt(m.commits)], [T(m, '行', 'LINES'), fmt(m.linesAdded)]];
   facts.forEach(([k, v], i) => {
     const fx = x + 50 + i * ((w - stub - 100) / 4);
     st.label(s, k, fx, y + h - 78, { size: 12 });
@@ -102,14 +102,14 @@ function ticket(m: Model, st: Style, _o: PieceOpts): Scene {
   });
   // 票根
   const sx = x + w - stub / 2;
-  st.label(s, T(m, '票根', 'STUB'), sx, y + 62, { anchor: 'middle', size: 12 });
+  st.label(s, 'STUB', sx, y + 62, { anchor: 'middle', size: 12 });
   st.num(s, range(m).split(' — ')[1] ?? '', sx, y + 110, 22, 'middle');
   const rnd = rng(hash(m.project));
   const bars: string[] = [];
   for (let k = 0; k < 44; k++) { const bw = 1 + Math.floor(rnd() * 3); bars.push(rect(sx - 110 + k * 5, y + 150, bw, 90, { fill: st.c.ink })); }
   s.add(g({ opacity: 0.8 }, ...bars));
   const hf = handFacts(m);
-  if (hf[0]) { s.text(`${hf[0].v} ${hf[0].k}`, sx, y + h - 46, { font: st.f.body, size: 16, fill: st.c.soft, anchor: 'middle' }); s.hit(sx - 120, y + h - 70, 240, 36, handTip(m)); }
+  if (hf[0]) { s.text(hf[0].text, sx, y + h - 46, { font: st.f.body, size: 16, fill: st.c.soft, anchor: 'middle' }); s.hit(sx - 120, y + h - 70, 240, 36, handTip(m)); }
   return s;
 }
 
@@ -120,11 +120,11 @@ export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
   const W = 1200;
   const { s, c } = canvas(m, st, W, 550, 40);
   const x0 = c.x + 56, x1 = c.x + c.w - 56;
-  st.label(s, T(m, '人与 AI 一起写成', 'MADE WITH AI'), x0, c.y + 70, { size: 14 });
+  st.label(s, T(m, '署名', 'CREDITS'), x0, c.y + 70, { size: 14 });
   st.title(s, m.project || 'Untitled', x0, c.y + 170, 96, 'start', { maxW: x1 - x0 });
   const ag = m.agents.filter((a) => a.kind === 'agent');
   const models = [...new Set(ag.flatMap((a) => a.models.map((q) => q.name)))];
-  s.text(T(m, `${ag.length} 个 AI 工具、${models.length} 个模型，${m.spanDays ? `${m.spanDays} 天` : ''}写成 ${fmt(m.linesAdded)} 行`, `${ag.length} AI tools, ${models.length} models, ${fmt(m.linesAdded)} lines${m.spanDays ? ` in ${m.spanDays} days` : ''}`), x0, c.y + 228, { font: st.f.body, size: 24, fill: st.c.soft, maxW: x1 - x0 });
+  s.text(T(m, `${ag.length} 个 AI 工具 · ${models.length} 个模型 · ${fmt(m.linesAdded)} 行${m.spanDays ? ` · ${m.spanDays} 天` : ''}`, `${ag.length} AI tools · ${models.length} models · ${fmt(m.linesAdded)} lines${m.spanDays ? ` · ${m.spanDays} days` : ''}`), x0, c.y + 228, { font: st.f.body, size: 24, fill: st.c.soft, maxW: x1 - x0 });
   s.hit(x0, c.y + 200, x1 - x0, 40, { t: T(m, '模型', 'Models'), d: models });
   // 一条贯穿的堆叠条
   const by = c.y + c.h - 196, bw = x1 - x0, bh = 30;
@@ -147,7 +147,7 @@ export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
   });
   s.text(summary(m), x0, c.y + c.h - 50, { font: st.f.body, size: 17, fill: st.c.soft });
   const hf = handFacts(m)[0];
-  if (hf) s.text(`${hf.v} ${hf.k}`, x1, c.y + c.h - 50, { font: st.f.body, size: 17, fill: st.c.soft, anchor: 'end' });
+  if (hf) s.text(hf.text, x1, c.y + c.h - 50, { font: st.f.body, size: 17, fill: st.c.soft, anchor: 'end' });
   return s;
 }
 
@@ -166,7 +166,7 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.add(circle(S / 2, S / 2, S / 2 - 4, { fill: st.c.paper, stroke: st.c.ink, strokeWidth: 3 }));
     s.add(circle(S / 2, S / 2, S / 2 - 16, { fill: 'none', stroke: st.c.ink, strokeWidth: 1, strokeOpacity: 0.5 }));
     // 外圈一圈字
-    const txt = T(m, `· 人 与 AI 合 作 · ${m.project} `, `· MADE WITH AI · ${m.project.toUpperCase()} `);
+    const txt = T(m, `· ${m.project} · AI 参与编写 `, `· ${m.project.toUpperCase()} · WRITTEN WITH AI `);
     const R0 = S / 2 - 46;
     const id = s.def('ring', (id2) => el('path', { id: id2, d: `M${S / 2} ${S / 2}m-${R0} 0a${R0} ${R0} 0 1 1 ${2 * R0} 0a${R0} ${R0} 0 1 1 ${-2 * R0} 0` }));
     s.add(el('text', { fontFamily: st.f.label.family, fontWeight: st.f.label.weight ?? 500, fontSize: 15, fill: st.c.ink, letterSpacing: 3 }, el('textPath', { href: `#${id}`, startOffset: '0' }, txt)));
@@ -180,7 +180,7 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     const s = new Scene(W, H);
     s.bg = st.c.paper;
     s.add(rect(0.5, 0.5, W - 1, H - 1, { fill: st.c.paper, stroke: st.c.ink, strokeOpacity: 0.25, rx: Math.min(st.radius, 14) }));
-    s.text(T(m, '与 AI 一起写成', 'Built with AI'), 18, 28, { font: st.f.label, size: 13, fill: st.c.soft });
+    s.text(T(m, 'AI 参与编写', 'Written with AI'), 18, 28, { font: st.f.label, size: 13, fill: st.c.soft });
     let x = 18;
     m.rows.forEach((a, i) => {
       const w = ((W - 36) * a.pct) / 100;
@@ -194,7 +194,7 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     return s;
   }
   // flat：shields 式
-  const left = T(m, '与 AI 写成', 'built with');
+  const left = T(m, 'AI 参与', 'written with');
   const right = lead.slice(0, 2).map((a) => `${a.name} ${Math.round(a.pct)}%`).join(' · ');
   const f = { family: 'Inter, Noto Sans SC', weight: 600 };
   const lw = measure(left, f, 13) + 44, rw = measure(right, f, 13) + 24;
@@ -223,7 +223,7 @@ export function byline(m: Model, st: Style, _o: PieceOpts): Scene | null {
   x += st.title(s, m.project, x, 74, 34) + 26;
   s.add(line(x, 44, x, 80, { stroke: st.c.ink, strokeOpacity: 0.3 }));
   x += 26;
-  x += s.text(T(m, '与', 'with'), x, 72, { font: st.f.body, size: 20, fill: st.c.soft }) + 16;
+  x += s.text(T(m, '用', 'with'), x, 72, { font: st.f.body, size: 20, fill: st.c.soft }) + 16;
   for (const a of lead.slice(0, 4)) {
     st.mark(s, a.key, x + 12, 64, 22);
     const w = s.text(a.name, x + 30, 72, { font: st.f.body, size: 20, fill: st.c.ink });
@@ -231,14 +231,14 @@ export function byline(m: Model, st: Style, _o: PieceOpts): Scene | null {
     x += w + 54;
     if (x > W - 300) break;
   }
-  s.text(T(m, '一起写成', 'made together'), x - 10, 72, { font: st.f.body, size: 20, fill: st.c.soft });
+  s.text(T(m, '写成', ''), x - 10, 72, { font: st.f.body, size: 20, fill: st.c.soft });
   s.text(summary(m), W - 48, 72, { font: st.f.label, size: 14, fill: st.c.faint, anchor: 'end' });
   return s;
 }
 
 // ───────────────────────── 人的部分 ─────────────────────────
 
-/** 人的部分：不比行数，比的是方向和取舍——发出的指令、审阅、亲手写的、从生成里留下的 */
+/** 人：AI 写的代码提交了多少、留下多少；人发了多少消息、review 多少次、人写了多少 */
 export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
   const h = m.hand;
   if (!h.prompts && !h.reviews && !h.handLines && !h.written) return null;
@@ -247,15 +247,15 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
   const nSteps = [h.written, h.committed, h.surviving].filter((v) => v > 0).length;
   const { s, c } = canvas(m, st, W, 300 + nSteps * 130 + 230 + 150 + (m.sign || m.named ? 60 : 0), 40);
   const x0 = c.x + 60, x1 = c.x + c.w - 60, cx = W / 2;
-  st.label(s, T(m, '人 的 部 分', 'THE HUMAN HAND'), x0, c.y + 70, { size: 15, fill: st.c.accent2 });
+  st.label(s, T(m, '人', 'PEOPLE'), x0, c.y + 70, { size: 15, fill: st.c.accent2 });
   st.title(s, m.project, x0, c.y + 150, 64, 'start', { maxW: x1 - x0 });
-  s.text(T(m, '代码大多是 agent 写的；写什么、留下什么，是人决定的。', 'Agents wrote most of the code. People decided what to write and what to keep.'), x0, c.y + 200, { font: st.f.body, size: 20, fill: st.c.soft, maxW: x1 - x0 });
+  s.text(T(m, `AI 写的代码有多少被提交、现在还剩多少，以及人自己做的事。`, 'How much AI-written code was committed and kept, and what people did themselves.'), x0, c.y + 200, { font: st.f.body, size: 20, fill: st.c.soft, maxW: x1 - x0 });
   // 取舍漏斗：写下 → 提交 → 留下
   let y = c.y + 270;
   const steps = [
-    { k: T(m, 'agent 在会话里写下', 'Generated in sessions'), v: h.written },
-    { k: T(m, '人决定提交', 'Committed by people'), v: h.committed },
-    { k: T(m, '至今仍在', 'Still in the code'), v: h.surviving },
+    { k: T(m, 'AI 写的', 'Written by AI'), v: h.written },
+    { k: T(m, '提交了的', 'Committed'), v: h.committed },
+    { k: T(m, '现在还在', 'Still here'), v: h.surviving },
   ].filter((q) => q.v > 0);
   const max = Math.max(...steps.map((q) => q.v), 1);
   steps.forEach((q, i) => {
@@ -265,7 +265,7 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
     st.bar(s, bx, y, w, 64, col, i);
     s.text(q.k, x0, y - 14, { font: st.f.label, size: 15, fill: st.c.soft });
     st.num(s, fmt(q.v), x1, y - 12, 22, 'end');
-    s.hit(x0, y - 40, x1 - x0, 110, { k: 'human', t: q.k, d: [T(m, `${fmt(q.v)} 行`, `${fmt(q.v)} lines`), ...(i ? [T(m, `是上一步的 ${Math.round((q.v / steps[i - 1].v) * 100)}%`, `${Math.round((q.v / steps[i - 1].v) * 100)}% of the previous step`)] : [])] });
+    s.hit(x0, y - 40, x1 - x0, 110, { k: 'human', t: q.k, d: [T(m, `${fmt(q.v)} 行`, `${fmt(q.v)} lines`), ...(i ? [T(m, `是上一项的 ${Math.round((q.v / steps[i - 1].v) * 100)}%`, `${Math.round((q.v / steps[i - 1].v) * 100)}% of the previous step`)] : [])] });
     y += 130;
   });
   // 指令的脉搏：每周会话里发出的指令（没有就用会话数）
@@ -284,7 +284,7 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
   }
   // 事实格
   const facts = [
-    [T(m, '指令', 'Prompts'), h.prompts], [T(m, '审阅', 'Reviews'), h.reviews], [T(m, '亲手写的行', 'Lines by hand'), h.handLines], [T(m, 'Tab 补全辅助', 'Tab-assisted'), h.tabLines],
+    [T(m, '发给 AI 的消息', 'Messages to AI'), h.prompts], [T(m, 'review', 'Reviews'), h.reviews], [T(m, '人写的行', 'Lines by people'), h.handLines], [T(m, 'Tab 补全的行', 'Tab-completed lines'), h.tabLines],
   ].filter(([, v]) => (v as number) > 0) as [string, number][];
   const fw = (x1 - x0) / Math.max(1, facts.length);
   facts.forEach(([k, v], i) => {
@@ -310,7 +310,7 @@ function pulse(m: Model): { label: string; vals: number[] } {
   }
   const vals = [...byWeek.entries()].sort((a, b) => a[0].localeCompare(b[0], 'en', { numeric: true })).map(([, v]) => v);
   const hasPrompts = vals.some((v) => v.p > 0);
-  return { label: hasPrompts ? T(m, '每周发出的指令', 'Prompts per week') : T(m, '每周开启的会话', 'Sessions per week'), vals: vals.map((v) => (hasPrompts ? v.p : v.s)) };
+  return { label: hasPrompts ? T(m, '每周发给 AI 的消息', 'Messages to AI per week') : T(m, '每周的会话数', 'Sessions per week'), vals: vals.map((v) => (hasPrompts ? v.p : v.s)) };
 }
 
 void alpha; void modelLine; void zh;

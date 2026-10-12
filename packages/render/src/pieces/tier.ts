@@ -30,7 +30,7 @@ function rows(m: Model, st: Style, o: PieceOpts): Scene {
   const { s, c } = canvas(m, st, W, P + 132 + m.rows.length * rowH + 24 + handH + 70, M);
   const x0 = c.x + P, x1 = c.x + c.w - P;
   let y = c.y + P;
-  st.label(s, T(m, '署 名', 'CREDITS'), x0, y + 10, { size: 13 });
+  st.label(s, T(m, '署名', 'CREDITS'), x0, y + 10, { size: 13 });
   st.label(s, range(m), x1, y + 10, { size: 12, anchor: 'end', fill: st.c.faint });
   st.title(s, m.project || 'Untitled', x0, y + 78, 56, 'start', { maxW: x1 - x0 });
   y += 132;
@@ -56,7 +56,7 @@ function rows(m: Model, st: Style, o: PieceOpts): Scene {
     y += 18;
     st.rule(s, x0, y, x1 - x0, 'thin');
     y += 40;
-    st.label(s, T(m, '人的部分', 'THE HUMAN HAND'), x0, y, { size: 13, fill: st.c.accent2 });
+    st.label(s, T(m, '人', 'PEOPLE'), x0, y, { size: 13, fill: st.c.accent2 });
     s.text(hl, x0, y + 34, { font: st.f.body, size: 18, fill: st.c.ink, maxW: x1 - x0 });
     if (names) s.text(names, x0, y + 64, { font: st.f.body, size: 15, fill: st.c.soft, maxW: x1 - x0 });
     s.hit(x0 - 8, y - 22, x1 - x0 + 16, names ? 96 : 66, handTip(m));
@@ -122,7 +122,7 @@ function hud(m: Model, st: Style, o: PieceOpts): Scene {
   const { s, c } = canvas(m, st, W, P + 150 + nr * (ch + gap) + (hl ? 90 : 0) + 60, M);
   const x0 = M + P, x1 = W - M - P;
   let y = c.y + P;
-  st.label(s, T(m, '// 协作者名单', '// CONTRIBUTOR MANIFEST'), x0, y + 6, { size: 13, fill: st.c.accent2 });
+  st.label(s, T(m, '// 署名', '// CREDITS'), x0, y + 6, { size: 13, fill: st.c.accent2 });
   st.title(s, m.project || 'Untitled', x0, y + 82, 72, 'start', { maxW: x1 - x0 - 160 });
   st.label(s, range(m), x1, y + 6, { size: 12, anchor: 'end' });
   y += 130;
@@ -147,7 +147,7 @@ function hud(m: Model, st: Style, o: PieceOpts): Scene {
   y += nr * (ch + gap) + 10;
   if (hl) {
     st.rule(s, x0, y + 10, x1 - x0, 'orn');
-    st.label(s, T(m, '// 人的部分', '// THE HUMAN HAND'), x0, y + 44, { size: 13, fill: st.c.accent });
+    st.label(s, T(m, '// 人', '// PEOPLE'), x0, y + 44, { size: 13, fill: st.c.accent });
     s.text(hl, x0, y + 74, { font: st.f.body, size: 18, fill: st.c.ink, maxW: x1 - x0 });
     s.hit(x0, y + 24, x1 - x0, 60, handTip(m));
     y += 90;
@@ -164,7 +164,7 @@ function podium(m: Model, st: Style, o: PieceOpts): Scene {
   const rest = m.rows.filter((a) => !top3.includes(a));
   const W = 1000, M = 34;
   const { s, c } = canvas(m, st, W, 832, M);
-  st.label(s, T(m, '署 名', 'CREDITS'), W / 2, c.y + 64, { anchor: 'middle' });
+  st.label(s, T(m, '署名', 'CREDITS'), W / 2, c.y + 64, { anchor: 'middle' });
   st.title(s, m.project || 'Untitled', W / 2, c.y + 136, 60, 'middle', { maxW: c.w - 120 });
   const order = [1, 0, 2];
   const pw = 210, base = c.y + 600;
@@ -197,7 +197,7 @@ function podium(m: Model, st: Style, o: PieceOpts): Scene {
     if (x > c.x + c.w - 160) break;
   }
   const hl = handLine(m);
-  if (hl) { st.label(s, T(m, '人的部分', 'THE HUMAN HAND'), W / 2, y + 78, { anchor: 'middle', fill: st.c.accent2 }); s.text(hl, W / 2, y + 112, { font: st.f.body, size: 18, fill: st.c.ink, anchor: 'middle', maxW: c.w - 100 }); s.hit(c.x + 50, y + 56, c.w - 100, 70, handTip(m)); }
+  if (hl) { st.label(s, T(m, '人', 'PEOPLE'), W / 2, y + 78, { anchor: 'middle', fill: st.c.accent2 }); s.text(hl, W / 2, y + 112, { font: st.f.body, size: 18, fill: st.c.ink, anchor: 'middle', maxW: c.w - 100 }); s.hit(c.x + 50, y + 56, c.w - 100, 70, handTip(m)); }
   return s;
 }
 
@@ -213,7 +213,7 @@ function center(m: Model, st: Style, o: PieceOpts): Scene {
   const { s, c } = canvas(m, st, W, 230 + m.rows.length * rowH + (hl ? 120 : 0) + 90, M);
   const cx = W / 2;
   let y = c.y + 64;
-  st.label(s, T(m, '署 名', 'THE CREDITS'), cx, y, { anchor: 'middle', size: 13 });
+  st.label(s, T(m, '署名', 'CREDITS'), cx, y, { anchor: 'middle', size: 13 });
   st.title(s, m.project || 'Untitled', cx, y + 74, 54, 'middle', { maxW: c.w - 100 });
   st.label(s, range(m), cx, y + 108, { anchor: 'middle', size: 12, fill: st.c.faint });
   st.rule(s, c.x + 80, y + 136, c.w - 160, 'orn');
@@ -234,7 +234,7 @@ function center(m: Model, st: Style, o: PieceOpts): Scene {
   });
   if (hl) {
     st.rule(s, c.x + 160, y + 10, c.w - 320, 'thin');
-    st.label(s, T(m, '人的部分', 'THE HUMAN HAND'), cx, y + 52, { anchor: 'middle', fill: st.c.accent2 });
+    st.label(s, T(m, '人', 'PEOPLE'), cx, y + 52, { anchor: 'middle', fill: st.c.accent2 });
     s.text(hl, cx, y + 84, { font: st.f.body, size: 17, fill: st.c.ink, anchor: 'middle', maxW: c.w - 100 });
     s.hit(c.x + 60, y + 30, c.w - 120, 70, handTip(m));
     y += 120;
@@ -276,7 +276,7 @@ function stats(m: Model, st: Style, o: PieceOpts): Scene {
   const W = 1080, M = 30;
   const cw = (W - M * 2 - 60 - 24) / 2, ch = 430;
   const { s, c } = canvas(m, st, W, 190 + Math.ceil(list.length / 2) * (ch + 24) + 40, M);
-  st.label(s, T(m, '能力面板', 'STAND STATS'), c.x + 40, c.y + 56, { size: 15, fill: st.c.accent2 });
+  st.label(s, T(m, '能力', 'STATS'), c.x + 40, c.y + 56, { size: 15, fill: st.c.accent2 });
   st.title(s, m.project || 'Untitled', c.x + 40, c.y + 130, 64, 'start', { maxW: c.w - 80 });
   list.forEach((a, i) => {
     const x = c.x + 30 + (i % 2) * (cw + 24), y = c.y + 170 + Math.floor(i / 2) * (ch + 24);

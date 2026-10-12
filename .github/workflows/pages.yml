@@ -1,4 +1,4 @@
-# creditia 自己的署名页：每次推到 main，用仓库里的 credits.json 生成小网站，发布到 GitHub Pages
+# 官网：每次推到 main 重新生成（首页的图都是渲染器现画的；creditia 自己的署名页用仓库里的 credits.json），发布到 GitHub Pages
 name: pages
 on:
   push:
@@ -16,11 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./
-        with:
-          credits: credits.json
-          style: minimal
-          site: _site
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+        working-directory: packages/render
+      - name: 生成官网（首页 + creditia 自己的署名页）
+        run: node site/build.ts _site
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
