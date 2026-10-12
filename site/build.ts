@@ -7,7 +7,7 @@ import path from 'node:path';
 import { buildModel, STYLES, styleById, art, exporter, raster, frames } from '../packages/render/src/index.ts';
 import { PIECES } from '../packages/render/src/registry.ts';
 import { makeExporter } from '../packages/render/src/export.ts';
-import { creditsBlock } from '../packages/render/src/text.ts';
+import { creditsBlock, fetchSegs } from '../packages/render/src/text.ts';
 import { deflateSync } from 'node:zlib';
 import type { Art } from '../packages/render/src/export.ts';
 import { LOGOS } from '../packages/render/src/logos.ts';
@@ -15,7 +15,7 @@ import { LOGO_OF } from '../packages/render/src/style.ts';
 import { TOOL_NAMES } from '../packages/render/src/data.ts';
 import * as C from '../packages/render/src/classic/index.ts';
 import { ICONS } from './icons.ts';
-import { ORDERED_THEMES, themeName, themeNote, pieceName, variantName } from '../packages/render/src/classic/catalog.ts';
+import { ORDERED_THEMES, themeName, themeNote, themeDot, pieceName, variantName } from '../packages/render/src/classic/catalog.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const OUT = path.resolve(process.argv[2] ?? path.join(ROOT, '_site'));
@@ -51,47 +51,37 @@ const modelOf = (raw: any, lang: Lang, kind: 'c' | 'v') => {
 const write = (rel: string, data: string | Uint8Array) => { const p = path.join(OUT, 'assets', rel); mkdirSync(path.dirname(p), { recursive: true }); writeFileSync(p, data); };
 
 /** 画一张作品，写 SVG 大图；thumb 给宽度时另写一张 PNG 缩略图。style 是原版主题 id 或新风格 id */
-async function draw(rel: string, piece: string, style: string, lang: Lang, o: { variant?: string; raw?: any; thumb?: number; thumbH?: number } = {}) {
+async function draw(rel: string, piece: string, style: string, lang: Lang, o: { variant?: string; raw?: any; thumb?: number; thumbH?: number; noSvg?: boolean } = {}) {
   const raw = o.raw ?? sample;
   if (isClassic(style)) {
     const a = (await C.art(piece, modelOf(raw, lang, 'c'), C.themeById(style)!, { lang, variant: o.variant }))!;
-    write(`${rel}.svg`, a.svg);
+    if (!o.noSvg) write(`${rel}.svg`, a.svg);
     const tw = o.thumb ?? (o.thumbH ? Math.round((o.thumbH * a.w) / a.h) : 0);
     if (tw) write(`${rel}.png`, C.raster.png(a.svg, tw));
     return { w: a.w, h: a.h, bg: a.bg };
   }
   const a: Art = art(piece, modelOf(raw, lang, 'v'), styleById(style)!, { variant: o.variant })!;
-  write(`${rel}.svg`, exporter.svg(a));
+  if (!o.noSvg) write(`${rel}.svg`, exporter.svg(a));
   const tw = o.thumb ?? (o.thumbH ? Math.round((o.thumbH * a.w) / a.h) : 0);
   if (tw) write(`${rel}.png`, exporter.png(a, tw / a.w));
   return { w: a.w, h: a.h, bg: a.bg };
 }
 
-const meta: any = { hero: {}, wall: {}, usage: {}, badge: null, selfBadge: null };
+const meta: any = { wall: {}, usage: {}, selfBadge: null };
 
-// 首屏：一组片尾字幕卡，像一部片子的结尾依次出现（片头 → 出品 → 部门 → 场记板 → 剧终），深浅色各一组
-const HERO: Record<'dark' | 'light', [string, string][]> = {
-  dark: [['film', 'opening'], ['gala', 'crew'], ['minimal-dark', 'production'], ['terminal', 'slate'], ['cinema', 'end']],
-  light: [['editorial', 'opening'], ['playbill', 'production'], ['minimal-light', 'slate'], ['broadsheet', 'block'], ['editorial', 'end']],
-};
-meta.hero = { dark: [], light: [] };
+// 首屏和命令行演示用的数字：样例项目 creditia fetch 的输出（各工具占比、模型）
+meta.fetch = {}; meta.share = {};
 for (const lang of LANGS) {
-  for (const mode of ['dark', 'light'] as const) {
-    meta.hero[mode] = [];
-    for (const [style, v] of HERO[mode]) {
-      const a = (await C.art('roll', modelOf(sample, lang, 'c'), C.themeById(style)!, { lang, variant: v }))!;
-      write(`hero/${lang}/${style}-${v}.png`, C.raster.png(a.svg, 1040));
-      meta.hero[mode].push({ style, variant: v, name: `${style}-${v}`, w: a.w, h: a.h, vz: variantName(v, 'zh'), ve: variantName(v, 'en') });
-    }
-  }
+  const segs = fetchSegs(modelOf(sample, lang, 'v'));
+  meta.fetch[lang] = segs;
+  meta.share[lang] = segs.filter((l) => l.length >= 4 && l[0].color).map((l) => ({ key: l[0].color, name: l[0].text.trim(), pct: parseFloat(l[3].text), model: (l[4]?.text ?? '').trim() }));
 }
-console.log('✓ hero');
 
 // 风格墙：三条带子，图块大小不一；一列可以是一张，也可以上下叠两三张。
 // 有的图块会动：live 是一整卷字幕在小窗里滚，morph 是同一张分享图在几种风格之间切换
 const styles = [
-  ...ORDERED_THEMES.map((t) => ({ id: t.id, name: themeName(t, 'zh'), en: themeName(t, 'en'), note: themeNote(t, 'zh'), noteEn: themeNote(t, 'en') })),
-  ...V2_STYLES.map((s) => ({ id: s.id, name: s.name, en: s.en, note: s.note, noteEn: '' })),
+  ...ORDERED_THEMES.map((t) => ({ id: t.id, name: themeName(t, 'zh'), en: themeName(t, 'en'), note: themeNote(t, 'zh'), noteEn: themeNote(t, 'en'), dot: themeDot(t), bg: t.bg })),
+  ...V2_STYLES.map((s) => ({ id: s.id, name: s.name, en: s.en, note: s.note, noteEn: '', dot: s.dot(), bg: s.c.bg })),
 ];
 type Item = { style: string; piece: string; variant?: string; live?: boolean; morph?: string[] };
 const it = (style: string, piece: string, variant?: string): Item => ({ style, piece, variant });
@@ -173,47 +163,42 @@ for (const lang of LANGS) {
   drawn.clear();
 }
 
-// 用法：命令行出的那张图、徽章、creditia 自己的徽章
-for (const lang of LANGS) {
-  meta.badge = await draw(`usage/${lang}-badge`, 'badge', 'minimal-light', lang);
-  if (own) meta.selfBadge = await draw(`usage/${lang}-self-badge`, 'badge', 'minimal-light', lang, { raw: own });
-}
-for (const f of ['app-light.webp', 'app-dark.webp']) if (existsSync(path.join(import.meta.dirname, f))) cpSync(path.join(import.meta.dirname, f), path.join(OUT, 'assets', f));
-console.log('✓ usage');
-
-// 导出格式：同一份数据真的导出成各种文件，胶片带下面一行标签，点了就下载或打开
+// 用法 · 命令行：真的跑一遍 export，各种格式都是同一张署名榜（noir）；终端里的 → 文件名点了就是这些文件
 const exp = makeExporter(raster, (d) => new Uint8Array(deflateSync(d)));
 const kb = (n: number) => (n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
 meta.formats = {};
 for (const lang of LANGS) {
-  const vm = modelOf(sample, lang, 'v');
-  const f: Record<string, any> = {};
-  // GIF：一卷片尾字幕在银幕里滚
-  const rollSt = styleById('noir')!; // 纯色底的长卷，GIF 小得多（黄金时代的纹理底会到 7 MB）
-  const fr = frames('roll', vm, rollSt, { variant: 'scroll' }, 36);
-  const gif = exp.gif(fr, { width: 420 });
-  write(`formats/${lang}/credits.gif`, gif); f.gif = { size: kb(gif.length) };
-  // PNG：分享图
-  const share = art('share', vm, styleById('ukiyoe')!)!;
-  const png = exp.png(share, 1); write(`formats/${lang}/credits.png`, png); f.png = { size: kb(png.length), w: share.w, h: share.h };
-  // 每种格式一张小预览图，页面上一排摆开
-  const thumb = (name: string, a: Art) => write(`formats/${lang}/thumb-${name}.png`, exporter.png(a, 420 / a.w));
-  thumb('png', share);
-  // SVG：署名榜，文字转路径
-  const tierA = art('tier', vm, styleById('manuscript')!)!;
-  const svg = exp.svg(tierA); write(`formats/${lang}/credits.svg`, svg); f.svg = { size: kb(svg.length), w: tierA.w, h: tierA.h }; thumb('svg', tierA);
-  // PDF：小票，打印用；页面上放一张同样的预览图
-  const rc = art('receipt', vm, styleById('pastel')!)!;
-  const pdf = await exp.pdf(rc, 2); write(`formats/${lang}/credits.pdf`, pdf); f.pdf = { size: kb(pdf.length), w: rc.w, h: rc.h }; thumb('pdf', rc);
-  // HTML：单文件网页，鼠标放上去能看每一块的数字
-  const board = ['tier', 'share', 'donut'].map((id) => art(id, vm, styleById('cyber')!)!).filter(Boolean);
-  const html = exp.html(board, { title: 'lumen · credits', lang, bg: styleById('cyber')!.c.bg, note: 'lumen' });
-  write(`formats/${lang}/credits.html`, html); f.html = { size: kb(Buffer.byteLength(html)) }; thumb('html', board[0]);
-  // Markdown：CREDITS.md 的区块
-  const md = creditsBlock(vm, 4); write(`formats/${lang}/CREDITS.md`, md); f.md = { size: kb(Buffer.byteLength(md)), text: md.split('\n').slice(0, 9).join('\n') };
-  meta.formats[lang] = f;
+  const vm = modelOf(sample, lang, 'v'), st = styleById('noir')!, f: Record<string, string> = {};
+  const tierA = art('tier', vm, st)!;
+  const out = (ext: string, d: string | Uint8Array) => { write(`out/${lang}/credits.${ext}`, d); f[ext] = kb(typeof d === 'string' ? Buffer.byteLength(d) : d.length); };
+  out('png', exp.png(tierA, 1));
+  out('svg', exp.svg(tierA));
+  out('pdf', await exp.pdf(tierA, 1));
+  out('gif', exp.gif(frames('tier', vm, st, {}, 20), { width: 400 }));
+  out('html', exp.html(['tier', 'share', 'donut'].map((id) => art(id, vm, st)!).filter(Boolean), { title: 'lumen · credits', lang, bg: st.c.bg, note: 'lumen' }));
+  out('md', creditsBlock(vm, 4));
+  write(`out/${lang}/peek.png`, exporter.png(tierA, 520 / tierA.w)); // 悬停时的小预览
+  meta.formats[lang] = { sizes: f, w: tierA.w, h: tierA.h };
 }
 console.log('✓ formats');
+
+// 用法 · agent：对话里导出的那张分享图
+// 用法 · GitHub：README 里的徽章（带风格的，不是空白条）和 Credits 段落里的署名条
+// 用法 · App：dock 里点到的几种风格，各一张分享图和署名榜
+const APP_STYLES = ['cinema', 'ukiyoe', 'terminal', 'pastel', 'neon', 'editorial', 'cyber', 'manga', 'woodblock', 'grimoire'];
+meta.app = APP_STYLES;
+for (const lang of LANGS) {
+  const vm = modelOf(sample, lang, 'v');
+  const sh = art('share', vm, styleById('ukiyoe')!)!; write(`usage/${lang}-share.png`, exporter.png(sh, 640 / sh.w));
+  for (const v of ['flat', 'stack']) { const a = art('badge', vm, styleById('ukiyoe')!, { variant: v })!; write(`usage/${lang}-badge-${v}.svg`, exporter.svg(a)); meta.usage[v] = { w: a.w, h: a.h }; }
+  for (const id of APP_STYLES) {
+    await draw(`app/${lang}/${id}-share`, 'share', id, lang, { thumb: 560, noSvg: true });
+    await draw(`app/${lang}/${id}-tier`, 'tier', id, lang, { thumb: 300, noSvg: true });
+    for (const pc of ['donut', 'versions']) await draw(`app/${lang}/${id}-${pc}`, pc, id, lang, { thumb: 300, noSvg: true });
+  }
+  if (own) meta.selfBadge = await draw(`usage/${lang}-self-badge`, 'badge', 'minimal-light', lang, { raw: own });
+}
+console.log('✓ usage');
 
 // 社交预览图
 for (const lang of LANGS) writeFileSync(path.join(OUT, `assets/og-${lang}.png`), exporter.png(art('share', buildModel(sample, { lang }), styleById('cinema')!)!, 1));
