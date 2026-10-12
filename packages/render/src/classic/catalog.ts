@@ -67,6 +67,7 @@ export const VARIANT_INFO: Record<string, [string, string]> = {
   classic: ['居中', 'Centered'], columns: ['双栏', 'Two columns'], billing: ['海报署名', 'Billing'], title: ['标题卡', 'Title card'],
   crawl: ['滚字', 'Crawl'], cast: ['演员表', 'Cast'], scroll: ['长卷', 'Scroll'], cards: ['字卡', 'Cards'], end: ['终', 'The End'],
   block: ['署名块', 'Billing block'], program: ['节目单', 'Programme'],
+  opening: ['片头', 'Opening titles'], production: ['出品', 'Production card'], slate: ['场记板', 'Clapperboard'], crew: ['部门', 'Departments'],
   // 小票
   slip: ['收银条', 'Slip'], thermal: ['热敏纸', 'Thermal'], folio: ['账页', 'Folio'], stub: ['票根', 'Stub'], ticket: ['电影票', 'Ticket'],
   ledger: ['账本', 'Ledger'],

@@ -35,7 +35,7 @@ test('全部作品在代表主题下都能出图，滤镜区域收在画布内',
   }
 });
 
-test('片尾字幕：十一种版式都能出图；没有标志的工具也进名单', async () => {
+test('片尾字幕：全部版式都能出图；没有标志的工具也进名单', async () => {
   const raw2 = structuredClone(raw);
   for (const c of raw2.contributors) if (c.harness === 'kimi') c.harness = 'opencode';
   const m2 = buildModel(raw2, { director: false, lang: 'zh' });
@@ -57,14 +57,16 @@ test('英文：全部作品、主题、版式里没有残留的中文', async ()
   assert.deepEqual(left, []);
 });
 
-test('片尾字幕：内容少时整体放大、名单铺开，不缩在画面中间', async () => {
+test('片尾字幕新版式：内容少时整体放大，不缩在画面中间；原来的十一种不变', async () => {
   const one = structuredClone(raw);
   const keep = new Set(one.contributors.filter((c: any) => c.harness === 'claude-code' || c.kind !== 'agent').map((c: any) => c.id));
   one.contributors = one.contributors.filter((c: any) => keep.has(c.id));
   one.breakdown = one.breakdown.filter((b: any) => keep.has(b.contributor));
   const m1 = buildModel(one, { director: false, lang: 'zh' });
-  for (const v of ['classic', 'billing', 'title', 'cast']) {
+  assert.deepEqual(FORMS.roll.variants!.slice(0, 11), ['classic', 'columns', 'billing', 'title', 'crawl', 'cast', 'scroll', 'cards', 'end', 'block', 'program']);
+  for (const v of ['opening', 'production', 'crew']) {
     const a = await art('roll', m1, themeById('film')!, { lang: 'zh', variant: v });
-    assert.match(a!.svg, /matrix\(1\.[0-9]+,0,0,1\.[0-9]+/, `${v} 没有放大`);
+    const k = Number(/matrix\(([0-9.]+),0,0,\1,/.exec(a!.svg)?.[1] ?? 1);
+    assert.ok(k > 1.04, `${v} 没有放大（${k}）`);
   }
 });
