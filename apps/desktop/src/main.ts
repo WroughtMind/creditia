@@ -40,7 +40,10 @@ const state = {
   projects: [] as any[], current: null as any, raw: null as any, model: null as Model | null,
   style: styleById(store.get('style') ?? '') ?? STYLES[0],
   lang: (store.get('lang') as 'zh' | 'en') ?? 'zh',
-  named: store.get('named') === '1', sign: store.get('sign') ?? '',
+  /** 署名设置按项目各管各的：读项目配置的 display 段，不跨项目沿用 */
+  named: false, sign: '',
+  /** 切项目的序号：慢的旧请求回来时如果已经切走，就丢弃 */
+  openSeq: 0,
   variants: {} as Record<string, string>,
   size: store.get('size') ?? 'native',
   arts: new Map<string, Art>(),
@@ -79,13 +82,34 @@ function empty(title: string, detail = '', cmd = '') {
 }
 
 async function openProject(p: any) {
+  const seq = ++state.openSeq;
   state.current = p; store.set('project', p.id);
+  state.raw = null; state.model = null; state.arts.clear(); state.variants = {};
+  ++state.token; // 让正在画的旧项目停下
+  $('#board').innerHTML = '';
   $('#pname').textContent = p.name; $('#pmeta').textContent = L('读取中…', 'Loading…');
-  try { state.raw = await api('credits', { projectId: p.id }); }
-  catch (e: any) { return empty(L('这个项目还没有档案', 'No credits for this project yet'), '', `cd ${p.path} && creditia analyze`); }
+  let raw: any, cfg: any;
+  try { [raw, cfg] = await Promise.all([api('credits', { projectId: p.id }), api('config_of', { projectId: p.id }).catch(() => ({}))]); }
+  catch {
+    if (seq !== state.openSeq) return;
+    return empty(L('这个项目还没有档案', 'No credits for this project yet'), '', `cd ${p.path} && creditia analyze`);
+  }
+  if (seq !== state.openSeq) return; // 已经切到别的项目
+  // 署名设置：项目配置优先；浏览器调试模式没有配置，用按项目存的本地值
+  const local = JSON.parse(store.get(`display.${p.id}`) ?? '{}');
+  state.named = !!(cfg?.display?.named ?? local.named);
+  state.sign = String(cfg?.display?.sign ?? local.sign ?? '');
+  state.raw = raw;
   $('#empty').hidden = true;
   rebuildModel();
   await paint();
+}
+/** 署名设置写回当前项目（配置文件；浏览器调试模式写本地） */
+function saveDisplay() {
+  const id = state.current?.id;
+  if (!id) return;
+  store.set(`display.${id}`, JSON.stringify({ named: state.named, sign: state.sign }));
+  api('set_display', { projectId: id, named: state.named, sign: state.sign }).catch(() => null);
 }
 function rebuildModel() {
   state.model = buildModel(state.raw, { lang: state.lang, named: state.named, sign: state.sign });
@@ -396,7 +420,7 @@ async function settings() {
   el.hidden = false;
   el.innerHTML = `<div class="panel glass">
     <h2>${L('设置', 'Settings')}</h2>
-    <h3>${L('人的署名', 'People')}</h3>
+    <h3>${L('人的署名', 'People')} · ${esc(state.current?.name ?? '')}</h3>
     <p>${L('默认只写人做了什么（指令、审阅、取舍），不写人名。你可以选择写出名字，或者留一个落款。', 'By default people are described by what they did — prompts, reviews, choices — without names. You can opt in to names or add a signature.')}</p>
     <div class="row"><span class="k">${L('人名', 'Names')}</span><span class="seg" id="named"><button data-v="0" class="${state.named ? '' : 'on'}">${L('不写', 'Hidden')}</button><button data-v="1" class="${state.named ? 'on' : ''}">${L('写出', 'Shown')}</button></span></div>
     <div class="row"><span class="k">${L('落款', 'Signature')}</span><input type="text" id="sign" value="${esc(state.sign)}" placeholder="${L('留空则不落款', 'Leave empty for none')}"></div>
@@ -407,14 +431,14 @@ async function settings() {
   el.onclick = (e) => { if (e.target === el) { el.hidden = true; el.innerHTML = ''; } };
   $('#named').onclick = async (e) => {
     const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
-    state.named = b.dataset.v === '1'; store.set('named', state.named ? '1' : '0');
+    state.named = b.dataset.v === '1';
     $('#named').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-    api('set_display', { projectId: state.current?.id, named: state.named, sign: state.sign }).catch(() => null);
+    saveDisplay();
     rebuildModel(); await paint();
   };
   ($('#sign') as HTMLInputElement).onchange = async (e) => {
-    state.sign = (e.target as HTMLInputElement).value.trim(); store.set('sign', state.sign);
-    api('set_display', { projectId: state.current?.id, named: state.named, sign: state.sign }).catch(() => null);
+    state.sign = (e.target as HTMLInputElement).value.trim();
+    saveDisplay();
     rebuildModel(); await paint();
   };
   const doc = await api('doctor').catch(() => []);

@@ -23,7 +23,9 @@ const devSample = () => ({
       const id = new URL(req.url, 'http://x').searchParams.get('id') ?? '';
       const hit = list().find((x) => x.id === id);
       if (!hit) { res.statusCode = 404; res.end('{}'); return; }
-      res.setHeader('content-type', 'application/json'); res.end(readFileSync(hit.file, 'utf8'));
+      // 调试用：CREDITIA_DEV_SLOW=<项目 id> 让这个项目的档案晚 3 秒返回，用来验证切项目不会串
+      const slow = process.env.CREDITIA_DEV_SLOW === id ? 3000 : 0;
+      setTimeout(() => { res.setHeader('content-type', 'application/json'); res.end(readFileSync(hit.file, 'utf8')); }, slow);
     });
     server.middlewares.use('/__dev/doctor', (_req: any, res: any) => json(res, [
       { id: 'claude-code', name: 'Claude Code', ok: true, detail: '样例数据' },

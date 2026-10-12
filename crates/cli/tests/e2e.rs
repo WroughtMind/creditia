@@ -295,6 +295,9 @@ fn new_sources_levels_and_paths() {
     let oc: Vec<String> = (0..10).map(|i| format!("pub fn opencode_part_{i}() -> usize {{ {i} + 100 }}")).collect();
     let rejected: Vec<String> = (0..5).map(|i| format!("pub fn rejected_attempt_{i}() -> usize {{ {i} }}")).collect();
     let cl: Vec<String> = (0..8).map(|i| format!("export const clineThing{i} = () => {i} * 2;")).collect();
+    // 被拒绝的 Cline 编辑、报错的 Claude Code 编辑：内容后来由人自己写进了提交，不能记成 agent 的
+    let cl_denied: Vec<String> = (0..6).map(|i| format!("export const handWrittenAfterDenial{i} = {i};")).collect();
+    let cc_failed: Vec<String> = (0..6).map(|i| format!("pub fn hand_after_failed_edit_{i}() -> u8 {{ {i} }}")).collect();
     fs::create_dir_all(repo.join("src")).unwrap();
     fs::write(repo.join("README.md"), "# demo project for the new adapters\n").unwrap();
     commit(&repo, "init", "me@example.com", &d(base - 86400));
@@ -304,6 +307,8 @@ fn new_sources_levels_and_paths() {
     fs::write(repo.join("src/oc.rs"), [oc.clone(), rejected.clone()].concat().join("\n") + "\n").unwrap();
     commit(&repo, "opencode work", "me@example.com", &d(base + 160));
     fs::write(repo.join("src/cl.ts"), cl.join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/denied.ts"), cl_denied.join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/failed.rs"), cc_failed.join("\n") + "\n").unwrap();
     commit(&repo, "cline work", "me@example.com", &d(base + 260));
 
     // Gemini：目录名是项目路径的 SHA-256
@@ -332,11 +337,26 @@ fn new_sources_levels_and_paths() {
     // Cline：路径相对于工作目录；模型与渠道在 task_metadata
     let t = env.root.join("vscode/saoudrizwan.claude-dev/tasks/t1");
     fs::create_dir_all(&t).unwrap();
-    fs::write(t.join("api_conversation_history.json"), serde_json::json!([{ "role": "user", "content": [{ "type": "text", "text": format!("<environment_details>\n# Current Working Directory ({rs}) Files\nsrc/\n</environment_details>") }] }]).to_string()).unwrap();
+    fs::write(t.join("api_conversation_history.json"), serde_json::json!([
+        { "role": "user", "content": [{ "type": "text", "text": format!("<environment_details>\n# Current Working Directory ({rs}) Files\nsrc/\n</environment_details>") }] },
+        { "role": "user", "content": [{ "type": "text", "text": "[write_to_file for 'src/cl.ts'] Result:\nThe content was successfully saved to src/cl.ts." }] },
+        { "role": "user", "content": [{ "type": "text", "text": "[write_to_file for 'src/denied.ts'] Result:\nThe user denied this operation." }] }
+    ]).to_string()).unwrap();
     fs::write(t.join("ui_messages.json"), serde_json::json!([
         { "ts": (base + 200) * 1000, "type": "say", "say": "task", "text": "add things" },
-        { "ts": (base + 250) * 1000, "type": "ask", "ask": "tool", "text": serde_json::json!({ "tool": "newFileCreated", "path": "src/cl.ts", "content": cl.join("\n") }).to_string() }
+        { "ts": (base + 250) * 1000, "type": "ask", "ask": "tool", "text": serde_json::json!({ "tool": "newFileCreated", "path": "src/cl.ts", "content": cl.join("\n") }).to_string() },
+        { "ts": (base + 255) * 1000, "type": "ask", "ask": "tool", "text": serde_json::json!({ "tool": "newFileCreated", "path": "src/denied.ts", "content": cl_denied.join("\n") }).to_string() }
     ]).to_string()).unwrap();
+
+    // Claude Code：一次 Edit 报错（old_string 没找到）
+    let cdir = env.root.join("claude/projects/demo");
+    fs::create_dir_all(&cdir).unwrap();
+    let lines = [
+        serde_json::json!({ "type": "user", "cwd": rs, "sessionId": "cc1", "timestamp": iso(base + 220), "message": { "role": "user", "content": "edit it" } }),
+        serde_json::json!({ "type": "assistant", "cwd": rs, "sessionId": "cc1", "timestamp": iso(base + 230), "message": { "id": "msg_01x", "model": "claude-test", "content": [{ "type": "tool_use", "id": "tu1", "name": "Edit", "input": { "file_path": format!("{rs}/src/failed.rs"), "old_string": "nope", "new_string": cc_failed.join("\n") } }] } }),
+        serde_json::json!({ "type": "user", "cwd": rs, "sessionId": "cc1", "timestamp": iso(base + 231), "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "tu1", "is_error": true, "content": "String to replace not found in file." }] } }),
+    ];
+    fs::write(cdir.join("cc1.jsonl"), lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n") + "\n").unwrap();
     fs::write(t.join("task_metadata.json"), serde_json::json!({ "model_usage": [{ "ts": (base + 200) * 1000, "model_id": "claude-sonnet-test", "model_provider_id": "openrouter" }] }).to_string()).unwrap();
 
     let (ok, v) = run(&env, &["init", "--repo", &rs]);
@@ -348,6 +368,10 @@ fn new_sources_levels_and_paths() {
     assert_eq!(b("a:gemini/gemini-test")["byEvidence"]["verified"]["linesAdded"], 12, "{}", credits["breakdown"]);
     assert_eq!(b("a:opencode/claude-opus-test")["byEvidence"]["verified"]["linesAdded"], 10, "{}", credits["breakdown"]);
     assert_eq!(b("a:cline/claude-sonnet-test")["byEvidence"]["verified"]["linesAdded"], 8, "{}", credits["breakdown"]);
+    // 被拒绝 / 报错的编辑没有逐行证据：全仓库的逐行证据正好是 Gemini 12 + OpenCode 10 + Cline 8
+    let verified_total: u64 = credits["breakdown"].as_array().unwrap().iter().map(|x| x["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap_or(0)).sum();
+    assert_eq!(verified_total, 30, "{}", credits["breakdown"]);
+    assert_eq!(b("a:claude-code/claude-test")["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap_or(0), 0);
     let c = |id: &str| credits["contributors"].as_array().unwrap().iter().find(|c| c["id"] == id).cloned().unwrap_or_default();
     assert_eq!(c("a:opencode/claude-opus-test")["provider"], "my-relay");
     assert_eq!(c("a:cline/claude-sonnet-test")["provider"], "openrouter");
@@ -357,8 +381,8 @@ fn new_sources_levels_and_paths() {
     assert!(!credits.to_string().contains("director"));
     // 会话里人发的指令
     assert!(credits["human"]["prompts"].as_i64().unwrap() >= 2);
-    // standard：失败的那次编辑写的 5 行跟随同提交里的 OpenCode（声明，不是逐行证据）
-    assert_eq!(b("a:opencode/claude-opus-test")["byEvidence"]["declared"]["linesAdded"], 5);
+    // standard：失败的那次编辑写的 5 行跟随同提交里的 OpenCode，记为推断（不是逐行证据，也不是声明）
+    assert_eq!(b("a:opencode/claude-opus-test")["byEvidence"]["inferred"]["linesAdded"], 5);
     // strict：同提交延伸不算，这 5 行未确认
     let out = env.root.join("strict.json");
     let (ok, v) = run(&env, &["analyze", "--repo", &rs, "--level", "strict", "--out", &out.display().to_string()]);

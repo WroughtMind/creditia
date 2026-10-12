@@ -12,15 +12,32 @@
   "app": {
     "withGlobalTauri": true,
     "windows": [
-      { "title": "creditia", "label": "main", "width": 1360, "height": 880, "minWidth": 760, "minHeight": 560, "titleBarStyle": "Overlay" }
+      {
+        "title": "creditia",
+        "label": "main",
+        "width": 1360,
+        "height": 880,
+        "minWidth": 760,
+        "minHeight": 560,
+        "titleBarStyle": "Overlay"
+      }
     ],
-    "security": { "csp": null }
+    "security": {
+      "csp": null
+    }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.icns", "icons/icon.ico", "icons/icon.png"],
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
     "category": "DeveloperTool",
-    "shortDescription": "为人和 AI 一起做出的作品署名"
+    "shortDescription": "为人和 AI 一起做出的作品署名",
+    "externalBin": [
+      "binaries/creditia-core"
+    ]
   }
 }

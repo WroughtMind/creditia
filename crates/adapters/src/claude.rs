@@ -45,6 +45,9 @@ fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
     let mut models: HashMap<String, usize> = HashMap::new();
     let mut seen_msg: HashSet<String> = HashSet::new();
     let mut providers: HashMap<String, usize> = HashMap::new();
+    // 每次编辑调用先挂起，等到工具结果：报错的（比如 old_string 没找到）丢掉，其余记为证据
+    let mut pending: Vec<(String, Vec<creditia_core::model::Ev>)> = vec![];
+    let mut failed: HashSet<String> = HashSet::new();
     for line in text.lines() {
         let Ok(o) = serde_json::from_str::<Value>(line) else { continue };
         if let Some(cwd) = o["cwd"].as_str() {
@@ -59,6 +62,15 @@ fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
         start = start.min(ts);
         end = end.max(ts);
         let m = &o["message"];
+        if o["type"] == "user" {
+            for b in m["content"].as_array().into_iter().flatten() {
+                if b["type"] == "tool_result" && b["is_error"] == true {
+                    if let Some(id) = b["tool_use_id"].as_str() {
+                        failed.insert(id.to_string());
+                    }
+                }
+            }
+        }
         if o["type"] == "user" && o["isMeta"] != true {
             let human = match &m["content"] {
                 Value::String(_) => true,
@@ -92,20 +104,29 @@ fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
             }
             let inp = &b["input"];
             let path = inp["file_path"].as_str().unwrap_or("");
+            let mut evs = vec![];
             match b["name"].as_str() {
                 Some("Write") => {
-                    crate::push_text(&mut g.evs, pm, path, inp["content"].as_str().unwrap_or(""), Src::Claude, model, &sid, ts);
+                    crate::push_text(&mut evs, pm, path, inp["content"].as_str().unwrap_or(""), Src::Claude, model, &sid, ts);
                 }
                 Some("Edit") => {
-                    crate::push_text(&mut g.evs, pm, path, inp["new_string"].as_str().unwrap_or(""), Src::Claude, model, &sid, ts);
+                    crate::push_text(&mut evs, pm, path, inp["new_string"].as_str().unwrap_or(""), Src::Claude, model, &sid, ts);
                 }
                 Some("MultiEdit") => {
                     for ed in inp["edits"].as_array().into_iter().flatten() {
-                        crate::push_text(&mut g.evs, pm, path, ed["new_string"].as_str().unwrap_or(""), Src::Claude, model, &sid, ts);
+                        crate::push_text(&mut evs, pm, path, ed["new_string"].as_str().unwrap_or(""), Src::Claude, model, &sid, ts);
                     }
                 }
                 _ => {}
             }
+            if !evs.is_empty() {
+                pending.push((b["id"].as_str().unwrap_or("").to_string(), evs));
+            }
+        }
+    }
+    for (id, evs) in pending {
+        if !failed.contains(&id) {
+            g.evs.extend(evs);
         }
     }
     if !in_project {

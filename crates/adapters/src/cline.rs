@@ -3,7 +3,8 @@
 //! - ui_messages.json 里 tool 消息（JSON 文本）有 newFileCreated / editedExistingFile / appliedDiff，路径相对于工作目录；
 //! - 工作目录取自对话首条消息里的环境说明「Current Working Directory (…)」；
 //! - 模型和渠道取自 task_metadata.json 的 model_usage（新版本才有）。
-//! 被拒绝的编辑也会出现在消息里，但只有真的出现在提交里的行才会被算作证据（行哈希 + 时间窗口），所以不会误记。
+//! 被拒绝、失败的编辑也会出现在 ui_messages 里：每次编辑都要在对话记录里找到对应的工具结果（`[write_to_file for 'a.ts'] Result:`），
+//! 结果是成功写入才算证据；找不到结果、被拒绝、报错的一律不算（人后来自己写了同样的行，不会被记成 agent 的逐行证据）。
 
 use crate::{added_from_diff, any_ts, vscode_user_dirs, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
@@ -44,6 +45,22 @@ fn cwd_of(task: &Path) -> Option<String> {
     Some(rest[..j].replace("\\\\", "/").to_string())
 }
 
+/// 对话记录里每个文件的编辑结果，按出现顺序：true = 写入成功
+fn outcomes(task: &Path) -> HashMap<String, std::collections::VecDeque<bool>> {
+    let mut out: HashMap<String, std::collections::VecDeque<bool>> = HashMap::new();
+    let Ok(t) = std::fs::read_to_string(task.join("api_conversation_history.json")) else { return out };
+    // JSON 字符串里的换行、引号是转义过的，直接在原文上找标记
+    let re = regex::Regex::new(r"\[(write_to_file|replace_in_file|apply_diff|insert_content|search_and_replace|edit_file|new_rule) for '([^']+)'\] Result:").unwrap();
+    let marks: Vec<(usize, usize, String)> = re.captures_iter(&t).map(|c| { let m = c.get(0).unwrap(); (m.start(), m.end(), c[2].trim_start_matches("./").to_string()) }).collect();
+    for (i, (_, end, path)) in marks.iter().enumerate() {
+        let stop = marks.get(i + 1).map(|m| m.0).unwrap_or(t.len()).min(end + 600);
+        let body = t[*end..stop].to_lowercase();
+        let failed = body.contains("denied") || body.contains("rejected") || body.contains("error") || body.contains("failed") || body.contains("did not") || body.contains("not found");
+        out.entry(path.clone()).or_default().push_back(!failed);
+    }
+    out
+}
+
 fn model_of(task: &Path) -> (String, Option<String>) {
     let v: Value = std::fs::read_to_string(task.join("task_metadata.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
     let last = v["model_usage"].as_array().and_then(|a| a.last()).cloned().unwrap_or_default();
@@ -52,6 +69,7 @@ fn model_of(task: &Path) -> (String, Option<String>) {
 
 pub fn scan_src(src: Src, store: &mut Store, pm: &PathMap, st: &mut Stats) {
     let mut n = 0;
+    let mut unconfirmed = 0;
     for task in tasks(src) {
         let Some(cwd) = cwd_of(&task) else { continue };
         if !pm.in_project(&cwd) {
@@ -69,6 +87,7 @@ pub fn scan_src(src: Src, store: &mut Store, pm: &PathMap, st: &mut Stats) {
         let (model, provider) = model_of(&task);
         let msgs: Vec<Value> = std::fs::read_to_string(&ui).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
         let (mut start, mut end, mut prompts, mut tokens) = (i64::MAX, 0i64, 0i64, 0i64);
+        let mut results = outcomes(&task);
         for m in &msgs {
             let ts = any_ts(&m["ts"]).unwrap_or(0);
             if ts > 0 {
@@ -95,6 +114,12 @@ pub fn scan_src(src: Src, store: &mut Store, pm: &PathMap, st: &mut Stats) {
                 _ => None,
             };
             let Some(text) = text else { continue };
+            // 这次编辑在对话记录里的结果：没有结果或没成功的不算
+            let ok = results.get_mut(rel.trim_start_matches("./")).and_then(|q| q.pop_front()).unwrap_or(false);
+            if !ok {
+                unconfirmed += 1;
+                continue;
+            }
             let abs = if Path::new(rel).is_absolute() { rel.to_string() } else { format!("{}/{}", cwd.trim_end_matches('/'), rel) };
             crate::push_text(&mut g.evs, pm, &abs, &text, src, &model, &id, ts);
         }
@@ -105,7 +130,7 @@ pub fn scan_src(src: Src, store: &mut Store, pm: &PathMap, st: &mut Stats) {
         store.groups.insert(gk, g);
     }
     if n > 0 {
-        st.notes.push(format!("{}: 项目相关任务 {n} 个", src.harness()));
+        st.notes.push(format!("{}: 项目相关任务 {n} 个；没有确认写入成功（被拒绝、报错或找不到结果）的编辑 {unconfirmed} 次，不计入", src.harness()));
     }
 }
 

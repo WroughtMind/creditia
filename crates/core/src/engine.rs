@@ -12,7 +12,7 @@ const WINDOW_AFTER: i64 = 3600;
 pub enum Strictness {
     /// 只认逐行证据和明确声明（盖章、agent 邮箱、Co-authored-by、bot）
     Strict,
-    /// 默认：再加同一提交内的延伸（同提交里有逐行证据的 agent 认领没对上的行）和分支前缀（标为推断）
+    /// 默认：再加两种推断——同一提交内的延伸（同提交里有逐行证据的 agent 认领没对上的行）和分支前缀
     Standard,
     /// 再加同时间窗口的会话（标为推断）
     Loose,
@@ -140,12 +140,13 @@ impl<'a> Engine<'a> {
     }
 
     /// 没有逐行证据时的降级。每一步都写明依据，按口径开关：
-    /// 同提交的逐行证据（standard）→ 盖章 trailer → agent 提交邮箱 → Co-authored-by → bot → aider 的作者名 →
+    /// 同提交的逐行证据（standard，推断）→ 盖章 trailer → agent 提交邮箱 → Co-authored-by → bot → aider 的作者名 →
     /// 别人的提交（算那个人）→ 同时间窗口的会话（loose，推断）→ 分支前缀（standard，推断）→ 未确认
     fn fallback(&mut self, c: &Commit, top_verified: Option<usize>) -> (Attr, String) {
         if let Some(w) = top_verified {
             if self.strictness != Strictness::Strict {
-                return (Attr { who: w, level: Level::Declared }, "同一提交内有逐行证据".into());
+                // 这是推断：同一提交里别的行有这个 agent 的逐行证据，没对上的行认为也是它写的
+                return (Attr { who: w, level: Level::Inferred }, "同一提交内有逐行证据（推断）".into());
             }
         }
         if let Some((h, m)) = self.stamps.get(&c.hash).cloned() {
@@ -254,7 +255,7 @@ mod tests {
         let a = e.attribute(&commit("me@x.com", vec![7, 0, 9]));
         assert_eq!(a.lines[0][0].level, Level::Verified);
         assert_eq!(a.lines[0][1].who, a.lines[0][0].who); // 过短行跟随主力
-        assert_eq!(a.lines[0][2].level, Level::Declared); // 没对上的行跟随同提交的 verified 主力
+        assert_eq!(a.lines[0][2].level, Level::Inferred); // 没对上的行跟随同提交的 verified 主力，标为推断
         assert_eq!(e.reg.list[a.lines[0][0].who].id, "a:codex/m");
     }
 
