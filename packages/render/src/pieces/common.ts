@@ -24,18 +24,17 @@ export const tip = tipOf;
 /** 模型名一行：最多三个 */
 export const modelLine = (a: Agent, n = 3) => a.models.slice(0, n).map((x) => x.name).join(' · ') + (a.models.length > n ? ` +${a.models.length - n}` : '');
 
-/** 人的部分：用做了什么来写，不写头衔 */
-export function handFacts(m: Model): { v: string; k: string }[] {
+/** 人做了什么：只写数字。v 是数字，k 是放在数字下面的短标签，text 是放进一句话里的说法 */
+export function handFacts(m: Model): { v: string; k: string; text: string }[] {
   const h = m.hand;
-  const out: { v: string; k: string }[] = [];
-  if (h.prompts) out.push({ v: fmt(h.prompts), k: T(m, '条指令', 'prompts') });
-  if (h.reviews) out.push({ v: fmt(h.reviews), k: T(m, '次审阅', 'reviews') });
-  if (h.handLines) out.push({ v: fmt(h.handLines), k: T(m, '行亲手写下', 'lines by hand') });
-  if (h.written > h.committed && h.committed) out.push({ v: `${Math.round((h.committed / h.written) * 100)}%`, k: T(m, '的生成被采纳', 'of generated code kept') });
+  const out: { v: string; k: string; text: string }[] = [];
+  if (h.prompts) out.push({ v: fmt(h.prompts), k: T(m, '条消息发给 AI', 'messages to AI'), text: T(m, `发了 ${fmt(h.prompts)} 条消息`, `${fmt(h.prompts)} messages sent`) });
+  if (h.reviews) out.push({ v: fmt(h.reviews), k: T(m, '次 review', 'reviews'), text: T(m, `review ${fmt(h.reviews)} 次`, `${fmt(h.reviews)} reviews`) });
+  if (h.handLines) out.push({ v: fmt(h.handLines), k: T(m, '行是人写的', 'lines by people'), text: T(m, `人写了 ${fmt(h.handLines)} 行`, `${fmt(h.handLines)} lines by people`) });
   return out;
 }
 export function handLine(m: Model): string {
-  return handFacts(m).map((f) => (zh(m) ? `${f.v} ${f.k}` : `${f.v} ${f.k}`)).join(zh(m) ? ' · ' : ' · ');
+  return handFacts(m).map((f) => f.text).join(' · ');
 }
 /** 署名：用户主动填写时；named 时列出人名 */
 export function peopleNames(m: Model, n = 4): string {
@@ -43,9 +42,9 @@ export function peopleNames(m: Model, n = 4): string {
   const names = m.people.slice(0, n).map((p) => p.name);
   return names.join(zh(m) ? '、' : ', ') + (m.people.length > n ? T(m, ` 等 ${m.people.length} 人`, ` +${m.people.length - n}`) : '');
 }
-export const handTip = (m: Model) => ({ k: 'human', t: T(m, '人的部分', 'The human hand'), d: [
-  ...handFacts(m).map((f) => `${f.v} ${f.k}`),
-  ...(m.hand.written && m.hand.committed ? [T(m, `agent 写下 ${fmt(m.hand.written)} 行，提交 ${fmt(m.hand.committed)} 行，至今留下 ${fmt(m.hand.surviving)} 行`, `${fmt(m.hand.written)} generated → ${fmt(m.hand.committed)} committed → ${fmt(m.hand.surviving)} remain`)] : []),
+export const handTip = (m: Model) => ({ k: 'human', t: T(m, '人', 'People'), d: [
+  ...handFacts(m).map((f) => f.text),
+  ...(m.hand.written && m.hand.committed ? [T(m, `AI 写了 ${fmt(m.hand.written)} 行，提交了 ${fmt(m.hand.committed)} 行，现在还在 ${fmt(m.hand.surviving)} 行`, `${fmt(m.hand.written)} written by AI → ${fmt(m.hand.committed)} committed → ${fmt(m.hand.surviving)} still here`)] : []),
   ...(peopleNames(m) ? [peopleNames(m)] : []),
 ] });
 

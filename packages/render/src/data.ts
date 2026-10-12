@@ -104,8 +104,8 @@ export const TOOL_NAMES: Record<string, string> = {
   dependabot: 'Dependabot', renovate: 'Renovate',
 };
 const BOTS = new Set(['github-actions', 'dependabot', 'renovate']);
-const ZH: Record<string, string> = { other: '其他', unattributed: '未确认', human: '人', hand: '人的部分' };
-const EN: Record<string, string> = { other: 'Others', unattributed: 'Unattributed', human: 'People', hand: 'The human hand' };
+const ZH: Record<string, string> = { other: '其他', unattributed: '未确认', human: '人', hand: '人' };
+const EN: Record<string, string> = { other: 'Others', unattributed: 'Unattributed', human: 'People', hand: 'People' };
 export const nameOf = (k: string, lang: Lang = 'zh') => (lang === 'en' ? EN : ZH)[k] ?? TOOL_NAMES[k] ?? k;
 
 /** 模型 id → 好读的名字：claude-opus-5-5 → Claude Opus 5.5，gpt-5.6-sol → GPT-5.6 Sol */
@@ -298,12 +298,12 @@ export const hanziDigits = (x: number | string) => String(x).split('').map((d) =
 /** 悬停提示的内容：每个贡献方一份 */
 export function tipOf(m: Model, a: Agent): { k: string; t: string; d: string[] } {
   const zh = m.lang === 'zh';
-  if (a.kind === 'unknown') return { k: a.key, t: a.name, d: [zh ? `${fmt(a.lines)} 行 · ${pct(a.pct)}` : `${fmt(a.lines)} lines · ${pct(a.pct)}`, zh ? '没有足够证据确认是谁写的，不并入任何人名下' : 'Not enough evidence to credit anyone'] };
+  if (a.kind === 'unknown') return { k: a.key, t: a.name, d: [zh ? `${fmt(a.lines)} 行 · ${pct(a.pct)}` : `${fmt(a.lines)} lines · ${pct(a.pct)}`, zh ? '找不到证据，不算到任何人头上' : 'No evidence for anyone, so not credited'] };
   const d = [zh ? `${fmt(a.lines)} 行 · ${pct(a.pct)}` : `${fmt(a.lines)} lines · ${pct(a.pct)}`];
   if (a.models.length) d.push(a.models.slice(0, 3).map((x) => `${x.name} ${Math.round(x.share * 100)}%`).join(' · '));
-  if (a.surviving) d.push(zh ? `至今仍在 ${fmt(a.surviving)} 行（${Math.round(a.survival * 100)}%）` : `${fmt(a.surviving)} still in the code (${Math.round(a.survival * 100)}%)`);
+  if (a.surviving) d.push(zh ? `现在还在 ${fmt(a.surviving)} 行（${Math.round(a.survival * 100)}%）` : `${fmt(a.surviving)} still in the code (${Math.round(a.survival * 100)}%)`);
   if (a.sessions) d.push(zh ? `${a.sessions} 个会话${a.tokens ? ` · ${compact(a.tokens)} token` : ''}` : `${a.sessions} sessions${a.tokens ? ` · ${compact(a.tokens)} tokens` : ''}`);
-  if (a.verified) d.push(zh ? `逐行证据 ${Math.round(a.verified * 100)}%` : `${Math.round(a.verified * 100)}% line-level evidence`);
-  if (a.providers.length) d.push((zh ? '经由 ' : 'via ') + a.providers.join(' · '));
+  if (a.verified) d.push(zh ? `${Math.round(a.verified * 100)}% 能在日志里对上` : `${Math.round(a.verified * 100)}% line-level evidence`);
+  if (a.providers.length) d.push((zh ? '通过 ' : 'via ') + a.providers.join(' · '));
   return { k: a.key, t: a.name, d };
 }

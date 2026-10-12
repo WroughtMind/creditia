@@ -302,37 +302,22 @@ pub fn detect_config(repo: &Path) -> Config {
         emails.dedup();
         c.directors.push(Director { id: format!("h:{}", name.to_lowercase().replace(' ', "-")), name, emails });
     }
-    // 把仓库里见过的 agent 邮箱补进映射：邮箱用户名里带工具名的（codex-acceptance@、cursoragent@…）按工具归类，[bot] 归 bot
+    // 把仓库里见过的 agent / bot 邮箱补进映射。只认确定的格式，不按邮箱里有没有「claude」「codex」这类字样去猜：
+    // - GitHub 的 bot 账号：<数字>+<名字>[bot]@users.noreply.github.com，名字是已知的 agent 应用才算 agent，否则算 bot
+    // - 各家官方的提交邮箱（default_agent_emails 里已有）
+    const BOT_AGENTS: [(&str, &str); 6] = [("copilot-swe-agent", "copilot"), ("devin-ai-integration", "devin"), ("google-labs-jules", "jules"), ("cursor", "cursor"), ("claude", "claude-code"), ("codex", "codex")];
     for l in log.lines() {
         if let Some((_, e)) = l.split_once('\0') {
             let e = e.to_lowercase();
             if c.agent_emails.contains_key(&e) || c.bot_emails.contains(&e) {
                 continue;
             }
-            let local = e.split('@').next().unwrap_or("");
-            let h = if e.contains("[bot]") {
-                c.bot_emails.push(e.clone());
-                continue;
-            } else if local.contains("codex") || e.ends_with("@openai.com") {
-                "codex"
-            } else if local.contains("cursor") || e.ends_with("@cursor.com") {
-                "cursor"
-            } else if local.contains("claude") || e.ends_with("@anthropic.com") {
-                "claude-code"
-            } else if local.contains("copilot") {
-                "github-copilot"
-            } else if local.contains("devin") {
-                "devin"
-            } else if local.contains("kimi") {
-                "kimi"
-            } else if local.contains("grok") {
-                "grok"
-            } else if local.contains("gemini") || local.contains("jules") {
-                "gemini"
-            } else {
-                continue;
-            };
-            c.agent_emails.insert(e, h.into());
+            let Some(local) = e.strip_suffix("@users.noreply.github.com") else { continue };
+            let Some(app) = local.split_once('+').map(|(_, n)| n).unwrap_or(local).strip_suffix("[bot]") else { continue };
+            match BOT_AGENTS.iter().find(|(n, _)| *n == app) {
+                Some((_, h)) => { c.agent_emails.insert(e.clone(), h.to_string()); }
+                None => c.bot_emails.push(e.clone()),
+            }
         }
     }
     c.markers = derive_markers(repo, &remotes);

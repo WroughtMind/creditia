@@ -529,26 +529,12 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let first = cc.commits.iter().map(|c| c.author_ts).min().unwrap_or(0);
     let last = cc.commits.iter().map(|c| c.author_ts).max().unwrap_or(0);
     let prompts: i64 = sessions.iter().filter(|s| !s.reviewer).map(|s| s.prompts).sum();
-    // GitHub PR review：主导者本人的 review 计入人的参与，bot（如 chatgpt-codex-connector）计入 agent 审阅
-    let director_logins: HashSet<String> = cfg
-        .directors
-        .iter()
-        .flat_map(|d| d.emails.iter())
-        .filter_map(|e| {
-            let local = e.split('@').next()?;
-            Some(local.split_once('+').map(|(_, l)| l).unwrap_or(local).to_lowercase())
-        })
-        .chain(cfg.directors.iter().map(|d| d.name.to_lowercase()))
-        .collect();
+    // GitHub PR review：bot 看账号形式（GitHub 的 bot 账号以 [bot] 结尾）和已知的 review 应用，其余都是人
+    const REVIEW_APPS: [&str; 7] = ["copilot-pull-request-reviewer", "chatgpt-codex-connector", "coderabbitai", "gemini-code-assist", "cursor", "sourcery-ai", "greptile-apps"];
     let (human_reviews, bot_reviews) = prs.iter().flat_map(|p| p.reviews.iter()).fold((0usize, 0usize), |(h, b), r| {
         let r = r.to_lowercase();
-        if director_logins.contains(&r) {
-            (h + 1, b)
-        } else if r.contains("codex") || r.contains("bot") || r.contains("copilot") {
-            (h, b + 1)
-        } else {
-            (h, b)
-        }
+        let is_bot = r.ends_with("[bot]") || REVIEW_APPS.contains(&r.as_str()) || r.starts_with("app/");
+        if is_bot { (h, b + 1) } else { (h + 1, b) }
     });
     let lines_written: usize = store.groups.values().flat_map(|g| g.evs.iter()).filter(|e| !e.tab).map(|e| (e.rel.as_str(), e.key, e.session.as_str())).collect::<HashSet<_>>().len();
     let coverage: Vec<Value> = seg

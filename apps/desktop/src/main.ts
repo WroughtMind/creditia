@@ -408,7 +408,7 @@ function toggleMenu() {
   };
   $('#re').onclick = async () => {
     if (!state.current) return;
-    toast(L('正在分析，不调用任何大模型…', 'Analyzing locally, no LLM involved…'), 120000);
+    toast(L('正在分析…', 'Analyzing…'), 120000);
     try { await api('analyze', { projectId: state.current.id }); state.projects = await api('projects'); await openProject(state.projects.find((x) => x.id === state.current.id) ?? state.current); toast(L('已更新', 'Updated')); }
     catch (e: any) { toast(String(e?.message ?? e), 5000); }
   };
@@ -420,13 +420,13 @@ async function settings() {
   el.hidden = false;
   el.innerHTML = `<div class="panel glass">
     <h2>${L('设置', 'Settings')}</h2>
-    <h3>${L('人的署名', 'People')} · ${esc(state.current?.name ?? '')}</h3>
-    <p>${L('默认只写人做了什么（指令、审阅、取舍），不写人名。你可以选择写出名字，或者留一个落款。', 'By default people are described by what they did — prompts, reviews, choices — without names. You can opt in to names or add a signature.')}</p>
+    <h3>${L('人', 'People')} · ${esc(state.current?.name ?? '')}</h3>
+    <p>${L('默认不写人名，只写数字（发了多少消息、review 多少次、人写了多少行）。想写名字或者加个落款，在这里改，只对这个项目生效。', 'By default no names appear, only numbers (messages sent, reviews, lines written by people). Turn on names or add a signature here; it only applies to this project.')}</p>
     <div class="row"><span class="k">${L('人名', 'Names')}</span><span class="seg" id="named"><button data-v="0" class="${state.named ? '' : 'on'}">${L('不写', 'Hidden')}</button><button data-v="1" class="${state.named ? 'on' : ''}">${L('写出', 'Shown')}</button></span></div>
     <div class="row"><span class="k">${L('落款', 'Signature')}</span><input type="text" id="sign" value="${esc(state.sign)}" placeholder="${L('留空则不落款', 'Leave empty for none')}"></div>
     <h3>${L('数据源', 'Data sources')}</h3><div id="doc"><p>${L('检查中…', 'Checking…')}</p></div>
     <h3>${L('关于', 'About')}</h3>
-    <p>${L('全部在本机分析：只读各工具的日志和 git 历史，只存行哈希与元数据，不存代码与 prompt，不调用任何大模型。', 'Everything runs locally: reads tool logs and git history, stores only line hashes and metadata, never code or prompts, and never calls an LLM.')}</p>
+    <p>${L('分析在本机完成：读各工具的日志和 git 历史，只保存行的哈希和时间、模型这类信息，不保存代码和 prompt，也不调用任何模型。', 'Analysis runs on this machine: it reads tool logs and git history, keeps only line hashes and metadata such as time and model, never code or prompts, and calls no models.')}</p>
   </div>`;
   el.onclick = (e) => { if (e.target === el) { el.hidden = true; el.innerHTML = ''; } };
   $('#named').onclick = async (e) => {

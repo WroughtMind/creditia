@@ -24,7 +24,7 @@ export function creditsOf(m: Model): Section[] {
   // 主笔：占比 ≥ 15% 的，否则第一名
   const leads = agents.filter((a) => a.pct >= 15);
   const lead = leads.length ? leads : agents.slice(0, 1);
-  if (lead.length) out.push({ head: T(m, '执笔', 'Written by'), credits: lead.map((a) => ({ name: a.name, sub: a.models.slice(0, 2).map((x) => x.name).join(' · '), key: a.key })) });
+  if (lead.length) out.push({ head: T(m, '主要作者', 'Written by'), credits: lead.map((a) => ({ name: a.name, sub: a.models.slice(0, 2).map((x) => x.name).join(' · '), key: a.key })) });
   // 各板块：该板块里占 ≥ 8% 的贡献方
   const order = ['core', 'frontend', 'tests', 'docs', 'build', 'assets'];
   for (const ar of order) {
@@ -49,18 +49,18 @@ export function creditsOf(m: Model): Section[] {
   }
   // 其余参与者
   const minor = agents.filter((a) => !lead.includes(a));
-  if (minor.length) out.push({ head: T(m, '协作', 'With'), credits: minor.map((a) => ({ name: a.name, sub: a.models[0]?.name, key: a.key })) });
+  if (minor.length) out.push({ head: T(m, '参与', 'With'), credits: minor.map((a) => ({ name: a.name, sub: a.models[0]?.name, key: a.key })) });
   // 审阅
-  const rev: Credit[] = m.reviewers.map((x) => ({ name: x.name, sub: x.reviews ? T(m, `${x.reviews} 次自动审阅`, `${x.reviews} automated reviews`) : x.model, key: x.key }));
-  if (m.hand.reviews) rev.push({ name: peopleNames(m, 2) || T(m, '人', 'People'), sub: T(m, `${m.hand.reviews} 次审阅`, `${m.hand.reviews} reviews`), key: 'human' });
-  if (rev.length) out.push({ head: T(m, '审阅', 'Review'), credits: rev });
+  const rev: Credit[] = m.reviewers.map((x) => ({ name: x.name, sub: x.reviews ? T(m, `自动 review ${x.reviews} 次`, `${x.reviews} automated reviews`) : x.model, key: x.key }));
+  if (m.hand.reviews) rev.push({ name: peopleNames(m, 2) || T(m, '人', 'People'), sub: T(m, `review ${m.hand.reviews} 次`, `${m.hand.reviews} reviews`), key: 'human' });
+  if (rev.length) out.push({ head: 'Review', credits: rev });
   // 人的部分
   const hf = handFacts(m);
-  if (hf.length) out.push({ head: T(m, '人的部分', 'The human hand'), credits: hf.map((f) => ({ name: `${f.v} ${f.k}`, key: 'human' })), key: 'human' });
+  if (hf.length) out.push({ head: T(m, '人', 'People'), credits: hf.map((f) => ({ name: f.text, key: 'human' })), key: 'human' });
   // 模型
   const models = [...new Set(agents.flatMap((a) => a.models.map((x) => x.name)))];
-  if (models.length) out.push({ head: T(m, '使用的模型', 'Models'), credits: models.map((x) => ({ name: x })) });
-  if (m.unknown && m.unknown.pct >= 0.05) out.push({ head: T(m, '另有', 'And'), credits: [{ name: T(m, `${pct(m.unknown.pct)} 的代码未能确认作者`, `${pct(m.unknown.pct)} of the code is unattributed`), key: 'unattributed' }] });
+  if (models.length) out.push({ head: T(m, '模型', 'Models'), credits: models.map((x) => ({ name: x })) });
+  if (m.unknown && m.unknown.pct >= 0.05) out.push({ head: T(m, '未确认', 'Unattributed'), credits: [{ name: T(m, `${pct(m.unknown.pct)} 的代码确定不了是谁写的`, `${pct(m.unknown.pct)} of the code has no clear author`), key: 'unattributed' }] });
   return out;
 }
 const closing = (m: Model) => T(m, `${m.sessions ? `${fmt(m.sessions)} 个会话` : ''}${m.tokens ? ` · ${compact(m.tokens)} token` : ''} · ${fmt(m.commits)} 次提交`, `${m.sessions ? `${fmt(m.sessions)} sessions` : ''}${m.tokens ? ` · ${compact(m.tokens)} tokens` : ''} · ${fmt(m.commits)} commits`).replace(/^ · /, '');
@@ -96,7 +96,7 @@ function classic(m: Model, st: Style, secs: Section[], scroll: boolean): Scene {
   const { s, c } = canvas(m, st, W, inner + (scroll ? view * 0.15 : 0), 40);
   const cx = W / 2;
   let y = c.y + 110;
-  st.label(s, T(m, '片 尾', 'END CREDITS'), cx, y, { anchor: 'middle', size: 14 });
+  st.label(s, T(m, '片尾字幕', 'END CREDITS'), cx, y, { anchor: 'middle', size: 14 });
   st.title(s, m.project || 'Untitled', cx, y + 92, 78, 'middle', { maxW: c.w - 120 });
   st.rule(s, cx - 140, y + 140, 280, 'orn');
   y += 240;
@@ -128,7 +128,7 @@ function card(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   const t = o.t ?? 1;
   const cx = W / 2;
   let y = c.y + 170;
-  st.label(s, T(m, '本作品由以下作者共同完成', 'A WORK MADE TOGETHER BY'), cx, y, { anchor: 'middle', size: 15 });
+  st.label(s, T(m, '主要作者', 'WRITTEN BY'), cx, y, { anchor: 'middle', size: 15 });
   y += 70;
   lead.credits.forEach((cr, i) => {
     const k = ease(t, i, lead.credits.length);
@@ -142,7 +142,7 @@ function card(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   });
   st.rule(s, cx - 200, y, 400, 'orn');
   y += 60;
-  const others = secs.find((x) => x.head === T(m, '协作', 'With'));
+  const others = secs.find((x) => x.head === T(m, '参与', 'With'));
   if (others) {
     st.label(s, others.head, cx, y, { anchor: 'middle' });
     const txt = others.credits.map((x) => x.name).join('  ·  ');
@@ -152,8 +152,8 @@ function card(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   }
   const hf = handFacts(m);
   if (hf.length) {
-    st.label(s, T(m, '人的部分', 'THE HUMAN HAND'), cx, y, { anchor: 'middle', fill: st.c.accent2 });
-    s.text(hf.map((f) => `${f.v} ${f.k}`).join('  ·  '), cx, y + 40, { font: st.f.body, size: 20, fill: st.c.ink, anchor: 'middle', maxW: c.w - 120 });
+    st.label(s, T(m, '人', 'PEOPLE'), cx, y, { anchor: 'middle', fill: st.c.accent2 });
+    s.text(hf.map((f) => f.text).join('  ·  '), cx, y + 40, { font: st.f.body, size: 20, fill: st.c.ink, anchor: 'middle', maxW: c.w - 120 });
     s.hit(c.x + 60, y - 20, c.w - 120, 70, handTip(m));
     y += 100;
   }
@@ -169,7 +169,7 @@ function vertical(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   // 先排版：每个元素一列，从右往左
   type Col = { kind: 'head' | 'name'; text: string; sub?: string; cr?: Credit; head: string; w: number; h: number };
   const cols: Col[] = [];
-  for (const sc of secs.filter((x) => x.head !== T(m, '使用的模型', 'Models'))) {
+  for (const sc of secs.filter((x) => x.head !== T(m, '模型', 'Models'))) {
     const head = sc.head.replace(/ · /g, '・');
     cols.push({ kind: 'head', text: head, head: sc.head, w: 58, h: measureV(head, st, HS, st.f.label) });
     for (const cr of sc.credits) cols.push({ kind: 'name', text: cr.name, sub: cr.sub, cr, head: sc.head, w: cr.sub ? 104 : 70, h: Math.max(measureV(cr.name, st, NS), cr.sub ? measureV(cr.sub, st, SS, st.f.body) + 12 : 0) });
@@ -180,7 +180,7 @@ function vertical(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   const { s, c } = canvas(m, st, W, inner, 40);
   const tx = c.x + c.w - 80;
   s.vtext(m.project || '', tx, c.y + 70, { font: st.f.display, size: 64, fill: st.c.ink });
-  s.vtext(zh(m) ? '片尾' : 'Credits', tx - 74, c.y + 80, { font: st.f.label, size: 22, fill: st.c.soft });
+  s.vtext(zh(m) ? '署名' : 'Credits', tx - 74, c.y + 80, { font: st.f.label, size: 22, fill: st.c.soft });
   let x = tx - titleW + 30;
   cols.forEach((col, i) => {
     const k = ease(t, i, cols.length);
@@ -198,7 +198,7 @@ function vertical(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   const foot = c.y + c.h - 40;
   s.text(`${range(m)}  ${closing(m)}`, c.x + 60, foot, { font: st.f.body, size: 16, fill: st.c.soft });
   if (m.sign) { s.vtext(m.sign, c.x + 90, c.y + 90, { font: st.f.display, size: 34, fill: st.c.ink }); inkSeal(s, c.x + 90, c.y + 120 + measureV(m.sign, st, 34), 54, [...m.sign].slice(0, 2).join('') || '印', { color: st.c.accent }); }
-  else inkSeal(s, c.x + 90, c.y + 110, 64, zh(m) ? '人机合作' : 'CO', { color: st.c.accent });
+  else inkSeal(s, c.x + 90, c.y + 110, 64, zh(m) ? '署名' : 'CR', { color: st.c.accent });
   return s;
 }
 
@@ -211,7 +211,7 @@ function ed(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   const x0 = W * 0.66, w = W * 0.28;
   // 右侧一层渐隐的纸色，保证字可读
   s.add(rect(x0 - 160, 0, W - x0 + 160, H, { fill: linearVeil(s, st) }));
-  const flat = secs.filter((x) => x.head !== T(m, '使用的模型', 'Models'));
+  const flat = secs.filter((x) => x.head !== T(m, '模型', 'Models'));
   const rows = flat.reduce((n, sc) => n + 1 + sc.credits.length, 0);
   const k0 = Math.min(1, (H - 330) / (rows * 46 + flat.length * 16));
   let y = 170;
@@ -247,7 +247,7 @@ function billing(m: Model, st: Style, secs: Section[], _o: PieceOpts): Scene {
   st.title(s, m.project || 'Untitled', cx, c.y + 560, 220, 'middle', { maxW: c.w - 80 });
   // 署名块
   const cond = { family: 'Oswald, Anton, Noto Sans SC', weight: 400 };
-  const lines: [string, string][] = secs.filter((x) => x.head !== T(m, '使用的模型', 'Models')).map((sc) => [sc.head.toUpperCase(), sc.credits.map((x) => x.name.toUpperCase()).join('  ·  ')]);
+  const lines: [string, string][] = secs.filter((x) => x.head !== T(m, '模型', 'Models')).map((sc) => [sc.head.toUpperCase(), sc.credits.map((x) => x.name.toUpperCase()).join('  ·  ')]);
   const bl = c.y + c.h - 60 - Math.min(6, lines.length) * 62 - 30;
   st.rule(s, c.x + 80, bl - 40, c.w - 160, 'thin');
   let y = bl;

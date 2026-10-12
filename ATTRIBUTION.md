@@ -67,14 +67,14 @@
   - Cline / Roo / Kilo：`model_provider_id`。
   - 模型串本身的前缀（`openrouter/`、`bedrock/`、`vertex_ai/`）。
 
-## 6. 人的部分
+## 6. 人
 
-人不和 agent 排同一个百分比。credits.json 的 `human` 和展示里的「人的部分」记录：
+人不和 AI 工具排同一个百分比。credits.json 的 `human` 和展示里「人」这一块记录：
 
-- **指令**：会话里人发出的消息数（各工具日志里的 user 消息）；
-- **审阅**：GitHub PR 上你本人的 review（`--github`），agent / bot 的 review 单独计；
-- **亲手写下**：人的提交里没有任何 agent 证据的行（在 standard 口径下，你自己的提交没有证据会是「未确认」，别人的提交算那个人）；
-- **取舍**：agent 在会话里写下的行 → 提交进仓库的行 → 至今仍在的行；
+- **发给 AI 的消息**：会话里人发出的消息数（各工具日志里的 user 消息）；
+- **review**：GitHub PR 上你本人的 review（`--github`），bot 的 review 单独计；
+- **人写的行**：别人的提交算那个人，Tab 补全的行也算人；你自己的提交里没有任何 AI 证据的行记为「未确认」，因为没法确定那是你写的还是没留下日志的 AI 写的；
+- **AI 写的代码去了哪**：AI 在会话里写的行 → 提交了的行 → 现在还在的行；
 - **Tab 补全**：Cursor 的 Tab 补全算人的辅助输入，不算 agent。
 
 人名默认不出现在任何展示里；`display.named` 打开才写，`display.sign` 是你主动写的落款。

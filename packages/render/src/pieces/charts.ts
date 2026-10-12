@@ -40,7 +40,7 @@ const orderKeys = (m: Model, keys: Iterable<string>) => [...new Set(keys)].sort(
 export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (!m.rows.length) return null;
   const t = o.t ?? 1;
-  const { s, p } = frame(m, st, 1000, 640, T(m, '占比', 'SHARE'), T(m, '代码由谁写成', 'Who wrote the code'));
+  const { s, p } = frame(m, st, 1000, 640, T(m, '占比', 'SHARE'), T(m, '各工具写了多少', 'Who wrote the code'));
   const cx = p.x + p.w * 0.36, cy = p.y + p.h / 2, R1 = 270, R0 = 170;
   let a0 = -Math.PI / 2;
   m.rows.forEach((a, i) => {
@@ -70,7 +70,7 @@ export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
 export function waffle(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (!m.rows.length) return null;
   const t = o.t ?? 1;
-  const { s, p } = frame(m, st, 1000, 560, T(m, '一格 = 1%', 'ONE CELL = 1%'), T(m, '一百格里的分工', 'A hundred cells'));
+  const { s, p } = frame(m, st, 1000, 560, T(m, '一格 = 1%', 'ONE CELL = 1%'), T(m, '一百格', 'A hundred cells'));
   // 最大余数法分配 100 格
   const raw = m.rows.map((a) => a.pct);
   const base = raw.map(Math.floor);
@@ -98,7 +98,7 @@ export function waffle(m: Model, st: Style, o: PieceOpts): Scene | null {
 export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (m.weeks.length < 3) return null;
   const t = o.t ?? 1;
-  const { s, p } = frame(m, st, 1400, 520, T(m, '每周新增代码', 'LINES PER WEEK'), T(m, '一周一周写出来的', 'Week by week'));
+  const { s, p } = frame(m, st, 1400, 520, T(m, '每周新增', 'PER WEEK'), T(m, '每周新增的代码', 'Lines added per week'));
   const keys = orderKeys(m, m.weeks.flatMap((w) => Object.keys(w.by)));
   const tot = m.weeks.map((w) => keys.reduce((s2, k) => s2 + (w.by[k] ?? 0), 0));
   const max = Math.max(...tot, 1);
@@ -139,7 +139,7 @@ export function lanes(m: Model, st: Style, o: PieceOpts): Scene | null {
   const t = o.t ?? 1;
   const keys = orderKeys(m, ss.map((x) => x.key));
   const laneH = 64;
-  const { s, p } = frame(m, st, 1400, keys.length * laneH, T(m, '会话', 'SESSIONS'), T(m, '每个工具什么时候在干活', 'When each tool was at work'), false);
+  const { s, p } = frame(m, st, 1400, keys.length * laneH, T(m, '会话', 'SESSIONS'), T(m, '各工具的会话', 'Sessions by tool'), false);
   const t0 = Math.min(...ss.map((x) => x.start)), t1 = Math.max(...ss.map((x) => x.end));
   const X = (v: number) => p.x + 170 + ((v - t0) / Math.max(1, t1 - t0)) * (p.w - 170);
   keys.forEach((k, li) => {
@@ -168,7 +168,7 @@ export function lanes(m: Model, st: Style, o: PieceOpts): Scene | null {
 export function clock(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (m.clock.length !== 7) return null;
   const t = o.t ?? 1;
-  const { s, p } = frame(m, st, 1400, 420, T(m, '星期 × 小时', 'DAY × HOUR'), T(m, '什么时候提交', 'When the commits land'), false);
+  const { s, p } = frame(m, st, 1400, 420, T(m, '星期 × 小时', 'DAY × HOUR'), T(m, '提交时间', 'When commits happen'), false);
   const max = Math.max(...m.clock.flat(), 1);
   const days = T(m, '一二三四五六日', 'MTWTFSS');
   const cw = (p.w - 60) / 24, ch = p.h / 7;
@@ -191,7 +191,7 @@ export function clock(m: Model, st: Style, o: PieceOpts): Scene | null {
 export function versions(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (m.versions.length < 2) return null;
   const t = o.t ?? 1;
-  const { s, p } = frame(m, st, 1200, 520, T(m, '每个版本', 'PER RELEASE'), T(m, '每个版本是谁写的', 'Who wrote each release'));
+  const { s, p } = frame(m, st, 1200, 520, T(m, '版本', 'RELEASES'), T(m, '各版本由谁写', 'Who wrote each release'));
   const keys = orderKeys(m, m.versions.flatMap((v) => Object.keys(v.by)));
   const max = Math.max(...m.versions.map((v) => v.total), 1);
   const n = m.versions.length, bw = Math.min(120, (p.w / n) * 0.55);
@@ -220,7 +220,7 @@ export function survival(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (!list.length || !m.linesSurviving) return null;
   const t = o.t ?? 1;
   const rowH = 74;
-  const { s, p } = frame(m, st, 1200, list.length * rowH, T(m, '沉淀', 'WHAT STAYED'), T(m, '写下的，至今还剩多少', 'Of what was written, what remains'), false);
+  const { s, p } = frame(m, st, 1200, list.length * rowH, T(m, '留存', 'RETENTION'), T(m, '写的代码现在还剩多少', 'How much of it is still here'), false);
   const max = Math.max(...list.map((a) => a.lines));
   list.forEach((a, i) => {
     const y = p.y + i * rowH;
@@ -232,7 +232,7 @@ export function survival(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.add(rect(x0, y + 10, wa, 26, { fill: colorOf(st, a), opacity: 0.25, rx: Math.min(st.radius, 6) }));
     st.bar(s, x0, y + 10, Math.max(2, ws), 26, colorOf(st, a), i);
     st.num(s, `${Math.round(a.survival * 100)}%`, p.x + p.w, y + 32, 22, 'end');
-    s.hit(p.x, y, p.w, rowH - 6, { ...tip(m, a), d: [T(m, `写下 ${fmt(a.lines)} 行，至今仍在 ${fmt(a.surviving)} 行`, `${fmt(a.lines)} written, ${fmt(a.surviving)} remain`), ...tip(m, a).d.slice(1)] });
+    s.hit(p.x, y, p.w, rowH - 6, { ...tip(m, a), d: [T(m, `写了 ${fmt(a.lines)} 行，现在还在 ${fmt(a.surviving)} 行`, `${fmt(a.lines)} written, ${fmt(a.surviving)} remain`), ...tip(m, a).d.slice(1)] });
   });
   return s;
 }
@@ -243,7 +243,7 @@ export function mosaic(m: Model, st: Style, o: PieceOpts): Scene | null {
   const files = m.files.filter((f) => f.lines > 0).sort((a, b) => b.lines - a.lines).slice(0, 60);
   if (files.length < 3) return null;
   const t = o.t ?? 1;
-  const { s, p } = frame(m, st, 1200, 640, T(m, '现在的代码', 'THE CODE TODAY'), T(m, '每个文件由谁构成', 'What each file is made of'));
+  const { s, p } = frame(m, st, 1200, 640, T(m, '文件', 'FILES'), T(m, '每个文件是谁写的', 'Who wrote each file'));
   const total = files.reduce((x, f) => x + f.lines, 0);
   const rects = squarify(files.map((f) => f.lines / total * p.w * p.h), { ...p });
   rects.forEach((b, i) => {
@@ -300,7 +300,7 @@ export function calendar(m: Model, st: Style, o: PieceOpts): Scene | null {
   const start = new Date(first); start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
   const weeks = Math.ceil(((last.getTime() - start.getTime()) / 864e5 + 1) / 7);
   const cell = Math.min(26, 1100 / weeks - 4);
-  const { s, p } = frame(m, st, Math.max(900, weeks * (cell + 4) + 230), 7 * (cell + 4), T(m, '每一天', 'EVERY DAY'), T(m, '哪天谁在写', 'Who wrote on which day'));
+  const { s, p } = frame(m, st, Math.max(900, weeks * (cell + 4) + 230), 7 * (cell + 4), T(m, '日历', 'CALENDAR'), T(m, '每天主要是谁在写', 'Who wrote most each day'));
   const byDate = new Map(m.days.map((d) => [d.date, d.by]));
   const max = Math.max(...m.days.map((d) => Object.values(d.by).reduce((x, y) => x + y, 0)), 1);
   for (let w = 0; w < weeks; w++) for (let d = 0; d < 7; d++) {
