@@ -1,0 +1,62 @@
+# CI：Rust 核心与渲染在 Linux 上测；App 在 macOS 上实际编译、打包成 .app（未签名），作为产物上传
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace
+
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci
+        working-directory: packages/render
+      - run: npm test
+        working-directory: packages/render
+
+  desktop-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            apps/desktop/src-tauri -> target
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install fonttools brotli
+      - run: npm ci
+        working-directory: packages/render
+      - run: npm ci
+        working-directory: apps/desktop
+      - name: 字体子集
+        run: npm run fonts
+        working-directory: apps/desktop
+      - name: 分析核心（随 App 一起打包）
+        run: npm run core
+        working-directory: apps/desktop
+      - name: 编译并打包 App
+        run: npx tauri build --bundles app
+        working-directory: apps/desktop
+      - name: 打成 zip
+        run: ditto -c -k --keepParent apps/desktop/src-tauri/target/release/bundle/macos/creditia.app creditia-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: creditia-macos
+          path: creditia-macos.zip
