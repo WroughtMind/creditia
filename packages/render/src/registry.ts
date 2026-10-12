@@ -67,7 +67,8 @@ export function frames(id: string, m: Model, st: Style, o: PieceOpts = {}, n = 2
     return Array.from({ length: steps + 1 }, (_, i) => {
       const y = Math.round((travel * i) / steps);
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewW}" height="${viewH}" viewBox="0 ${y} ${viewW} ${viewH}"><rect y="${y}" width="${viewW}" height="${viewH}" fill="${full.bg}"/>${inner}</svg>`;
-      return { ...full, w: viewW, h: viewH, svg, hits: [], motion: undefined };
+      // crop：导出 GIF 时整卷只栅格化一次，再按 y 裁出每一帧（逐帧裁 viewBox 会碰到 resvg 的滤镜区域 bug，也慢）
+      return { ...full, w: viewW, h: viewH, svg, hits: [], motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y } };
     });
   }
   const out: Art[] = [];
