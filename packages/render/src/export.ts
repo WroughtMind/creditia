@@ -8,7 +8,9 @@ import { INTERACT_CSS, mountHits } from './interact.ts';
 import type { Hit } from './svg.ts';
 
 /** 一张可导出的作品 */
-export interface Art { w: number; h: number; svg: string; hits: Hit[]; bg: string; title: string; motion?: Motion }
+export interface Art { w: number; h: number; svg: string; hits: Hit[]; bg: string; title: string; motion?: Motion; crop?: Crop }
+/** 滚动片尾字幕的一帧：整卷 svg 里从 y 开始、高 h 的一段 */
+export interface Crop { svg: string; w: number; h: number; y: number }
 /** HTML 里的动态：scroll = 片尾字幕在银幕里滚动 */
 export interface Motion { kind: 'scroll'; viewW: number; viewH: number; secs: number }
 
@@ -76,8 +78,15 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
     const enc = GIFEncoder();
     const fps = o.fps ?? 20, delay = Math.round(1000 / fps);
     const width = o.width ?? Math.min(frames[0].w, 960);
+    // 滚动字幕：整卷栅格化一次，逐帧裁行
+    const c0 = frames[0].crop;
+    const whole = c0 && frames.every((f) => f.crop?.svg === c0.svg) ? R.rgba(c0.svg, (width * c0.w) / frames[0].w) : null;
+    const cut = (f: Art) => {
+      const k = whole!.w / f.crop!.w, top = Math.round(f.crop!.y * k), h = Math.min(Math.round(f.h * k), whole!.h - top);
+      return { w: whole!.w, h, data: whole!.data.subarray(top * whole!.w * 4, (top + h) * whole!.w * 4) };
+    };
     frames.forEach((f, i) => {
-      const img = R.rgba(f.svg, width);
+      const img = whole ? cut(f) : R.rgba(f.svg, width);
       const palette = quantize(img.data, 256, { format: 'rgb565' });
       const index = applyPalette(img.data, palette, 'rgb565');
       enc.writeFrame(index, img.w, img.h, { palette, delay: i === frames.length - 1 ? (o.hold ?? 2400) : delay, repeat: 0 });

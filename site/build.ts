@@ -1,16 +1,19 @@
 // 官网构建：node site/build.ts [输出目录]
 // 页面上的作品都是渲染器现画的（原版 satori 渲染器和新风格两套），演示用虚构的样例项目；
-// creditia 自己的署名用仓库里的 credits.json。作品都写成文字已转路径的 SVG，页面里用 <img> 引用。
+// creditia 自己的署名用仓库里的 credits.json。大图是文字已转路径的 SVG，缩略图是 PNG。
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { buildModel, STYLES, styleById, art, exporter } from '../packages/render/src/index.ts';
+import { buildModel, STYLES, styleById, art, exporter, raster, frames } from '../packages/render/src/index.ts';
+import { makeExporter } from '../packages/render/src/export.ts';
+import { creditsBlock } from '../packages/render/src/text.ts';
+import { deflateSync } from 'node:zlib';
 import type { Art } from '../packages/render/src/export.ts';
 import { LOGOS } from '../packages/render/src/logos.ts';
 import { LOGO_OF } from '../packages/render/src/style.ts';
 import { TOOL_NAMES } from '../packages/render/src/data.ts';
 import * as C from '../packages/render/src/classic/index.ts';
-import { ORDERED_THEMES, themeDot, themeName, themeNote } from '../packages/render/src/classic/catalog.ts';
+import { ORDERED_THEMES, themeName, themeNote } from '../packages/render/src/classic/catalog.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const OUT = path.resolve(process.argv[2] ?? path.join(ROOT, '_site'));
@@ -43,53 +46,93 @@ const modelOf = (raw: any, lang: Lang, kind: 'c' | 'v') => {
   if (!models.has(k)) models.set(k, kind === 'c' ? C.buildModel(raw, { director: false, lang }) : buildModel(raw, { lang }));
   return models.get(k);
 };
+const write = (rel: string, data: string | Uint8Array) => { const p = path.join(OUT, 'assets', rel); mkdirSync(path.dirname(p), { recursive: true }); writeFileSync(p, data); };
 
-/** 画一张作品：style 是原版主题 id 或新风格 id。写到 assets/<dir>/<name>.svg，返回尺寸和底色 */
-async function draw(dir: string, name: string, piece: string, style: string, lang: Lang, variant?: string, raw = sample) {
-  let svg: string, w: number, h: number, bg: string;
+/** 画一张作品，写 SVG 大图；thumb 给宽度时另写一张 PNG 缩略图。style 是原版主题 id 或新风格 id */
+async function draw(rel: string, piece: string, style: string, lang: Lang, o: { variant?: string; raw?: any; thumb?: number } = {}) {
+  const raw = o.raw ?? sample;
   if (isClassic(style)) {
-    const a = (await C.art(piece, modelOf(raw, lang, 'c'), C.themeById(style)!, { lang, variant }))!;
-    ({ svg, w, h, bg } = a);
-  } else {
-    const a: Art = art(piece, modelOf(raw, lang, 'v'), styleById(style)!, { variant })!;
-    svg = exporter.svg(a); ({ w, h, bg } = a);
+    const a = (await C.art(piece, modelOf(raw, lang, 'c'), C.themeById(style)!, { lang, variant: o.variant }))!;
+    write(`${rel}.svg`, a.svg);
+    if (o.thumb) write(`${rel}.png`, C.raster.png(a.svg, o.thumb));
+    return { w: a.w, h: a.h, bg: a.bg };
   }
-  mkdirSync(path.join(OUT, 'assets', dir), { recursive: true });
-  writeFileSync(path.join(OUT, 'assets', dir, `${name}.svg`), svg);
-  return { w, h, bg };
+  const a: Art = art(piece, modelOf(raw, lang, 'v'), styleById(style)!, { variant: o.variant })!;
+  write(`${rel}.svg`, exporter.svg(a));
+  if (o.thumb) write(`${rel}.png`, exporter.png(a, o.thumb / a.w));
+  return { w: a.w, h: a.h, bg: a.bg };
 }
 
-const meta: any = { reel: null, styleArt: {}, badge: null, selfBadge: null };
+const meta: any = { reel: {}, sheet: {}, usage: {}, badge: null, selfBadge: null };
 
-// 首屏：一整卷片尾字幕，在银幕里往上滚（新风格里黄金时代的长卷；原版的 cinema 主题同名，这里直接用新渲染器）
-mkdirSync(path.join(OUT, 'assets/reel'), { recursive: true });
+// 首屏：一整卷片尾字幕在银幕里往上滚。深色是黄金时代，浅色是极简（新风格的长卷）
 for (const lang of LANGS) {
-  const a = art('roll', modelOf(sample, lang, 'v'), styleById('cinema')!, { variant: 'scroll' })!;
-  writeFileSync(path.join(OUT, 'assets/reel', `${lang}.svg`), exporter.svg(a));
-  meta.reel = { w: a.w, h: a.h, bg: a.bg };
+  for (const [mode, sid] of [['dark', 'cinema'], ['light', 'minimal']] as const) {
+    const a = art('roll', modelOf(sample, lang, 'v'), styleById(sid)!, { variant: 'scroll' })!;
+    write(`reel/${lang}-${mode}.svg`, exporter.svg(a));
+    meta.reel[mode] = { w: a.w, h: a.h };
+  }
 }
 console.log('✓ reel');
 
-// 风格：每种一张署名榜、一张片尾字幕
+// 风格：同一份数据，每种风格各出署名榜、片尾字幕、分享图；缩略图一眼看全，点开看大图
 const styles = [
-  ...ORDERED_THEMES.map((t) => ({ id: t.id, name: themeName(t, 'zh'), en: themeName(t, 'en'), note: themeNote(t, 'zh'), noteEn: themeNote(t, 'en'), dot: themeDot(t) })),
-  ...V2_STYLES.map((s) => ({ id: s.id, name: s.name, en: s.en, note: s.note, noteEn: '', dot: s.dot() })),
+  ...ORDERED_THEMES.map((t) => ({ id: t.id, name: themeName(t, 'zh'), en: themeName(t, 'en'), note: themeNote(t, 'zh'), noteEn: themeNote(t, 'en') })),
+  ...V2_STYLES.map((s) => ({ id: s.id, name: s.name, en: s.en, note: s.note, noteEn: '' })),
 ];
+const SHEET: [string, number][] = [['tier', 300], ['roll', 300], ['share', 480]];
 for (const lang of LANGS) {
   for (const s of styles) {
-    const tier = await draw(`styles/${lang}`, `${s.id}-tier`, 'tier', s.id, lang);
-    const roll = await draw(`styles/${lang}`, `${s.id}-roll`, 'roll', s.id, lang);
-    meta.styleArt[s.id] = { tier, roll };
+    for (const [piece, w] of SHEET) {
+      const d = await draw(`sheet/${lang}/${s.id}-${piece}`, piece, s.id, lang, { thumb: w });
+      (meta.sheet[s.id] ??= {})[piece] = d;
+    }
   }
-  console.log('✓ styles', lang);
+  console.log('✓ sheet', lang);
 }
 
-// 示例徽章（放在「开始用」里）和 creditia 自己的徽章（真实数据，页脚）
+// 用法：命令行出的那张图、徽章、creditia 自己的徽章
 for (const lang of LANGS) {
-  meta.badge = await draw('badge', lang, 'badge', 'minimal-light', lang);
-  if (own) meta.selfBadge = await draw('badge', `self-${lang}`, 'badge', 'minimal-light', lang, undefined, own);
+  meta.usage.slate = await draw(`usage/${lang}-slate`, 'roll', 'minimal-light', lang, { variant: 'slate', thumb: 560 });
+  meta.badge = await draw(`usage/${lang}-badge`, 'badge', 'minimal-light', lang);
+  if (own) meta.selfBadge = await draw(`usage/${lang}-self-badge`, 'badge', 'minimal-light', lang, { raw: own });
 }
-console.log('✓ badges');
+for (const f of ['app-light.webp', 'app-dark.webp']) if (existsSync(path.join(import.meta.dirname, f))) cpSync(path.join(import.meta.dirname, f), path.join(OUT, 'assets', f));
+console.log('✓ usage');
+
+// 导出格式：同一份数据真的导出成各种文件，页面上能直接打开、下载
+const exp = makeExporter(raster, (d) => new Uint8Array(deflateSync(d)));
+const kb = (n: number) => (n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
+meta.formats = {};
+for (const lang of LANGS) {
+  const vm = modelOf(sample, lang, 'v');
+  const f: Record<string, any> = {};
+  // GIF：一卷片尾字幕在银幕里滚
+  const rollSt = styleById('noir')!; // 纯色底的长卷，GIF 小得多（黄金时代的纹理底会到 7 MB）
+  const fr = frames('roll', vm, rollSt, { variant: 'scroll' }, 36);
+  const gif = exp.gif(fr, { width: 420 });
+  write(`formats/${lang}/credits.gif`, gif); f.gif = { size: kb(gif.length) };
+  // PNG：分享图
+  const share = art('share', vm, styleById('ukiyoe')!)!;
+  const png = exp.png(share, 1); write(`formats/${lang}/credits.png`, png); f.png = { size: kb(png.length), w: share.w, h: share.h };
+  write(`formats/${lang}/png-preview.png`, exp.png(share, 420 / share.w));
+  // SVG：署名榜，文字转路径
+  const tierA = art('tier', vm, styleById('manuscript')!)!;
+  const svg = exp.svg(tierA); write(`formats/${lang}/credits.svg`, svg); f.svg = { size: kb(svg.length), w: tierA.w, h: tierA.h };
+  // PDF：小票，打印用；页面上放一张同样的预览图
+  const rc = art('receipt', vm, styleById('pastel')!)!;
+  const pdf = await exp.pdf(rc, 2); write(`formats/${lang}/credits.pdf`, pdf); f.pdf = { size: kb(pdf.length), w: rc.w, h: rc.h };
+  write(`formats/${lang}/receipt-preview.png`, exp.png(rc, 420 / rc.w));
+  // HTML：单文件网页，鼠标放上去能看每一块的数字
+  const board = ['tier', 'share', 'donut'].map((id) => art(id, vm, styleById('cyber')!)!).filter(Boolean);
+  const html = exp.html(board, { title: 'lumen · credits', lang, bg: styleById('cyber')!.c.bg, note: 'lumen' });
+  write(`formats/${lang}/credits.html`, html); f.html = { size: kb(Buffer.byteLength(html)) };
+  write(`formats/${lang}/html-preview.png`, exp.png(board[0], 420 / board[0].w));
+  // Markdown：CREDITS.md 的区块
+  const md = creditsBlock(vm, 4); write(`formats/${lang}/CREDITS.md`, md); f.md = { size: kb(Buffer.byteLength(md)), text: md.split('\n').slice(0, 9).join('\n') };
+  meta.formats[lang] = f;
+}
+console.log('✓ formats');
 
 // 社交预览图
 for (const lang of LANGS) writeFileSync(path.join(OUT, `assets/og-${lang}.png`), exporter.png(art('share', buildModel(sample, { lang }), styleById('cinema')!)!, 1));

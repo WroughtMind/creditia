@@ -10,8 +10,8 @@ description: 给人和 AI agent 一起做出的作品署名。分析本机日志
 ## 原则
 
 - 全程用 CLI，每步加 `--json`，读返回值再决定下一步。退出码 0 成功、1 失败、2 有警告（警告要转告用户）。
-- **公开前必须确认**：写 `CREDITS.md`、改官网 / README、提交之前，列出将公开的内容（项目名、PR 标题、文件名、人名、落款），用户同意才做。
-- **人名默认不写**。不要替用户给人加头衔；用户明确要求时才用 `--named` 或 `--sign`。
+- **公开前必须确认**：写 `CREDITS.md`、改官网 / README、提交之前，列出将公开的内容（项目名、PR 标题、文件名），用户同意才做。
+- **只写 AI**：作品里只有工具和模型，不写人名，也不要替用户给人加头衔。
 - 口径（strict / standard / loose）、风格、公开范围都是用户的决定：列出选项和区别，让用户选。
 - 只读各工具的数据，不修改 `~/.codex`、`~/.claude`、`~/.cursor`、`~/.gemini` 等任何目录。
 
@@ -25,11 +25,10 @@ description: 给人和 AI agent 一起做出的作品署名。分析本机日志
 6. **预览**：导出 PNG 给用户看，例如 `creditia export --piece tier --style ink --format png --out /tmp/tier.png --json`。
 7. **产出**（用户确认后）：
    - 档案：`creditia doc --json`
-   - 徽章：`creditia export --piece badge --variant flat --format svg --out assets/credits-badge.svg`
+   - 徽章：`creditia export --piece badge --format svg --out assets/credits-badge.svg`
    - 分享图：`creditia export --piece share --style glass --format png --size og --out assets/credits.png`
-   - 片尾字幕网页：`creditia export --piece roll --variant scroll --style cinema --format html --out credits.html`
+   - 片尾字幕：`creditia export --piece roll --variant slate --format png --out credits.png`（版式见 `--list`，`--format gif` 只在新风格的会动作品上有）
    - 全部作品一页：`creditia board --style minimal --out credits.html`
-   - 嵌入：`creditia export --piece tier --format embed --json`
    - 放到 GitHub：`creditia publish --json`（写仓库根目录的 credits.json，返回将公开的字段，先念给用户确认），再按 README「放到 GitHub 上」加 workflow
 8. **接入**：改官网 / README 时先给用户看 diff，确认后再写。
 9. **可选**：`creditia hook install`，之后每次提交自动盖章。
