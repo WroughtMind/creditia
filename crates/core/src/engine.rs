@@ -172,7 +172,8 @@ impl<'a> Engine<'a> {
             // 以邮箱为身份，显示 git 作者名
             let name = if c.name.is_empty() { c.email.clone() } else { c.name.clone() };
             let name = self.cfg.display_name(&name);
-            return (Attr { who: self.reg.human(&format!("h:{}", c.email), &name), level: Level::Declared }, "其他人的提交".into());
+            // id 用邮箱的短哈希：档案可能被公开，不能带出邮箱
+            return (Attr { who: self.reg.human(&person_id(&c.email), &name), level: Level::Declared }, "其他人的提交".into());
         }
         if self.strictness == Strictness::Loose {
             if let Some(s) = self.session_at(c, None) {
@@ -201,6 +202,12 @@ impl<'a> Engine<'a> {
             .filter(|s| harness.map(|h| s.src.harness() == h).unwrap_or(true))
             .max_by_key(|s| (br.is_some() && s.branch.as_ref() == br, s.start))
     }
+}
+
+/// 人的贡献者 id：邮箱（小写）的 FNV 哈希，十六进制 10 位。同一邮箱永远得到同一个 id，但看不出邮箱
+pub fn person_id(email: &str) -> String {
+    let h = email.trim().to_lowercase().bytes().fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
+    format!("h:{:010x}", h & 0xff_ffff_ffff)
 }
 
 /// 存活代码归因：blame 行 → 引入它的提交里同路径同哈希的那一行
@@ -272,9 +279,11 @@ mod tests {
         let a = e.attribute(&commit("cursoragent@cursor.com", vec![1]));
         assert_eq!(a.lines[0][0].level, Level::Declared);
         assert_eq!(e.reg.list[a.lines[0][0].who].harness.as_deref(), Some("cursor"));
-        // 别人 → 人类贡献者
+        // 别人 → 人类贡献者；id 里不带邮箱
         let a = e.attribute(&commit("other@y.com", vec![1]));
         assert_eq!(e.reg.list[a.lines[0][0].who].kind, "human");
+        assert!(!e.reg.list[a.lines[0][0].who].id.contains('@'));
+        assert_eq!(e.reg.list[a.lines[0][0].who].id, person_id("Other@Y.com"));
         // 盖章优先于邮箱
         let mut stamps = HashMap::new();
         stamps.insert("a".repeat(40), ("kimi".to_string(), Some("k3".to_string())));

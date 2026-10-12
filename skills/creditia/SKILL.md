@@ -30,6 +30,7 @@ description: 给人和 AI agent 一起做出的作品署名。分析本机日志
    - 片尾字幕网页：`creditia export --piece roll --variant scroll --style cinema --format html --out credits.html`
    - 全部作品一页：`creditia board --style minimal --out credits.html`
    - 嵌入：`creditia export --piece tier --format embed --json`
+   - 放到 GitHub：`creditia publish --json`（写仓库根目录的 credits.json，返回将公开的字段，先念给用户确认），再按 README「放到 GitHub 上」加 workflow
 8. **接入**：改官网 / README 时先给用户看 diff，确认后再写。
 9. **可选**：`creditia hook install`，之后每次提交自动盖章。
 

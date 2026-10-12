@@ -1,0 +1,52 @@
+# creditia 的 GitHub Action：用仓库里公开的 credits.json（本机 creditia publish 写出）生成徽章、CREDITS.md 和一个署名小网站。
+# CI 里没有任何人的 agent 日志，所以分析要在本机做；这里只负责把结果做成能看的东西。
+name: creditia
+description: 把 credits.json 做成徽章、CREDITS.md 和一个随提交更新的署名页
+author: WroughtMind
+branding:
+  icon: award
+  color: gray-dark
+inputs:
+  credits:
+    description: 档案路径（creditia publish 写出的 credits.json）
+    default: credits.json
+  style:
+    description: 风格（creditia export --list 查看）
+    default: minimal
+  badge:
+    description: 徽章写到哪里（留空不生成），例如 assets/credits-badge.svg
+    default: ''
+  doc:
+    description: CREDITS.md 写到哪里（留空不生成）
+    default: ''
+  site:
+    description: 署名小网站写到哪个目录（留空不生成），配合 actions/upload-pages-artifact 发布到 GitHub Pages
+    default: ''
+  lang:
+    description: zh 或 en
+    default: zh
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+    - name: 安装渲染依赖
+      shell: bash
+      run: cd "$GITHUB_ACTION_PATH/packages/render" && npm ci --omit=dev --no-audit --no-fund
+    - name: 生成
+      shell: bash
+      env:
+        CT: node ${{ github.action_path }}/packages/cli/bin/creditia.mjs
+        CREDITS: ${{ inputs.credits }}
+        STYLE: ${{ inputs.style }}
+        LANG_CT: ${{ inputs.lang }}
+        BADGE: ${{ inputs.badge }}
+        DOC: ${{ inputs.doc }}
+        SITE: ${{ inputs.site }}
+      run: |
+        set -e
+        if [ ! -f "$CREDITS" ]; then echo "::error::没有 $CREDITS。先在本机运行 creditia analyze && creditia publish，把 credits.json 提交进仓库。"; exit 1; fi
+        if [ -n "$BADGE" ]; then $CT export --credits "$CREDITS" --piece badge --variant flat --style "$STYLE" --lang "$LANG_CT" --format svg --out "$BADGE"; fi
+        if [ -n "$DOC" ]; then $CT doc --credits "$CREDITS" --lang "$LANG_CT" --out "$DOC"; fi
+        if [ -n "$SITE" ]; then $CT site --credits "$CREDITS" --style "$STYLE" --lang "$LANG_CT" --out "$SITE"; fi

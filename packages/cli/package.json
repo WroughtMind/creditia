@@ -12,12 +12,12 @@
   },
   "files": [
     "bin",
-    "src",
-    "../render/src",
-    "../render/assets",
-    "../render/fixtures"
+    "dist",
+    "README.md"
   ],
   "scripts": {
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/cli.mjs --packages=external --loader:.json=json --banner:js=\"import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);\"",
+    "prepublishOnly": "npm run build",
     "test": "node --test test/*.test.ts"
   },
   "dependencies": {
@@ -51,5 +51,24 @@
     "@expo-google-fonts/zhi-mang-xing": "^0.4.1",
     "@resvg/resvg-js": "^2.6.2",
     "gifenc": "^1.0.3"
-  }
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WroughtMind/creditia.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/WroughtMind/creditia",
+  "keywords": [
+    "credits",
+    "attribution",
+    "ai",
+    "agents",
+    "claude-code",
+    "codex",
+    "cursor",
+    "git"
+  ]
 }

@@ -54,7 +54,7 @@ pub fn load_config(repo: &Path, override_path: Option<&Path>) -> Config {
     let mut c = Config::load(&p).unwrap_or_else(|_| detect_config(repo));
     c.repo = repo.display().to_string();
     if c.name.is_empty() {
-        c.name = repo.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        c.name = crate::project_name(repo);
     }
     if c.remotes.is_empty() {
         c.remotes = ad::git::identity(repo).1;

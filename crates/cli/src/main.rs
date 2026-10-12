@@ -228,7 +228,7 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
 pub fn detect_config(repo: &Path) -> Config {
     let mut c = Config::default();
     c.repo = repo.display().to_string();
-    c.name = repo.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    c.name = project_name(repo);
     let cur = ad::git::git(repo, &["rev-parse", "--abbrev-ref", "HEAD"]).trim().to_string();
     c.branch = if !cur.is_empty() && cur != "HEAD" {
         cur
@@ -338,6 +338,14 @@ pub fn detect_config(repo: &Path) -> Config {
     c.markers = derive_markers(repo, &remotes);
     c.exclude_markers = detect_excludes(repo, &remotes);
     c
+}
+
+/// 项目名：有远程地址就用远程仓库名（克隆进什么目录都一样），否则用目录名
+pub fn project_name(repo: &Path) -> String {
+    let (_, remotes) = ad::git::identity(repo);
+    let pick = remotes.iter().find(|r| r.contains("github.com")).or(remotes.first());
+    pick.and_then(|r| r.rsplit('/').next()).map(String::from).filter(|s| !s.is_empty())
+        .unwrap_or_else(|| repo.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default())
 }
 
 /// 判断日志路径是否属于本项目的关键词：目录名、各 worktree 目录、远程仓库名。

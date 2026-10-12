@@ -9,21 +9,22 @@
 
 ## 做什么
 
-读本机的 git 历史和各家 agent 的日志，**逐行**弄清楚：哪段代码是哪个工具、哪个模型、在哪次会话里写下的，经由哪个渠道（官方、云厂商、聚合平台、中转站）。产出一份档案（`credits.json` + `CREDITS.md`），再从同一份档案做出一整面「作品墙」：署名榜、片尾字幕、精力小票、分享图、徽章、人的部分，以及各种统计图，十六种风格，导出 PNG / SVG / PDF / GIF / 可交互的 HTML 单文件。
+现在很多项目的代码是好几个 AI 工具、好几个模型一起写的。creditia 读你电脑上的 git 历史和这些工具留下的日志，算出每一行是哪个工具、哪个模型写的，再把结果做成能拿出去的东西：README 徽章、CREDITS.md、片尾字幕式的署名图、分享图、统计图，或者一个能放在项目网站上的署名页。
 
-全程在本机完成，**不调用任何大模型**：归因靠行哈希、时间窗口、提交元数据这些可复查的证据，每一个数字都能追到具体的提交。默认口径会做两种推断（同一提交内的延伸、分支前缀），它们单独记为「推断」；只要有证据的结论，用 `--level strict`。
+分析在本机完成，不上传代码，也不调用任何大模型。
 
-## 理念
+## 结果靠得住吗
 
-**代码大多是 agent 写的；写什么、留下什么，是人决定的。**
+- 一行代码如果在某个工具的日志里能找到（工具确实把这一行写进了文件），就算有逐行证据。
+- 没有日志的，看提交里的信息：提交邮箱、`Co-authored-by`、creditia 的提交盖章。
+- 两样都没有的，默认会做两种推断：同一个提交里其余的行跟着有证据的那个工具走；`codex/` 这类工具自动建的分支算那个工具。推断单独记，在图上和档案里都能看出来。不想要推断，用 `--level strict`。
+- 还是对不上的，记为「未确认」，不算到任何工具或人头上。
 
-- **agent 按行署名。** 谁写了多少行、多少至今仍在、多少有逐行证据，分工具、分模型列清楚。
-- **人不和 agent 抢百分比。** 人的贡献不是行数，是方向和取舍：发出了多少条指令、做了多少次审阅、亲手写了多少行、agent 生成的代码里留下了多少。这些单独成一块「人的部分」。
-- **不封头衔。** 没有「由某某主导」。人名默认不出现——要不要写名字、要不要落款，由你决定。
-- **诚实。** 证据不够的归「未确认」，不并进任何人名下；每个结论都标明依据是逐行证据、明确声明，还是推断。推断不冒充证据，`strict` 口径下完全不做推断。
-- **开发者是作者，也是编辑。** 你决定口径（strict / standard / loose）、决定公开哪些内容（项目名、PR 标题、文件名、人名），决定用哪种样子拿出去。creditia 只负责把事实整理好、做得好看。
+完整规则和已知的边界在 [ATTRIBUTION.md](ATTRIBUTION.md)。
 
-归因的完整规则、各数据源的边界、多路径项目和各种边缘情况，见 [ATTRIBUTION.md](ATTRIBUTION.md)。
+## 人在哪里
+
+creditia 主要回答「哪些 AI 工具和模型参与了、各写了多少」。人的工作没法用行数衡量，所以单独放：发了多少条指令、做了多少次审阅、亲手写了多少行、AI 写的代码最后留下了多少。人名默认不写，要写名字或者落款，在设置里打开。
 
 ## 支持的工具
 
@@ -43,25 +44,48 @@
 
 ```bash
 cd 你的仓库
-creditia init                       # 写 .creditia/config.json（识别你的提交身份、主分支、路径）
-creditia analyze --github           # 分析，写 .creditia/credits.json
-creditia doc                        # 写 CREDITS.md（只改标记区间）
-creditia export --piece tier --style ink --format png --out tier.png
-creditia export --piece roll --style cinema --variant scroll --format html --out credits.html
-creditia board --style glass --out credits.html   # 全部作品放进一个可交互的页面
-creditia hook install               # 之后每次提交自动盖章，不再依赖日志
+npx creditia analyze                # 分析（第一次会下载对应平台的分析程序）
+npx creditia doc                    # 写 CREDITS.md
+npx creditia export --piece tier --style ink --format png --out tier.png
+npx creditia export --list          # 全部作品、版式、风格、格式
+npx creditia hook install           # 以后每次提交自动盖章：日志被清理了也认得出是哪个工具写的
 ```
 
-一个项目在好几个地方（worktree、临时克隆、换过电脑、搬过家）：
+一般不用自己敲这些：让你的 agent 用 [skills/creditia/SKILL.md](skills/creditia/SKILL.md)，它会按步骤做，公开任何内容之前先问你。
+
+一个项目在好几个地方（worktree、临时克隆、换过电脑、搬过家）：`creditia paths` 看登记过的路径，`creditia link <路径>` 补上。
+
+## 放到 GitHub 上
+
+CI 里看不到任何人的 agent 日志，所以分析在本机做，CI 只负责把结果做成徽章、CREDITS.md 和署名页：
 
 ```bash
-creditia paths                      # 看本项目登记过的全部路径
-creditia link /old/machine/path     # 关联一个路径（目录不在了也行）
+npx creditia publish                # 把档案写到仓库根目录的 credits.json，并列出将公开的内容
+git add credits.json && git commit -m "credits"
 ```
 
-让 agent 代你操作时，所有命令都支持 `--json`、非交互；agent 可以先 `creditia whoami` 认出自己，再 `creditia stamp` 给自己的提交盖章。见 [skills/creditia/SKILL.md](skills/creditia/SKILL.md)。
+```yaml
+# .github/workflows/credits.yml
+on: { push: { branches: [main] } }
+permissions: { contents: read, pages: write, id-token: write }
+jobs:
+  credits:
+    runs-on: ubuntu-latest
+    environment: github-pages
+    steps:
+      - uses: actions/checkout@v4
+      - uses: WroughtMind/creditia@main
+        with: { site: _site, style: ink }
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+      - uses: actions/deploy-pages@v4
+```
+
+每次推送，署名页就跟着更新。也可以只生成徽章（`badge: assets/credits-badge.svg`）或 CREDITS.md（`doc: CREDITS.md`）。
 
 ## App
+
+macOS 的 App 目前没有签名（还没有开发者证书）：第一次打开时右键 → 打开，或者在终端运行 `xattr -cr /Applications/creditia.app`。
 
 一面展墙：顶部切换项目，左下角的小圆点切换风格（悬停看风格名，每个圆点就是这个风格的缩影），所有作品直接摆出来。悬停作品会出现虚线框——换版式、选格式导出；作品里的每一块都能悬停看细节；把作品拖到右下角的导出坞也能导出，拖的时候其余作品会虚化。
 

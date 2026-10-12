@@ -231,6 +231,8 @@ fn end_to_end() {
     // 隐私：输出里不含代码原文
     let txt = credits.to_string();
     assert!(!txt.contains("codex_fn_") && !txt.contains("cursorValue"));
+    // 档案里不出现任何邮箱
+    assert!(!txt.contains("@example.com") && !txt.contains("@cursor.com"), "{txt}");
 
     // 增量：加一个提交，只处理 1 个
     fs::write(repo.join("src/more.rs"), "pub fn more_fn_added_later() -> i32 { 42 }\n").unwrap();

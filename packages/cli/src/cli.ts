@@ -57,20 +57,51 @@ const USAGE = `用法：creditia <命令> [选项]
                  [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--named] [--sign 名字] [--out FILE]
   export         --list                                 全部作品、版式、风格、格式
   board          [--style S] [--out credits.html]       全部作品放进一个可交互的 HTML 页面
+  site           [--out 目录] [--style S]               一个小网站：首页是全部作品，每种风格一页（给 GitHub Pages）
+  publish        [--out credits.json]                   把档案放到仓库根目录，准备公开（会列出将公开的内容）
+
+任何展示命令都可以加 --credits FILE，直接用一份现成的档案（CI 里没有 agent 日志，用的就是仓库里公开的 credits.json）
   fetch                                                 终端名片
 
 所有命令支持 --json。`;
 
 // ───────────────────────── 核心二进制 ─────────────────────────
-function corePath(): string {
+const VERSION: string = JSON.parse(readFileSync(path.join(HERE, '../package.json'), 'utf8')).version;
+const TARGETS: Record<string, string> = {
+  'darwin-arm64': 'aarch64-apple-darwin', 'darwin-x64': 'x86_64-apple-darwin', 'linux-x64': 'x86_64-unknown-linux-gnu',
+  'linux-arm64': 'aarch64-unknown-linux-gnu', 'win32-x64': 'x86_64-pc-windows-msvc',
+};
+const exeName = process.platform === 'win32' ? 'creditia-core.exe' : 'creditia-core';
+/** 下载后的核心放在这里，按版本分开 */
+const cachedCore = () => path.join(process.env.CREDITIA_HOME ?? path.join(process.env.HOME ?? process.env.USERPROFILE ?? '.', '.creditia'), 'bin', VERSION, exeName);
+
+function corePath(): string | null {
   if (process.env.CREDITIA_CORE) return process.env.CREDITIA_CORE;
-  const exe = process.platform === 'win32' ? 'creditia-core.exe' : 'creditia-core';
-  for (const p of [path.join(ROOT, 'target/release', exe), path.join(ROOT, 'target/debug', exe), path.join(HERE, '..', 'bin', `${process.platform}-${process.arch}`, exe)]) if (existsSync(p)) return p;
-  return exe;
+  for (const p of [path.join(ROOT, 'target/release', exeName), path.join(ROOT, 'target/debug', exeName), cachedCore()]) if (existsSync(p)) return p;
+  const which = spawnSync(process.platform === 'win32' ? 'where' : 'which', [exeName], { encoding: 'utf8' });
+  return which.status === 0 ? which.stdout.split('\n')[0].trim() : null;
 }
+/** 第一次用分析功能时，从 GitHub Releases 下载对应平台的核心（只下一次） */
+async function ensureCore(): Promise<string> {
+  const found = corePath();
+  if (found) return found;
+  const target = TARGETS[`${process.platform}-${process.arch}`];
+  if (!target) die(`这个平台（${process.platform}-${process.arch}）没有预编译的核心；请从源码 cargo build --release，再设置 CREDITIA_CORE`);
+  const url = `https://github.com/WroughtMind/creditia/releases/download/v${VERSION}/creditia-core-${target}${process.platform === 'win32' ? '.exe' : ''}`;
+  if (!json) console.error(`第一次运行，下载分析核心：${url}`);
+  const res = await fetch(url);
+  if (!res.ok) die(`下载失败（${res.status}）：${url}\n可以从源码 cargo build --release，再设置 CREDITIA_CORE`);
+  const out = cachedCore();
+  mkdirSync(path.dirname(out), { recursive: true });
+  writeFileSync(out, new Uint8Array(await res.arrayBuffer()), { mode: 0o755 });
+  return out;
+}
+let coreBin: string | null = null;
 function core(args: string[], inherit = true): { code: number; out: string } {
-  const r = spawnSync(corePath(), args, { stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'inherit'], encoding: 'utf8' });
-  if (r.error) die(`找不到 creditia-core：${(r.error as any).message}\n先 cargo build --release，或设置 CREDITIA_CORE`);
+  const bin = coreBin ?? corePath();
+  if (!bin) die('找不到分析核心 creditia-core');
+  const r = spawnSync(bin, args, { stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'inherit'], encoding: 'utf8' });
+  if (r.error) die(`运行 creditia-core 失败：${(r.error as any).message}`);
   return { code: r.status ?? 1, out: r.stdout ?? '' };
 }
 function die(msg: string): never {
@@ -88,13 +119,24 @@ function sh(cwd: string, args: string[]) {
 function repoOf(): string {
   const start = path.resolve(flags.repo ?? process.cwd());
   const top = sh(start, ['rev-parse', '--show-toplevel']);
-  if (!top) die(`不是 git 仓库：${start}`);
+  if (!top) {
+    if (flags.credits) return start; // 只渲染一份现成的档案，不需要仓库
+    die(`不是 git 仓库：${start}`);
+  }
   const common = sh(top, ['rev-parse', '--git-common-dir']);
   return common.endsWith('/.git') || common === '.git' ? path.dirname(path.resolve(top, common)) : top;
 }
 const loadConfig = (repo: string): any => { const p = path.join(repo, '.creditia/config.json'); return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : {}; };
+/** 档案从哪来：--credits 指定的文件 → 本机分析结果 .creditia/credits.json（必要时现场分析）→ 仓库根目录公开的 credits.json */
 function loadCredits(repo: string, refresh = false): any {
+  if (flags.credits) {
+    const f = path.resolve(flags.credits);
+    if (!existsSync(f)) die(`没有 ${f}`);
+    return JSON.parse(readFileSync(f, 'utf8'));
+  }
+  const pub = path.join(repo, 'credits.json');
   const p = path.join(repo, '.creditia/credits.json');
+  if (!existsSync(p) && !refresh && existsSync(pub)) return JSON.parse(readFileSync(pub, 'utf8'));
   if (refresh || !existsSync(p)) {
     const r = core(['update', '--repo', repo, '--json'], false);
     if (r.code === 1) die('分析失败');
@@ -121,6 +163,11 @@ const PASS = new Set(['discover', 'init', 'analyze', 'update', 'collect', 'docto
 
 async function main() {
   if (!cmd || cmd === 'help' || cmd === '-h' || cmd === '--help') return console.log(USAGE);
+  if (cmd === '--version' || cmd === 'version') return console.log(VERSION);
+  // 只有要做分析时才需要核心：透传给核心的命令、--refresh、或者仓库里还没有任何档案
+  const top = sh(path.resolve(flags.repo ?? process.cwd()), ['rev-parse', '--show-toplevel']);
+  const hasCredits = !!flags.credits || (!!top && (existsSync(path.join(top, '.creditia/credits.json')) || existsSync(path.join(top, 'credits.json'))));
+  if (PASS.has(cmd) || on.has('refresh') || (!hasCredits && !on.has('list'))) coreBin = await ensureCore();
   if (PASS.has(cmd)) process.exit(core(argv).code);
   switch (cmd) {
     case 'doc': {
@@ -142,6 +189,8 @@ async function main() {
     }
     case 'export': return exportCmd();
     case 'board': return boardCmd();
+    case 'site': return siteCmd();
+    case 'publish': return publishCmd();
     case 'fetch': { const { m } = modelOf(repoOf()); console.log(ansi(fetchSegs(m))); return; }
     default: die(`未知命令：${cmd}\n\n${USAGE}`);
   }
@@ -202,6 +251,38 @@ async function boardCmd() {
   const ids = (flags.pieces ?? 'share,tier,roll,hand,receipt,donut,stream,survival,versions,lanes,clock,mosaic,calendar').split(',');
   const arts = ids.map((id) => (PIECES[id] ? art(id, m, st) : null)).filter(Boolean) as Art[];
   write(flags.out ?? path.join(repo, 'credits.html'), ex.html(arts, { title: `${m.project} · credits`, lang: m.lang, bg: st.c.bg, note: m.project }));
+}
+
+/** 公开档案：从本机分析结果复制到仓库根目录，并列出将公开的内容让人确认 */
+function publishCmd() {
+  const repo = repoOf();
+  const { m, raw } = modelOf(repo, on.has('refresh'));
+  const out = flags.out ?? path.join(repo, 'credits.json');
+  const titles = (raw.units ?? []).filter((u: any) => u.title && !/^PR #\d+$/.test(u.title)).length;
+  const paths = (raw.files ?? []).filter((f: any) => f.path).length;
+  const people = m.people.map((p) => p.name);
+  const report = { path: out, project: m.project, prTitles: titles, filePaths: paths, people, note: '只含行数、工具、模型、时间与上面这些字段；不含代码、prompt、邮箱、本机路径' };
+  writeFileSync(out, JSON.stringify(raw, null, 1) + '\n');
+  if (json) return console.log(JSON.stringify(report));
+  console.log(`已写入 ${out}\n将公开：项目名「${m.project}」、${titles} 个 PR / 提交标题、${paths} 个文件路径、人名：${people.join('、') || '无'}\n${report.note}\n不想公开标题、路径或人名：改 .creditia/config.json 的 privacy 后重新 analyze。`);
+}
+
+/** 小网站：首页是默认风格的全部作品，每种风格一页（四件代表作），顶部一排风格圆点 */
+function siteCmd() {
+  const repo = repoOf();
+  const { m } = modelOf(repo, on.has('refresh'));
+  const out = flags.out ?? path.join(repo, '_credits');
+  mkdirSync(out, { recursive: true });
+  const main = styleById(flags.style ?? 'minimal') ?? STYLES[0];
+  const nav = (cur: string) => `<nav style="position:sticky;top:0;z-index:5;display:flex;gap:8px;justify-content:center;padding:14px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)">${STYLES.map((st) => `<a href="${st.id === main.id ? 'index' : st.id}.html" title="${st.name} · ${st.en}" style="display:block;width:22px;height:22px;border-radius:99px;${st.id === cur ? 'outline:2px solid currentColor;outline-offset:3px' : ''}"><svg viewBox="0 0 24 24" width="22" height="22">${st.dot()}</svg></a>`).join('')}</nav>`;
+  const page = (st: typeof main, ids: string[]) => {
+    const arts = ids.map((id) => (PIECES[id] ? art(id, m, st) : null)).filter(Boolean) as Art[];
+    return ex.html(arts, { title: `${m.project} · credits · ${st.name}`, lang: m.lang, bg: st.c.bg, note: `${m.project} · ${st.name}` }).replace('<body', `<body style="color:${st.dark ? '#eee' : '#111'}"`).replace(/(<body[^>]*>)/, `$1${nav(st.id)}`);
+  };
+  writeFileSync(path.join(out, 'index.html'), page(main, ['share', 'tier', 'roll', 'hand', 'receipt', 'donut', 'stream', 'survival', 'versions', 'lanes', 'clock', 'mosaic', 'calendar']));
+  for (const st of STYLES) if (st.id !== main.id) writeFileSync(path.join(out, `${st.id}.html`), page(st, ['share', 'tier', 'roll', 'hand']));
+  if (json) console.log(JSON.stringify({ path: out, pages: STYLES.length }));
+  else console.error(`→ ${out}/index.html（${STYLES.length} 页）`);
 }
 
 // ───────────────────────── 终端颜色 ─────────────────────────
