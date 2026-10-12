@@ -99,18 +99,51 @@ section, #screen { scroll-margin-top: 64px; }
 /* ───────── 首屏 ───────── */
 #screen { position: relative; height: 100vh; height: 100svh; min-height: 660px; max-height: 1100px; overflow: hidden; background: var(--hero); color: var(--hero-ink); transition: background-color .3s, color .3s; }
 @property --p { syntax: '<percentage>'; inherits: false; initial-value: 130%; }
-.stage { position: absolute; z-index: 1; top: 88px; bottom: 40px; right: max(32px, calc((100vw - 1120px) / 2)); width: min(480px, 40vw); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; perspective: 1400px; }
-.cards { position: relative; flex: none; transform: rotateX(var(--tx, 0deg)) rotateY(var(--ty, 0deg)); transition: transform 1s cubic-bezier(.2,.8,.2,1); }
-.cards img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,.12), 0 40px 90px -30px rgba(0,0,0,.55);
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(var(--p) - 30%), transparent var(--p)); mask-image: linear-gradient(to bottom, #000 calc(var(--p) - 30%), transparent var(--p)); }
-.cap { display: flex; align-items: center; gap: 14px; font-size: 12.5px; color: var(--hero-soft); min-height: 20px; }
-.ticks { display: flex; gap: 6px; }
-.ticks button { width: 22px; height: 14px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; align-items: center; }
-.ticks i { display: block; height: 2px; border-radius: 2px; background: var(--hero-line); overflow: hidden; }
-.ticks i b { display: block; height: 100%; width: 100%; background: var(--hero-ink); transform-origin: left; transform: scaleX(0); }
-.ticks .done i b { transform: none; }
+/* 首屏右边：一个编辑器，代码一行行写出来，每行左边标上是哪个 AI 写的，底下的占比跟着涨 */
+@property --glow { syntax: '<color>'; inherits: true; initial-value: rgba(0,0,0,0); }
+.stage { position: absolute; z-index: 1; top: 84px; bottom: 36px; right: max(32px, calc((100vw - 1120px) / 2)); width: min(540px, 45vw); display: grid; place-items: center; perspective: 1600px; translate: 0 calc(var(--py, 0px) * -0.35); }
+.stage::before { content: ""; position: absolute; inset: -6% -24% -6% -14%; pointer-events: none; background: radial-gradient(46% 42% at 52% 46%, color-mix(in srgb, var(--glow) 34%, transparent), transparent 72%); transition: --glow 1.4s ease; }
+.ed { --ed-bg: #FFFFFF; --ed-line: rgba(22,21,18,.09); --ed-soft: #8D887E; --ed-faint: #C9C4BA; --ed-hl: rgba(22,21,18,.035); --ed-str: #8A6A35; --ed-kw: #7A6F9E;
+  position: relative; flex: none; width: 540px; border-radius: 14px; font-variant-ligatures: none; background: var(--ed-bg); border: 1px solid var(--ed-line); overflow: hidden; font-size: 12.5px;
+  box-shadow: 0 1px 1px rgba(22,21,18,.04), 0 50px 110px -48px rgba(40,30,20,.45); transform: scale(var(--k, 1)) rotateX(var(--tx, 0deg)) rotateY(var(--ty, 0deg)); transition: transform .9s cubic-bezier(.2,.8,.2,1); }
+:root[data-theme="dark"] .ed { --tint: .1; --ed-bg: #0F0F10; --ed-line: rgba(241,234,220,.08); --ed-soft: #7F7A70; --ed-faint: #46433E; --ed-hl: rgba(241,234,220,.035); --ed-str: #C8AE7E; --ed-kw: #A69AD0; box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 50px 120px -40px rgba(0,0,0,.9); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ed { --tint: .1; --ed-bg: #0F0F10; --ed-line: rgba(241,234,220,.08); --ed-soft: #7F7A70; --ed-faint: #46433E; --ed-hl: rgba(241,234,220,.035); --ed-str: #C8AE7E; --ed-kw: #A69AD0; box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 50px 120px -40px rgba(0,0,0,.9); } }
+.ed-tabs { position: relative; height: 40px; display: flex; align-items: stretch; padding: 0 8px; border-bottom: 1px solid var(--ed-line); font: 11.5px "JetBrains Mono", monospace; color: var(--ed-soft); }
+.ed-tabs span { display: flex; align-items: center; gap: 7px; padding: 0 12px; transition: color .4s; white-space: nowrap; }
+.ed-tabs span i { width: 6px; height: 6px; border-radius: 2px; background: var(--ed-faint); transition: background-color .4s; }
+.ed-tabs span.on { color: var(--hero-ink); }
+.ed-tabs span.on i { background: var(--glow); }
+.ed-tabs b { position: absolute; bottom: -1px; height: 1.5px; background: var(--hero-ink); transition: left .55s cubic-bezier(.2,.8,.2,1), width .55s cubic-bezier(.2,.8,.2,1); }
+.ed-code { position: relative; padding: 12px 0; height: calc(19 * 22px + 24px); font-family: "JetBrains Mono", ui-monospace, monospace; }
+.r { position: relative; display: grid; grid-template-columns: 38px 3px 1fr; align-items: center; height: 22px; white-space: pre; color: var(--hero-ink); }
+.r::before { content: ""; position: absolute; inset: 0; background: var(--ed-hl); opacity: 0; transition: opacity .25s; }
+.r.cur::before { opacity: 1; }
+.r::after { content: ""; position: absolute; inset: 0 0 0 41px; background: linear-gradient(90deg, var(--c), transparent 85%); opacity: 0; transition: opacity .6s; pointer-events: none; }
+.r.done::after { opacity: var(--tint, .07); }
+.r .n { text-align: right; padding-right: 12px; font-size: 10.5px; color: var(--ed-faint); }
+.r .s { align-self: stretch; background: var(--c); transform: scaleY(0); transform-origin: top; transition: transform .35s cubic-bezier(.3,1.4,.5,1); }
+.r .s.none { background: repeating-linear-gradient(180deg, var(--ed-soft) 0 3px, transparent 3px 6px); opacity: .6; }
+.r.done .s { transform: none; }
+.r .x { padding-left: 14px; overflow: hidden; }
+.r .w { position: absolute; right: 14px; top: 0; height: 22px; display: flex; align-items: center; gap: 6px; font: 500 11px Inter, sans-serif; color: var(--c); opacity: 0; transform: translateX(8px); transition: opacity .4s, transform .5s cubic-bezier(.2,.8,.2,1); }
+.r .w.none { color: var(--ed-soft); }
+.r .w svg { width: 12px; height: 12px; fill: currentColor; }
+.r .w.none svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-dasharray: 3 3; }
+.r .w.on { opacity: 1; transform: none; }
+.r .k { color: var(--ed-kw); } .r .q { color: var(--ed-str); } .r .m { color: var(--ed-soft); font-style: italic; }
+.r .cr { display: inline-block; width: 7px; height: 15px; vertical-align: -3px; background: var(--glow); margin-left: 1px; }
+.ed-foot { border-top: 1px solid var(--ed-line); padding: 14px 16px 16px; }
+.ed-cap { display: flex; justify-content: space-between; align-items: baseline; font-size: 11.5px; color: var(--ed-soft); margin-bottom: 10px; }
+.ed-cap b { font-weight: 500; color: var(--hero-ink); }
+.ed-bar { display: flex; gap: 2px; height: 5px; border-radius: 3px; overflow: hidden; background: var(--ed-hl); }
+.ed-bar i { display: block; height: 100%; background: var(--c); transition: flex-basis .45s cubic-bezier(.2,.8,.2,1); flex: 0 0 0%; }
+.ed-bar i.none { background: repeating-linear-gradient(135deg, var(--ed-soft) 0 2px, transparent 2px 4px); }
+.ed-chips { margin-top: 11px; display: flex; gap: 16px; font: 11.5px "JetBrains Mono", monospace; color: var(--ed-soft); font-variant-numeric: tabular-nums; }
+.ed-chips span { display: inline-flex; align-items: center; gap: 6px; transition: color .3s; }
+.ed-chips span.hot { color: var(--hero-ink); }
+.ed-chips svg { width: 12px; height: 12px; fill: var(--c); }
+.ed-chips .none svg { fill: none; stroke: var(--ed-soft); stroke-dasharray: 2 2; }
 .title { translate: 0 var(--py, 0px); opacity: var(--po, 1); }
-.stage { translate: 0 calc(var(--py, 0px) * -0.35); }
 .title { position: absolute; z-index: 2; left: max(32px, calc((100vw - 1120px) / 2)); top: 50%; transform: translateY(-48%); width: min(520px, 46vw); }
 .title h1 { font-size: clamp(48px, 6vw, 84px); line-height: 1; }
 :lang(zh) .title h1 { font-size: clamp(40px, 4.6vw, 64px); line-height: 1.24; }
@@ -150,34 +183,6 @@ section, #screen { scroll-margin-top: 64px; }
 .live .roller img { height: auto; }
 .morph > img { position: absolute; inset: 0; }
 .morph > img.on { z-index: 1; }
-/* 导出：一排小样，每种格式长成它自己的样子，点了就下载或打开 */
-.exports { margin-top: 44px; }
-.exports .lbl { display: block; color: var(--soft); font-size: 14px; margin-bottom: 14px; }
-.fx { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
-.fx a { display: flex; flex-direction: column; gap: 10px; text-decoration: none; min-width: 0; }
-.fx .pv { position: relative; height: 156px; border-radius: 10px; overflow: hidden; background: var(--line2); border: 1px solid var(--line); display: grid; place-items: center; transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s, border-color .2s; }
-.fx a:hover .pv { transform: translateY(-4px); box-shadow: var(--shadow); border-color: var(--soft); }
-.fx .pv img { transition: transform .5s cubic-bezier(.2,.8,.2,1); }
-.fx a:hover .pv img { transform: scale(1.04); }
-.fx .nm { display: flex; align-items: baseline; gap: 8px; font: 500 13px "JetBrains Mono", monospace; }
-.fx .nm small { font: 12px Inter, sans-serif; color: var(--faint); }
-.fx .nm .ar { margin-left: auto; width: 14px; height: 14px; stroke: currentColor; fill: none; opacity: .35; transition: opacity .2s, transform .2s; flex: none; align-self: center; }
-.fx a:hover .ar { opacity: .9; transform: translateY(1px); }
-/* 各自的样子 */
-.pv.photo img { width: 100%; height: 100%; object-fit: cover; }
-.pv.vec img { width: 72%; height: auto; box-shadow: 0 0 0 1px #4B8DF8; }
-.pv.vec i { position: absolute; width: 7px; height: 7px; background: var(--card); border: 1px solid #4B8DF8; }
-.pv.page { background: repeating-linear-gradient(45deg, var(--line2) 0 6px, transparent 6px 12px); }
-.pv.page img { width: auto; height: 134px; margin-top: 24px; box-shadow: 0 6px 20px -6px rgba(0,0,0,.35); clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%); }
-.pv.anim img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
-.pv.anim b { position: absolute; left: 8px; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: #E5484D; animation: dot 1.4s infinite; }
-.pv.web { display: block; padding: 0; background: var(--card); }
-.pv.web .bar { height: 18px; display: flex; gap: 4px; align-items: center; padding: 0 8px; border-bottom: 1px solid var(--line); }
-.pv.web .bar i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
-.pv.web img { width: 100%; height: calc(100% - 18px); object-fit: cover; object-position: top; }
-.pv.text { display: block; padding: 12px 14px; background: var(--card); font: 10.5px/1.6 "JetBrains Mono", monospace; color: var(--soft); white-space: pre; text-align: left; overflow: hidden; }
-.pv.text em { font-style: normal; color: var(--ink); }
-
 /* 放大看 */
 #lb { position: fixed; inset: 0; z-index: 50; background: rgba(8,8,8,.86); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); display: grid; grid-template-rows: 1fr auto; padding: 4vh 4vw 3vh; color: #EEE9DF; }
 #lb .big { display: grid; place-items: center; min-height: 0; }
@@ -216,32 +221,123 @@ section, #screen { scroll-margin-top: 64px; }
 .tok-k { color: var(--soft); }
 .tok-c { color: var(--faint); font-style: italic; }
 
-/* ───────── 用法：四种同时摆出来 ───────── */
+/* ───────── 用法：四张卡都是会自己演的小样，高度固定，内容在里面滚，不把页面撑开 ───────── */
 .ways { margin-top: 44px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.way { border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 22px 22px 0; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
-.way h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: baseline; gap: 10px; }
+.way { border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 18px 22px 0; display: flex; flex-direction: column; gap: 14px; overflow: hidden; min-width: 0; }
+.way h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 10px; min-height: 28px; }
 .way h3 small { font-weight: 400; color: var(--faint); font-size: 13px; }
-.way .body { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
-.term { border-radius: 12px 12px 0 0; background: var(--term); color: var(--term-ink); padding: 18px 20px 22px; font-size: 13px; line-height: 1.95; overflow: hidden; white-space: pre; }
+.again { margin-left: auto; width: 28px; height: 28px; border-radius: 99px; border: 0; background: transparent; color: var(--faint); cursor: pointer; display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity .3s, color .15s, background-color .15s; }
+.again.on { opacity: 1; pointer-events: auto; }
+.again:hover { color: var(--ink); background: var(--line2); }
+.again svg { width: 15px; height: 15px; }
+.way .body { position: relative; height: 410px; min-width: 0; }
+.way .body > * { height: 100%; border-radius: 12px 12px 0 0; }
+/* 命令行 */
+.term { font-variant-ligatures: none; background: var(--term); color: var(--term-ink); padding: 16px 18px 20px; font-size: 12px; line-height: 1.72; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .term .p { color: #8C877D; }
 .term .o { color: #A9A397; }
-.chat { display: grid; gap: 10px; padding-bottom: 22px; }
-.msg { max-width: 90%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.6; }
-.msg.me { justify-self: end; background: var(--ink); color: var(--bg); border-bottom-right-radius: 4px; }
-.msg.ai { background: var(--bg); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
-.msg.ai b { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; margin-bottom: 3px; }
-.msg.ai b svg { width: 13px; height: 13px; fill: currentColor; }
-.msg code { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--soft); }
-.repo { border: 1px solid var(--line); border-bottom: 0; border-radius: 12px 12px 0 0; background: var(--bg); padding: 18px 20px 20px; }
-.repo .fn { font-size: 12px; color: var(--faint); margin-bottom: 8px; }
-.repo h4 { margin: 0 0 10px; font-size: 20px; font-weight: 600; }
-.repo .badge img { height: 21px; width: auto; }
-.repo table { margin-top: 14px; width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.repo th, .repo td { text-align: left; padding: 6px 9px; border: 1px solid var(--line); }
-.repo th { font-weight: 600; background: var(--line2); }
-.repo td.n { text-align: right; font-variant-numeric: tabular-nums; }
-.shot { border: 1px solid var(--line); border-bottom: 0; border-radius: 10px 10px 0 0; overflow: hidden; }
-.shot img { width: 100%; }
+.term .d { color: #625E57; }
+.term .bd { font-weight: 600; color: #F1EADC; }
+.term .g { display: inline-block; animation: grow .7s cubic-bezier(.2,.8,.2,1) backwards; }
+@keyframes grow { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.term .ok { color: #7CCB9F; }
+.term a.out { color: var(--term-ink); text-decoration: none; border-bottom: 1px dashed rgba(232,228,219,.28); transition: border-color .15s, color .15s; }
+.term a.out:hover { border-bottom-color: currentColor; color: #fff; }
+.term .spin::before { content: "⠋"; display: inline-block; width: 1.2em; color: #D97757; animation: braille .8s steps(1) infinite; }
+@keyframes braille { 0% { content: "⠋"; } 12% { content: "⠙"; } 25% { content: "⠹"; } 37% { content: "⠸"; } 50% { content: "⠼"; } 62% { content: "⠴"; } 75% { content: "⠦"; } 87% { content: "⠧"; } }
+#peek { position: fixed; z-index: 45; width: 220px; padding: 8px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); pointer-events: none; opacity: 0; transform: translateY(6px) scale(.98); transition: opacity .18s, transform .25s cubic-bezier(.2,.8,.2,1); }
+#peek.on { opacity: 1; transform: none; }
+#peek img { width: 100%; border-radius: 6px; }
+#peek pre { margin: 0; padding: 6px 8px; font: 10.5px/1.55 "JetBrains Mono", monospace; color: var(--soft); white-space: pre; overflow-x: hidden; max-height: 210px; overflow: hidden; }
+#peek small { display: flex; justify-content: space-between; padding: 7px 4px 0; font-size: 11.5px; color: var(--faint); }
+/* agent */
+.agent { position: relative; background: var(--bg); border: 1px solid var(--line); border-bottom: 0; padding: 16px 16px 24px; overflow: hidden; display: flex; flex-direction: column; gap: 12px; font-size: 13.5px; line-height: 1.65; }
+.agent > * { flex: none; }
+.agent .u { align-self: flex-end; max-width: 85%; background: var(--ink); color: var(--bg); padding: 7px 13px; border-radius: 14px 14px 4px 14px; }
+.agent .a { display: grid; grid-template-columns: 16px 1fr; gap: 9px; }
+.agent .a > svg { width: 14px; height: 14px; margin-top: 4px; fill: #D97757; }
+.agent .a .wd { display: inline; }
+.tool { font: 11.5px/1.6 "JetBrains Mono", monospace; min-width: 0; font-variant-ligatures: none; }
+.tool .hd { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tool .hd b { font-weight: 600; flex: none; }
+.tool .hd span { color: var(--soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool .st { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #4FA37F; transition: background-color .3s; }
+.tool .st.run { background: transparent; border: 1.5px solid var(--line); border-top-color: var(--ink); animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.tool .out { margin: 5px 0 0 3px; padding-left: 13px; border-left: 1px solid var(--line); color: var(--soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool .out img { margin: 8px 0 2px; width: min(260px, 100%); border-radius: 6px; box-shadow: 0 10px 30px -14px rgba(0,0,0,.5); }
+.tool .add { display: block; background: rgba(79,163,127,.13); color: #2E7D5B; padding: 1px 6px; border-radius: 4px; }
+:root[data-theme="dark"] .tool .add { color: #7CCB9F; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tool .add { color: #7CCB9F; } }
+/* GitHub：仓库首页的样子 */
+.gh { --g-bg: #fff; --g-fg: #1f2328; --g-mut: #59636e; --g-bd: #d1d9e0; --g-sub: #f6f8fa; --g-link: #0969da; --g-ok: #1a7f37; --g-run: #bf8700; --g-hl: #fff8c5;
+  position: relative; overflow: hidden; border: 1px solid var(--g-bd); border-bottom: 0; background: var(--g-bg); color: var(--g-fg); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, "PingFang SC", sans-serif; }
+:root[data-theme="dark"] .gh { --g-bg: #0d1117; --g-fg: #f0f6fc; --g-mut: #9198a1; --g-bd: #3d444d; --g-sub: #151b23; --g-link: #4493f8; --g-ok: #3fb950; --g-run: #d29922; --g-hl: rgba(187,128,9,.25); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .gh { --g-bg: #0d1117; --g-fg: #f0f6fc; --g-mut: #9198a1; --g-bd: #3d444d; --g-sub: #151b23; --g-link: #4493f8; --g-ok: #3fb950; --g-run: #d29922; --g-hl: rgba(187,128,9,.25); } }
+.gh-in { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.gh-sc { flex: 1; min-height: 0; overflow: hidden; }
+.gh-row { height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: var(--g-sub); border-bottom: 1px solid var(--g-bd); font-size: 13px; white-space: nowrap; }
+.gh-row .av { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--g-bd); color: var(--g-fg); }
+.gh-row .av svg { width: 12px; height: 12px; fill: currentColor; }
+.gh-row b { font-weight: 600; }
+.gh-row .msg { color: var(--g-mut); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.gh-row .sig { flex: none; display: inline-flex; }
+.gh-row .sig svg { width: 16px; height: 16px; }
+.gh-row .run { width: 12px; height: 12px; margin: 2px; border-radius: 50%; border: 2px solid var(--g-run); border-right-color: transparent; animation: spin .8s linear infinite; }
+.gh-row .sha { margin-left: auto; font: 12px "JetBrains Mono", monospace; color: var(--g-mut); }
+.gh-row time { color: var(--g-mut); font-size: 12px; }
+.gh-tabs { display: flex; gap: 2px; padding: 0 8px; height: 46px; align-items: center; border-bottom: 1px solid var(--g-bd); }
+.gh-tabs span { position: relative; display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px; color: var(--g-mut); font-size: 13.5px; }
+.gh-tabs span.on { color: var(--g-fg); font-weight: 600; }
+.gh-tabs span.on::after { content: ""; position: absolute; left: 6px; right: 6px; bottom: -9px; height: 2px; border-radius: 2px; background: #fd8c73; }
+.gh-tabs svg { width: 16px; height: 16px; fill: var(--g-mut); }
+.gh-md { padding: 18px 24px 30px; }
+.gh-md h1 { margin: 0 0 14px; padding-bottom: .3em; border-bottom: 1px solid var(--g-bd); font-size: 26px; font-weight: 600; line-height: 1.25; }
+.gh-md h2 { margin: 24px 0 14px; padding-bottom: .3em; border-bottom: 1px solid var(--g-bd); font-size: 19px; font-weight: 600; line-height: 1.25; }
+.gh-md p { margin: 0 0 14px; }
+.gh-md .badges { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.shield { display: inline-flex; height: 20px; border-radius: 3px; overflow: hidden; font: 11px/20px Verdana, "DejaVu Sans", Geneva, sans-serif; color: #fff; }
+.shield span { padding: 0 6px; background: #555; }
+.shield span + span { background: var(--s, #4c1); }
+.gh-md .cb { height: 20px; width: auto; border-radius: 3px; }
+.gh-md .cs { width: 100%; max-width: 420px; height: auto; border-radius: 4px; }
+.gh-md table { margin-top: 14px; border-collapse: collapse; font-size: 13px; display: block; max-width: 100%; overflow: hidden; }
+.gh-md th, .gh-md td { padding: 5px 12px; border: 1px solid var(--g-bd); white-space: nowrap; }
+.gh-md th { font-weight: 600; text-align: left; }
+.gh-md tr:nth-child(2n) { background: var(--g-sub); }
+.gh-md td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.gh-md a { color: var(--g-link); text-decoration: none; }
+/* App：桌面应用的样子，光标自己点风格、拖去导出 */
+.app { --a-bg: #EFEEEB; --a-glass: rgba(255,255,255,.66); --a-pill: #fff; container-type: inline-size; position: relative; overflow: hidden; border: 1px solid var(--line); border-bottom: 0; background: var(--a-bg); font-size: 12px; user-select: none; -webkit-user-select: none; }
+:root[data-theme="dark"] .app { --a-bg: #171716; --a-glass: rgba(40,40,38,.7); --a-pill: #262624; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .app { --a-bg: #171716; --a-glass: rgba(40,40,38,.7); --a-pill: #262624; } }
+.app-bar { position: relative; height: 40px; display: flex; align-items: center; gap: 7px; padding: 0 14px; }
+.app-bar > i { width: 10px; height: 10px; border-radius: 50%; background: #FF5F57; }
+.app-bar > i:nth-child(2) { background: #FEBC2E; } .app-bar > i:nth-child(3) { background: #28C840; }
+.app-pill { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); height: 25px; padding: 0 12px; border-radius: 99px; background: var(--a-pill); box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 0 0 1px var(--line2); display: flex; align-items: center; gap: 8px; white-space: nowrap; font-weight: 600; font-size: 11.5px; }
+.app-pill small { font-weight: 400; color: var(--soft); font-size: 10.5px; }
+.app-cv { position: absolute; top: 52px; left: 16px; right: 16px; display: grid; grid-template-columns: 1fr 1fr .8fr; gap: 12px; align-items: start; }
+.pc { position: relative; border-radius: 4px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.1), 0 14px 34px -16px rgba(0,0,0,.45); transition: transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s; }
+.pc.share { grid-column: 1 / 3; aspect-ratio: 1200 / 630; }
+.pc.tier { grid-column: 3; grid-row: 1 / 3; align-self: stretch; }
+.pc.donut, .pc.versions { aspect-ratio: 1; }
+.pc img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; transition: opacity .55s ease; }
+.pc.lift { transform: scale(.96); box-shadow: 0 0 0 2px #5B8DEF, 0 14px 34px -16px rgba(0,0,0,.45); }
+.app-dock { position: absolute; left: 12px; bottom: 12px; display: flex; align-items: center; gap: .55cqi; padding: 6px 8px; border-radius: 99px; background: var(--a-glass); -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 8px 24px -10px rgba(0,0,0,.3), inset 0 0 0 1px rgba(255,255,255,.35); }
+.app-dock span { width: clamp(8px, 2.75cqi, 15px); height: clamp(8px, 2.75cqi, 15px); border-radius: 50%; transition: box-shadow .25s, transform .25s; }
+.app-dock span.on { box-shadow: 0 0 0 1.5px var(--a-bg), 0 0 0 2.6px var(--ink); }
+.app-dock span.tap { transform: scale(.8); }
+.app-dock svg { width: 100%; height: 100%; display: block; }
+.app-dock .dv { width: 1px; height: 12px; background: var(--line); margin: 0 3px; }
+.app-drop { position: absolute; right: 12px; bottom: 52px; height: 30px; padding: 0 13px; border-radius: 99px; background: var(--a-glass); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 8px 24px -10px rgba(0,0,0,.3), inset 0 0 0 1px var(--line); display: flex; align-items: center; gap: 9px; color: var(--soft); font-size: 11px; white-space: nowrap; opacity: 0; transform: translateY(10px); transition: opacity .3s, transform .35s cubic-bezier(.2,.8,.2,1), background-color .2s, color .2s; }
+.app-drop b { font: 500 10px "JetBrains Mono", monospace; letter-spacing: .02em; opacity: .8; }
+.app-drop.show { opacity: 1; transform: none; }
+.app-drop.hot { background: var(--ink); color: var(--bg); transform: scale(1.05); }
+.app-ghost { position: absolute; left: 0; top: 0; z-index: 4; width: 30%; aspect-ratio: 1200 / 630; border-radius: 3px; overflow: hidden; box-shadow: 0 20px 40px -12px rgba(0,0,0,.55); opacity: 0; pointer-events: none; }
+.app-ghost img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.app-cur { position: absolute; left: 0; top: 0; z-index: 6; opacity: 0; transition: opacity .4s; width: 20px; height: 20px; pointer-events: none; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.35)); }
+.app-toast { position: absolute; left: 50%; top: 48px; z-index: 7; padding: 6px 12px; border-radius: 99px; background: var(--ink); color: var(--bg); font-size: 11.5px; white-space: nowrap; opacity: 0; transform: translate(-50%, -6px); }
+.app-toast svg { width: 12px; height: 12px; vertical-align: -2px; margin-right: 5px; stroke: currentColor; fill: none; }
 
 .vline { margin: 12px 0 0; color: var(--soft); font-size: 14px; }
 .vline code { font: 12.5px "JetBrains Mono", monospace; color: var(--ink); }
@@ -325,17 +421,15 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 
 @media (max-width: 900px) {
   .wrap, header .wrap { width: calc(100% - 40px); }
-  .stage { left: 12%; right: 12%; width: auto; top: 70px; bottom: 44%; opacity: .5; }
-  .cap { display: none; }
+  .stage { left: 20px; right: 20px; width: auto; top: 64px; bottom: 47%; opacity: .8; }
+  .gh-md { padding: 16px 16px 24px; }
+  .gh-row .sha { display: none; }
   #screen::after { content: ""; position: absolute; inset: 18% 0 0; z-index: 1; pointer-events: none; background: linear-gradient(transparent, var(--hero) 40%); }
   .title { top: auto; bottom: 48px; transform: none; left: 20px; right: 20px; width: auto; }
   .title p { font-size: 16px; }
   .agents { gap: 12px 14px; }
   .agents svg { width: 22px; height: 22px; }
   .wall, .band { gap: 10px; }
-  .fx { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-left: 20px; padding-bottom: 8px; margin: 0 -20px; padding-left: 20px; padding-right: 20px; scrollbar-width: none; }
-  .fx::-webkit-scrollbar { display: none; }
-  .fx a { flex: 0 0 150px; scroll-snap-align: start; }
   .ways { grid-template-columns: 1fr; }
   nav { display: none; }
   .ibento { grid-template-columns: 1fr; grid-template-areas: "ask" "app" "cli" "skill" "ci"; }
@@ -343,7 +437,9 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   #lb .bar { flex-wrap: wrap; gap: 8px 12px; }
   #lb .bar .cp { max-width: 92vw; order: 9; }
   .way h3 { flex-wrap: wrap; gap: 2px 10px; }
-  .term { font-size: 11.5px; padding: 14px 16px 18px; }
+  .term { font-size: 10.5px; padding: 14px 14px 18px; }
+  .way { padding: 16px 16px 0; }
+  .way .body { height: 380px; }
 }
 </style>
 </head>
@@ -367,7 +463,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 
 <main>
   <div id="screen">
-    <div class="stage" id="stage"><div class="cards" id="cards"></div><div class="cap"><span id="capn"></span><span class="ticks" id="ticks"></span></div></div>
+    <div class="stage" id="stage" aria-hidden="true"><div class="ed" id="ed"><div class="ed-tabs" id="edtabs"></div><div class="ed-code" id="edcode"></div><div class="ed-foot"><div class="ed-cap"><span id="edl"></span><span id="edr"></span></div><div class="ed-bar" id="edbar"></div><div class="ed-chips" id="edchips"></div></div></div></div>
     <div class="title">
       <h1 class="serif" data-i="hero.t">你的代码，<br>是哪些 AI 写的</h1>
       <p data-i="hero.p">把 agent 的日志和 git 历史逐行对上，算出每个工具、每个模型写了多少，做成片尾字幕。全在本地。</p>
@@ -384,7 +480,6 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
       <div class="head rise"><h2 class="serif" data-i="looks.t">同一份署名，二十六种样子</h2></div>
     </div>
     <div class="wall rise" id="wall"></div>
-    <div class="wrap"><div class="exports rise" id="exports"></div></div>
   </section>
 
   <section id="lines">
@@ -404,22 +499,10 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
     <div class="wrap">
       <div class="head rise"><h2 class="serif" data-i="use.t">四种用法</h2></div>
       <div class="ways">
-        <div class="way rise">
-          <h3 data-i="w.cli">命令行</h3>
-          <div class="body"><div class="term mono" id="term"></div></div>
-        </div>
-        <div class="way rise">
-          <h3 data-i="w.agent">交给 agent</h3>
-          <div class="body"><div class="chat" id="chat"></div></div>
-        </div>
-        <div class="way rise">
-          <h3>GitHub Action <small class="mono">WroughtMind/creditia@main</small></h3>
-          <div class="body"><div class="repo"><div class="fn">README.md</div><h4>lumen</h4><div class="badge"><img id="u-badge" alt="credits badge"></div><table id="credits-md"></table></div></div>
-        </div>
-        <div class="way rise">
-          <h3>App <small>macOS</small></h3>
-          <div class="body"><div class="shot"><img id="u-app" alt="creditia app" loading="lazy"></div></div>
-        </div>
+        <div class="way rise"><h3><span data-i="w.cli">命令行</span><button class="again" data-again="term" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="term mono" id="term"></div></div></div>
+        <div class="way rise"><h3><span data-i="w.agent">交给 agent</span><button class="again" data-again="chat" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="agent" id="chat"></div></div></div>
+        <div class="way rise"><h3>GitHub Action <small class="mono">WroughtMind/creditia@main</small><button class="again" data-again="gh" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="gh" id="gh"></div></div></div>
+        <div class="way rise"><h3>App <small>macOS · Windows · Linux</small></h3><div class="body"><div class="app" id="app"></div></div></div>
       </div>
     </div>
   </section>
@@ -449,6 +532,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 </footer>
 
 <div id="toast"></div>
+<div id="peek" aria-hidden="true"></div>
 <div id="lb" hidden role="dialog" aria-modal="true">
   <button class="x" aria-label="close">✕</button>
   <div class="big"><img id="lbimg" alt=""></div>
@@ -461,7 +545,6 @@ const EN = {
   'hero.t': 'Which AI<br>wrote your code',
   'hero.p': 'creditia matches your agents’ logs against git history line by line, works out what each tool and each model wrote, and rolls it as end credits. Runs locally.',
   'looks.t': 'Same credits, twenty-six looks',
-  'exp.l': 'Exports to',
   'lines.t': 'Every line has a source', 'lines.p': 'What can’t be matched is marked unattributed. Runs locally, calls no model.',
   'use.t': 'Four ways to use it', 'w.cli': 'Command line', 'w.agent': 'Your agent',
   'foot.rules': 'Attribution rules',
@@ -469,7 +552,6 @@ const EN = {
 };
 const ZH = {};
 document.querySelectorAll('[data-i]').forEach((el) => (ZH[el.dataset.i] = el.innerHTML));
-ZH['exp.l'] = '导出成';
 const lang = () => (document.documentElement.lang === 'en' ? 'en' : 'zh');
 const t = (k) => (lang() === 'en' ? EN[k] : ZH[k]) ?? k;
 const isDark = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -524,68 +606,169 @@ function count(el, to, fmt, dur = 1000) {
 
 // ───────── 首屏 ─────────
 $('agents').innerHTML = DATA.tools.map((x) => `<span data-n="${x.name}" aria-label="${x.name}">${x.svg}</span>`).join('');
-// 首屏：一组片尾字幕卡，一张一张从上往下「显影」出来，停一会儿换下一张；鼠标放上去就停住
-const HOLD = 4.2, DEV = 1.7; // 停留、显影的秒数
-const hero = { list: [], i: -1, t: 0, hover: false, busy: false, key: '' };
-const MASK = typeof CSS !== 'undefined' && CSS.registerProperty !== undefined; // --p 能做动画（@property）才用显影，否则淡入
+// 首屏：编辑器里代码一行行写出来，每写完一行就标上是哪个 AI 写的；底下按行数算占比，
+// 三个文件写完，换成整个仓库的数字。鼠标放上去就停住
+const AGC = { 'claude-code': '#D97757', codex: '#4FA37F', cursor: '#7D8AE0', kimi: '#C59A4C', grok: '#9C978D', unattributed: '' };
+const NM = { c: 'claude-code', x: 'codex', u: 'cursor', k: 'kimi', g: 'grok', n: 'unattributed' };
+const FILES = [
+  ['src/sync/queue.ts', `c|import { db } from '../db'
+c|import type { Op } from './types'
+c|
+c|export class SyncQueue {
+c|  private pending: Op[] = []
+c|  private timer?: number
+c|
+x|  push(op: Op) {
+x|    this.pending.push(op)
+x|    this.timer ??= setTimeout(
+x|      () => this.flush(), 400)
+x|  }
+c|
+c|  async flush() {
+c|    const ops = this.pending.splice(0)
+c|    await db.ops.bulkPut(ops)
+c|    this.timer = undefined
+c|  }
+c|}`],
+  ['src/ui/Timeline.tsx', `u|import { useMemo } from 'react'
+u|import { groupByDay } from '../lib/time'
+u|
+c|export function Timeline({ notes }) {
+c|  const days = useMemo(
+c|    () => groupByDay(notes), [notes])
+c|  return (
+x|    <ol className="timeline">
+x|      {days.map((d) => (
+x|        <Day key={d.date} {...d} />
+x|      ))}
+x|    </ol>
+c|  )
+c|}`],
+  ['src/lib/search.ts', `k|import MiniSearch from 'minisearch'
+c|
+c|const index = new MiniSearch({
+c|  fields: ['title', 'body'],
+c|  storeFields: ['title'],
+x|})
+x|
+g|export const search = (q: string) =>
+c|  index.search(q, { prefix: true })
+c|
+n|// TODO: fuzzy match for CJK
+c|export function reindex(notes) {
+c|  index.removeAll()
+c|  index.addAll(notes)
+c|}`],
+].map(([name, src]) => ({ name, lines: src.split('\n').map((l) => ({ who: NM[l[0]], tx: l.slice(2) })) }));
+const logoOf = (key) => (key === 'unattributed' ? '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>' : DATA.tools.find((x) => x.name === (DATA.share.zh.find((r) => r.key === key) || {}).name)?.svg || '');
+const agName = (key) => (DATA.share[lang()].find((r) => r.key === key) || {}).name || key;
+const KW = /(\/\/.*$)|('[^']*'?)|\b(import|from|export|const|class|private|async|await|function|return|type|new)\b|[&<>]/g;
+const synt = (s) => s.replace(KW, (m, c, q, k) => (c ? `<span class="m">${esc(c)}</span>` : q ? `<span class="q">${esc(q)}</span>` : k ? `<span class="k">${k}</span>` : m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'));
+const hero = { gen: 0, hover: false, counts: {}, total: 0, key: '' };
+const until = async (f) => { while (!f()) await sleep(120); };
+const heroLive = () => !hero.hover && scrollY < innerHeight && !document.hidden;
+function heroTally(final) {
+  const rows = DATA.share[lang()];
+  const pct = (k) => (final ? rows.find((r) => r.key === k).pct : hero.total ? (100 * (hero.counts[k] || 0)) / hero.total : 0);
+  [...$('edbar').children].forEach((i) => (i.style.flexBasis = `${pct(i.dataset.k)}%`));
+  [...$('edchips').children].forEach((c) => { c.querySelector('b').textContent = `${pct(c.dataset.k).toFixed(1)}%`; });
+  const en = lang() === 'en';
+  $('edl').innerHTML = final ? `<b>lumen</b> · ${en ? 'whole repo' : '整个仓库'}` : `<b>${hero.total}</b> ${en ? 'lines' : '行'}`;
+  $('edr').textContent = final ? (en ? '612 commits · 49,360 lines' : '612 次提交 · 49,360 行') : en ? 'by line' : '按行计';
+}
+function heroFrame() {
+  const rows = DATA.share[lang()];
+  $('edbar').innerHTML = rows.map((r) => `<i data-k="${r.key}" class="${r.key === 'unattributed' ? 'none' : ''}" style="--c:${AGC[r.key]}"></i>`).join('');
+  $('edchips').innerHTML = rows.map((r) => `<span data-k="${r.key}" class="${r.key === 'unattributed' ? 'none' : ''}" style="--c:${AGC[r.key]}" title="${r.name}">${logoOf(r.key)}<b>0.0%</b></span>`).join('');
+  $('edtabs').innerHTML = FILES.map((f) => `<span><i></i>${f.name.split('/').pop()}</span>`).join('') + '<b></b>';
+}
+function heroTab(j) {
+  const tabs = [...$('edtabs').querySelectorAll('span')], bar = $('edtabs').querySelector('b');
+  tabs.forEach((x, i) => x.classList.toggle('on', i === j));
+  bar.style.left = `${tabs[j].offsetLeft}px`; bar.style.width = `${tabs[j].offsetWidth}px`;
+}
+const rowHtml = (l, n, head) => `<div class="r" style="--c:${AGC[l.who] || 'transparent'}"><span class="n">${n}</span><span class="s ${l.who === 'unattributed' ? 'none' : ''}"></span><span class="x"></span>${head ? `<span class="w ${l.who === 'unattributed' ? 'none' : ''}">${logoOf(l.who)}${l.who === 'unattributed' ? (lang() === 'en' ? 'Unattributed' : '未确认') : agName(l.who)}</span>` : ''}</div>`;
+function heroStatic() {
+  const f = FILES[2];
+  $('ed').style.setProperty('--glow', AGC['claude-code']);
+  heroTab(2);
+  $('edcode').innerHTML = f.lines.map((l, i) => rowHtml(l, i + 1, i === 0 || f.lines[i - 1].who !== l.who)).join('');
+  [...$('edcode').children].forEach((r, i) => { r.classList.add('done'); r.querySelector('.x').innerHTML = synt(f.lines[i].tx) || ' '; r.querySelector('.w')?.classList.add('on'); });
+  heroTally(true);
+}
+async function heroRun() {
+  const g = ++hero.gen, alive = () => g === hero.gen;
+  const ed = $('ed');
+  while (alive()) {
+    hero.counts = {}; hero.total = 0; heroTally(false);
+    for (const [j, f] of FILES.entries()) {
+      heroTab(j);
+      const code = $('edcode');
+      if (code.children.length) {
+        await Promise.all([...code.children].map((r, i) => r.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-6px)' }], { duration: 260, delay: i * 12, fill: 'forwards' }).finished));
+      }
+      if (!alive()) return;
+      code.innerHTML = f.lines.map((l, i) => rowHtml(l, i + 1, i === 0 || f.lines[i - 1].who !== l.who)).join('');
+      const rows = [...code.children];
+      for (const [i, l] of f.lines.entries()) {
+        await until(() => heroLive() || !alive());
+        if (!alive()) return;
+        const r = rows[i], x = r.querySelector('.x'), full = synt(l.tx);
+        if (l.who !== 'unattributed') ed.style.setProperty('--glow', AGC[l.who]);
+        if (i && l.who !== f.lines[i - 1].who) await sleep(200);
+        r.classList.add('cur');
+        // 一次几个字往外冒：按纯文本长度推进，带着高亮一起
+        const plain = l.tx;
+        // 按时间推进而不是按帧数，主线程忙的时候也不会写得更慢
+        const t1 = performance.now(), dur = Math.max(80, plain.length * 6);
+        for (let k = 0; k < 1; await sleep(16)) {
+          k = Math.min(1, (performance.now() - t1) / dur);
+          x.innerHTML = synt(plain.slice(0, Math.round(plain.length * k))) + '<span class="cr"></span>';
+        }
+        x.innerHTML = full || ' ';
+        r.classList.remove('cur'); r.classList.add('done');
+        r.querySelector('.w')?.classList.add('on');
+        hero.counts[l.who] = (hero.counts[l.who] || 0) + 1; hero.total++;
+        heroTally(false);
+        const chip = $('edchips').querySelector(`[data-k="${l.who}"]`);
+        chip?.classList.add('hot'); setTimeout(() => chip?.classList.remove('hot'), 400);
+        await sleep(l.tx ? 50 : 20);
+      }
+      await sleep(600);
+    }
+    // 三个文件写完：换成整个仓库的数字，停一会儿再从头来
+    ed.style.setProperty('--glow', AGC['claude-code']);
+    heroTally(true);
+    $('edl').animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 500, easing: EASE });
+    await sleep(3600);
+    await until(() => heroLive() || !alive());
+  }
+}
 function reel() {
-  const mode = isDark() ? 'dark' : 'light', key = `${lang()}-${mode}`;
-  hero.list = DATA.hero[mode];
+  const key = lang();
   fitStage();
-  $('ticks').innerHTML = hero.list.map((x, j) => `<button data-j="${j}" aria-label="${heroLabel(x)}"><i><b></b></i></button>`).join('');
-  hero.list.forEach((x) => { const im = new Image(); im.src = heroSrc(x); }); // 预先载入
-  if (hero.key !== key) { hero.key = key; $('cards').innerHTML = ''; hero.i = -1; heroGo(0, true); }
-  else heroMark();
+  if (hero.key === key) return;
+  hero.key = key;
+  heroFrame();
+  $('edcode').innerHTML = '';
+  if (RM) return heroStatic();
+  heroTab(0);
+  setTimeout(heroRun, hero.gen ? 0 : 700);
 }
-const heroSrc = (x) => `assets/hero/${lang()}/${x.name}.png`;
-const heroLabel = (x) => `${sname(styleOf(x.style))} · ${lang() === 'en' ? x.ve : x.vz}`;
 function fitStage() {
-  const st = $('stage').getBoundingClientRect(), d = hero.list[0];
-  if (!d) return;
-  const capH = innerWidth > 900 ? 40 : 0;
-  const w = Math.min(st.width, ((st.height - capH) * d.w) / d.h);
-  $('cards').style.width = `${w}px`; $('cards').style.height = `${(w * d.h) / d.w}px`;
+  const st = $('stage'), ed = $('ed');
+  const k = Math.min(1, st.clientWidth / ed.offsetWidth, st.clientHeight / ed.offsetHeight);
+  ed.style.setProperty('--k', k.toFixed(3));
 }
-function heroMark() {
-  $('capn').textContent = hero.list[hero.i] ? heroLabel(hero.list[hero.i]) : '';
-  [...$('ticks').children].forEach((b, j) => { b.classList.toggle('done', j < hero.i); if (j !== hero.i) b.querySelector('b').style.transform = ''; });
-}
-function heroGo(j, first) {
-  if (hero.busy && !first) return;
-  const x = hero.list[(j + hero.list.length) % hero.list.length];
-  hero.i = (j + hero.list.length) % hero.list.length; hero.t = 0;
-  heroMark();
-  const img = new Image(); img.alt = heroLabel(x); img.width = x.w; img.height = x.h; img.src = heroSrc(x);
-  const box = $('cards'), old = [...box.children];
-  if (RM) { box.append(img); old.forEach((o) => o.remove()); return; }
-  hero.busy = true;
-  const run = () => {
-    box.append(img); // 解码好了再放进去，免得没开始显影就整张露出来
-    const a = MASK
-      ? img.animate([{ '--p': '0%', filter: 'blur(6px)', transform: 'scale(1.015)' }, { '--p': '130%', filter: 'blur(0)', transform: 'none' }], { duration: DEV * 1000, delay: first ? 500 : 0, easing: 'cubic-bezier(.45,0,.2,1)', fill: 'backwards' })
-      : img.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 900, delay: first ? 500 : 0, fill: 'backwards' });
-    old.forEach((o) => o.animate([{ opacity: 1 }, { opacity: 0 }], { duration: DEV * 600, delay: DEV * 500, fill: 'forwards' }));
-    a.finished.then(() => { old.forEach((o) => o.remove()); hero.busy = false; }, () => (hero.busy = false));
-  };
-  img.decode ? img.decode().then(run, run) : run();
-}
-tickers.add((dt) => {
-  if (RM || hero.busy || hero.hover || hero.i < 0 || scrollY > innerHeight) return;
-  hero.t += dt;
-  const b = $('ticks').children[hero.i]?.querySelector('b');
-  if (b) b.style.transform = `scaleX(${Math.min(1, hero.t / HOLD)})`;
-  if (hero.t >= HOLD) heroGo(hero.i + 1);
-});
-$('ticks').onclick = (e) => { const b = e.target.closest('button'); if (b) heroGo(+b.dataset.j); };
-// 鼠标在卡片上：停住，卡片微微朝鼠标转
+// 鼠标在编辑器上：停住，编辑器微微朝鼠标转
 const stageEl = $('stage');
-stageEl.onpointerenter = () => (hero.hover = true);
-stageEl.onpointerleave = () => { hero.hover = false; $('cards').style.setProperty('--tx', '0deg'); $('cards').style.setProperty('--ty', '0deg'); };
+stageEl.onpointerenter = () => FINE && (hero.hover = true);
+stageEl.onpointerleave = () => { hero.hover = false; $('ed').style.setProperty('--tx', '0deg'); $('ed').style.setProperty('--ty', '0deg'); };
 stageEl.onpointermove = (e) => {
   if (!FINE) return;
-  const r = $('cards').getBoundingClientRect();
-  $('cards').style.setProperty('--ty', `${((e.clientX - r.left) / r.width - 0.5) * 7}deg`);
-  $('cards').style.setProperty('--tx', `${(0.5 - (e.clientY - r.top) / r.height) * 5}deg`);
+  const r = $('ed').getBoundingClientRect();
+  $('ed').style.setProperty('--ty', `${((e.clientX - r.left) / r.width - 0.5) * 5}deg`);
+  $('ed').style.setProperty('--tx', `${(0.5 - (e.clientY - r.top) / r.height) * 4}deg`);
 };
 // 往下滚：标题慢慢退开
 const screenEl = $('screen');
@@ -611,7 +794,7 @@ function intro() {
   rise([document.querySelector('.title p'), document.querySelector('.acts')], { y: 30, delay: after, step: 120, dur: 1000 });
   document.querySelectorAll('#agents span').forEach((s, k) => s.animate(
     [{ transform: 'scale(.4)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 700, delay: after + 260 + k * 35, easing: SPRING, fill: 'backwards' }));
-  document.querySelector('.cap').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1200, delay: 1600, fill: 'backwards' });
+  $('stage').animate([{ opacity: 0, transform: 'translateY(30px)' }, { opacity: 1, transform: 'none' }], { duration: 1300, delay: 300, easing: EASE, fill: 'backwards' });
 }
 
 // ───────── 风格墙 ─────────
@@ -737,23 +920,6 @@ $('wall').addEventListener('click', (e) => {
   const m = W.morphs.find((x) => x.el === t);
   openLb(+t.dataset.i + (m ? m.j : 0), t);
 });
-
-function exports() {
-  const L = lang(), f = DATA.formats[L], base = `assets/formats/${L}`;
-  const th = (k) => `${base}/thumb-${k}.png`;
-  const ARR = '<svg class="ar" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round"><path d="M12 4v13M6 12l6 6 6-6"/></svg>';
-  const OPEN = '<svg class="ar" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"/></svg>';
-  const md = esc(f.md.text).replace(/^(#+ .*|\|.*\|)$/gm, '<em>$1</em>');
-  const items = [
-    ['PNG', 'credits.png', f.png.size, `<div class="pv photo"><img src="${th('png')}" alt="" loading="lazy"></div>`],
-    ['SVG', 'credits.svg', f.svg.size, `<div class="pv vec"><img src="${th('svg')}" alt="" loading="lazy">${['top:13%;left:12%', 'top:13%;right:12%', 'bottom:13%;left:12%', 'bottom:13%;right:12%'].map((p) => `<i style="${p};margin:-3px"></i>`).join('')}</div>`],
-    ['PDF', 'credits.pdf', f.pdf.size, `<div class="pv page"><img src="${th('pdf')}" alt="" loading="lazy"></div>`],
-    ['GIF', 'credits.gif', f.gif.size, `<div class="pv anim"><img src="${base}/credits.gif" alt="" loading="lazy"><b></b></div>`],
-    ['HTML', 'credits.html', f.html.size, `<div class="pv web"><div class="bar"><i></i><i></i><i></i></div><img src="${th('html')}" alt="" loading="lazy"></div>`, true],
-    ['Markdown', 'CREDITS.md', f.md.size, `<div class="pv text">${md}</div>`],
-  ];
-  $('exports').innerHTML = `<span class="lbl">${t('exp.l')}</span><div class="fx">${items.map(([n, file, size, pv, open]) => `<a href="${base}/${file}" ${open ? 'target="_blank" rel="noopener"' : 'download'}>${pv}<span class="nm">${n}<small>${size}</small>${open ? OPEN : ARR}</span></a>`).join('')}</div>`;
-}
 
 // ───────── 放大看：从图块的位置长出来，关的时候缩回去 ─────────
 let cur = -1, src = null, opener = null; // src：缩回去的目标（翻页后就没有了）；opener：关掉后焦点回到哪
@@ -884,71 +1050,262 @@ function scan() {
   document.querySelectorAll('#legend span').forEach((s, k) => s.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 500, delay: 200 + ls.length * per + k * 90, easing: EASE, fill: 'backwards' }));
 }
 
-// ───────── 用法：滚到才开始演 ─────────
+// ───────── 用法：滚到才开始演；每张卡高度固定，内容在卡里往上滚 ─────────
 const CLAUDE = DATA.tools[0].svg;
-const TERM = [['npx creditia analyze', 'share'], ['npx creditia export --piece roll --style cinema', '→ credits.png'], ['npx creditia doc', '→ CREDITS.md']];
-const SHARE = [['Claude Code', 59.3], ['Codex', 27.6], ['Cursor', 6.7]];
-const shareTx = (p) => SHARE.map(([n, v]) => `${n} ${(v * p).toFixed(1)}%`).join(' · ');
-const played = new Set();
-function termFinal() { return TERM.map(([c, o]) => `<span class="p">$</span> ${c}\n<span class="o">${o === 'share' ? shareTx(1) : o}</span>`).join('\n') + '\n<span class="p">$</span> <span class="caret"></span>'; }
-async function playTerm() {
-  const el = $('term');
-  if (RM) return (el.innerHTML = termFinal());
-  let done = '';
-  for (const [c, o] of TERM) {
-    for (let n = 0; n <= c.length; n++) { el.innerHTML = `${done}<span class="p">$</span> ${c.slice(0, n)}<span class="caret"></span>`; await sleep(n ? 22 + Math.random() * 40 : 260); }
-    await sleep(380);
-    const line = `<span class="p">$</span> ${c}\n`;
-    if (o === 'share') {
-      el.innerHTML = `${done}${line}<span class="o" id="tshare">${shareTx(0)}</span>`;
-      const span = $('tshare'), t0 = performance.now();
-      await new Promise((r) => requestAnimationFrame(function f(now) { const p = Math.min(1, (now - t0) / 900); span.textContent = shareTx(1 - Math.pow(1 - p, 3)); p < 1 ? requestAnimationFrame(f) : r(); }));
-    } else el.innerHTML = `${done}${line}<span class="o">${o}</span>`;
-    done += `${line}<span class="o">${o === 'share' ? shareTx(1) : o}</span>\n`;
-    await sleep(420);
-  }
-  el.innerHTML = termFinal();
-}
-const chatMsgs = () => (lang() === 'en'
-  ? [['me', 'Put a credits card for this repo in the README'], ['ai', 'Claude Code 59%, Codex 28%, Cursor 7%, 2% unattributed. Exported <code>assets/credits.png</code> in ukiyo-e. Adding it publishes the project name and these numbers. Go ahead?'], ['me', 'Go ahead']]
-  : [['me', '给这个仓库做一张署名图，放进 README'], ['ai', 'Claude Code 59%、Codex 28%、Cursor 7%，2% 未确认。已用浮世绘导出 <code>assets/credits.png</code>。放进 README 会公开项目名和这些数字，要继续吗？'], ['me', '继续']]);
-const bubble = ([who, s]) => (who === 'me' ? `<div class="msg me">${s}</div>` : `<div class="msg ai"><b>${CLAUDE}Claude Code</b>${s}</div>`);
-async function playChat() {
-  const el = $('chat'), msgs = chatMsgs();
-  if (RM) return (el.innerHTML = msgs.map(bubble).join(''));
+const EN_ = () => lang() === 'en';
+const shareRows = () => [...DATA.share[lang()]].sort((a, b) => b.pct - a.pct);
+const tierLine = () => shareRows().map((r) => `${r.key === 'unattributed' ? (EN_() ? 'Unattributed' : '未确认') : r.name} ${r.pct.toFixed(1)}%`).join(' · ');
+const analyzeOut = () => (EN_() ? 'lumen: 612 commits (612 new), 20 units, 49,360 lines; 2.4s' : 'lumen：612 个提交（新增 612），20 项，49,360 行；2.4s');
+const follow = (el, fast) => el.scrollTo({ top: el.scrollHeight, behavior: fast || RM ? 'auto' : 'smooth' });
+const runs = {}; // 每张卡一个代号：重播或换语言时，旧的那一遍自己停下
+const FMTS = ['png', 'svg', 'pdf', 'gif', 'html', 'md'];
+
+/** 命令行：analyze → fetch → 一行循环导出六种格式，→ 后面的文件名是真的文件，悬停能看 */
+async function playTerm(fast) {
+  const g = (runs.term = (runs.term || 0) + 1), el = $('term'), w = (ms) => (fast || RM ? null : sleep(ms));
+  const live = () => runs.term === g;
+  const add = (h) => { el.insertAdjacentHTML('beforeend', h); follow(el, fast); };
+  const type = async (cmd) => {
+    if (fast || RM) return add(`<span class="p">$</span> ${cmd}\n`);
+    add('<span class="p">$</span> ');
+    const ty = document.createElement('span'), caret = document.createElement('span');
+    caret.className = 'caret'; el.append(ty, caret);
+    for (let n = 1; n <= cmd.length; n += 2) { if (!live()) return; ty.textContent = cmd.slice(0, n); await sleep(14 + Math.random() * 26); }
+    ty.textContent = cmd; caret.remove(); add('\n');
+    await sleep(240);
+  };
   el.innerHTML = '';
-  for (const m of msgs) {
-    if (m[0] === 'ai') { el.insertAdjacentHTML('beforeend', '<div class="msg ai dots"><i></i><i></i><i></i></div>'); await sleep(1100); el.lastElementChild.remove(); }
-    el.insertAdjacentHTML('beforeend', bubble(m));
-    el.lastElementChild.animate([{ opacity: 0, transform: 'translateY(10px) scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 500, easing: SPRING });
-    await sleep(m[0] === 'me' ? 650 : 900);
+  await w(300);
+  await type('npx creditia analyze'); if (!live()) return;
+  if (!fast && !RM) {
+    add(`<span class="o spin" id="tsp"></span>`);
+    const sp = $('tsp'), t0 = performance.now();
+    while (performance.now() - t0 < 1300 && live()) { const n = Math.round(612 * Math.min(1, (performance.now() - t0) / 1100)); sp.textContent = EN_() ? ` reading commits ${n}/612 · matching agent logs` : ` 读取提交 ${n}/612 · 对照 agent 日志`; await sleep(40); }
+    sp.remove(); if (!live()) return;
+  }
+  add(`<span class="o">${analyzeOut()}\n${tierLine()}\n${EN_() ? 'wrote' : '写入'} .creditia/credits.json</span>\n`);
+  await w(500);
+  await type('npx creditia fetch'); if (!live()) return;
+  const C = (k) => (k === 'unattributed' ? '#8C877D' : AGC[k] || 'inherit');
+  for (const line of DATA.fetch[lang()]) {
+    add(line.map((sg) => {
+      const tx = esc(sg.text);
+      if (/^█+$/.test(sg.text)) return `<span class="g" style="color:${C(sg.color)}">${tx}</span>`;
+      if (sg.bold) return `<span class="bd">${tx}</span>`;
+      if (sg.dim) return `<span class="d">${tx}</span>`;
+      return sg.color ? `<span style="color:${C(sg.color)}">${tx}</span>` : tx;
+    }).join('') + '\n');
+    await w(70);
+  }
+  await w(500);
+  await type(`for f in ${FMTS.join(' ')}; do npx creditia export --piece tier --style noir --out credits.$f; done`); if (!live()) return;
+  const base = `assets/out/${lang()}`, sz = DATA.formats[lang()].sizes;
+  for (const f of FMTS) {
+    await w(f === 'gif' ? 650 : 260); if (!live()) return;
+    add(`<span class="ok">→</span> <a class="out" href="${base}/credits.${f}" target="_blank" rel="noopener" data-f="${f}">credits.${f}</a>  <span class="d">${sz[f]}</span>\n`);
+  }
+  add('<span class="p">$</span> <span class="caret"></span>');
+  done('term');
+}
+// 悬停 → 文件名：弹出这个文件的样子
+const peek = $('peek');
+let mdText = {};
+document.addEventListener('pointerover', async (e) => {
+  const a = e.target.closest?.('a.out');
+  if (!a || !FINE) return;
+  const f = a.dataset.f, base = `assets/out/${lang()}`, sz = DATA.formats[lang()].sizes[f];
+  let body;
+  if (f === 'md') { mdText[lang()] ??= await fetch(`${base}/credits.md`).then((r) => r.text()).catch(() => ''); body = `<pre>${esc(mdText[lang()].split('\n').slice(0, 14).join('\n'))}</pre>`; }
+  else { const d = DATA.formats[lang()]; body = `<img src="${base}/${f === 'gif' ? 'credits.gif' : 'peek.png'}" width="${d.w}" height="${d.h}" alt="">`; }
+  peek.innerHTML = `${body}<small><span>credits.${f}</span><span>${sz}</span></small>`;
+  const r = a.getBoundingClientRect(), ph = peek.offsetHeight || 200;
+  peek.style.left = `${Math.min(innerWidth - 232, Math.max(12, r.left))}px`;
+  peek.style.top = `${r.top - ph - 10 > 8 ? r.top - ph - 10 : r.bottom + 10}px`;
+  peek.classList.add('on');
+  a.addEventListener('pointerleave', () => peek.classList.remove('on'), { once: true });
+});
+
+/** agent：说一句 → 它自己跑命令、出图、问一句 → 继续 → 改好 README */
+const AGENT = () => (EN_()
+  ? { ask: 'Make a credits card for this repo and put it in the README', look: 'Let me see who wrote what in this repo first.', exp: 'npx creditia export --piece share --style ukiyoe --out assets/credits.png',
+    q: 'Claude Code wrote 59%, Codex 28%, Cursor 7%; 2% is unattributed. Putting the card in the README makes the project name and these numbers public. Go ahead?', go: 'Go ahead', fin: 'Added to the top of the README.' }
+  : { ask: '给这个仓库做一张署名图，放进 README', look: '先看看这个仓库的代码各是谁写的。', exp: 'npx creditia export --piece share --style ukiyoe --out assets/credits.png',
+    q: 'Claude Code 写了 59%，Codex 28%，Cursor 7%，2% 未确认。放进 README 会公开项目名和这些数字，要继续吗？', go: '继续', fin: '已经放到 README 顶部。' });
+async function playChat(fast) {
+  const g = (runs.chat = (runs.chat || 0) + 1), el = $('chat'), live = () => runs.chat === g, x = AGENT();
+  const w = (ms) => (fast || RM ? null : sleep(ms));
+  const add = (h) => { el.insertAdjacentHTML('beforeend', h); const n = el.lastElementChild; if (!fast && !RM) n.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: EASE }); follow(el, fast); return n; };
+  const say = async (s) => {
+    const n = add(`<div class="a">${CLAUDE}<div></div></div>`), box = n.lastElementChild;
+    if (fast || RM) return (box.textContent = s);
+    const parts = EN_() ? s.split(/(\s+)/) : [...s];
+    for (let i = 0; i < parts.length; i += EN_() ? 2 : 3) { if (!live()) return; box.textContent = parts.slice(0, i + 1).join(''); await sleep(EN_() ? 34 : 26); }
+    box.textContent = s;
+  };
+  const tool = async (name, arg, out, ms) => {
+    const n = add(`<div class="tool"><div class="hd"><i class="st run"></i><b>${name}</b><span>${esc(arg)}</span></div></div>`);
+    await w(ms); if (!live()) return;
+    n.querySelector('.st').classList.remove('run');
+    n.insertAdjacentHTML('beforeend', `<div class="out">${out}</div>`);
+    n.querySelector('.out img')?.addEventListener('load', () => live() && follow(el, fast));
+    if (!fast && !RM) n.lastElementChild.animate([{ opacity: 0, clipPath: 'inset(0 0 100% 0)' }, { opacity: 1, clipPath: 'inset(0 0 0 0)' }], { duration: 500, easing: EASE });
+    follow(el, fast);
+  };
+  el.innerHTML = '';
+  await w(300);
+  add(`<div class="u">${x.ask}</div>`); await w(700); if (!live()) return;
+  await say(x.look); await w(300); if (!live()) return;
+  await tool('Bash', 'npx creditia analyze', `${esc(analyzeOut())}\n${esc(tierLine())}`, 1400); await w(400); if (!live()) return;
+  const img = `<img src="assets/usage/${lang()}-share.png" alt="credits card" width="640" height="336">`;
+  await tool('Bash', x.exp, `→ assets/credits.png\n${img}`, 1100); await w(700); if (!live()) return;
+  await say(x.q); await w(900); if (!live()) return;
+  add(`<div class="u">${x.go}</div>`); await w(600); if (!live()) return;
+  await tool('Update', 'README.md', `<span class="add">+ ![credits](assets/credits.png)</span>`, 800); await w(400); if (!live()) return;
+  await say(x.fin);
+  done('chat');
+}
+
+/** GitHub：Action 跑完，机器人提交 update credits，README 里的徽章、表格跟着变 */
+const GH_ICON = {
+  readme: '<svg viewBox="0 0 16 16"><path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z"/></svg>',
+  law: '<svg viewBox="0 0 16 16"><path d="M8.75.75V2h.985c.304 0 .603.08.867.231l1.29.736c.038.022.08.033.124.033h2.234a.75.75 0 0 1 0 1.5h-.427l2.111 4.692a.75.75 0 0 1-.154.838l-.53-.53.529.531-.001.002-.002.002-.006.006-.006.005-.01.01-.045.04c-.21.176-.441.327-.686.45C14.556 10.78 13.88 11 13 11a4.498 4.498 0 0 1-2.023-.454 3.544 3.544 0 0 1-.686-.45l-.045-.04-.016-.015-.006-.006-.004-.004v-.001a.75.75 0 0 1-.154-.838L12.178 4.5h-.162c-.305 0-.604-.079-.868-.231l-1.29-.736a.245.245 0 0 0-.124-.033H8.75V13h2.5a.75.75 0 0 1 0 1.5h-6.5a.75.75 0 0 1 0-1.5h2.5V3.5h-.984a.245.245 0 0 0-.124.033l-1.289.737c-.265.15-.564.23-.869.23h-.162l2.112 4.692a.75.75 0 0 1-.154.838l-.53-.53.529.531-.001.002-.002.002-.006.006-.016.015-.045.04c-.21.176-.441.327-.686.45C4.556 10.78 3.88 11 3 11a4.498 4.498 0 0 1-2.023-.454 3.544 3.544 0 0 1-.686-.45l-.045-.04-.016-.015-.006-.006-.004-.004v-.001a.75.75 0 0 1-.154-.838L2.178 4.5H1.75a.75.75 0 0 1 0-1.5h2.234a.249.249 0 0 0 .125-.033l1.288-.737c.265-.15.564-.23.869-.23h.984V.75a.75.75 0 0 1 1.5 0Zm2.945 8.477c.285.135.718.273 1.305.273s1.02-.138 1.305-.273L13 6.327Zm-10 0c.285.135.718.273 1.305.273s1.02-.138 1.305-.273L3 6.327Z"/></svg>',
+  ok: '<svg viewBox="0 0 16 16" fill="var(--g-ok)"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>',
+};
+const GH_ROWS = () => [EN_() ? ['Tool', 'Model', 'Share', 'Lines'] : ['工具', '模型', '占比', '新增行'], ...shareRows().filter((r) => r.key !== 'unattributed').slice(0, 3).map((r) => [r.name, r.model, r.pct, Math.round((49360 * r.pct) / 100)])];
+const OLD = { 'Claude Code': [57.9, 25410], Codex: [28.4, 12460], Cursor: [7.2, 3160] }; // 上一次跑出来的数，Action 跑完变成新的
+const pct = (v) => `${v.toFixed(1)}%`, plus = (v) => `+${Math.round(v).toLocaleString('en-US')}`;
+function ghFrame(state) {
+  const L = lang(), en = EN_();
+  const row = state === 'run'
+    ? `<span class="sig"><i class="run"></i></span><b>creditia</b><span class="msg">${en ? 'In progress' : '正在运行'} · update credits</span><span class="sha">#128</span>`
+    : `<span class="av">${ICON('githubactions')}</span><b>github-actions[bot]</b><span class="msg">update credits</span><span class="sig">${GH_ICON.ok}</span><span class="sha">a3f9e21</span><time>${en ? 'now' : '刚刚'}</time>`;
+  const rows = GH_ROWS(), old = state === 'run';
+  $('gh').innerHTML = `<div class="gh-in"><div class="gh-row">${row}</div><div class="gh-sc"><div class="gh-tabs"><span class="on">${GH_ICON.readme}README</span><span>${GH_ICON.law}${en ? 'MIT license' : 'MIT 许可证'}</span></div>
+  <div class="gh-md"><h1>lumen</h1><p class="badges"><span class="shield"><span>build</span><span>passing</span></span><span class="shield"><span>license</span><span style="--s:#007ec6">MIT</span></span><img class="cb" src="assets/usage/${L}-badge-flat.svg" alt="credits" width="${DATA.usage.flat.w}" height="${DATA.usage.flat.h}" style="width:${Math.round((20 * DATA.usage.flat.w) / DATA.usage.flat.h)}px"></p>
+  <p>${en ? 'A local-first timeline for your notes.' : '本地优先的笔记时间线。'}</p><h2>Credits</h2>
+  <img class="cs" src="assets/usage/${L}-badge-stack.svg" alt="credits" width="${DATA.usage.stack.w}" height="${DATA.usage.stack.h}">
+  <table>${rows.map((r, i) => `<tr>${r.map((c, j) => (i ? `<td class="${j > 1 ? 'n' : ''}">${j === 2 ? pct(old ? OLD[r[0]]?.[0] ?? c : c) : j === 3 ? plus(old ? OLD[r[0]]?.[1] ?? c : c) : c}</td>` : `<th>${c}</th>`)).join('')}</tr>`).join('')}</table></div></div></div>`;
+}
+async function playGh(fast) {
+  const g = (runs.gh = (runs.gh || 0) + 1), live = () => runs.gh === g;
+  if (fast || RM) { ghFrame('done'); return done('gh'); }
+  ghFrame('run');
+  const md = () => $('gh').querySelector('.gh-sc');
+  await sleep(2200); if (!live()) return;
+  const rowOld = $('gh').querySelector('.gh-row');
+  rowOld.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-6px)' }], { duration: 260, fill: 'forwards' });
+  await sleep(260); if (!live()) return;
+  const scrolled = md().scrollTop;
+  const rows = GH_ROWS();
+  ghFrame('done'); md().scrollTop = scrolled;
+  // 新数字从旧数字数上去；变了的格子闪一下黄底
+  const tds = [...$('gh').querySelectorAll('td.n')];
+  tds.forEach((td) => { const r = td.parentElement.rowIndex, j = td.cellIndex, to = rows[r][j], from = OLD[rows[r][0]]?.[j - 2] ?? to, f = j === 2 ? pct : plus; td.textContent = f(from); setTimeout(() => { count2(td, from, to, f, 1100); td.animate([{ backgroundColor: 'var(--g-hl)' }, { backgroundColor: 'var(--g-hl)', offset: 0.6 }, { backgroundColor: 'transparent' }], { duration: 2200 }); }, 900); });
+  $('gh').querySelector('.gh-row').animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: EASE });
+  ['.cb', '.cs'].forEach((q, k) => $('gh').querySelector(q).animate([{ opacity: 0.2, filter: 'blur(3px)' }, { opacity: 1, filter: 'none' }], { duration: 700, delay: 300 + k * 250, easing: EASE, fill: 'backwards' }));
+  await sleep(700); if (!live()) return;
+  md().scrollTo({ top: $('gh').querySelector('.badges').offsetTop - md().offsetTop - 12, behavior: 'smooth' });
+  done('gh');
+}
+function count2(el, from, to, fmt, dur) {
+  const t0 = performance.now();
+  requestAnimationFrame(function f(now) { const p = Math.min(1, (now - t0) / dur); el.textContent = fmt(from + (to - from) * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(f); });
+}
+
+/** App：光标在 dock 里点几种风格，画布上的作品跟着换；再把分享图拖到右下角导出 */
+const APPM = { i: 0, visible: false, run: 0 };
+const APP_PCS = ['share', 'tier', 'donut', 'versions'];
+const appImg = (id, p) => `assets/app/${lang()}/${id}-${p}.png`;
+const CURSOR = '<svg viewBox="0 0 20 20"><path d="M4 2.5v13.2l3.3-3.1 2.2 5.1 2.2-.95-2.15-5h4.6z" fill="#111" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+function appFrame() {
+  const en = EN_(), cur = DATA.app[APPM.i];
+  const nClassic = DATA.styles.filter((s) => s.noteEn).length;
+  $('app').innerHTML = `<div class="app-bar"><i></i><i></i><i></i><span class="app-pill">lumen<small>${en ? '612 commits · 49,360 lines' : '612 次提交 · 49,360 行'}</small></span></div>
+  <div class="app-cv">${APP_PCS.map((p) => `<div class="pc ${p}"><img src="${appImg(cur, p)}" alt=""></div>`).join('')}</div>
+  <div class="app-dock">${DATA.styles.map((s, k) => `${k === nClassic ? '<i class="dv"></i>' : ''}<span data-s="${s.id}" class="${s.id === cur ? 'on' : ''}" title="${sname(s)}"><svg viewBox="0 0 24 24">${s.dot}</svg></span>`).join('')}</div>
+  <div class="app-drop">${en ? 'Drop to export' : '拖到这里导出'}<b>PNG SVG PDF HTML MD</b></div>
+  <div class="app-ghost"><img alt=""></div><div class="app-cur">${CURSOR}</div><div class="app-toast"></div>`;
+  APPM.pos = null;
+}
+function appSet(id) {
+  APPM.i = DATA.app.indexOf(id);
+  $('app').querySelectorAll('.app-dock span').forEach((s) => s.classList.toggle('on', s.dataset.s === id));
+  APP_PCS.forEach((p, k) => {
+    const box = $('app').querySelector(`.pc.${p}`), old = box.querySelector('img'), im = new Image();
+    im.alt = ''; im.style.opacity = '0'; im.src = appImg(id, p);
+    const show = () => setTimeout(() => { box.append(im); requestAnimationFrame(() => (im.style.opacity = '1')); setTimeout(() => old.remove(), 600); }, k * 70);
+    im.decode ? im.decode().then(show, show) : show();
+  });
+}
+async function appMove(el, x, y, ms) {
+  const from = APPM.pos || { x: x + 60, y: y + 60 };
+  APPM.pos = { x, y };
+  const a = el.animate([{ transform: `translate(${from.x}px,${from.y}px)` }, { transform: `translate(${x}px,${y}px)` }], { duration: ms, easing: 'cubic-bezier(.45,.05,.2,1)', fill: 'forwards' });
+  await a.finished.catch(() => {});
+}
+async function playApp() {
+  const g = ++APPM.run, live = () => APPM.run === g;
+  appFrame();
+  if (RM) return;
+  const app = $('app'), cur = app.querySelector('.app-cur'), ghost = app.querySelector('.app-ghost'), drop = app.querySelector('.app-drop'), toastEl = app.querySelector('.app-toast');
+  const at = (el, fx = 0.5, fy = 0.5) => { const a = app.getBoundingClientRect(), r = el.getBoundingClientRect(); return { x: r.left - a.left + r.width * fx, y: r.top - a.top + r.height * fy }; };
+  const wait = async (ms) => { await sleep(ms); while (live() && !APPM.visible) await sleep(200); };
+  cur.style.transform = `translate(${app.clientWidth * 0.55}px,${app.clientHeight * 0.45}px)`; cur.style.opacity = '1'; APPM.pos = { x: app.clientWidth * 0.55, y: app.clientHeight * 0.45 };
+  await wait(600);
+  while (live()) {
+    for (let n = 0; n < 3 && live(); n++) {
+      const next = DATA.app[(APPM.i + 1) % DATA.app.length], dot = app.querySelector(`.app-dock span[data-s="${next}"]`);
+      const p = at(dot); await appMove(cur, p.x - 3, p.y - 2, 750); if (!live()) return;
+      APP_PCS.forEach((pc) => { new Image().src = appImg(DATA.app[(APPM.i + 2) % DATA.app.length], pc); }); // 先载下一种
+      dot.classList.add('tap'); cur.animate([{ scale: 1 }, { scale: 0.86 }, { scale: 1 }], { duration: 220 });
+      await sleep(140); dot.classList.remove('tap'); appSet(next);
+      await wait(1300);
+    }
+    if (!live()) return;
+    // 把分享图拖去导出
+    const pc = app.querySelector('.pc.share'), p0 = at(pc, 0.42, 0.45);
+    await appMove(cur, p0.x, p0.y, 800); if (!live()) return;
+    pc.classList.add('lift'); drop.classList.add('show');
+    ghost.querySelector('img').src = appImg(DATA.app[APPM.i], 'share');
+    const gw = ghost.offsetWidth, gh = ghost.offsetHeight;
+    await sleep(250);
+    const p1 = at(drop, 0.5, 0.5);
+    const path = (p) => `translate(${p.x - gw * 0.4}px,${p.y - gh * 0.45}px)`;
+    ghost.animate([{ opacity: 0, transform: path(p0) + ' scale(1.4)' }, { opacity: 0.95, transform: path(p0) }], { duration: 200, fill: 'forwards' });
+    await sleep(120);
+    ghost.animate([{ opacity: 0.95, transform: path(p0) }, { opacity: 0.95, transform: path({ x: p1.x, y: p1.y - 26 }) }], { duration: 950, easing: 'cubic-bezier(.45,.05,.2,1)', fill: 'forwards' });
+    const hot = setTimeout(() => drop.classList.add('hot'), 700);
+    await appMove(cur, p1.x, p1.y - 26, 950); if (!live()) return clearTimeout(hot);
+    ghost.animate([{ opacity: 0.95, transform: path({ x: p1.x, y: p1.y - 26 }) }, { opacity: 0, transform: path(p1) + ' scale(.3)' }], { duration: 300, easing: 'ease-in', fill: 'forwards' });
+    pc.classList.remove('lift');
+    await sleep(250);
+    drop.classList.remove('hot');
+    const nm = sname(styleOf(DATA.app[APPM.i]));
+    toastEl.innerHTML = `<svg viewBox="0 0 24 24" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>${EN_() ? `Exported credits.png · ${nm}` : `已导出 credits.png · ${nm}`}`;
+    toastEl.animate([{ opacity: 0, transform: 'translate(-50%,-6px)' }, { opacity: 1, transform: 'translate(-50%,0)', offset: 0.12 }, { opacity: 1, transform: 'translate(-50%,0)', offset: 0.85 }, { opacity: 0, transform: 'translate(-50%,-6px)' }], { duration: 2200, easing: 'ease-out' });
+    await sleep(500); drop.classList.remove('show');
+    await wait(1600);
   }
 }
-const ROWS = () => (lang() === 'en'
-  ? [['Tool', 'Model', 'Share', 'Lines'], ['Claude Code', 'Claude Opus 5.5', 59.3, 27730], ['Codex', 'GPT-5.6 Sol', 27.6, 12880], ['Cursor', 'Composer 2', 6.7, 3120]]
-  : [['工具', '模型', '占比', '新增行'], ['Claude Code', 'Claude Opus 5.5', 59.3, 27730], ['Codex', 'GPT-5.6 Sol', 27.6, 12880], ['Cursor', 'Composer 2', 6.7, 3120]]);
-const pct = (v) => `${v.toFixed(1)}%`, plus = (v) => `+${Math.round(v).toLocaleString('en-US')}`;
-function table(anim) {
-  const rows = ROWS();
-  $('credits-md').innerHTML = rows.map((r, i) => `<tr>${r.map((c, j) => (i ? `<td class="${j > 1 ? 'n' : ''}" data-v="${j > 1 ? c : ''}">${j === 2 ? pct(c) : j === 3 ? plus(c) : c}</td>` : `<th>${c}</th>`)).join('')}</tr>`).join('');
-  if (!anim || RM) return;
-  $('credits-md').querySelectorAll('tr').forEach((tr, i) => tr.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 500, delay: 250 + i * 110, easing: EASE, fill: 'backwards' }));
-  $('credits-md').querySelectorAll('td[data-v]:not([data-v=""])').forEach((td) => { const v = +td.dataset.v; const f = td.cellIndex === 2 ? pct : plus; td.textContent = f(0); setTimeout(() => count(td, v, f, 1200), 500); });
-  $('u-badge').animate([{ opacity: 0, transform: 'translateX(-10px)' }, { opacity: 1, transform: 'none' }], { duration: 600, delay: 100, easing: EASE, fill: 'backwards' });
-}
-const PLAYS = { term: playTerm, chat: playChat, readme: () => table(true), app: () => !RM && $('u-app').animate([{ transform: 'translateY(40px) scale(1.04)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 1200, easing: EASE, fill: 'backwards' }) };
-const playIO = new IntersectionObserver((es) => es.forEach((e) => { if (!e.isIntersecting) return; const k = e.target.dataset.play; playIO.unobserve(e.target); played.add(k); PLAYS[k](); }), { threshold: 0.45 });
+new IntersectionObserver((es) => es.forEach((e) => (APPM.visible = e.isIntersecting)), { threshold: 0.2 }).observe($('app'));
+
+const played = new Set();
+const PLAYS = { term: playTerm, chat: playChat, gh: playGh, app: playApp };
+function done(k) { document.querySelector(`[data-again="${k}"]`)?.classList.add('on'); }
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-again]'); if (!b) return; b.classList.remove('on'); PLAYS[b.dataset.again](); });
+const playIO = new IntersectionObserver((es) => es.forEach((e) => { if (!e.isIntersecting) return; const k = e.target.dataset.play; playIO.unobserve(e.target); played.add(k); PLAYS[k](); }), { threshold: 0.4 });
 function usage() {
   const L = lang();
-  $('u-badge').src = `assets/usage/${L}-badge.svg`;
-  $('u-app').src = `assets/app-${isDark() ? 'dark' : 'light'}.webp`;
-  if (played.has('term') || !$('term').innerHTML) $('term').innerHTML = played.has('term') ? termFinal() : '<span class="p">$</span> <span class="caret"></span>';
-  if (played.has('chat')) $('chat').innerHTML = chatMsgs().map(bubble).join('');
-  table(false);
+  // 换语言：已经演过的直接摆出结果，没演过的等滚到再演
+  for (const k of ['term', 'chat', 'gh']) if (played.has(k)) PLAYS[k](true);
+  if (!played.has('gh')) ghFrame('run');
+  if (!played.has('term')) $('term').innerHTML = '<span class="p">$</span> <span class="caret"></span>';
+  if (!played.has('chat')) $('chat').innerHTML = '';
+  if (played.has('app')) playApp(); else appFrame();
   if (DATA.hasSelf) { $('selfbadge').src = `assets/usage/${L}-self-badge.svg`; $('selflink').href = L === 'en' ? 'self/en/' : 'self/'; }
   else $('selflink').hidden = true;
 }
-[['term', '#term'], ['chat', '#chat'], ['readme', '.repo'], ['app', '.shot']].forEach(([k, q]) => { const el = document.querySelector(q); el.dataset.play = k; playIO.observe(el); });
+[['term', '#term'], ['chat', '#chat'], ['gh', '#gh'], ['app', '#app']].forEach(([k, q]) => { const el = document.querySelector(q); el.dataset.play = k; playIO.observe(el); });
 
 // ───────── 复制：按钮上方冒一个小提示 ─────────
 const DL_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v10.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6zM4 19h16v2H4z"/></svg>';
@@ -1058,7 +1415,6 @@ const io = new IntersectionObserver((es) => {
     el.classList.add('in');
     const h2 = el.querySelector('h2');
     if (h2 && !RM) rise(split(h2), { step: lang() === 'zh' ? 40 : 70, dur: 1000 });
-    if (el.id === 'exports' && !RM) el.querySelectorAll('.fx a').forEach((a, j) => a.animate([{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }], { duration: 700, delay: 150 + j * 80, easing: EASE, fill: 'backwards' }));
     if (el.classList.contains('editor')) setTimeout(scan, 300);
   });
 }, { rootMargin: '0px 0px -10% 0px' });
@@ -1068,7 +1424,7 @@ function applyLang() {
   document.querySelectorAll('[data-i]').forEach((el) => (el.innerHTML = t(el.dataset.i)));
   $('lang').textContent = lang() === 'en' ? '中' : 'EN';
   document.title = lang() === 'en' ? 'creditia — which AI wrote your code' : 'creditia — 你的代码，是哪些 AI 写的';
-  reel(); wall(); exports(); lines(); usage(); install();
+  reel(); wall(); lines(); usage(); install();
 }
 // 换语言：整页淡入淡出；换主题：从按钮那里一圈扩开
 const transition = (fn, circleFrom) => {
@@ -1088,7 +1444,7 @@ $('lang').onclick = () => transition(() => {
   try { localStorage.setItem('ct-lang', document.documentElement.lang); } catch (e) {}
   applyLang(); split(document.querySelector('.title h1'));
 });
-const onTheme = () => { reel(); $('u-app').src = `assets/app-${isDark() ? 'dark' : 'light'}.webp`; };
+const onTheme = () => {};
 $('theme').onclick = (e) => {
   const b = e.currentTarget;
   transition(() => {
