@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="zh" data-theme="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>creditia — 哪些代码是哪个 AI 写的</title>
+<meta name="description" content="读你电脑上的 git 历史和 AI 工具的日志，算出每个工具、每个模型写了多少代码，做成署名榜、片尾字幕和统计图。开源，本地运行。">
+<meta property="og:title" content="creditia">
+<meta property="og:description" content="哪些代码是哪个 AI 写的。开源，本地运行。">
+<meta property="og:image" content="https://wroughtmind.github.io/creditia/assets/og-zh.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  // 主题与语言：先读用户选过的，没有就跟系统；放在最前面，避免闪一下
+  (function () {
+    try {
+      var t = localStorage.getItem('ct-theme'); if (t) document.documentElement.dataset.theme = t;
+      var l = localStorage.getItem('ct-lang') || ((navigator.language || 'zh').toLowerCase().startsWith('zh') ? 'zh' : 'en');
+      document.documentElement.lang = l;
+    } catch (e) {}
+  })();
+</script>
+<style>
+:root {
+  --bg: #F5F5F3; --bg2: #FFFFFF; --ink: #0D0D0D; --soft: #66666A; --faint: #A3A3A6;
+  --line: rgba(13,13,13,.09); --line2: rgba(13,13,13,.05);
+  --glass: rgba(245,245,243,.72); --shadow: 0 1px 2px rgba(0,0,0,.05), 0 24px 64px rgba(0,0,0,.08);
+  --code: #0D0D0D; --codeink: #F2F2F0;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0A0A0A; --bg2: #121212; --ink: #F2F2F0; --soft: #9A9A9E; --faint: #5C5C60;
+    --line: rgba(255,255,255,.09); --line2: rgba(255,255,255,.05);
+    --glass: rgba(10,10,10,.68); --shadow: 0 1px 2px rgba(0,0,0,.4), 0 30px 80px rgba(0,0,0,.55);
+    --code: #161616; --codeink: #F2F2F0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0A0A0A; --bg2: #121212; --ink: #F2F2F0; --soft: #9A9A9E; --faint: #5C5C60;
+  --line: rgba(255,255,255,.09); --line2: rgba(255,255,255,.05);
+  --glass: rgba(10,10,10,.68); --shadow: 0 1px 2px rgba(0,0,0,.4), 0 30px 80px rgba(0,0,0,.55);
+  --code: #161616; --codeink: #F2F2F0;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.6 Inter, -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+a { color: inherit; }
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+.wrap { width: min(1180px, 100% - 40px); margin: 0 auto; }
+
+/* ── 顶栏 ── */
+header {
+  position: sticky; top: 0; z-index: 20; padding-top: env(safe-area-inset-top, 0px);
+  background: var(--glass); backdrop-filter: saturate(160%) blur(18px); -webkit-backdrop-filter: saturate(160%) blur(18px);
+  border-bottom: 1px solid var(--line2);
+}
+header .wrap { display: flex; align-items: center; height: 60px; gap: 28px; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 600; letter-spacing: -.01em; text-decoration: none; }
+.brand svg { width: 20px; height: 20px; }
+nav.links { display: flex; gap: 22px; font-size: 14px; color: var(--soft); }
+nav.links a { text-decoration: none; transition: color .15s; }
+nav.links a:hover { color: var(--ink); }
+.grow { flex: 1; }
+.ctl { display: flex; gap: 6px; }
+.ctl button, .ctl a {
+  height: 32px; min-width: 32px; padding: 0 10px; border-radius: 99px; border: 1px solid var(--line); background: transparent;
+  color: var(--ink); font: 500 12.5px/1 Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none;
+}
+.ctl button:hover, .ctl a:hover { background: var(--line2); }
+.ctl svg { width: 15px; height: 15px; }
+
+/* ── 首屏 ── */
+.hero { padding: clamp(56px, 10vw, 112px) 0 40px; text-align: center; position: relative; }
+.hero::before {
+  content: ""; position: absolute; inset: -60px 0 auto; height: 520px; z-index: -1; pointer-events: none;
+  background: radial-gradient(50% 50% at 50% 0%, var(--line2) 0%, transparent 72%);
+}
+.eyebrow { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--soft); border: 1px solid var(--line); border-radius: 99px; padding: 5px 12px; }
+.eyebrow i { width: 6px; height: 6px; border-radius: 99px; background: var(--ink); }
+h1 {
+  margin: 22px auto 0; max-width: 15em; font-weight: 650; letter-spacing: -.035em; line-height: 1.04;
+  font-size: clamp(40px, 6.6vw, 82px); text-wrap: balance;
+}
+:lang(zh) h1 { letter-spacing: -.01em; line-height: 1.12; max-width: 12em; }
+.sub { margin: 22px auto 0; max-width: 40em; color: var(--soft); font-size: clamp(16px, 1.6vw, 18.5px); text-wrap: pretty; }
+.cta { margin: 34px auto 0; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.cmd {
+  display: inline-flex; align-items: center; gap: 14px; height: 48px; padding: 0 8px 0 18px; border-radius: 12px;
+  background: var(--code); color: var(--codeink); font-size: 15px; border: 1px solid var(--line);
+}
+.cmd .p { opacity: .45; }
+.cmd button { height: 34px; padding: 0 12px; border-radius: 8px; border: 0; background: rgba(255,255,255,.1); color: inherit; font: 500 12.5px Inter, sans-serif; cursor: pointer; }
+.cmd button:hover { background: rgba(255,255,255,.18); }
+.btn { height: 48px; padding: 0 20px; border-radius: 12px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); text-decoration: none; font-weight: 500; font-size: 15px; }
+.btn:hover { background: var(--line2); }
+.btn svg { width: 16px; height: 16px; }
+
+/* ── 主图 ── */
+.stage { margin: 56px auto 0; width: min(1060px, 100%); }
+.frame {
+  position: relative; border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line);
+  background: var(--bg2); transition: background-color .4s;
+}
+.frame .ct-art { display: block; width: 100%; }
+.frame .ct-art > svg { display: block; width: 100%; height: auto; }
+.frame .swap { animation: swap .45s cubic-bezier(.2,.7,.2,1); }
+@keyframes swap { from { opacity: 0; filter: blur(8px); transform: scale(.995); } }
+.dots { margin: 22px auto 0; display: flex; gap: 9px; justify-content: center; flex-wrap: wrap; }
+.dots button { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 99px; background: none; cursor: pointer; position: relative; transition: transform .15s; }
+.dots button:hover { transform: scale(1.16); }
+.dots button svg { width: 26px; height: 26px; display: block; }
+.dots button.on::after { content: ""; position: absolute; inset: -4px; border-radius: 99px; border: 1.5px solid var(--ink); }
+.caption { margin-top: 14px; text-align: center; font-size: 13.5px; color: var(--soft); min-height: 1.6em; }
+.caption b { color: var(--ink); font-weight: 600; }
+
+/* ── 区块 ── */
+section { padding: clamp(72px, 10vw, 128px) 0 0; }
+.kicker { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--soft); font-weight: 500; }
+:lang(zh) .kicker { letter-spacing: .2em; }
+h2 { margin: 12px 0 0; font-size: clamp(30px, 4vw, 48px); letter-spacing: -.03em; line-height: 1.1; font-weight: 650; max-width: 18em; text-wrap: balance; }
+:lang(zh) h2 { letter-spacing: -.005em; }
+.lead { margin: 16px 0 0; color: var(--soft); max-width: 38em; font-size: 17px; text-wrap: pretty; }
+
+/* 作品墙 */
+.wall { margin-top: 44px; columns: 3 300px; column-gap: 22px; }
+.wall figure { margin: 0 0 22px; break-inside: avoid; }
+.wall a { display: block; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: transform .25s, box-shadow .25s; }
+.wall a:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+.wall img { display: block; width: 100%; height: auto; background: var(--line2); }
+.wall figcaption { margin-top: 8px; font-size: 13px; color: var(--soft); }
+
+/* 怎么算 */
+.grid4 { margin-top: 44px; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); }
+.grid4 > div { padding: 26px 24px 8px 0; }
+.grid4 .n { font-size: 13px; color: var(--faint); font-family: "JetBrains Mono", monospace; }
+.grid4 h3 { margin: 10px 0 8px; font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+.grid4 p { margin: 0; color: var(--soft); font-size: 15px; }
+.bar4 { margin-top: 30px; display: flex; height: 10px; border-radius: 99px; overflow: hidden; gap: 2px; }
+.bar4 i:nth-child(1) { flex: 62; background: var(--ink); }
+.bar4 i:nth-child(2) { flex: 22; background: color-mix(in srgb, var(--ink) 60%, transparent); }
+.bar4 i:nth-child(3) { flex: 12; background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--ink) 45%, transparent) 0 3px, transparent 3px 6px); }
+.bar4 i:nth-child(4) { flex: 4; background: var(--line); }
+.note { margin-top: 26px; color: var(--soft); font-size: 15px; }
+.note a { text-underline-offset: 3px; }
+
+/* 工具 */
+.tools { margin-top: 40px; display: grid; grid-template-columns: repeat(8, 1fr); border-left: 1px solid var(--line); border-top: 1px solid var(--line); }
+.tools div { aspect-ratio: 1.15; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-size: 13px; color: var(--soft); }
+.tools svg { width: 26px; height: 26px; fill: var(--ink); }
+.tools .mono { font-weight: 600; font-size: 17px; color: var(--ink); }
+
+/* 用法 */
+.steps { margin-top: 44px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; }
+.step { border: 1px solid var(--line); border-radius: 14px; padding: 22px; background: var(--bg2); display: flex; flex-direction: column; gap: 12px; }
+.step .n { font-size: 13px; color: var(--faint); font-family: "JetBrains Mono", monospace; }
+.step h3 { margin: 0; font-size: 18px; font-weight: 600; }
+.step p { margin: 0; color: var(--soft); font-size: 14.5px; }
+pre { margin: 0; background: var(--code); color: var(--codeink); border-radius: 10px; padding: 14px 16px; font-size: 13px; line-height: 1.65; overflow-x: auto; }
+pre .c { opacity: .45; }
+
+/* creditia 自己 */
+.self { margin-top: 40px; border: 1px solid var(--line); border-radius: 16px; padding: 28px; background: var(--bg2); }
+.self .row { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.self .big { font-size: 40px; font-weight: 650; letter-spacing: -.03em; }
+.selfbar { margin: 18px 0 14px; display: flex; height: 14px; border-radius: 99px; overflow: hidden; gap: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 14px; color: var(--soft); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
+
+footer { margin-top: clamp(80px, 10vw, 140px); border-top: 1px solid var(--line); padding: 28px 0 calc(40px + env(safe-area-inset-bottom, 0px)); color: var(--soft); font-size: 14px; }
+footer .wrap { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+
+.reveal { opacity: 0; transform: translateY(18px); transition: opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); }
+.reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } .frame .swap { animation: none; } html { scroll-behavior: auto; } }
+
+@media (max-width: 900px) {
+  nav.links { display: none; }
+  .grid4 { grid-template-columns: 1fr 1fr; }
+  .tools { grid-template-columns: repeat(4, 1fr); }
+  .steps { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .cmd { font-size: 13px; }
+  .grid4 { grid-template-columns: 1fr; }
+  .tools { grid-template-columns: repeat(3, 1fr); }
+}
+/*__INTERACT_CSS__*/
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="brand" href="#top"><!--__LOGO__-->creditia</a>
+    <nav class="links">
+      <a href="#gallery" data-i="nav.gallery">作品</a>
+      <a href="#how" data-i="nav.how">怎么算的</a>
+      <a href="#use" data-i="nav.use">用法</a>
+      <a href="#self" data-i="nav.self">creditia 自己</a>
+    </nav>
+    <div class="grow"></div>
+    <div class="ctl">
+      <button id="lang" aria-label="language">EN</button>
+      <button id="theme" aria-label="theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg></button>
+      <a href="https://github.com/WroughtMind/creditia" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg></a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero wrap">
+    <span class="eyebrow"><i></i><span data-i="hero.eyebrow">开源 · 在你自己的电脑上运行</span></span>
+    <h1 data-i="hero.title">这个项目里，哪些代码是哪个 AI 写的</h1>
+    <p class="sub" data-i="hero.sub">creditia 读你电脑上的 git 历史，和 Claude Code、Codex、Cursor 这些工具留下的日志，一行一行对上，算出每个工具、每个模型写了多少。结果可以做成署名榜、片尾字幕、徽章和统计图，导出成图片、PDF、动图或者网页。</p>
+    <div class="cta">
+      <div class="cmd"><span><span class="p">$</span> npx creditia analyze</span><button id="copy" data-i="hero.copy">复制</button></div>
+      <a class="btn" href="https://github.com/WroughtMind/creditia/actions/workflows/ci.yml?query=branch%3Amain"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8-1.6 0-3.2 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2-.1 1.7-.8 3.1-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.5-1-2.5-3.9zM14 5.5c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg><span data-i="hero.app">macOS App</span></a>
+    </div>
+
+    <div class="stage reveal">
+      <div class="frame" id="frame"><div class="ct-art" id="art"></div></div>
+      <div class="dots" id="dots" role="tablist" aria-label="styles"></div>
+      <div class="caption" id="caption"></div>
+    </div>
+  </div>
+
+  <section id="gallery">
+    <div class="wrap">
+      <div class="kicker reveal" data-i="gallery.k">作品</div>
+      <h2 class="reveal" data-i="gallery.t">同一份数据，很多种样子</h2>
+      <p class="lead reveal" data-i="gallery.l">署名榜、片尾字幕、小票、统计图，每一种都有十六种风格可选。下面这些都是同一个示例项目。</p>
+      <div class="wall" id="wall"></div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="kicker reveal" data-i="how.k">怎么算的</div>
+      <h2 class="reveal" data-i="how.t">每一行都有出处，出处分四种</h2>
+      <div class="bar4 reveal" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="grid4 reveal">
+        <div><div class="n">01</div><h3 data-i="how.1t">日志里对得上</h3><p data-i="how.1p">工具把这一行写进文件时留下了记录。最可靠的一种。</p></div>
+        <div><div class="n">02</div><h3 data-i="how.2t">提交里写明了</h3><p data-i="how.2p">提交邮箱、Co-authored-by，或者 creditia 给提交盖的章。</p></div>
+        <div><div class="n">03</div><h3 data-i="how.3t">推断</h3><p data-i="how.3p">同一个提交里其余的行跟着有证据的工具走；工具自己建的分支算那个工具。单独标出来，可以关掉。</p></div>
+        <div><div class="n">04</div><h3 data-i="how.4t">确定不了</h3><p data-i="how.4p">记为「未确认」，不算到任何人头上。</p></div>
+      </div>
+      <p class="note reveal" data-i="how.note">都在你的电脑上算，不上传代码，也不调用任何模型。人的工作没法按行数算，所以单独写几个数字：发给 AI 多少条消息、review 多少次、人写了多少行；名字默认不出现。</p>
+      <p class="note reveal"><a href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md" data-i="how.more">完整的规则和已知的局限 →</a></p>
+
+      <div class="tools reveal" id="tools"></div>
+      <p class="note reveal" data-i="tools.note">日志读得到的工具能对到每一行；Copilot、Devin、Jules、Aider 这类从提交信息里识别。模型名会统一（同一个模型经过 Bedrock、OpenRouter 或者中转站，写法不一样），看得出来的话也会记下是经哪个渠道调用的。</p>
+    </div>
+  </section>
+
+  <section id="use">
+    <div class="wrap">
+      <div class="kicker reveal" data-i="use.k">用法</div>
+      <h2 class="reveal" data-i="use.t">三条命令</h2>
+      <p class="lead reveal" data-i="use.l">也可以让你的 agent 来做：creditia 带了一份 skill，它会一步步来，公开任何内容之前先问你。</p>
+      <div class="steps">
+        <div class="step reveal"><div class="n">01</div><h3 data-i="use.1t">分析</h3><p data-i="use.1p">在仓库里运行。第一次会下载对应平台的分析程序。</p><pre><span class="c">$</span> npx creditia analyze</pre></div>
+        <div class="step reveal"><div class="n">02</div><h3 data-i="use.2t">出图</h3><p data-i="use.2p">挑作品、风格和格式。--list 看全部选项。</p><pre><span class="c">$</span> npx creditia export \
+    --piece roll --style cinema \
+    --format png --out roll.png</pre></div>
+        <div class="step reveal"><div class="n">03</div><h3 data-i="use.3t">放到 GitHub 上</h3><p data-i="use.3p">把结果提交进仓库，GitHub Action 会在每次推送后更新徽章和署名页。</p><pre><span class="c">$</span> npx creditia publish
+<span class="c"># .github/workflows/credits.yml</span>
+- uses: WroughtMind/creditia@main
+  with: { site: _site, style: ink }</pre></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="self">
+    <div class="wrap">
+      <div class="kicker reveal" data-i="self.k">creditia 自己</div>
+      <h2 class="reveal" data-i="self.t">这个仓库也是 AI 写的</h2>
+      <div class="self reveal">
+        <div class="row"><span class="big">__OWN_LINES__</span><span class="lead" style="margin:0" data-i="self.lines">行代码</span></div>
+        <div class="selfbar" id="selfbar"></div>
+        <div class="legend" id="legend"></div>
+        <p class="note"><a href="self/" id="selflink" data-i="self.more">看 creditia 自己的完整署名页 →</a></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>creditia · MIT</span>
+    <a href="https://github.com/WroughtMind/creditia">GitHub</a>
+    <a href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md" data-i="foot.rules">归因规则</a>
+    <span class="grow"></span>
+    <span data-i="foot.made">这个页面上的图都是 creditia 画的</span>
+  </div>
+</footer>
+
+<script>
+/*__DATA__*/
+const T = {
+  en: {
+    'nav.gallery': 'Gallery', 'nav.how': 'How it works', 'nav.use': 'Usage', 'nav.self': 'creditia itself',
+    'hero.eyebrow': 'Open source · runs on your own machine',
+    'hero.title': 'Which AI wrote which part of your code',
+    'hero.sub': 'creditia reads your git history and the logs left by tools like Claude Code, Codex and Cursor, matches them line by line, and works out how much each tool and each model wrote. The result becomes a credits list, an end-credits roll, a badge or charts, exported as images, PDF, GIF or a web page.',
+    'hero.copy': 'Copy', 'hero.copied': 'Copied', 'hero.app': 'macOS App',
+    'hero.caption': 'A sample project with made-up numbers. Pick a style below, hover the image for details.',
+    'gallery.k': 'Gallery', 'gallery.t': 'One set of numbers, many ways to show it',
+    'gallery.l': 'Credits list, end credits, receipt, charts. Each comes in sixteen styles. Everything below is the same sample project.',
+    'how.k': 'How it works', 'how.t': 'Every line has a source, and there are four kinds',
+    'how.1t': 'Matched in a log', 'how.1p': 'The tool left a record when it wrote this line to the file. The most reliable kind.',
+    'how.2t': 'Stated in the commit', 'how.2p': 'Commit email, Co-authored-by, or a stamp creditia added to the commit.',
+    'how.3t': 'Inferred', 'how.3p': 'Other lines in the same commit follow the tool that has evidence; branches a tool created count for that tool. Marked separately, and you can turn it off.',
+    'how.4t': 'Unknown', 'how.4p': 'Marked as unattributed and credited to no one.',
+    'how.note': 'Everything is computed on your machine. No code is uploaded and no model is called. People’s work can’t be measured in lines, so it gets a few separate numbers: messages sent to AI, reviews, lines written by people. Names are hidden by default.',
+    'how.more': 'Full rules and known limits →',
+    'tools.note': 'Tools whose logs can be read are matched line by line; Copilot, Devin, Jules and Aider are recognized from commit metadata. Model names are unified (the same model looks different through Bedrock, OpenRouter or a relay), and the provider is recorded when it can be told.',
+    'use.k': 'Usage', 'use.t': 'Three commands',
+    'use.l': 'Or let your agent do it: creditia ships a skill that goes step by step and asks before publishing anything.',
+    'use.1t': 'Analyze', 'use.1p': 'Run it inside the repo. The first run downloads the analyzer for your platform.',
+    'use.2t': 'Export', 'use.2p': 'Pick a piece, a style and a format. --list shows every option.',
+    'use.3t': 'Put it on GitHub', 'use.3p': 'Commit the result; the GitHub Action refreshes the badge and credits page on every push.',
+    'self.k': 'creditia itself', 'self.t': 'This repo was written by AI too', 'self.lines': 'lines of code', 'self.more': 'See creditia’s full credits page →',
+    'foot.rules': 'Attribution rules', 'foot.made': 'Every image on this page was drawn by creditia',
+  },
+};
+const lang = () => (document.documentElement.lang === 'en' ? 'en' : 'zh');
+const ZH = {};
+document.querySelectorAll('[data-i]').forEach((el) => (ZH[el.dataset.i] = el.innerHTML));
+ZH['hero.copied'] = '已复制';
+ZH['hero.caption'] = '示例项目，数字是编的。在下面换个风格，鼠标放在图上看细节。';
+const t = (k) => (lang() === 'en' ? T.en[k] : ZH[k]) ?? k;
+function applyLang() {
+  document.querySelectorAll('[data-i]').forEach((el) => (el.innerHTML = t(el.dataset.i)));
+  document.getElementById('lang').textContent = lang() === 'en' ? '中' : 'EN';
+  document.getElementById('selflink').href = lang() === 'en' ? 'self/en/' : 'self/';
+  document.title = lang() === 'en' ? 'creditia — which AI wrote which part of your code' : 'creditia — 哪些代码是哪个 AI 写的';
+  renderWall(); renderSelf(); show(current, true);
+}
+
+// ── 主图：风格圆点 + 悬停 ──
+let current = 'minimal', off = null, seq = 0;
+const dots = document.getElementById('dots');
+dots.innerHTML = DATA.styles.map((s) => `<button role="tab" data-s="${s.id}" aria-label="${s.en}"><svg viewBox="0 0 24 24">${s.dot}</svg></button>`).join('');
+dots.onclick = (e) => { const b = e.target.closest('button'); if (b) show(b.dataset.s); };
+dots.onmouseover = (e) => { const b = e.target.closest('button'); if (b) caption(b.dataset.s); };
+dots.onmouseleave = () => caption(current);
+function caption(id) {
+  const s = DATA.styles.find((x) => x.id === id);
+  document.getElementById('caption').innerHTML = `<b>${lang() === 'en' ? s.en : s.name}</b> · ${lang() === 'en' ? '' : s.note + ' · '}${t('hero.caption')}`;
+}
+async function show(id, force) {
+  if (id === current && !force && off) return;
+  const my = ++seq;
+  current = id;
+  dots.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.s === id));
+  caption(id);
+  const base = `assets/hero/${lang()}/${id}`;
+  const [svg, meta] = await Promise.all([fetch(base + '.svg').then((r) => r.text()), fetch(base + '.json').then((r) => r.json())]);
+  if (my !== seq) return; // 已经点了别的
+  const art = document.getElementById('art');
+  off?.();
+  art.innerHTML = svg;
+  art.classList.remove('swap'); void art.offsetWidth; art.classList.add('swap');
+  document.getElementById('frame').style.backgroundColor = meta.bg;
+  off = mountHits(art, meta.hits, meta.w, meta.h);
+}
+
+// ── 作品墙 ──
+const NAMES = { tier: ['署名榜', 'Credits'], roll: ['片尾字幕', 'End credits'], receipt: ['小票', 'Receipt'], hand: ['人', 'People'], stream: ['每周新增', 'Weekly'], waffle: ['百格', 'Waffle'], donut: ['占比', 'Share'], calendar: ['日历', 'Calendar'], badge: ['徽章', 'Badge'] };
+function renderWall() {
+  const L = lang();
+  document.getElementById('wall').innerHTML = DATA.gallery.map((g) => {
+    const s = DATA.styles.find((x) => x.id === g.style);
+    const src = `assets/gallery/${L}/${g.file}`;
+    return `<figure class="reveal in"><a href="${src}" target="_blank" rel="noopener"><img src="${src}" width="${g.w}" height="${g.h}" loading="lazy" alt="${(NAMES[g.piece] ?? [g.piece, g.piece])[L === 'en' ? 1 : 0]} · ${L === 'en' ? s.en : s.name}"></a><figcaption>${(NAMES[g.piece] ?? [g.piece, g.piece])[L === 'en' ? 1 : 0]} · ${L === 'en' ? s.en : s.name}</figcaption></figure>`;
+  }).join('');
+}
+
+// ── 工具 ──
+document.getElementById('tools').innerHTML = DATA.tools.map((x) => `<div>${x.svg}<span>${x.name}</span></div>`).join('');
+
+// ── creditia 自己 ──
+function renderSelf() {
+  if (!DATA.own) { document.getElementById('self').hidden = true; return; }
+  const rows = DATA.own.rows;
+  const color = (k, i) => (k === 'unattributed' ? 'repeating-linear-gradient(45deg, var(--faint) 0 3px, transparent 3px 6px)' : `color-mix(in srgb, var(--ink) ${Math.max(28, 100 - i * 24)}%, transparent)`);
+  document.getElementById('selfbar').innerHTML = rows.map((r, i) => `<i style="flex:${r.pct};background:${color(r.key, i)}"></i>`).join('');
+  document.getElementById('legend').innerHTML = rows.map((r, i) => `<span><i style="background:${color(r.key, i)}"></i>${r.key === 'unattributed' ? (lang() === 'en' ? 'Unattributed' : '未确认') : r.name} ${r.pct.toFixed(1)}%${r.models.length ? ` · ${r.models.join(', ')}` : ''}</span>`).join('');
+}
+
+// ── 主题、语言、复制、出场 ──
+document.getElementById('theme').onclick = () => {
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const cur = document.documentElement.dataset.theme || (dark ? 'dark' : 'light');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem('ct-theme', next); } catch (e) {}
+};
+document.getElementById('lang').onclick = () => {
+  document.documentElement.lang = lang() === 'en' ? 'zh' : 'en';
+  try { localStorage.setItem('ct-lang', document.documentElement.lang); } catch (e) {}
+  applyLang();
+};
+document.getElementById('copy').onclick = async (e) => {
+  try { await navigator.clipboard.writeText('npx creditia analyze'); e.target.textContent = t('hero.copied'); setTimeout(() => (e.target.textContent = t('hero.copy')), 1600); } catch (err) {}
+};
+const io = new IntersectionObserver((es) => es.forEach((x) => { if (x.isIntersecting) { x.target.classList.add('in'); io.unobserve(x.target); } }), { rootMargin: '0px 0px -8% 0px' });
+document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+applyLang();
+</script>
+</body>
+</html>

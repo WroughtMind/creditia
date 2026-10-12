@@ -25,6 +25,8 @@ jobs:
         working-directory: packages/render
       - run: npm test
         working-directory: packages/render
+      - run: node --test test/*.test.ts
+        working-directory: packages/cli
 
   desktop-macos:
     runs-on: macos-latest

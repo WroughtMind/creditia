@@ -3,9 +3,9 @@
  "breakdown": [
   {
    "byArea": {
-    "core": 97,
+    "core": 83,
     "docs": 34,
-    "tests": 5
+    "tests": 19
    },
    "byEvidence": {
     "declared": {
@@ -29,16 +29,16 @@
    },
    "contributor": "unattributed",
    "linesAdded": 136,
-   "linesSurviving": 104
+   "linesSurviving": 91
   },
   {
    "byArea": {
     "assets": 9,
-    "build": 38,
-    "core": 10481,
+    "build": 328,
+    "core": 10262,
     "docs": 252,
-    "frontend": 569,
-    "tests": 279
+    "frontend": 335,
+    "tests": 442
    },
    "byEvidence": {
     "declared": {
@@ -62,22 +62,23 @@
    },
    "contributor": "a:claude-code/claude-fable-5-1",
    "linesAdded": 11628,
-   "linesSurviving": 6865
+   "linesSurviving": 6775
   },
   {
    "byArea": {
     "assets": 10,
-    "core": 8848,
-    "docs": 270,
-    "frontend": 176,
-    "tests": 143
+    "build": 293,
+    "core": 6422,
+    "docs": 324,
+    "frontend": 1273,
+    "tests": 3327
    },
    "byEvidence": {
     "declared": {
-     "linesAdded": 0
+     "linesAdded": 126
     },
     "inferred": {
-     "linesAdded": 5460
+     "linesAdded": 7529
     },
     "manual": {
      "linesAdded": 0
@@ -86,15 +87,15 @@
      "linesAdded": 0
     },
     "verified": {
-     "linesAdded": 3987
+     "linesAdded": 3994
     }
    },
    "byVersion": {
-    "unreleased": 9447
+    "unreleased": 11649
    },
    "contributor": "a:claude-code/claude-opus-5-5",
-   "linesAdded": 9447,
-   "linesSurviving": 9420
+   "linesAdded": 11649,
+   "linesSurviving": 11487
   }
  ],
  "clock": [
@@ -116,8 +117,8 @@
    0,
    0,
    1,
-   0,
-   0,
+   2,
+   1,
    0,
    0,
    0,
@@ -317,7 +318,7 @@
    "from": "2026-10-10",
    "name": "2026-10",
    "to": "2026-10-12",
-   "verifiedShare": 0.234
+   "verifiedShare": 0.217
   }
  ],
  "days": [
@@ -336,7 +337,7 @@
   },
   {
    "by": {
-    "claude-code": 166
+    "claude-code": 2368
    },
    "date": "2026-10-12"
   }
@@ -344,10 +345,31 @@
  "files": [
   {
    "by": {
-    "claude-code": 30,
+    "claude-code": 62
+   },
+   "lines": 62,
+   "path": ".github/workflows/ci.yml"
+  },
+  {
+   "by": {
+    "claude-code": 35
+   },
+   "lines": 35,
+   "path": ".github/workflows/pages.yml"
+  },
+  {
+   "by": {
+    "claude-code": 29
+   },
+   "lines": 29,
+   "path": ".github/workflows/release.yml"
+  },
+  {
+   "by": {
+    "claude-code": 31,
     "unattributed": 3
    },
-   "lines": 33,
+   "lines": 34,
    "path": ".gitignore"
   },
   {
@@ -381,11 +403,18 @@
   },
   {
    "by": {
-    "claude-code": 102,
+    "claude-code": 126,
     "unattributed": 1
    },
-   "lines": 103,
+   "lines": 127,
    "path": "README.md"
+  },
+  {
+   "by": {
+    "claude-code": 52
+   },
+   "lines": 52,
+   "path": "action.yml"
   },
   {
    "by": {
@@ -515,9 +544,9 @@
   },
   {
    "by": {
-    "claude-code": 171
+    "claude-code": 176
    },
-   "lines": 171,
+   "lines": 176,
    "path": "crates/adapters/src/cline.rs"
   },
   {
@@ -599,26 +628,26 @@
   },
   {
    "by": {
-    "claude-code": 607,
+    "claude-code": 593,
     "unattributed": 2
    },
-   "lines": 609,
+   "lines": 595,
    "path": "crates/cli/src/analyze.rs"
   },
   {
    "by": {
-    "claude-code": 787,
+    "claude-code": 780,
     "unattributed": 3
    },
-   "lines": 790,
+   "lines": 783,
    "path": "crates/cli/src/main.rs"
   },
   {
    "by": {
-    "claude-code": 409,
+    "claude-code": 411,
     "unattributed": 2
    },
-   "lines": 411,
+   "lines": 413,
    "path": "crates/cli/tests/e2e.rs"
   },
   {
@@ -637,9 +666,9 @@
   },
   {
    "by": {
-    "claude-code": 322
+    "claude-code": 331
    },
-   "lines": 322,
+   "lines": 331,
    "path": "crates/core/src/engine.rs"
   },
   {
@@ -658,10 +687,10 @@
   },
   {
    "by": {
-    "claude-code": 392,
+    "claude-code": 424,
     "unattributed": 36
    },
-   "lines": 428,
+   "lines": 460,
    "path": "crates/core/src/model.rs"
   },
   {
@@ -701,6 +730,13 @@
   },
   {
    "by": {
+    "claude-code": 1639
+   },
+   "lines": 1639,
+   "path": "credits.json"
+  },
+  {
+   "by": {
     "claude-code": 32
    },
    "lines": 32,
@@ -708,23 +744,23 @@
   },
   {
    "by": {
-    "claude-code": 3
+    "claude-code": 5
    },
-   "lines": 3,
+   "lines": 5,
    "path": "packages/cli/bin/creditia.mjs"
   },
   {
    "by": {
-    "claude-code": 55
+    "claude-code": 74
    },
-   "lines": 55,
+   "lines": 74,
    "path": "packages/cli/package.json"
   },
   {
    "by": {
-    "claude-code": 221
+    "claude-code": 302
    },
-   "lines": 221,
+   "lines": 302,
    "path": "packages/cli/src/cli.ts"
   },
   {
@@ -743,10 +779,10 @@
   },
   {
    "by": {
-    "claude-code": 51,
-    "unattributed": 14
+    "claude-code": 57,
+    "unattributed": 1
    },
-   "lines": 65,
+   "lines": 58,
    "path": "packages/cli/test/text.test.ts"
   },
   {
@@ -1003,9 +1039,9 @@
   },
   {
    "by": {
-    "claude-code": 74
+    "claude-code": 73
    },
-   "lines": 74,
+   "lines": 73,
    "path": "packages/render/src/pieces/common.ts"
   },
   {
@@ -1150,9 +1186,9 @@
   },
   {
    "by": {
-    "claude-code": 63
+    "claude-code": 64
    },
-   "lines": 63,
+   "lines": 64,
    "path": "skills/creditia/SKILL.md"
   },
   {
@@ -1233,12 +1269,12 @@
    "path": "spike/tests/vectors.json"
   }
  ],
- "generatedAt": "2026-10-12T17:38:08+08:00",
- "head": "2d2eced069b07951f7bc9cb599c64f536f81e090",
+ "generatedAt": "2026-10-12T18:15:33+08:00",
+ "head": "681b4adbe73a2c48ac121ca9b05b18dc0711826a",
  "human": {
   "agentReviews": 0,
   "plans": 0,
-  "prompts": 13,
+  "prompts": 17,
   "reviews": 0,
   "tabAssistedLines": 0
  },
@@ -1257,11 +1293,11 @@
  "sessions": [
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "end": 1791797794,
-   "prompts": 13,
+   "end": 1791800010,
+   "prompts": 17,
    "review": false,
    "start": 1791692687,
-   "tokens": 108228693
+   "tokens": 150000850
   }
  ],
  "timeline": [
@@ -1275,21 +1311,21 @@
   },
   {
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 166
+    "a:claude-code/claude-opus-5-5": 2368
    },
    "week": "2026-W42"
   }
  ],
  "totals": {
   "binaryFiles": 51,
-  "commits": 16,
+  "commits": 19,
   "days": 3,
-  "linesAdded": 21211,
-  "linesSurviving": 16389,
+  "linesAdded": 23413,
+  "linesSurviving": 18353,
   "linesWritten": 4166,
   "sessions": 1,
-  "tokens": 108228693,
-  "units": 16
+  "tokens": 150000850,
+  "units": 13
  },
  "units": [
   {
@@ -1361,9 +1397,11 @@
   {
    "areas": [
     "assets",
+    "build",
     "core",
     "docs",
-    "frontend"
+    "frontend",
+    "tests"
    ],
    "commits": [
     "61aa2befca7f5dba8c97bfc285a79493410ce48e"
@@ -1403,9 +1441,11 @@
   },
   {
    "areas": [
+    "build",
     "core",
     "docs",
-    "frontend"
+    "frontend",
+    "tests"
    ],
    "commits": [
     "3c5ef8559b46bb4435b71f0e6ca69f686cc2e907"
@@ -1528,15 +1568,25 @@
   },
   {
    "areas": [
+    "assets",
+    "build",
     "core",
+    "docs",
+    "frontend",
     "tests"
    ],
    "commits": [
+    "4bd8e86e3d333d547a7a2a6f68b0b0e9f4503173",
+    "e3c006d9dab2e80d65eba5b76393d3506207dffd",
+    "2d2eced069b07951f7bc9cb599c64f536f81e090",
+    "b9657f25a9f270256cc09369e7e90ef62ddd2830",
+    "7824d4cc903dd36dc60e12d93724d8816c43de82",
+    "08fee5b7f1d4150cea456b4cfbb3113b6849ee80",
     "bee2001bf292ae8bf5f2737ab65b4e6a8d2129f2"
    ],
-   "date": "2026-10-11",
-   "id": "c:bee2001b",
-   "lines": 1148,
+   "date": "2026-10-12",
+   "id": "pr:3",
+   "lines": 11450,
    "shares": [
     {
      "contributor": "a:claude-code/claude-opus-5-5",
@@ -1544,72 +1594,7 @@
      "share": 1
     }
    ],
-   "title": "归因核心：更多数据源、模型与渠道、口径、一个项目多处路径",
-   "version": null
-  },
-  {
-   "areas": [
-    "assets",
-    "core",
-    "docs"
-   ],
-   "commits": [
-    "08fee5b7f1d4150cea456b4cfbb3113b6849ee80"
-   ],
-   "date": "2026-10-11",
-   "id": "c:08fee5b7",
-   "lines": 6990,
-   "shares": [
-    {
-     "contributor": "a:claude-code/claude-opus-5-5",
-     "evidence": "verified",
-     "share": 1
-    }
-   ],
-   "title": "渲染重做：手写 SVG 场景，16 种风格 × 16 种作品，可交互导出",
-   "version": null
-  },
-  {
-   "areas": [
-    "assets",
-    "core",
-    "frontend"
-   ],
-   "commits": [
-    "7824d4cc903dd36dc60e12d93724d8816c43de82"
-   ],
-   "date": "2026-10-11",
-   "id": "c:7824d4cc",
-   "lines": 780,
-   "shares": [
-    {
-     "contributor": "a:claude-code/claude-opus-5-5",
-     "evidence": "verified",
-     "share": 1
-    }
-   ],
-   "title": "App 重做：黑白液态玻璃的展墙",
-   "version": null
-  },
-  {
-   "areas": [
-    "core",
-    "docs"
-   ],
-   "commits": [
-    "b9657f25a9f270256cc09369e7e90ef62ddd2830"
-   ],
-   "date": "2026-10-11",
-   "id": "c:b9657f25",
-   "lines": 363,
-   "shares": [
-    {
-     "contributor": "a:claude-code/claude-opus-5-5",
-     "evidence": "verified",
-     "share": 1
-    }
-   ],
-   "title": "文档、CLI、skill 与标志",
+   "title": "重做 App、作品与分析；加 npx、GitHub Action 和署名页 (#3)",
    "version": null
   },
   {
@@ -1619,11 +1604,11 @@
     "tests"
    ],
    "commits": [
-    "2d2eced069b07951f7bc9cb599c64f536f81e090"
+    "681b4adbe73a2c48ac121ca9b05b18dc0711826a"
    ],
    "date": "2026-10-12",
-   "id": "c:2d2eced0",
-   "lines": 166,
+   "id": "c:681b4adb",
+   "lines": 199,
    "shares": [
     {
      "contributor": "a:claude-code/claude-opus-5-5",
@@ -1631,7 +1616,7 @@
      "share": 1
     }
    ],
-   "title": "修三处问题，加 CI：macOS 上实际编译打包 App",
+   "title": "文案改成平实的说法；几处关键词猜测改成按约定判断",
    "version": null
   }
  ],

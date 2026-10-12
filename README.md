@@ -5,7 +5,7 @@
 > 为人和 AI 一起做出的作品署名。
 > Credits for work made by people and agents together.
 
-**状态：开发中。**
+**状态：开发中。** 官网：https://wroughtmind.github.io/creditia/
 
 ## 做什么
 

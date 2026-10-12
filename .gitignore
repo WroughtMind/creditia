@@ -32,3 +32,4 @@ AGENTS.md
 spike/projects/
 apps/desktop/src-tauri/binaries/
 dist/
+_site/
