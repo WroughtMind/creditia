@@ -6,23 +6,23 @@ interface Brand { logo?: string; color: string; onDark?: string }
 export const BRANDS: Record<string, Brand> = {
   codex: { logo: 'openai', color: '#10A37F' },
   cursor: { logo: 'cursor', color: '#0A84FF' },
-  grok: { logo: 'x', color: '#26262A', onDark: '#E6E6E3' },
+  grok: { logo: 'grok', color: '#26262A', onDark: '#E6E6E3' },
   'claude-code': { logo: 'claude', color: '#D97757' },
   deepseek: { logo: 'deepseek', color: '#4D6BFE' },
   kimi: { logo: 'kimi', color: '#1F2329', onDark: '#E6E6E3' },
-  gemini: { logo: 'googlegemini', color: '#8E75B2' },
+  gemini: { logo: 'geminicli', color: '#8E75B2' },
   qwen: { logo: 'qwen', color: '#615CED' },
   cline: { logo: 'cline', color: '#5B8DEF' },
   copilot: { logo: 'githubcopilot', color: '#6E40C9' },
   amp: { logo: 'amp', color: '#F34E3F' },
   windsurf: { logo: 'windsurf', color: '#0FBF8F' },
   trae: { logo: 'trae', color: '#FF4D4F' },
-  opencode: { color: '#E8A33D' },
-  roo: { color: '#C2410C' },
-  kilo: { color: '#E5484D' },
-  aider: { color: '#14B014' },
-  devin: { color: '#1F2937', onDark: '#E6E6E3' },
-  jules: { color: '#7C5CFF' },
+  opencode: { logo: 'opencode', color: '#E8A33D' },
+  roo: { logo: 'roocode', color: '#C2410C' },
+  kilo: { logo: 'kilocode', color: '#E5484D' },
+  aider: { logo: 'aider', color: '#14B014' },
+  devin: { logo: 'devin', color: '#1F2937', onDark: '#E6E6E3' },
+  jules: { logo: 'googlejules', color: '#7C5CFF' },
   'github-actions': { logo: 'github-actions', color: '#2088FF' },
 };
 /** 自动化机器人：不算 AI 作者，不进片尾字幕 */
@@ -31,7 +31,7 @@ export const BOTS = new Set(['github-actions', 'dependabot', 'renovate']);
 /** logo 源。Node 端从磁盘读（index.ts 注册），App / 网页端从内存注册，forms 不碰文件系统。 */
 export interface LogoSource { svg(name: string): string | null }
 // 默认用内置的标志数据（由 assets/logos 生成），Node、浏览器、打包后的 CLI 都能用
-let source: LogoSource | null = { svg: (n) => (LOGOS[n] ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${LOGOS[n].vb}"><path d="${LOGOS[n].d}"/></svg>` : null) };
+let source: LogoSource | null = { svg: (n) => (LOGOS[n] ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${LOGOS[n].vb}"><path d="${LOGOS[n].d}"${LOGOS[n].rule ? ` fill-rule="${LOGOS[n].rule}"` : ''}/></svg>` : null) };
 export function useLogoSource(s: LogoSource) { source = s; }
 
 const svgCache = new Map<string, string | null>();

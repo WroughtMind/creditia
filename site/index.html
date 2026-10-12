@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>creditia — 你的代码，是哪些 AI 写的</title>
-<meta name="description" content="读你电脑上 AI 编程工具的日志，和 git 历史逐行对照，算出每个工具、每个模型写了多少代码，做成片尾字幕、署名榜和 README 徽章。开源，本地运行。">
+<meta name="description" content="把 AI 编程工具的日志和 git 历史逐行对上，算出每个工具、每个模型写了多少代码，做成片尾字幕。开源，本地运行。">
 <meta property="og:title" content="creditia">
-<meta property="og:description" content="你的代码，是哪些 AI 写的。开源，本地运行。">
+<meta property="og:description" content="你的代码，是哪些 AI 写的。">
 <meta property="og:image" content="https://wroughtmind.github.io/creditia/assets/og-zh.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@500&display=swap" rel="stylesheet">
 <script>
   (function () {
     try {
@@ -24,262 +24,173 @@
 </script>
 <style>
 :root {
-  --bg: #F6F5F2; --bg2: #EFEDE8; --card: #FFFFFF; --ink: #111110; --soft: #5E5C57; --faint: #9E9B94;
-  --line: rgba(17,17,16,.09); --line2: rgba(17,17,16,.05);
-  --glass: rgba(246,245,242,.78);
-  --shadow: 0 1px 2px rgba(17,17,16,.06), 0 24px 60px -24px rgba(17,17,16,.28);
-  --shadow-lg: 0 2px 4px rgba(17,17,16,.06), 0 40px 90px -30px rgba(17,17,16,.42);
-  --accent: #B5852F;
-  --c-verified: #111110; --c-declared: #7D7A73; --c-inferred: #BDB9B0;
+  --bg: #F3F1EC; --ink: #161512; --soft: #67635B; --faint: #A39E94; --line: rgba(22,21,18,.12); --line2: rgba(22,21,18,.06);
+  --card: #FBFAF7; --shadow: 0 1px 2px rgba(22,21,18,.06), 0 30px 70px -30px rgba(22,21,18,.35);
+  --c-verified: #161512; --c-declared: #7D7970; --c-inferred: #BDB8AE;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0D0D0C; --bg2: #151514; --card: #1A1A19; --ink: #EEECE7; --soft: #A09C94; --faint: #64615B;
-    --line: rgba(238,236,231,.1); --line2: rgba(238,236,231,.05);
-    --glass: rgba(13,13,12,.74);
-    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 30px 70px -24px rgba(0,0,0,.85);
-    --shadow-lg: 0 2px 4px rgba(0,0,0,.4), 0 50px 100px -30px rgba(0,0,0,.95);
-    --accent: #D6AE62;
-    --c-verified: #EEECE7; --c-declared: #8F8B83; --c-inferred: #55524C;
+    --bg: #0C0C0B; --ink: #ECE8DF; --soft: #9D988E; --faint: #5F5B54; --line: rgba(236,232,223,.12); --line2: rgba(236,232,223,.06);
+    --card: #141413; --shadow: 0 1px 2px rgba(0,0,0,.5), 0 40px 90px -30px rgba(0,0,0,.9);
+    --c-verified: #ECE8DF; --c-declared: #8E8A81; --c-inferred: #54514B;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0D0D0C; --bg2: #151514; --card: #1A1A19; --ink: #EEECE7; --soft: #A09C94; --faint: #64615B;
-  --line: rgba(238,236,231,.1); --line2: rgba(238,236,231,.05);
-  --glass: rgba(13,13,12,.74);
-  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 30px 70px -24px rgba(0,0,0,.85);
-  --shadow-lg: 0 2px 4px rgba(0,0,0,.4), 0 50px 100px -30px rgba(0,0,0,.95);
-  --accent: #D6AE62;
-  --c-verified: #EEECE7; --c-declared: #8F8B83; --c-inferred: #55524C;
+  --bg: #0C0C0B; --ink: #ECE8DF; --soft: #9D988E; --faint: #5F5B54; --line: rgba(236,232,223,.12); --line2: rgba(236,232,223,.06);
+  --card: #141413; --shadow: 0 1px 2px rgba(0,0,0,.5), 0 40px 90px -30px rgba(0,0,0,.9);
+  --c-verified: #ECE8DF; --c-declared: #8E8A81; --c-inferred: #54514B;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: 72px; }
+html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
-  font: 16px/1.65 Inter, -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
-  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
-  transition: background-color .3s, color .3s;
+  font: 16px/1.7 Inter, -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased; transition: background-color .3s, color .3s;
 }
 a { color: inherit; }
 img { display: block; max-width: 100%; height: auto; }
-.mono, code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
-.wrap { width: min(1200px, 100% - 48px); margin: 0 auto; }
-h1, h2, h3 { font-weight: 650; letter-spacing: -.028em; margin: 0; text-wrap: balance; }
-:lang(zh) h1, :lang(zh) h2, :lang(zh) h3 { letter-spacing: -.01em; font-weight: 600; }
-h2 { font-size: clamp(32px, 4vw, 52px); line-height: 1.1; }
-:lang(zh) h2 { line-height: 1.25; }
-.kicker { font-size: 13px; font-weight: 600; color: var(--accent); letter-spacing: .04em; margin-bottom: 14px; }
-.lead { margin: 18px 0 0; color: var(--soft); font-size: 18px; max-width: 36em; text-wrap: pretty; }
-section { padding: clamp(96px, 12vw, 150px) 0 0; }
+.mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+.serif { font-family: "Instrument Serif", "Noto Serif SC", "Songti SC", serif; font-weight: 400; letter-spacing: -.005em; }
+:lang(zh) .serif { font-family: "Noto Serif SC", "Songti SC", "Instrument Serif", serif; font-weight: 500; letter-spacing: .01em; }
+.wrap { width: min(1120px, 100% - 64px); margin: 0 auto; }
+h1, h2 { margin: 0; text-wrap: balance; }
+h2 { font-size: clamp(34px, 4.4vw, 58px); line-height: 1.08; }
+:lang(zh) h2 { font-size: clamp(30px, 3.6vw, 46px); line-height: 1.3; }
+section { padding-top: clamp(110px, 14vw, 180px); }
+.intro { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: end; }
+.intro p { margin: 0; color: var(--soft); font-size: 17px; max-width: 30em; text-wrap: pretty; }
 
-/* ───────── 顶栏 ───────── */
-header { position: sticky; top: 0; z-index: 30; padding-top: env(safe-area-inset-top, 0px); background: var(--glass); backdrop-filter: saturate(160%) blur(18px); -webkit-backdrop-filter: saturate(160%) blur(18px); border-bottom: 1px solid transparent; transition: border-color .3s; }
-header.scrolled { border-color: var(--line2); }
-header .wrap { height: 60px; display: flex; align-items: center; gap: 30px; }
-.brand { display: flex; align-items: center; gap: 9px; font-weight: 650; letter-spacing: -.01em; text-decoration: none; font-size: 15.5px; }
-.brand svg { width: 20px; height: 20px; }
-nav.links { display: flex; gap: 26px; font-size: 14px; color: var(--soft); }
-nav.links a { text-decoration: none; transition: color .15s; }
-nav.links a:hover { color: var(--ink); }
+/* ───────── 顶栏：只有名字和三个小按钮 ───────── */
+header { position: absolute; inset: 0 0 auto; z-index: 10; color: #E9E2D3; }
+header .wrap { height: 72px; display: flex; align-items: center; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 15px; text-decoration: none; letter-spacing: -.01em; }
+.brand svg { width: 19px; height: 19px; }
 .grow { flex: 1; }
-.ctl { display: flex; gap: 6px; }
-.ctl button, .ctl a {
-  height: 32px; min-width: 32px; padding: 0 10px; border-radius: 99px; border: 1px solid var(--line);
-  background: transparent; color: inherit; font: 500 12.5px/1 Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none;
-}
-.ctl button:hover, .ctl a:hover { background: var(--line2); }
+.ctl { display: flex; gap: 4px; }
+.ctl button, .ctl a { height: 30px; min-width: 30px; padding: 0 9px; border-radius: 99px; border: 0; background: transparent; color: inherit; opacity: .7; font: 500 12.5px/1 Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.ctl button:hover, .ctl a:hover { opacity: 1; background: rgba(233,226,211,.1); }
 .ctl svg { width: 15px; height: 15px; }
 
-/* ───────── 首屏 ───────── */
-.hero { padding-top: clamp(48px, 7vw, 96px); }
-.hero .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); gap: 56px; align-items: center; }
-.pill { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); font-size: 13px; color: var(--soft); }
-.pill i { width: 6px; height: 6px; border-radius: 99px; background: #3BA55C; }
-.hero h1 { margin-top: 22px; font-size: clamp(44px, 5.4vw, 74px); line-height: 1.02; }
-:lang(zh) .hero h1 { font-size: clamp(40px, 5.4vw, 70px); line-height: 1.16; }
-.hero p.sub { margin: 24px 0 0; font-size: 18.5px; color: var(--soft); max-width: 31em; text-wrap: pretty; }
-.cta { margin-top: 32px; display: flex; gap: 10px; flex-wrap: wrap; }
-.cmd { display: inline-flex; align-items: center; gap: 16px; height: 50px; padding: 0 8px 0 18px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 15px; }
-.cmd .p { opacity: .5; margin-right: 10px; }
-.cmd button { height: 34px; padding: 0 12px; border-radius: 8px; border: 0; background: color-mix(in srgb, var(--bg) 16%, transparent); color: inherit; font: 500 12.5px Inter, sans-serif; cursor: pointer; }
-.cmd button:hover { background: color-mix(in srgb, var(--bg) 26%, transparent); }
-.btn { display: inline-flex; align-items: center; gap: 8px; height: 50px; padding: 0 18px; border-radius: 12px; border: 1px solid var(--line); font-weight: 500; font-size: 15px; text-decoration: none; }
-.btn:hover { background: var(--line2); }
-.btn svg { width: 17px; height: 17px; }
-.supports { margin-top: 40px; }
-.supports .lbl { font-size: 12.5px; color: var(--faint); margin-bottom: 12px; }
-.logos { display: flex; flex-wrap: wrap; gap: 14px 13px; align-items: center; color: var(--soft); }
-.logos span { display: inline-flex; width: 21px; height: 21px; align-items: center; justify-content: center; }
-.logos svg { width: 20px; height: 20px; fill: currentColor; }
-.logos b { font-size: 9.5px; font-weight: 700; letter-spacing: -.02em; border: 1.4px solid currentColor; border-radius: 99px; width: 21px; height: 21px; display: inline-flex; align-items: center; justify-content: center; }
-.logos span:hover { color: var(--ink); }
+/* ───────── 首屏：放映厅 ───────── */
+#screen { position: relative; height: 100vh; height: 100svh; min-height: 640px; max-height: 1100px; overflow: hidden; background: #070708; color: #EDE6D8; }
+.reel-view { position: absolute; top: 0; bottom: 0; right: max(32px, calc((100vw - 1120px) / 2)); width: min(540px, 44vw);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22%, #000 78%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 22%, #000 78%, transparent 100%); }
+.reel { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
+.reel img { width: 100%; }
+.reel-view:hover .reel { animation-play-state: paused !important; }
+@keyframes roll { from { transform: translateY(var(--from)); } to { transform: translateY(var(--to)); } }
+.title { position: absolute; z-index: 2; left: max(32px, calc((100vw - 1120px) / 2)); top: 50%; transform: translateY(-46%); width: min(500px, 44vw); }
+.title h1 { font-size: clamp(48px, 6vw, 84px); line-height: 1; color: #F1EADC; }
+:lang(zh) .title h1 { font-size: clamp(40px, 4.6vw, 64px); line-height: 1.24; }
+.title p { margin: 28px 0 0; font-size: 17px; line-height: 1.75; color: #A39B8B; max-width: 27em; text-wrap: pretty; }
+.cmd { margin-top: 34px; display: inline-flex; align-items: center; gap: 14px; height: 46px; padding: 0 6px 0 16px; border-radius: 10px; border: 1px solid rgba(237,230,216,.18); font-size: 14.5px; color: #F1EADC; }
+.cmd .p { color: #7E7768; margin-right: 8px; }
+.cmd button { height: 34px; width: 34px; border-radius: 7px; border: 0; background: transparent; color: #A39B8B; cursor: pointer; display: grid; place-items: center; }
+.cmd button:hover { background: rgba(237,230,216,.1); color: #F1EADC; }
+.cmd button svg { width: 16px; height: 16px; }
+.links { margin-top: 22px; display: flex; gap: 22px; font-size: 14px; color: #A39B8B; }
+.links a { text-decoration: none; }
+.links a:hover { color: #F1EADC; }
+.fine { position: absolute; left: max(32px, calc((100vw - 1120px) / 2)); bottom: 26px; font-size: 12.5px; color: #5E584D; }
 
-/* 首屏右边：成品叠在一起 */
-.stack { position: relative; aspect-ratio: 1 / 1.02; }
-.stack .card { position: absolute; border-radius: 10px; overflow: hidden; box-shadow: var(--shadow-lg); }
-.stack .roll { right: 0; top: 0; width: 60%; }
-.stack .share { left: 0; bottom: 4%; width: 74%; }
-.stack .readme-card { left: 0; top: 7%; width: 50%; background: var(--card); border: 1px solid var(--line); padding: 14px 16px 16px; box-shadow: var(--shadow-lg); }
-.stack .readme-card .fn { font-size: 11.5px; color: var(--faint); display: flex; align-items: center; gap: 6px; }
-.stack .readme-card .fn svg { width: 13px; height: 13px; }
-.stack .readme-card .h { font-weight: 650; font-size: 18px; margin: 8px 0 10px; letter-spacing: -.01em; }
-.stack .readme-card img { width: 100%; }
-.stack .tag { position: absolute; font-size: 12px; color: var(--soft); background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: 4px 10px; box-shadow: var(--shadow); white-space: nowrap; }
-.stack .tag.t2 { right: 3%; top: 63%; }
-.stack .tag.t3 { left: 3%; bottom: -4%; }
-.floaty { animation: floaty 7s ease-in-out infinite; }
-.floaty.d2 { animation-delay: -2.5s; }
-.floaty.d3 { animation-delay: -4.5s; }
-@keyframes floaty { 50% { transform: translateY(-8px); } }
+/* ───────── 风格：一张署名榜、一卷片尾字幕，换风格 ───────── */
+.stage { margin-top: 56px; display: grid; grid-template-columns: 1fr 1fr; gap: clamp(20px, 3vw, 40px); }
+.frame { aspect-ratio: 4 / 5; display: grid; place-items: center; }
+.frame img { max-height: 100%; width: auto; max-width: 100%; box-shadow: var(--shadow); border-radius: 4px; transition: opacity .35s; }
+.frame img.out { opacity: 0; }
+.picker { margin-top: 36px; display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.now { min-width: 0; flex: 1 1 260px; font-size: 15px; color: var(--soft); }
+.now b { color: var(--ink); font-weight: 600; margin-right: 10px; }
+.dots { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.dots button { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 99px; background: none; cursor: pointer; position: relative; transition: transform .15s; }
+.dots button:hover { transform: scale(1.18); }
+.dots button svg { width: 22px; height: 22px; display: block; }
+.dots button.on::after { content: ""; position: absolute; inset: -4px; border-radius: 99px; border: 1.5px solid var(--ink); }
+.dots i { width: 1px; height: 16px; background: var(--line); margin: 0 5px; }
 
-/* ───────── 三个重点 ───────── */
-.facts { margin-top: clamp(80px, 10vw, 120px); display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
-.facts > div { padding: 30px 32px 0 0; }
-.facts > div + div { padding-left: 32px; border-left: 1px solid var(--line); }
-.facts b { display: block; font-size: 24px; font-weight: 650; letter-spacing: -.02em; }
-:lang(zh) .facts b { font-weight: 600; letter-spacing: 0; }
-.facts p { margin: 10px 0 0; color: var(--soft); font-size: 15.5px; text-wrap: pretty; }
-
-/* ───────── 作品墙 ───────── */
-.formats { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 8px; }
-.formats span { border: 1px solid var(--line); border-radius: 99px; padding: 3px 11px; font-size: 13px; color: var(--soft); }
-.wall { margin-top: 48px; columns: 3 300px; column-gap: 22px; }
-.wall figure { margin: 0 0 22px; break-inside: avoid; position: relative; border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); transition: transform .3s cubic-bezier(.2,.7,.2,1), box-shadow .3s; }
-.wall figure:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
-.wall img { width: 100%; }
-.wall figcaption { position: absolute; left: 10px; bottom: 10px; font-size: 12.5px; padding: 5px 10px; border-radius: 99px; background: rgba(17,17,16,.74); color: #F4F2EE; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); opacity: 0; transform: translateY(4px); transition: opacity .2s, transform .2s; pointer-events: none; }
-.wall figure:hover figcaption { opacity: 1; transform: none; }
-
-/* ───────── 风格 ───────── */
-.styles-head { margin-top: clamp(72px, 9vw, 110px); }
-.styles-head h3 { font-size: clamp(26px, 3vw, 36px); }
-.styles-head p { margin: 10px 0 0; color: var(--soft); max-width: 42em; font-size: 16.5px; }
-.chips { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 7px; }
-.chips button { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px 0 7px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--soft); font: inherit; font-size: 13.5px; cursor: pointer; transition: background-color .15s, color .15s, border-color .15s; }
-.chips button svg { width: 20px; height: 20px; border-radius: 99px; flex: none; }
-.chips button:hover { color: var(--ink); background: var(--line2); }
-.chips button.on { color: var(--bg); background: var(--ink); border-color: var(--ink); }
-.chips .sep { width: 1px; height: 22px; background: var(--line); align-self: center; margin: 0 6px; flex: none; }
-.stage { margin-top: 24px; padding: clamp(18px, 3vw, 40px); border-radius: 16px; background: var(--bg2); display: grid; grid-template-columns: 1fr 1fr; gap: clamp(14px, 2.4vw, 32px); align-items: start; }
-.stage figure { margin: 0; }
-.stage .art { border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
-.stage figcaption { margin-top: 10px; font-size: 13px; color: var(--soft); }
-.stage-note { margin-top: 14px; font-size: 14.5px; color: var(--soft); display: flex; gap: 10px; }
-.stage-note b { color: var(--ink); font-weight: 600; }
-.fade-in { animation: fadein .45s cubic-bezier(.2,.7,.2,1); }
-@keyframes fadein { from { opacity: 0; transform: translateY(8px); } }
-
-/* ───────── 原理 ───────── */
-.lines { margin-top: 52px; display: grid; grid-template-columns: 340px 1fr; gap: 48px; align-items: start; }
-.sources { display: grid; gap: 4px; }
-.src { display: grid; grid-template-columns: 14px 1fr; gap: 12px; align-items: baseline; padding: 14px 12px; margin: 0 -12px; border-radius: 12px; cursor: default; transition: background-color .15s; }
-.src:hover, .src.on { background: var(--line2); }
-.src i { width: 12px; height: 12px; border-radius: 3px; transform: translateY(1px); }
-.src b { font-weight: 600; display: block; }
-.src span { color: var(--soft); font-size: 14.5px; }
+/* ───────── 一行一行 ───────── */
+.legend { margin-top: 44px; display: flex; gap: 8px; flex-wrap: wrap; }
+.legend span { display: inline-flex; align-items: center; gap: 9px; height: 34px; padding: 0 13px; border-radius: 99px; border: 1px solid var(--line); font-size: 14px; color: var(--soft); cursor: default; transition: background-color .15s, color .15s; }
+.legend span:hover, .legend span.on { background: var(--line2); color: var(--ink); }
+.legend i { width: 11px; height: 11px; border-radius: 3px; }
 .sw-verified { background: var(--c-verified); }
 .sw-declared { background: var(--c-declared); }
 .sw-inferred { background: repeating-linear-gradient(45deg, var(--c-inferred) 0 2px, transparent 2px 4px); outline: 1px solid var(--c-inferred); }
 .sw-unknown { outline: 1px dashed var(--faint); }
-.editor { border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--shadow); overflow: hidden; }
-.editor .tab { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line2); font-size: 13px; color: var(--soft); }
-.editor .tab i { width: 9px; height: 9px; border-radius: 99px; background: var(--line); }
-.code { padding: 10px 0 14px; font-size: 13.5px; line-height: 1.95; overflow-x: auto; }
-.ln { display: grid; grid-template-columns: 44px 4px 1fr auto; align-items: center; transition: background-color .15s, opacity .2s; padding-right: 14px; min-width: 660px; }
+.editor { margin-top: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); overflow: hidden; }
+.code { padding: 14px 0 16px; font-size: 13.5px; line-height: 1.95; overflow-x: auto; }
+.ln { display: grid; grid-template-columns: 46px 4px 1fr auto; align-items: center; transition: opacity .2s; padding-right: 16px; min-width: 680px; }
 .ln .no { text-align: right; padding-right: 14px; color: var(--faint); font-size: 12px; }
 .ln .mark { align-self: stretch; }
-.ln .tx { padding-left: 16px; white-space: pre; }
-.ln .who { font-size: 12px; color: var(--soft); font-family: Inter, sans-serif; opacity: 0; transition: opacity .15s; white-space: nowrap; }
-.ln:hover { background: var(--line2); }
+.ln .tx { padding-left: 18px; white-space: pre; }
+.ln .who { font: 12.5px Inter, sans-serif; color: var(--soft); opacity: 0; transition: opacity .15s; white-space: nowrap; }
 .ln:hover .who, .ln.lit .who { opacity: 1; }
-.code.focus .ln:not(.lit) { opacity: .28; }
+.code.focus .ln:not(.lit) { opacity: .25; }
 .m-verified { background: var(--c-verified); }
 .m-declared { background: var(--c-declared); }
 .m-inferred { background: repeating-linear-gradient(180deg, var(--c-inferred) 0 3px, transparent 3px 6px); }
 .m-unknown { background: repeating-linear-gradient(180deg, var(--faint) 0 2px, transparent 2px 6px); opacity: .7; }
 .tok-k { color: var(--soft); }
 .tok-c { color: var(--faint); font-style: italic; }
-.rules { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-.rules div { border-top: 1px solid var(--line); padding-top: 14px; font-size: 15px; color: var(--soft); }
-.rules b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 2px; }
-.more { display: inline-block; margin-top: 26px; font-weight: 500; text-underline-offset: 4px; }
 
 /* ───────── 开始用 ───────── */
-.use { margin-top: 52px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.use .card { border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 24px; display: flex; flex-direction: column; gap: 10px; }
-.use .card h3 { font-size: 19px; letter-spacing: -.01em; }
-.use .card p { margin: 0; color: var(--soft); font-size: 15px; text-wrap: pretty; }
-.use .vis { margin-top: auto; padding-top: 14px; }
-.term { border-radius: 10px; background: #111110; color: #E8E6E1; font-size: 12.5px; line-height: 1.85; padding: 14px 16px; overflow-x: auto; white-space: pre; }
-.term .p { color: #8F8B83; }
-.readme { border: 1px solid var(--line); border-radius: 10px; padding: 16px; background: var(--bg); }
-.readme .h { font-weight: 650; font-size: 17px; margin-bottom: 10px; }
-.readme img { height: 22px; width: auto; }
-.readme code { display: block; margin-top: 12px; font-size: 11.5px; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.shot { border-radius: 10px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); }
+.term { margin-top: 48px; border-radius: 12px; background: #0F0F0E; color: #E8E4DB; padding: 22px 26px; font-size: 14px; line-height: 2; overflow-x: auto; white-space: pre; }
+:root[data-theme="dark"] .term { border: 1px solid var(--line); }
+.term .c { color: #6F6B63; }
+.term .p { color: #8C877D; }
+.tools { margin-top: 44px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px 20px; color: var(--soft); }
+.tools .lbl { font-size: 14px; margin-right: 6px; }
+.tools svg { width: 22px; height: 22px; fill: currentColor; display: block; }
+.tools span { display: inline-flex; }
+.tools span:hover { color: var(--ink); }
+.more { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
+.more a { padding: 22px 24px 4px 0; text-decoration: none; display: block; }
+.more a + a { padding-left: 24px; border-left: 1px solid var(--line); }
+.more b { display: block; font-weight: 600; }
+.more span { color: var(--soft); font-size: 14.5px; }
+.more a:hover b { text-decoration: underline; text-underline-offset: 4px; }
+.more img { height: 20px; width: auto; margin-top: 10px; }
 
-/* ───────── creditia 自己 ───────── */
-.self { display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; align-items: center; border-radius: 20px; background: var(--bg2); padding: clamp(28px, 4vw, 56px); }
-.self h2 { font-size: clamp(28px, 3.2vw, 42px); }
-.self p { color: var(--soft); font-size: 17px; margin: 14px 0 0; }
-.self .badge-row { margin-top: 20px; }
-.self .badge-row img { height: 24px; width: auto; }
-.self .art { border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
-
-footer { margin-top: clamp(90px, 12vw, 140px); border-top: 1px solid var(--line); padding: 28px 0 calc(40px + env(safe-area-inset-bottom, 0px)); color: var(--soft); font-size: 14px; }
-footer .wrap { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+footer { margin-top: clamp(110px, 14vw, 170px); border-top: 1px solid var(--line); padding: 26px 0 calc(40px + env(safe-area-inset-bottom, 0px)); color: var(--soft); font-size: 14px; }
+footer .wrap { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 footer a { text-decoration: none; }
-footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
+footer a:hover { color: var(--ink); }
+footer .self { display: inline-flex; align-items: center; gap: 12px; }
+footer .self img { height: 20px; width: auto; }
+footer .self span { white-space: nowrap; }
 
-.rise { opacity: 0; transform: translateY(18px); transition: opacity .9s cubic-bezier(.2,.7,.2,1), transform .9s cubic-bezier(.2,.7,.2,1); }
+.rise { opacity: 0; transform: translateY(16px); transition: opacity .9s cubic-bezier(.2,.7,.2,1), transform .9s cubic-bezier(.2,.7,.2,1); }
 .rise.in { opacity: 1; transform: none; }
-@media (prefers-reduced-motion: reduce) {
-  .rise { opacity: 1; transform: none; transition: none; }
-  .floaty, .fade-in { animation: none; }
-}
+@media (prefers-reduced-motion: reduce) { .rise { opacity: 1; transform: none; transition: none; } .reel { animation: none !important; } }
 
-@media (max-width: 1000px) {
-  nav.links { display: none; }
-  .hero .grid { grid-template-columns: 1fr; gap: 48px; }
-  .stack { max-width: 560px; width: 100%; margin: 0 auto; }
-  .facts { grid-template-columns: 1fr; }
-  .facts > div, .facts > div + div { padding: 22px 0; border-left: 0; border-bottom: 1px solid var(--line); }
-  .lines { grid-template-columns: 1fr; gap: 28px; }
-  .rules { grid-template-columns: 1fr; gap: 0; }
-  .rules div { padding: 14px 0; }
-  .use { grid-template-columns: 1fr; }
-  .self { grid-template-columns: 1fr; }
-}
-@media (max-width: 640px) {
+@media (max-width: 900px) {
   .wrap { width: calc(100% - 40px); }
-  .hero p.sub { font-size: 17px; }
-  .cmd { font-size: 14px; flex: 1 1 100%; justify-content: space-between; }
-  .btn { flex: 1 1 100%; justify-content: center; }
-  .stack .tag { display: none; }
-  .wall { columns: 2 150px; column-gap: 12px; }
-  .wall figure { margin-bottom: 12px; border-radius: 8px; }
-  .wall figure:nth-child(n+9) { display: none; }
-  .chips { flex-wrap: nowrap; overflow-x: auto; margin: 24px -20px 0; padding: 2px 20px 8px; scrollbar-width: none; }
-  .chips::-webkit-scrollbar { display: none; }
-  .chips button { flex: none; white-space: nowrap; }
-  .stage { padding: 12px; gap: 10px; }
-  .lead { font-size: 16.5px; }
+  .reel-view { left: 10%; right: 10%; width: auto; bottom: 38%; opacity: .4; }
+  #screen::after { content: ""; position: absolute; inset: 20% 0 0; z-index: 1; pointer-events: none; background: linear-gradient(transparent, #070708 40%); }
+  .title { top: auto; bottom: 64px; transform: none; left: 20px; right: 20px; width: auto; }
+  .title p { font-size: 16px; }
+  .fine { display: none; }
+  header .wrap { width: calc(100% - 40px); }
+  .intro { grid-template-columns: 1fr; gap: 18px; }
+  .stage { gap: 12px; margin-top: 36px; }
+  .picker { gap: 16px; }
+  .dots { flex-wrap: nowrap; overflow-x: auto; margin: 0 -20px; padding: 6px 20px; scrollbar-width: none; }
+  .dots::-webkit-scrollbar { display: none; }
+  .dots button { flex: none; }
+  .more { grid-template-columns: 1fr; }
+  .more a, .more a + a { padding: 18px 0; border-left: 0; border-bottom: 1px solid var(--line); }
+  .term { font-size: 12.5px; padding: 18px; }
 }
 </style>
 </head>
 <body>
-<header id="hdr">
+<header>
   <div class="wrap">
-    <a class="brand" href="#top"><!--__LOGO__-->creditia</a>
-    <nav class="links">
-      <a href="#works" data-i="nav.works">作品</a>
-      <a href="#how" data-i="nav.how">原理</a>
-      <a href="#use" data-i="nav.use">开始用</a>
-    </nav>
+    <a class="brand" href="#screen"><!--__LOGO__-->creditia</a>
     <div class="grow"></div>
     <div class="ctl">
       <button id="lang" aria-label="language">EN</button>
@@ -289,123 +200,65 @@ footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
   </div>
 </header>
 
-<main id="top">
-  <!-- 首屏 -->
-  <div class="hero">
-    <div class="wrap grid">
-      <div>
-        <span class="pill"><i></i><span data-i="hero.pill">开源 · 本地运行 · MIT</span></span>
-        <h1 data-i="hero.title">你的代码，<br>是哪些 AI 写的</h1>
-        <p class="sub" data-i="hero.sub">creditia 读你电脑上 Claude Code、Codex、Cursor 等工具留下的日志，和 git 历史逐行对照，算出每个工具、每个模型各写了多少，再做成片尾字幕、署名榜和 README 徽章。</p>
-        <div class="cta">
-          <div class="cmd mono"><span><span class="p">$</span>npx creditia analyze</span><button id="copy" data-i="hero.copy">复制</button></div>
-          <a class="btn" href="https://github.com/WroughtMind/creditia"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>GitHub</a>
-        </div>
-        <div class="supports">
-          <div class="lbl" data-i="hero.supports">认得这些工具</div>
-          <div class="logos" id="logos"></div>
-        </div>
-      </div>
-      <div class="stack" aria-hidden="true">
-        <div class="card roll floaty d2"><img id="h-roll" alt=""></div>
-        <div class="card share floaty"><img id="h-share" alt=""></div>
-        <div class="card readme-card floaty d3"><div class="fn"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Z"/></svg>README.md</div><div class="h">your-project</div><img id="h-badge" alt=""></div>
-        <span class="tag t2" data-i="hero.t2">片尾字幕</span>
-        <span class="tag t3" data-i="hero.t3">分享图</span>
-      </div>
+<main>
+  <div id="screen">
+    <div class="reel-view"><div class="reel" id="reel"><img id="reelart" alt=""></div></div>
+    <div class="title">
+      <h1 class="serif" data-i="hero.t">你的代码，<br>是哪些 AI 写的</h1>
+      <p data-i="hero.p">creditia 把 Claude Code、Codex、Cursor 这些工具的日志和 git 历史逐行对上，算出每个工具、每个模型写了多少，再做成一卷片尾字幕。全在你的电脑上算。</p>
+      <div class="cmd mono"><span><span class="p">$</span>npx creditia analyze</span><button id="copy" aria-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button></div>
+      <div class="links"><a href="https://github.com/WroughtMind/creditia">GitHub ↗</a><a href="#start" data-i="hero.start">怎么用 ↓</a></div>
     </div>
-    <div class="wrap">
-      <div class="facts rise">
-        <div><b data-i="f1.t">逐行对照</b><p data-i="f1.p">每一行都要对上工具日志或提交记录。对不上的记为「未确认」，不硬算到谁头上。</p></div>
-        <div><b data-i="f2.t">只在本地</b><p data-i="f2.p">代码和 prompt 不离开你的电脑，也不调用任何模型。</p></div>
-        <div><b data-i="f3.t">11 个 agent，各家模型</b><p data-i="f3.p">经 Bedrock、OpenRouter 或中转站调用的模型也认得出，名字统一，渠道另记。</p></div>
-      </div>
-    </div>
+    <div class="fine" data-i="hero.fine">示例项目，数字是编的 · 鼠标放上去暂停</div>
   </div>
 
-  <!-- 作品 -->
-  <section id="works">
+  <section id="looks">
     <div class="wrap">
-      <div class="kicker rise" data-i="works.k">作品</div>
-      <h2 class="rise" data-i="works.t">一份数据，十几种出法</h2>
-      <p class="lead rise" data-i="works.l">片尾字幕、署名榜、小票、徽章、统计图。每一张都能导出，放进 README、发到社交媒体，或者打印出来。</p>
-      <div class="formats rise"><span>PNG</span><span>SVG</span><span>PDF</span><span>GIF</span><span data-i="works.html">可交互网页</span><span>CREDITS.md</span></div>
-      <div class="wall" id="wall"></div>
-
-      <div class="styles-head rise">
-        <h3 data-i="styles.t">26 种风格</h3>
-        <p data-i="styles.l">15 种原版主题，加上新做的 11 种：水墨、浮世绘、古籍、巴洛克、漫画、赛博……换风格时排版也跟着换，不只是换颜色。</p>
+      <div class="intro rise">
+        <h2 class="serif" data-i="looks.t">同一份署名，<br>二十六种样子</h2>
+        <p data-i="looks.p">十五种原版主题，加上水墨、浮世绘、古籍、漫画、赛博等十一种新风格。署名榜、片尾字幕、小票、徽章、统计图，都能导出成图片、PDF 或网页。</p>
       </div>
-      <div class="chips rise" id="chips"></div>
       <div class="stage rise" id="stage">
-        <figure><div class="art"><img id="s-tier" alt=""></div><figcaption data-i="styles.tier">署名榜</figcaption></figure>
-        <figure><div class="art"><img id="s-roll" alt=""></div><figcaption data-i="styles.roll">片尾字幕</figcaption></figure>
+        <div class="frame"><img id="s-tier" alt=""></div>
+        <div class="frame"><img id="s-roll" alt=""></div>
       </div>
-      <div class="stage-note" id="stagenote"></div>
-    </div>
-  </section>
-
-  <!-- 原理 -->
-  <section id="how">
-    <div class="wrap">
-      <div class="kicker rise" data-i="how.k">原理</div>
-      <h2 class="rise" data-i="how.t">每一行都有出处</h2>
-      <p class="lead rise" data-i="how.l">出处分四种。把鼠标放到左边任意一种上，右边会标出对应的行。</p>
-      <div class="lines">
-        <div class="sources rise" id="sources"></div>
-        <div class="editor rise">
-          <div class="tab"><i></i><i></i><i></i><span class="mono">src/analyze.ts</span></div>
-          <div class="code mono" id="code"></div>
-        </div>
-      </div>
-      <div class="rules rise">
-        <div><b data-i="r1.t">只算真写进去的</b><span data-i="r1.p">被拒绝、写失败的编辑不算。</span></div>
-        <div><b data-i="r2.t">推断可以关掉</b><span data-i="r2.p">严格、标准、宽松三档。严格档只认日志和提交里写明的。</span></div>
-        <div><b data-i="r3.t">只写 AI</b><span data-i="r3.p">署名里只有工具和模型，不写人名。</span></div>
-      </div>
-      <a class="more rise" href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md" data-i="how.more">完整的规则和已知的局限 →</a>
-    </div>
-  </section>
-
-  <!-- 开始用 -->
-  <section id="use">
-    <div class="wrap">
-      <div class="kicker rise" data-i="use.k">开始用</div>
-      <h2 class="rise" data-i="use.t">三种用法</h2>
-      <div class="use">
-        <div class="card rise">
-          <h3 data-i="u1.t">命令行，或者交给 agent</h3>
-          <p data-i="u1.p">在仓库里跑一条命令就行。仓库里带了 skill，Claude Code、Codex 这些 agent 也能替你跑，公开任何东西之前会先问你。</p>
-          <div class="vis"><div class="term mono"><span class="p">$</span> npx creditia analyze
-<span class="p">$</span> npx creditia export \
-    --piece roll --style cinema
-<span class="p">$</span> npx creditia publish</div></div>
-        </div>
-        <div class="card rise">
-          <h3 data-i="u2.t">放进 README</h3>
-          <p data-i="u2.p">把 credits.json 提交进仓库，GitHub Action 会在每次推送后更新徽章、CREDITS.md 和署名页。</p>
-          <div class="vis"><div class="readme"><div class="h">your-project</div><img id="u-badge" alt="credits badge"><code>uses: WroughtMind/creditia@main</code></div></div>
-        </div>
-        <div class="card rise">
-          <h3>App</h3>
-          <p data-i="u3.p">所有作品摆成一面墙：切项目、切风格、换版式，拖到角落就能导出。目前是未签名的 macOS 版。</p>
-          <div class="vis"><div class="shot"><img id="u-app" alt="creditia app" loading="lazy"></div></div>
-        </div>
+      <div class="picker rise">
+        <div class="now" id="now"></div>
+        <div class="dots" id="dots"></div>
       </div>
     </div>
   </section>
 
-  <!-- creditia 自己 -->
-  <section id="self">
+  <section id="lines">
     <div class="wrap">
-      <div class="self rise">
-        <div>
-          <h2 data-i="self.t">creditia 自己也是 AI 写的</h2>
-          <p id="selfp"></p>
-          <div class="badge-row"><img id="self-badge" alt="creditia credits badge"></div>
-          <a class="more" id="selflink" href="self/" data-i="self.more">看完整的署名页 →</a>
-        </div>
-        <div class="art"><img id="self-tier" alt="" loading="lazy"></div>
+      <div class="intro rise">
+        <h2 class="serif" data-i="lines.t">每一行，<br>都有出处</h2>
+        <p data-i="lines.p">对得上工具日志的算数，提交里写明了的算数，对不上的记为「未确认」，不算到谁头上。被拒绝、写失败的编辑不算。不上传代码，不调用模型。</p>
+      </div>
+      <div class="legend rise" id="legend"></div>
+      <div class="editor rise"><div class="code mono" id="code"></div></div>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <div class="intro rise">
+        <h2 class="serif" data-i="start.t">在仓库里<br>跑一下</h2>
+        <p data-i="start.p">第一次运行会下载对应平台的分析程序。也可以交给 agent：仓库里带了 skill，公开任何东西之前它会先问你。</p>
+      </div>
+<div class="term mono rise"><span class="c" data-i="start.c1"># 分析这个仓库</span>
+<span class="p">$</span> npx creditia analyze
+
+<span class="c" data-i="start.c2"># 出一张片尾字幕：作品、风格、版式、格式都能选</span>
+<span class="p">$</span> npx creditia export --piece roll --style cinema --variant slate --format png
+
+<span class="c" data-i="start.c3"># 把档案放进仓库，GitHub Action 会在每次推送后更新徽章和署名页</span>
+<span class="p">$</span> npx creditia publish</div>
+      <div class="tools rise" id="tools"><span class="lbl" data-i="start.tools">读得懂这些工具的日志</span></div>
+      <div class="more rise">
+        <a href="https://github.com/WroughtMind/creditia#放到-github-上"><b data-i="m1.t">放进 README →</b><span data-i="m1.p">徽章、CREDITS.md 和署名页，每次推送自动更新。</span><img id="badge" alt="credits badge"></a>
+        <a href="https://github.com/WroughtMind/creditia#app"><b data-i="m2.t">App →</b><span data-i="m2.p">所有作品摆成一面墙，切项目、切风格，拖到角落导出。目前是未签名的 macOS 版。</span></a>
+        <a href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md"><b data-i="m3.t">规则和局限 →</b><span data-i="m3.p">每种出处怎么认、严格和宽松的区别、目前还认不出的情况。</span></a>
       </div>
     </div>
   </section>
@@ -414,98 +267,96 @@ footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
 <footer>
   <div class="wrap">
     <span>creditia · MIT</span>
-    <a href="https://github.com/WroughtMind/creditia">GitHub</a>
-    <a href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md" data-i="foot.rules">归因规则</a>
-    <span class="grow"></span>
-    <span data-i="foot.made">这一页上的每一张图都是 creditia 画的</span>
+    <div class="grow"></div>
+    <a class="self" id="selflink" href="self/"><img id="selfbadge" alt=""><span data-i="foot.self">creditia 自己的署名 →</span></a>
   </div>
 </footer>
 
 <script>
 /*__DATA__*/
-// ───────── 文案 ─────────
 const EN = {
-  'nav.works': 'Pieces', 'nav.how': 'How it works', 'nav.use': 'Get started',
-  'hero.pill': 'Open source · Runs locally · MIT',
-  'hero.title': 'Which AI wrote your code?',
-  'hero.sub': 'creditia reads the logs that Claude Code, Codex, Cursor and other tools leave on your machine, matches them against git history line by line, and works out how much each tool and each model wrote. Then it turns that into end credits, a credits list and a README badge.',
-  'hero.copy': 'Copy', 'hero.copied': 'Copied', 'hero.supports': 'Reads logs from',
-  'hero.t2': 'End credits', 'hero.t3': 'Share card',
-  'f1.t': 'Line by line', 'f1.p': 'Every line has to match a tool log or a commit. Lines that don’t are marked unattributed, not guessed.',
-  'f2.t': 'Local only', 'f2.p': 'Your code and prompts never leave your machine, and no model is called.',
-  'f3.t': '11 agents, every model', 'f3.p': 'Models called through Bedrock, OpenRouter or a relay are recognised too: one name, with the route noted.',
-  'works.k': 'Pieces', 'works.t': 'One set of numbers, a dozen ways to show it',
-  'works.l': 'End credits, credits lists, receipts, badges, charts. Every piece exports: put it in a README, post it, or print it.',
-  'works.html': 'Interactive page',
-  'styles.t': '26 styles', 'styles.l': 'The 15 original themes, plus 11 new ones: ink wash, ukiyo-e, woodblock, baroque, manga, cyber… A style changes the layout, not just the colours.',
-  'styles.tier': 'Credits list', 'styles.roll': 'End credits',
-  'how.k': 'How it works', 'how.t': 'Every line has a source', 'how.l': 'There are four kinds of source. Hover one on the left to see its lines on the right.',
-  'r1.t': 'Only what landed', 'r1.p': 'Rejected or failed edits don’t count.',
-  'r2.t': 'Inference is optional', 'r2.p': 'Strict, standard or loose. Strict only trusts logs and what the commit states.',
-  'r3.t': 'AI only', 'r3.p': 'Credits list tools and models, never people’s names.',
-  'how.more': 'Full rules and known limits →',
-  'use.k': 'Get started', 'use.t': 'Three ways to use it',
-  'u1.t': 'Command line, or your agent', 'u1.p': 'One command in your repo. The repo ships a skill, so agents like Claude Code and Codex can run it for you, and they ask before publishing anything.',
-  'u2.t': 'In your README', 'u2.p': 'Commit credits.json and the GitHub Action refreshes the badge, CREDITS.md and a credits page on every push.',
-  'u3.p': 'Every piece on one wall: switch projects, styles and layouts, drag to a corner to export. Currently an unsigned macOS build.',
-  'self.t': 'creditia was written by AI too', 'self.more': 'See the full credits page →',
-  'foot.rules': 'Attribution rules', 'foot.made': 'Every image on this page was drawn by creditia',
+  'hero.t': 'Which AI<br>wrote your code',
+  'hero.p': 'creditia matches the logs of Claude Code, Codex, Cursor and others against your git history, line by line, works out what each tool and each model wrote, and rolls it as end credits. Everything runs on your machine.',
+  'hero.start': 'How to use ↓', 'hero.fine': 'Sample project, made-up numbers · hover to pause',
+  'looks.t': 'Same credits,<br>twenty-six looks',
+  'looks.p': 'Fifteen original themes, plus eleven new ones: ink wash, ukiyo-e, woodblock, manga, cyber and more. Credits lists, end credits, receipts, badges and charts all export to images, PDF or a web page.',
+  'lines.t': 'Every line<br>has a source',
+  'lines.p': 'A line counts when it matches a tool log or the commit says who wrote it. Otherwise it is marked unattributed and credited to no one. Rejected or failed edits don’t count. No code is uploaded and no model is called.',
+  'start.t': 'Run it<br>in your repo',
+  'start.p': 'The first run downloads the analyzer for your platform. Or hand it to your agent: the repo ships a skill, and it asks before publishing anything.',
+  'start.c1': '# analyze this repository', 'start.c2': '# render end credits: pick the piece, style, layout and format', 'start.c3': '# commit the credits file; the GitHub Action refreshes the badge and credits page on every push',
+  'start.tools': 'Reads logs from',
+  'm1.t': 'In your README →', 'm1.p': 'A badge, CREDITS.md and a credits page, refreshed on every push.',
+  'm2.t': 'App →', 'm2.p': 'Every piece on one wall: switch projects and styles, drag to a corner to export. Unsigned macOS build for now.',
+  'm3.t': 'Rules and limits →', 'm3.p': 'How each source is recognised, strict versus loose, and what it can’t tell yet.',
+  'foot.self': 'creditia’s own credits →',
 };
 const ZH = {};
 document.querySelectorAll('[data-i]').forEach((el) => (ZH[el.dataset.i] = el.innerHTML));
-ZH['hero.copied'] = '已复制';
 const lang = () => (document.documentElement.lang === 'en' ? 'en' : 'zh');
 const t = (k) => (lang() === 'en' ? EN[k] : ZH[k]) ?? k;
-const fmt = (n) => Number(n).toLocaleString('en-US');
-
-const PIECE = { tier: ['署名榜', 'Credits list'], roll: ['片尾字幕', 'End credits'], receipt: ['小票', 'Receipt'], share: ['分享图', 'Share card'], donut: ['环形图', 'Donut'], versions: ['版本柱状图', 'Versions'], fetch: ['终端名片', 'Terminal card'], badge: ['徽章', 'Badge'] };
-const VAR = { cast: ['演员表', 'cast'], stub: ['票根', 'stub'], hud: ['面板', 'HUD'], vertical: ['竖排', 'vertical'], stats: ['能力图', 'stats'], program: ['节目单', 'programme'], ed: ['动画片尾', 'anime ED'], slate: ['场记板', 'clapperboard'], crew: ['部门', 'departments'] };
 const S = (id) => DATA.styles.find((s) => s.id === id);
-const sname = (id) => (lang() === 'en' ? S(id).en : S(id).name);
-const pick = (pair) => pair[lang() === 'en' ? 1 : 0];
-const size = (img, d) => { img.width = d.w; img.height = d.h; };
 
-// ───────── 首屏 ─────────
-document.getElementById('logos').innerHTML = DATA.tools.map((x) => `<span title="${x.name}">${x.svg}</span>`).join('');
-function hero() {
-  for (const k of ['roll', 'share', 'badge']) {
-    const img = document.getElementById('h-' + k);
-    img.src = `assets/hero/${lang()}/${k}.svg`; size(img, DATA.hero[k]);
-  }
+// ───────── 首屏：片尾字幕在银幕里滚 ─────────
+function reel() {
+  const img = document.getElementById('reelart');
+  img.width = DATA.reel.w; img.height = DATA.reel.h;
+  img.src = `assets/reel/${lang()}.svg`;
+  const start = () => {
+    const r = document.getElementById('reel');
+    const view = r.parentElement.getBoundingClientRect();
+    const h = (view.width * DATA.reel.h) / DATA.reel.w;
+    r.style.setProperty('--from', `${view.height * 0.18}px`);
+    r.style.setProperty('--to', `${-h + view.height * 0.3}px`);
+    r.style.animation = 'none'; void r.offsetWidth;
+    r.style.animation = `roll ${Math.round((h - view.height * 0.12) / 28)}s linear infinite`;
+  };
+  if (img.complete) start(); else img.onload = start;
 }
 
-// ───────── 作品墙 ─────────
-function wall() {
+// ───────── 风格：一张署名榜、一卷片尾字幕；没人点的时候自己慢慢换 ─────────
+const ORDER = DATA.styles.map((s) => s.id);
+let style = 'cinema', auto = true, timer = null;
+function dots() {
+  const btn = (s) => `<button data-s="${s.id}" class="${s.id === style ? 'on' : ''}" title="${lang() === 'en' ? s.en : s.name}" aria-label="${lang() === 'en' ? s.en : s.name}"><svg viewBox="0 0 24 24">${s.dot}</svg></button>`;
+  document.getElementById('dots').innerHTML = DATA.styles.slice(0, 15).map(btn).join('') + '<i></i>' + DATA.styles.slice(15).map(btn).join('');
+}
+function show(id) {
+  style = id;
   const L = lang();
-  document.getElementById('wall').innerHTML = DATA.wall.map((a) => `<figure class="rise in" style="background:${a.bg}"><img src="assets/wall/${L}/${a.name}.svg" width="${a.w}" height="${a.h}" loading="lazy" alt=""><figcaption>${pick(PIECE[a.piece] ?? [a.piece, a.piece])}${a.variant && VAR[a.variant] ? ' · ' + pick(VAR[a.variant]) : ''} · ${sname(a.style)}</figcaption></figure>`).join('');
-}
-
-// ───────── 风格 ─────────
-let style = 'cinema';
-function chips() {
-  const btn = (s) => `<button data-s="${s.id}" class="${s.id === style ? 'on' : ''}"><svg viewBox="0 0 24 24">${s.dot}</svg>${lang() === 'en' ? s.en : s.name}</button>`;
-  document.getElementById('chips').innerHTML = DATA.styles.slice(0, 15).map(btn).join('') + '<span class="sep"></span>' + DATA.styles.slice(15).map(btn).join('');
-}
-document.getElementById('chips').onclick = (e) => { const b = e.target.closest('button'); if (b) { style = b.dataset.s; chips(); stage(); } };
-function stage() {
-  const a = DATA.styleArt[style];
   for (const k of ['tier', 'roll']) {
     const img = document.getElementById('s-' + k);
-    img.src = `assets/styles/${lang()}/${style}-${k}.svg`; size(img, a[k]);
-    img.parentElement.style.background = a[k].bg;
+    const a = DATA.styleArt[id][k];
+    const next = new Image();
+    next.src = `assets/styles/${L}/${id}-${k}.svg`;
+    img.classList.add('out');
+    const swap = () => { img.width = a.w; img.height = a.h; img.src = next.src; requestAnimationFrame(() => img.classList.remove('out')); };
+    next.decode ? next.decode().then(swap, swap) : (next.onload = swap);
   }
-  const st = document.getElementById('stage');
-  st.classList.remove('fade-in'); void st.offsetWidth; st.classList.add('fade-in');
-  const s = S(style);
-  document.getElementById('stagenote').innerHTML = `<b>${sname(style)}</b><span>${lang() === 'en' ? s.noteEn || '' : s.note}</span>`;
+  const s = S(id);
+  document.getElementById('now').innerHTML = `<b>${L === 'en' ? s.en : s.name}</b>${L === 'en' ? s.noteEn || '' : s.note}`;
+  document.querySelectorAll('#dots button').forEach((b) => b.classList.toggle('on', b.dataset.s === id));
+}
+document.getElementById('dots').onclick = (e) => { const b = e.target.closest('button'); if (b) { auto = false; show(b.dataset.s); } };
+document.getElementById('stage').onmouseenter = () => (auto = false);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function cycle() {
+  clearInterval(timer);
+  if (reduced) return;
+  timer = setInterval(() => {
+    if (!auto || document.hidden) return;
+    const r = document.getElementById('stage').getBoundingClientRect();
+    if (r.bottom < 0 || r.top > innerHeight) return;
+    show(ORDER[(ORDER.indexOf(style) + 1) % ORDER.length]);
+  }, 4200);
 }
 
-// ───────── 原理：一行一行 ─────────
+// ───────── 一行一行 ─────────
 const SRC = {
-  verified: ['日志里对得上', 'Matched in a log', '工具把这一行写进文件时留下了记录。最可靠。', 'The tool left a record when it wrote this line. The most reliable.'],
-  declared: ['提交里写明了', 'Stated in the commit', '提交邮箱、Co-authored-by，或者 creditia 给提交盖的章。', 'Commit email, Co-authored-by, or a creditia stamp.'],
-  inferred: ['推断', 'Inferred', '同一个提交里其余的行，跟着有证据的工具走。单独标出来，可以关掉。', 'Other lines in the same commit follow the tool with evidence. Marked separately, and can be turned off.'],
-  unknown: ['确定不了', 'Unknown', '记为「未确认」，不算到任何工具头上。', 'Marked unattributed and credited to no tool.'],
+  verified: ['日志里对得上', 'Matched in a log'],
+  declared: ['提交里写明了', 'Stated in the commit'],
+  inferred: ['推断（可以关掉）', 'Inferred (optional)'],
+  unknown: ['未确认', 'Unattributed'],
 };
 const CODE = [
   ['export async function analyze(repo: Repo, opts: Options) {', 'verified', 'Claude Code · Claude Opus 5.5'],
@@ -515,52 +366,44 @@ const CODE = [
   ['    for (const line of c.addedLines) {', 'verified', 'Claude Code · Claude Opus 5.5'],
   ['      const hit = index.match(line.file, line.hash, c.time)', 'verified', 'Codex · GPT-5.6 Sol'],
   ['      line.author = hit ?? fallback(c)', 'declared', 'GitHub Copilot · Co-authored-by'],
-  ['    }', 'inferred', ['Claude Code（跟着同一个提交）', 'Claude Code (same commit)']],
-  ['  }', 'inferred', ['Claude Code（跟着同一个提交）', 'Claude Code (same commit)']],
+  ['    }', 'inferred', ['Claude Code，跟着同一个提交', 'Claude Code, same commit']],
+  ['  }', 'inferred', ['Claude Code，跟着同一个提交', 'Claude Code, same commit']],
   ['  // 没有日志的行，按提交信息补', 'declared', 'Cursor · Co-authored-by'],
   ['  return summarize(commits, { level: opts.level })', 'declared', 'Cursor · Co-authored-by'],
-  ['}', 'inferred', ['Claude Code（跟着同一个提交）', 'Claude Code (same commit)']],
+  ['}', 'inferred', ['Claude Code，跟着同一个提交', 'Claude Code, same commit']],
   ['', 'unknown', ''],
   ['function fallback(c: Commit) {', 'verified', 'Codex · GPT-5.6 Sol'],
-  ['  return c.stamp ?? c.coauthor ?? UNATTRIBUTED', 'unknown', ['未确认：没有日志，提交里也没写', 'Unattributed: no log, nothing in the commit']],
-  ['}', 'unknown', ['未确认', 'Unattributed']],
+  ['  return c.stamp ?? c.coauthor ?? UNATTRIBUTED', 'unknown', ['没有日志，提交里也没写', 'No log, nothing in the commit']],
+  ['}', 'unknown', ''],
 ];
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const hl = (s) => esc(s).replace(/^(\s*)(\/\/.*)$/, '$1<span class="tok-c">$2</span>').replace(/\b(export|async|function|const|await|for|of|return)\b/g, '<span class="tok-k">$1</span>');
 function lines() {
-  const L = lang();
-  document.getElementById('sources').innerHTML = Object.entries(SRC).map(([k, v]) => `<div class="src" data-k="${k}"><i class="sw-${k}"></i><div><b>${L === 'en' ? v[1] : v[0]}</b><span>${L === 'en' ? v[3] : v[2]}</span></div></div>`).join('');
-  document.getElementById('code').innerHTML = CODE.map(([tx, k, who], i) => `<div class="ln" data-k="${k}"><span class="no">${i + 1}</span><span class="mark m-${k}"></span><span class="tx">${hl(tx) || ' '}</span><span class="who">${Array.isArray(who) ? who[L === 'en' ? 1 : 0] : who}${who ? ' · ' : ''}${L === 'en' ? SRC[k][1] : SRC[k][0]}</span></div>`).join('');
+  const L = lang(), i = L === 'en' ? 1 : 0;
+  document.getElementById('legend').innerHTML = Object.entries(SRC).map(([k, v]) => `<span data-k="${k}"><i class="sw-${k}"></i>${v[i]}</span>`).join('');
+  document.getElementById('code').innerHTML = CODE.map(([tx, k, who], n) => `<div class="ln" data-k="${k}"><span class="no">${n + 1}</span><span class="mark m-${k}"></span><span class="tx">${hl(tx) || ' '}</span><span class="who">${Array.isArray(who) ? who[i] : who}${who ? ' · ' : ''}${SRC[k][i]}</span></div>`).join('');
   const code = document.getElementById('code');
-  document.querySelectorAll('.src').forEach((s) => {
+  document.querySelectorAll('#legend span').forEach((s) => {
     s.onmouseenter = () => { code.classList.add('focus'); code.querySelectorAll('.ln').forEach((l) => l.classList.toggle('lit', l.dataset.k === s.dataset.k)); s.classList.add('on'); };
     s.onmouseleave = () => { code.classList.remove('focus'); code.querySelectorAll('.ln').forEach((l) => l.classList.remove('lit')); s.classList.remove('on'); };
   });
 }
 
-// ───────── 开始用、creditia 自己 ─────────
-function extras() {
+// ───────── 开始用、页脚 ─────────
+document.getElementById('tools').insertAdjacentHTML('beforeend', DATA.tools.map((x) => `<span title="${x.name}">${x.svg}</span>`).join(''));
+function badges() {
   const L = lang();
-  document.getElementById('u-badge').src = `assets/hero/${L}/badge.svg`;
-  if (!DATA.hasSelf) { document.getElementById('self').hidden = true; return; }
-  document.getElementById('self-badge').src = `assets/self/${L}/badge.svg`;
-  const tier = document.getElementById('self-tier');
-  tier.src = `assets/self/${L}/tier.svg`; size(tier, DATA.self.tier);
-  document.getElementById('selflink').href = L === 'en' ? 'self/en/' : 'self/';
-  const st = DATA.selfStats;
-  document.getElementById('selfp').textContent = L === 'en'
-    ? `These are this repository’s real credits: ${fmt(st.commits)} commits, ${fmt(st.lines)} lines. Whatever couldn’t be matched is marked unattributed.`
-    : `这是这个仓库真实的署名：${fmt(st.commits)} 次提交，${fmt(st.lines)} 行。对不上的记为「未确认」。`;
+  document.getElementById('badge').src = `assets/badge/${L}.svg`;
+  if (DATA.hasSelf) { document.getElementById('selfbadge').src = `assets/badge/self-${L}.svg`; document.getElementById('selflink').href = L === 'en' ? 'self/en/' : 'self/'; }
+  else document.getElementById('selflink').hidden = true;
 }
-const isDark = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
-const appShot = () => (document.getElementById('u-app').src = `assets/app-${isDark() ? "dark" : "light"}.webp`);
 
 // ───────── 语言、主题、复制、出场 ─────────
 function applyLang() {
   document.querySelectorAll('[data-i]').forEach((el) => (el.innerHTML = t(el.dataset.i)));
   document.getElementById('lang').textContent = lang() === 'en' ? '中' : 'EN';
   document.title = lang() === 'en' ? 'creditia — which AI wrote your code' : 'creditia — 你的代码，是哪些 AI 写的';
-  hero(); wall(); chips(); stage(); lines(); extras();
+  reel(); dots(); show(style); lines(); badges();
 }
 document.getElementById('lang').onclick = () => {
   document.documentElement.lang = lang() === 'en' ? 'zh' : 'en';
@@ -568,20 +411,18 @@ document.getElementById('lang').onclick = () => {
   applyLang();
 };
 document.getElementById('theme').onclick = () => {
-  const next = isDark() ? 'light' : 'dark';
-  document.documentElement.dataset.theme = next;
-  try { localStorage.setItem('ct-theme', next); } catch (e) {}
-  appShot();
+  const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+  try { localStorage.setItem('ct-theme', document.documentElement.dataset.theme); } catch (e) {}
 };
-matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', appShot);
 document.getElementById('copy').onclick = async (e) => {
-  try { await navigator.clipboard.writeText('npx creditia analyze'); e.target.textContent = t('hero.copied'); setTimeout(() => (e.target.textContent = t('hero.copy')), 1600); } catch (err) {}
+  const b = e.currentTarget;
+  try { await navigator.clipboard.writeText('npx creditia analyze'); b.style.color = '#C9A55C'; setTimeout(() => (b.style.color = ''), 1200); } catch (err) {}
 };
-const hdr = document.getElementById('hdr');
-addEventListener('scroll', () => hdr.classList.toggle('scrolled', scrollY > 8), { passive: true });
 const io = new IntersectionObserver((es) => es.forEach((x) => { if (x.isIntersecting) { x.target.classList.add('in'); io.unobserve(x.target); } }), { rootMargin: '0px 0px -8% 0px' });
 document.querySelectorAll('.rise').forEach((el) => io.observe(el));
-applyLang(); appShot();
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(reel, 200); });
+applyLang(); cycle();
 </script>
 </body>
 </html>

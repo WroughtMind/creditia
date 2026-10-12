@@ -52,9 +52,9 @@ export interface Style {
 
 /** 工具 → logo 名 */
 export const LOGO_OF: Record<string, string> = {
-  'claude-code': 'claude', codex: 'openai', cursor: 'cursor', grok: 'x', kimi: 'kimi', gemini: 'googlegemini', qwen: 'qwen', cline: 'cline',
+  'claude-code': 'claude', codex: 'openai', cursor: 'cursor', grok: 'grok', kimi: 'kimi', gemini: 'geminicli', qwen: 'qwen', cline: 'cline',
   copilot: 'githubcopilot', amp: 'amp', windsurf: 'windsurf', trae: 'trae', deepseek: 'deepseek', 'github-actions': 'github-actions',
-  dependabot: 'dependabot', renovate: 'renovate',
+  dependabot: 'dependabot', renovate: 'renovate', opencode: 'opencode', roo: 'roocode', kilo: 'kilocode', devin: 'devin', jules: 'googlejules', aider: 'aider',
 };
 /** 各家熟悉的品牌色（只在愿意用品牌色的风格里用） */
 export const BRAND: Record<string, string> = {
@@ -69,7 +69,7 @@ export function logo(key: string, cx: number, cy: number, size: number, fill: st
   if (lg) {
     const [, , vw, vh] = lg.vb.split(/\s+/).map(Number);
     const k = size / Math.max(vw, vh);
-    return el('path', { d: lg.d, fill, transform: `translate(${r(cx - (vw * k) / 2)} ${r(cy - (vh * k) / 2)}) scale(${r(k * 1000) / 1000})` });
+    return el('path', { d: lg.d, fill, fillRule: lg.rule, transform: `translate(${r(cx - (vw * k) / 2)} ${r(cy - (vh * k) / 2)}) scale(${r(k * 1000) / 1000})` });
   }
   if (key === 'unattributed' || key === 'other') return '';
   const initials = key.replace(/[^a-z0-9]/gi, ' ').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
