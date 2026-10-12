@@ -7,7 +7,7 @@ import type { Theme } from './themes.ts';
 import type { Model, Contributor } from './data.ts';
 import { fmt, pct, compact, nameOf } from './data.ts';
 import { BRANDS, BOTS, colorOf, famColor, logoSvg } from './brand.ts';
-import { h, box, col, txt, label, mark, bar, fill, backdrop, surface, svgImage, stripes, blocks, plate, plateMetrics, ornament, MONO_FONT, type Node, type Out } from './ui.ts';
+import { h, box, col, txt, label, mark, bar, fill, backdrop, surface, svgImage, stripes, blocks, plate, plateMetrics, ornament, fit, spread, eq, MONO_FONT, type Node, type Out } from './ui.ts';
 
 const keysOf = (m: Model) => m.rows.map((r) => r.key);
 /** 主演名单：有 logo 的 AI 工具按名次排 */
@@ -714,24 +714,25 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
       label(t, b.role, 14, { color: t.soft, letterSpacing: 2.5 }),
       txt({ fontFamily: t.display, fontSize: serif ? 36 : 30, fontWeight: t.displayWeight, color: t.ink }, p.name));
     const items = blocks.flatMap((b) => b.people.map((p) => item(b, p)));
-    return { w: W, h: H, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', padding: '0 100px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
-      txt({ fontFamily: t.display, fontSize: serif ? 110 : 84, fontWeight: t.displayWeight, letterSpacing: serif ? 2 : -2, lineHeight: 1, textAlign: 'center' }, m.project),
-      box({ width: 80, height: 2, backgroundColor: t.accent, margin: '40px 0 46px' }),
-      box({ flexWrap: 'wrap', justifyContent: 'center', alignItems: 'baseline', maxWidth: 680 }, ...items),
-      txt({ marginTop: 40, fontSize: 11, color: t.faint, letterSpacing: 2.6, textTransform: 'uppercase' }, totals)) };
+    return { w: W, h: H, fit: { padX: 90, padY: 150 }, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', padding: '0 100px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
+      fit(1.5, { alignItems: 'center' },
+        txt({ fontFamily: t.display, fontSize: serif ? 110 : 84, fontWeight: t.displayWeight, letterSpacing: serif ? 2 : -2, lineHeight: 1, textAlign: 'center' }, m.project),
+        box({ width: 80, height: 2, backgroundColor: t.accent, margin: '40px 0 46px' }),
+        box({ flexWrap: 'wrap', justifyContent: 'center', alignItems: 'baseline', maxWidth: 680 }, ...items),
+        txt({ marginTop: 40, fontSize: 11, color: t.faint, letterSpacing: 2.6, textTransform: 'uppercase' }, totals))) };
   }
 
   if (v === 'title') {
     const stars = m.rows.filter((r) => r.kind === 'agent' && isAi(r.key)).slice(0, 4).map((r) => r.name);
     const namesRow = box({ alignItems: 'center', gap: 22 },
       ...stars.flatMap((name, i) => (i ? [txt({ color: t.accent, fontSize: 22 }, '·')] : []).concat(txt({ fontFamily: t.display, fontSize: serif ? 30 : 26, color: t.ink }, name))));
-    return { w: W, h: H, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', gap: 30, ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
+    return { w: W, h: H, fit: { padX: 80, padY: 200 }, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans }, fit(1.25, { alignItems: 'center', gap: 30 },
       label(t, 'creditia presents', 11, { color: t.soft, letterSpacing: 5 }),
       m.director ? label(t, `a project by ${m.director}`, 11, { color: t.soft, letterSpacing: 3 }) : null,
       txt({ fontFamily: t.display, fontSize: serif ? 128 : 96, fontWeight: t.displayWeight, letterSpacing: serif ? 2 : -2, lineHeight: 1.05, textAlign: 'center' }, m.project),
       box({ width: 90, height: 2, backgroundColor: t.accent }),
       namesRow,
-      box({ marginTop: 60 }, txt({ fontSize: 11, color: t.faint, letterSpacing: 2.4, textTransform: 'uppercase' }, totals))) };
+      box({ marginTop: 60 }, txt({ fontSize: 11, color: t.faint, letterSpacing: 2.4, textTransform: 'uppercase' }, totals)))) };
   }
 
   if (v === 'crawl') {
@@ -756,19 +757,21 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
   if (v === 'cast') {
     // 卡司表：左列角色靠中缝右对齐，右列名字靠中缝左对齐，像 "in order of appearance"
     const rows = blocks.flatMap((b) => b.people.map((p) => ({ role: b.role, p })));
+    // 两栏等宽（出图时量出最宽的一项再统一）：中缝在正中，内容少时整块还能放大
     const row = (x: { role: string; p: RollPerson }) => box({ alignItems: 'baseline', height: 60 },
-      box({ width: 430, justifyContent: 'flex-end' }, txt({ fontFamily: t.labelFont, fontSize: 18, color: t.soft, letterSpacing: 3, textTransform: 'uppercase' }, x.role)),
-      box({ width: 100, justifyContent: 'center' }, txt({ fontFamily: t.deco ?? t.display, fontSize: 14, color: t.accent }, t.family === 'cinema' || t.family === 'gala' ? '◆' : '·')),
-      box({ width: 430, alignItems: 'baseline', gap: 12 },
+      eq('cast', box({ justifyContent: 'flex-end', flexShrink: 0 }, txt({ fontFamily: t.labelFont, fontSize: 18, color: t.soft, letterSpacing: 3, textTransform: 'uppercase' }, x.role))),
+      box({ width: 72, justifyContent: 'center' }, txt({ fontFamily: t.deco ?? t.display, fontSize: 14, color: t.accent }, t.family === 'cinema' || t.family === 'gala' ? '◆' : '·')),
+      eq('cast', box({ alignItems: 'baseline', gap: 12, flexShrink: 0 },
         x.p.key ? mark(x.p.key, t, 22) : null,
-        txt({ fontFamily: t.display, fontSize: 30 * fs, fontWeight: t.displayWeight, color: t.ink }, x.p.name),
-        x.p.model ? txt({ fontFamily: MONO_FONT, fontSize: 13, color: t.faint }, x.p.model) : null));
-    return { w: W, h: H, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', padding: '0 60px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
-      label(t, 'cast', 13, { letterSpacing: 8 }),
-      txt({ fontFamily: t.display, fontSize: 60 * fs, fontWeight: t.displayWeight, margin: '14px 0 10px', textAlign: 'center' }, m.project),
-      ornament(t, 12),
-      col({ marginTop: 40 }, ...rows.map(row)),
-      label(t, 'in order of appearance', 12, { marginTop: 46 })) };
+        txt({ fontFamily: t.display, fontSize: 30 * fs, fontWeight: t.displayWeight, color: t.ink, whiteSpace: 'nowrap' }, x.p.name),
+        x.p.model ? txt({ fontFamily: MONO_FONT, fontSize: 13, color: t.faint, whiteSpace: 'nowrap' }, x.p.model) : null)));
+    return { w: W, h: H, fit: { padX: 60, padY: 150 }, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', padding: '0 60px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
+      fit(1.6, { alignItems: 'center' },
+        label(t, 'cast', 13, { letterSpacing: 8 }),
+        txt({ fontFamily: t.display, fontSize: 60 * fs, fontWeight: t.displayWeight, margin: '14px 0 10px', textAlign: 'center' }, m.project),
+        ornament(t, 12),
+        spread(2.2, col({ marginTop: 40, gap: 0 }, ...rows.map(row))),
+        label(t, 'in order of appearance', 12, { marginTop: 46 }))) };
   }
 
   if (v === 'scroll') {
@@ -864,10 +867,11 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
   // classic：居中堆叠
   const role = (name: string, ...people: Node[]) => col({ alignItems: 'center', gap: 18 }, label(t, name, 15, { letterSpacing: 6 }), ...people);
   const body = blocks.map((b) => role(b.role, box({ gap: 44, flexWrap: 'wrap', justifyContent: 'center' }, ...b.people.map(person))));
-  return { w: W, h: H, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', gap: 58, ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
-    txt({ fontFamily: t.display, fontSize: projSize, fontWeight: t.displayWeight, letterSpacing: serif ? -1 : -2, marginBottom: 6 }, m.project),
-    txt({ fontSize: 12, color: t.accent, letterSpacing: 6 }, '· · · · ·'),
-    ...body) };
+  return { w: W, h: H, fit: { padX: 70, padY: 140 }, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', padding: '0 60px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
+    fit(1.5, { alignItems: 'center', gap: 40 },
+      txt({ fontFamily: t.display, fontSize: projSize, fontWeight: t.displayWeight, letterSpacing: serif ? -1 : -2, marginBottom: 6 }, m.project),
+      txt({ fontSize: 12, color: t.accent, letterSpacing: 6 }, '· · · · ·'),
+      spread(3, col({ alignItems: 'center', gap: 58, marginTop: 18 }, ...body)))) };
 }
 
 // ═════════════════════════ 精力小票 ═════════════════════════

@@ -42,3 +42,29 @@ test('片尾字幕：十一种版式都能出图；没有标志的工具也进�
   assert.ok(m2.rows.some((r) => r.key === 'opencode'));
   for (const v of FORMS.roll.variants!) assert.ok(await art('roll', m2, themeById('film')!, { lang: 'zh', variant: v }), v);
 });
+
+test('英文：全部作品、主题、版式里没有残留的中文', async () => {
+  const { enTree, leftoverCjk } = await import('../src/classic/i18n.ts');
+  const en = buildModel(raw, { director: false, lang: 'en' });
+  const left: string[] = [];
+  for (const [id, f] of Object.entries(FORMS)) {
+    if (id === 'blame' || id === 'profile') continue;
+    for (const t of THEMES) for (const v of f.variants ?? [undefined]) {
+      const out = f.render(en, t, { lang: 'en', variant: v });
+      if (out) left.push(...leftoverCjk(enTree(out.tree)).map((s) => `${id}/${t.id}/${v ?? ''}: ${s}`));
+    }
+  }
+  assert.deepEqual(left, []);
+});
+
+test('片尾字幕：内容少时整体放大、名单铺开，不缩在画面中间', async () => {
+  const one = structuredClone(raw);
+  const keep = new Set(one.contributors.filter((c: any) => c.harness === 'claude-code' || c.kind !== 'agent').map((c: any) => c.id));
+  one.contributors = one.contributors.filter((c: any) => keep.has(c.id));
+  one.breakdown = one.breakdown.filter((b: any) => keep.has(b.contributor));
+  const m1 = buildModel(one, { director: false, lang: 'zh' });
+  for (const v of ['classic', 'billing', 'title', 'cast']) {
+    const a = await art('roll', m1, themeById('film')!, { lang: 'zh', variant: v });
+    assert.match(a!.svg, /matrix\(1\.[0-9]+,0,0,1\.[0-9]+/, `${v} 没有放大`);
+  }
+});
