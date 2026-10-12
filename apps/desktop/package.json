@@ -8,7 +8,8 @@
     "build": "vite build",
     "tauri": "tauri",
     "fonts": "node tools/fonts.mjs",
-    "icon": "node tools/icon.mjs && tauri icon tools/icon.png && rm -rf src-tauri/icons/android src-tauri/icons/ios"
+    "icon": "node tools/icon.mjs && tauri icon tools/icon.png && rm -rf src-tauri/icons/android src-tauri/icons/ios",
+    "core": "node tools/core.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.1",
@@ -16,7 +17,6 @@
     "vite": "^8.3.0"
   },
   "dependencies": {
-    "@resvg/resvg-wasm": "^2.6.2",
-    "satori": "0.38.2"
+    "@resvg/resvg-wasm": "^2.6.2"
   }
 }

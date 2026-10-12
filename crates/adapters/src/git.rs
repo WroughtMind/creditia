@@ -49,6 +49,49 @@ pub fn main_worktree(repo: &Path) -> Option<std::path::PathBuf> {
     p.parent().map(|x| x.to_path_buf()).and_then(|x| x.canonicalize().ok())
 }
 
+/// `.gitattributes` 里标为生成物或第三方的路径（linguist-generated、linguist-vendored、-diff、binary），转成正则
+pub fn generated_patterns(repo: &Path, rev: &str) -> Vec<regex::Regex> {
+    let text = git(repo, &["show", &format!("{rev}:.gitattributes")]);
+    let mut out = vec![];
+    for l in text.lines() {
+        let l = l.trim();
+        if l.is_empty() || l.starts_with('#') {
+            continue;
+        }
+        let mut it = l.split_whitespace();
+        let Some(pat) = it.next() else { continue };
+        let attrs: Vec<&str> = it.collect();
+        let hit = attrs.iter().any(|a| matches!(*a, "linguist-generated" | "linguist-generated=true" | "linguist-vendored" | "linguist-vendored=true" | "-diff" | "binary"));
+        if hit {
+            if let Ok(re) = regex::Regex::new(&glob_re(pat)) {
+                out.push(re);
+            }
+        }
+    }
+    out
+}
+
+/// gitignore 式通配 → 正则：不含 `/` 的模式匹配任意目录下的文件名
+fn glob_re(pat: &str) -> String {
+    let anchored = pat.starts_with('/') || pat.trim_end_matches('/').contains('/');
+    let p = pat.trim_start_matches('/');
+    let mut re = String::new();
+    let cs: Vec<char> = p.chars().collect();
+    let mut i = 0;
+    while i < cs.len() {
+        match cs[i] {
+            '*' if i + 1 < cs.len() && cs[i + 1] == '*' => { re.push_str(".*"); i += 2; if i < cs.len() && cs[i] == '/' { i += 1; } continue; }
+            '*' => re.push_str("[^/]*"),
+            '?' => re.push_str("[^/]"),
+            c if "\\.+()|[]{}^$".contains(c) => { re.push('\\'); re.push(c); }
+            c => re.push(c),
+        }
+        i += 1;
+    }
+    let re = if p.ends_with('/') { format!("{re}.*") } else { re };
+    if anchored { format!("^{re}$") } else { format!("(^|.*/){re}$") }
+}
+
 pub fn worktrees(repo: &Path) -> Vec<String> {
     git(repo, &["worktree", "list", "--porcelain"]).lines().filter_map(|l| l.strip_prefix("worktree ")).map(String::from).collect()
 }
@@ -333,4 +376,19 @@ pub fn mailmap_emails(repo: &Path, canonical: &str) -> Vec<String> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::glob_re;
+    #[test]
+    fn globs() {
+        let m = |p: &str, f: &str| regex::Regex::new(&glob_re(p)).unwrap().is_match(f);
+        assert!(m("*.pb.go", "api/v1/x.pb.go"));
+        assert!(m("vendor/**", "vendor/a/b.c"));
+        assert!(!m("vendor/**", "src/vendor.rs"));
+        assert!(m("/dist/*.js", "dist/app.js"));
+        assert!(!m("/dist/*.js", "web/dist/app.js"));
+        assert!(m("package-lock.json", "web/package-lock.json"));
+    }
 }

@@ -1,60 +1,36 @@
-// App 预览用的字体子集：拉丁字体只留常用区段，中文字体留 GB2312 的 6,763 个汉字。CLI 仍用完整字体。
+// App 用的字体子集：清单来自 packages/render/src/fonts.ts。拉丁字体留常用区段；
+// 中日文字体留 GB2312 的 6,763 个汉字 + 假名 + 常用符号。产物在 src/fonts/（不入库，npm run fonts 生成）。
+// 需要 python3 + fontTools（pip install fonttools）。
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, statSync } from 'node:fs';
+import { mkdirSync, writeFileSync, statSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-const HERE = path.dirname(new URL(import.meta.url).pathname);
-const require = createRequire(path.resolve(HERE, '../../../packages/render/package.json'));
+import { FONTS } from '../../../packages/render/src/fonts.ts';
+
+const HERE = import.meta.dirname;
+const RENDER = path.resolve(HERE, '../../../packages/render');
+const require = createRequire(path.join(RENDER, 'package.json'));
 const OUT = path.resolve(HERE, '../src/fonts');
 mkdirSync(OUT, { recursive: true });
-const LATIN = 'U+0020-007E,U+00A0-00FF,U+2000-206F,U+2190-21FF,U+2500-25FF,U+3000-303F,U+FF00-FFEF';
-// GB2312 一、二级汉字：解码全部码位得到字符集
+const LATIN = 'U+0020-007E,U+00A0-00FF,U+2000-206F,U+2190-21FF,U+2500-25FF,U+3000-303F,U+FF00-FFEF,U+30A0-30FF,U+3040-309F';
 const dec = new TextDecoder('gb2312');
 const chars = [];
 for (let a = 0xb0; a <= 0xf7; a++) for (let b = 0xa1; b <= 0xfe; b++) { const c = dec.decode(new Uint8Array([a, b])); if (c && c !== '�') chars.push(c); }
 const textFile = path.join(OUT, '.gb2312.txt');
-writeFileSync(textFile, chars.join(''));
-const FILES = [
-  ['inter/400Regular/Inter_400Regular.ttf', 'Inter-400.ttf'],
-  ['inter/500Medium/Inter_500Medium.ttf', 'Inter-500.ttf'],
-  ['inter/600SemiBold/Inter_600SemiBold.ttf', 'Inter-600.ttf'],
-  ['inter/700Bold/Inter_700Bold.ttf', 'Inter-700.ttf'],
-  ['jetbrains-mono/400Regular/JetBrainsMono_400Regular.ttf', 'JetBrainsMono-400.ttf'],
-  ['jetbrains-mono/700Bold/JetBrainsMono_700Bold.ttf', 'JetBrainsMono-700.ttf'],
-  ['instrument-serif/400Regular/InstrumentSerif_400Regular.ttf', 'InstrumentSerif-400.ttf'],
-  ['newsreader/400Regular/Newsreader_400Regular.ttf', 'Newsreader-400.ttf'],
-  ['newsreader/500Medium/Newsreader_500Medium.ttf', 'Newsreader-500.ttf'],
-  ['noto-sans-sc/400Regular/NotoSansSC_400Regular.ttf', 'NotoSansSC-400.ttf', true],
-  ['noto-sans-sc/700Bold/NotoSansSC_700Bold.ttf', 'NotoSansSC-700.ttf', true],
-  ['noto-serif-sc/400Regular/NotoSerifSC_400Regular.ttf', 'NotoSerifSC-400.ttf', true],
-  // ── 第二轮体裁的字体 ──
-  ['cinzel/500Medium/Cinzel_500Medium.ttf', 'Cinzel-500.ttf'],
-  ['cinzel/700Bold/Cinzel_700Bold.ttf', 'Cinzel-700.ttf'],
-  ['cinzel-decorative/700Bold/CinzelDecorative_700Bold.ttf', 'CinzelDecorative-700.ttf'],
-  ['playfair-display/500Medium/PlayfairDisplay_500Medium.ttf', 'PlayfairDisplay-500.ttf'],
-  ['playfair-display/700Bold/PlayfairDisplay_700Bold.ttf', 'PlayfairDisplay-700.ttf'],
-  ['playfair-display/900Black/PlayfairDisplay_900Black.ttf', 'PlayfairDisplay-900.ttf'],
-  ['libre-baskerville/400Regular/LibreBaskerville_400Regular.ttf', 'LibreBaskerville-400.ttf'],
-  ['libre-baskerville/700Bold/LibreBaskerville_700Bold.ttf', 'LibreBaskerville-700.ttf'],
-  ['oswald/400Regular/Oswald_400Regular.ttf', 'Oswald-400.ttf'],
-  ['oswald/600SemiBold/Oswald_600SemiBold.ttf', 'Oswald-600.ttf'],
-  ['poiret-one/400Regular/PoiretOne_400Regular.ttf', 'PoiretOne-400.ttf'],
-  ['limelight/400Regular/Limelight_400Regular.ttf', 'Limelight-400.ttf'],
-  ['unifrakturmaguntia/400Regular/UnifrakturMaguntia_400Regular.ttf', 'UnifrakturMaguntia-400.ttf'],
-  ['vt323/400Regular/VT323_400Regular.ttf', 'VT323-400.ttf'],
-  ['press-start-2p/400Regular/PressStart2P_400Regular.ttf', 'PressStart2P-400.ttf'],
-  ['monoton/400Regular/Monoton_400Regular.ttf', 'Monoton-400.ttf'],
-  ['archivo-black/400Regular/ArchivoBlack_400Regular.ttf', 'ArchivoBlack-400.ttf'],
-  ['anton/400Regular/Anton_400Regular.ttf', 'Anton-400.ttf'],
-  ['zcool-xiaowei/400Regular/ZCOOLXiaoWei_400Regular.ttf', 'ZCOOLXiaoWei-400.ttf', true],
-  ['zcool-qingke-huangyou/400Regular/ZCOOLQingKeHuangYou_400Regular.ttf', 'ZCOOLQingKeHuangYou-400.ttf', true],
-  ['ma-shan-zheng/400Regular/MaShanZheng_400Regular.ttf', 'MaShanZheng-400.ttf', true],
-];
-for (const [src, name, cjk] of FILES) {
-  const input = require.resolve(`@expo-google-fonts/${src}`);
+writeFileSync(textFile, chars.join('') + '點〇');
+
+const manifest = [];
+for (const f of FONTS) {
+  const dir = path.join(path.dirname(require.resolve(`@expo-google-fonts/${f.pkg}/package.json`)), f.dir);
+  const ttf = readdirSync(dir).find((x) => x.endsWith('.ttf'));
+  const name = `${f.family.replace(/\s+/g, '')}-${f.weight}${f.italic ? 'i' : ''}.ttf`;
   const out = path.join(OUT, name);
-  const args = ['-m', 'fontTools.subset', input, `--output-file=${out}`, `--unicodes=${LATIN}`, '--layout-features=*', '--no-hinting'];
-  if (cjk) args.push(`--text-file=${textFile}`);
-  execFileSync('python3', args, { stdio: 'inherit' });
-  console.log(name.padEnd(24), `${(statSync(out).size / 1024).toFixed(0)} KB`);
+  if (!existsSync(out)) {
+    const args = ['-m', 'fontTools.subset', path.join(dir, ttf), `--output-file=${out}`, `--unicodes=${LATIN}`, '--layout-features=*', '--no-hinting'];
+    if (f.cjk) args.push(`--text-file=${textFile}`);
+    execFileSync('python3', args, { stdio: 'inherit' });
+  }
+  manifest.push({ family: f.family, weight: f.weight, italic: !!f.italic, file: name });
+  console.log(name.padEnd(34), `${(statSync(out).size / 1024).toFixed(0)} KB`);
 }
+writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 1));

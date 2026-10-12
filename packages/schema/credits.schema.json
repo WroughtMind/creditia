@@ -18,7 +18,7 @@
       }
     },
     "generatedAt": { "type": "string", "format": "date-time" },
-    "level": { "type": "string", "enum": ["strict", "standard", "loose"], "description": "用户选择的口径" },
+    "level": { "type": "string", "enum": ["strict", "standard", "loose"], "description": "归因口径：strict 只认逐行证据与明确声明；standard 再加同提交延伸与分支前缀（标为推断）；loose 再加同时间窗口的会话（推断）" },
     "head": { "type": "string", "description": "分析时的 HEAD" },
     "versions": { "type": "array", "items": { "type": "object", "required": ["tag", "date"], "properties": { "tag": { "type": "string" }, "date": { "$ref": "#/$defs/date" } } } },
     "coverage": {
@@ -36,7 +36,6 @@
         }
       }
     },
-    "directors": { "type": "array", "items": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "string" }, "name": { "type": "string" } } } },
     "contributors": {
       "type": "array",
       "items": {
@@ -47,10 +46,11 @@
           "kind": { "type": "string", "enum": ["agent", "human", "unattributed"] },
           "harness": { "type": "string", "description": "codex、cursor、claude-code、grok、kimi、gemini、github-actions…" },
           "model": { "type": ["string", "null"] },
+          "provider": { "type": "string", "description": "谁提供的模型：anthropic、openai、aws-bedrock、google-vertex、openrouter、relay，或用户自定义的渠道名；看不出就不写" },
           "family": { "type": ["string", "null"] },
           "where": { "type": "string", "enum": ["local", "cloud"] },
           "name": { "type": "string" },
-          "roles": { "type": "array", "items": { "type": "string", "enum": ["director", "author", "reviewer", "planner"] } },
+          "roles": { "type": "array", "items": { "type": "string", "enum": ["author", "reviewer", "planner"] } },
           "reviews": { "type": "integer" }
         }
       }
@@ -99,7 +99,7 @@
     "days": { "type": "array", "items": { "type": "object", "required": ["date", "by"], "properties": { "date": { "$ref": "#/$defs/date" }, "by": { "type": "object", "additionalProperties": { "type": "integer" } } } } },
     "clock": { "type": "array", "minItems": 7, "maxItems": 7, "items": { "type": "array", "minItems": 24, "maxItems": 24, "items": { "type": "integer" } }, "description": "星期（周一起）× 小时的提交数" },
     "files": { "type": "array", "items": { "type": "object", "required": ["lines", "by"], "properties": { "path": { "type": "string" }, "lines": { "type": "integer" }, "by": { "type": "object", "additionalProperties": { "type": "integer" } } } } },
-    "sessions": { "type": "array", "items": { "type": "object", "required": ["contributor", "start", "end"], "properties": { "contributor": { "type": "string" }, "start": { "type": "integer" }, "end": { "type": "integer" }, "tokens": { "type": "integer" }, "review": { "type": "boolean" } } } },
+    "sessions": { "type": "array", "items": { "type": "object", "required": ["contributor", "start", "end"], "properties": { "contributor": { "type": "string" }, "start": { "type": "integer" }, "end": { "type": "integer" }, "tokens": { "type": "integer" }, "review": { "type": "boolean" }, "prompts": { "type": "integer", "description": "这个会话里人发出的指令数" } } } },
     "units": {
       "type": "array",
       "items": {

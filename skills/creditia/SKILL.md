@@ -1,38 +1,49 @@
 ---
 name: creditia
-description: 给人和 AI agent 一起做出的作品署名。生成 CREDITS.md 和 credits.json，导出 tier、片尾字幕、徽章等展示；需要用户决定的事（口径、风格、公开哪些内容）必须停下来问。
+description: 给人和 AI agent 一起做出的作品署名。分析本机日志与 git 历史（不调用大模型），生成 CREDITS.md、credits.json，导出署名榜、片尾字幕、徽章、统计图等（PNG / SVG / PDF / GIF / 可交互 HTML）。公开任何内容前必须让用户确认。
 ---
 
 # creditia
 
-用户说"给 X 做个 credits""加个徽章""更新一下署名"时用这个 skill。
+用户说「给 X 做个 credits」「加个徽章」「更新署名」「这个项目哪些是 AI 写的」时用这个 skill。
 
 ## 原则
 
-- 全程用 CLI，每步都加 `--json`，读返回值再决定下一步。
-- **公开任何内容前必须让用户确认**：写入 `CREDITS.md`、改官网、改 README、提交之前，列出将要公开的字段（项目名、PR 标题、人名、文件名），用户说可以才做。`--yes` 只跳过确认提示，不跳过隐私过滤。
-- 不替用户选口径、风格、是否显示主导者。列出选项，让用户选。
-- 不修改 `~/.codex`、`~/.claude`、`~/.cursor` 等任何 agent 数据。
+- 全程用 CLI，每步加 `--json`，读返回值再决定下一步。退出码 0 成功、1 失败、2 有警告（警告要转告用户）。
+- **公开前必须确认**：写 `CREDITS.md`、改官网 / README、提交之前，列出将公开的内容（项目名、PR 标题、文件名、人名、落款），用户同意才做。
+- **人名默认不写**。不要替用户加「由某某主导」之类的头衔；用户明确要求时才用 `--named` 或 `--sign`。
+- 口径（strict / standard / loose）、风格、公开范围都是用户的决定：列出选项和区别，让用户选。
+- 只读各工具的数据，不修改 `~/.codex`、`~/.claude`、`~/.cursor`、`~/.gemini` 等任何目录。
 
 ## 流程
 
-1. **找项目**：`creditia discover --json`。用户没指定项目时，把列表给用户选；指定了就直接用。
-2. **初始化**（仓库里还没有 `.creditia/config.json` 时）：`creditia init --json`。把识别出的主导者和邮箱念给用户确认，不对就让用户改配置文件。
-3. **分析**：`creditia analyze --github --json`。汇报：各方占比、未确认比例、证据覆盖（哪段时间只有 git 信号）。未确认超过 20% 时，告诉用户原因（通常是日志缺失或 PR 没有分支名），问要不要先补 `gh auth login` 或接受现状。
-4. **问用户要决定的事**：
-   - 口径：按工具（默认）/ 按模型
-   - 风格：Minimal / Film Credits / Terminal / Glass / Editorial / Mono
-   - 是否显示主导者署名（默认不显示）
-   - 私有仓库：是否公开 PR 标题、文件名
-5. **预览**：`creditia app open --form tier --theme <风格>`，让用户在 App 里看；没有 App 时 `creditia export --form tier --format png --out /tmp/tier.png` 给用户看图。
-6. **产出**：
-   - 档案：`creditia doc --json`（写 `CREDITS.md`，只改标记区间）
-   - 嵌入：`creditia export --form tier --format embed --json` 得到 `<creditia-card>` 片段
-   - 徽章：`creditia export --form badge --format svg --out assets/creditia-badge.svg`
-   - 其他形式按需：`roll`、`receipt`、`share`、`waffle` 等，`creditia export --list` 看全部
-7. **接入代码**：改官网 / README 时，先 diff 给用户看，确认后再写。
-8. **确认后提交**：列出将公开的内容，用户同意后再 `git add` / `git commit`。
-9. **可选**：`creditia hook install`，以后每次提交自动盖章，不再依赖日志。
+1. **找项目**：`creditia discover --json`。用户没指定就把列表给用户选。
+2. **初始化**（还没有 `.creditia/config.json` 时）：`creditia init --json`。把识别出的「你的提交身份」（邮箱）念给用户确认——它只用来区分「用户自己的提交」和「别人的提交」。
+3. **多处路径**：项目如果在别的目录、别的电脑上也做过（worktree、临时克隆、旧路径），`creditia paths --json` 看已登记的，`creditia link <路径> --json` 补上。
+4. **分析**：`creditia analyze --github --json`。汇报各工具占比、未确认比例、逐行证据覆盖。未确认超过 20% 时说明原因（日志被清理、工具不在支持范围、提交里没有声明），问用户要不要换口径或接受现状。
+5. **选样子**：`creditia export --list --json` 看全部作品、版式、风格。推荐几种给用户，用户选。
+6. **预览**：导出 PNG 给用户看，例如 `creditia export --piece tier --style ink --format png --out /tmp/tier.png --json`。
+7. **产出**（用户确认后）：
+   - 档案：`creditia doc --json`
+   - 徽章：`creditia export --piece badge --variant flat --format svg --out assets/credits-badge.svg`
+   - 分享图：`creditia export --piece share --style glass --format png --size og --out assets/credits.png`
+   - 片尾字幕网页：`creditia export --piece roll --variant scroll --style cinema --format html --out credits.html`
+   - 全部作品一页：`creditia board --style minimal --out credits.html`
+   - 嵌入：`creditia export --piece tier --format embed --json`
+   - 放到 GitHub：`creditia publish --json`（写仓库根目录的 credits.json，返回将公开的字段，先念给用户确认），再按 README「放到 GitHub 上」加 workflow
+8. **接入**：改官网 / README 时先给用户看 diff，确认后再写。
+9. **可选**：`creditia hook install`，之后每次提交自动盖章。
+
+## 给自己盖章
+
+你作为 agent 提交代码前：
+
+```
+creditia whoami --json                      # 确认自己是哪个工具
+creditia stamp --harness <工具> --model <模型>
+```
+
+这样这次提交会带上 `Creditia-Harness` / `Creditia-Model`，以后即使日志被清理也能确认是你写的。
 
 ## 常用命令
 
@@ -40,18 +51,14 @@ description: 给人和 AI agent 一起做出的作品署名。生成 CREDITS.md 
 creditia discover --json
 creditia init --json
 creditia analyze --github --json
-creditia update --json
+creditia analyze --level strict --json
 creditia doc --json
-creditia release-notes v1.0.0
-creditia export --list
-creditia export --form tier --theme minimal --format embed
-creditia export --form roll --theme film --format png --out roll.png
+creditia export --list --json
+creditia export --piece roll --style ukiyoe --variant vertical --format png --out roll.png
+creditia export --piece tier --style cyber --format gif --out tier.gif
+creditia board --style glass --out credits.html
 creditia blame src/foo.ts:42 --json
+creditia paths --json
+creditia link /path/on/another/machine --json
 creditia doctor --json
-creditia hook install
-creditia stamp --harness <当前工具> --model <模型>
 ```
-
-## 自己也要盖章
-
-你作为 agent 给仓库提交时，提交前运行 `creditia stamp --harness <你是哪个工具> --model <你的模型>`，这样这次提交会带上 `Creditia-Harness` trailer。

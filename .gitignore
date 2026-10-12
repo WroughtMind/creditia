@@ -30,3 +30,5 @@ AGENTS.md
 /docs/
 /.creditia/
 spike/projects/
+apps/desktop/src-tauri/binaries/
+dist/

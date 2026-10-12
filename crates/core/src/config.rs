@@ -30,9 +30,12 @@ pub struct Privacy {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Display {
-    /// 是否在展示里写出主导者（默认不写，用户觉得土）
+    /// 是否在展示里写出人名（默认不写：人的贡献用做了什么来呈现）
     #[serde(default)]
-    pub director: bool,
+    pub named: bool,
+    /// 落款：用户主动填写才有
+    #[serde(default)]
+    pub sign: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -48,7 +51,9 @@ pub struct Config {
     pub markers: Vec<String>,
     #[serde(default)]
     pub exclude_markers: Vec<String>,
-    #[serde(default)]
+    /// 你自己（本机用户）的提交身份。用来区分「我的提交里可能有 agent 写的代码」和「别人的提交」，
+    /// 不会在任何展示里写成「主导者」。旧字段名 directors 照样能读
+    #[serde(default, alias = "me")]
     pub directors: Vec<Director>,
     /// agent 邮箱 → harness
     #[serde(default)]
@@ -58,6 +63,12 @@ pub struct Config {
     /// 分支前缀 → harness（如 `codex/`）
     #[serde(default)]
     pub branch_prefixes: HashMap<String, String>,
+    /// 归因口径：strict 只认逐行证据和明确声明；standard（默认）再加两种推断：同一提交内的延伸、分支前缀；loose 再加同时间窗口的会话。推断全部单独记账
+    #[serde(default = "standard")]
+    pub level: String,
+    /// 本项目的其他路径（别的电脑、已删除的临时目录、搬家前的位置）：日志里的这些路径也算本项目
+    #[serde(default)]
+    pub paths: Vec<String>,
     /// 证据覆盖分段 [(名称, 起, 止)]
     #[serde(default)]
     pub segments: Vec<(String, String, String)>,
@@ -71,6 +82,7 @@ pub struct Config {
 }
 
 fn one() -> u32 { 1 }
+fn standard() -> String { "standard".into() }
 
 impl Default for Config {
     fn default() -> Self {
@@ -83,8 +95,14 @@ impl Default for Config {
             exclude_markers: vec![],
             directors: vec![],
             agent_emails: default_agent_emails(),
-            bot_emails: vec!["41898282+github-actions[bot]@users.noreply.github.com".into()],
-            branch_prefixes: [("codex/", "codex"), ("cursor/", "cursor"), ("claude/", "claude-code"), ("grok/", "grok"), ("kimi/", "kimi")]
+            bot_emails: vec![
+                "41898282+github-actions[bot]@users.noreply.github.com".into(),
+                "49699333+dependabot[bot]@users.noreply.github.com".into(),
+                "29139614+renovate[bot]@users.noreply.github.com".into(),
+            ],
+            level: "standard".into(),
+            paths: vec![],
+            branch_prefixes: [("codex/", "codex"), ("cursor/", "cursor"), ("claude/", "claude-code"), ("grok/", "grok"), ("kimi/", "kimi"), ("copilot/", "copilot"), ("devin/", "devin"), ("jules/", "jules"), ("opencode/", "opencode")]
                 .iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(),
             segments: vec![],
             privacy: Privacy::default(),
@@ -101,6 +119,11 @@ pub fn default_agent_emails() -> HashMap<String, String> {
         ("noreply@anthropic.com", "claude-code"),
         ("codex@users.noreply.github.com", "codex"),
         ("codex@openai.com", "codex"),
+        ("198982749+copilot@users.noreply.github.com", "copilot"),
+        ("167198135+copilot@users.noreply.github.com", "copilot"),
+        ("158243242+devin-ai-integration[bot]@users.noreply.github.com", "devin"),
+        ("161369871+google-labs-jules[bot]@users.noreply.github.com", "jules"),
+        ("noreply@aider.chat", "aider"),
     ]
     .iter()
     .map(|(a, b)| (a.to_string(), b.to_string()))

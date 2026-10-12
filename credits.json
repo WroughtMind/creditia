@@ -1,0 +1,1639 @@
+{
+ "$schema": "https://creditia.dev/schema/v0.json",
+ "breakdown": [
+  {
+   "byArea": {
+    "core": 97,
+    "docs": 34,
+    "tests": 5
+   },
+   "byEvidence": {
+    "declared": {
+     "linesAdded": 0
+    },
+    "inferred": {
+     "linesAdded": 0
+    },
+    "manual": {
+     "linesAdded": 0
+    },
+    "unattributed": {
+     "linesAdded": 136
+    },
+    "verified": {
+     "linesAdded": 0
+    }
+   },
+   "byVersion": {
+    "unreleased": 136
+   },
+   "contributor": "unattributed",
+   "linesAdded": 136,
+   "linesSurviving": 104
+  },
+  {
+   "byArea": {
+    "assets": 9,
+    "build": 38,
+    "core": 10481,
+    "docs": 252,
+    "frontend": 569,
+    "tests": 279
+   },
+   "byEvidence": {
+    "declared": {
+     "linesAdded": 11628
+    },
+    "inferred": {
+     "linesAdded": 0
+    },
+    "manual": {
+     "linesAdded": 0
+    },
+    "unattributed": {
+     "linesAdded": 0
+    },
+    "verified": {
+     "linesAdded": 0
+    }
+   },
+   "byVersion": {
+    "unreleased": 11628
+   },
+   "contributor": "a:claude-code/claude-fable-5-1",
+   "linesAdded": 11628,
+   "linesSurviving": 6865
+  },
+  {
+   "byArea": {
+    "assets": 10,
+    "core": 8848,
+    "docs": 270,
+    "frontend": 176,
+    "tests": 143
+   },
+   "byEvidence": {
+    "declared": {
+     "linesAdded": 0
+    },
+    "inferred": {
+     "linesAdded": 5460
+    },
+    "manual": {
+     "linesAdded": 0
+    },
+    "unattributed": {
+     "linesAdded": 0
+    },
+    "verified": {
+     "linesAdded": 3987
+    }
+   },
+   "byVersion": {
+    "unreleased": 9447
+   },
+   "contributor": "a:claude-code/claude-opus-5-5",
+   "linesAdded": 9447,
+   "linesSurviving": 9420
+  }
+ ],
+ "clock": [
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   3,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   2,
+   0,
+   0,
+   0,
+   2,
+   0,
+   4,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   4,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "conflictLines": 0,
+ "contributors": [
+  {
+   "id": "unattributed",
+   "kind": "unattributed",
+   "roles": []
+  },
+  {
+   "family": "anthropic",
+   "harness": "claude-code",
+   "id": "a:claude-code/claude-fable-5-1",
+   "kind": "agent",
+   "model": "claude-fable-5-1",
+   "roles": [
+    "author"
+   ],
+   "where": "local"
+  },
+  {
+   "family": "anthropic",
+   "harness": "claude-code",
+   "id": "a:claude-code/claude-opus-5-5",
+   "kind": "agent",
+   "model": "claude-opus-5-5",
+   "roles": [
+    "author"
+   ],
+   "where": "local"
+  }
+ ],
+ "coverage": [
+  {
+   "best": "verified",
+   "from": "2026-10-10",
+   "name": "2026-10",
+   "to": "2026-10-12",
+   "verifiedShare": 0.234
+  }
+ ],
+ "days": [
+  {
+   "by": {
+    "claude-code": 11628,
+    "unattributed": 136
+   },
+   "date": "2026-10-10"
+  },
+  {
+   "by": {
+    "claude-code": 9281
+   },
+   "date": "2026-10-11"
+  },
+  {
+   "by": {
+    "claude-code": 166
+   },
+   "date": "2026-10-12"
+  }
+ ],
+ "files": [
+  {
+   "by": {
+    "claude-code": 30,
+    "unattributed": 3
+   },
+   "lines": 33,
+   "path": ".gitignore"
+  },
+  {
+   "by": {
+    "claude-code": 102
+   },
+   "lines": 102,
+   "path": "ATTRIBUTION.md"
+  },
+  {
+   "by": {
+    "claude-code": 1,
+    "unattributed": 19
+   },
+   "lines": 20,
+   "path": "CREDITS.md"
+  },
+  {
+   "by": {
+    "claude-code": 25
+   },
+   "lines": 25,
+   "path": "Cargo.toml"
+  },
+  {
+   "by": {
+    "unattributed": 21
+   },
+   "lines": 21,
+   "path": "LICENSE"
+  },
+  {
+   "by": {
+    "claude-code": 102,
+    "unattributed": 1
+   },
+   "lines": 103,
+   "path": "README.md"
+  },
+  {
+   "by": {
+    "claude-code": 39
+   },
+   "lines": 39,
+   "path": "apps/desktop/index.html"
+  },
+  {
+   "by": {
+    "claude-code": 22
+   },
+   "lines": 22,
+   "path": "apps/desktop/package.json"
+  },
+  {
+   "by": {
+    "claude-code": 24
+   },
+   "lines": 24,
+   "path": "apps/desktop/src-tauri/Cargo.toml"
+  },
+  {
+   "by": {
+    "claude-code": 3
+   },
+   "lines": 3,
+   "path": "apps/desktop/src-tauri/build.rs"
+  },
+  {
+   "by": {
+    "claude-code": 7
+   },
+   "lines": 7,
+   "path": "apps/desktop/src-tauri/capabilities/default.json"
+  },
+  {
+   "by": {
+    "claude-code": 229
+   },
+   "lines": 229,
+   "path": "apps/desktop/src-tauri/src/main.rs"
+  },
+  {
+   "by": {
+    "claude-code": 43
+   },
+   "lines": 43,
+   "path": "apps/desktop/src-tauri/tauri.conf.json"
+  },
+  {
+   "by": {
+    "claude-code": 46
+   },
+   "lines": 46,
+   "path": "apps/desktop/src/engine.ts"
+  },
+  {
+   "by": {
+    "claude-code": 51
+   },
+   "lines": 51,
+   "path": "apps/desktop/src/fonts.ts"
+  },
+  {
+   "by": {
+    "claude-code": 2
+   },
+   "lines": 2,
+   "path": "apps/desktop/src/logo.ts"
+  },
+  {
+   "by": {
+    "claude-code": 448
+   },
+   "lines": 448,
+   "path": "apps/desktop/src/main.ts"
+  },
+  {
+   "by": {
+    "claude-code": 166
+   },
+   "lines": 166,
+   "path": "apps/desktop/src/style.css"
+  },
+  {
+   "by": {
+    "claude-code": 13
+   },
+   "lines": 13,
+   "path": "apps/desktop/tools/core.mjs"
+  },
+  {
+   "by": {
+    "claude-code": 36
+   },
+   "lines": 36,
+   "path": "apps/desktop/tools/fonts.mjs"
+  },
+  {
+   "by": {
+    "claude-code": 21
+   },
+   "lines": 21,
+   "path": "apps/desktop/tools/icon.mjs"
+  },
+  {
+   "by": {
+    "claude-code": 43
+   },
+   "lines": 43,
+   "path": "apps/desktop/vite.config.ts"
+  },
+  {
+   "by": {
+    "claude-code": 15
+   },
+   "lines": 15,
+   "path": "crates/adapters/Cargo.toml"
+  },
+  {
+   "by": {
+    "claude-code": 213
+   },
+   "lines": 213,
+   "path": "crates/adapters/src/claude.rs"
+  },
+  {
+   "by": {
+    "claude-code": 171
+   },
+   "lines": 171,
+   "path": "crates/adapters/src/cline.rs"
+  },
+  {
+   "by": {
+    "claude-code": 178
+   },
+   "lines": 178,
+   "path": "crates/adapters/src/codex.rs"
+  },
+  {
+   "by": {
+    "claude-code": 155
+   },
+   "lines": 155,
+   "path": "crates/adapters/src/cursor.rs"
+  },
+  {
+   "by": {
+    "claude-code": 166
+   },
+   "lines": 166,
+   "path": "crates/adapters/src/gemini.rs"
+  },
+  {
+   "by": {
+    "claude-code": 394
+   },
+   "lines": 394,
+   "path": "crates/adapters/src/git.rs"
+  },
+  {
+   "by": {
+    "claude-code": 148
+   },
+   "lines": 148,
+   "path": "crates/adapters/src/grok.rs"
+  },
+  {
+   "by": {
+    "claude-code": 170
+   },
+   "lines": 170,
+   "path": "crates/adapters/src/kimi.rs"
+  },
+  {
+   "by": {
+    "claude-code": 199
+   },
+   "lines": 199,
+   "path": "crates/adapters/src/lib.rs"
+  },
+  {
+   "by": {
+    "claude-code": 125
+   },
+   "lines": 125,
+   "path": "crates/adapters/src/opencode.rs"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "crates/adapters/tests/norm.json"
+  },
+  {
+   "by": {
+    "unattributed": 1
+   },
+   "lines": 1,
+   "path": "crates/adapters/tests/vectors.json"
+  },
+  {
+   "by": {
+    "claude-code": 20
+   },
+   "lines": 20,
+   "path": "crates/cli/Cargo.toml"
+  },
+  {
+   "by": {
+    "claude-code": 607,
+    "unattributed": 2
+   },
+   "lines": 609,
+   "path": "crates/cli/src/analyze.rs"
+  },
+  {
+   "by": {
+    "claude-code": 787,
+    "unattributed": 3
+   },
+   "lines": 790,
+   "path": "crates/cli/src/main.rs"
+  },
+  {
+   "by": {
+    "claude-code": 409,
+    "unattributed": 2
+   },
+   "lines": 411,
+   "path": "crates/cli/tests/e2e.rs"
+  },
+  {
+   "by": {
+    "claude-code": 13
+   },
+   "lines": 13,
+   "path": "crates/core/Cargo.toml"
+  },
+  {
+   "by": {
+    "claude-code": 152
+   },
+   "lines": 152,
+   "path": "crates/core/src/config.rs"
+  },
+  {
+   "by": {
+    "claude-code": 322
+   },
+   "lines": 322,
+   "path": "crates/core/src/engine.rs"
+  },
+  {
+   "by": {
+    "claude-code": 128
+   },
+   "lines": 128,
+   "path": "crates/core/src/hash.rs"
+  },
+  {
+   "by": {
+    "claude-code": 7
+   },
+   "lines": 7,
+   "path": "crates/core/src/lib.rs"
+  },
+  {
+   "by": {
+    "claude-code": 392,
+    "unattributed": 36
+   },
+   "lines": 428,
+   "path": "crates/core/src/model.rs"
+  },
+  {
+   "by": {
+    "claude-code": 82
+   },
+   "lines": 82,
+   "path": "crates/core/src/util.rs"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "crates/core/tests/norm.json"
+  },
+  {
+   "by": {
+    "unattributed": 1
+   },
+   "lines": 1,
+   "path": "crates/core/tests/vectors.json"
+  },
+  {
+   "by": {
+    "claude-code": 11
+   },
+   "lines": 11,
+   "path": "crates/store/Cargo.toml"
+  },
+  {
+   "by": {
+    "claude-code": 231
+   },
+   "lines": 231,
+   "path": "crates/store/src/lib.rs"
+  },
+  {
+   "by": {
+    "claude-code": 32
+   },
+   "lines": 32,
+   "path": "packages/cli/README.md"
+  },
+  {
+   "by": {
+    "claude-code": 3
+   },
+   "lines": 3,
+   "path": "packages/cli/bin/creditia.mjs"
+  },
+  {
+   "by": {
+    "claude-code": 55
+   },
+   "lines": 55,
+   "path": "packages/cli/package.json"
+  },
+  {
+   "by": {
+    "claude-code": 221
+   },
+   "lines": 221,
+   "path": "packages/cli/src/cli.ts"
+  },
+  {
+   "by": {
+    "claude-code": 32
+   },
+   "lines": 32,
+   "path": "packages/cli/templates/com.creditia.collect.plist"
+  },
+  {
+   "by": {
+    "claude-code": 38
+   },
+   "lines": 38,
+   "path": "packages/cli/templates/creditia-update.yml"
+  },
+  {
+   "by": {
+    "claude-code": 51,
+    "unattributed": 14
+   },
+   "lines": 65,
+   "path": "packages/cli/test/text.test.ts"
+  },
+  {
+   "by": {
+    "claude-code": 15
+   },
+   "lines": 15,
+   "path": "packages/embed/package.json"
+  },
+  {
+   "by": {
+    "claude-code": 57
+   },
+   "lines": 57,
+   "path": "packages/embed/src/creditia-card.ts"
+  },
+  {
+   "by": {
+    "claude-code": 3
+   },
+   "lines": 3,
+   "path": "packages/render/.gitignore"
+  },
+  {
+   "by": {
+    "claude-code": 44
+   },
+   "lines": 44,
+   "path": "packages/render/README.md"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/creditia/logo.svg"
+  },
+  {
+   "by": {
+    "claude-code": 13
+   },
+   "lines": 13,
+   "path": "packages/render/assets/logos/SOURCES.md"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/amp.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/anthropic.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/claude.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/cline.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/cursor.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/deepseek.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/dependabot.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/github-actions.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/githubcopilot.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/googlegemini.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/kimi.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/openai.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/openrouter.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/qwen.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/renovate.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/trae.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/windsurf.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/x.svg"
+  },
+  {
+   "by": {
+    "claude-code": 3067
+   },
+   "lines": 3067,
+   "path": "packages/render/fixtures/lumen.json"
+  },
+  {
+   "by": {
+    "claude-code": 49
+   },
+   "lines": 49,
+   "path": "packages/render/package.json"
+  },
+  {
+   "by": {
+    "claude-code": 309
+   },
+   "lines": 309,
+   "path": "packages/render/src/data.ts"
+  },
+  {
+   "by": {
+    "claude-code": 192
+   },
+   "lines": 192,
+   "path": "packages/render/src/export.ts"
+  },
+  {
+   "by": {
+    "claude-code": 51
+   },
+   "lines": 51,
+   "path": "packages/render/src/fonts.ts"
+  },
+  {
+   "by": {
+    "claude-code": 31
+   },
+   "lines": 31,
+   "path": "packages/render/src/gallery.ts"
+  },
+  {
+   "by": {
+    "claude-code": 42
+   },
+   "lines": 42,
+   "path": "packages/render/src/index.ts"
+  },
+  {
+   "by": {
+    "claude-code": 57
+   },
+   "lines": 57,
+   "path": "packages/render/src/interact.ts"
+  },
+  {
+   "by": {
+    "claude-code": 19
+   },
+   "lines": 19,
+   "path": "packages/render/src/logos.ts"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/src/metrics.json"
+  },
+  {
+   "by": {
+    "claude-code": 317
+   },
+   "lines": 317,
+   "path": "packages/render/src/pieces/cards.ts"
+  },
+  {
+   "by": {
+    "claude-code": 320
+   },
+   "lines": 320,
+   "path": "packages/render/src/pieces/charts.ts"
+  },
+  {
+   "by": {
+    "claude-code": 74
+   },
+   "lines": 74,
+   "path": "packages/render/src/pieces/common.ts"
+  },
+  {
+   "by": {
+    "claude-code": 299
+   },
+   "lines": 299,
+   "path": "packages/render/src/pieces/roll.ts"
+  },
+  {
+   "by": {
+    "claude-code": 305
+   },
+   "lines": 305,
+   "path": "packages/render/src/pieces/tier.ts"
+  },
+  {
+   "by": {
+    "claude-code": 76
+   },
+   "lines": 76,
+   "path": "packages/render/src/registry.ts"
+  },
+  {
+   "by": {
+    "claude-code": 160
+   },
+   "lines": 160,
+   "path": "packages/render/src/style.ts"
+  },
+  {
+   "by": {
+    "claude-code": 110
+   },
+   "lines": 110,
+   "path": "packages/render/src/styles/base.ts"
+  },
+  {
+   "by": {
+    "claude-code": 103
+   },
+   "lines": 103,
+   "path": "packages/render/src/styles/cyber.ts"
+  },
+  {
+   "by": {
+    "claude-code": 259
+   },
+   "lines": 259,
+   "path": "packages/render/src/styles/east.ts"
+  },
+  {
+   "by": {
+    "claude-code": 11
+   },
+   "lines": 11,
+   "path": "packages/render/src/styles/index.ts"
+  },
+  {
+   "by": {
+    "claude-code": 144
+   },
+   "lines": 144,
+   "path": "packages/render/src/styles/pop.ts"
+  },
+  {
+   "by": {
+    "claude-code": 223
+   },
+   "lines": 223,
+   "path": "packages/render/src/styles/story.ts"
+  },
+  {
+   "by": {
+    "claude-code": 247
+   },
+   "lines": 247,
+   "path": "packages/render/src/styles/west.ts"
+  },
+  {
+   "by": {
+    "claude-code": 253
+   },
+   "lines": 253,
+   "path": "packages/render/src/svg.ts"
+  },
+  {
+   "by": {
+    "claude-code": 110
+   },
+   "lines": 110,
+   "path": "packages/render/src/text.ts"
+  },
+  {
+   "by": {
+    "claude-code": 105
+   },
+   "lines": 105,
+   "path": "packages/render/test/render.test.ts"
+  },
+  {
+   "by": {
+    "claude-code": 59
+   },
+   "lines": 59,
+   "path": "packages/render/tools/fixture.mjs"
+  },
+  {
+   "by": {
+    "claude-code": 13
+   },
+   "lines": 13,
+   "path": "packages/render/tools/logos.mjs"
+  },
+  {
+   "by": {
+    "claude-code": 29
+   },
+   "lines": 29,
+   "path": "packages/render/tools/metrics.py"
+  },
+  {
+   "by": {
+    "claude-code": 127
+   },
+   "lines": 127,
+   "path": "packages/schema/credits.schema.json"
+  },
+  {
+   "by": {
+    "claude-code": 13
+   },
+   "lines": 13,
+   "path": "packages/schema/package.json"
+  },
+  {
+   "by": {
+    "claude-code": 71
+   },
+   "lines": 71,
+   "path": "packages/schema/types.ts"
+  },
+  {
+   "by": {
+    "claude-code": 63
+   },
+   "lines": 63,
+   "path": "skills/creditia/SKILL.md"
+  },
+  {
+   "by": {
+    "claude-code": 16
+   },
+   "lines": 16,
+   "path": "spike/Cargo.toml"
+  },
+  {
+   "by": {
+    "claude-code": 341
+   },
+   "lines": 341,
+   "path": "spike/src/adapters.rs"
+  },
+  {
+   "by": {
+    "claude-code": 309
+   },
+   "lines": 309,
+   "path": "spike/src/engine.rs"
+  },
+  {
+   "by": {
+    "claude-code": 99
+   },
+   "lines": 99,
+   "path": "spike/src/ev.rs"
+  },
+  {
+   "by": {
+    "claude-code": 281
+   },
+   "lines": 281,
+   "path": "spike/src/git.rs"
+  },
+  {
+   "by": {
+    "claude-code": 129
+   },
+   "lines": 129,
+   "path": "spike/src/hash.rs"
+  },
+  {
+   "by": {
+    "claude-code": 561
+   },
+   "lines": 561,
+   "path": "spike/src/main.rs"
+  },
+  {
+   "by": {
+    "claude-code": 32
+   },
+   "lines": 32,
+   "path": "spike/src/paths.rs"
+  },
+  {
+   "by": {
+    "claude-code": 74
+   },
+   "lines": 74,
+   "path": "spike/src/util.rs"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "spike/tests/norm.json"
+  },
+  {
+   "by": {
+    "unattributed": 1
+   },
+   "lines": 1,
+   "path": "spike/tests/vectors.json"
+  }
+ ],
+ "generatedAt": "2026-10-12T17:38:08+08:00",
+ "head": "2d2eced069b07951f7bc9cb599c64f536f81e090",
+ "human": {
+  "agentReviews": 0,
+  "plans": 0,
+  "prompts": 13,
+  "reviews": 0,
+  "tabAssistedLines": 0
+ },
+ "level": "standard",
+ "project": {
+  "name": "creditia",
+  "range": {
+   "from": "2026-10-10",
+   "to": "2026-10-12"
+  },
+  "repos": [
+   "github.com/wroughtmind/creditia"
+  ]
+ },
+ "schemaVersion": 0,
+ "sessions": [
+  {
+   "contributor": "a:claude-code/claude-opus-5-5",
+   "end": 1791797794,
+   "prompts": 13,
+   "review": false,
+   "start": 1791692687,
+   "tokens": 108228693
+  }
+ ],
+ "timeline": [
+  {
+   "byContributor": {
+    "a:claude-code/claude-fable-5-1": 11628,
+    "a:claude-code/claude-opus-5-5": 9281,
+    "unattributed": 136
+   },
+   "week": "2026-W41"
+  },
+  {
+   "byContributor": {
+    "a:claude-code/claude-opus-5-5": 166
+   },
+   "week": "2026-W42"
+  }
+ ],
+ "totals": {
+  "binaryFiles": 51,
+  "commits": 16,
+  "days": 3,
+  "linesAdded": 21211,
+  "linesSurviving": 16389,
+  "linesWritten": 4166,
+  "sessions": 1,
+  "tokens": 108228693,
+  "units": 16
+ },
+ "units": [
+  {
+   "areas": [
+    "assets",
+    "build",
+    "core",
+    "docs",
+    "frontend",
+    "tests"
+   ],
+   "commits": [
+    "e5e95a1999f4abe17d7a4869be3dcb5fbeb2f285"
+   ],
+   "date": "2026-10-10",
+   "id": "c:e5e95a19",
+   "lines": 8405,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-fable-5-1",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "creditia：阶段 0 验证与 MVP 第一版",
+   "version": null
+  },
+  {
+   "areas": [
+    "docs"
+   ],
+   "commits": [
+    "479146ee6ec60fede7f3c11954402a47c7fddb1d"
+   ],
+   "date": "2026-10-10",
+   "id": "c:479146ee",
+   "lines": 20,
+   "shares": [
+    {
+     "contributor": "unattributed",
+     "evidence": "unattributed",
+     "share": 1
+    }
+   ],
+   "title": "docs: creditia 自己的 credits 档案 Creditia-Harness: claude-code Creditia-Model: claude-fable-5-1",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs"
+   ],
+   "commits": [
+    "b4342e4b60eb6858e8a7fd6d2b6869d45fc625d3"
+   ],
+   "date": "2026-10-10",
+   "id": "c:b4342e4b",
+   "lines": 46,
+   "shares": [
+    {
+     "contributor": "unattributed",
+     "evidence": "unattributed",
+     "share": 1
+    }
+   ],
+   "title": "fix: 模型名归一（去掉 provider 前缀、Claude 版本号用横线） Creditia-Harness: claude-code Creditia-Model: claude-fable-5-1",
+   "version": null
+  },
+  {
+   "areas": [
+    "assets",
+    "core",
+    "docs",
+    "frontend"
+   ],
+   "commits": [
+    "61aa2befca7f5dba8c97bfc285a79493410ce48e"
+   ],
+   "date": "2026-10-10",
+   "id": "c:61aa2bef",
+   "lines": 1941,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-fable-5-1",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "验收重构：版式家族、App 重做、徽章与字幕多版式、人单独署名",
+   "version": null
+  },
+  {
+   "areas": [
+    "core"
+   ],
+   "commits": [
+    "dc17c4f025a9aa5730cade360450886c7154c4b6"
+   ],
+   "date": "2026-10-10",
+   "id": "c:dc17c4f0",
+   "lines": 25,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-fable-5-1",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "fix: 盖章 hook 在单行提交后补空行，conventional commit 主题不再被当成 trailer",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "frontend"
+   ],
+   "commits": [
+    "3c5ef8559b46bb4435b71f0e6ca69f686cc2e907"
+   ],
+   "date": "2026-10-10",
+   "id": "c:3c5ef855",
+   "lines": 1251,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-fable-5-1",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "第二轮重做：八个新体裁、片尾十一版式、小票七版式、App 图库→单图主线",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs"
+   ],
+   "commits": [
+    "8b0828f7fbbad3ad174b7a24134afe8eeb2e2469"
+   ],
+   "date": "2026-10-10",
+   "id": "c:8b0828f7",
+   "lines": 6,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-fable-5-1",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "不入库：.creditia/、docs/validation/、spike/projects/ 加入 .gitignore；README 去掉验证报告链接；lessons 补推 GitHub 的教训",
+   "version": null
+  },
+  {
+   "areas": [
+    "core"
+   ],
+   "commits": [
+    "90779ac692b40b1390e11d6b09f8ae776ad3a663"
+   ],
+   "date": "2026-10-10",
+   "id": "c:90779ac6",
+   "lines": 21,
+   "shares": [
+    {
+     "contributor": "unattributed",
+     "evidence": "unattributed",
+     "share": 1
+    }
+   ],
+   "title": "补 MIT LICENSE 文件",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "9456eae40a9d1b682687cb3120f5617f09bc12ec"
+   ],
+   "date": "2026-10-10",
+   "id": "c:9456eae4",
+   "lines": 42,
+   "shares": [
+    {
+     "contributor": "unattributed",
+     "evidence": "unattributed",
+     "share": 1
+    }
+   ],
+   "title": "外部内容出仓：docs/ 内部文档只留本地不入库；测试向量重算为中性数据；示例路径、夹具数字、gallery 项目名改中性；logo 来源直接注明 simple-icons",
+   "version": null
+  },
+  {
+   "areas": [
+    "core"
+   ],
+   "commits": [
+    "de7761fffadc27affd2dfe1c292a7cfee3b0732d"
+   ],
+   "date": "2026-10-10",
+   "id": "c:de7761ff",
+   "lines": 2,
+   "shares": [
+    {
+     "contributor": "unattributed",
+     "evidence": "unattributed",
+     "share": 1
+    }
+   ],
+   "title": "AGENTS.md 移出仓库：内部工作指令只留本地",
+   "version": null
+  },
+  {
+   "areas": [
+    "docs"
+   ],
+   "commits": [
+    "9d83c0794e0f24dad98e378096fc5d7f7ac229b7"
+   ],
+   "date": "2026-10-10",
+   "id": "c:9d83c079",
+   "lines": 5,
+   "shares": [
+    {
+     "contributor": "unattributed",
+     "evidence": "unattributed",
+     "share": 1
+    }
+   ],
+   "title": "重新生成自家 credits 档案：最新数据，主导者单独署名",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "tests"
+   ],
+   "commits": [
+    "bee2001bf292ae8bf5f2737ab65b4e6a8d2129f2"
+   ],
+   "date": "2026-10-11",
+   "id": "c:bee2001b",
+   "lines": 1148,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "归因核心：更多数据源、模型与渠道、口径、一个项目多处路径",
+   "version": null
+  },
+  {
+   "areas": [
+    "assets",
+    "core",
+    "docs"
+   ],
+   "commits": [
+    "08fee5b7f1d4150cea456b4cfbb3113b6849ee80"
+   ],
+   "date": "2026-10-11",
+   "id": "c:08fee5b7",
+   "lines": 6990,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "渲染重做：手写 SVG 场景，16 种风格 × 16 种作品，可交互导出",
+   "version": null
+  },
+  {
+   "areas": [
+    "assets",
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "7824d4cc903dd36dc60e12d93724d8816c43de82"
+   ],
+   "date": "2026-10-11",
+   "id": "c:7824d4cc",
+   "lines": 780,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App 重做：黑白液态玻璃的展墙",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs"
+   ],
+   "commits": [
+    "b9657f25a9f270256cc09369e7e90ef62ddd2830"
+   ],
+   "date": "2026-10-11",
+   "id": "c:b9657f25",
+   "lines": 363,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "文档、CLI、skill 与标志",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "2d2eced069b07951f7bc9cb599c64f536f81e090"
+   ],
+   "date": "2026-10-12",
+   "id": "c:2d2eced0",
+   "lines": 166,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "修三处问题，加 CI：macOS 上实际编译打包 App",
+   "version": null
+  }
+ ],
+ "versions": []
+}

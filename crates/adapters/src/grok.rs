@@ -111,7 +111,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
                 }
             }
         }
-        g.sessions.push(Session { src: Src::Grok, id, model, start: s.start, end: s.end, tokens: 0, branch: s.branch, prompts, reviewer: false, has_content: hist.exists() });
+        g.sessions.push(Session { src: Src::Grok, id, model, start: s.start, end: s.end, tokens: 0, branch: s.branch, prompts, reviewer: false, has_content: hist.exists(), provider: None });
         store.groups.insert(gk, g);
     }
     if n > 0 {
