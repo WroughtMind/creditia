@@ -14,9 +14,10 @@ async function deflate(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await out.arrayBuffer());
 }
 
-async function exporterFor(st: Style, svg: string) {
+/** st 为空：原版作品，文字已经是路径，不需要字体；新风格的作品按风格取字体 */
+async function exporter(st: Style | null, svg: string) {
   await init();
-  const fonts = await fontBytes(st, svg);
+  const fonts = st ? await fontBytes(st, svg) : [];
   const opts = (width?: number) => ({ font: { fontBuffers: fonts, loadSystemFonts: false, defaultFontFamily: 'Noto Sans SC' }, fitTo: width ? { mode: 'width' as const, value: Math.round(width) } : undefined });
   const raster: Raster = {
     png: (svg, w) => { const r = new Resvg(svg, opts(w)); const out = r.render().asPng(); r.free(); return out; },
@@ -28,8 +29,8 @@ async function exporterFor(st: Style, svg: string) {
 
 export type Format = 'png' | 'svg' | 'pdf' | 'gif' | 'html';
 /** 按格式出文件。frames 只在 GIF 时用 */
-export async function exportArt(fmt: Format, st: Style, a: Art, size: string, frames?: () => Art[]): Promise<{ bytes: Uint8Array; mime: string; ext: string }> {
-  const ex = await exporterFor(st, a.svg);
+export async function exportArt(fmt: Format, st: Style | null, a: Art, size: string, frames?: () => Art[]): Promise<{ bytes: Uint8Array; mime: string; ext: string }> {
+  const ex = await exporter(st, a.svg);
   const sz = SIZES.find((x) => x.id === size);
   const fit = (x: Art) => (sz && sz.w ? sized(x, sz.w, sz.h) : x);
   const enc = new TextEncoder();

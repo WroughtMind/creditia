@@ -125,7 +125,7 @@ h2 { margin: 18px 0 0; font-size: clamp(38px, 5vw, 72px); line-height: 1.04; let
 :lang(zh) h2 { font-size: clamp(32px, 4vw, 56px); line-height: 1.22; letter-spacing: .01em; }
 .lead { margin: 22px 0 0; color: var(--soft); font-size: 17.5px; max-width: 34em; text-wrap: pretty; }
 
-/* ───────── 十六种样子 ───────── */
+/* ───────── 风格 ───────── */
 .studio { margin-top: 64px; display: grid; grid-template-columns: 300px 1fr; gap: 56px; align-items: start; }
 .picker { position: sticky; top: 96px; }
 .picker h4 { margin: 22px 0 8px; font-size: 11.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--faint); font-weight: 500; }
@@ -283,7 +283,7 @@ footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
   <section id="styles">
     <div class="wrap">
       <div class="kicker rise" data-i="styles.k">风格</div>
-      <h2 class="serif rise" data-i="styles.t">同一份数据，十六种样子</h2>
+      <h2 class="serif rise" data-i="styles.t">同一份数据，二十六种样子</h2>
       <p class="lead rise" data-i="styles.l">每种风格不只是换颜色，排版也跟着变：古籍是竖排的，赛博是一块块面板，漫画是能力图。下面是同一个示例项目，选一种看看，鼠标放在图上能看到每一块的数字。</p>
       <div class="studio">
         <div class="picker rise" id="picker"></div>
@@ -384,7 +384,7 @@ const EN = {
   'hero.title': 'Which AI wrote<br>which part of your code',
   'hero.sub': 'It reads your git history and the logs left by Claude Code, Codex, Cursor and others, matches them line by line, works out how much each tool and model wrote, and turns it into end credits like these.',
   'hero.copy': 'Copy', 'hero.copied': 'Copied', 'hero.fine': 'Sample project, made-up numbers · hover to pause',
-  'styles.k': 'Styles', 'styles.t': 'One set of numbers, sixteen looks',
+  'styles.k': 'Styles', 'styles.t': 'One set of numbers, twenty-six looks',
   'styles.l': 'A style changes the layout, not just the colors: the woodblock book is vertical, cyber is a set of panels, manga is a stats chart. Same sample project throughout. Pick one and hover the image for the numbers behind each part.',
   'album.k': 'Album', 'album.t': 'End credits, receipts, charts',
   'album.l': 'Beyond the credits list there are a dozen more pieces. Each exports to an image, PDF, GIF, or a web page you can hover for the numbers.',
@@ -405,7 +405,15 @@ document.querySelectorAll('[data-i]').forEach((el) => (ZH[el.dataset.i] = el.inn
 ZH['hero.copied'] = '已复制';
 const lang = () => (document.documentElement.lang === 'en' ? 'en' : 'zh');
 const t = (k) => (lang() === 'en' ? EN[k] : ZH[k]) ?? k;
-const GROUPS = [['基础', 'Basics', ['minimal', 'noir', 'glass']], ['东方', 'East Asian', ['ink', 'ukiyoe', 'woodblock']], ['西方古典', 'Classical', ['cinema', 'baroque', 'grimoire']], ['电影与文学', 'Film & books', ['manuscript', 'pastel', 'cutout', 'meadow']], ['流行', 'Pop', ['manga', 'cyber', 'terminal']]];
+const GROUPS = [
+  ['基础', 'Basics', ['minimal-light', 'minimal-dark', 'glass', 'mono']],
+  ['电影与舞台', 'Film & stage', ['film', 'cinema', 'gala', 'playbill', 'cutout', 'pastel']],
+  ['纸面', 'Paper', ['editorial', 'broadsheet', 'poster', 'manuscript']],
+  ['东方', 'East Asian', ['ink', 'ukiyoe', 'woodblock']],
+  ['西方古典', 'Classical', ['baroque', 'grimoire']],
+  ['屏幕', 'Screens', ['terminal', 'crt', 'neon', 'arcade', 'cyber']],
+  ['动画与漫画', 'Animation & comics', ['meadow', 'manga']],
+];
 const PIECE = { tier: ['署名榜', 'Credits'], roll: ['片尾字幕', 'End credits'], receipt: ['小票', 'Receipt'], hand: ['人', 'People'], stream: ['每周新增', 'Weekly'], waffle: ['百格', 'Waffle'], donut: ['占比', 'Share'], clock: ['提交时间', 'Commit times'], calendar: ['日历', 'Calendar'] };
 const VAR = { vertical: ['竖排', 'vertical'], hud: ['面板', 'HUD'], ed: ['动画片尾', 'anime ED'], stats: ['能力', 'stats'], podium: ['领奖台', 'podium'], billing: ['海报', 'billing'], ticket: ['电影票', 'ticket'] };
 const S = (id) => DATA.styles.find((s) => s.id === id);
@@ -434,7 +442,7 @@ async function reel() {
   r.style.animation = `roll ${Math.round((h - view.height * 0.18) / 30)}s linear infinite`;
 }
 
-// ───────── 十六种样子 ─────────
+// ───────── 风格 ─────────
 let style = 'ukiyoe';
 function picker() {
   const L = lang();
@@ -446,7 +454,7 @@ async function easel() {
   const card = document.getElementById('easelcard');
   card.style.background = meta.bg;
   card.classList.remove('fade-in'); void card.offsetWidth; card.classList.add('fade-in');
-  document.getElementById('easelnote').innerHTML = `<b>${sname(style)}</b><span>${lang() === 'en' ? '' : S(style).note}</span>`;
+  document.getElementById('easelnote').innerHTML = `<b>${sname(style)}</b><span>${lang() === 'en' ? S(style).noteEn ?? '' : S(style).note}</span>`;
 }
 
 // ───────── 画册 ─────────

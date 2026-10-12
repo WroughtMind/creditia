@@ -164,3 +164,4 @@ body.dragging #dock .sizes { display: flex; gap: 2px; padding: 3px; border-radiu
 #empty b { display: block; color: var(--ink); font-size: 18px; margin-bottom: 8px; font-weight: 600; }
 #empty code { font: 12px "JetBrains Mono", ui-monospace, monospace; background: var(--glass); padding: 6px 10px; border-radius: 8px; display: inline-block; margin-top: 10px; }
 .busy { position: absolute; inset: 0; display: grid; place-items: center; color: var(--soft); font-size: 12px; background: color-mix(in srgb, var(--bg) 70%, transparent); border-radius: 8px; }
+#dots .divider{width:1px;height:16px;background:var(--line,rgba(0,0,0,.15));margin:0 4px;align-self:center;flex:none}

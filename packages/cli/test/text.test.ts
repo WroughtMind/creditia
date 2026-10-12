@@ -26,11 +26,11 @@ function fakeModel() {
   });
 }
 
-test('creditsBlock：工具表、人、版本段落、证据说明', () => {
+test('creditsBlock：工具表、版本段落、证据说明，不写人', () => {
   const s = creditsBlock(fakeModel());
   assert.match(s, /\| Codex \| GPT-5\.6 Sol \| 87\.2% \| \+312,045 \| 97,531 \|/);
   assert.match(s, /未确认 \| — \| 12\.8%/);
-  assert.match(s, /\*\*人\*\*：发了 12 条消息，review 3 次/);
+  assert.ok(!s.includes('**人**'), '署名只写 AI，不写人这一段');
   assert.match(s, /## v0\.1\.0 · 2025-04-02/);
   assert.match(s, /- #12 修一个并发 bug — Codex/);
   assert.match(s, /没有逐行日志/);

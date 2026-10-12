@@ -136,15 +136,22 @@ export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.hit(x, by - 6, w, bh + 12, tip(m, a));
     x += w;
   });
-  // 前三名
-  const top = m.rows.filter((a) => a.kind === 'agent').slice(0, 3);
-  top.forEach((a, i) => {
-    const tx = x0 + i * (bw / 3);
-    st.mark(s, a.key, tx + 14, c.y + c.h - 120, 28);
-    s.text(a.name, tx + 40, c.y + c.h - 110, { font: st.f.display, size: 24, fill: st.c.ink, maxW: bw / 3 - 140 });
-    st.num(s, pct(a.pct), tx + bw / 3 - 30, c.y + c.h - 110, 24, 'end', { fill: st.c.soft });
-    s.hit(tx, c.y + c.h - 150, bw / 3 - 10, 54, tip(m, a));
-  });
+  // 图例：色块 + 标志 + 名字 + 占比，按各自的宽度从左往右排，色块和上面条里的颜色一一对应
+  const top = m.rows.filter((a) => a.kind === 'agent').slice(0, 4);
+  let lx = x0;
+  const ly = c.y + c.h - 110;
+  for (const a of top) {
+    // 有的风格字体比度量表宽一点，留出余量
+    const nw = measure(a.name, st.f.display, 22) * 1.06, pw = measure(pct(a.pct), st.f.num, 22) * 1.06;
+    const w = 14 + 10 + 26 + 8 + nw + 14 + pw;
+    if (lx + w > x1) break;
+    st.bar(s, lx, ly - 15, 14, 14, colorOf(st, a), a.rank);
+    st.mark(s, a.key, lx + 24 + 13, ly - 8, 24);
+    s.text(a.name, lx + 24 + 26 + 8, ly, { font: st.f.display, size: 22, fill: st.c.ink });
+    st.num(s, pct(a.pct), lx + w, ly, 22, 'end', { fill: st.c.soft });
+    s.hit(lx, ly - 30, w, 44, tip(m, a));
+    lx += w + 40;
+  }
   s.text(summary(m), x0, c.y + c.h - 50, { font: st.f.body, size: 17, fill: st.c.soft });
   const hf = handFacts(m)[0];
   if (hf) s.text(hf.text, x1, c.y + c.h - 50, { font: st.f.body, size: 17, fill: st.c.soft, anchor: 'end' });

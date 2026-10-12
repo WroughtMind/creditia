@@ -26,6 +26,8 @@ export const modelLine = (a: Agent, n = 3) => a.models.slice(0, n).map((x) => x.
 
 /** 人做了什么：只写数字。v 是数字，k 是放在数字下面的短标签，text 是放进一句话里的说法 */
 export function handFacts(m: Model): { v: string; k: string; text: string }[] {
+  // 署名只写 AI：人这一侧的数字不进作品
+  if (!m.showHand) return [];
   const h = m.hand;
   const out: { v: string; k: string; text: string }[] = [];
   if (h.prompts) out.push({ v: fmt(h.prompts), k: T(m, '条消息发给 AI', 'messages to AI'), text: T(m, `发了 ${fmt(h.prompts)} 条消息`, `${fmt(h.prompts)} messages sent`) });

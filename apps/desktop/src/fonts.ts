@@ -49,3 +49,6 @@ export async function fontBytes(st: Style, svg = ''): Promise<Uint8Array[]> {
     return bytes.get(f.file)!;
   }));
 }
+
+/** 原版渲染器（satori）要的字体文件地址：按需取，不注册 @font-face */
+export const fontFiles = () => (manifest as any[]).filter((f) => !f.italic).map((f) => ({ family: f.family as string, weight: f.weight as number, url: urlOf(f.file) }));

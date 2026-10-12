@@ -66,6 +66,8 @@ export interface Model {
   /** 署名：用户主动填写时才有 */
   sign: string;
   hand: Hand;
+  /** 作品里写不写人这一侧（发了多少消息、review、人写的行）。默认不写 */
+  showHand: boolean;
   commits: number;
   units: number;
   linesAdded: number;
@@ -177,7 +179,8 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
     const prov = byId.get(b.contributor)?.provider;
     if (prov && !a.providers.includes(prov)) a.providers.push(prov);
   }
-  const total = n(c.totals?.linesAdded) || [...agentsBy.values(), ...peopleBy.values()].reduce((s, x) => s + x.lines, 0);
+  // 署名只写 AI：占比的分母不含人写的行（和原版一致）
+  const total = [...agentsBy.values()].reduce((s, x) => s + x.lines, 0);
   const pctOf = (x: number) => (total ? (x / total) * 100 : 0);
 
   // 会话：次数、token、首末日期
@@ -225,15 +228,15 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
   const verTags = [...versionsRaw.map((v) => v.tag), 'unreleased'];
   const versions = verTags.map((tag) => {
     const by: Record<string, number> = {};
-    for (const b of c.breakdown ?? []) { const v = n(b.byVersion?.[tag]); if (v) { const k = groupOf(b.contributor).kind === 'human' ? 'human' : keyOf(b.contributor); by[k] = (by[k] ?? 0) + v; } }
+    for (const b of c.breakdown ?? []) { const v = n(b.byVersion?.[tag]); if (v && groupOf(b.contributor).kind !== 'human') { const k = keyOf(b.contributor); by[k] = (by[k] ?? 0) + v; } }
     return { tag, date: versionsRaw.find((v) => v.tag === tag)?.date ?? '', by, total: Object.values(by).reduce((s, x) => s + x, 0) };
   }).filter((v) => v.total > 0);
   const regroup = (by: Record<string, number>) => {
     const out: Record<string, number> = {};
     for (const [id, v] of Object.entries(by ?? {})) {
       const gr = id.includes(':') || byId.has(id) ? groupOf(id) : { key: id, kind: id.startsWith('h:') ? 'human' : 'agent' };
-      const k = gr.kind === 'human' || id.startsWith('h:') ? 'human' : gr.key;
-      out[k] = (out[k] ?? 0) + n(v);
+      if (gr.kind === 'human' || id.startsWith('h:')) continue;
+      out[gr.key] = (out[gr.key] ?? 0) + n(v);
     }
     return out;
   };
@@ -244,7 +247,8 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
   const areas: Record<string, Record<string, number>> = {};
   for (const b of c.breakdown ?? []) {
     const gr = groupOf(b.contributor);
-    const k = gr.kind === 'human' ? 'human' : gr.key;
+    if (gr.kind === 'human') continue;
+    const k = gr.key;
     for (const [ar, v] of Object.entries(b.byArea ?? {})) { (areas[ar] ??= {})[k] = (areas[ar][k] ?? 0) + n(v); }
   }
   const range = c.project?.range ?? {};
@@ -257,8 +261,8 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
   return {
     project: c.project?.name ?? '', lang,
     range: { from: range.from ?? '', to: range.to ?? '' }, spanDays: span, activeDays: n(t.days),
-    agents, rows, unknown, people, named: o.named, sign, hand,
-    commits: n(t.commits), units: n(t.units), linesAdded: total, linesSurviving: n(t.linesSurviving), tokens: n(t.tokens), sessions: n(t.sessions),
+    agents, rows, unknown, people, named: o.named, sign, hand, showHand: false,
+    commits: n(t.commits), units: n(t.units), linesAdded: n(t.linesAdded) || total, linesSurviving: n(t.linesSurviving), tokens: n(t.tokens), sessions: n(t.sessions),
     verifiedShare: total ? verifiedAll / total : 0,
     versions, weeks, days, clock: Array.isArray(c.clock) ? c.clock : [], files, areas, timeline, units: c.units ?? [], reviewers, raw: c,
   };

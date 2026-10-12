@@ -16,14 +16,14 @@ export function unitLead(m: Model, u: any): string {
   for (const s of u.shares ?? []) {
     const c = contribs.find((x: any) => x.id === s.contributor);
     const k = c?.harness ?? (s.contributor === 'unattributed' ? 'unattributed' : 'human');
-    by.set(k, (by.get(k) ?? 0) + s.share);
+    // 只写 AI：人写的部分不算主要贡献方
+    if (k !== 'human') by.set(k, (by.get(k) ?? 0) + s.share);
   }
   const top = [...by.entries()].sort((a, b) => b[1] - a[1])[0];
-  if (!top) return nameOf('unattributed', m.lang);
-  return top[0] === 'human' ? T(m, '人', 'people') : nameOf(top[0], m.lang);
+  return top ? nameOf(top[0], m.lang) : '—';
 }
 
-/** CREDITS.md 标记区间里的内容。agent 一张表；人单独一段，写做了什么 */
+/** CREDITS.md 标记区间里的内容：agent 一张表、版本段落 */
 export function creditsBlock(m: Model, maxPerSection = 10): string {
   const out: string[] = [];
   out.push([m.project, T(m, `${fmt(m.commits)} 次提交`, `${fmt(m.commits)} commits`), `+${fmt(m.linesAdded)} ${T(m, '行', 'lines')}`, m.spanDays ? T(m, `${m.spanDays} 天`, `${m.spanDays} days`) : ''].filter(Boolean).join(' · '), '');
@@ -67,7 +67,7 @@ export function mergeCreditsMd(existing: string | null, block: string): string {
 export function releaseNotes(m: Model, tag: string): string {
   const v = m.versions.find((x) => x.tag === tag);
   if (!v) return '';
-  const parts = Object.entries(v.by).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k === 'human' ? T(m, '人', 'people') : nameOf(k, m.lang)} ${pct((n / v.total) * 100)}`);
+  const parts = Object.entries(v.by).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${nameOf(k, m.lang)} ${pct((n / v.total) * 100)}`);
   return `### Credits\n\n${parts.join(' · ')}\n`;
 }
 
@@ -75,9 +75,9 @@ export function prComment(m: Model, id: string): string {
   const u = m.units.find((x: any) => x.id === id);
   if (!u) return '';
   const contribs = m.raw.contributors ?? [];
-  const parts = (u.shares ?? []).map((s: any) => {
+  const parts = (u.shares ?? []).filter((s: any) => s.contributor === 'unattributed' || contribs.find((x: any) => x.id === s.contributor)?.harness).map((s: any) => {
     const c = contribs.find((x: any) => x.id === s.contributor);
-    const name = c?.harness ? `${nameOf(c.harness, m.lang)}${c.model ? ` (${c.model})` : ''}` : s.contributor === 'unattributed' ? nameOf('unattributed', m.lang) : T(m, '人', 'people');
+    const name = c?.harness ? `${nameOf(c.harness, m.lang)}${c.model ? ` (${c.model})` : ''}` : nameOf('unattributed', m.lang);
     return `${name} ${Math.round(s.share * 100)}%`;
   });
   return `**creditia** · ${parts.join(' · ')}\n`;
