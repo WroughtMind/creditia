@@ -90,7 +90,9 @@ function classic(m: Model, st: Style, secs: Section[], scroll: boolean): Scene {
   const W = 1080, gut = 28;
   const lineH = 54, subH = 24, gapH = 46;
   let inner = 340;
-  for (const sc of secs) { inner += gapH; for (const c of sc.credits) inner += lineH + (c.sub ? subH : 0); }
+  // 合并的职务（主要作者 · 核心 · 界面……）一行一个，右对齐，不再横排成一长条冲出画面
+  const headLines = (sc: Section) => sc.head.split(' · ');
+  for (const sc of secs) { inner += gapH + Math.max(sc.credits.reduce((a, c) => a + lineH + (c.sub ? subH : 0), 0), headLines(sc).length * 26); }
   inner += 260;
   const view = scroll ? Math.round((W * 9) / 16) : 0;
   const { s, c } = canvas(m, st, W, inner + (scroll ? view * 0.15 : 0), 40);
@@ -102,14 +104,16 @@ function classic(m: Model, st: Style, secs: Section[], scroll: boolean): Scene {
   y += 240;
   for (const sc of secs) {
     y += gapH;
-    sc.credits.forEach((cr, i) => {
-      if (i === 0) st.label(s, sc.head, cx - gut, y + 4, { anchor: 'end', size: 17, fill: st.c.soft });
+    const y0 = y;
+    headLines(sc).forEach((h, j) => st.label(s, h, cx - gut, y0 + 4 + j * 26, { anchor: 'end', size: 17, fill: st.c.soft, maxW: c.w / 2 - gut - 50 }));
+    sc.credits.forEach((cr) => {
       s.text(cr.name, cx + gut, y + 6, { font: st.f.display, size: 30, fill: st.c.ink, maxW: c.w / 2 - 70 });
       let hh = lineH;
       if (cr.sub) { s.text(cr.sub, cx + gut, y + 34, { font: st.f.body, size: 16, fill: st.c.soft, maxW: c.w / 2 - 70, overflow: 'clip' }); hh += subH; }
       s.hit(c.x + 40, y - 34, c.w - 80, hh, tipFor(m, cr, sc.head));
       y += hh;
     });
+    y = Math.max(y, y0 + headLines(sc).length * 26);
   }
   y += 120;
   st.rule(s, cx - 60, y - 40, 120, 'thin');
