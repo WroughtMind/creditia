@@ -695,7 +695,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
 
   if (v === 'columns') {
     const rowB = (b: { role: string; people: RollPerson[] }) => box({ width: '100%', padding: '30px 0', borderTop: `1px solid ${hair(t)}`, gap: 48 },
-      box({ width: 200, justifyContent: 'flex-end' }, label(t, b.role, 13)),
+      box({ width: 200, justifyContent: 'flex-end' }, label(t, b.role, 16)),
       col({ flex: 1, gap: 16 }, ...b.people.map((p) => box({ alignItems: 'baseline', gap: 14 },
         txt({ fontFamily: t.display, fontSize: serif ? 34 : 28, fontWeight: t.displayWeight, color: t.ink }, p.name),
         p.model ? txt({ fontFamily: MONO_FONT, fontSize: 14, color: t.faint }, p.model) : null,
@@ -711,7 +711,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
   if (v === 'billing') {
     // 海报底部的演职员块：标题大字在上，角色小字 + 名字大字挤成一段居中的文字块
     const item = (b: { role: string; people: RollPerson[] }, p: RollPerson) => box({ alignItems: 'baseline', gap: 10, margin: '0 18px 14px' },
-      label(t, b.role, 11, { color: t.soft, letterSpacing: 2.5 }),
+      label(t, b.role, 14, { color: t.soft, letterSpacing: 2.5 }),
       txt({ fontFamily: t.display, fontSize: serif ? 36 : 30, fontWeight: t.displayWeight, color: t.ink }, p.name));
     const items = blocks.flatMap((b) => b.people.map((p) => item(b, p)));
     return { w: W, h: H, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', padding: '0 100px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
@@ -738,7 +738,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
     const seq: Node[] = [label(t, m.project, 14, { color: t.soft, letterSpacing: 6 })];
     for (const b of blocks) {
       seq.push(label(t, b.role, 14, { letterSpacing: 5 }));
-      seq.push(txt({ fontFamily: t.display, fontSize: serif ? 50 : 40, color: t.ink, textAlign: 'center', lineHeight: 1.2 }, b.people.map((p) => p.name).join('   ·   ')));
+      seq.push(txt({ fontFamily: t.display, fontSize: serif ? 50 : 40, color: t.ink, textAlign: 'center', lineHeight: 1.2, maxWidth: W - 200 }, b.people.map((p) => p.name).join('   ·   ')));
     }
     const n = seq.length;
     const lines = seq.map((node, i) => {
@@ -776,7 +776,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
     const L: Node[] = [], R: Node[] = [];
     blocks.forEach((b, i) => {
       const node = col({ alignItems: 'center', gap: 14, marginBottom: 44 },
-        label(t, b.role, 13, { letterSpacing: 5 }),
+        label(t, b.role, 15, { letterSpacing: 5 }),
         ...b.people.map((p) => col({ alignItems: 'center', gap: 4 },
           txt({ fontFamily: t.display, fontSize: 34 * fs, fontWeight: t.displayWeight, color: t.ink, textAlign: 'center' }, p.name),
           p.model ? txt({ fontFamily: MONO_FONT, fontSize: 13, color: t.faint }, p.model) : null)));
@@ -797,7 +797,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
     // 卡串：每个角色一张卡，像片尾一张张切过去的卡
     const rad = Math.min(t.radius, 14);
     const card = (b: { role: string; people: RollPerson[] }) => col({ width: 440, padding: '26px 30px', ...surface(t, { borderRadius: rad }), gap: 14 },
-      label(t, b.role, 12, { letterSpacing: 4 }),
+      label(t, b.role, 14, { letterSpacing: 4 }),
       ...b.people.map((p) => box({ alignItems: 'baseline', gap: 12, flexWrap: 'wrap' },
         p.key ? mark(p.key, t, 24) : null,
         txt({ fontFamily: t.display, fontSize: 32 * fs, fontWeight: t.displayWeight, color: t.ink }, p.name),
@@ -826,9 +826,10 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
   if (v === 'block') {
     // 压缩 billing block：海报底部那坨又高又窄的大写字（行规：名字至少是片名的 15%，角色不小于名字一半）
     const COND = 'Oswald, Noto Sans SC';
-    const seg = (role: string, names: string[]) => box({ alignItems: 'baseline', gap: 7, margin: '0 13px' },
-      role ? txt({ fontFamily: COND, fontSize: 12, color: t.soft, letterSpacing: 1.6, textTransform: 'uppercase' }, role) : null,
-      names.length ? txt({ fontFamily: COND, fontSize: 27, fontWeight: 600, color: t.ink, letterSpacing: 0.6, textTransform: 'uppercase' }, names.join('   ')) : null);
+    // 每个名字单独一块：同一职务的几个名字之间留出清楚的间距，放不下就换行，不会挤成一串
+    const seg = (role: string, names: string[]) => box({ alignItems: 'baseline', flexWrap: 'wrap', justifyContent: 'center', columnGap: 18, rowGap: 6, margin: '0 16px' },
+      role ? txt({ fontFamily: COND, fontSize: 15, color: t.soft, letterSpacing: 1.6, textTransform: 'uppercase' }, role) : null,
+      ...names.map((nm) => txt({ fontFamily: COND, fontSize: 27, fontWeight: 600, color: t.ink, letterSpacing: 0.6, textTransform: 'uppercase' }, nm)));
     return { w: W, h: H, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', gap: 40, padding: '80px 70px', ...backdrop(t, keysOf(m)), color: t.ink },
       txt({ fontFamily: t.display, fontSize: 104 * fs, fontWeight: t.displayWeight, lineHeight: 1.08, textAlign: 'center' }, m.project),
       col({ alignItems: 'center', gap: 8, marginTop: 6 },
@@ -845,7 +846,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
     const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
     const act = (a: { title: string; date?: string; names: string[] }, i: number) => col({ gap: 8, padding: '18px 0', borderTop: `1px solid ${hair(t)}` },
       box({ alignItems: 'baseline', justifyContent: 'space-between' },
-        label(t, `Act ${roman[i] ?? i + 1} · ${a.title}`, 13, { letterSpacing: 3 }),
+        label(t, `Act ${roman[i] ?? i + 1} · ${a.title}`, 15, { letterSpacing: 3 }),
         a.date ? txt({ fontFamily: MONO_FONT, fontSize: 13, color: t.faint }, a.date) : null),
       txt({ fontFamily: t.display, fontSize: 28 * fs, fontWeight: t.displayWeight, color: t.ink }, a.names.join('  ·  ')));
     return { w: W, h: H, tree: col({ width: W, height: H, padding: '90px 100px 80px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
