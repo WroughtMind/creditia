@@ -98,12 +98,19 @@ section, #screen { scroll-margin-top: 64px; }
 
 /* ───────── 首屏 ───────── */
 #screen { position: relative; height: 100vh; height: 100svh; min-height: 660px; max-height: 1100px; overflow: hidden; background: var(--hero); color: var(--hero-ink); transition: background-color .3s, color .3s; }
-.reel-view { position: absolute; top: 0; bottom: 0; right: max(32px, calc((100vw - 1120px) / 2)); width: min(520px, 42vw);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 20%, #000 80%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 20%, #000 80%, transparent 100%); }
-.reel { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
-.reel img { width: 100%; }
+@property --p { syntax: '<percentage>'; inherits: false; initial-value: 130%; }
+.stage { position: absolute; z-index: 1; top: 88px; bottom: 40px; right: max(32px, calc((100vw - 1120px) / 2)); width: min(480px, 40vw); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; perspective: 1400px; }
+.cards { position: relative; flex: none; transform: rotateX(var(--tx, 0deg)) rotateY(var(--ty, 0deg)); transition: transform 1s cubic-bezier(.2,.8,.2,1); }
+.cards img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,.12), 0 40px 90px -30px rgba(0,0,0,.55);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(var(--p) - 30%), transparent var(--p)); mask-image: linear-gradient(to bottom, #000 calc(var(--p) - 30%), transparent var(--p)); }
+.cap { display: flex; align-items: center; gap: 14px; font-size: 12.5px; color: var(--hero-soft); min-height: 20px; }
+.ticks { display: flex; gap: 6px; }
+.ticks button { width: 22px; height: 14px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; align-items: center; }
+.ticks i { display: block; height: 2px; border-radius: 2px; background: var(--hero-line); overflow: hidden; }
+.ticks i b { display: block; height: 100%; width: 100%; background: var(--hero-ink); transform-origin: left; transform: scaleX(0); }
+.ticks .done i b { transform: none; }
 .title { translate: 0 var(--py, 0px); opacity: var(--po, 1); }
-.reel-view { translate: 0 calc(var(--py, 0px) * -0.35); }
+.stage { translate: 0 calc(var(--py, 0px) * -0.35); }
 .title { position: absolute; z-index: 2; left: max(32px, calc((100vw - 1120px) / 2)); top: 50%; transform: translateY(-48%); width: min(520px, 46vw); }
 .title h1 { font-size: clamp(48px, 6vw, 84px); line-height: 1; }
 :lang(zh) .title h1 { font-size: clamp(40px, 4.6vw, 64px); line-height: 1.24; }
@@ -143,11 +150,33 @@ section, #screen { scroll-margin-top: 64px; }
 .live .roller img { height: auto; }
 .morph > img { position: absolute; inset: 0; }
 .morph > img.on { z-index: 1; }
-.exports { margin-top: 30px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.exports .lbl { color: var(--soft); font-size: 14px; margin-right: 6px; }
-.exports a { display: inline-flex; align-items: baseline; gap: 7px; height: 32px; align-items: center; padding: 0 13px; border: 1px solid var(--line); border-radius: 99px; font: 500 13px "JetBrains Mono", monospace; text-decoration: none; transition: background-color .15s, border-color .15s; }
-.exports a:hover { background: var(--line2); border-color: var(--soft); }
-.exports a small { font: 12px Inter, sans-serif; color: var(--faint); }
+/* 导出：一排小样，每种格式长成它自己的样子，点了就下载或打开 */
+.exports { margin-top: 44px; }
+.exports .lbl { display: block; color: var(--soft); font-size: 14px; margin-bottom: 14px; }
+.fx { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+.fx a { display: flex; flex-direction: column; gap: 10px; text-decoration: none; min-width: 0; }
+.fx .pv { position: relative; height: 156px; border-radius: 10px; overflow: hidden; background: var(--line2); border: 1px solid var(--line); display: grid; place-items: center; transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s, border-color .2s; }
+.fx a:hover .pv { transform: translateY(-4px); box-shadow: var(--shadow); border-color: var(--soft); }
+.fx .pv img { transition: transform .5s cubic-bezier(.2,.8,.2,1); }
+.fx a:hover .pv img { transform: scale(1.04); }
+.fx .nm { display: flex; align-items: baseline; gap: 8px; font: 500 13px "JetBrains Mono", monospace; }
+.fx .nm small { font: 12px Inter, sans-serif; color: var(--faint); }
+.fx .nm .ar { margin-left: auto; width: 14px; height: 14px; stroke: currentColor; fill: none; opacity: .35; transition: opacity .2s, transform .2s; flex: none; align-self: center; }
+.fx a:hover .ar { opacity: .9; transform: translateY(1px); }
+/* 各自的样子 */
+.pv.photo img { width: 100%; height: 100%; object-fit: cover; }
+.pv.vec img { width: 72%; height: auto; box-shadow: 0 0 0 1px #4B8DF8; }
+.pv.vec i { position: absolute; width: 7px; height: 7px; background: var(--card); border: 1px solid #4B8DF8; }
+.pv.page { background: repeating-linear-gradient(45deg, var(--line2) 0 6px, transparent 6px 12px); }
+.pv.page img { width: auto; height: 134px; margin-top: 24px; box-shadow: 0 6px 20px -6px rgba(0,0,0,.35); clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%); }
+.pv.anim img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.pv.anim b { position: absolute; left: 8px; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: #E5484D; animation: dot 1.4s infinite; }
+.pv.web { display: block; padding: 0; background: var(--card); }
+.pv.web .bar { height: 18px; display: flex; gap: 4px; align-items: center; padding: 0 8px; border-bottom: 1px solid var(--line); }
+.pv.web .bar i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.pv.web img { width: 100%; height: calc(100% - 18px); object-fit: cover; object-position: top; }
+.pv.text { display: block; padding: 12px 14px; background: var(--card); font: 10.5px/1.6 "JetBrains Mono", monospace; color: var(--soft); white-space: pre; text-align: left; overflow: hidden; }
+.pv.text em { font-style: normal; color: var(--ink); }
 
 /* 放大看 */
 #lb { position: fixed; inset: 0; z-index: 50; background: rgba(8,8,8,.86); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); display: grid; grid-template-rows: 1fr auto; padding: 4vh 4vw 3vh; color: #EEE9DF; }
@@ -214,58 +243,61 @@ section, #screen { scroll-margin-top: 64px; }
 .shot { border: 1px solid var(--line); border-bottom: 0; border-radius: 10px 10px 0 0; overflow: hidden; }
 .shot img { width: 100%; }
 
-.ins { margin-top: 40px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); overflow: hidden; }
-.itabs { position: relative; display: flex; gap: 2px; padding: 8px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
-.itabs::-webkit-scrollbar { display: none; }
-.itabs button { position: relative; z-index: 1; flex: none; height: 38px; padding: 0 16px; border: 0; border-radius: 10px; background: none; cursor: pointer; font-size: 14px; color: var(--soft); transition: color .25s; }
-.itabs button.on { color: var(--ink); }
-.itabs .ind { position: absolute; z-index: 0; top: 8px; height: 38px; border-radius: 10px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px var(--line); transition: left .5s cubic-bezier(.2,.8,.2,1), width .5s cubic-bezier(.2,.8,.2,1); }
-.ver { display: inline-flex; padding: 3px; border-radius: 99px; border: 1px solid var(--line); position: relative; }
-.ver button { position: relative; z-index: 1; height: 30px; padding: 0 13px; border: 0; background: none; border-radius: 99px; cursor: pointer; font-size: 13px; color: var(--soft); transition: color .25s; white-space: nowrap; }
-.ver button.on { color: var(--bg); }
-.ver button small { font-family: "JetBrains Mono", monospace; font-size: 11.5px; opacity: .75; margin-left: 5px; }
-.ver .ind { position: absolute; z-index: 0; top: 3px; height: 30px; border-radius: 99px; background: var(--ink); transition: left .45s cubic-bezier(.2,.8,.2,1), width .45s cubic-bezier(.2,.8,.2,1); }
-.ipanel { padding: 26px 26px 28px; transition: height .45s cubic-bezier(.2,.8,.2,1); box-sizing: content-box; }
-.plats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
-.plats button { height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--line); background: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--soft); transition: background-color .2s, color .2s, border-color .2s; }
-.plats button svg { width: 15px; height: 15px; fill: currentColor; }
-.plats button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.plats button em { font-style: normal; font-size: 11.5px; opacity: .6; }
-.dls { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
-.dlc { position: relative; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; background: var(--bg); transition: transform .25s cubic-bezier(.2,.8,.2,1), border-color .2s, box-shadow .25s; }
-a.dlc:hover { transform: translateY(-2px); border-color: var(--soft); box-shadow: var(--shadow); }
-.dlc .fmt { flex: none; width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; font: 500 11px "JetBrains Mono", monospace; letter-spacing: .02em; background: var(--line2); border: 1px solid var(--line); text-transform: uppercase; }
-.dlc b { display: block; font-weight: 500; font-size: 14.5px; line-height: 1.35; }
-.dlc > span:not(.fmt):not(.soon) { flex: 1; min-width: 0; }
-.dlc small { display: block; color: var(--faint); font: 12px "JetBrains Mono", monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dlc .arr { margin-left: auto; width: 18px; height: 18px; stroke: currentColor; fill: none; opacity: .5; transition: transform .25s, opacity .2s; }
-a.dlc:hover .arr { transform: translateY(2px); opacity: 1; }
-.soon { flex: none; font-size: 11.5px; line-height: 1; padding: 5px 8px; border-radius: 99px; color: var(--soft); background: var(--line2); border: 1px dashed var(--line); white-space: nowrap; }
-.dlc .soon { margin-left: 4px; }
-.sub { margin: 24px 0 10px; font-size: 13px; color: var(--faint); }
-.rows { display: grid; gap: 8px; }
-.irow { display: grid; grid-template-columns: 26px 128px 1fr auto; align-items: center; gap: 12px; padding: 9px 9px 9px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); min-height: 52px; }
-.irow > i { width: 18px; height: 18px; display: grid; place-items: center; color: var(--soft); }
-.irow > i svg { width: 18px; height: 18px; fill: currentColor; }
-.irow > b { font-weight: 500; font-size: 14px; }
-.irow code { font: 13px/1.5 "JetBrains Mono", monospace; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-.irow code::-webkit-scrollbar { display: none; }
-.irow.off code { color: var(--faint); }
-.cp { height: 34px; min-width: 34px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; color: var(--soft); transition: background-color .15s, color .15s, transform .15s; }
+.vline { margin: 12px 0 0; color: var(--soft); font-size: 14px; }
+.vline code { font: 12.5px "JetBrains Mono", monospace; color: var(--ink); }
+.ibento { margin-top: 40px; display: grid; grid-template-columns: 1.15fr 1fr; grid-template-areas: "ask app" "cli skill" "cli ci"; gap: 16px; }
+.ib { border: 1px solid var(--line); border-radius: 18px; background: var(--card); padding: 22px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ib h3 { margin: 0; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.ib h3 small { font-weight: 400; color: var(--faint); font-size: 12.5px; }
+.ib.ask { grid-area: ask; background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.ib.app { grid-area: app; } .ib.cli { grid-area: cli; } .ib.skill { grid-area: skill; } .ib.ci { grid-area: ci; }
+.ask .say { flex: 1; font-size: 15.5px; line-height: 1.85; white-space: pre-wrap; opacity: .92; }
+.ask .go { align-self: flex-start; height: 42px; padding: 0 18px; border-radius: 11px; border: 0; background: var(--bg); color: var(--ink); font-weight: 500; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: transform .2s; }
+.ask .go:hover { transform: translateY(-1px); }
+.ask .go svg { width: 15px; height: 15px; }
+.soon { flex: none; font-size: 11px; line-height: 1; padding: 4px 7px; border-radius: 99px; color: var(--soft); border: 1px dashed var(--line); white-space: nowrap; font-family: Inter, sans-serif; font-weight: 400; }
+.plat { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.plat:first-of-type { border-top: 0; padding-top: 0; }
+.plat > i svg { width: 18px; height: 18px; fill: currentColor; display: block; }
+.plat b { font-weight: 500; font-size: 14.5px; }
+.plat b em { font-style: normal; font-weight: 400; font-size: 11.5px; color: var(--faint); margin-left: 8px; }
+.plat .fmts { display: flex; gap: 6px; align-items: center; }
+.plat .fmt { font: 12px "JetBrains Mono", monospace; padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); text-decoration: none; color: var(--faint); }
+a.fmt { color: var(--ink); } a.fmt:hover { background: var(--line2); }
+.plat.me .fmt:first-child { background: var(--ink); color: var(--bg); border-color: var(--ink); opacity: .35; }
+.plat.me a.fmt:first-child { opacity: 1; }
+.plat .pm { grid-column: 2 / -1; display: flex; align-items: center; gap: 8px; font: 12px "JetBrains Mono", monospace; color: var(--faint); min-width: 0; }
+.plat .pm span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm { border-radius: 12px; background: var(--term); color: var(--term-ink); padding: 16px 0 14px; font: 12.5px/1.7 "JetBrains Mono", monospace; flex: 1; overflow: hidden; }
+.tm .c { color: #6F6B63; padding: 10px 18px 2px; }
+.tm .c:first-child { padding-top: 0; }
+.tm .l { display: flex; align-items: center; gap: 10px; padding: 3px 10px 3px 18px; min-height: 30px; }
+.tm .l > span:first-child { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.tm .l > span:first-child::-webkit-scrollbar { display: none; }
+.tm .l .p { color: #6F6B63; margin-right: 8px; font-style: normal; }
+.tm .l.off > span:first-child { color: #5E5A53; }
+.tm .l.off .soon { opacity: 0; transition: opacity .15s; }
+.tm .l.off:hover .soon { opacity: 1; }
+.ib h3 .key { margin-left: auto; font-weight: 400; font-size: 12px; color: var(--faint); display: inline-flex; align-items: center; gap: 6px; }
+.ib h3 .key i { width: 18px; height: 2px; background: currentColor; opacity: .5; }
+.tm .l .soon { color: #8C877D; border-color: rgba(232,228,219,.18); }
+.tm .l .cp { opacity: 0; height: 26px; min-width: 26px; padding: 0 6px; background: transparent; border-color: rgba(232,228,219,.2); color: #A9A397; transition: opacity .15s; }
+.tm .l:hover { background: rgba(255,255,255,.04); }
+.tm .l:hover .cp, .tm .l .cp:focus-visible { opacity: 1; }
+.logos { display: flex; flex-wrap: wrap; gap: 12px 14px; color: var(--soft); }
+.logos svg { width: 20px; height: 20px; fill: currentColor; display: block; }
+.line { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 6px 6px 6px 12px; font: 12.5px "JetBrains Mono", monospace; min-height: 40px; }
+.line > span:first-child { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.line > span:first-child::-webkit-scrollbar { display: none; }
+.line.off > span:first-child { color: var(--faint); }
+.line small { font: 11.5px Inter, sans-serif; color: var(--faint); flex: none; }
+.cp { height: 30px; min-width: 30px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; color: var(--soft); transition: background-color .15s, color .15s, transform .15s; flex: none; }
 .cp:hover { color: var(--ink); background: var(--line2); }
 .cp:active { transform: scale(.94); }
-.cp svg { width: 15px; height: 15px; }
-.prompt { position: relative; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); padding: 20px 22px 70px; font-size: 15px; line-height: 1.85; white-space: pre-wrap; }
-.prompt .cp { position: absolute; right: 14px; bottom: 14px; height: 40px; padding: 0 16px; background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 500; }
-.prompt .cp:hover { background: var(--ink); color: var(--bg); opacity: .88; }
-.prompt.off { color: var(--faint); }
-.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-.chips button { height: 32px; padding: 0 13px; border-radius: 99px; border: 1px solid var(--line); background: none; cursor: pointer; font-size: 13.5px; color: var(--soft); transition: background-color .2s, color .2s; }
-.chips button.on { background: var(--line2); color: var(--ink); border-color: var(--soft); }
-.yaml { position: relative; border-radius: 12px; background: var(--term); color: var(--term-ink); padding: 18px 20px; font: 13px/1.85 "JetBrains Mono", monospace; white-space: pre; overflow-x: auto; }
-.yaml .cp { position: absolute; top: 12px; right: 12px; background: transparent; border-color: rgba(232,228,219,.2); color: #A9A397; }
+.cp svg { width: 14px; height: 14px; }
+.yaml { position: relative; border-radius: 12px; background: var(--term); color: var(--term-ink); padding: 14px 18px; font: 12.5px/1.8 "JetBrains Mono", monospace; white-space: pre; overflow-x: auto; }
+.yaml .cp { position: absolute; top: 10px; right: 10px; background: transparent; border-color: rgba(232,228,219,.2); color: #A9A397; }
 .yaml .k { color: #8C877D; }
-.agrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
 #toast { position: fixed; z-index: 60; left: 0; top: 0; padding: 5px 11px; border-radius: 8px; font-size: 12.5px; background: var(--ink); color: var(--bg); pointer-events: none; opacity: 0; white-space: nowrap; }
 #lb .bar .cp { background: transparent; border-color: rgba(238,233,223,.2); color: #EEE9DF; font: 12.5px "JetBrains Mono", monospace; height: 38px; max-width: min(46vw, 520px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; line-height: 36px; }
 #lb .bar .n { font: 12px "JetBrains Mono", monospace; color: #8C877D; }
@@ -293,20 +325,21 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 
 @media (max-width: 900px) {
   .wrap, header .wrap { width: calc(100% - 40px); }
-  .reel-view { left: 10%; right: 10%; width: auto; bottom: 40%; opacity: .45; }
+  .stage { left: 12%; right: 12%; width: auto; top: 70px; bottom: 44%; opacity: .5; }
+  .cap { display: none; }
   #screen::after { content: ""; position: absolute; inset: 18% 0 0; z-index: 1; pointer-events: none; background: linear-gradient(transparent, var(--hero) 40%); }
   .title { top: auto; bottom: 48px; transform: none; left: 20px; right: 20px; width: auto; }
   .title p { font-size: 16px; }
   .agents { gap: 12px 14px; }
   .agents svg { width: 22px; height: 22px; }
   .wall, .band { gap: 10px; }
+  .fx { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-left: 20px; padding-bottom: 8px; margin: 0 -20px; padding-left: 20px; padding-right: 20px; scrollbar-width: none; }
+  .fx::-webkit-scrollbar { display: none; }
+  .fx a { flex: 0 0 150px; scroll-snap-align: start; }
   .ways { grid-template-columns: 1fr; }
   nav { display: none; }
-  .itabs { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
-  .ipanel { padding: 18px 16px 20px; }
-  .irow { grid-template-columns: 22px 1fr auto; row-gap: 4px; }
-  .irow code { grid-column: 1 / -1; grid-row: 2; padding-bottom: 2px; }
-  .prompt { font-size: 14px; padding: 16px 16px 66px; }
+  .ibento { grid-template-columns: 1fr; grid-template-areas: "ask" "app" "cli" "skill" "ci"; }
+  .ib { padding: 18px 16px; }
   #lb .bar { flex-wrap: wrap; gap: 8px 12px; }
   #lb .bar .cp { max-width: 92vw; order: 9; }
   .way h3 { flex-wrap: wrap; gap: 2px 10px; }
@@ -328,19 +361,19 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
       </button>
       <a href="https://github.com/WroughtMind/creditia" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg></a>
     </div>
-    <a class="get" href="#install" data-go="install"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v10.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6zM4 19h16v2H4z"/></svg><span data-i="nav.get">安装</span></a>
+    <a class="get" href="#install"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v10.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6zM4 19h16v2H4z"/></svg><span data-i="nav.get">安装</span></a>
   </div>
 </header>
 
 <main>
   <div id="screen">
-    <div class="reel-view"><div class="reel" id="reel"><img id="reelart" alt=""></div></div>
+    <div class="stage" id="stage"><div class="cards" id="cards"></div><div class="cap"><span id="capn"></span><span class="ticks" id="ticks"></span></div></div>
     <div class="title">
       <h1 class="serif" data-i="hero.t">你的代码，<br>是哪些 AI 写的</h1>
       <p data-i="hero.p">把 agent 的日志和 git 历史逐行对上，算出每个工具、每个模型写了多少，做成片尾字幕。全在本地。</p>
       <div class="acts">
         <div class="cmd mono"><span><span class="p">$</span>npx creditia analyze</span><button id="copy" aria-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button></div>
-        <a class="dl" id="herodl" href="#install" data-go="app"></a>
+        <a class="dl" id="herodl" href="#install"></a>
       </div>
       <div class="agents" id="agents"></div>
     </div>
@@ -393,8 +426,14 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 
   <section id="install">
     <div class="wrap">
-      <div class="head rise"><h2 class="serif" data-i="ins.t">安装</h2><div class="ver" id="ver"></div></div>
-      <div class="ins rise"><div class="itabs" id="itabs"></div><div class="ipanel" id="ipanel"></div></div>
+      <div class="head rise"><div><h2 class="serif" data-i="ins.t">安装</h2><p class="vline" id="vline"></p></div></div>
+      <div class="ibento">
+        <div class="ib ask rise" id="ib-ask"></div>
+        <div class="ib app rise" id="ib-app"></div>
+        <div class="ib cli rise" id="ib-cli"></div>
+        <div class="ib skill rise" id="ib-skill"></div>
+        <div class="ib ci rise" id="ib-ci"></div>
+      </div>
     </div>
   </section>
 </main>
@@ -485,35 +524,69 @@ function count(el, to, fmt, dur = 1000) {
 
 // ───────── 首屏 ─────────
 $('agents').innerHTML = DATA.tools.map((x) => `<span data-n="${x.name}" aria-label="${x.name}">${x.svg}</span>`).join('');
-const hero = { y: 0, v: 28, from: 0, to: 0, ready: false, hover: false };
+// 首屏：一组片尾字幕卡，一张一张从上往下「显影」出来，停一会儿换下一张；鼠标放上去就停住
+const HOLD = 4.2, DEV = 1.7; // 停留、显影的秒数
+const hero = { list: [], i: -1, t: 0, hover: false, busy: false, key: '' };
+const MASK = typeof CSS !== 'undefined' && CSS.registerProperty !== undefined; // --p 能做动画（@property）才用显影，否则淡入
 function reel() {
-  const mode = isDark() ? 'dark' : 'light', d = DATA.reel[mode];
-  const img = $('reelart');
-  size(img, d);
-  hero.ready = false;
-  const start = () => {
-    const view = $('reel').parentElement.getBoundingClientRect();
-    const h = (view.width * d.h) / d.w;
-    hero.from = view.height * 0.16; hero.to = -h + view.height * 0.3;
-    if (!hero.y || hero.y > hero.from || hero.y < hero.to) hero.y = hero.from;
-    hero.ready = true;
-    $('reel').style.transform = `translate3d(0,${hero.y}px,0)`;
-  };
-  img.onload = start;
-  img.src = `assets/reel/${lang()}-${mode}.svg`;
-  if (img.complete && img.naturalWidth) start();
+  const mode = isDark() ? 'dark' : 'light', key = `${lang()}-${mode}`;
+  hero.list = DATA.hero[mode];
+  fitStage();
+  $('ticks').innerHTML = hero.list.map((x, j) => `<button data-j="${j}" aria-label="${heroLabel(x)}"><i><b></b></i></button>`).join('');
+  hero.list.forEach((x) => { const im = new Image(); im.src = heroSrc(x); }); // 预先载入
+  if (hero.key !== key) { hero.key = key; $('cards').innerHTML = ''; hero.i = -1; heroGo(0, true); }
+  else heroMark();
 }
-// 字幕自己往上走；鼠标放上去慢慢停下，往下滚页面时跟着快一点
+const heroSrc = (x) => `assets/hero/${lang()}/${x.name}.png`;
+const heroLabel = (x) => `${sname(styleOf(x.style))} · ${lang() === 'en' ? x.ve : x.vz}`;
+function fitStage() {
+  const st = $('stage').getBoundingClientRect(), d = hero.list[0];
+  if (!d) return;
+  const capH = innerWidth > 900 ? 40 : 0;
+  const w = Math.min(st.width, ((st.height - capH) * d.w) / d.h);
+  $('cards').style.width = `${w}px`; $('cards').style.height = `${(w * d.h) / d.w}px`;
+}
+function heroMark() {
+  $('capn').textContent = hero.list[hero.i] ? heroLabel(hero.list[hero.i]) : '';
+  [...$('ticks').children].forEach((b, j) => { b.classList.toggle('done', j < hero.i); if (j !== hero.i) b.querySelector('b').style.transform = ''; });
+}
+function heroGo(j, first) {
+  if (hero.busy && !first) return;
+  const x = hero.list[(j + hero.list.length) % hero.list.length];
+  hero.i = (j + hero.list.length) % hero.list.length; hero.t = 0;
+  heroMark();
+  const img = new Image(); img.alt = heroLabel(x); img.width = x.w; img.height = x.h; img.src = heroSrc(x);
+  const box = $('cards'), old = [...box.children];
+  if (RM) { box.append(img); old.forEach((o) => o.remove()); return; }
+  hero.busy = true;
+  const run = () => {
+    box.append(img); // 解码好了再放进去，免得没开始显影就整张露出来
+    const a = MASK
+      ? img.animate([{ '--p': '0%', filter: 'blur(6px)', transform: 'scale(1.015)' }, { '--p': '130%', filter: 'blur(0)', transform: 'none' }], { duration: DEV * 1000, delay: first ? 500 : 0, easing: 'cubic-bezier(.45,0,.2,1)', fill: 'backwards' })
+      : img.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 900, delay: first ? 500 : 0, fill: 'backwards' });
+    old.forEach((o) => o.animate([{ opacity: 1 }, { opacity: 0 }], { duration: DEV * 600, delay: DEV * 500, fill: 'forwards' }));
+    a.finished.then(() => { old.forEach((o) => o.remove()); hero.busy = false; }, () => (hero.busy = false));
+  };
+  img.decode ? img.decode().then(run, run) : run();
+}
 tickers.add((dt) => {
-  if (!hero.ready || RM || scrollY > innerHeight * 1.2) return;
-  const target = hero.hover ? 0 : 28 + Math.max(0, sv) * 0.25;
-  hero.v += (target - hero.v) * Math.min(1, dt * 3);
-  hero.y -= hero.v * dt;
-  if (hero.y < hero.to) hero.y = hero.from;
-  $('reel').style.transform = `translate3d(0,${hero.y}px,0)`;
+  if (RM || hero.busy || hero.hover || hero.i < 0 || scrollY > innerHeight) return;
+  hero.t += dt;
+  const b = $('ticks').children[hero.i]?.querySelector('b');
+  if (b) b.style.transform = `scaleX(${Math.min(1, hero.t / HOLD)})`;
+  if (hero.t >= HOLD) heroGo(hero.i + 1);
 });
-document.querySelector('.reel-view').onpointerenter = () => (hero.hover = true);
-document.querySelector('.reel-view').onpointerleave = () => (hero.hover = false);
+$('ticks').onclick = (e) => { const b = e.target.closest('button'); if (b) heroGo(+b.dataset.j); };
+// 鼠标在卡片上：停住，卡片微微朝鼠标转
+const stageEl = $('stage');
+stageEl.onpointerenter = () => (hero.hover = true);
+stageEl.onpointerleave = () => { hero.hover = false; $('cards').style.setProperty('--tx', '0deg'); $('cards').style.setProperty('--ty', '0deg'); };
+stageEl.onpointermove = (e) => {
+  if (!FINE) return;
+  const r = $('cards').getBoundingClientRect();
+  $('cards').style.setProperty('--ty', `${((e.clientX - r.left) / r.width - 0.5) * 7}deg`);
+  $('cards').style.setProperty('--tx', `${(0.5 - (e.clientY - r.top) / r.height) * 5}deg`);
+};
 // 往下滚：标题慢慢退开
 const screenEl = $('screen');
 const parallax = () => {
@@ -538,7 +611,7 @@ function intro() {
   rise([document.querySelector('.title p'), document.querySelector('.acts')], { y: 30, delay: after, step: 120, dur: 1000 });
   document.querySelectorAll('#agents span').forEach((s, k) => s.animate(
     [{ transform: 'scale(.4)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 700, delay: after + 260 + k * 35, easing: SPRING, fill: 'backwards' }));
-  document.querySelector('.reel-view').animate([{ opacity: 0, transform: 'scale(1.04)' }, { opacity: 1, transform: 'none' }], { duration: 1800, delay: 200, easing: EASE, fill: 'backwards' });
+  document.querySelector('.cap').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1200, delay: 1600, fill: 'backwards' });
 }
 
 // ───────── 风格墙 ─────────
@@ -667,11 +740,19 @@ $('wall').addEventListener('click', (e) => {
 
 function exports() {
   const L = lang(), f = DATA.formats[L], base = `assets/formats/${L}`;
-  const a = (name, file, size, open) => `<a href="${base}/${file}" ${open ? 'target="_blank" rel="noopener"' : 'download'}>${name}<small>${size}</small></a>`;
-  $('exports').innerHTML = `<span class="lbl">${t('exp.l')}</span>` + [
-    a('PNG', 'credits.png', f.png.size), a('SVG', 'credits.svg', f.svg.size), a('PDF', 'credits.pdf', f.pdf.size),
-    a('GIF', 'credits.gif', f.gif.size), a('HTML', 'credits.html', f.html.size, true), a('Markdown', 'CREDITS.md', f.md.size),
-  ].join('');
+  const th = (k) => `${base}/thumb-${k}.png`;
+  const ARR = '<svg class="ar" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round"><path d="M12 4v13M6 12l6 6 6-6"/></svg>';
+  const OPEN = '<svg class="ar" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"/></svg>';
+  const md = esc(f.md.text).replace(/^(#+ .*|\|.*\|)$/gm, '<em>$1</em>');
+  const items = [
+    ['PNG', 'credits.png', f.png.size, `<div class="pv photo"><img src="${th('png')}" alt="" loading="lazy"></div>`],
+    ['SVG', 'credits.svg', f.svg.size, `<div class="pv vec"><img src="${th('svg')}" alt="" loading="lazy">${['top:13%;left:12%', 'top:13%;right:12%', 'bottom:13%;left:12%', 'bottom:13%;right:12%'].map((p) => `<i style="${p};margin:-3px"></i>`).join('')}</div>`],
+    ['PDF', 'credits.pdf', f.pdf.size, `<div class="pv page"><img src="${th('pdf')}" alt="" loading="lazy"></div>`],
+    ['GIF', 'credits.gif', f.gif.size, `<div class="pv anim"><img src="${base}/credits.gif" alt="" loading="lazy"><b></b></div>`],
+    ['HTML', 'credits.html', f.html.size, `<div class="pv web"><div class="bar"><i></i><i></i><i></i></div><img src="${th('html')}" alt="" loading="lazy"></div>`, true],
+    ['Markdown', 'CREDITS.md', f.md.size, `<div class="pv text">${md}</div>`],
+  ];
+  $('exports').innerHTML = `<span class="lbl">${t('exp.l')}</span><div class="fx">${items.map(([n, file, size, pv, open]) => `<a href="${base}/${file}" ${open ? 'target="_blank" rel="noopener"' : 'download'}>${pv}<span class="nm">${n}<small>${size}</small>${open ? OPEN : ARR}</span></a>`).join('')}</div>`;
 }
 
 // ───────── 放大看：从图块的位置长出来，关的时候缩回去 ─────────
@@ -886,117 +967,65 @@ async function copy(text, btn) {
 }
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-copy]'); if (b) copy(b.dataset.copy, b); });
 
-// ───────── 安装：平台 × 方式 × 版本。ready 为 false 的还没发布，按钮不可点，标「即将推出」；接入后改成 true 就行 ─────────
+// ───────── 安装：所有方式一眼摆出来，本机对应的排最前，不用选。
+// 第四个字段 ready：已经能用的才可点、可复制；其余标「即将推出」。发布后把它改成 true 就行 ─────────
 const VER = DATA.version;
 const REPO = 'https://github.com/WroughtMind/creditia';
 const ICON = (k) => (DATA.icons[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${DATA.icons[k]}"/></svg>` : '');
-const toolSvg = (name) => DATA.tools.find((x) => x.name === name)?.svg ?? '';
 const SOON = () => `<span class="soon">${lang() === 'en' ? 'Soon' : '即将推出'}</span>`;
 const cpBtn = (text) => `<button class="cp" data-copy="${text.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" aria-label="copy">${COPY_SVG}</button>`;
-const PLATFORMS = { mac: ['macOS', 'apple'], win: ['Windows', 'windows'], linux: ['Linux', 'linux'] };
 const MOBILE = /iphone|ipad|ipod|android/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const detectOS = () => { const p = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent).toLowerCase(); return /win/.test(p) ? 'win' : /linux|x11|cros/.test(p) && !/android/.test(p) ? 'linux' : 'mac'; };
-const ins = { tab: 'app', os: detectOS(), v: 'stable', ask: 'all' };
-const pre = () => ins.v === 'preview';
-const asset = (f) => `${REPO}/releases/download/${pre() ? 'nightly' : 'v' + VER}/${f.replace('{v}', pre() ? 'nightly' : VER)}`;
-// 每一项：[图标, 名字（中, 英）, 内容, 已经能用]
+const asset = (f) => `${REPO}/releases/download/v${VER}/${f.replace('{v}', VER)}`;
+const L2 = (x) => (Array.isArray(x) ? x[lang() === 'en' ? 1 : 0] ?? x[0] : x);
+// 桌面 App：每个平台一个主安装包，其余格式跟在后面，再加一行包管理器
 const APP = {
-  mac: { dl: [[['Apple 芯片', 'Apple silicon'], 'dmg', 'creditia_{v}_aarch64.dmg'], [['Intel 芯片', 'Intel'], 'dmg', 'creditia_{v}_x64.dmg']],
-    pm: () => [['homebrew', 'Homebrew', pre() ? 'brew install --cask wroughtmind/tap/creditia@nightly' : 'brew install --cask wroughtmind/tap/creditia', false]] },
-  win: { dl: [[['x64 安装程序', 'x64 installer'], 'exe', 'creditia_{v}_x64-setup.exe'], [['x64 MSI', 'x64 MSI'], 'msi', 'creditia_{v}_x64_en-US.msi'], [['ARM64 安装程序', 'ARM64 installer'], 'exe', 'creditia_{v}_arm64-setup.exe']],
-    pm: () => [['windows', 'winget', `winget install WroughtMind.Creditia${pre() ? '.Nightly' : ''}`, false], ['powershell', 'Scoop', `scoop bucket add wroughtmind https://github.com/WroughtMind/scoop-bucket; scoop install creditia${pre() ? '-nightly' : ''}`, false]] },
-  linux: { dl: [[['AppImage', 'AppImage'], 'app', 'creditia_{v}_amd64.AppImage'], [['Debian / Ubuntu', 'Debian / Ubuntu'], 'deb', 'creditia_{v}_amd64.deb'], [['Fedora / openSUSE', 'Fedora / openSUSE'], 'rpm', 'creditia-{v}-1.x86_64.rpm']],
-    pm: () => [['flathub', 'Flathub', `flatpak install flathub dev.creditia.app${pre() ? '//beta' : ''}`, false]] },
+  mac: { name: 'macOS', icon: 'apple', sub: ['Apple 芯片、Intel 通用', 'Apple silicon & Intel'], files: [['.dmg', 'creditia_{v}_universal.dmg', false]], pm: ['brew install --cask wroughtmind/tap/creditia', false] },
+  win: { name: 'Windows', icon: 'windows', sub: ['Windows 10 / 11', 'Windows 10 / 11'], files: [['.exe', 'creditia_{v}_x64-setup.exe', false], ['.msi', 'creditia_{v}_x64_en-US.msi', false], ['ARM64', 'creditia_{v}_arm64-setup.exe', false]], pm: ['winget install WroughtMind.Creditia', false] },
+  linux: { name: 'Linux', icon: 'linux', sub: ['x64', 'x64'], files: [['.AppImage', 'creditia_{v}_amd64.AppImage', false], ['.deb', 'creditia_{v}_amd64.deb', false], ['.rpm', 'creditia-{v}-1.x86_64.rpm', false]], pm: ['flatpak install flathub dev.creditia.app', false] },
 };
-const CLI = () => {
-  const tag = pre() ? '@next' : '';
-  return [
-    ['npm', 'npx', `npx creditia${tag} analyze`, false],
-    ['npm', 'npm', `npm i -g creditia${tag}`, false],
-    ['pnpm', 'pnpm', `pnpm add -g creditia${tag}`, false],
-    ['bun', 'bun', `bun add -g creditia${tag}`, false],
-    ['homebrew', 'Homebrew', `brew install wroughtmind/tap/creditia${pre() ? ' --HEAD' : ''}`, false],
-    ['gnubash', 'macOS / Linux', `curl -fsSL https://wroughtmind.github.io/creditia/install.sh | sh${pre() ? ' -s -- --nightly' : ''}`, false],
-    ['powershell', 'Windows', `irm https://wroughtmind.github.io/creditia/install.ps1 | iex${pre() ? '; creditia self-update --nightly' : ''}`, false],
-    ['docker', 'Docker', `docker run --rm -v "$PWD:/repo" ghcr.io/wroughtmind/creditia:${pre() ? 'nightly' : VER} analyze`, false],
-    ['rust', [lang() === 'en' ? 'Cargo (core)' : 'Cargo（分析核心）'], pre() ? `cargo install --git ${REPO} creditia-cli` : `cargo install creditia-cli@${VER}`, pre()],
-    ['gnubash', [lang() === 'en' ? 'From source' : '从源码'], `git clone ${REPO} && cd creditia/packages/cli && npm i && npm link`, true],
-  ];
-};
-const AGENTS = [['Claude Code', 'claude-code'], ['Codex', 'codex'], ['Cursor', 'cursor'], ['Gemini CLI', 'gemini'], ['OpenCode', 'opencode'], ['GitHub Copilot', 'copilot'], ['Cline', 'cline'], ['Qwen Code', 'qwen']];
-const SKILL = () => [
-  ...AGENTS.map(([name, id]) => [name, `npx creditia${pre() ? '@next' : ''} skill add --agent ${id}`, false]),
-  [lang() === 'en' ? 'Claude Code, by hand' : 'Claude Code（手动）', `git clone --depth 1 ${REPO} /tmp/creditia && mkdir -p ~/.claude/skills && cp -r /tmp/creditia/skills/creditia ~/.claude/skills/`, true],
+// 命令行：按来源分组，一行一个
+const CLI = () => [
+  ['npm · pnpm · bun', [['npx creditia analyze', false], ['npm i -g creditia', false], ['pnpm add -g creditia', false], ['bun add -g creditia', false]]],
+  ['Homebrew · Scoop', [['brew install wroughtmind/tap/creditia', false], ['scoop install creditia', false]]],
+  [lang() === 'en' ? 'One-line script' : '一行脚本', [['curl -fsSL https://wroughtmind.github.io/creditia/install.sh | sh', false], ['irm https://wroughtmind.github.io/creditia/install.ps1 | iex', false]]],
+  ['Docker · Cargo', [['docker run --rm -v "$PWD:/repo" ghcr.io/wroughtmind/creditia analyze', false], [`cargo install --git ${REPO} creditia-cli`, true]]],
+  [lang() === 'en' ? 'From source' : '从源码', [[`git clone ${REPO} && cd creditia/packages/cli && npm i && npm link`, true]]],
 ];
-const ASKS = {
-  all: ['安装并分析', 'Install and analyze'],
-  app: ['装 App', 'Install the app', false], // 安装包还没发布
-  skill: ['只装 skill', 'Just the skill'],
-  readme: ['做成 README 徽章', 'README badge'],
-};
+const SKILL_AGENTS = ['Claude Code', 'Codex', 'Cursor', 'Gemini CLI', 'OpenCode', 'GitHub Copilot', 'Cline', 'Qwen Code', 'Roo Code', 'Kilo Code'];
 const OSN = { mac: 'macOS', win: 'Windows', linux: 'Linux' };
 function prompt() {
-  const en = lang() === 'en', os = MOBILE && !ins.picked ? (en ? 'computer' : '电脑') : OSN[ins.os], v = pre() ? (en ? 'the nightly build' : '预览版（main 分支）') : (en ? `v${VER}` : `稳定版 v${VER}`);
-  const P = {
-    all: en ? `Install creditia (${REPO}) — ${v} — on my ${os}${os === 'computer' ? '' : ' machine'}, then use it to work out which AI tools and models wrote the code in this repo.\n1. Install the command-line tool and the skills/creditia skill, following the README.\n2. Run creditia analyze at the repo root and tell me the result.\n3. Ask me before publishing or committing anything.`
-      : `帮我在这台${os === '电脑' ? '' : ' '}${os}${os === '电脑' ? '' : ' '}上安装 creditia（${REPO}，${v}），用它算出这个仓库的代码是哪些 AI 工具和模型写的：\n1. 按 README 安装命令行工具和 skills/creditia 这个 skill；\n2. 在仓库根目录运行 creditia analyze，把结果告诉我；\n3. 公开或提交任何东西之前先问我。`,
-    app: en ? `Download and install the creditia desktop app (${v})${os === 'computer' ? '' : ` for ${os}`} from ${REPO}/releases — pick the build for my CPU — and open it.` : `从 ${REPO}/releases 下载 creditia 桌面版（${v}）${os === '电脑' ? '的' : `的 ${os} `}安装包，选和我电脑芯片对应的那个，装好后打开。`,
-    skill: en ? `Add the creditia skill to yourself: copy skills/creditia from ${REPO} into your skills folder, then tell me what it can do.` : `把 ${REPO} 里的 skills/creditia 装进你的 skills 目录，装好后告诉我它能做什么。`,
-    readme: en ? `Use creditia (${REPO}) to analyze this repo, export a credits badge, and add it to the top of README.md. Show me the numbers and wait for my OK before committing.` : `用 creditia（${REPO}）分析这个仓库，导出一个署名徽章放到 README.md 顶部。先给我看数字，我同意了再提交。`,
-  };
-  return P[ins.ask];
+  const en = lang() === 'en', os = MOBILE ? '' : OSN[detectOS()];
+  return en
+    ? `Install creditia (${REPO})${os ? ` on this ${os} machine` : ''} and use it to work out which AI tools and models wrote the code in this repo.\n1. Install the command-line tool and the skills/creditia skill, following the README.\n2. Run creditia analyze at the repo root and tell me the result.\n3. Ask me before publishing or committing anything.`
+    : `帮我${os ? `在这台 ${os} 上` : ''}装上 creditia（${REPO}），用它算出这个仓库的代码是哪些 AI 工具和模型写的：\n1. 按 README 安装命令行工具和 skills/creditia 这个 skill；\n2. 在仓库根目录运行 creditia analyze，把结果告诉我；\n3. 公开或提交任何东西之前先问我。`;
 }
-const CI = () => {
-  const ref = pre() ? 'main' : `v${VER}`;
-  return [
-    ['githubactions', 'GitHub Actions', `- uses: WroughtMind/creditia@${ref}\n  with:\n    badge: assets/credits-badge.svg\n    doc: CREDITS.md`, pre()],
-    ['gitlab', 'GitLab CI', `credits:\n  image: ghcr.io/wroughtmind/creditia:${pre() ? 'nightly' : VER}\n  script:\n    - creditia badge --out assets/credits-badge.svg\n    - creditia doc`, false],
-  ];
-};
-const TABS = { app: ['桌面 App', 'Desktop app'], cli: ['命令行', 'Command line'], skill: ['Agent skill', 'Agent skill'], ask: ['交给 agent', 'Ask your agent'], ci: ['CI', 'CI'] };
-const L2 = (x) => (Array.isArray(x) ? x[lang() === 'en' ? 1 : 0] ?? x[0] : x);
-const row = (icon, name, cmd, ready) => `<div class="irow${ready ? '' : ' off'}"><i>${icon}</i><b>${L2(name)}</b><code>${esc(cmd)}</code>${ready ? cpBtn(cmd) : SOON()}</div>`;
+const cmdLine = (cmd, ready, cls = 'line') => `<div class="${cls}${ready ? '' : ' off'}"><span>${cls === 'l' ? '<i class="p">$</i>' : ''}${esc(cmd)}</span>${ready ? cpBtn(cmd) : SOON()}</div>`;
 const yamlHl = (s) => esc(s).replace(/^(\s*-?\s*)([\w-]+):/gm, '$1<span class="k">$2</span>:');
-function panel() {
-  const en = lang() === 'en';
-  if (ins.tab === 'app') {
-    const p = APP[ins.os], here = detectOS();
-    return `<div class="plats">${Object.entries(PLATFORMS).map(([k, [n, ic]]) => `<button data-os="${k}" class="${k === ins.os ? 'on' : ''}">${ICON(ic)}${n}${k === here && !MOBILE ? `<em>${en ? 'this device' : '本机'}</em>` : ''}</button>`).join('')}</div>
-      <div class="dls">${p.dl.map(([name, fmt, file]) => { const ready = false; const inner = `<span class="fmt">${fmt}</span><span><b>${L2(name)}</b><small>${file.replace('{v}', pre() ? 'nightly' : VER)}</small></span>`; return ready ? `<a class="dlc" href="${asset(file)}">${inner}<svg class="arr" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round"><path d="M12 4v13M6 12l6 6 6-6"/></svg></a>` : `<div class="dlc">${inner}${SOON()}</div>`; }).join('')}</div>
-      <div class="sub">${en ? 'Package managers' : '包管理器'}</div><div class="rows">${p.pm().map(([ic, n, c, r]) => row(ICON(ic), n, c, r)).join('')}</div>`;
-  }
-  if (ins.tab === 'cli') return `<div class="rows">${CLI().map(([ic, n, c, r]) => row(ICON(ic), n, c, r)).join('')}</div>`;
-  if (ins.tab === 'skill') return `<div class="rows">${SKILL().map(([n, c, r], i) => row(toolSvg(AGENTS[i]?.[0] ?? 'Claude Code'), n, c, r)).join('')}</div>`;
-  if (ins.tab === 'ask') {
-    const t = prompt(), ready = ASKS[ins.ask][2] !== false;
-    return `<div class="chips">${Object.entries(ASKS).map(([k, v]) => `<button data-ask="${k}" class="${k === ins.ask ? 'on' : ''}">${L2(v)}</button>`).join('')}</div><div class="prompt${ready ? '' : ' off'}" id="ptext">${esc(t)}${ready ? `<button class="cp" data-copy="${esc(t).replace(/"/g, '&quot;')}">${COPY_SVG}${en ? 'Copy for your agent' : '复制，发给 agent'}</button>` : `<span class="soon" style="position:absolute;right:16px;bottom:18px">${en ? 'Soon' : '即将推出'}</span>`}</div>`;
-  }
-  return `<div class="rows" style="gap:14px">${CI().map(([ic, n, y, r]) => `<div><div class="sub" style="margin-top:0;display:flex;align-items:center;gap:8px">${ICON(ic).replace('<svg', '<svg style="width:15px;height:15px;fill:currentColor"')}${n}${r ? '' : SOON()}</div><div class="yaml">${yamlHl(y)}${r ? cpBtn(y) : ''}</div></div>`).join('')}</div>`;
+function install() {
+  const en = lang() === 'en', me = detectOS();
+  $('vline').innerHTML = en ? `Current <code>v${VER}</code> · nightly builds: <code>creditia@next</code> on npm, <code>@main</code> for the Action` : `当前 <code>v${VER}</code> · 预览版：npm 用 <code>creditia@next</code>，Action 用 <code>@main</code>`;
+  // 交给 agent：最省事，放第一个
+  const say = prompt();
+  $('ib-ask').innerHTML = `<h3>${en ? 'Ask your agent' : '交给 agent'}</h3><div class="say">${esc(say)}</div><button class="go" data-copy="${esc(say).replace(/"/g, '&quot;')}">${COPY_SVG}${en ? 'Copy, then paste to your agent' : '复制，发给 agent'}</button>`;
+  // 桌面 App：本机排第一
+  const order = MOBILE ? ['mac', 'win', 'linux'] : [me, ...['mac', 'win', 'linux'].filter((k) => k !== me)];
+  $('ib-app').innerHTML = `<h3>${en ? 'Desktop app' : '桌面 App'}</h3><div>${order.map((k) => {
+    const p = APP[k], isMe = k === me && !MOBILE;
+    const files = p.files.map(([label, f, r]) => (r ? `<a class="fmt" href="${asset(f)}" download>${label}</a>` : `<span class="fmt" title="${f.replace('{v}', VER)}">${label}</span>`)).join('');
+    const soonAll = p.files.every(([, , r]) => !r);
+    return `<div class="plat${isMe ? ' me' : ''}"><i>${ICON(p.icon)}</i><b>${p.name}${isMe ? `<em>${en ? 'this device' : '本机'}</em>` : ''}</b><span class="fmts">${files}${soonAll ? SOON() : ''}</span><div class="pm"><span>${esc(p.pm[0])}</span>${p.pm[1] ? cpBtn(p.pm[0]) : ''}</div></div>`;
+  }).join('')}</div>`;
+  // 命令行：一个终端，按来源分组；悬停一行出现复制
+  $('ib-cli').innerHTML = `<h3>${en ? 'Command line' : '命令行'}<small>Node 22+</small><span class="key"><i></i>${en ? 'dimmed: coming soon' : '暗的：即将推出'}</span></h3><div class="tm">${CLI().map(([g, lines]) => `<div class="c"># ${g}</div>${lines.map(([c, r]) => cmdLine(c, r, 'l')).join('')}`).join('')}</div>`;
+  // Agent skill：一行命令装进本机所有 agent；手动装 Claude Code 现在就能用
+  $('ib-skill').innerHTML = `<h3>Agent skill</h3><div class="logos">${SKILL_AGENTS.map((n) => { const t = DATA.tools.find((x) => x.name === n); return t ? `<span title="${n}">${t.svg}</span>` : ''; }).join('')}</div>${cmdLine('npx creditia skill add', false)}${cmdLine(`git clone --depth 1 ${REPO} /tmp/creditia && cp -r /tmp/creditia/skills/creditia ~/.claude/skills/`, true)}`;
+  // CI
+  const gh = `- uses: WroughtMind/creditia@main\n  with:\n    badge: assets/credits-badge.svg\n    doc: CREDITS.md`;
+  $('ib-ci').innerHTML = `<h3>CI<small>GitHub Actions</small></h3><div class="yaml">${yamlHl(gh)}${cpBtn(gh)}</div><div class="line off"><span>GitLab CI · ghcr.io/wroughtmind/creditia</span>${SOON()}</div>`;
+  // 首屏按钮：按本机系统写；手机上没有能装的 App，只写「安装」
+  $('herodl').innerHTML = MOBILE ? `${DL_SVG}${en ? 'Install' : '安装'}` : `${ICON(APP[me].icon)}${en ? `Get it for ${APP[me].name}` : `下载 ${APP[me].name} 版`}`;
 }
-const slide = (box) => { const on = box.querySelector('button.on'), ind = box.querySelector('.ind'); if (on && ind) { ind.style.left = `${on.offsetLeft}px`; ind.style.width = `${on.offsetWidth}px`; } };
-function install(anim) {
-  const en = lang() === 'en';
-  $('ver').innerHTML = `<span class="ind"></span><button data-v="stable" class="${pre() ? '' : 'on'}">${en ? 'Stable' : '稳定版'}<small>v${VER}</small></button><button data-v="preview" class="${pre() ? 'on' : ''}">${en ? 'Nightly' : '预览版'}<small>main</small></button>`;
-  $('itabs').innerHTML = `<span class="ind"></span>` + Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}" class="${k === ins.tab ? 'on' : ''}">${L2(v)}</button>`).join('');
-  slide($('ver')); slide($('itabs'));
-  const p = $('ipanel'), h0 = p.offsetHeight;
-  p.innerHTML = panel();
-  if (anim && !RM) {
-    const h1 = p.offsetHeight;
-    if (h0 && h0 !== h1) p.animate([{ height: `${h0 - 54}px` }, { height: `${h1 - 54}px` }], { duration: 420, easing: 'cubic-bezier(.2,.8,.2,1)' });
-    [...p.children].forEach((c, k) => c.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: k * 50, easing: EASE, fill: 'backwards' }));
-  }
-  // 首屏按钮：按本机系统写
-  // 手机上没有能装的 App：按钮只写「安装」，带到安装区让人挑
-  $('herodl').innerHTML = MOBILE ? `${DL_SVG}${en ? 'Install' : '安装'}` : `${ICON(PLATFORMS[detectOS()][1])}${en ? `Get it for ${PLATFORMS[detectOS()][0]}` : `下载 ${PLATFORMS[detectOS()][0]} 版`}`;
-}
-$('install').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.tab) ins.tab = b.dataset.tab; else if (b.dataset.os) { ins.os = b.dataset.os; ins.picked = true; } else if (b.dataset.v) ins.v = b.dataset.v; else if (b.dataset.ask) ins.ask = b.dataset.ask; else return;
-  install(true);
-});
-// 首屏「下载」和顶栏「安装」：跳到安装区，选好对应的页签
-document.addEventListener('click', (e) => { const a = e.target.closest('[data-go]'); if (!a) return; if (a.dataset.go === 'app') { ins.tab = 'app'; ins.os = detectOS(); install(false); } });
 
 // ───────── 顶栏：离开首屏后变实底；往下滚收起，往上滚出现；当前在哪一节，药丸就滑到哪 ─────────
 const hdr = document.querySelector('header');
@@ -1029,7 +1058,7 @@ const io = new IntersectionObserver((es) => {
     el.classList.add('in');
     const h2 = el.querySelector('h2');
     if (h2 && !RM) rise(split(h2), { step: lang() === 'zh' ? 40 : 70, dur: 1000 });
-    if (el.id === 'exports' && !RM) el.querySelectorAll('a').forEach((a, j) => a.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 500, delay: 300 + j * 60, easing: EASE, fill: 'backwards' }));
+    if (el.id === 'exports' && !RM) el.querySelectorAll('.fx a').forEach((a, j) => a.animate([{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }], { duration: 700, delay: 150 + j * 80, easing: EASE, fill: 'backwards' }));
     if (el.classList.contains('editor')) setTimeout(scan, 300);
   });
 }, { rootMargin: '0px 0px -10% 0px' });
@@ -1039,7 +1068,7 @@ function applyLang() {
   document.querySelectorAll('[data-i]').forEach((el) => (el.innerHTML = t(el.dataset.i)));
   $('lang').textContent = lang() === 'en' ? '中' : 'EN';
   document.title = lang() === 'en' ? 'creditia — which AI wrote your code' : 'creditia — 你的代码，是哪些 AI 写的';
-  reel(); wall(); exports(); lines(); usage(); install(false);
+  reel(); wall(); exports(); lines(); usage(); install();
 }
 // 换语言：整页淡入淡出；换主题：从按钮那里一圈扩开
 const transition = (fn, circleFrom) => {
