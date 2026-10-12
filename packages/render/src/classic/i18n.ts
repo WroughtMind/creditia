@@ -7,6 +7,7 @@ const WORDS: Record<string, string> = {
   工期: 'Span', 动工: 'Active', 会话: 'Sessions', 提交: 'Commits', 写下: 'Written', 留下: 'Kept', 至今仍在: 'Still here',
   剧终: 'The End', 全剧: 'Full run', 未发布: 'Unreleased', 今晚演出: 'Tonight', 次提交: 'commits', 行: 'lines', 代码: 'Code',
   其他: 'Others', 未确认: 'Unattributed',
+  联合出品: 'in association with', 模型: 'Models',
   'cast 演职员': 'cast', 'colophon 版权页': 'colophon', 'credits 署名': 'credits', 'ENERGY RECEIPT 精力小票': 'ENERGY RECEIPT',
   'ledger 账簿': 'ledger', 'OPEN 24H · 署名': 'OPEN 24H · CREDITS', 'PLAYBILL 节目单': 'PLAYBILL', 'programme 节目单': 'programme',
   'THANK YOU · 请保留小票': 'THANK YOU · PLEASE KEEP', 'Creditia — 作品署名': 'Creditia — credits', 'Creditia — 命令行': 'Creditia — terminal',
@@ -42,6 +43,7 @@ const RULES: [RegExp, string | ((...a: string[]) => string)][] = [
   [/由 creditia 开具 · (.+)/, 'issued by creditia · $1'],
   [/creditia 记 · /, 'creditia · '],
   [/^(.+) 作品$/, '$1 projects'],
+  [/^(.+) 出品$/, 'A $1 production'],
 ];
 
 const CJK = /[一-鿿、，：；（）「」]/;

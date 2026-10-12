@@ -459,7 +459,7 @@ const t = (k) => (lang() === 'en' ? EN[k] : ZH[k]) ?? k;
 const fmt = (n) => Number(n).toLocaleString('en-US');
 
 const PIECE = { tier: ['署名榜', 'Credits list'], roll: ['片尾字幕', 'End credits'], receipt: ['小票', 'Receipt'], share: ['分享图', 'Share card'], donut: ['环形图', 'Donut'], versions: ['版本柱状图', 'Versions'], fetch: ['终端名片', 'Terminal card'], badge: ['徽章', 'Badge'] };
-const VAR = { cast: ['演员表', 'cast'], stub: ['票根', 'stub'], hud: ['面板', 'HUD'], vertical: ['竖排', 'vertical'], stats: ['能力图', 'stats'], program: ['节目单', 'programme'], ed: ['动画片尾', 'anime ED'] };
+const VAR = { cast: ['演员表', 'cast'], stub: ['票根', 'stub'], hud: ['面板', 'HUD'], vertical: ['竖排', 'vertical'], stats: ['能力图', 'stats'], program: ['节目单', 'programme'], ed: ['动画片尾', 'anime ED'], slate: ['场记板', 'clapperboard'], crew: ['部门', 'departments'] };
 const S = (id) => DATA.styles.find((s) => s.id === id);
 const sname = (id) => (lang() === 'en' ? S(id).en : S(id).name);
 const pick = (pair) => pair[lang() === 'en' ? 1 : 0];

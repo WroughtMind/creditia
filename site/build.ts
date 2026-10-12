@@ -75,7 +75,7 @@ const WALL: [string, string, string?][] = [
   ['roll', 'cinema', 'cast'], ['tier', 'ukiyoe'], ['receipt', 'film', 'stub'], ['tier', 'cyber', 'hud'],
   ['roll', 'woodblock', 'vertical'], ['donut', 'gala'], ['tier', 'glass'], ['tier', 'manga', 'stats'],
   ['roll', 'playbill', 'program'], ['versions', 'editorial'], ['receipt', 'manuscript'], ['fetch', 'terminal'],
-  ['roll', 'meadow', 'ed'], ['share', 'broadsheet'],
+  ['roll', 'meadow', 'ed'], ['share', 'broadsheet'], ['roll', 'minimal-light', 'slate'], ['roll', 'gala', 'crew'],
 ];
 for (const lang of LANGS) {
   for (const [piece, style, v] of WALL) {

@@ -1,5 +1,6 @@
 // 形式清单：id → 渲染函数。Node 和浏览器端共用（index.ts 给 Node 端加字体和 PNG）。
 import * as F from './forms.ts';
+import { ROLL_NEW, rollNew } from './rolls.ts';
 import type { Model } from './data.ts';
 import type { Theme } from './themes.ts';
 import type { Out } from './ui.ts';
@@ -13,7 +14,8 @@ export const FORMS: Record<string, { name: string; q: string; size: string; vari
   share: { name: '分享图', q: '链接预览、社交媒体', size: '1200×630', render: (m, t) => F.share(m, t) },
   byline: { name: '署名行', q: '页脚、关于页', size: '1200×120', render: (m, t, c) => F.byline(m, t, c.lang) },
   receipt: { name: '精力小票', q: '花了多少精力', size: '1080×1350', variants: F.RECEIPT_VARIANTS, def: (t) => F.RECEIPT_DEFAULT[t.family] ?? 'slip', render: (m, t, c) => F.receipt(m, t, c.variant) },
-  roll: { name: '片尾字幕', q: '谁担任了什么角色', size: '1080×1350', variants: F.ROLL_VARIANTS, def: (t) => F.ROLL_DEFAULT[t.family] ?? 'classic', render: (m, t, c) => F.roll(m, t, c.variant) },
+  // 原来的十一种在前，新版式（rolls.ts）排在后面
+  roll: { name: '片尾字幕', q: '谁担任了什么角色', size: '1080×1350', variants: [...F.ROLL_VARIANTS, ...ROLL_NEW], def: (t) => F.ROLL_DEFAULT[t.family] ?? 'classic', render: (m, t, c) => (ROLL_NEW.includes(c.variant ?? '') ? rollNew(m, t, c.variant!) : F.roll(m, t, c.variant)) },
   ribbon: { name: '时间织带', q: '怎么一步步做出来的', size: '1200×500', render: (m, t) => F.ribbon(m, t) },
   mosaic: { name: '代码马赛克', q: '现在由谁构成', size: '1200×860', render: (m, t) => F.mosaic(m, t) },
   profile: { name: '个人履历卡', q: '我和 AI 一起做了什么', size: '1200×自适应', render: (m, t, c) => (c.projects?.length ? F.profile(c.person ?? m.director, c.projects, t) : null) },
