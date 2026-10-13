@@ -123,6 +123,7 @@ async function openProject(p: any) {
   $('#board').innerHTML = '';
   $('#pname').textContent = p.name; $('#pmeta').textContent = L('读取中…', 'Loading…');
   let raw: any;
+  const st = readStamp(p); // 先记下版本再读档案：读的过程中又变了，下次比对还能发现
   try { raw = await api('credits', { projectId: p.id }); }
   catch (e: any) {
     if (seq !== state.openSeq) return;
@@ -132,11 +133,42 @@ async function openProject(p: any) {
     return empty(() => [L('这个项目还没有档案', 'No credits for this project yet'), '', `cd ${p.path} && creditia analyze`, can ? { label: L('现在分析', 'Analyze now'), run: () => reanalyze(p) } : undefined], true);
   }
   if (seq !== state.openSeq) return; // 已经切到别的项目
+  stampOf = await st;
   state.raw = raw;
   $('#empty').hidden = true; emptyView = null;
   rebuildModel();
   await paint();
 }
+
+// ───────────────────────── 档案变了就原地刷新 ─────────────────────────
+// 在终端里 creditia analyze、提交时的 hook 都会改档案。App 回到前台、或者每 30 秒，比一下版本；
+// 变了就读新档案，墙上的作品原地换掉（不清空、不跳回顶部），换过的版式也留着。
+let stampOf = '', refreshing = false;
+const readStamp = (p: any): Promise<string> => (native ? api('stamp', { projectId: p.id }).then(String, () => '') : Promise.resolve(''));
+async function refreshIfChanged() {
+  const p = state.current;
+  if (!native || !p || !state.raw || refreshing || analyzing || document.hidden) return;
+  refreshing = true;
+  try {
+    const st = await readStamp(p);
+    if (!st || st === stampOf || p !== state.current) return;
+    const raw = await api('credits', { projectId: p.id });
+    if (p !== state.current) return;
+    stampOf = st;
+    await swapRaw(raw);
+    state.projects = await api('projects').catch(() => state.projects);
+    toast(L('档案有更新，已换成最新的', 'Credits changed — showing the latest'));
+  } catch { /* 读不到就等下一次 */ } finally { refreshing = false; }
+}
+/** 换一份档案，墙上原地换 */
+async function swapRaw(raw: any) {
+  state.raw = raw;
+  rebuildModel();
+  await paint();
+}
+addEventListener('focus', refreshIfChanged);
+document.addEventListener('visibilitychange', refreshIfChanged);
+setInterval(refreshIfChanged, 30000);
 function rebuildModel() {
   state.model = buildModel(state.raw, { director: false, lang: state.lang });
   const m = state.model;
@@ -574,7 +606,14 @@ async function reanalyze(p: any) {
   try {
     await withProgress(p.name, () => api('analyze', { projectId: p.id }));
     state.projects = await api('projects');
-    await openProject(state.projects.find((x) => x.id === p.id) ?? p);
+    const fresh = state.projects.find((x) => x.id === p.id) ?? p;
+    // 正看着这个项目：原地换，不清空墙
+    if (state.current?.id === p.id && state.raw) {
+      const st = readStamp(fresh);
+      const raw = await api('credits', { projectId: p.id });
+      state.current = fresh; stampOf = await st;
+      await swapRaw(raw);
+    } else await openProject(fresh);
     toast(L('已更新', 'Updated'));
   } catch (e) { toast(errText(e), 6000); }
 }

@@ -78,6 +78,22 @@ fn credits(project_id: String) -> Res<Value> {
     Err(Fail::new("no_credits"))
 }
 
+/// 档案的「版本」：仓库里 credits.json 的修改时间 + 作品库里最近一次分析的时间。
+/// 界面回到前台、或者每隔一会儿比一比，变了就原地换成新的
+#[tauri::command]
+fn stamp(project_id: String) -> Res<String> {
+    let lib = Library::open()?;
+    let p = project(&lib, &project_id)?;
+    let live = PathBuf::from(&p.path).join(".creditia/credits.json");
+    let modified = std::fs::metadata(live)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    Ok(format!("{modified}:{}", p.last_analyzed.unwrap_or(0)))
+}
+
 #[tauri::command]
 fn config_of(project_id: String) -> Res<Value> {
     let lib = Library::open()?;
@@ -350,7 +366,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            projects, credits, config_of, set_display, analyze, cancel_analyze, pick_folder, add_project, embed_snippet,
+            projects, credits, stamp, config_of, set_display, analyze, cancel_analyze, pick_folder, add_project, embed_snippet,
             library_path, save_file, reveal, open_path, doctor
         ])
         .run(tauri::generate_context!())
