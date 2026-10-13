@@ -210,8 +210,11 @@ pub fn person_id(email: &str) -> String {
     format!("h:{:010x}", h & 0xff_ffff_ffff)
 }
 
+/// 每个提交的归因：(路径, 行哈希) → 归因，和这个提交整体的归因（没有逐行证据时用）
+pub type CommitAttrs = HashMap<String, (HashMap<(String, u32), Attr>, Option<Attr>)>;
+
 /// 存活代码归因：blame 行 → 引入它的提交里同路径同哈希的那一行
-pub fn survival(blame: &[(String, Vec<BlameLine>)], per_commit: &HashMap<String, (HashMap<(String, u32), Attr>, Option<Attr>)>, unattr: usize) -> Vec<Attr> {
+pub fn survival(blame: &[(String, Vec<BlameLine>)], per_commit: &CommitAttrs, unattr: usize) -> Vec<Attr> {
     let mut out = vec![];
     for (_, lines) in blame {
         for b in lines {

@@ -282,7 +282,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         st.notes.push(format!(".gitattributes 标为生成物、第三方的文件改动 {skipped_generated} 处不计入"));
     }
     let commit_by_hash: HashMap<&str, &Commit> = cc.commits.iter().map(|c| (c.hash.as_str(), c)).collect();
-    let per_commit: HashMap<String, (HashMap<(String, u32), Attr>, Option<Attr>)> = attrs
+    let per_commit: engine::CommitAttrs = attrs
         .iter()
         .map(|(h, a)| {
             let c = commit_by_hash[h.as_str()];
@@ -585,7 +585,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         *groups.entry(reg.group(*w)).or_default() += lv.values().sum::<usize>();
     }
     let mut gl: Vec<(String, usize)> = groups.into_iter().collect();
-    gl.sort_by(|a, b| b.1.cmp(&a.1));
+    gl.sort_by_key(|g| std::cmp::Reverse(g.1));
     let tier = gl
         .iter()
         .map(|(k, n)| format!("{} {:.1}%", if k == UNATTR { "未确认".to_string() } else if k.starts_with("h:") { reg.list.iter().find(|w| &w.id == k).and_then(|w| w.name.clone()).unwrap_or(k.clone()) } else { k.clone() }, *n as f64 / total_lines.max(1) as f64 * 100.0))

@@ -123,6 +123,7 @@ pub fn open_ro(p: &Path) -> rusqlite::Result<Connection> {
 }
 
 /// 把一段新文本拆成行，生成证据。返回是否映射到了本项目
+#[allow(clippy::too_many_arguments)]
 pub fn push_text(out: &mut Vec<Ev>, pm: &PathMap, abs: &str, text: &str, src: Src, model: &str, session: &str, ts: i64) -> bool {
     let Some(rel) = pm.to_rel(abs) else { return false };
     let ext = ext_of(&rel);

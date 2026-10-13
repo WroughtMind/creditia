@@ -35,7 +35,7 @@ fn sessions() -> Vec<Sess> {
             continue;
         }
         let v: Value = std::fs::read_to_string(&state).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-        let cwd = v["cwd"].as_str().map(String::from).or_else(|| index.get(&dir.to_string_lossy().trim_end_matches('/').to_string()).cloned()).unwrap_or_default();
+        let cwd = v["cwd"].as_str().map(String::from).or_else(|| index.get(dir.to_string_lossy().trim_end_matches('/')).cloned()).unwrap_or_default();
         let wires = walkdir::WalkDir::new(dir.join("agents")).into_iter().flatten().filter(|x| x.file_name() == "wire.jsonl").map(|x| x.path().to_path_buf()).collect();
         out.push(Sess { dir, cwd, wires });
     }

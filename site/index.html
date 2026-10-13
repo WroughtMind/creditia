@@ -1633,7 +1633,7 @@ async function playDesk() {
     const dot = doc.querySelector(`#dots button[data-s="${id}"]`); if (!dot) continue;
     await curTo(inApp(dot)); if (!live()) return;
     tap(); dot.click();
-    await waitFor(() => doc.querySelectorAll('#board .tile').length >= 3, 15000, live);
+    await waitFor(() => doc.querySelectorAll('#board .tile').length >= 3 && !doc.body.classList.contains('busy'), 15000, live); // App 画完新风格才一次换上
     if (!(await pause(1500))) return;
   }
   // 4 换版式
