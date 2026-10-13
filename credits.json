@@ -25,11 +25,11 @@
     }
    },
    "byVersion": {
-    "unreleased": 136
+    "archive/site-v2-2026-10-12": 136
    },
    "contributor": "unattributed",
    "linesAdded": 136,
-   "linesSurviving": 91
+   "linesSurviving": 100
   },
   {
    "byArea": {
@@ -58,27 +58,23 @@
     }
    },
    "byVersion": {
-    "unreleased": 11628
+    "archive/site-v2-2026-10-12": 11628
    },
    "contributor": "a:claude-code/claude-fable-5-1",
    "linesAdded": 11628,
-   "linesSurviving": 6775
+   "linesSurviving": 7068
   },
   {
    "byArea": {
-    "assets": 10,
-    "build": 293,
-    "core": 6422,
-    "docs": 324,
-    "frontend": 1273,
-    "tests": 3327
+    "core": 10,
+    "frontend": 110
    },
    "byEvidence": {
     "declared": {
-     "linesAdded": 126
+     "linesAdded": 120
     },
     "inferred": {
-     "linesAdded": 7529
+     "linesAdded": 0
     },
     "manual": {
      "linesAdded": 0
@@ -87,15 +83,60 @@
      "linesAdded": 0
     },
     "verified": {
-     "linesAdded": 3994
+     "linesAdded": 0
     }
    },
    "byVersion": {
-    "unreleased": 11649
+    "archive/site-pre-mobile": 79,
+    "archive/site-v3-2026-10-12": 10,
+    "unreleased": 31
+   },
+   "contributor": "a:claude-code",
+   "linesAdded": 120,
+   "linesSurviving": 109
+  },
+  {
+   "byArea": {
+    "assets": 171,
+    "build": 339,
+    "core": 10957,
+    "docs": 651,
+    "frontend": 5529,
+    "tests": 3405
+   },
+   "byEvidence": {
+    "declared": {
+     "linesAdded": 126
+    },
+    "inferred": {
+     "linesAdded": 14375
+    },
+    "manual": {
+     "linesAdded": 0
+    },
+    "unattributed": {
+     "linesAdded": 0
+    },
+    "verified": {
+     "linesAdded": 6551
+    }
+   },
+   "byVersion": {
+    "archive/site-pre-mobile": 1126,
+    "archive/site-v10-2026-10-13": 614,
+    "archive/site-v11-2026-10-13": 508,
+    "archive/site-v2-2026-10-12": 12745,
+    "archive/site-v3-2026-10-12": 3332,
+    "archive/site-v4-2026-10-12": 834,
+    "archive/site-v5-2026-10-12": 318,
+    "archive/site-v6-2026-10-12": 392,
+    "archive/site-v7-2026-10-12": 115,
+    "archive/site-v8-2026-10-12": 819,
+    "archive/site-v9-2026-10-12": 249
    },
    "contributor": "a:claude-code/claude-opus-5-5",
-   "linesAdded": 11649,
-   "linesSurviving": 11487
+   "linesAdded": 21052,
+   "linesSurviving": 17161
   }
  ],
  "clock": [
@@ -118,29 +159,29 @@
    0,
    1,
    2,
+   3,
+   0,
+   0,
+   0,
+   0,
+   3
+  ],
+  [
+   2,
+   1,
+   1,
+   1,
+   2,
+   1,
    1,
    0,
    0,
    0,
    0,
-   0
-  ],
-  [
    0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
+   2,
+   4,
+   1,
    0,
    0,
    0,
@@ -301,6 +342,17 @@
    "where": "local"
   },
   {
+   "family": null,
+   "harness": "claude-code",
+   "id": "a:claude-code",
+   "kind": "agent",
+   "model": null,
+   "roles": [
+    "author"
+   ],
+   "where": "local"
+  },
+  {
    "family": "anthropic",
    "harness": "claude-code",
    "id": "a:claude-code/claude-opus-5-5",
@@ -317,8 +369,8 @@
    "best": "verified",
    "from": "2026-10-10",
    "name": "2026-10",
-   "to": "2026-10-12",
-   "verifiedShare": 0.217
+   "to": "2026-10-13",
+   "verifiedShare": 0.242
   }
  ],
  "days": [
@@ -337,24 +389,177 @@
   },
   {
    "by": {
-    "claude-code": 2368
+    "claude-code": 6806
    },
    "date": "2026-10-12"
+  },
+  {
+   "by": {
+    "claude-code": 5085
+   },
+   "date": "2026-10-13"
   }
  ],
  "files": [
   {
    "by": {
-    "claude-code": 62
+    "claude-code": 1
    },
-   "lines": 62,
+   "lines": 1,
+   "path": ".github/readme/logo-dark.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo-light.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/aider.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/claude-code.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/cline.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/codex.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/copilot.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/cursor.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/devin.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/gemini.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/grok.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/jules.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/kilo.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/kimi.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/opencode.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/qwen.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": ".github/readme/logo/roo.svg"
+  },
+  {
+   "by": {
+    "claude-code": 21
+   },
+   "lines": 21,
+   "path": ".github/readme/map-dark-en.svg"
+  },
+  {
+   "by": {
+    "claude-code": 21
+   },
+   "lines": 21,
+   "path": ".github/readme/map-dark.svg"
+  },
+  {
+   "by": {
+    "claude-code": 21
+   },
+   "lines": 21,
+   "path": ".github/readme/map-light-en.svg"
+  },
+  {
+   "by": {
+    "claude-code": 21
+   },
+   "lines": 21,
+   "path": ".github/readme/map-light.svg"
+  },
+  {
+   "by": {
+    "claude-code": 64
+   },
+   "lines": 64,
    "path": ".github/workflows/ci.yml"
   },
   {
    "by": {
-    "claude-code": 35
+    "claude-code": 45
    },
-   "lines": 35,
+   "lines": 45,
    "path": ".github/workflows/pages.yml"
   },
   {
@@ -366,10 +571,10 @@
   },
   {
    "by": {
-    "claude-code": 31,
+    "claude-code": 32,
     "unattributed": 3
    },
-   "lines": 34,
+   "lines": 35,
    "path": ".gitignore"
   },
   {
@@ -403,10 +608,16 @@
   },
   {
    "by": {
-    "claude-code": 126,
-    "unattributed": 1
+    "claude-code": 181
    },
-   "lines": 127,
+   "lines": 181,
+   "path": "README.en.md"
+  },
+  {
+   "by": {
+    "claude-code": 181
+   },
+   "lines": 181,
    "path": "README.md"
   },
   {
@@ -467,17 +678,24 @@
   },
   {
    "by": {
-    "claude-code": 46
+    "claude-code": 47
    },
-   "lines": 46,
+   "lines": 47,
    "path": "apps/desktop/src/engine.ts"
   },
   {
    "by": {
-    "claude-code": 51
+    "claude-code": 54
    },
-   "lines": 51,
+   "lines": 54,
    "path": "apps/desktop/src/fonts.ts"
+  },
+  {
+   "by": {
+    "claude-code": 91
+   },
+   "lines": 91,
+   "path": "apps/desktop/src/kits.ts"
   },
   {
    "by": {
@@ -488,16 +706,16 @@
   },
   {
    "by": {
-    "claude-code": 448
+    "claude-code": 437
    },
-   "lines": 448,
+   "lines": 437,
    "path": "apps/desktop/src/main.ts"
   },
   {
    "by": {
-    "claude-code": 166
+    "claude-code": 172
    },
-   "lines": 166,
+   "lines": 172,
    "path": "apps/desktop/src/style.css"
   },
   {
@@ -509,9 +727,9 @@
   },
   {
    "by": {
-    "claude-code": 36
+    "claude-code": 41
    },
-   "lines": 36,
+   "lines": 41,
    "path": "apps/desktop/tools/fonts.mjs"
   },
   {
@@ -730,9 +948,9 @@
   },
   {
    "by": {
-    "claude-code": 1639
+    "claude-code": 1624
    },
-   "lines": 1639,
+   "lines": 1624,
    "path": "credits.json"
   },
   {
@@ -751,16 +969,16 @@
   },
   {
    "by": {
-    "claude-code": 74
+    "claude-code": 87
    },
-   "lines": 74,
+   "lines": 87,
    "path": "packages/cli/package.json"
   },
   {
    "by": {
-    "claude-code": 302
+    "claude-code": 351
    },
-   "lines": 302,
+   "lines": 351,
    "path": "packages/cli/src/cli.ts"
   },
   {
@@ -822,10 +1040,17 @@
   },
   {
    "by": {
-    "claude-code": 13
+    "claude-code": 18
    },
-   "lines": 13,
+   "lines": 18,
    "path": "packages/render/assets/logos/SOURCES.md"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/aider.svg"
   },
   {
    "by": {
@@ -881,6 +1106,20 @@
     "claude-code": 1
    },
    "lines": 1,
+   "path": "packages/render/assets/logos/devin.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/geminicli.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
    "path": "packages/render/assets/logos/github-actions.svg"
   },
   {
@@ -902,6 +1141,27 @@
     "claude-code": 1
    },
    "lines": 1,
+   "path": "packages/render/assets/logos/googlejules.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/grok.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/kilocode.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
    "path": "packages/render/assets/logos/kimi.svg"
   },
   {
@@ -910,6 +1170,13 @@
    },
    "lines": 1,
    "path": "packages/render/assets/logos/openai.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/opencode.svg"
   },
   {
    "by": {
@@ -931,6 +1198,13 @@
    },
    "lines": 1,
    "path": "packages/render/assets/logos/renovate.svg"
+  },
+  {
+   "by": {
+    "claude-code": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/roocode.svg"
   },
   {
    "by": {
@@ -962,23 +1236,129 @@
   },
   {
    "by": {
-    "claude-code": 49
+    "claude-code": 62
    },
-   "lines": 49,
+   "lines": 62,
    "path": "packages/render/package.json"
   },
   {
    "by": {
-    "claude-code": 309
+    "claude-code": 91
    },
-   "lines": 309,
+   "lines": 91,
+   "path": "packages/render/src/classic/art.ts"
+  },
+  {
+   "by": {
+    "claude-code": 94
+   },
+   "lines": 94,
+   "path": "packages/render/src/classic/brand.ts"
+  },
+  {
+   "by": {
+    "claude-code": 34
+   },
+   "lines": 34,
+   "path": "packages/render/src/classic/browser.ts"
+  },
+  {
+   "by": {
+    "claude-code": 75
+   },
+   "lines": 75,
+   "path": "packages/render/src/classic/catalog.ts"
+  },
+  {
+   "by": {
+    "claude-code": 124
+   },
+   "lines": 124,
+   "path": "packages/render/src/classic/data.ts"
+  },
+  {
+   "by": {
+    "claude-code": 38
+   },
+   "lines": 38,
+   "path": "packages/render/src/classic/fonts.ts"
+  },
+  {
+   "by": {
+    "claude-code": 1771
+   },
+   "lines": 1771,
+   "path": "packages/render/src/classic/forms.ts"
+  },
+  {
+   "by": {
+    "claude-code": 96,
+    "unattributed": 10
+   },
+   "lines": 106,
+   "path": "packages/render/src/classic/gallery.ts"
+  },
+  {
+   "by": {
+    "claude-code": 85
+   },
+   "lines": 85,
+   "path": "packages/render/src/classic/i18n.ts"
+  },
+  {
+   "by": {
+    "claude-code": 74
+   },
+   "lines": 74,
+   "path": "packages/render/src/classic/index.ts"
+  },
+  {
+   "by": {
+    "claude-code": 40
+   },
+   "lines": 40,
+   "path": "packages/render/src/classic/registry.ts"
+  },
+  {
+   "by": {
+    "claude-code": 149
+   },
+   "lines": 149,
+   "path": "packages/render/src/classic/rolls.ts"
+  },
+  {
+   "by": {
+    "claude-code": 160
+   },
+   "lines": 160,
+   "path": "packages/render/src/classic/text.ts"
+  },
+  {
+   "by": {
+    "claude-code": 207
+   },
+   "lines": 207,
+   "path": "packages/render/src/classic/themes.ts"
+  },
+  {
+   "by": {
+    "claude-code": 150
+   },
+   "lines": 150,
+   "path": "packages/render/src/classic/ui.ts"
+  },
+  {
+   "by": {
+    "claude-code": 313
+   },
+   "lines": 313,
    "path": "packages/render/src/data.ts"
   },
   {
    "by": {
-    "claude-code": 192
+    "claude-code": 201
    },
-   "lines": 192,
+   "lines": 201,
    "path": "packages/render/src/export.ts"
   },
   {
@@ -1011,9 +1391,9 @@
   },
   {
    "by": {
-    "claude-code": 19
+    "claude-code": 27
    },
-   "lines": 19,
+   "lines": 27,
    "path": "packages/render/src/logos.ts"
   },
   {
@@ -1025,9 +1405,9 @@
   },
   {
    "by": {
-    "claude-code": 317
+    "claude-code": 324
    },
-   "lines": 317,
+   "lines": 324,
    "path": "packages/render/src/pieces/cards.ts"
   },
   {
@@ -1039,16 +1419,16 @@
   },
   {
    "by": {
-    "claude-code": 73
+    "claude-code": 75
    },
-   "lines": 73,
+   "lines": 75,
    "path": "packages/render/src/pieces/common.ts"
   },
   {
    "by": {
-    "claude-code": 299
+    "claude-code": 303
    },
-   "lines": 299,
+   "lines": 303,
    "path": "packages/render/src/pieces/roll.ts"
   },
   {
@@ -1060,9 +1440,9 @@
   },
   {
    "by": {
-    "claude-code": 76
+    "claude-code": 77
    },
-   "lines": 76,
+   "lines": 77,
    "path": "packages/render/src/registry.ts"
   },
   {
@@ -1137,6 +1517,13 @@
   },
   {
    "by": {
+    "claude-code": 72
+   },
+   "lines": 72,
+   "path": "packages/render/test/classic.test.ts"
+  },
+  {
+   "by": {
     "claude-code": 105
    },
    "lines": 105,
@@ -1151,9 +1538,9 @@
   },
   {
    "by": {
-    "claude-code": 13
+    "claude-code": 15
    },
-   "lines": 13,
+   "lines": 15,
    "path": "packages/render/tools/logos.mjs"
   },
   {
@@ -1186,9 +1573,37 @@
   },
   {
    "by": {
-    "claude-code": 64
+    "claude-code": 233
    },
-   "lines": 64,
+   "lines": 233,
+   "path": "site/build.ts"
+  },
+  {
+   "by": {
+    "claude-code": 19
+   },
+   "lines": 19,
+   "path": "site/icons.ts"
+  },
+  {
+   "by": {
+    "claude-code": 1812
+   },
+   "lines": 1812,
+   "path": "site/index.html"
+  },
+  {
+   "by": {
+    "claude-code": 198
+   },
+   "lines": 198,
+   "path": "site/readme.ts"
+  },
+  {
+   "by": {
+    "claude-code": 63
+   },
+   "lines": 63,
    "path": "skills/creditia/SKILL.md"
   },
   {
@@ -1269,12 +1684,12 @@
    "path": "spike/tests/vectors.json"
   }
  ],
- "generatedAt": "2026-10-12T18:15:33+08:00",
- "head": "681b4adbe73a2c48ac121ca9b05b18dc0711826a",
+ "generatedAt": "2026-10-13T14:29:13+08:00",
+ "head": "d8b060acce674997742ea0ed48d7604a6a032810",
  "human": {
   "agentReviews": 0,
   "plans": 0,
-  "prompts": 17,
+  "prompts": 62,
   "reviews": 0,
   "tabAssistedLines": 0
  },
@@ -1283,7 +1698,7 @@
   "name": "creditia",
   "range": {
    "from": "2026-10-10",
-   "to": "2026-10-12"
+   "to": "2026-10-13"
   },
   "repos": [
    "github.com/wroughtmind/creditia"
@@ -1293,11 +1708,27 @@
  "sessions": [
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "end": 1791800010,
-   "prompts": 17,
+   "end": 1791872944,
+   "prompts": 60,
    "review": false,
    "start": 1791692687,
-   "tokens": 150000850
+   "tokens": 470054997
+  },
+  {
+   "contributor": "a:claude-code/claude-sonnet-5-5",
+   "end": 1791834432,
+   "prompts": 1,
+   "review": false,
+   "start": 1791834421,
+   "tokens": 18410
+  },
+  {
+   "contributor": "a:claude-code/claude-sonnet-5-5",
+   "end": 1791834614,
+   "prompts": 1,
+   "review": false,
+   "start": 1791834593,
+   "tokens": 28564
   }
  ],
  "timeline": [
@@ -1311,21 +1742,22 @@
   },
   {
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 2368
+    "a:claude-code": 120,
+    "a:claude-code/claude-opus-5-5": 11771
    },
    "week": "2026-W42"
   }
  ],
  "totals": {
-  "binaryFiles": 51,
-  "commits": 19,
-  "days": 3,
-  "linesAdded": 23413,
-  "linesSurviving": 18353,
-  "linesWritten": 4166,
-  "sessions": 1,
-  "tokens": 150000850,
-  "units": 13
+  "binaryFiles": 57,
+  "commits": 40,
+  "days": 4,
+  "linesAdded": 32936,
+  "linesSurviving": 24438,
+  "linesWritten": 6563,
+  "sessions": 3,
+  "tokens": 470101971,
+  "units": 30
  },
  "units": [
   {
@@ -1351,7 +1783,7 @@
     }
    ],
    "title": "creditia：阶段 0 验证与 MVP 第一版",
-   "version": null
+   "version": "archive/site-v2-2026-10-12"
   },
   {
    "areas": [
@@ -1371,7 +1803,7 @@
     }
    ],
    "title": "docs: creditia 自己的 credits 档案 Creditia-Harness: claude-code Creditia-Model: claude-fable-5-1",
-   "version": null
+   "version": "archive/site-v2-2026-10-12"
   },
   {
    "areas": [
@@ -1392,7 +1824,7 @@
     }
    ],
    "title": "fix: 模型名归一（去掉 provider 前缀、Claude 版本号用横线） Creditia-Harness: claude-code Creditia-Model: claude-fable-5-1",
-   "version": null
+   "version": "archive/site-v2-2026-10-12"
   },
   {
    "areas": [
@@ -1417,7 +1849,7 @@
     }
    ],
    "title": "验收重构：版式家族、App 重做、徽章与字幕多版式、人单独署名",
-   "version": null
+   "version": "archive/site-v2-2026-10-12"
   },
   {
    "areas": [
@@ -1437,7 +1869,7 @@
     }
    ],
    "title": "fix: 盖章 hook 在单行提交后补空行，conventional commit 主题不再被当成 trailer",
-   "version": null
+   "version": "archive/site-v2-2026-10-12"
   },
   {
    "areas": [
@@ -1461,7 +1893,7 @@
     }
    ],
    "title": "第二轮重做：八个新体裁、片尾十一版式、小票七版式、App 图库→单图主线",
-   "version": null
+   "version": "archive/site-v2-2026-10-12"
   },
   {
    "areas": [
@@ -1482,7 +1914,7 @@
     }
    ],
    "title": "不入库：.creditia/、docs/validation/、spike/projects/ 加入 .gitignore；README 去掉验证报告链接；lessons 补推 GitHub 的教训",
-   "version": null
+   "version": "archive/site-v2-2026-10-12"
   },
   {
    "areas": [
@@ -1502,7 +1934,7 @@
     }
    ],
    "title": "补 MIT LICENSE 文件",
-   "version": null
+   "version": "archive/site-v2-2026-10-12"
   },
   {
    "areas": [
@@ -1524,7 +1956,7 @@
     }
    ],
    "title": "外部内容出仓：docs/ 内部文档只留本地不入库；测试向量重算为中性数据；示例路径、夹具数字、gallery 项目名改中性；logo 来源直接注明 simple-icons",
-   "version": null
+   "version": "archive/site-v2-2026-10-12"
   },
   {
    "areas": [
@@ -1544,7 +1976,7 @@
     }
    ],
    "title": "AGENTS.md 移出仓库：内部工作指令只留本地",
-   "version": null
+   "version": "archive/site-v2-2026-10-12"
   },
   {
    "areas": [
@@ -1564,7 +1996,7 @@
     }
    ],
    "title": "重新生成自家 credits 档案：最新数据，主导者单独署名",
-   "version": null
+   "version": "archive/site-v2-2026-10-12"
   },
   {
    "areas": [
@@ -1595,20 +2027,23 @@
     }
    ],
    "title": "重做 App、作品与分析；加 npx、GitHub Action 和署名页 (#3)",
-   "version": null
+   "version": "archive/site-v2-2026-10-12"
   },
   {
    "areas": [
+    "build",
     "core",
     "docs",
+    "frontend",
     "tests"
    ],
    "commits": [
+    "953e4ab717d5df959cdbc5e748ff74de7f1b1977",
     "681b4adbe73a2c48ac121ca9b05b18dc0711826a"
    ],
    "date": "2026-10-12",
-   "id": "c:681b4adb",
-   "lines": 199,
+   "id": "pr:4",
+   "lines": 847,
    "shares": [
     {
      "contributor": "a:claude-code/claude-opus-5-5",
@@ -1616,9 +2051,426 @@
      "share": 1
     }
    ],
-   "title": "文案改成平实的说法；几处关键词猜测改成按约定判断",
+   "title": "官网；文案改成平实的说法；几处关键词猜测改成按约定判断",
+   "version": "archive/site-v2-2026-10-12"
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "da31a37bfd96934ec0cdfbbf049f0f6825738182"
+   ],
+   "date": "2026-10-12",
+   "id": "pr:5",
+   "lines": 448,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "官网重做",
+   "version": "archive/site-v2-2026-10-12"
+  },
+  {
+   "areas": [
+    "build",
+    "core",
+    "frontend",
+    "tests"
+   ],
+   "commits": [
+    "e7dee205bf8f25817473dc74427ea9717a2efe98",
+    "f233fbba2ca6b80a3dd02ce0dca30dfd2259f9c7",
+    "b6bcd50adad9270bd9d512676c5a9643c0bd2678"
+   ],
+   "date": "2026-10-12",
+   "id": "pr:6",
+   "lines": 3342,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 0.997
+    },
+    {
+     "contributor": "a:claude-code",
+     "evidence": "declared",
+     "share": 0.003
+    }
+   ],
+   "title": "原版渲染器回来，和新风格并存；作品里只写 AI；官网手机端",
+   "version": "archive/site-v3-2026-10-12"
+  },
+  {
+   "areas": [
+    "assets",
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "a52b4213991d6ff80243c22c2378d3fd1152d823"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:7",
+   "lines": 427,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "官网重新设计：先讲清楚它回答什么、为什么可信、拿到什么",
+   "version": "archive/site-v4-2026-10-12"
+  },
+  {
+   "areas": [
+    "core",
+    "tests"
+   ],
+   "commits": [
+    "3a83261cec521246f15a7e6c9af50796c2a7d60e"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:8",
+   "lines": 213,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "片尾字幕内容少时放大铺开；原版作品有了英文",
+   "version": "archive/site-v4-2026-10-12"
+  },
+  {
+   "areas": [
+    "core",
+    "frontend",
+    "tests"
+   ],
+   "commits": [
+    "1ecc3809e5f8ac4d8c57236c4e6121937ec11b7b"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:9",
+   "lines": 194,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "片尾字幕：原来的十一种恢复原样；新增片头、出品、场记板、部门四种",
+   "version": "archive/site-v4-2026-10-12"
+  },
+  {
+   "areas": [
+    "assets",
+    "core",
+    "docs",
+    "frontend"
+   ],
+   "commits": [
+    "eb5e3d19ab67c5bba90aa7d614961759a1fc3198"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:10",
+   "lines": 318,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "官网换成安静的四屏；补齐工具标志",
+   "version": "archive/site-v5-2026-10-12"
+  },
+  {
+   "areas": [
+    "assets",
+    "core",
+    "docs",
+    "frontend"
+   ],
+   "commits": [
+    "cea6dfe2aac2c865ff1186d00dd38b5558330fee"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:11",
+   "lines": 392,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "官网：风格一眼看全、真实的导出文件、四种用法、亮暗切换",
+   "version": "archive/site-v6-2026-10-12"
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "db4c0253f75c733af25027d766c132d4b4440742"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:12",
+   "lines": 115,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "官网：风格胶片带、导出格式一行、四种用法同时展示",
+   "version": "archive/site-v7-2026-10-12"
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "aa784cc9da09ca2b7e7d46549fc1e4a339a97d45"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:13",
+   "lines": 819,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "官网：风格墙、全站动效、安装入口、交互修整",
+   "version": "archive/site-v8-2026-10-12"
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "6c11367e1f2f57e97eff0bdb84eb10a406fe5f9a"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:14",
+   "lines": 249,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "官网：首屏署名卡逐张显影、安装区一眼看全、导出改成小样",
+   "version": "archive/site-v9-2026-10-12"
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "0bca52c7e3c2df76ccbe4f3f41526d38650499d7"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:15",
+   "lines": 614,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "官网：首屏逐行署名编辑器；四种用法做成会动的小样",
+   "version": "archive/site-v10-2026-10-13"
+  },
+  {
+   "areas": [
+    "build",
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "01b2bce5e458c0a11065823899443adee594c41b"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:16",
+   "lines": 508,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "site: real app on a desktop, Action explained, style-switcher hero",
+   "version": "archive/site-v11-2026-10-13"
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "8b65217aad6846b5f02699ea430c7b1b87abce46"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:17",
+   "lines": 289,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "site: code-map hero; Action and App back in the 2×2 grid; smooth app tour",
+   "version": "archive/site-pre-mobile"
+  },
+  {
+   "areas": [
+    "frontend"
+   ],
+   "commits": [
+    "360e40c55cbb86052dab3d31683f995bf2ba3e71"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:18",
+   "lines": 79,
+   "shares": [
+    {
+     "contributor": "a:claude-code",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "site: hero polish — token strokes, beam flash, share bar, live commits",
+   "version": "archive/site-pre-mobile"
+  },
+  {
+   "areas": [
+    "frontend"
+   ],
+   "commits": [
+    "a70b5e1d9a6ac4ce3f7559b40a1484d28db9f62e"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:19",
+   "lines": 160,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "site: scroll from the code map into the line-by-line section",
+   "version": "archive/site-pre-mobile"
+  },
+  {
+   "areas": [
+    "assets",
+    "core",
+    "docs"
+   ],
+   "commits": [
+    "418fb4b6aeb9b844a671e4ed105b69398ef72bea",
+    "774d94d1d9f4422c919883ef572f04d213bd1b6f"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:20",
+   "lines": 677,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "README: animated code map, style collage, English version",
+   "version": "archive/site-pre-mobile"
+  },
+  {
+   "areas": [
+    "frontend"
+   ],
+   "commits": [
+    "d9063936f47c28ba0a8e1454f4bba15f665f6b9d"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:21",
+   "lines": 31,
+   "shares": [
+    {
+     "contributor": "a:claude-code",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "Site: phone layout",
    "version": null
   }
  ],
- "versions": []
+ "versions": [
+  {
+   "date": "2026-10-12",
+   "tag": "archive/site-v2-2026-10-12"
+  },
+  {
+   "date": "2026-10-13",
+   "tag": "archive/site-v3-2026-10-12"
+  },
+  {
+   "date": "2026-10-13",
+   "tag": "archive/site-v4-2026-10-12"
+  },
+  {
+   "date": "2026-10-13",
+   "tag": "archive/site-v5-2026-10-12"
+  },
+  {
+   "date": "2026-10-13",
+   "tag": "archive/site-v6-2026-10-12"
+  },
+  {
+   "date": "2026-10-13",
+   "tag": "archive/site-v7-2026-10-12"
+  },
+  {
+   "date": "2026-10-13",
+   "tag": "archive/site-v8-2026-10-12"
+  },
+  {
+   "date": "2026-10-13",
+   "tag": "archive/site-v9-2026-10-12"
+  },
+  {
+   "date": "2026-10-13",
+   "tag": "archive/site-v10-2026-10-13"
+  },
+  {
+   "date": "2026-10-13",
+   "tag": "archive/site-v11-2026-10-13"
+  },
+  {
+   "date": "2026-10-13",
+   "tag": "archive/site-pre-mobile"
+  }
+ ]
 }

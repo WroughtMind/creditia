@@ -8,7 +8,12 @@
 <meta property="og:title" content="creditia">
 <meta property="og:description" content="你的代码，是哪些 AI 写的。">
 <meta property="og:image" content="https://wroughtmind.github.io/creditia/assets/og-zh.png">
+<meta property="og:url" content="https://wroughtmind.github.io/creditia/">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://wroughtmind.github.io/creditia/">
+<link rel="alternate" hreflang="zh" href="https://wroughtmind.github.io/creditia/">
+<link rel="alternate" hreflang="en" href="https://wroughtmind.github.io/creditia/en.html">
+<link rel="alternate" hreflang="x-default" href="https://wroughtmind.github.io/creditia/">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,7 +22,7 @@
   (function () {
     try {
       var t = localStorage.getItem('ct-theme'); if (t) document.documentElement.dataset.theme = t;
-      var l = localStorage.getItem('ct-lang') || ((navigator.language || 'zh').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en');
+      var l = document.documentElement.dataset.lang || localStorage.getItem('ct-lang') || ((navigator.language || 'zh').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en');
       document.documentElement.lang = l;
     } catch (e) {}
   })();
@@ -362,6 +367,22 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 .dstep b { font-weight: 500; color: var(--faint); margin-right: 7px; font-variant-numeric: tabular-nums; }
 .dstep + .again { margin-left: 0; }
 
+.selfc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 56px; align-items: end; }
+.selfc .sh p { margin: 12px 0 0; color: var(--soft); }
+.selfc .go2 { margin-top: 28px; }
+.selfc a.more { color: var(--ink); text-decoration: none; font-size: 14.5px; border-bottom: 1px solid var(--line); padding-bottom: 3px; transition: border-color .15s; }
+.selfc a.more:hover { border-color: currentColor; }
+.srows { display: flex; flex-direction: column; gap: 18px; }
+.srow { display: grid; grid-template-columns: 18px 112px minmax(0, 1fr) 62px; align-items: center; column-gap: 12px; font-size: 14.5px; }
+.srow svg { width: 16px; height: 16px; fill: currentColor; display: block; }
+.srow > i { width: 13px; height: 13px; border-radius: 3px; border: 1px dashed var(--soft); }
+.srow .tr { height: 6px; border-radius: 3px; background: var(--line2); overflow: hidden; }
+.srow .tr b { display: block; height: 100%; border-radius: 3px; }
+.srow em { font-style: normal; text-align: right; font-variant-numeric: tabular-nums; }
+.srow small { grid-column: 2 / -1; margin-top: 4px; color: var(--faint); font-size: 12.5px; }
+.smeta { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px 18px; font: 12.5px "JetBrains Mono", monospace; color: var(--soft); }
+.smeta b { font-weight: 500; color: var(--ink); }
+.deskshot { display: none; }
 .vline { margin: 12px 0 0; color: var(--soft); font-size: 14px; }
 .vline code { font: 12.5px "JetBrains Mono", monospace; color: var(--ink); }
 .ibento { margin-top: 40px; display: grid; grid-template-columns: 1.15fr 1fr; grid-template-areas: "ask app" "cli skill" "cli ci"; gap: 16px; }
@@ -476,6 +497,17 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   .ib h3 { flex-wrap: wrap; row-gap: 4px; }
   .plat .fmts { grid-column: 2; flex-wrap: wrap; }
   .term .mdl { display: none; }
+  .selfc { grid-template-columns: 1fr; gap: 30px; }
+  .srow { grid-template-columns: 18px 96px minmax(0, 1fr) 54px; font-size: 13.5px; column-gap: 10px; }
+  #deskcard .dstep, #deskcard .again { display: none; }
+  .way .body.dbody { aspect-ratio: auto; height: auto; }
+  .deskbox { display: none; }
+  .deskshot { display: block; padding-bottom: 18px; }
+  .deskshot img { width: 100%; height: auto; display: block; border-radius: 10px; border: 1px solid var(--line); }
+  .deskshot .dk { display: none; }
+  :root[data-theme="dark"] .deskshot .dk { display: block; } :root[data-theme="dark"] .deskshot .lt { display: none; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .deskshot .dk { display: block; } :root:not([data-theme="light"]) .deskshot .lt { display: none; } }
+  .deskshot p { margin: 12px 0 0; font-size: 13px; color: var(--soft); }
   .wall, .band { gap: 10px; }
   .ways { grid-template-columns: 1fr; }
   nav { display: none; }
@@ -483,7 +515,8 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   .ib { padding: 18px 16px; }
   #lb .bar { flex-wrap: wrap; gap: 8px 12px; }
   #lb .bar .cp { max-width: 92vw; order: 9; }
-  .way h3 { flex-wrap: wrap; gap: 2px 10px; }
+  .way h3 { flex-wrap: nowrap; gap: 10px; white-space: nowrap; }
+  .way h3 small { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .term { font-size: 10px; padding: 12px 12px 16px; }
   .way { padding: 16px 16px 0; }
   .way .body { height: 380px; }
@@ -554,7 +587,20 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
         <div class="way rise"><h3><span data-i="w.cli">命令行</span><button class="again" data-again="term" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="term mono" id="term"></div></div></div>
         <div class="way rise"><h3><span data-i="w.agent">交给 agent</span><button class="again" data-again="chat" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="agent" id="chat"></div></div></div>
         <div class="way rise" id="flowcard"><h3>GitHub Action <small class="mono">WroughtMind/creditia@main</small><button class="again" data-again="flow" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="flow2" id="flow"></div></div></div>
-        <div class="way rise" id="deskcard"><h3>App <small>macOS · Windows · Linux</small><span class="dstep" id="dsteps"></span><button class="again" data-again="desk" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body dbody"><div class="deskbox" id="deskbox"><div class="desk" id="desk"></div></div></div></div>
+        <div class="way rise" id="deskcard"><h3>App <small>macOS · Windows · Linux</small><span class="dstep" id="dsteps"></span><button class="again" data-again="desk" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body dbody"><div class="deskbox" id="deskbox"><div class="desk" id="desk"></div></div><div class="deskshot"><img class="dk" src="assets/app-dark.webp" alt="creditia App" loading="lazy" width="1200" height="750"><img class="lt" src="assets/app-light.webp" alt="creditia App" loading="lazy" width="1200" height="750"><p data-i="desk.pc">在电脑上打开这一页，可以直接上手试。</p></div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="self" hidden>
+    <div class="wrap">
+      <div class="selfc">
+        <div class="sh rise">
+          <h2 class="serif" data-i="self.t">creditia 自己的署名</h2>
+          <p data-i="self.p">用 creditia 分析它自己的仓库，结果原样放在这里。</p>
+          <div class="go2"><a class="more" id="selfmore" href="self/"></a></div>
+        </div>
+        <div class="sbody rise" id="selfbody"></div>
       </div>
     </div>
   </section>
@@ -579,7 +625,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
     <a href="https://github.com/WroughtMind/creditia">GitHub</a>
     <a href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md" data-i="foot.rules">归因规则</a>
     <div class="grow"></div>
-    <a class="self" id="selflink" href="self/" aria-label="creditia credits"><img id="selfbadge" alt=""></a>
+    <a class="self" id="selflink" href="self/" aria-label="creditia credits"><img id="selfbadge" alt="creditia credits badge"></a>
   </div>
 </footer>
 
@@ -588,7 +634,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 <div id="lb" hidden role="dialog" aria-modal="true">
   <button class="x" aria-label="close">✕</button>
   <div class="big"><img id="lbimg" alt=""></div>
-  <div class="bar"><button data-d="-1" aria-label="previous">←</button><span class="n" id="lbn"></span><b id="lbname"></b><span id="lbnote"></span><button class="cp" id="lbcmd"></button><button data-d="1" aria-label="next">→</button></div>
+  <div class="bar"><button data-d="-1" aria-label="previous">←</button><span class="n" id="lbn"></span><b id="lbname"></b><span id="lbnote"></span><button class="cp" id="lbcmd" aria-label="copy command"></button><button data-d="1" aria-label="next">→</button></div>
 </div>
 
 <script>
@@ -600,6 +646,7 @@ const EN = {
   'lines.t': 'Every line has a source', 'lines.p': 'What can’t be matched is marked unattributed. Runs locally, calls no model.',
   'use.t': 'Four ways to use it', 'w.cli': 'Command line', 'w.agent': 'Your agent',
   'foot.rules': 'Attribution rules',
+  'self.t': 'creditia’s own credits', 'self.p': 'creditia, run on its own repository. Shown as is.', 'desk.pc': 'Open this page on a computer to try the app right here.',
   'nav.looks': 'Looks', 'nav.lines': 'Sources', 'nav.use': 'Usage', 'nav.get': 'Install', 'ins.t': 'Install',
 };
 const ZH = {};
@@ -1015,7 +1062,7 @@ function intro() {
 let ALL = [];
 const styleOf = (id) => DATA.styles.find((s) => s.id === id);
 const label = (x) => `${sname(styleOf(x.style))} · ${lang() === 'en' ? x.pe : x.pz}`;
-const thumb = (x) => `assets/wall/${lang()}/${x.name}.png`;
+const thumb = (x) => `assets/wall/${lang()}/${x.name}.${DATA.thumbExt || 'png'}`;
 const W = { bands: [], lives: [], morphs: [], visible: false, drag: null, clock: 0, k: 1 };
 const BASE = [26, -20, 32]; // 每条带子的速度（px/s），正数往左
 function wall() {
@@ -1141,6 +1188,7 @@ const lb = $('lb'), lbimg = $('lbimg');
 function show(x) {
   lb.classList.toggle('tall', x.kind === 'live');
   size(lbimg, x);
+  lbimg.alt = label(x);
   lbimg.src = thumb(x); // 缩略图已经在缓存里，先顶上；SVG 大图载好了再换
   const big = new Image(); big.src = `assets/wall/${lang()}/${x.name}.svg`;
   big.onload = () => { if (ALL[cur] === x) lbimg.src = big.src; };
@@ -1520,7 +1568,7 @@ addEventListener('message', (e) => {
 });
 function quickLook(el) {
   if (!el.dataset.img) { const a = document.createElement('a'); a.href = el.dataset.url; a.download = el.dataset.name; a.click(); return; }
-  const q = $('ql'); q.querySelector('b').textContent = el.dataset.name; q.querySelector('img').src = el.dataset.url; q.hidden = false;
+  const q = $('ql'); q.querySelector('b').textContent = el.dataset.name; q.querySelector('img').src = el.dataset.url; q.querySelector('img').alt = el.dataset.name; q.hidden = false;
   if (!RM) q.querySelector('.card').animate([{ transform: 'scale(.85)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: EASE });
 }
 // 自己动手：真实的点击会让演示停下
@@ -1639,7 +1687,22 @@ const played = new Set();
 const PLAYS = { term: playTerm, chat: playChat, flow: playFlow, desk: playDesk };
 function done(k) { document.querySelector(`[data-again="${k}"]`)?.classList.add('on'); }
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-again]'); if (!b) return; b.classList.remove('on'); PLAYS[b.dataset.again](); });
-const playIO = new IntersectionObserver((es) => es.forEach((e) => { if (!e.isIntersecting) return; const k = e.target.dataset.play; playIO.unobserve(e.target); played.add(k); PLAYS[k](); }), { threshold: 0.4 });
+// 手机上卡片一张接一张划过去，等打字演完太久：直接摆出结果，想看过程点 ↻。App 演示在手机上太小，换成截图
+const PHONE = matchMedia('(max-width: 900px)').matches;
+const playIO = new IntersectionObserver((es) => es.forEach((e) => { if (!e.isIntersecting) return; const k = e.target.dataset.play; playIO.unobserve(e.target); played.add(k); PLAYS[k](PHONE); }), { threshold: 0.4 });
+// creditia 自己的署名：仓库里的 credits.json（本机 creditia publish 写出），每次构建现算
+function selfCredits() {
+  const x = DATA.self?.[lang()]; $('self').hidden = !x; if (!x) return;
+  const en = lang() === 'en', f = (n) => n.toLocaleString('en-US');
+  const rows = x.rows.map((r) => {
+    const t = DATA.tools.find((y) => y.name === r.name), col = r.key === 'unattributed' ? 'var(--soft)' : AGC[r.key] || 'var(--ink)';
+    const ic = r.key === 'unattributed' ? '<i></i>' : `<span style="color:${col}">${t?.svg || ''}</span>`;
+    return `<div class="srow">${ic}<span>${esc(r.name)}</span><span class="tr"><b style="width:${Math.max(0.6, r.pct)}%;background:${col}"></b></span><em>${r.pct.toFixed(1)}%</em>${r.models ? `<small>${esc(r.models)}</small>` : ''}</div>`;
+  }).join('');
+  $('selfbody').innerHTML = `<div class="srows">${rows}</div><div class="smeta"><span><b>${f(x.commits)}</b> ${en ? 'commits' : '次提交'}</span><span><b>${f(x.lines)}</b> ${en ? 'lines' : '行'}</span><span>${x.from} → ${x.to}</span></div>`;
+  $('selfmore').textContent = en ? 'Full credits page →' : '看完整的署名页 →';
+  $('selfmore').href = en ? 'self/en/' : 'self/';
+}
 function usage() {
   const L = lang();
   // 换语言：已经演过的直接摆出结果，没演过的等滚到再演
@@ -1648,10 +1711,11 @@ function usage() {
   if (!played.has('term')) $('term').innerHTML = '<span class="p">$</span> <span class="caret"></span>';
   if (!played.has('chat')) $('chat').innerHTML = '';
   if (played.has('desk')) { D.run++; D.touring = false; const src = $('appf')?.src; deskFrame(); if (src) { winOpen('aw', false); $('aboot').classList.add('gone'); } $('tw').hidden = !!src; dsteps(6); } else deskFrame();
+  selfCredits();
   if (DATA.hasSelf) { $('selfbadge').src = `assets/usage/${L}-self-badge.svg`; $('selflink').href = L === 'en' ? 'self/en/' : 'self/'; }
   else $('selflink').hidden = true;
 }
-[['term', '#term'], ['chat', '#chat'], ['flow', '#flow'], ['desk', '#deskbox']].forEach(([k, q]) => { const el = document.querySelector(q); el.dataset.play = k; playIO.observe(el); });
+[['term', '#term'], ['chat', '#chat'], ['flow', '#flow'], ...(PHONE ? [] : [['desk', '#deskbox']])].forEach(([k, q]) => { const el = document.querySelector(q); el.dataset.play = k; playIO.observe(el); });
 
 // ───────── 复制：按钮上方冒一个小提示 ─────────
 const DL_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v10.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6zM4 19h16v2H4z"/></svg>';

@@ -20,7 +20,7 @@ jobs:
         with: { node-version: 24 }
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
-      - run: pip install fonttools brotli
+      - run: pip install fonttools brotli pillow
       - run: npm ci --no-audit --no-fund
         working-directory: packages/render
       # 首页「桌面 App」那一段里跑的是真的 App 前端（网页版，数据是 lumen 示例）
