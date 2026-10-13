@@ -1,7 +1,7 @@
 // 官网构建：node site/build.ts [输出目录]
 // 页面上的作品都是渲染器现画的（原版 satori 渲染器和新风格两套），演示用虚构的样例项目；
 // creditia 自己的署名用仓库里的 credits.json。大图是文字已转路径的 SVG，缩略图是 PNG。
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { buildModel, STYLES, styleById, art, exporter, raster, frames } from '../packages/render/src/index.ts';
@@ -249,6 +249,9 @@ let html = readFileSync(path.join(import.meta.dirname, 'index.html'), 'utf8');
 html = html
   .replace('/*__DATA__*/', `const DATA = ${JSON.stringify({ ...meta, styles, tools, hasSelf: !!own, hasApp, icons: ICONS, version: JSON.parse(readFileSync(path.join(ROOT, 'packages/cli/package.json'), 'utf8')).version })};`)
   .replaceAll('<!--__LOGO__-->', logo);
+// 字体放在自己站上：按页面里实际出现的字截出 woff2（衬线中文只用在几个大标题上，截出来只有几 KB），
+// 不再等 Google Fonts。本机没有 fontTools 就照旧用 Google Fonts
+html = selfHostFonts(html);
 writeFileSync(path.join(OUT, 'index.html'), html);
 // 英文版：同一页，默认英文，分享出去的标题、描述、预览图也是英文（和 index.html 在同一目录，相对路径不用改）
 const EN_DESC = 'Matches your AI coding agents’ logs against git history line by line, works out how much each tool and each model wrote, and rolls it as end credits. Open source, runs locally.';
@@ -264,3 +267,35 @@ writeFileSync(path.join(OUT, 'assets/favicon.svg'), logo.replace(/currentColor/g
 cpSync(path.join(ROOT, 'packages/render/assets/creditia/logo.svg'), path.join(OUT, 'assets/logo.svg'));
 writeFileSync(path.join(OUT, '.nojekyll'), '');
 console.log(`→ ${OUT}/index.html`);
+
+function selfHostFonts(page: string): string {
+  const dir = (pkg: string, w: string) => { const d = path.join(ROOT, 'packages/render/node_modules/@expo-google-fonts', pkg, w); return readdirSync(d).filter((f) => f.endsWith('.ttf')).map((f) => path.join(d, f)).sort((x, y) => statSync(y).size - statSync(x).size)[0]; }; // 有的包里另有一个空壳 .ttf，取最大的
+  // 页面上（含 DATA 和英文文案）出现的全部字符；拉丁字体只要非中日韩的部分
+  const all = [...new Set(page)].filter((c) => c.codePointAt(0)! >= 0x20);
+  const latin = all.filter((c) => c.codePointAt(0)! < 0x2e80).join('');
+  // 大标题：class="serif" 的元素里的字（中文版在模板里，英文版在 EN 里，拉丁部分已经在 latin 里）
+  const ASCII = Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)).join('');
+  const heads = [...page.matchAll(/class="serif"[^>]*>([^]*?)<\/h[12]>/g)].map((m) => m[1].replace(/<[^>]+>/g, '')).join('');
+  const faces = [
+    { family: 'Instrument Serif', w: 400, pkg: 'instrument-serif', dir: '400Regular', text: latin },
+    { family: 'Inter', w: 400, pkg: 'inter', dir: '400Regular', text: latin },
+    { family: 'Inter', w: 500, pkg: 'inter', dir: '500Medium', text: latin },
+    { family: 'Inter', w: 600, pkg: 'inter', dir: '600SemiBold', text: latin },
+    { family: 'JetBrains Mono', w: 400, pkg: 'jetbrains-mono', dir: '400Regular', text: latin },
+    { family: 'JetBrains Mono', w: 500, pkg: 'jetbrains-mono', dir: '500Medium', text: latin },
+    { family: 'Noto Serif SC', w: 500, pkg: 'noto-serif-sc', dir: '500Medium', text: heads + ASCII + '，、。：；！？「」' },
+  ].map((f) => ({ ...f, file: `${f.family.replace(/ /g, '')}-${f.w}.woff2` }));
+  mkdirSync(path.join(OUT, 'assets/fonts'), { recursive: true });
+  for (const f of faces) {
+    const r = spawnSync('python3', ['-m', 'fontTools.subset', dir(f.pkg, f.dir), `--text=${f.text}`, '--flavor=woff2', `--output-file=${path.join(OUT, 'assets/fonts', f.file)}`], { stdio: ['ignore', 'ignore', 'inherit'] });
+    if (r.status !== 0) { console.log('! fontTools 不可用，字体照旧走 Google Fonts'); return page; }
+  }
+  const css = faces.map((f) => `@font-face { font-family: "${f.family}"; font-weight: ${f.w}; font-style: normal; font-display: swap; src: url(assets/fonts/${f.file}) format("woff2"); }`).join('\n');
+  // 首屏一出来就要用的：正文、英文标题、中文标题
+  const pre = ['Inter-400', 'InstrumentSerif-400', 'NotoSerifSC-500'].map((n) => `<link rel="preload" href="assets/fonts/${n}.woff2" as="font" type="font/woff2" crossorigin>`).join('\n');
+  const kb = faces.reduce((a, f) => a + readFileSync(path.join(OUT, 'assets/fonts', f.file)).length, 0) / 1024;
+  console.log(`✓ fonts: ${faces.length} 个 woff2，共 ${kb.toFixed(0)} KB`);
+  const out = page.replace(/<link rel="preconnect" href="https:\/\/fonts\.googleapis\.com">\n<link rel="preconnect" href="https:\/\/fonts\.gstatic\.com" crossorigin>\n<link href="https:\/\/fonts\.googleapis\.com[^>]*>/, `${pre}\n<style>\n${css}\n</style>`);
+  if (out === page) throw new Error('没找到 Google Fonts 的 <link>，字体没换上');
+  return out;
+}
