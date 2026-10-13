@@ -25,7 +25,7 @@
     }
    },
    "byVersion": {
-    "archive/site-v2-2026-10-12": 136
+    "unreleased": 136
    },
    "contributor": "unattributed",
    "linesAdded": 136,
@@ -58,7 +58,7 @@
     }
    },
    "byVersion": {
-    "archive/site-v2-2026-10-12": 11628
+    "unreleased": 11628
    },
    "contributor": "a:claude-code/claude-fable-5-1",
    "linesAdded": 11628,
@@ -66,12 +66,12 @@
   },
   {
    "byArea": {
-    "core": 10,
+    "core": 46,
     "frontend": 110
    },
    "byEvidence": {
     "declared": {
-     "linesAdded": 120
+     "linesAdded": 156
     },
     "inferred": {
      "linesAdded": 0
@@ -87,21 +87,19 @@
     }
    },
    "byVersion": {
-    "archive/site-pre-mobile": 79,
-    "archive/site-v3-2026-10-12": 10,
-    "unreleased": 31
+    "unreleased": 156
    },
    "contributor": "a:claude-code",
-   "linesAdded": 120,
-   "linesSurviving": 109
+   "linesAdded": 156,
+   "linesSurviving": 145
   },
   {
    "byArea": {
     "assets": 171,
-    "build": 339,
-    "core": 10957,
+    "build": 340,
+    "core": 11973,
     "docs": 651,
-    "frontend": 5529,
+    "frontend": 5602,
     "tests": 3405
    },
    "byEvidence": {
@@ -109,7 +107,7 @@
      "linesAdded": 126
     },
     "inferred": {
-     "linesAdded": 14375
+     "linesAdded": 15457
     },
     "manual": {
      "linesAdded": 0
@@ -118,25 +116,15 @@
      "linesAdded": 0
     },
     "verified": {
-     "linesAdded": 6551
+     "linesAdded": 6559
     }
    },
    "byVersion": {
-    "archive/site-pre-mobile": 1126,
-    "archive/site-v10-2026-10-13": 614,
-    "archive/site-v11-2026-10-13": 508,
-    "archive/site-v2-2026-10-12": 12745,
-    "archive/site-v3-2026-10-12": 3332,
-    "archive/site-v4-2026-10-12": 834,
-    "archive/site-v5-2026-10-12": 318,
-    "archive/site-v6-2026-10-12": 392,
-    "archive/site-v7-2026-10-12": 115,
-    "archive/site-v8-2026-10-12": 819,
-    "archive/site-v9-2026-10-12": 249
+    "unreleased": 22142
    },
    "contributor": "a:claude-code/claude-opus-5-5",
-   "linesAdded": 21052,
-   "linesSurviving": 17161
+   "linesAdded": 22142,
+   "linesSurviving": 18109
   }
  ],
  "clock": [
@@ -181,8 +169,8 @@
    0,
    2,
    4,
+   2,
    1,
-   0,
    0,
    0,
    0,
@@ -370,7 +358,7 @@
    "from": "2026-10-10",
    "name": "2026-10",
    "to": "2026-10-13",
-   "verifiedShare": 0.242
+   "verifiedShare": 0.235
   }
  ],
  "days": [
@@ -395,7 +383,7 @@
   },
   {
    "by": {
-    "claude-code": 5085
+    "claude-code": 6211
    },
    "date": "2026-10-13"
   }
@@ -948,9 +936,9 @@
   },
   {
    "by": {
-    "claude-code": 1624
+    "claude-code": 2476
    },
-   "lines": 1624,
+   "lines": 2476,
    "path": "credits.json"
   },
   {
@@ -1573,9 +1561,9 @@
   },
   {
    "by": {
-    "claude-code": 233
+    "claude-code": 301
    },
-   "lines": 233,
+   "lines": 301,
    "path": "site/build.ts"
   },
   {
@@ -1587,9 +1575,9 @@
   },
   {
    "by": {
-    "claude-code": 1812
+    "claude-code": 1876
    },
-   "lines": 1812,
+   "lines": 1876,
    "path": "site/index.html"
   },
   {
@@ -1684,12 +1672,12 @@
    "path": "spike/tests/vectors.json"
   }
  ],
- "generatedAt": "2026-10-13T14:29:13+08:00",
- "head": "d8b060acce674997742ea0ed48d7604a6a032810",
+ "generatedAt": "2026-10-13T16:17:15+08:00",
+ "head": "1ed6670d32791e9dcd04829efca31b78cc42ea6e",
  "human": {
   "agentReviews": 0,
   "plans": 0,
-  "prompts": 62,
+  "prompts": 64,
   "reviews": 0,
   "tabAssistedLines": 0
  },
@@ -1708,11 +1696,11 @@
  "sessions": [
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "end": 1791872944,
-   "prompts": 60,
+   "end": 1791879261,
+   "prompts": 62,
    "review": false,
    "start": 1791692687,
-   "tokens": 470054997
+   "tokens": 485740833
   },
   {
    "contributor": "a:claude-code/claude-sonnet-5-5",
@@ -1742,22 +1730,22 @@
   },
   {
    "byContributor": {
-    "a:claude-code": 120,
-    "a:claude-code/claude-opus-5-5": 11771
+    "a:claude-code": 156,
+    "a:claude-code/claude-opus-5-5": 12861
    },
    "week": "2026-W42"
   }
  ],
  "totals": {
   "binaryFiles": 57,
-  "commits": 40,
+  "commits": 42,
   "days": 4,
-  "linesAdded": 32936,
-  "linesSurviving": 24438,
+  "linesAdded": 34062,
+  "linesSurviving": 25422,
   "linesWritten": 6563,
   "sessions": 3,
-  "tokens": 470101971,
-  "units": 30
+  "tokens": 485787807,
+  "units": 32
  },
  "units": [
   {
@@ -1783,7 +1771,7 @@
     }
    ],
    "title": "creditia：阶段 0 验证与 MVP 第一版",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -1803,7 +1791,7 @@
     }
    ],
    "title": "docs: creditia 自己的 credits 档案 Creditia-Harness: claude-code Creditia-Model: claude-fable-5-1",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -1824,7 +1812,7 @@
     }
    ],
    "title": "fix: 模型名归一（去掉 provider 前缀、Claude 版本号用横线） Creditia-Harness: claude-code Creditia-Model: claude-fable-5-1",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -1849,7 +1837,7 @@
     }
    ],
    "title": "验收重构：版式家族、App 重做、徽章与字幕多版式、人单独署名",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -1869,7 +1857,7 @@
     }
    ],
    "title": "fix: 盖章 hook 在单行提交后补空行，conventional commit 主题不再被当成 trailer",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -1893,7 +1881,7 @@
     }
    ],
    "title": "第二轮重做：八个新体裁、片尾十一版式、小票七版式、App 图库→单图主线",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -1914,7 +1902,7 @@
     }
    ],
    "title": "不入库：.creditia/、docs/validation/、spike/projects/ 加入 .gitignore；README 去掉验证报告链接；lessons 补推 GitHub 的教训",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -1934,7 +1922,7 @@
     }
    ],
    "title": "补 MIT LICENSE 文件",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -1956,7 +1944,7 @@
     }
    ],
    "title": "外部内容出仓：docs/ 内部文档只留本地不入库；测试向量重算为中性数据；示例路径、夹具数字、gallery 项目名改中性；logo 来源直接注明 simple-icons",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -1976,7 +1964,7 @@
     }
    ],
    "title": "AGENTS.md 移出仓库：内部工作指令只留本地",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -1996,7 +1984,7 @@
     }
    ],
    "title": "重新生成自家 credits 档案：最新数据，主导者单独署名",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2027,7 +2015,7 @@
     }
    ],
    "title": "重做 App、作品与分析；加 npx、GitHub Action 和署名页 (#3)",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2052,7 +2040,7 @@
     }
    ],
    "title": "官网；文案改成平实的说法；几处关键词猜测改成按约定判断",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2073,7 +2061,7 @@
     }
    ],
    "title": "官网重做",
-   "version": "archive/site-v2-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2103,7 +2091,7 @@
     }
    ],
    "title": "原版渲染器回来，和新风格并存；作品里只写 AI；官网手机端",
-   "version": "archive/site-v3-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2125,7 +2113,7 @@
     }
    ],
    "title": "官网重新设计：先讲清楚它回答什么、为什么可信、拿到什么",
-   "version": "archive/site-v4-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2146,7 +2134,7 @@
     }
    ],
    "title": "片尾字幕内容少时放大铺开；原版作品有了英文",
-   "version": "archive/site-v4-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2168,7 +2156,7 @@
     }
    ],
    "title": "片尾字幕：原来的十一种恢复原样；新增片头、出品、场记板、部门四种",
-   "version": "archive/site-v4-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2191,7 +2179,7 @@
     }
    ],
    "title": "官网换成安静的四屏；补齐工具标志",
-   "version": "archive/site-v5-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2214,7 +2202,7 @@
     }
    ],
    "title": "官网：风格一眼看全、真实的导出文件、四种用法、亮暗切换",
-   "version": "archive/site-v6-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2235,7 +2223,7 @@
     }
    ],
    "title": "官网：风格胶片带、导出格式一行、四种用法同时展示",
-   "version": "archive/site-v7-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2256,7 +2244,7 @@
     }
    ],
    "title": "官网：风格墙、全站动效、安装入口、交互修整",
-   "version": "archive/site-v8-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2277,7 +2265,7 @@
     }
    ],
    "title": "官网：首屏署名卡逐张显影、安装区一眼看全、导出改成小样",
-   "version": "archive/site-v9-2026-10-12"
+   "version": null
   },
   {
    "areas": [
@@ -2298,7 +2286,7 @@
     }
    ],
    "title": "官网：首屏逐行署名编辑器；四种用法做成会动的小样",
-   "version": "archive/site-v10-2026-10-13"
+   "version": null
   },
   {
    "areas": [
@@ -2320,7 +2308,7 @@
     }
    ],
    "title": "site: real app on a desktop, Action explained, style-switcher hero",
-   "version": "archive/site-v11-2026-10-13"
+   "version": null
   },
   {
    "areas": [
@@ -2341,7 +2329,7 @@
     }
    ],
    "title": "site: code-map hero; Action and App back in the 2×2 grid; smooth app tour",
-   "version": "archive/site-pre-mobile"
+   "version": null
   },
   {
    "areas": [
@@ -2361,7 +2349,7 @@
     }
    ],
    "title": "site: hero polish — token strokes, beam flash, share bar, live commits",
-   "version": "archive/site-pre-mobile"
+   "version": null
   },
   {
    "areas": [
@@ -2381,7 +2369,7 @@
     }
    ],
    "title": "site: scroll from the code map into the line-by-line section",
-   "version": "archive/site-pre-mobile"
+   "version": null
   },
   {
    "areas": [
@@ -2404,7 +2392,7 @@
     }
    ],
    "title": "README: animated code map, style collage, English version",
-   "version": "archive/site-pre-mobile"
+   "version": null
   },
   {
    "areas": [
@@ -2425,52 +2413,49 @@
    ],
    "title": "Site: phone layout",
    "version": null
+  },
+  {
+   "areas": [
+    "build",
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "321e6a55541469bc1d6ed26b3e04dda4451255be"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:22",
+   "lines": 1090,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Site: own credits, WebP wall, phone cards, English URL, alt text",
+   "version": null
+  },
+  {
+   "areas": [
+    "core"
+   ],
+   "commits": [
+    "d459c9716761b4202fb6344b9fe0c503bab44b2a"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:23",
+   "lines": 36,
+   "shares": [
+    {
+     "contributor": "a:claude-code",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "Site: self-hosted, subset fonts",
+   "version": null
   }
  ],
- "versions": [
-  {
-   "date": "2026-10-12",
-   "tag": "archive/site-v2-2026-10-12"
-  },
-  {
-   "date": "2026-10-13",
-   "tag": "archive/site-v3-2026-10-12"
-  },
-  {
-   "date": "2026-10-13",
-   "tag": "archive/site-v4-2026-10-12"
-  },
-  {
-   "date": "2026-10-13",
-   "tag": "archive/site-v5-2026-10-12"
-  },
-  {
-   "date": "2026-10-13",
-   "tag": "archive/site-v6-2026-10-12"
-  },
-  {
-   "date": "2026-10-13",
-   "tag": "archive/site-v7-2026-10-12"
-  },
-  {
-   "date": "2026-10-13",
-   "tag": "archive/site-v8-2026-10-12"
-  },
-  {
-   "date": "2026-10-13",
-   "tag": "archive/site-v9-2026-10-12"
-  },
-  {
-   "date": "2026-10-13",
-   "tag": "archive/site-v10-2026-10-13"
-  },
-  {
-   "date": "2026-10-13",
-   "tag": "archive/site-v11-2026-10-13"
-  },
-  {
-   "date": "2026-10-13",
-   "tag": "archive/site-pre-mobile"
-  }
- ]
+ "versions": []
 }

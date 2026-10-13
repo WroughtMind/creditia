@@ -92,6 +92,11 @@ fn glob_re(pat: &str) -> String {
     if anchored { format!("^{re}$") } else { format!("(^|.*/){re}$") }
 }
 
+/// tag 名的通配：整个名字都要对上（`archive/**` 只排除 archive/ 开头的）
+fn tag_re(pat: &str) -> String {
+    glob_re(&format!("/{}", pat.trim_start_matches('/')))
+}
+
 pub fn worktrees(repo: &Path) -> Vec<String> {
     git(repo, &["worktree", "list", "--porcelain"]).lines().filter_map(|l| l.strip_prefix("worktree ")).map(String::from).collect()
 }
@@ -242,8 +247,9 @@ pub fn units(repo: &Path, rev: &str, prs: &[PrMeta]) -> (Vec<Unit>, HashMap<Stri
     (units, parents)
 }
 
-/// 每个提交首次出现在哪个 tag
-pub fn versions(repo: &Path, parents: &HashMap<String, Vec<String>>) -> (Vec<(String, i64)>, HashMap<String, String>) {
+/// 每个提交首次出现在哪个 tag。ignore 里的 tag（通配）不算版本，比如存档用的 `archive/**`
+pub fn versions(repo: &Path, parents: &HashMap<String, Vec<String>>, ignore: &[String]) -> (Vec<(String, i64)>, HashMap<String, String>) {
+    let skip: Vec<regex::Regex> = ignore.iter().filter_map(|p| regex::Regex::new(&tag_re(p)).ok()).collect();
     let tags = git(repo, &["for-each-ref", "--sort=creatordate", "--format=%(refname:short)%00%(objectname)%00%(*objectname)%00%(creatordate:unix)", "refs/tags"]);
     let mut seen: HashSet<String> = HashSet::new();
     let mut of: HashMap<String, String> = HashMap::new();
@@ -251,6 +257,9 @@ pub fn versions(repo: &Path, parents: &HashMap<String, Vec<String>>) -> (Vec<(St
     for l in tags.lines() {
         let p: Vec<&str> = l.split('\0').collect();
         if p.len() < 4 {
+            continue;
+        }
+        if skip.iter().any(|r| r.is_match(p[0])) {
             continue;
         }
         let target = if p[2].is_empty() { p[1] } else { p[2] };
@@ -380,7 +389,7 @@ pub fn mailmap_emails(repo: &Path, canonical: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::glob_re;
+    use super::{glob_re, tag_re};
     #[test]
     fn globs() {
         let m = |p: &str, f: &str| regex::Regex::new(&glob_re(p)).unwrap().is_match(f);
@@ -390,5 +399,15 @@ mod tests {
         assert!(m("/dist/*.js", "dist/app.js"));
         assert!(!m("/dist/*.js", "web/dist/app.js"));
         assert!(m("package-lock.json", "web/package-lock.json"));
+    }
+    #[test]
+    fn ignored_tags() {
+        let m = |p: &str, t: &str| regex::Regex::new(&tag_re(p)).unwrap().is_match(t);
+        assert!(m("archive/**", "archive/site-pre-mobile"));
+        assert!(m("archive/**", "archive/a/b"));
+        assert!(!m("archive/**", "v1.2.0"));
+        assert!(!m("archive/**", "release/archive/x"));
+        assert!(m("nightly-*", "nightly-2026-10-13"));
+        assert!(!m("nightly-*", "v1-nightly-2"));
     }
 }

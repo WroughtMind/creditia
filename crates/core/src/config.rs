@@ -72,6 +72,9 @@ pub struct Config {
     /// 证据覆盖分段 [(名称, 起, 止)]
     #[serde(default)]
     pub segments: Vec<(String, String, String)>,
+    /// 不算发布版本的 tag（通配，`**` 跨目录）。默认排除 `archive/**`：存档用的 tag 不是版本
+    #[serde(default = "default_ignore_tags")]
+    pub ignore_tags: Vec<String>,
     #[serde(default)]
     pub privacy: Privacy,
     #[serde(default)]
@@ -83,6 +86,7 @@ pub struct Config {
 
 fn one() -> u32 { 1 }
 fn standard() -> String { "standard".into() }
+pub fn default_ignore_tags() -> Vec<String> { vec!["archive/**".into()] }
 
 impl Default for Config {
     fn default() -> Self {
@@ -105,6 +109,7 @@ impl Default for Config {
             branch_prefixes: [("codex/", "codex"), ("cursor/", "cursor"), ("claude/", "claude-code"), ("grok/", "grok"), ("kimi/", "kimi"), ("copilot/", "copilot"), ("devin/", "devin"), ("jules/", "jules"), ("opencode/", "opencode")]
                 .iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(),
             segments: vec![],
+            ignore_tags: default_ignore_tags(),
             privacy: Privacy::default(),
             display: Display::default(),
             version: 1,
