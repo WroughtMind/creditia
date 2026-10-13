@@ -359,7 +359,7 @@ fn save_file(name: String, bytes: String, mime: Option<String>) -> Res<String> {
     let _ = mime;
     let dir = export_dir()?;
     std::fs::create_dir_all(&dir).map_err(|e| Fail::with("io", e))?;
-    let safe = name.replace(['/', '\\', ':'], "-");
+    let safe = safe_name(&name);
     let mut path = dir.join(&safe);
     if path.exists() {
         let stem = std::path::Path::new(&safe).file_stem().and_then(|s| s.to_str()).unwrap_or("export").to_string();
@@ -371,12 +371,26 @@ fn save_file(name: String, bytes: String, mime: Option<String>) -> Res<String> {
     }
     let data = base64::engine::general_purpose::STANDARD.decode(bytes).map_err(|e| Fail::with("io", e))?;
     std::fs::write(&path, data).map_err(|e| Fail::with("io", e))?;
+    SAVED.lock().unwrap().insert(path.clone());
     Ok(path.display().to_string())
 }
+
+/// 文件名只留一个干净的名字：不带目录、不带各系统不认的字符、不以点开头或结尾
+fn safe_name(name: &str) -> String {
+    let s: String = name.chars().map(|c| if c.is_control() || "/\\:*?\"<>|".contains(c) { '-' } else { c }).collect();
+    let s = s.trim_matches(|c: char| c == '.' || c.is_whitespace());
+    if s.is_empty() { "export".into() } else { s.to_string() }
+}
+
+/// 这次打开 App 以来存过的文件：「在访达中显示」只认这些
+static SAVED: Mutex<std::collections::BTreeSet<PathBuf>> = Mutex::new(std::collections::BTreeSet::new());
 
 #[tauri::command]
 fn reveal(path: String) -> Res<()> {
     let p = PathBuf::from(&path);
+    if !SAVED.lock().unwrap().contains(&p) {
+        return Err(Fail::new("not_allowed"));
+    }
     #[cfg(target_os = "macos")]
     { let _ = Command::new("open").args(["-R", path.as_str()]).status(); }
     #[cfg(target_os = "windows")]
@@ -389,7 +403,7 @@ fn reveal(path: String) -> Res<()> {
     Ok(())
 }
 
-#[tauri::command]
+/// 只给 open_folder 用，不直接开放给页面
 fn open_path(path: String) -> Res<()> {
     #[cfg(target_os = "macos")]
     { let _ = Command::new("open").arg(path.as_str()).status(); }
@@ -439,7 +453,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             projects, credits, stamp, config_of, set_display, analyze, cancel_analyze, pick_folder, add_project, embed_snippet,
-            library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, open_path, doctor
+            library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor
         ])
         .run(tauri::generate_context!())
         .expect("启动 creditia App 失败");
@@ -456,6 +470,15 @@ mod tests {
         std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
         std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
         p
+    }
+
+    #[test]
+    fn export_names_stay_in_the_folder() {
+        assert_eq!(safe_name("lumen-share-ink.png"), "lumen-share-ink.png");
+        assert_eq!(safe_name("../../etc/passwd"), "-..-etc-passwd");
+        assert_eq!(safe_name(".."), "export");
+        assert_eq!(safe_name("a:b*c?.svg"), "a-b-c-.svg");
+        assert_eq!(safe_name(" .hidden. "), "hidden");
     }
 
     #[test]
