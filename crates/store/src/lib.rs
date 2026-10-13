@@ -47,6 +47,8 @@ impl Library {
         let dir = data_dir();
         std::fs::create_dir_all(&dir).map_err(|e| format!("创建作品库目录失败 {}: {e}", dir.display()))?;
         let conn = Connection::open(dir.join("library.sqlite")).map_err(|e| e.to_string())?;
+        // App 和命令行可能同时打开作品库：被锁住时等一会儿，而不是直接报 database is locked
+        conn.busy_timeout(std::time::Duration::from_secs(5)).map_err(|e| e.to_string())?;
         conn.execute_batch(
             "pragma journal_mode=wal;
              create table if not exists projects(
