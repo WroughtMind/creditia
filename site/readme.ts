@@ -27,7 +27,7 @@ const THEMES = {
   dark: { bg: '#070708', ink: '#F1EADC', soft: '#A39B8B', line: '#1B1A18' },
   light: { bg: '#F3F1EC', ink: '#161512', soft: '#67635B', line: '#E2DED5' },
 };
-const W = 1280, H = 560, MX = 48, MY = 84, MW = W - 2 * MX, MH = 352;
+const W = 1280, H = 580, MX = 48, MY = 96, MW = W - 2 * MX, MH = 352, BY = 476, LY = 530;
 const PITCH = 4.5, CW = 56, GAP = 22, SHADE = [1, 0.78, 0.6];
 
 function rng(seed: number) { return () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -101,14 +101,19 @@ function mapSvg(toks: Tok[], theme: keyof typeof THEMES, lang: Lang): string {
   }
   // 占比条和图例
   let bx = MX;
-  const bar = sh.map((r) => { const w = (r.pct / 100) * MW, s = `<rect x="${f1(bx)}" y="458" width="${f1(Math.max(0, w - 2))}" height="4" fill="${colorOf(FT.indexOf(r.key))}"/>`; bx += w; return s; }).join('');
+  const bar = sh.map((r) => { const w = (r.pct / 100) * MW, s = `<rect x="${f1(bx)}" y="${BY}" width="${f1(Math.max(0, w - 3))}" height="5" fill="${colorOf(FT.indexOf(r.key))}"/>`; bx += w; return s; }).join('');
+  // 图例两端对齐：先估每一项的宽度，剩下的平分成间距
+  const items = sh.map((r) => {
+    const name = r.key === 'unattributed' ? (en ? 'Unattributed' : '未确认') : r.name;
+    return { r, name, w: 28 + [...name].reduce((a, ch) => a + (ch.charCodeAt(0) > 0x2e80 ? 19 : 10.4), 0) + 10 + 52 };
+  });
+  const gap = (MW - items.reduce((a, x) => a + x.w, 0)) / (items.length - 1);
   let lx = MX;
-  const legend = sh.map((r) => {
-    const k = FT.indexOf(r.key), col = colorOf(k), name = r.key === 'unattributed' ? (en ? 'Unattributed' : '未确认') : r.name;
-    const nameW = [...name].reduce((a, ch) => a + (ch.charCodeAt(0) > 0x2e80 ? 14 : 8), 0);
-    const s = (r.key === 'unattributed' ? `<rect x="${lx + 1}" y="497" width="12" height="12" rx="3" fill="none" stroke="${c.soft}" stroke-dasharray="2 2"/>` : logoSvg(r.key, lx, 496, 14, col))
-      + `<text x="${lx + 22}" y="508" font-family="${sans}" font-size="14" fill="${c.ink}">${esc(name)}<tspan dx="8" font-family="${mono}" font-size="13" fill="${c.soft}">${r.pct.toFixed(1)}%</tspan></text>`;
-    lx += 22 + nameW + 8 + 40 + 48;
+  const legend = items.map(({ r, name, w }) => {
+    const k = FT.indexOf(r.key), col = colorOf(k);
+    const s = (r.key === 'unattributed' ? `<rect x="${f1(lx + 2)}" y="${LY - 16}" width="16" height="16" rx="4" fill="none" stroke="${c.soft}" stroke-dasharray="3 2.5"/>` : logoSvg(r.key, f1(lx), LY - 17, 19, col))
+      + `<text x="${f1(lx + 28)}" y="${LY}" font-family="${sans}" font-size="19" fill="${c.ink}">${esc(name)}<tspan dx="10" font-family="${mono}" font-size="17" fill="${c.soft}">${r.pct.toFixed(1)}%</tspan></text>`;
+    lx += w + gap;
     return s;
   }).join('');
   const lines = 49360, cap = en ? `${lines.toLocaleString('en-US')} lines · 612 commits · 112 days` : `${lines.toLocaleString('en-US')} 行 · 612 次提交 · 112 天`;
@@ -122,16 +127,15 @@ function mapSvg(toks: Tok[], theme: keyof typeof THEMES, lang: Lang): string {
 <mask id="flash" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect x="-150" y="0" width="150" height="${H}" fill="url(#fl)">${move}</rect></mask>
 </defs>
 <rect width="${W}" height="${H}" rx="18" fill="${c.bg}"/>
-<text x="${MX}" y="50" font-family="${mono}" font-size="15" fill="${c.ink}">lumen</text>
-<text x="${MX + 62}" y="50" font-family="${sans}" font-size="14" fill="${c.soft}">${esc(note)}</text>
-<text x="${W - MX}" y="50" text-anchor="end" font-family="${mono}" font-size="13" fill="${c.soft}">${esc(cap)}</text>
+<text x="${MX}" y="58" font-family="${sans}" font-size="20" fill="${c.ink}"><tspan font-family="${mono}" font-weight="600">lumen</tspan><tspan dx="14" fill="${c.soft}">${esc(note)}</tspan></text>
+<text x="${W - MX}" y="58" text-anchor="end" font-family="${mono}" font-size="17" fill="${c.soft}">${esc(cap)}</text>
 <g fill="none" stroke-width="2">
 <use href="#all" stroke="${c.ink}" stroke-opacity=".16"/>
 <g clip-path="url(#cut)">${layers.join('')}<animate attributeName="opacity" values="1;1;0" keyTimes="0;.92;1" dur="${DUR}" repeatCount="indefinite"/></g>
 <use href="#all" stroke="${c.ink}" stroke-opacity=".7" mask="url(#flash)"/>
 </g>
 <g opacity="0"><rect x="-90" y="${MY - 12}" width="90" height="${MH + 20}" fill="url(#glow)"/><rect x="-1" y="${MY - 12}" width="1" height="${MH + 20}" fill="${c.ink}" opacity=".85"/>${move}<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.07;.09;.4;.43;1" dur="${DUR}" repeatCount="indefinite"/></g>
-<rect x="${MX}" y="458" width="${MW}" height="4" fill="${c.ink}" fill-opacity=".1"/>
+<rect x="${MX}" y="${BY}" width="${MW}" height="5" fill="${c.ink}" fill-opacity=".1"/>
 <g clip-path="url(#cut)">${bar}<animate attributeName="opacity" values="1;1;0" keyTimes="0;.92;1" dur="${DUR}" repeatCount="indefinite"/></g>
 ${legend}
 </svg>

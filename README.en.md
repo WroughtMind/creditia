@@ -27,7 +27,7 @@ and turns the result into badges, CREDITS.md, end credits and share cards. Runs 
 
 ## One command
 
-```console
+```text
 $ creditia analyze && creditia fetch
 lumen  2026-06-02 → 2026-09-21
 ───────────────────────────────
@@ -44,23 +44,21 @@ commits 612  lines 49,360  tokens 491M
 Once analyzed, put the result to use:
 
 ```bash
-creditia doc                     # write CREDITS.md (only touches its marked block)
-creditia export --piece roll --style cinema --out roll.png  # end credits
-creditia export --list           # every piece, layout, style and format
-creditia hook install            # stamp every future commit, so it still counts after logs are cleaned up
-creditia blame src/core/analyze.ts:12    # which tool and model wrote this line
+creditia doc                                  # write CREDITS.md (only its marked block)
+creditia export --piece roll --out roll.png   # end credits
+creditia export --list                        # every piece, layout, style and format
+creditia hook install                         # stamp future commits, so they count even after logs are gone
+creditia blame src/core/analyze.ts:12         # which tool and model wrote this line
 ```
 
 One project in several places (worktrees, scratch clones, another machine): `creditia paths` lists the registered paths, `creditia link <path>` adds one.
 
 ## Every line has a source
 
-| Evidence | Where it comes from |
-|---|---|
-| **Matched in logs** | The tool's own log recorded writing this line: Claude Code Write / Edit, Codex FileChange, Cursor line hashes… |
-| **Declared in commits** | Commit email, `Co-authored-by`, creditia's commit stamp |
-| **Inferred** | Other lines in the same commit follow the tool with evidence; branches tools create themselves, like `codex/`. Kept separate; turn off with `--level strict` |
-| **Unattributed** | Anything that matches none of the above. Counted toward no tool |
+- **Matched in logs** — The tool's own log recorded writing this line: Claude Code Write / Edit, Codex FileChange, Cursor line hashes…
+- **Declared in commits** — Commit email, `Co-authored-by`, creditia's commit stamp
+- **Inferred** — Other lines in the same commit follow the tool with evidence; branches tools create themselves, like `codex/`. Kept separate; turn off with `--level strict`
+- **Unattributed** — Anything that matches none of the above. Counted toward no tool
 
 creditia answers one question — which AI tools and models wrote how much. No names appear in any piece, and percentages are taken over AI and unattributed lines only. Full rules and known limits: [ATTRIBUTION.md](ATTRIBUTION.md).
 
@@ -109,7 +107,7 @@ jobs:
 
 ## Supported tools
 
-| | Tool | What it reads | Line evidence | Model |
+| | Tool | What it reads | Lines | Model |
 |:-:|---|---|:-:|:-:|
 | <img src=".github/readme/logo/claude-code.svg" width="18"> | Claude Code | Write / Edit / MultiEdit in `~/.claude/projects/*/*.jsonl`; providers incl. Bedrock, Vertex, relays | ✓ | ✓ |
 | <img src=".github/readme/logo/codex.svg" width="18"> | Codex | `~/.codex` thread store + rollout FileChange; provider from `model_provider` | ✓ | ✓ |

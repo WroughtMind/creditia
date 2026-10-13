@@ -27,7 +27,7 @@
 
 ## 一行命令
 
-```console
+```text
 $ creditia analyze && creditia fetch
 lumen  2026-06-02 → 2026-09-21
 ───────────────────────────────
@@ -44,23 +44,21 @@ Grok            █░░░░░░░░░░░░░░░░░░░░�
 分析完，结果可以拿去用：
 
 ```bash
-creditia doc                     # 写 CREDITS.md（只改标记区间）
-creditia export --piece roll --style cinema --out roll.png  # 片尾字幕
-creditia export --list           # 全部作品、版式、风格、格式
-creditia hook install            # 以后每次提交自动盖章：日志被清理了也认得出
-creditia blame src/core/analyze.ts:12    # 这一行是哪个工具、哪个模型写的
+creditia doc                                  # 写 CREDITS.md（只改标记区间）
+creditia export --piece roll --out roll.png   # 片尾字幕
+creditia export --list                        # 全部作品、版式、风格、格式
+creditia hook install                         # 以后每次提交自动盖章：日志被清理了也认得出
+creditia blame src/core/analyze.ts:12         # 这一行是哪个工具、哪个模型写的
 ```
 
 一个项目在好几个地方（worktree、临时克隆、换过电脑）：`creditia paths` 看登记过的路径，`creditia link <路径>` 补上。
 
 ## 每一行，都有出处
 
-| 证据 | 怎么来的 |
-|---|---|
-| **日志里对得上** | 工具日志里有这一行的写入：Claude Code 的 Write / Edit、Codex 的 FileChange、Cursor 的逐行哈希…… |
-| **提交里写明了** | 提交邮箱、`Co-authored-by`、creditia 的提交盖章 |
-| **推断** | 同一提交里其余的行，跟着有证据的那个工具走；`codex/` 这类工具自动建的分支。单独记，`--level strict` 关掉 |
-| **未确认** | 以上都对不上的行。不算给任何工具 |
+- **日志里对得上**　工具日志里有这一行的写入：Claude Code 的 Write / Edit、Codex 的 FileChange、Cursor 的逐行哈希……
+- **提交里写明了**　提交邮箱、`Co-authored-by`、creditia 的提交盖章
+- **推断**　同一提交里其余的行，跟着有证据的那个工具走；`codex/` 这类工具自动建的分支。单独记，`--level strict` 关掉
+- **未确认**　以上都对不上的行。不算给任何工具
 
 creditia 只回答「哪些 AI 工具和模型写了多少」：作品里不出现任何名字，百分比只在 AI 和「未确认」的行之间算。完整规则和已知的边界在 [ATTRIBUTION.md](ATTRIBUTION.md)。
 
@@ -109,7 +107,7 @@ jobs:
 
 ## 支持的工具
 
-| | 工具 | 读什么 | 逐行证据 | 模型 |
+| | 工具 | 读什么 | 逐行 | 模型 |
 |:-:|---|---|:-:|:-:|
 | <img src=".github/readme/logo/claude-code.svg" width="18"> | Claude Code | `~/.claude/projects/*/*.jsonl` 的 Write / Edit / MultiEdit；渠道含 Bedrock、Vertex、中转站 | ✓ | ✓ |
 | <img src=".github/readme/logo/codex.svg" width="18"> | Codex | `~/.codex` 线程库 + rollout 的 FileChange；渠道看 `model_provider` | ✓ | ✓ |
