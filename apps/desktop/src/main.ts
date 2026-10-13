@@ -1,6 +1,7 @@
 // creditia App：一面展墙。顶部切换项目，左下角圆点切换风格，所有作品直接摆出来；
 // 悬停看细节、换版式、选格式导出；拖到右下角的导出坞也能导出。
 import { buildModel, type Model } from '../../../packages/render/src/classic/data.ts';
+import { nameOf } from '../../../packages/render/src/data.ts';
 import { creditsBlock, mergeCreditsMd } from '../../../packages/render/src/classic/text.ts';
 import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts';
 import { INTERACT_CSS, mountHits } from '../../../packages/render/src/interact.ts';
@@ -51,7 +52,40 @@ const L = (zh: string, en: string) => (state.lang === 'zh' ? zh : en);
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 const fmt = (n: number) => n.toLocaleString('en-US');
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-function toast(msg: string, ms = 2600) { const el = $('#toast'); el.textContent = msg; el.hidden = false; clearTimeout((toast as any)._t); (toast as any)._t = setTimeout(() => (el.hidden = true), ms); }
+type Act = { label: string; run: () => void };
+let toastTimer = 0, toastMs = 0;
+/** 提示条：可以带按钮（在访达中显示、取消……）和转圈；ms 为 0 就一直留着。鼠标停在上面时不消失 */
+function toast(msg: string, ms = 2600, o: { acts?: Act[]; spin?: boolean } = {}) {
+  const el = $('#toast');
+  el.innerHTML = `${o.spin ? '<i class="spin"></i>' : ''}<span class="msg"></span>${(o.acts ?? []).map((a, i) => `<button data-i="${i}">${esc(a.label)}</button>`).join('')}`;
+  el.querySelector('.msg')!.textContent = msg;
+  el.onclick = (e) => { const b = (e.target as HTMLElement).closest('button'); if (!b) return; el.hidden = true; o.acts![Number(b.dataset.i)].run(); };
+  el.hidden = false;
+  toastMs = ms; clearTimeout(toastTimer);
+  if (ms > 0) toastTimer = setTimeout(() => (el.hidden = true), ms);
+}
+/** 原生端的错误只带代码和细节，文案在这里按语言写 */
+const ERRORS: Record<string, [string, string]> = {
+  not_in_library: ['这个项目不在作品库里', 'This project is not in the library'],
+  no_credits: ['这个项目还没有档案', 'No credits for this project yet'],
+  dir_missing: ['项目目录已经不在了', 'The project folder is gone'],
+  core_missing: ['找不到分析核心 creditia-core', 'Cannot find the analysis core (creditia-core)'],
+  core_failed: ['分析失败', 'Analysis failed'],
+  busy: ['已经有一个分析在跑', 'An analysis is already running'],
+  cancelled: ['分析已取消', 'Analysis cancelled'],
+  no_home: ['找不到用户目录', 'Cannot find your home folder'],
+  io: ['读写文件失败', 'Could not read or write the file'],
+  store: ['读不到作品库', 'Cannot read the library'],
+};
+function errText(e: any): string {
+  const t = e?.code && ERRORS[e.code], d = e?.detail ? String(e.detail) : '';
+  if (t) return L(t[0], t[1]) + (d ? L(`：${d}`, `: ${d}`) : '');
+  return String(e?.message ?? e);
+}
+/** 家目录缩成 ~ */
+const short = (path: string) => path.replace(/^(\/Users|\/home)\/[^/]+/, '~').replace(/^[A-Za-z]:\\Users\\[^\\]+/, '~');
+const OS = /Mac/.test(navigator.userAgent) ? 'mac' : /Windows/.test(navigator.userAgent) ? 'win' : 'linux';
+const revealLabel = () => (OS === 'mac' ? L('在访达中显示', 'Show in Finder') : OS === 'win' ? L('在资源管理器中显示', 'Show in Explorer') : L('打开所在文件夹', 'Open folder'));
 
 const tiles = () => state.style.board;
 const keyOf = (b: { id: string; variant?: string }, i: number) => `${b.id}#${i}`;
@@ -61,18 +95,24 @@ async function boot() {
   bootKits();
   const st = document.createElement('style'); st.textContent = INTERACT_CSS; document.head.appendChild(st);
   $('#logo').innerHTML = LOGO_SVG;
-  renderDots(); renderDock(); wireTop();
-  try { state.projects = await api('projects'); } catch (e: any) { return empty(L('读不到作品库', 'Cannot read the library'), String(e?.message ?? e)); }
-  if (!state.projects.length) return empty(L('还没有分析过的项目', 'No analyzed projects yet'), '', 'creditia analyze');
+  applyLang(); renderDots(); renderDock(); wireTop();
+  try { state.projects = await api('projects'); } catch (e: any) { return empty(() => [L('读不到作品库', 'Cannot read the library'), errText(e)]); }
+  if (!state.projects.length) return empty(() => [L('还没有分析过的项目', 'No analyzed projects yet'), '', 'creditia analyze', native ? { label: L('添加项目…', 'Add a project…'), run: addProject } : undefined]);
   const last = state.projects.find((p) => p.id === store.get('project')) ?? state.projects[0];
   await openProject(last);
   addEventListener('resize', () => layout());
 }
-function empty(title: string, detail = '', cmd = '') {
+/** 空状态。传进来的是函数：换语言时按新语言重写一遍 */
+type EmptyView = () => [title: string, detail?: string, cmd?: string, act?: Act];
+let emptyView: EmptyView | null = null;
+function empty(view: EmptyView, keepName = false) {
+  emptyView = view;
+  const [title, detail = '', cmd = '', act] = view();
   $('#board').innerHTML = ''; document.body.classList.remove('busy');
   const el = $('#empty'); el.hidden = false;
-  el.innerHTML = `<div><b>${esc(title)}</b>${esc(detail)}${cmd ? `<br><span>${L('在项目目录里运行', 'Run in your project')}</span><br><code>${esc(cmd)}</code>` : ''}</div>`;
-  $('#pname').textContent = 'creditia'; $('#pmeta').textContent = '';
+  el.innerHTML = `<div><b>${esc(title)}</b>${esc(detail)}${act ? `<br><button class="go glass">${esc(act.label)}</button>` : ''}${cmd ? `<br><span>${act ? L('或者在项目目录里运行', 'or run in your project') : L('在项目目录里运行', 'Run in your project')}</span><br><code>${esc(cmd)}</code>` : ''}</div>`;
+  if (act) (el.querySelector('.go') as HTMLElement).onclick = act.run;
+  if (!keepName) { $('#pname').textContent = 'creditia'; $('#pmeta').textContent = ''; }
 }
 
 async function openProject(p: any) {
@@ -84,13 +124,16 @@ async function openProject(p: any) {
   $('#pname').textContent = p.name; $('#pmeta').textContent = L('读取中…', 'Loading…');
   let raw: any;
   try { raw = await api('credits', { projectId: p.id }); }
-  catch {
+  catch (e: any) {
     if (seq !== state.openSeq) return;
-    return empty(L('这个项目还没有档案', 'No credits for this project yet'), '', `cd ${p.path} && creditia analyze`);
+    $('#pmeta').textContent = '';
+    if (e?.code && e.code !== 'no_credits') return empty(() => [L('读不到这个项目的档案', 'Cannot read this project'), errText(e)], true);
+    const can = native && p.exists !== false;
+    return empty(() => [L('这个项目还没有档案', 'No credits for this project yet'), '', `cd ${p.path} && creditia analyze`, can ? { label: L('现在分析', 'Analyze now'), run: () => reanalyze(p) } : undefined], true);
   }
   if (seq !== state.openSeq) return; // 已经切到别的项目
   state.raw = raw;
-  $('#empty').hidden = true;
+  $('#empty').hidden = true; emptyView = null;
   rebuildModel();
   await paint();
 }
@@ -251,15 +294,24 @@ async function doExport(fmtId: string, id: string, k: string) {
   const variant = curVariant(id, k, tiles()[i]);
   const base = `${m.project || 'credits'}-${id}${variant ? '-' + variant : ''}-${state.style.id}`;
   try {
-    if (fmtId === 'md') { await navigator.clipboard.writeText(mergeCreditsMd(null, creditsBlock(m))).catch(() => null); return toast(L('CREDITS.md 区块已复制', 'CREDITS.md block copied')); }
-    toast(fmtId === 'gif' ? L('正在逐帧生成 GIF…', 'Rendering GIF frames…') : L('正在导出…', 'Exporting…'), 60000);
+    if (fmtId === 'md') {
+      const text = mergeCreditsMd(null, creditsBlock(m));
+      try { await navigator.clipboard.writeText(text); return toast(L('CREDITS.md 区块已复制', 'CREDITS.md block copied')); }
+      catch { return toast(L('没能写进剪贴板', 'Could not copy to the clipboard'), 8000, { acts: [{ label: L('存成文件', 'Save as a file'), run: () => saveBytes('CREDITS.md', new TextEncoder().encode(text), 'text/markdown').catch((e) => toast(errText(e), 5000)) }] }); }
+    }
+    toast(fmtId === 'gif' ? L('正在逐帧生成 GIF…', 'Rendering GIF frames…') : L('正在导出…', 'Exporting…'), 60000, { spin: true });
     await new Promise((r) => setTimeout(r, 30));
     const kit = state.style;
     const out = await exportArt(fmtId as Format, kit.style, a, state.size, kit.frames ? () => kit.frames!(state.raw, state.lang, id, variant) : undefined);
     const sz = state.size !== 'native' && fmtId !== 'html' ? `-${state.size}` : '';
-    const path = await api('save_file', { name: `${base}${sz}.${out.ext}`, bytes: b64(out.bytes), mime: out.mime });
-    toast(L(`已保存 ${path}`, `Saved ${path}`));
-  } catch (e: any) { console.error(e); toast(L(`导出失败：${e?.message ?? e}`, `Export failed: ${e?.message ?? e}`), 5000); }
+    await saveBytes(`${base}${sz}.${out.ext}`, out.bytes, out.mime);
+  } catch (e: any) { console.error(e); toast(L(`导出失败：${errText(e)}`, `Export failed: ${errText(e)}`), 5000); }
+}
+/** 存文件；App 里提示带「在访达中显示」 */
+async function saveBytes(name: string, bytes: Uint8Array, mime: string) {
+  const path: string = await api('save_file', { name, bytes: b64(bytes), mime });
+  const acts = native ? [{ label: revealLabel(), run: () => { api('reveal', { path }).catch((e) => toast(errText(e), 5000)); } }] : [];
+  toast(L(`已保存到 ${short(path)}`, `Saved to ${short(path)}`), 6000, { acts });
 }
 
 function renderDock() {
@@ -407,26 +459,33 @@ function renderDots() {
 }
 
 // ───────────────────────── 顶栏：项目、语言、设置 ─────────────────────────
+/** 页面里写死的字、无障碍标签、<html lang> */
+function applyLang() {
+  document.documentElement.lang = state.lang === 'zh' ? 'zh-CN' : 'en';
+  const lang = $('#lang'), gear = $('#gear');
+  lang.textContent = state.lang === 'zh' ? '中' : 'EN';
+  lang.title = L('界面语言：中文（点一下换成 English）', 'Language: English (click for 中文)');
+  lang.setAttribute('aria-label', lang.title);
+  gear.title = L('设置', 'Settings'); gear.setAttribute('aria-label', gear.title);
+  $('#project').setAttribute('aria-label', L('切换项目', 'Switch project'));
+  $('#dots').setAttribute('aria-label', L('风格', 'Styles'));
+  $('#dock').setAttribute('aria-label', L('导出', 'Export'));
+}
 function wireTop() {
   const pill = $('#project');
   pill.onclick = () => toggleMenu();
   pill.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') toggleMenu(); };
-  const lang = $('#lang'), gear = $('#gear');
-  const labels = () => {
-    lang.textContent = state.lang === 'zh' ? '中' : 'EN';
-    lang.title = L('界面语言：中文（点一下换成 English）', 'Language: English (click for 中文)');
-    gear.title = L('设置', 'Settings'); gear.setAttribute('aria-label', gear.title);
-  };
-  labels();
   addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTop(); });
-  lang.onclick = async () => {
+  const t = $('#toast');
+  t.onmouseenter = () => clearTimeout(toastTimer);
+  t.onmouseleave = () => { if (toastMs > 0) toastTimer = setTimeout(() => (t.hidden = true), 1500); };
+  $('#lang').onclick = async () => {
     state.lang = state.lang === 'zh' ? 'en' : 'zh'; store.set('lang', state.lang);
-    labels();
-    document.documentElement.lang = state.lang;
-    renderDock(); renderDots();
+    applyLang(); renderDock(); renderDots(); closeMenu();
     if (state.raw) { rebuildModel(); await paint(); }
+    else if (emptyView && !$('#empty').hidden) empty(emptyView, !!state.current);
   };
-  gear.onclick = () => settings();
+  $('#gear').onclick = () => settings();
 }
 function closeMenu() { $('#menu').hidden = true; $('#project').setAttribute('aria-expanded', 'false'); }
 function toggleMenu() {
@@ -435,13 +494,13 @@ function toggleMenu() {
   pill.setAttribute('aria-expanded', 'true');
   menu.hidden = false;
   menu.innerHTML = `<input id="q" placeholder="${L('搜索项目', 'Search projects')}" autocomplete="off"><div class="list" id="plist"></div>
-    <div class="foot"><button id="add">＋ ${L('添加项目', 'Add project')}</button><button id="re">↻ ${L('重新分析', 'Re-analyze')}</button></div>`;
+    <div class="foot"><button id="add">${L('＋ 添加项目', '+ Add project')}</button><button id="re">↻ ${L('重新分析', 'Re-analyze')}</button></div>`;
   const draw = () => {
     const q = ($('#q') as HTMLInputElement).value.trim().toLowerCase();
     $('#plist').innerHTML = state.projects.filter((p) => !q || `${p.name} ${p.path}`.toLowerCase().includes(q)).map((p) => `
-      <div class="item ${p.id === state.current?.id ? 'on' : ''}" data-id="${esc(p.id)}">
-        <b>${esc(p.name)}</b><span class="r">${p.lastAnalyzed ? new Date(p.lastAnalyzed * 1000).toLocaleDateString(state.lang === 'zh' ? 'zh-CN' : 'en-US') : L('未分析', 'not analyzed')}</span>
-        <span>${esc(p.path)}</span><span class="r">${p.evidence ? `${fmt(p.evidence)} ${L('条证据', 'evidence')}` : ''}</span>
+      <div class="item ${p.id === state.current?.id ? 'on' : ''} ${p.exists === false ? 'gone' : ''}" data-id="${esc(p.id)}">
+        <b>${esc(p.name)}${p.exists === false ? `<em class="tag">${L('目录不在了', 'folder missing')}</em>` : ''}</b><span class="r">${p.lastAnalyzed ? new Date(p.lastAnalyzed * 1000).toLocaleDateString(state.lang === 'zh' ? 'zh-CN' : 'en-US') : L('未分析', 'not analyzed')}</span>
+        <span title="${esc(p.path)}">${esc(p.path)}</span><span class="r">${p.evidence ? `${fmt(p.evidence)} ${L('条证据', 'evidence')}` : ''}</span>
         ${p.paths?.length > 1 ? `<span class="paths">${L('还在', 'also at')} ${esc(p.paths.slice(1, 3).join('、'))}${p.paths.length > 3 ? ' …' : ''}</span>` : ''}
       </div>`).join('') || `<div class="item"><span>${L('没有匹配的项目', 'No match')}</span></div>`;
   };
@@ -454,17 +513,46 @@ function toggleMenu() {
     const p = state.projects.find((x) => x.id === it.dataset.id);
     if (p && p !== state.current) openProject(p);
   };
-  $('#add').onclick = async () => {
-    try { const r = await api('add_project'); if (r) { state.projects = await api('projects'); const p = state.projects.find((x) => x.id === r.id); if (p) openProject(p); menu.hidden = true; } }
-    catch (e: any) { toast(String(e?.message ?? e)); }
-  };
-  $('#re').onclick = async () => {
-    if (!state.current) return;
-    toast(L('正在分析…', 'Analyzing…'), 120000);
-    try { await api('analyze', { projectId: state.current.id }); state.projects = await api('projects'); await openProject(state.projects.find((x) => x.id === state.current.id) ?? state.current); toast(L('已更新', 'Updated')); }
-    catch (e: any) { toast(String(e?.message ?? e), 5000); }
-  };
+  const re = $('#re') as HTMLButtonElement;
+  if (!state.current || state.current.exists === false || analyzing) { re.disabled = true; re.title = state.current?.exists === false ? L('项目目录已经不在了', 'The project folder is gone') : ''; }
+  ($('#add') as HTMLButtonElement).disabled = analyzing;
+  $('#add').onclick = () => { closeMenu(); addProject(); };
+  re.onclick = () => { closeMenu(); if (state.current) reanalyze(state.current); };
   setTimeout(() => document.addEventListener('click', function off(e) { if (!menu.contains(e.target as Node) && !pill.contains(e.target as Node)) { menu.hidden = true; pill.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', off); } }), 0);
+}
+
+// ───────────────────────── 分析：进度、取消 ─────────────────────────
+let analyzing = false;
+/** 跑一次分析：一直挂着进度提示（秒数、取消），跑完或出错再换成结果 */
+async function withProgress<T>(name: string, job: () => Promise<T>): Promise<T> {
+  if (analyzing) throw { code: 'busy' };
+  analyzing = true;
+  const t0 = Date.now();
+  const text = () => { const s = Math.round((Date.now() - t0) / 1000); return L(`正在分析 ${name}…${s ? ` ${s} 秒` : ''}`, `Analyzing ${name}…${s ? ` ${s}s` : ''}`); };
+  toast(text(), 0, { spin: true, acts: [{ label: L('取消', 'Cancel'), run: () => { toast(L('正在取消…', 'Cancelling…'), 0, { spin: true }); api('cancel_analyze').catch(() => null); } }] });
+  const tick = setInterval(() => { const m = document.querySelector('#toast .msg'); if (m && document.querySelector('#toast button')) m.textContent = text(); }, 1000);
+  try { return await job(); } finally { clearInterval(tick); analyzing = false; }
+}
+async function reanalyze(p: any) {
+  try {
+    await withProgress(p.name, () => api('analyze', { projectId: p.id }));
+    state.projects = await api('projects');
+    await openProject(state.projects.find((x) => x.id === p.id) ?? p);
+    toast(L('已更新', 'Updated'));
+  } catch (e) { toast(errText(e), 6000); }
+}
+async function addProject() {
+  let dir: string | null;
+  try { dir = await api('pick_folder'); } catch (e) { return toast(errText(e), 5000); }
+  if (!dir) return;
+  const name = dir.split(/[\\/]/).filter(Boolean).pop() ?? dir;
+  try {
+    const r = await withProgress(name, () => api('add_project', { path: dir }));
+    state.projects = await api('projects');
+    const p = state.projects.find((x) => x.id === r?.id);
+    if (p) await openProject(p);
+    toast(L(`已添加 ${name}`, `Added ${name}`));
+  } catch (e) { toast(errText(e), 6000); }
 }
 
 function closeSheet() { const el = $('#sheet'); el.hidden = true; el.innerHTML = ''; }
@@ -479,7 +567,11 @@ async function settings() {
   </div>`;
   el.onclick = (e) => { if (e.target === el || (e.target as HTMLElement).closest('[data-act="close"]')) closeSheet(); };
   const doc = await api('doctor').catch(() => []);
-  $('#doc').innerHTML = doc.length ? doc.map((d: any) => `<div class="row"><i class="dot ${d.ok ? 'ok' : ''}"></i><span class="k">${esc(d.name)}</span><span class="v">${esc(d.detail)}</span></div>`).join('') : `<p>${L('没有可用的数据源', 'No data sources found')}</p>`;
+  const detail = (d: any) => !d.ok ? L('没有找到', 'Not found')
+    : d.records != null ? L(`${fmt(d.records)} 条记录`, `${fmt(d.records)} records`)
+    : d.entries != null ? L(`${fmt(d.entries)} 个条目`, `${fmt(d.entries)} entries`)
+    : L('已就绪', 'Ready');
+  $('#doc').innerHTML = doc.length ? doc.map((d: any) => `<div class="row" title="${esc(d.path ?? '')}"><i class="dot ${d.ok ? 'ok' : ''}"></i><span class="k">${esc(nameOf(d.id, state.lang))}</span><span class="v">${esc(detail(d))}</span></div>`).join('') : `<p>${L('没有可用的数据源', 'No data sources found')}</p>`;
 }
 
 boot();

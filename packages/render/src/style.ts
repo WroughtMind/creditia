@@ -16,6 +16,7 @@ export interface Style {
   en: string;
   /** 一句话说明：灵感来源、气质 */
   note: string;
+  noteEn: string;
   dark: boolean;
   c: Palette;
   /** 贡献方配色，按名次取 */

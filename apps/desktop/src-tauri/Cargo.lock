@@ -412,6 +412,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "creditia-store",
+ "libc",
  "serde",
  "serde_json",
  "tauri",

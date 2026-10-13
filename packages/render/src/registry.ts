@@ -14,6 +14,7 @@ export interface PieceDef {
   en: string;
   /** 回答的问题 */
   q: string;
+  qEn: string;
   variants?: string[];
   /** 能做成动画（GIF / HTML） */
   animated?: boolean;
@@ -21,22 +22,22 @@ export interface PieceDef {
 }
 
 export const PIECES: Record<string, PieceDef> = {
-  tier: { name: '署名榜', en: 'Credits', q: '各工具写了多少', variants: TIER_VARIANTS, animated: true, render: tier },
-  share: { name: '分享图', en: 'Share Card', q: '链接预览、社交媒体', animated: true, render: share },
-  hand: { name: '人', en: 'People', q: '人做了多少：消息、review、人写的代码', animated: true, render: hand },
-  receipt: { name: '小票', en: 'Receipt', q: '花了多少时间、会话和 token', variants: RECEIPT_VARIANTS, render: receipt },
-  badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', variants: BADGE_VARIANTS, render: badge },
-  byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', render: byline },
-  roll: { name: '片尾字幕', en: 'Credits Roll', q: '谁担任了什么角色', variants: ROLL_VARIANTS, animated: true, render: roll },
-  donut: { name: '环形图', en: 'Donut', q: '占比', animated: true, render: donut },
-  waffle: { name: '华夫饼图', en: 'Waffle', q: '一格 1%', animated: true, render: waffle },
-  stream: { name: '河流图', en: 'Stream', q: '每周新增代码', animated: true, render: stream },
-  lanes: { name: '会话泳道', en: 'Sessions', q: '各工具什么时候在干活', animated: true, render: lanes },
-  clock: { name: '作息打卡', en: 'Punch Card', q: '星期 × 小时', animated: true, render: clock },
-  versions: { name: '版本柱状图', en: 'Releases', q: '每个版本谁写的', animated: true, render: versions },
-  survival: { name: '留存', en: 'Retention', q: '写的代码现在还剩多少', animated: true, render: survival },
-  mosaic: { name: '文件马赛克', en: 'File Mosaic', q: '现在的代码由谁构成', animated: true, render: mosaic },
-  calendar: { name: '日历', en: 'Calendar', q: '哪天谁在写', animated: true, render: calendar },
+  tier: { name: '署名榜', en: 'Credits', q: '各工具写了多少', qEn: 'How much each tool wrote', variants: TIER_VARIANTS, animated: true, render: tier },
+  share: { name: '分享图', en: 'Share Card', q: '链接预览、社交媒体', qEn: 'Link previews, social posts', animated: true, render: share },
+  hand: { name: '人', en: 'People', q: '人做了多少：消息、review、人写的代码', qEn: 'What people did: messages, reviews, hand-written code', animated: true, render: hand },
+  receipt: { name: '小票', en: 'Receipt', q: '花了多少时间、会话和 token', qEn: 'Time, sessions and tokens spent', variants: RECEIPT_VARIANTS, render: receipt },
+  badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', qEn: 'README, profile page', variants: BADGE_VARIANTS, render: badge },
+  byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', render: byline },
+  roll: { name: '片尾字幕', en: 'Credits Roll', q: '谁担任了什么角色', qEn: 'Who played which role', variants: ROLL_VARIANTS, animated: true, render: roll },
+  donut: { name: '环形图', en: 'Donut', q: '占比', qEn: 'Shares', animated: true, render: donut },
+  waffle: { name: '华夫饼图', en: 'Waffle', q: '一格 1%', qEn: 'One square is 1%', animated: true, render: waffle },
+  stream: { name: '河流图', en: 'Stream', q: '每周新增代码', qEn: 'New code each week', animated: true, render: stream },
+  lanes: { name: '会话泳道', en: 'Sessions', q: '各工具什么时候在干活', qEn: 'When each tool was at work', animated: true, render: lanes },
+  clock: { name: '作息打卡', en: 'Punch Card', q: '星期 × 小时', qEn: 'Weekday × hour', animated: true, render: clock },
+  versions: { name: '版本柱状图', en: 'Releases', q: '每个版本谁写的', qEn: 'Who wrote each release', animated: true, render: versions },
+  survival: { name: '留存', en: 'Retention', q: '写的代码现在还剩多少', qEn: 'How much of the written code is still here', animated: true, render: survival },
+  mosaic: { name: '文件马赛克', en: 'File Mosaic', q: '现在的代码由谁构成', qEn: 'Who the current code is made of', animated: true, render: mosaic },
+  calendar: { name: '日历', en: 'Calendar', q: '哪天谁在写', qEn: 'Who wrote on which day', animated: true, render: calendar },
 };
 
 /** 版式的中文名 */
@@ -53,7 +54,7 @@ export function art(id: string, m: Model, st: Style, o: PieceOpts = {}): Art | n
   if (!p) throw new Error(`未知作品：${id}`);
   const s = p.render(m, st, o);
   if (!s) return null;
-  return { w: s.w, h: s.h, svg: s.toString(), hits: s.hits, bg: s.bg, title: `${m.project} · ${p.name}`, motion: (s as any).motion };
+  return { w: s.w, h: s.h, svg: s.toString(), hits: s.hits, bg: s.bg, title: `${m.project} · ${m.lang === 'en' ? p.en : p.name}`, motion: (s as any).motion };
 }
 /** 动画帧：t 从 0 到 1 */
 export function frames(id: string, m: Model, st: Style, o: PieceOpts = {}, n = 28): Art[] {

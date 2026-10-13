@@ -73,7 +73,7 @@ const classicKits: Kit[] = ORDERED_THEMES.map((t) => ({
 const SKIP = new Set(['minimal', 'noir', 'glass', 'cinema', 'terminal']);
 const v2Kits: Kit[] = STYLES.filter((s) => !SKIP.has(s.id)).map((s) => ({
   id: s.id, style: s, dot: s.dot(),
-  name: (lang) => (lang === 'zh' ? s.name : s.en), note: () => s.note,
+  name: (lang) => (lang === 'zh' ? s.name : s.en), note: (lang) => (lang === 'zh' ? s.note : s.noteEn),
   board: V2_BOARD,
   render: async (raw, lang, id, variant) => { await ready(s); return v2Art(id, v2Model(raw, lang), s, { variant }); },
   frames: (raw, lang, id, variant) => v2Frames(id, v2Model(raw, lang), s, { variant }, 24),
@@ -81,7 +81,7 @@ const v2Kits: Kit[] = STYLES.filter((s) => !SKIP.has(s.id)).map((s) => ({
   current: (id, variant) => variant ?? s.prefer[id] ?? PIECES[id]?.variants?.[0],
   animated: (id) => !!PIECES[id]?.animated,
   pieceName: (id, lang) => (lang === 'zh' ? PIECES[id]?.name : PIECES[id]?.en) ?? id,
-  pieceQ: (id, lang) => (lang === 'zh' ? PIECES[id]?.q : '') ?? '',
+  pieceQ: (id, lang) => (lang === 'zh' ? PIECES[id]?.q : PIECES[id]?.qEn) ?? '',
   variantName: v2Variant,
 }));
 

@@ -62,7 +62,7 @@ export function seal(s: Scene, cx: number, cy: number, size: number, chars: stri
 
 const INK = '#1F1C18';
 export const ink: Style = defineStyle({
-  id: 'ink', name: '水墨', en: 'Ink Wash', note: '宣纸、远山、朱印；国画的留白与浓淡', dark: false,
+  id: 'ink', name: '水墨', en: 'Ink Wash', note: '宣纸、远山、朱印；国画的留白与浓淡', noteEn: 'Rice paper, distant mountains and a red seal; the empty space and washes of ink painting', dark: false,
   c: { bg: '#EFE7D6', paper: '#F3ECDD', ink: INK, soft: '#5F584D', faint: '#A39A89', line: 'rgba(31,28,24,0.18)', accent: '#B23A2E', accent2: '#7A2E25' },
   series: [INK, '#3A3631', '#57524A', '#7A7469', '#9E978A', '#BDB5A6'],
   f: {
@@ -136,7 +136,7 @@ const KI = '#D8A23E';      // 黄土
 const SUMI = '#2A2520';
 const WASHI = '#EEE1C4';
 export const ukiyoe: Style = defineStyle({
-  id: 'ukiyoe', name: '浮世绘', en: 'Ukiyo-e', note: '江户版画：青海波、远富士、题签与朱色版元印', dark: false,
+  id: 'ukiyoe', name: '浮世绘', en: 'Ukiyo-e', note: '江户版画：青海波、远富士、题签与朱色版元印', noteEn: 'Edo woodblock prints: wave patterns, a far-off Fuji, a title slip and a red publisher\'s seal', dark: false,
   c: { bg: WASHI, paper: '#F3E8CF', ink: SUMI, soft: '#5D5446', faint: '#A49679', line: 'rgba(42,37,32,0.25)', accent: SHU, accent2: AI },
   series: [AI, SHU, KI, '#4E6B4A', AI2, '#8C5A3C'],
   f: {
@@ -209,7 +209,7 @@ export function seigaiha(s: Scene, x: number, y: number, w: number, h: number, R
 
 const ZHU = '#A8322A';
 export const woodblock: Style = defineStyle({
-  id: 'woodblock', name: '古籍', en: 'Woodblock Book', note: '明清刻本：竖排、界栏、版心鱼尾、朱批', dark: false,
+  id: 'woodblock', name: '古籍', en: 'Woodblock Book', note: '明清刻本：竖排、界栏、版心鱼尾、朱批', noteEn: 'A Ming–Qing printed book: vertical lines, ruled columns, fishtail centre folds and red annotations', dark: false,
   c: { bg: '#E9DDC3', paper: '#EFE4CB', ink: '#231E18', soft: '#5C5143', faint: '#9E8F75', line: 'rgba(35,30,24,0.55)', accent: ZHU, accent2: ZHU },
   series: ['#231E18', '#4A4034', '#6E6252', '#938571', '#B2A48C', '#C9BCA2'],
   f: {

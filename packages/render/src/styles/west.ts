@@ -6,7 +6,7 @@ import { Scene, el, g, rect, circle, line, path, r, rng, hash, mix } from '../sv
 
 const GOLD = '#CDA85C', IVORY = '#EFE6D2', NIGHT = '#08080B';
 export const cinema: Style = defineStyle({
-  id: 'cinema', name: '黄金时代', en: 'Golden Age', note: '老电影片头：黑底金线、Art Deco 放射光、胶片颗粒', dark: true,
+  id: 'cinema', name: '黄金时代', en: 'Golden Age', note: '老电影片头：黑底金线、Art Deco 放射光、胶片颗粒', noteEn: 'Old movie titles: gold rules on black, Art Deco sunbursts, film grain', dark: true,
   c: { bg: NIGHT, paper: '#0E0D11', ink: IVORY, soft: '#A39880', faint: '#5E5748', line: 'rgba(205,168,92,0.28)', accent: GOLD, accent2: GOLD },
   series: [GOLD, IVORY, '#A98B4F', '#D8CBB0', '#7C6A44', '#B9AE98'],
   f: {
@@ -81,7 +81,7 @@ function scroll(s: Scene, x: number, y: number, size: number, fx: number, fy: nu
 }
 
 export const baroque: Style = defineStyle({
-  id: 'baroque', name: '巴洛克', en: 'Baroque', note: '丝绒、金箔、涡卷与月桂；宫廷里的荣誉榜', dark: true,
+  id: 'baroque', name: '巴洛克', en: 'Baroque', note: '丝绒、金箔、涡卷与月桂；宫廷里的荣誉榜', noteEn: 'Velvet, gold leaf, scrolls and laurels; a roll of honour at court', dark: true,
   c: { bg: VELVET, paper: '#35101A', ink: '#F6E7C4', soft: '#CDAE7A', faint: '#8A6A48', line: 'rgba(243,217,139,0.25)', accent: G1, accent2: '#E9C979' },
   series: ['#E9C979', '#D8D2C4', '#C98E5A', '#A7B6A0', '#B88AA0', '#8F9BB3'],
   f: {
@@ -173,7 +173,7 @@ export function laurel(s: Scene, cx: number, cy: number, R: number, fill: string
 
 const PARCH = '#D8C59C', BROWN = '#2E1F12', BLOOD = '#7A1418', SILVER = '#9EA3AA';
 export const grimoire: Style = defineStyle({
-  id: 'grimoire', name: '魔典', en: 'Grimoire', note: '暗黑奇幻的怪物图鉴：焦边羊皮卷、黑体字、蜡封与符文', dark: false,
+  id: 'grimoire', name: '魔典', en: 'Grimoire', note: '暗黑奇幻的怪物图鉴：焦边羊皮卷、黑体字、蜡封与符文', noteEn: 'A dark-fantasy bestiary: burnt-edge parchment, blackletter, wax seals and runes', dark: false,
   c: { bg: PARCH, paper: '#E0CFA8', ink: BROWN, soft: '#5E4630', faint: '#9C8462', line: 'rgba(46,31,18,0.3)', accent: BLOOD, accent2: BLOOD },
   series: [BROWN, BLOOD, '#4C5A4A', '#6B4A2E', '#3E4A5C', '#8A6A3A'],
   f: {
