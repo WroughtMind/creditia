@@ -47,7 +47,7 @@ if (hasApp) {
   const demo = {
     projects: [{ id: 'lumen', name: 'lumen', path: '~/code/lumen', paths: ['~/code/lumen'], lastAnalyzed: Math.floor(Date.now() / 1000), evidence: 18234, exists: true, hasCredits: true }],
     credits: { lumen: sample },
-    doctor: [{ id: 'claude-code', name: 'Claude Code', ok: true, detail: '' }, { id: 'codex', name: 'Codex', ok: true, detail: '' }, { id: 'cursor', name: 'Cursor', ok: true, detail: '' }],
+    doctor: [{ id: 'claude-code', ok: true }, { id: 'codex', ok: true }, { id: 'cursor', ok: true }],
   };
   const f = path.join(OUT, 'app/index.html');
   writeFileSync(f, readFileSync(f, 'utf8').replace('<head>', `<head>\n<script>window.__CREDITIA_DEMO__ = ${JSON.stringify(demo)};</script>`));
@@ -99,7 +99,7 @@ for (const lang of LANGS) {
 // 有的图块会动：live 是一整卷字幕在小窗里滚，morph 是同一张分享图在几种风格之间切换
 const styles = [
   ...ORDERED_THEMES.map((t) => ({ id: t.id, name: themeName(t, 'zh'), en: themeName(t, 'en'), note: themeNote(t, 'zh'), noteEn: themeNote(t, 'en'), dot: themeDot(t), bg: t.bg })),
-  ...V2_STYLES.map((s) => ({ id: s.id, name: s.name, en: s.en, note: s.note, noteEn: '', dot: s.dot(), bg: s.c.bg })),
+  ...V2_STYLES.map((s) => ({ id: s.id, name: s.name, en: s.en, note: s.note, noteEn: s.noteEn, dot: s.dot(), bg: s.c.bg })),
 ];
 type Item = { style: string; piece: string; variant?: string; live?: boolean; morph?: string[] };
 const it = (style: string, piece: string, variant?: string): Item => ({ style, piece, variant });

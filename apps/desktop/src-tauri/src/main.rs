@@ -6,10 +6,38 @@ use base64::Engine as _;
 use creditia_store::Library;
 use serde_json::{json, Value};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
+use std::sync::Mutex;
+
+/// 给界面的错误：只带代码和原始细节，文案由界面按当前语言写
+#[derive(serde::Serialize, Debug)]
+struct Fail {
+    code: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
+}
+impl Fail {
+    fn new(code: &'static str) -> Self {
+        Fail { code, detail: None }
+    }
+    fn with(code: &'static str, detail: impl ToString) -> Self {
+        Fail { code, detail: Some(detail.to_string()) }
+    }
+}
+/// 作品库（creditia-store）报的错
+impl From<String> for Fail {
+    fn from(e: String) -> Self {
+        Fail::with("store", e)
+    }
+}
+type Res<T> = Result<T, Fail>;
+
+fn project(lib: &Library, project_id: &str) -> Res<creditia_store::Project> {
+    lib.projects()?.into_iter().find(|p| p.id == project_id).ok_or(Fail::new("not_in_library"))
+}
 
 #[tauri::command]
-fn projects() -> Result<Value, String> {
+fn projects() -> Res<Value> {
     let lib = Library::open()?;
     let list: Vec<Value> = lib
         .projects()?
@@ -32,9 +60,9 @@ fn projects() -> Result<Value, String> {
 
 /// 优先读仓库里的档案（最新），没有就用作品库快照
 #[tauri::command]
-fn credits(project_id: String) -> Result<Value, String> {
+fn credits(project_id: String) -> Res<Value> {
     let lib = Library::open()?;
-    if let Some(p) = lib.projects()?.into_iter().find(|p| p.id == project_id) {
+    if let Ok(p) = project(&lib, &project_id) {
         let live = PathBuf::from(&p.path).join(".creditia/credits.json");
         if let Ok(t) = std::fs::read_to_string(&live) {
             if let Ok(v) = serde_json::from_str::<Value>(&t) {
@@ -47,11 +75,11 @@ fn credits(project_id: String) -> Result<Value, String> {
             }
         }
     }
-    Err("这个项目还没有档案；先在 CLI 里 creditia analyze".into())
+    Err(Fail::new("no_credits"))
 }
 
 #[tauri::command]
-fn config_of(project_id: String) -> Result<Value, String> {
+fn config_of(project_id: String) -> Res<Value> {
     let lib = Library::open()?;
     let Some(p) = lib.projects()?.into_iter().find(|p| p.id == project_id) else { return Ok(json!({})) };
     let path = PathBuf::from(&p.path).join(".creditia/config.json");
@@ -59,10 +87,10 @@ fn config_of(project_id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
-fn set_display(project_id: String, named: bool, sign: String) -> Result<(), String> {
+fn set_display(project_id: String, named: bool, sign: String) -> Res<()> {
     let lib = Library::open()?;
-    let Some(p) = lib.projects()?.into_iter().find(|p| p.id == project_id) else { return Err("项目不在作品库里".into()) };
-    creditia_store::Library::set_display(std::path::Path::new(&p.path), named, &sign)
+    let p = project(&lib, &project_id)?;
+    Ok(creditia_store::Library::set_display(std::path::Path::new(&p.path), named, &sign)?)
 }
 
 /// 核心二进制：和 App 一起打包（sidecar 同目录），开发时用 PATH 里的
@@ -80,44 +108,146 @@ fn core_bin() -> PathBuf {
     PathBuf::from(exe)
 }
 
-fn run_core(args: &[&str]) -> Result<Value, String> {
-    let out = Command::new(core_bin()).args(args).arg("--json").output().map_err(|e| format!("找不到 creditia-core：{e}"))?;
-    let v: Value = serde_json::from_slice(&out.stdout).map_err(|_| String::from_utf8_lossy(&out.stderr).to_string())?;
-    if out.status.code() == Some(1) {
-        return Err(v["error"].as_str().unwrap_or("分析失败").to_string());
+/// 跑核心的命令：Windows 上不弹控制台窗口；Unix 上自成一个进程组，取消时连它起的 git 一起停
+fn core_cmd(args: &[&str]) -> Command {
+    let mut c = Command::new(core_bin());
+    c.args(args).arg("--json");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        c.process_group(0);
+    }
+    c
+}
+
+fn run_core(args: &[&str]) -> Res<Value> {
+    let out = core_cmd(args).output().map_err(|e| Fail::with("core_missing", e))?;
+    core_result(out.status, &out.stdout, &out.stderr)
+}
+
+/// 核心的退出码：0 成功，2 成功但有警告，1 出错（JSON 里带 error）
+fn core_result(status: std::process::ExitStatus, stdout: &[u8], stderr: &[u8]) -> Res<Value> {
+    let v: Value = serde_json::from_slice(stdout).map_err(|_| Fail::with("core_failed", String::from_utf8_lossy(stderr).trim()))?;
+    if let Some(e) = v["error"].as_str() {
+        return Err(Fail::with("core_failed", e));
+    }
+    if !matches!(status.code(), Some(0) | Some(2)) {
+        return Err(Fail::with("core_failed", String::from_utf8_lossy(stderr).trim()));
     }
     Ok(v)
 }
 
-/// 重新分析一个项目（在它的仓库目录里跑核心）
-#[tauri::command]
-async fn analyze(project_id: String) -> Result<Value, String> {
-    let lib = Library::open()?;
-    let Some(p) = lib.projects()?.into_iter().find(|p| p.id == project_id) else { return Err("项目不在作品库里".into()) };
-    if !PathBuf::from(&p.path).is_dir() {
-        return Err(format!("目录已经不在了：{}", p.path));
-    }
-    tauri::async_runtime::spawn_blocking(move || run_core(&["analyze", "--repo", &p.path])).await.map_err(|e| e.to_string())?
+/// 正在跑的分析：同一时间只跑一个，界面可以取消
+static RUNNING: Mutex<Option<Child>> = Mutex::new(None);
+static CANCELLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 管道各开一条线程读完，免得写满卡住核心
+fn drain<R: std::io::Read + Send + 'static>(r: Option<R>) -> Option<std::thread::JoinHandle<Vec<u8>>> {
+    r.map(|mut r| {
+        std::thread::spawn(move || {
+            let mut b = vec![];
+            let _ = r.read_to_end(&mut b);
+            b
+        })
+    })
 }
 
-/// 选一个文件夹加进作品库：先分析一遍
+fn run_analysis(repo: &str) -> Res<Value> {
+    let (out, err) = {
+        let mut slot = RUNNING.lock().unwrap();
+        if slot.is_some() {
+            return Err(Fail::new("busy"));
+        }
+        let mut c = core_cmd(&["analyze", "--repo", repo]).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| Fail::with("core_missing", e))?;
+        CANCELLED.store(false, std::sync::atomic::Ordering::SeqCst);
+        let pipes = (drain(c.stdout.take()), drain(c.stderr.take()));
+        *slot = Some(c);
+        pipes
+    };
+    // 等的是核心进程退出，不是管道关上：取消时核心起的子进程可能还拿着管道
+    let status = loop {
+        {
+            let mut slot = RUNNING.lock().unwrap();
+            match slot.as_mut().map(|c| c.try_wait()) {
+                Some(Ok(None)) => {}
+                Some(r) => {
+                    *slot = None;
+                    break r.map_err(|e| Fail::with("core_failed", e))?.unwrap();
+                }
+                None => return Err(Fail::new("cancelled")),
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+    if CANCELLED.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err(Fail::new("cancelled"));
+    }
+    let stdout = out.and_then(|t| t.join().ok()).unwrap_or_default();
+    let stderr = err.and_then(|t| t.join().ok()).unwrap_or_default();
+    core_result(status, &stdout, &stderr)
+}
+
 #[tauri::command]
-async fn add_project(app: tauri::AppHandle) -> Result<Value, String> {
-    use tauri_plugin_dialog::DialogExt;
-    let Some(dir) = app.dialog().file().blocking_pick_folder() else { return Ok(Value::Null) };
-    let path = dir.into_path().map_err(|e| e.to_string())?;
-    let p = path.display().to_string();
-    let v = tauri::async_runtime::spawn_blocking(move || run_core(&["analyze", "--repo", &p])).await.map_err(|e| e.to_string())??;
+fn cancel_analyze() {
+    if let Some(c) = RUNNING.lock().unwrap().as_mut() {
+        CANCELLED.store(true, std::sync::atomic::Ordering::SeqCst);
+        // 连同核心起的 git 一起停。直接调系统调用：有的系统上 `kill -KILL -<pgid>` 会被解析错、杀到自己
+        #[cfg(unix)]
+        if let Ok(pgid) = i32::try_from(c.id()) {
+            if pgid > 1 {
+                // SAFETY: 只是发信号；核心用 process_group(0) 启动，进程组号就是它的 pid
+                unsafe { libc::kill(-pgid, libc::SIGKILL) };
+            }
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            let _ = Command::new("taskkill").args(["/T", "/F", "/PID", &c.id().to_string()]).creation_flags(0x0800_0000).status();
+        }
+        let _ = c.kill();
+    }
+}
+
+/// 重新分析一个项目（在它的仓库目录里跑核心）
+#[tauri::command]
+async fn analyze(project_id: String) -> Res<Value> {
     let lib = Library::open()?;
+    let p = project(&lib, &project_id)?;
+    if !PathBuf::from(&p.path).is_dir() {
+        return Err(Fail::with("dir_missing", p.path));
+    }
+    tauri::async_runtime::spawn_blocking(move || run_analysis(&p.path)).await.map_err(|e| Fail::with("core_failed", e))?
+}
+
+/// 选一个文件夹（只选，不分析；分析交给 add_project，界面这期间能显示进度）
+#[tauri::command]
+async fn pick_folder(app: tauri::AppHandle) -> Res<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+    let Some(dir) = app.dialog().file().blocking_pick_folder() else { return Ok(None) };
+    Ok(Some(dir.into_path().map_err(|e| Fail::with("io", e))?.display().to_string()))
+}
+
+/// 把一个文件夹加进作品库：先分析一遍
+#[tauri::command]
+async fn add_project(path: String) -> Res<Value> {
+    let p = path.clone();
+    let v = tauri::async_runtime::spawn_blocking(move || run_analysis(&p)).await.map_err(|e| Fail::with("core_failed", e))??;
+    let lib = Library::open()?;
+    let path = PathBuf::from(path);
     let repo = path.canonicalize().unwrap_or(path);
-    let id = lib.projects()?.into_iter().find(|x| PathBuf::from(&x.path) == repo).map(|x| x.id).unwrap_or_default();
+    let id = lib.projects()?.into_iter().find(|x| std::path::Path::new(&x.path) == repo).map(|x| x.id).unwrap_or_default();
     Ok(json!({ "id": id, "result": v }))
 }
 
 #[tauri::command]
-fn embed_snippet(project_id: String, piece: String, theme: String) -> Result<String, String> {
+fn embed_snippet(project_id: String, piece: String, theme: String) -> Res<String> {
     let lib = Library::open()?;
-    let Some(p) = lib.projects()?.into_iter().find(|p| p.id == project_id) else { return Err("项目不在作品库里".into()) };
+    let p = project(&lib, &project_id)?;
     let rel = PathBuf::from(&p.path).join(".creditia/credits.json");
     let src = if rel.exists() { "/.creditia/credits.json" } else { "credits.json" };
     Ok(format!("<script type=\"module\" src=\"https://cdn.jsdelivr.net/npm/@creditia/embed@0/dist/creditia-card.js\"></script>\n<creditia-card src=\"{src}\" piece=\"{piece}\" theme=\"{theme}\"></creditia-card>\n"))
@@ -137,10 +267,10 @@ fn home() -> Option<PathBuf> {
 
 /// 导出写进「下载」目录；重名自动加序号
 #[tauri::command]
-fn save_file(name: String, bytes: String, mime: Option<String>) -> Result<String, String> {
+fn save_file(name: String, bytes: String, mime: Option<String>) -> Res<String> {
     let _ = mime;
-    let dir = home().ok_or("找不到用户目录")?.join("Downloads");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let dir = home().ok_or(Fail::new("no_home"))?.join("Downloads");
+    std::fs::create_dir_all(&dir).map_err(|e| Fail::with("io", e))?;
     let safe = name.replace(['/', '\\', ':'], "-");
     let mut path = dir.join(&safe);
     if path.exists() {
@@ -151,13 +281,13 @@ fn save_file(name: String, bytes: String, mime: Option<String>) -> Result<String
             if !cand.exists() { path = cand; break; }
         }
     }
-    let data = base64::engine::general_purpose::STANDARD.decode(bytes).map_err(|e| e.to_string())?;
-    std::fs::write(&path, data).map_err(|e| e.to_string())?;
+    let data = base64::engine::general_purpose::STANDARD.decode(bytes).map_err(|e| Fail::with("io", e))?;
+    std::fs::write(&path, data).map_err(|e| Fail::with("io", e))?;
     Ok(path.display().to_string())
 }
 
 #[tauri::command]
-fn reveal(path: String) -> Result<(), String> {
+fn reveal(path: String) -> Res<()> {
     let p = PathBuf::from(&path);
     #[cfg(target_os = "macos")]
     { let _ = Command::new("open").args(["-R", path.as_str()]).status(); }
@@ -172,7 +302,7 @@ fn reveal(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_path(path: String) -> Result<(), String> {
+fn open_path(path: String) -> Res<()> {
     #[cfg(target_os = "macos")]
     { let _ = Command::new("open").arg(path.as_str()).status(); }
     #[cfg(target_os = "windows")]
@@ -182,12 +312,13 @@ fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// 数据源体检：交给核心（和 CLI 的 creditia doctor 完全一致）；核心不在时退回本地探测
+/// 数据源体检：交给核心（和 CLI 的 creditia doctor 完全一致）；核心不在时退回本地探测。
+/// 只给数字和状态，文字由界面按语言写
 #[tauri::command]
 fn doctor() -> Value {
     if let Ok(v) = run_core(&["doctor"]) {
         if let Some(a) = v["sources"].as_array() {
-            return json!(a.iter().map(|h| json!({ "id": h["source"], "name": h["source"], "path": h["path"], "ok": h["readable"], "detail": if h["readable"] == true { format!("{} 条", h["records"]) } else { "没有找到".into() } })).collect::<Vec<_>>());
+            return json!(a.iter().map(|h| json!({ "id": h["source"], "path": h["path"], "ok": h["readable"], "records": h["records"] })).collect::<Vec<_>>());
         }
     }
     doctor_local()
@@ -197,23 +328,21 @@ fn doctor_local() -> Value {
     let h = home().unwrap_or_default();
     let env_dir = |k: &str, d: &str| std::env::var_os(k).map(PathBuf::from).unwrap_or_else(|| h.join(d));
     let mut out: Vec<Value> = vec![];
-    let mut add = |id: &str, name: &str, path: PathBuf, marker: &str| {
+    let mut add = |id: &str, path: PathBuf, marker: &str| {
         let probe = path.join(marker);
         let ok = probe.exists();
-        let detail = if !ok { "没有找到".to_string() } else if probe.is_dir() {
-            format!("{} 个条目", std::fs::read_dir(&probe).map(|d| d.count()).unwrap_or(0))
-        } else { "已就绪".to_string() };
-        out.push(json!({ "id": id, "name": name, "path": path.display().to_string(), "ok": ok, "detail": detail }));
+        let entries = if ok && probe.is_dir() { std::fs::read_dir(&probe).map(|d| d.count()).ok() } else { None };
+        out.push(json!({ "id": id, "path": path.display().to_string(), "ok": ok, "entries": entries }));
     };
-    add("codex", "Codex", env_dir("CODEX_HOME", ".codex"), "state_5.sqlite");
-    add("claude-code", "Claude Code", env_dir("CLAUDE_CONFIG_DIR", ".claude"), "projects");
-    add("cursor", "Cursor", env_dir("CREDITIA_CURSOR_DIR", ".cursor"), "ai-tracking/ai-code-tracking.db");
-    add("grok", "Grok", env_dir("CREDITIA_GROK_DIR", ".grok"), "sessions");
+    add("codex", env_dir("CODEX_HOME", ".codex"), "state_5.sqlite");
+    add("claude-code", env_dir("CLAUDE_CONFIG_DIR", ".claude"), "projects");
+    add("cursor", env_dir("CREDITIA_CURSOR_DIR", ".cursor"), "ai-tracking/ai-code-tracking.db");
+    add("grok", env_dir("CREDITIA_GROK_DIR", ".grok"), "sessions");
     let kimi = std::env::var_os("CREDITIA_KIMI_DIR").map(PathBuf::from).unwrap_or_else(|| {
         let a = h.join(".kimi-code");
         if a.exists() { a } else { h.join(".kimi") }
     });
-    add("kimi", "Kimi", kimi, "sessions");
+    add("kimi", kimi, "sessions");
     json!(out)
 }
 
@@ -221,9 +350,54 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            projects, credits, config_of, set_display, analyze, add_project, embed_snippet,
+            projects, credits, config_of, set_display, analyze, cancel_analyze, pick_folder, add_project, embed_snippet,
             library_path, save_file, reveal, open_path, doctor
         ])
         .run(tauri::generate_context!())
         .expect("启动 creditia App 失败");
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    /// 假的核心：打印一段 JSON 或报错，按参数决定睡多久
+    fn fake_core(dir: &std::path::Path, body: &str) -> PathBuf {
+        let p = dir.join("creditia-core");
+        std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        p
+    }
+
+    #[test]
+    fn analysis_runs_reports_and_cancels() {
+        let dir = std::env::temp_dir().join(format!("creditia-app-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // 成功（有警告时退出码 2 也算成功）
+        std::env::set_var("CREDITIA_CORE", fake_core(&dir, r#"echo '{"ok":true}'; exit 2"#));
+        assert_eq!(run_analysis("/tmp").unwrap()["ok"], true);
+
+        // 核心报错：带上它的原话
+        std::env::set_var("CREDITIA_CORE", fake_core(&dir, r#"echo '{"error":"not a git repo"}'; exit 1"#));
+        let e = run_analysis("/tmp").unwrap_err();
+        assert_eq!((e.code, e.detail.as_deref()), ("core_failed", Some("not a git repo")));
+
+        // 跑着的时候不能再开第二个；取消之后返回 cancelled，槽位也空出来
+        std::env::set_var("CREDITIA_CORE", fake_core(&dir, "sleep 30; echo '{}'"));
+        let t = std::thread::spawn(|| run_analysis("/tmp"));
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert_eq!(run_analysis("/tmp").unwrap_err().code, "busy");
+        let t0 = std::time::Instant::now();
+        cancel_analyze();
+        assert_eq!(t.join().unwrap().unwrap_err().code, "cancelled");
+        assert!(t0.elapsed() < std::time::Duration::from_secs(5));
+        assert!(RUNNING.lock().unwrap().is_none());
+
+        // 找不到核心
+        std::env::set_var("CREDITIA_CORE", dir.join("nope"));
+        assert_eq!(run_analysis("/tmp").unwrap_err().code, "core_missing");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

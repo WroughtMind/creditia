@@ -28,9 +28,9 @@ const devSample = () => ({
       setTimeout(() => { res.setHeader('content-type', 'application/json'); res.end(readFileSync(hit.file, 'utf8')); }, slow);
     });
     server.middlewares.use('/__dev/doctor', (_req: any, res: any) => json(res, [
-      { id: 'claude-code', name: 'Claude Code', ok: true, detail: '样例数据' },
-      { id: 'codex', name: 'Codex', ok: true, detail: '样例数据' },
-      { id: 'cursor', name: 'Cursor', ok: false, detail: '没有找到' },
+      { id: 'claude-code', path: '~/.claude', ok: true, records: 1824 },
+      { id: 'codex', path: '~/.codex', ok: true, records: 312 },
+      { id: 'cursor', path: '~/.cursor', ok: false },
     ]));
   },
 });

@@ -70,6 +70,9 @@ button { font: inherit; color: inherit; }
 .menu .foot { display: flex; gap: 8px; padding: 8px 6px 4px; border-top: 1px solid var(--edge); margin-top: 6px; }
 .menu .foot button { flex: 1; border: 0; background: transparent; padding: 8px; border-radius: 10px; cursor: pointer; color: var(--soft); }
 .menu .foot button:hover { background: var(--glass2); color: var(--ink); }
+.menu .foot button:disabled { opacity: .4; cursor: default; background: transparent; color: var(--soft); }
+.menu .item.gone b, .menu .item.gone span { opacity: .55; }
+.menu .item .tag { font-style: normal; font-weight: 500; font-size: 10.5px; color: var(--soft); margin-left: 8px; padding: 1px 6px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--edge); }
 
 /* ── 展墙 ── */
 #stage { position: absolute; inset: 0; overflow: auto; padding: 84px 0 140px; scrollbar-width: none; }
@@ -181,8 +184,15 @@ body.dragging #dock .sizes { display: flex; gap: 2px; padding: 3px; border-radiu
 .seg button.on { background: var(--ink); color: var(--bg); }
 
 #toast { position: fixed; z-index: 80; left: 50%; top: 70px; transform: translateX(-50%); padding: 9px 16px; border-radius: 99px; font-size: 12.5px; max-width: 80vw; animation: drop .2s; }
+#toast { display: flex; align-items: center; gap: 10px; background: var(--glass2); color: var(--ink); }
+#toast:has(button) { padding-right: 6px; }
+#toast .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#toast button { flex: none; border: 0; height: 26px; padding: 0 11px; border-radius: 99px; cursor: pointer; font-size: 12px; font-weight: 600; background: var(--glass2); box-shadow: inset 0 0 0 1px var(--edge); }
+#toast button:hover { background: var(--ink); color: var(--bg); }
+#toast .spin { flex: none; width: 12px; height: 12px; border-radius: 99px; border: 1.5px solid var(--faint); border-top-color: var(--ink); animation: spin .8s linear infinite; }
 #empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--soft); }
 #empty b { display: block; color: var(--ink); font-size: 18px; margin-bottom: 8px; font-weight: 600; }
+#empty .go { margin-top: 16px; height: 36px; padding: 0 18px; border: 0; border-radius: 99px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--ink); }
+#empty .go:hover { background: var(--glass2); }
 #empty code { font: 12px "JetBrains Mono", ui-monospace, monospace; background: var(--glass); padding: 6px 10px; border-radius: 8px; display: inline-block; margin-top: 10px; }
-.busy { position: absolute; inset: 0; display: grid; place-items: center; color: var(--soft); font-size: 12px; background: color-mix(in srgb, var(--bg) 70%, transparent); border-radius: 8px; }
 #dots .divider{width:1px;height:16px;background:var(--line,rgba(0,0,0,.15));margin:0 4px;align-self:center;flex:none}

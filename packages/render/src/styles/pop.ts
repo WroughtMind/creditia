@@ -26,7 +26,7 @@ export function sfx(s: Scene, text: string, x: number, y: number, size: number, 
   s.text(text, x, y, { font: { family: 'Dela Gothic One, Noto Sans SC', weight: 400 }, size, fill: color, stroke: W, strokeW: size * 0.12, rotate: rot, anchor: 'middle' });
 }
 export const manga: Style = defineStyle({
-  id: 'manga', name: '漫画', en: 'Manga', note: '少年漫画的张力：网点、集中线、「ゴゴゴ」与替身面板', dark: false,
+  id: 'manga', name: '漫画', en: 'Manga', note: '少年漫画的张力：网点、集中线、「ゴゴゴ」与替身面板', noteEn: 'Shōnen manga tension: screentone, speed lines, “ゴゴゴ” and stand panels', dark: false,
   c: { bg: W, paper: W, ink: K, soft: '#444444', faint: '#9A9A9A', line: 'rgba(0,0,0,0.85)', accent: MAG, accent2: PUR },
   series: [K, MAG, PUR, '#2B6CB0', '#D9481C', '#3A8A3A'],
   f: {
@@ -80,7 +80,7 @@ export const manga: Style = defineStyle({
 const PH = '#7CFF9E', TBG = '#060A08';
 const MONO = { family: 'JetBrains Mono, DotGothic16, Noto Sans SC', weight: 400 };
 export const terminal: Style = defineStyle({
-  id: 'terminal', name: '终端', en: 'Terminal', note: '磷光绿的老终端：提示符、ASCII 条、背后的代码雨', dark: true,
+  id: 'terminal', name: '终端', en: 'Terminal', note: '磷光绿的老终端：提示符、ASCII 条、背后的代码雨', noteEn: 'A phosphor-green terminal: prompts, ASCII bars and code rain behind', dark: true,
   c: { bg: TBG, paper: '#09100C', ink: '#D6FFE0', soft: '#5FBF7E', faint: '#2E6B45', line: 'rgba(124,255,158,0.18)', accent: PH, accent2: '#FFB347' },
   series: [PH, '#54D6FF', '#FFB347', '#FF6B8B', '#C9A0FF', '#E8F57A'],
   f: { display: { family: 'JetBrains Mono, DotGothic16, Noto Sans SC', weight: 700 }, body: MONO, num: { family: 'JetBrains Mono, Noto Sans SC', weight: 700 }, label: MONO, mono: MONO },

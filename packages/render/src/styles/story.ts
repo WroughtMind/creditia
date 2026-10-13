@@ -7,7 +7,7 @@ import { Scene, el, g, rect, circle, line, path, r, rng, hash, mix, measure } fr
 const TYPE = '#24221F', RED = '#C2382B', SHEET = '#F3EDE1';
 const TW = { family: 'Courier Prime, Noto Serif SC', weight: 400 };
 export const manuscript: Style = defineStyle({
-  id: 'manuscript', name: '手稿', en: 'Manuscript', note: '打字机打出的书稿，编辑用红铅笔批注，咖啡渍还在', dark: false,
+  id: 'manuscript', name: '手稿', en: 'Manuscript', note: '打字机打出的书稿，编辑用红铅笔批注，咖啡渍还在', noteEn: 'A typewritten manuscript with an editor\'s red-pencil notes and a coffee ring', dark: false,
   c: { bg: '#E7DFCF', paper: SHEET, ink: TYPE, soft: '#5E5850', faint: '#A39B8D', line: 'rgba(36,34,31,0.2)', accent: RED, accent2: RED },
   series: [TYPE, '#4A4640', '#6F6A62', '#8F897F', '#ABA59A', '#C3BDB1'],
   f: { display: { family: 'Courier Prime, Noto Serif SC', weight: 700 }, body: TW, num: { family: 'Courier Prime, Noto Serif SC', weight: 700 }, label: TW, mono: TW, script: { family: 'Long Cang, Noto Serif SC' } },
@@ -73,7 +73,7 @@ export function cloud(s: Scene, cx: number, cy: number, W: number, seed: number)
   s.add(el('ellipse', { cx, cy: cy + W * 0.02, rx: W * 0.5, ry: W * 0.06, fill: '#DCE9F3', opacity: 0.8, filter: blur(s, 4) }));
 }
 export const meadow: Style = defineStyle({
-  id: 'meadow', name: '夏日', en: 'Summer Meadow', note: '手绘动画里的夏天：积云、山坡、风吹过草地', dark: false,
+  id: 'meadow', name: '夏日', en: 'Summer Meadow', note: '手绘动画里的夏天：积云、山坡、风吹过草地', noteEn: 'Summer in hand-drawn animation: cumulus clouds, hillsides, wind over the grass', dark: false,
   c: { bg: '#BFE3F2', paper: '#FFFDF6', ink: LEAF, soft: '#5E6B57', faint: '#A3AE9C', line: 'rgba(47,59,42,0.12)', accent: '#E07A5F', accent2: '#3D85C6' },
   series: ['#E07A5F', '#3D85C6', '#F2B84B', '#6FA67F', '#9C6ADE', '#E68FA8'],
   f: {
@@ -129,7 +129,7 @@ export const meadow: Style = defineStyle({
 
 const PINK = '#F2C4C6', ROSE = '#D98A95', WINE = '#6B2737', MINT = '#A8D8C8', MUSTARD = '#E2AE4C', CREAM = '#FBF1E6';
 export const pastel: Style = defineStyle({
-  id: 'pastel', name: '对称', en: 'Symmetry', note: '粉彩、居中对称、小号大写字和细框；像一部精致的旅馆电影', dark: false,
+  id: 'pastel', name: '对称', en: 'Symmetry', note: '粉彩、居中对称、小号大写字和细框；像一部精致的旅馆电影', noteEn: 'Pastels, centred symmetry, small caps and hairline frames, like a fastidious hotel film', dark: false,
   c: { bg: PINK, paper: CREAM, ink: WINE, soft: '#9A5B66', faint: '#C9939B', line: 'rgba(107,39,55,0.2)', accent: MUSTARD, accent2: WINE },
   series: [WINE, '#E07A5F', '#5FA89B', MUSTARD, '#8E7CC3', ROSE],
   f: {
@@ -183,7 +183,7 @@ function cut(x: number, y: number, w: number, h: number, seed: number, j = 0.04)
   return 'M' + pts.map(([a, b2]) => `${r(a)} ${r(b2)}`).join('L') + 'Z';
 }
 export const cutout: Style = defineStyle({
-  id: 'cutout', name: '剪纸', en: 'Cut-Paper Titles', note: '五六十年代电影片头：剪纸色块、粗壮字、黑橙白', dark: false,
+  id: 'cutout', name: '剪纸', en: 'Cut-Paper Titles', note: '五六十年代电影片头：剪纸色块、粗壮字、黑橙白', noteEn: 'Film titles from the fifties and sixties: cut-paper shapes, sturdy type, black, orange and white', dark: false,
   c: { bg: ORANGE, paper: PAPER, ink: CHAR, soft: '#4E3A2E', faint: '#9B6A4E', line: 'rgba(21,19,17,0.3)', accent: CHAR, accent2: PAPER },
   series: [CHAR, ORANGE, '#2D5DA8', '#F2C230', '#7A2E1C', '#8C8C8C'],
   f: { display: { family: 'Anton, Noto Sans SC', weight: 400 }, body: { family: 'Oswald, Noto Sans SC', weight: 400 }, num: { family: 'Anton, Noto Sans SC', weight: 400 }, label: { family: 'Oswald, Noto Sans SC', weight: 600 }, mono: { family: 'Oswald, Noto Sans SC' } },

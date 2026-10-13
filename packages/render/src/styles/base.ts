@@ -5,7 +5,7 @@ import { el, g, rect, circle, line, r, mix, alpha } from '../svg.ts';
 const SANS = 'Inter, Noto Sans SC';
 
 export const minimal: Style = defineStyle({
-  id: 'minimal', name: '极简', en: 'Minimal', note: '白纸黑字，只留信息本身', dark: false,
+  id: 'minimal', name: '极简', en: 'Minimal', note: '白纸黑字，只留信息本身', noteEn: 'Black on white paper, nothing but the information', dark: false,
   c: { bg: '#F4F3F0', paper: '#FFFFFF', ink: '#121212', soft: '#6E6B65', faint: '#ADA9A2', line: '#E7E5E0', accent: '#121212', accent2: '#8A8780' },
   series: ['#121212', '#4B4A47', '#76746F', '#9E9B95', '#C2BFB8', '#DAD7D1'],
   f: { display: { family: SANS, weight: 600 }, body: { family: SANS, weight: 400 }, num: { family: SANS, weight: 500 }, label: { family: SANS, weight: 500 }, mono: { family: 'JetBrains Mono, Noto Sans SC', weight: 400 } },
@@ -28,7 +28,7 @@ export const minimal: Style = defineStyle({
 });
 
 export const noir: Style = defineStyle({
-  id: 'noir', name: '暗室', en: 'Noir', note: '黑底白字，像深夜的编辑器', dark: true,
+  id: 'noir', name: '暗室', en: 'Noir', note: '黑底白字，像深夜的编辑器', noteEn: 'White on black, like an editor late at night', dark: true,
   c: { bg: '#0A0A0A', paper: '#141414', ink: '#F2F1EE', soft: '#8E8B85', faint: '#56544F', line: '#242422', accent: '#F2F1EE', accent2: '#8E8B85' },
   series: ['#F2F1EE', '#BDBBB6', '#8F8D88', '#6A6864', '#4B4A47', '#363533'],
   f: minimal.f, radius: 99, labelTrack: 0.16,
@@ -50,7 +50,7 @@ export const noir: Style = defineStyle({
 
 /** 液态玻璃：底下是按贡献方品牌色生成的柔光，玻璃面做折射（位移）+ 磨砂（模糊）+ 高光描边 */
 export const glass: Style = defineStyle({
-  id: 'glass', name: '液态玻璃', en: 'Liquid Glass', note: '磨砂、折射、边缘高光；颜色来自各家品牌色', dark: false,
+  id: 'glass', name: '液态玻璃', en: 'Liquid Glass', note: '磨砂、折射、边缘高光；颜色来自各家品牌色', noteEn: 'Frosted glass, refraction and rim light, coloured by each tool\'s brand', dark: false,
   c: { bg: '#E9ECF2', paper: '#FFFFFF', ink: '#0F1115', soft: '#4D5260', faint: '#8C92A0', line: 'rgba(15,17,21,0.08)', accent: '#0F1115', accent2: '#5B6170' },
   series: ['#0F1115', '#3A3F4B', '#666C79', '#9096A3', '#B8BDC8', '#D6D9E0'],
   f: { display: { family: SANS, weight: 600 }, body: { family: SANS, weight: 400 }, num: { family: SANS, weight: 600 }, label: { family: SANS, weight: 500 }, mono: { family: 'JetBrains Mono, Noto Sans SC' } },

@@ -6,7 +6,7 @@ const Y = '#F3E600', C = '#00E5F0', R = '#FF2A4D', BG = '#08090D', INK = '#E9ECE
 const DISP = { family: 'Rajdhani, Noto Sans SC', weight: 700 };
 
 export const cyber: Style = defineStyle({
-  id: 'cyber', name: '赛博', en: 'Cyber', note: '霓虹都市的 HUD：倒角面板、故障错位、条形码与警示条', dark: true,
+  id: 'cyber', name: '赛博', en: 'Cyber', note: '霓虹都市的 HUD：倒角面板、故障错位、条形码与警示条', noteEn: 'A neon-city HUD: chamfered panels, glitch offsets, barcodes and hazard stripes', dark: true,
   c: { bg: BG, paper: '#0E1016', ink: INK, soft: '#8A93A3', faint: '#4A5262', line: 'rgba(0,229,240,0.16)', accent: Y, accent2: C },
   series: [Y, C, R, '#B6FF3B', '#FF8A1F', '#B983FF'],
   f: {
