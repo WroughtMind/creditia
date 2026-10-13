@@ -202,8 +202,6 @@ console.log('✓ formats');
 
 // 用法 · agent：对话里导出的那张分享图
 // 用法 · GitHub：README 里的徽章（带风格的，不是空白条）和 Credits 段落里的署名条
-const HERO_STYLES = ['cinema', 'woodblock', 'neon', 'pastel', 'editorial', 'cyber', 'manga', 'grimoire', 'broadsheet', 'baroque']; // 都是 1200×630，切换时画框不变形
-meta.heroStyles = HERO_STYLES;
 for (const lang of LANGS) {
   const vm = modelOf(sample, lang, 'v');
   const sh = art('share', vm, styleById('ukiyoe')!)!; write(`usage/${lang}-share.png`, exporter.png(sh, 640 / sh.w));
@@ -211,8 +209,6 @@ for (const lang of LANGS) {
   { const b = art('badge', vm, styleById('ink')!, { variant: 'flat' })!; write(`usage/${lang}-ink-badge.svg`, exporter.svg(b)); meta.usage.ink = { w: b.w, h: b.h }; }
   { const a = art('share', vm, styleById('ink')!)!; write(`usage/${lang}-ink-share.png`, exporter.png(a, 560 / a.w)); }
   for (const v of ['flat', 'stack']) { const a = art('badge', vm, styleById('ukiyoe')!, { variant: v })!; write(`usage/${lang}-badge-${v}.svg`, exporter.svg(a)); meta.usage[v] = { w: a.w, h: a.h }; }
-  // 首屏：同一张分享图，在几种风格之间切换（SVG，文字已转路径，大屏也清楚）
-  for (const id of HERO_STYLES) await draw(`hero/${lang}/${id}`, 'share', id, lang);
   if (own) meta.selfBadge = await draw(`usage/${lang}-self-badge`, 'badge', 'minimal-light', lang, { raw: own });
 }
 console.log('✓ usage');

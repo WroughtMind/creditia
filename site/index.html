@@ -99,28 +99,22 @@ section, #screen { scroll-margin-top: 64px; }
 /* ───────── 首屏 ───────── */
 #screen { position: relative; height: 100vh; height: 100svh; min-height: 660px; max-height: 1100px; overflow: hidden; background: var(--hero); color: var(--hero-ink); transition: background-color .3s, color .3s; }
 @property --p { syntax: '<percentage>'; inherits: false; initial-value: 130%; }
-/* 首屏右边：同一张分享图，在几种风格之间换——一道光从左扫到右，新风格就显出来；背景跟着染上这张图的颜色 */
-.stage { position: absolute; z-index: 1; top: 84px; bottom: 40px; right: max(32px, calc((100vw - 1120px) / 2)); width: min(640px, 47vw); display: flex; flex-direction: column; justify-content: center; gap: 22px; perspective: 1600px; translate: 0 calc(var(--py, 0px) * -0.35); }
-.amb { position: absolute; z-index: -1; inset: -10% -40% -10% -60%; pointer-events: none; }
-.amb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(80px) saturate(1.4); opacity: 0; transition: opacity 1.6s ease; }
-.amb img.on { opacity: .28; }
-:root[data-theme="dark"] .amb img.on { opacity: .4; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .amb img.on { opacity: .4; } }
-.frame { position: relative; width: 100%; aspect-ratio: 1200 / 630; border-radius: 6px; transform: rotateX(var(--tx, 0deg)) rotateY(var(--ty, 0deg)); transition: transform .9s cubic-bezier(.2,.8,.2,1); box-shadow: 0 2px 4px rgba(0,0,0,.12), 0 60px 110px -46px rgba(0,0,0,.65); }
-.frame .pane { position: absolute; inset: 0; overflow: hidden; border-radius: 6px; will-change: transform; }
-.frame .pane img { position: absolute; inset: 0; width: 100%; height: 100%; will-change: transform; }
-.frame .edge { position: absolute; z-index: 3; top: -5%; bottom: -5%; left: 0; width: 2px; margin-left: -1px; background: linear-gradient(transparent, #fff 20%, #fff 80%, transparent); box-shadow: 0 0 22px 5px rgba(255,255,255,.5); opacity: 0; pointer-events: none; }
-.sbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 48px; }
-.sname { min-width: 0; overflow: hidden; }
-.sname b { display: block; font: 400 24px/1.2 "Instrument Serif", "Noto Serif SC", serif; white-space: nowrap; }
-:lang(zh) .sname b { font: 500 19px/1.4 "Noto Serif SC", serif; }
-.sname span { display: block; font-size: 12.5px; color: var(--hero-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sdots { display: flex; gap: 2px; flex: none; }
-.sdots button { position: relative; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; display: grid; place-items: center; transition: transform .2s; }
-.sdots button:hover { transform: scale(1.15); }
-.sdots svg { width: 19px; height: 19px; display: block; }
-.sdots button::after { content: ""; position: absolute; inset: 1px; border-radius: 50%; background: conic-gradient(var(--hero-ink) calc(var(--p, 0) * 1%), var(--hero-line) 0); -webkit-mask: radial-gradient(circle, transparent 11.5px, #000 12px); mask: radial-gradient(circle, transparent 11.5px, #000 12px); opacity: 0; transition: opacity .3s; }
-.sdots button.on::after { opacity: 1; }
+/* 首屏右边：lumen 整个仓库摊开成一片代码地图，一个文件一段、一行一道线；一道光扫过去，每一行染上写它的 AI 的颜色 */
+.field { position: absolute; z-index: 1; top: 96px; bottom: 52px; left: calc(max(32px, (100vw - 1120px) / 2) + min(520px, 46vw) + 64px); right: 0; display: flex; flex-direction: column; gap: 16px; translate: 0 calc(var(--py, 0px) * -0.3); }
+.fcap { display: flex; justify-content: space-between; gap: 16px; padding-right: max(32px, calc((100vw - 1120px) / 2)); font-size: 12px; color: var(--hero-soft); white-space: nowrap; }
+.fcap #fcount { color: var(--hero-ink); font-variant-numeric: tabular-nums; transition: opacity .6s; }
+.fcv { position: relative; flex: 1; min-height: 0; -webkit-mask-image: linear-gradient(90deg, #000 78%, transparent); mask-image: linear-gradient(90deg, #000 78%, transparent); }
+.fcv canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.ftip { position: absolute; z-index: 2; pointer-events: none; padding: 9px 11px; border-radius: 10px; background: var(--hero); color: var(--hero-ink); box-shadow: 0 0 0 1px var(--hero-line), 0 14px 40px -12px rgba(0,0,0,.45); font-size: 12px; line-height: 1.6; white-space: nowrap; }
+.ftip b { display: block; font: 500 12px "JetBrains Mono", monospace; margin-bottom: 3px; }
+.ftip i { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+.ftip span { display: block; color: var(--hero-soft); } .ftip span em { font-style: normal; color: var(--hero-ink); font-variant-numeric: tabular-nums; margin-left: 6px; }
+.flegend { display: flex; flex-wrap: wrap; gap: 6px 20px; padding-right: max(32px, calc((100vw - 1120px) / 2)); font-size: 13px; color: var(--hero-soft); }
+.flegend span { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; cursor: default; transition: color .2s, opacity .2s; }
+.flegend span svg { width: 15px; height: 15px; fill: currentColor; }
+.flegend span i { width: 13px; height: 13px; border-radius: 3px; border: 1px dashed currentColor; }
+.flegend span em { font-style: normal; color: var(--hero-ink); font-variant-numeric: tabular-nums; }
+.flegend.focus span:not(.on) { opacity: .4; }
 .title { translate: 0 var(--py, 0px); opacity: var(--po, 1); }
 .title { position: absolute; z-index: 2; left: max(32px, calc((100vw - 1120px) / 2)); top: 50%; transform: translateY(-48%); width: min(520px, 46vw); }
 .title h1 { font-size: clamp(48px, 6vw, 84px); line-height: 1; }
@@ -247,30 +241,27 @@ section, #screen { scroll-margin-top: 64px; }
 .tool .add { display: block; background: rgba(79,163,127,.13); color: #2E7D5B; padding: 1px 6px; border-radius: 4px; }
 :root[data-theme="dark"] .tool .add { color: #7CCB9F; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tool .add { color: #7CCB9F; } }
-/* GitHub Action 和 App：各占一整行，一个讲清流程，一个是真的能用的 App */
-.flow, .deskcard { margin-top: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 18px 22px 22px; }
-.fhead { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
-.fhead h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: baseline; gap: 10px; }
-.fhead h3 small { font-weight: 400; color: var(--faint); font-size: 13px; }
-.fhead p { order: 3; flex: 0 0 100%; margin: 2px 0 0; color: var(--soft); font-size: 14px; line-height: 1.7; text-wrap: pretty; }
-/* Action：三步，从你的电脑到 GitHub 到你拿到的东西 */
-.steps3 { margin-top: 20px; display: grid; grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1.1fr) 40px minmax(0, 1fr); }
-.st3 { display: flex; flex-direction: column; gap: 10px; min-width: 0; opacity: .38; transition: opacity .6s; }
-.st3.on, .st3.done { opacity: 1; }
-.st3 .lb { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--soft); }
-.st3 .lb b { flex: none; width: 21px; height: 21px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font: 500 11px Inter, sans-serif; color: var(--ink); transition: background-color .3s, color .3s; }
-.st3.on .lb b { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.st3.done .lb b { color: #4FA37F; border-color: #4FA37F; }
-.pipe { position: relative; }
-.pipe::before { content: ""; position: absolute; left: 8px; right: 8px; top: 50%; border-top: 1px dashed var(--line); }
-.pipe::after { content: ""; position: absolute; right: 8px; top: calc(50% - 4px); border: 4px solid transparent; border-left: 6px solid var(--line); border-right: 0; }
-.pipe i { position: absolute; z-index: 1; left: 6px; top: calc(50% - 4px); width: 8px; height: 8px; border-radius: 50%; background: var(--ink); opacity: 0; }
-.mt { flex: 1; border-radius: 12px; background: var(--term); color: var(--term-ink); padding: 14px 16px; font: 12px/1.75 "JetBrains Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 300px; font-variant-ligatures: none; }
-.st3[data-n="0"] .mt { flex: none; height: 300px; }
+/* GitHub Action：卡片里三步轮着演——本机 publish、GitHub 上每次推送、你得到的东西 */
+.flow2 { display: flex; flex-direction: column; gap: 12px; }
+.fst { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.fst li { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--faint); white-space: nowrap; cursor: pointer; transition: color .3s; }
+.fst li:hover { color: var(--ink); }
+.fst li b { flex: none; width: 19px; height: 19px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font: 500 10.5px Inter, sans-serif; transition: background-color .3s, color .3s, border-color .3s; }
+.fst li.on { color: var(--ink); } .fst li.on b { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.fst li.done { color: var(--soft); } .fst li.done b { border-color: #4FA37F; color: #4FA37F; }
+.fst i { flex: 1; min-width: 8px; height: 1px; background: var(--line); position: relative; }
+.fst i::after { content: ""; position: absolute; inset: 0; background: #4FA37F; transform: scaleX(0); transform-origin: 0 0; transition: transform .7s cubic-bezier(.5,0,.3,1); }
+.fst i.done::after { transform: none; }
+.fstage { position: relative; flex: 1; min-height: 0; }
+.fpane { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px; opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity .45s, transform .45s cubic-bezier(.2,.8,.2,1), visibility 0s .45s; }
+.fpane.on { opacity: 1; visibility: visible; transform: none; transition: opacity .45s, transform .45s cubic-bezier(.2,.8,.2,1); }
+.res td.m { display: none; }
+.fgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+.mt { flex: 1; min-height: 0; border-radius: 12px 12px 0 0; background: var(--term); color: var(--term-ink); padding: 14px 16px; font: 12px/1.75 "JetBrains Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; font-variant-ligatures: none; }
 .mt .p { color: #8C877D; } .mt .o { color: #A9A397; } .mt .ok { color: #7CCB9F; }
 .yml { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); }
 .yml .fn { padding: 8px 14px; border-bottom: 1px solid var(--line); font: 11.5px "JetBrains Mono", monospace; color: var(--soft); }
-.yml pre { margin: 0; padding: 10px 14px 12px; font: 11.5px/1.7 "JetBrains Mono", monospace; color: var(--soft); white-space: pre; overflow: hidden; }
+.yml pre { margin: 0; padding: 10px 14px 12px; font: 11px/1.6 "JetBrains Mono", monospace; color: var(--soft); white-space: pre; overflow: hidden; }
 .yml pre .hl { color: var(--ink); background: color-mix(in srgb, #E2B93B 22%, transparent); border-radius: 3px; transition: background-color 1s; }
 .yml pre .hl.off { background: transparent; }
 .yml pre .k { color: var(--faint); }
@@ -298,10 +289,10 @@ section, #screen { scroll-margin-top: 64px; }
 .res .url i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
 .res .url span { margin-left: 6px; flex: 1; text-align: center; background: var(--line2); border-radius: 6px; padding: 2px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .res .site img { width: 100%; display: block; }
-.res-col { display: grid; gap: 10px; }
 /* App：一块桌面，上面是真的 App（打包成网页的 creditia），先自己演一遍，随时可以接手 */
-.deskbox { position: relative; margin-top: 18px; border-radius: 12px; overflow: hidden; aspect-ratio: 1280 / 800; background: #1b1b22; box-shadow: inset 0 0 0 1px var(--line); }
-.desk { position: absolute; left: 0; top: 0; width: 1280px; height: 800px; transform-origin: 0 0; transform: scale(var(--ds, 1)); overflow: hidden; user-select: none; -webkit-user-select: none;
+.way .body.dbody { height: auto; aspect-ratio: 1040 / 840; }
+.deskbox { position: relative; overflow: hidden; background: #1b1b22; box-shadow: inset 0 0 0 1px var(--line); }
+.desk { position: absolute; left: 0; top: 0; width: 1040px; height: 840px; transform-origin: 0 0; transform: scale(var(--ds, 1)); overflow: hidden; user-select: none; -webkit-user-select: none;
   font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif; color: #1d1d1f; --mb: rgba(246,240,236,.42); --mb-ink: #1d1d1f; }
 :root[data-theme="dark"] .desk { --mb: rgba(24,22,34,.42); --mb-ink: #f2f2f2; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .desk { --mb: rgba(24,22,34,.42); --mb-ink: #f2f2f2; } }
@@ -310,7 +301,7 @@ section, #screen { scroll-margin-top: 64px; }
 .mbar svg { width: 14px; height: 14px; fill: currentColor; display: block; }
 .mbar b { font-weight: 700; }
 .mbar .r { margin-left: auto; display: flex; gap: 16px; align-items: center; }
-.dfiles { position: absolute; z-index: 1; top: 44px; right: 22px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.dfiles { position: absolute; z-index: 1; top: 44px; right: 6px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
 .dfile { width: 92px; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: default; border-radius: 6px; padding: 4px 2px; }
 .dfile .th { width: 64px; height: 56px; display: grid; place-items: center; }
 .dfile .th img { max-width: 64px; max-height: 56px; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
@@ -323,15 +314,15 @@ section, #screen { scroll-margin-top: 64px; }
 .lights { position: absolute; z-index: 3; left: 14px; top: 11px; display: flex; gap: 8px; }
 .lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.2); cursor: pointer; }
 .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; cursor: default; }
-.tw { z-index: 4; left: 70px; top: 70px; width: 620px; height: 360px; background: rgba(30,30,32,.94); color: #e8e8e8; }
+.tw { z-index: 4; left: 60px; top: 96px; width: 580px; height: 340px; background: rgba(30,30,32,.94); color: #e8e8e8; }
 .tw .tb { height: 32px; display: grid; place-items: center; font-size: 12.5px; color: #a6a6a6; border-bottom: 1px solid rgba(255,255,255,.08); }
 .tw pre { margin: 0; padding: 10px 16px; font: 12.5px/1.65 "JetBrains Mono", Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; font-variant-ligatures: none; }
 .tw .p { color: #7fd08c; } .tw .o { color: #b4b4b4; } .tw .c { display: inline-block; width: 8px; height: 15px; vertical-align: -3px; background: #e8e8e8; animation: blink 1.05s steps(1) infinite; }
-.aw { z-index: 5; left: 92px; top: 40px; width: 1096px; height: 676px; background: #EFEFED; }
+.aw { z-index: 5; left: 20px; top: 40px; width: 900px; height: 700px; background: #EFEFED; }
 :root[data-theme="dark"] .aw { background: #0A0A0A; }
 .aw .lights { top: 16px; left: 12px; gap: 6px; }
 .aw .lights i { width: 10px; height: 10px; }
-.aw iframe { position: absolute; left: 0; top: 0; width: 1370px; height: 845px; transform: scale(.8); transform-origin: 0 0; border: 0; display: block; background: transparent; }
+.aw iframe { position: absolute; left: 0; top: 0; width: 1125px; height: 875px; transform: scale(.8); transform-origin: 0 0; border: 0; display: block; background: transparent; }
 .aw .boot { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; background: inherit; transition: opacity .5s; }
 .aw .boot img { width: 84px; height: 84px; animation: breathe 1.4s ease-in-out infinite; }
 @keyframes breathe { 50% { transform: scale(.92); opacity: .7; } }
@@ -355,15 +346,9 @@ section, #screen { scroll-margin-top: 64px; }
 .ql .card img { display: block; max-width: 796px; max-height: 560px; }
 .dcur { position: absolute; z-index: 60; left: 0; top: 0; width: 22px; height: 22px; pointer-events: none; opacity: 0; transition: opacity .3s; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
 .dcur.on { opacity: 1; }
-.dsteps { margin-top: 14px; display: flex; align-items: flex-start; gap: 6px 22px; flex-wrap: wrap; }
-.dsteps ol { margin: 0; padding: 0; list-style: none; display: flex; gap: 4px 18px; flex-wrap: wrap; counter-reset: s; }
-.dsteps li { counter-increment: s; display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--faint); transition: color .3s; }
-.dsteps li::before { content: counter(s); width: 19px; height: 19px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 10.5px; transition: all .3s; }
-.dsteps li.on { color: var(--ink); }
-.dsteps li.on::before { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.dsteps li.done { color: var(--soft); }
-.dsteps li.done::before { border-color: #4FA37F; color: #4FA37F; }
-.dsteps p { flex-basis: 100%; margin: 4px 0 0; color: var(--soft); font-size: 14px; min-height: 1.7em; }
+.dstep { margin-left: auto; min-width: 0; font-size: 12.5px; font-weight: 400; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dstep b { font-weight: 500; color: var(--faint); margin-right: 7px; font-variant-numeric: tabular-nums; }
+.dstep + .again { margin-left: 0; }
 
 .vline { margin: 12px 0 0; color: var(--soft); font-size: 14px; }
 .vline code { font: 12.5px "JetBrains Mono", monospace; color: var(--ink); }
@@ -447,8 +432,12 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 
 @media (max-width: 900px) {
   .wrap, header .wrap { width: calc(100% - 40px); }
-  .stage { left: 20px; right: 20px; width: auto; top: 76px; bottom: auto; gap: 12px; }
-  .sdots { display: none; }
+  .field { left: 20px; right: 0; top: 74px; bottom: auto; height: max(180px, calc(100svh - 610px)); gap: 10px; }
+  .fcap, .flegend { padding-right: 20px; }
+  .flegend { gap: 4px 12px; font-size: 12px; flex-wrap: nowrap; overflow: hidden; }
+  .flegend span:nth-child(n+4) { display: none; }
+  .fcap { font-size: 11px; } #fproj { display: none; }
+  .fcv { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
   .title { top: auto; bottom: 48px; transform: none; left: 20px; right: 20px; width: auto; }
   .title p { font-size: 16px; }
   .agents { gap: 12px 14px; }
@@ -464,12 +453,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   .term { font-size: 10.5px; padding: 14px 14px 18px; }
   .way { padding: 16px 16px 0; }
   .way .body { height: 380px; }
-  .flow, .deskcard { padding: 16px; }
-  .steps3 { grid-template-columns: minmax(0, 1fr); }
-  .pipe { height: 30px; }
-  .pipe::before { left: 50%; right: auto; top: 4px; bottom: 4px; border-top: 0; border-left: 1px dashed var(--line); }
-  .pipe::after { display: none; }
-  .st3[data-n="0"] .mt { height: 250px; min-height: 0; font-size: 11px; }
+  .fst li:not(.on) span { display: none; }
   .yml pre { font-size: 10px; overflow-x: auto; }
 }
 </style>
@@ -494,7 +478,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 
 <main>
   <div id="screen">
-    <div class="stage" id="stage"><div class="amb" id="amb" aria-hidden="true"></div><div class="frame" id="frame"><i class="edge"></i></div><div class="sbar"><div class="sname"><b id="sn"></b><span id="snote"></span></div><div class="sdots" id="sdots"></div></div></div>
+    <div class="field" id="field"><div class="fcap mono"><span id="fproj"></span><span id="fcount"></span></div><div class="fcv"><canvas id="fcv" aria-hidden="true"></canvas><div class="ftip" id="ftip" hidden></div></div><div class="flegend" id="flegend"></div></div>
     <div class="title">
       <h1 class="serif" data-i="hero.t">你的代码，<br>是哪些 AI 写的</h1>
       <p data-i="hero.p">把 agent 的日志和 git 历史逐行对上，算出每个工具、每个模型写了多少，做成片尾字幕。全在本地。</p>
@@ -532,15 +516,8 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
       <div class="ways">
         <div class="way rise"><h3><span data-i="w.cli">命令行</span><button class="again" data-again="term" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="term mono" id="term"></div></div></div>
         <div class="way rise"><h3><span data-i="w.agent">交给 agent</span><button class="again" data-again="chat" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="agent" id="chat"></div></div></div>
-      </div>
-      <div class="flow rise" id="flowcard">
-        <div class="fhead"><h3>GitHub Action <small class="mono">WroughtMind/creditia@main</small></h3><button class="again" data-again="flow" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><p data-i="flow.p">分析只在你的电脑上做，agent 日志不上传。把公开的 credits.json 推上去一次，之后每次推送，Action 自动重做徽章、CREDITS.md 和署名页。</p></div>
-        <div class="steps3" id="flow"></div>
-      </div>
-      <div class="deskcard rise" id="deskcard">
-        <div class="fhead"><h3>App <small>macOS · Windows · Linux</small></h3><button class="again" data-again="desk" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><p data-i="desk.p">下面是真的 App，打包成了网页，用样例项目 lumen。先自己从头演一遍，你随时可以接手：点圆点、换版式、把作品拖去导出。</p></div>
-        <div class="deskbox" id="deskbox"><div class="desk" id="desk"></div></div>
-        <div class="dsteps" id="dsteps"></div>
+        <div class="way rise" id="flowcard"><h3>GitHub Action <small class="mono">WroughtMind/creditia@main</small><button class="again" data-again="flow" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="flow2" id="flow"></div></div></div>
+        <div class="way rise" id="deskcard"><h3>App <small>macOS · Windows · Linux</small><span class="dstep" id="dsteps"></span><button class="again" data-again="desk" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body dbody"><div class="deskbox" id="deskbox"><div class="desk" id="desk"></div></div></div></div>
       </div>
     </div>
   </section>
@@ -584,8 +561,6 @@ const EN = {
   'hero.p': 'creditia matches your agents’ logs against git history line by line, works out what each tool and each model wrote, and rolls it as end credits. Runs locally.',
   'looks.t': 'Same credits, twenty-six looks',
   'lines.t': 'Every line has a source', 'lines.p': 'What can’t be matched is marked unattributed. Runs locally, calls no model.',
-  'flow.p': 'Analysis happens only on your machine; agent logs are never uploaded. Push the public credits.json once, and on every push the Action rebuilds your badge, CREDITS.md and credits page.',
-  'desk.p': 'This is the real app, built for the web, on the sample project lumen. It plays the whole flow once; take over any time: click a dot, change a layout, drag a piece out to export.',
   'use.t': 'Four ways to use it', 'w.cli': 'Command line', 'w.agent': 'Your agent',
   'foot.rules': 'Attribution rules',
   'nav.looks': 'Looks', 'nav.lines': 'Sources', 'nav.use': 'Usage', 'nav.get': 'Install', 'ins.t': 'Install',
@@ -648,71 +623,148 @@ function count(el, to, fmt, dur = 1000) {
 $('agents').innerHTML = DATA.tools.map((x) => `<span data-n="${x.name}" aria-label="${x.name}">${x.svg}</span>`).join('');
 // 首屏：同一张分享图（样例项目 lumen），在几种风格之间换。一道光从左扫到右，新风格就显出来；
 // 背后的光晕跟着换色。点圆点直接换，鼠标放在图上就停
-const HOLD = 2.6, WIPE = 950;
-const hero = { list: [], i: -1, t: 0, hover: false, busy: false, key: '' };
-const heroSrc = (id) => `assets/hero/${lang()}/${id}.svg`;
-function reel() {
-  hero.list = DATA.heroStyles.map((id) => styleOf(id)).filter(Boolean);
-  fitStage();
-  const key = lang();
-  $('sdots').innerHTML = hero.list.map((st, j) => `<button data-j="${j}" aria-label="${sname(st)}" title="${sname(st)}"><svg viewBox="0 0 24 24">${st.dot}</svg></button>`).join('');
-  if (hero.key !== key) { hero.key = key; const j = Math.max(0, hero.i); hero.i = -1; [...$('frame').querySelectorAll('.pane')].forEach((x) => x.remove()); heroGo(j, true); }
-  else heroMark();
+// ───────── 首屏：lumen 的代码地图 ─────────
+// 一个文件一段、一行一道线，先是一片灰；一道光从左扫到右，扫过的行染上写它的 AI 的颜色，占比跟着涨到最终数字。
+// 扫完以后：悬停一段看这个文件谁写了多少，悬停图例只亮这个工具写的行。
+const FT = ['claude-code', 'codex', 'cursor', 'kimi', 'grok', 'unattributed'];
+const F = { n: 0, cols: 0, rows: 0, w: 0, h: 0, dpr: 1, cw: 9, gap: 7, files: [], byCol: [], t0: 0, raf: 0, done: false, hover: -1, focus: -1, key: '' };
+const PITCH = 4.5, SH = 2, INTRO = 900, SCAN = 2700, LINES = 49360;
+const FDIRS = [['src/core', 'ts'], ['src/render', 'ts'], ['src/lens', 'ts'], ['src/ui', 'tsx'], ['crates/lumen-core/src', 'rs'], ['crates/lumen-cli/src', 'rs'], ['tests', 'ts'], ['scripts', 'sh']];
+const FNAMES = ['exposure', 'timeline', 'grain', 'histogram', 'palette', 'shutter', 'decode', 'export', 'session', 'layers', 'mask', 'tone', 'curve', 'bloom', 'viewport', 'cache', 'thumb', 'queue', 'worker', 'config', 'plugin', 'metadata', 'lut', 'raw', 'sharpen', 'crop', 'white_balance', 'preview', 'keymap', 'undo'];
+function rng(seed) { return () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const inOut = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+/** 按画布大小摆出所有的线；同一个种子，换尺寸也是同一个仓库的样子 */
+function fieldBuild() {
+  // 挑一个种子，让各色线的比例贴近 lumen 真实的占比
+  const want = FT.map((k) => (DATA.share.zh.find((r) => r.key === k)?.pct || 0) / 100);
+  let best = null;
+  for (let seed = 1; seed <= 40; seed++) {
+    fieldLay(seed);
+    const n = [0, 0, 0, 0, 0, 0]; for (let i = 0; i < F.n; i++) n[F.t[i]]++;
+    const err = n.reduce((e, v, k) => e + Math.abs(v / F.n - want[k]), 0);
+    if (!best || err < best.err) best = { err, seed };
+    if (err < 0.03) break;
+  }
+  fieldLay(best.seed);
 }
-function fitStage() {}
-function heroMark() {
-  const st = hero.list[hero.i]; if (!st) return;
-  [...$('sdots').children].forEach((b, j) => { b.classList.toggle('on', j === hero.i); b.style.setProperty('--p', 0); });
-  const note = lang() === 'en' ? st.noteEn || '' : st.note || '';
-  $('sn').textContent = sname(st); $('snote').textContent = note;
-}
-function heroGo(j, first) {
-  if (hero.busy && !first) return;
-  j = (j + hero.list.length) % hero.list.length;
-  const st = hero.list[j]; hero.i = j; hero.t = 0;
-  const img = new Image(); img.alt = `lumen · ${sname(st)}`; img.src = heroSrc(st.id);
-  const pane = document.createElement('div'); pane.className = 'pane'; pane.append(img);
-  const nxt = new Image(); nxt.src = heroSrc(hero.list[(j + 1) % hero.list.length].id); // 先载下一张
-  const box = $('frame'), old = [...box.querySelectorAll('.pane')], edge = box.querySelector('.edge');
-  hero.busy = true;
-  const run = () => {
-    box.append(pane);
-    heroMark();
-    if (!RM) rise([$('sn'), $('snote')], { y: 60, step: 60, dur: 700 });
-    // 背后的光晕
-    const amb = $('amb'), a = new Image(); a.src = img.src; a.alt = ''; amb.append(a);
-    requestAnimationFrame(() => requestAnimationFrame(() => a.classList.add('on')));
-    [...amb.children].slice(0, -1).forEach((x) => { x.classList.remove('on'); setTimeout(() => x.remove(), 1700); });
-    if (RM || !old.length) {
-      if (!RM && first) pane.animate([{ opacity: 0, transform: 'scale(1.02)' }, { opacity: 1, transform: 'none' }], { duration: 1100, delay: 250, easing: EASE, fill: 'backwards' });
-      old.forEach((o) => o.remove()); hero.busy = false; return;
+function fieldLay(seed) {
+  const cv = $('fcv'), box = cv.parentElement;
+  const w = box.clientWidth, h = box.clientHeight, mob = innerWidth < 900;
+  F.dpr = Math.min(2, devicePixelRatio || 1); F.w = w; F.h = h;
+  cv.width = Math.round(w * F.dpr); cv.height = Math.round(h * F.dpr);
+  F.cw = mob ? 40 : 56; F.gap = mob ? 14 : 22;
+  F.cols = Math.max(1, Math.floor((w + F.gap) / (F.cw + F.gap))); F.rows = Math.floor(h / PITCH);
+  const R = rng(seed), wt = FT.map((k) => DATA.share.zh.find((r) => r.key === k)?.pct || 0), tot = wt.reduce((a, b) => a + b, 0);
+  const pick = () => { let v = R() * tot; for (let k = 0; k < wt.length; k++) { v -= wt[k]; if (v <= 0) return k; } return 0; };
+  const X = [], Y = [], Wd = [], T = [];
+  F.files = []; F.byCol = [];
+  for (let c = 0; c < F.cols; c++) {
+    const list = []; F.byCol.push(list);
+    let y = Math.floor(R() * 5);
+    while (y < F.rows - 6) {
+      const n = Math.min(F.rows - y, Math.max(10, Math.round(Math.exp(2.8 + R() * 1.6))));
+      const dir = FDIRS[Math.floor(R() * FDIRS.length)], f = { name: `${dir[0]}/${FNAMES[Math.floor(R() * FNAMES.length)]}.${dir[1]}`, r0: y, r1: y + n, i0: X.length, counts: [0, 0, 0, 0, 0, 0] };
+      const dom = pick(); let tool = dom, block = 0, ind = 0;
+      for (let i = 0; i < n; i++) {
+        if (block <= 0) { block = 6 + Math.floor(R() * 40); tool = R() < 0.8 ? dom : pick(); }
+        block--;
+        if (i > 0 && R() < 0.13) continue; // 空行
+        ind = i === 0 ? 0 : Math.max(0, Math.min(4, ind + (R() < 0.22 ? 1 : R() < 0.25 ? -1 : 0)));
+        const step = F.cw / 11, avail = F.cw - ind * step;
+        X.push(c * (F.cw + F.gap) + ind * step); Y.push((y + i) * PITCH); Wd.push(Math.max(3, avail * (0.25 + R() * 0.75))); T.push(tool);
+        f.counts[tool]++;
+      }
+      f.i1 = X.length;
+      list.push(F.files.length); F.files.push(f);
+      y += n + 2;
     }
-    // 只动 transform：外框从左往右推开，里面的图反向抵消，看起来就是一道擦除
-    const opts = { duration: WIPE, easing: 'cubic-bezier(.65,0,.35,1)' };
-    pane.animate([{ transform: 'translateX(-100%)' }, { transform: 'none' }], opts);
-    img.animate([{ transform: 'translateX(100%)' }, { transform: 'none' }], opts);
-    edge.animate([{ left: '0%', opacity: 0 }, { opacity: 1, offset: 0.08 }, { opacity: 1, offset: 0.9 }, { left: '100%', opacity: 0 }], opts);
-    setTimeout(() => { old.forEach((o) => o.remove()); hero.busy = false; }, WIPE + 20);
-  };
-  img.decode ? img.decode().then(run, run) : (img.onload = run);
+  }
+  F.n = X.length; F.x = Float32Array.from(X); F.y = Float32Array.from(Y); F.wd = Float32Array.from(Wd); F.t = Uint8Array.from(T);
 }
-tickers.add((dt) => {
-  if (RM || hero.busy || hero.hover || hero.i < 0 || scrollY > innerHeight || document.hidden) return;
-  hero.t += dt;
-  $('sdots').children[hero.i]?.style.setProperty('--p', Math.min(100, (hero.t / HOLD) * 100).toFixed(1));
-  if (hero.t >= HOLD) heroGo(hero.i + 1);
+function fieldDraw(now) {
+  const ctx = $('fcv').getContext('2d'), cs = getComputedStyle($('screen'));
+  const ink = cs.getPropertyValue('--hero-ink').trim(), soft = cs.getPropertyValue('--hero-soft').trim();
+  const t = F.done ? 1e9 : now - F.t0;
+  const reveal = clamp01(t / INTRO), scan = clamp01((t - INTRO) / SCAN), bx = inOut(scan) * (F.w + 80) - 40;
+  ctx.setTransform(F.dpr, 0, 0, F.dpr, 0, 0); ctx.clearRect(0, 0, F.w, F.h);
+  const shown = (i) => F.y[i] <= (reveal * 1.3 - (F.x[i] / F.w) * 0.3) * F.h; // 从上往下“写”出来，左边先
+  const colorOf = (k) => (k === 5 ? soft : AGC[FT[k]]);
+  // 还没扫到的：一片淡灰
+  ctx.globalAlpha = 0.16; ctx.fillStyle = ink; ctx.beginPath();
+  for (let i = 0; i < F.n; i++) if (F.x[i] >= bx && shown(i)) ctx.rect(F.x[i], F.y[i], F.wd[i], SH);
+  ctx.fill();
+  // 扫过的：按工具上色；有悬停时别的淡下去
+  for (let k = 0; k < FT.length; k++) {
+    ctx.globalAlpha = F.focus >= 0 ? (F.focus === k ? 1 : 0.08) : F.hover >= 0 ? 0.28 : k === 5 ? 0.6 : 1;
+    ctx.fillStyle = colorOf(k); ctx.beginPath();
+    for (let i = 0; i < F.n; i++) if (F.t[i] === k && F.x[i] < bx && shown(i)) ctx.rect(F.x[i], F.y[i], F.wd[i], SH);
+    ctx.fill();
+  }
+  if (F.hover >= 0) {
+    const f = F.files[F.hover]; ctx.globalAlpha = 1;
+    for (let i = f.i0; i < f.i1; i++) { ctx.fillStyle = colorOf(F.t[i]); ctx.fillRect(F.x[i], F.y[i], F.wd[i], SH); }
+  }
+  // 扫描的光
+  if (scan > 0 && scan < 1) {
+    const g = ctx.createLinearGradient(bx - 90, 0, bx + 2, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, ink);
+    ctx.globalAlpha = 0.1; ctx.fillStyle = g; ctx.fillRect(bx - 90, 0, 92, F.h);
+    ctx.globalAlpha = 0.85; ctx.fillStyle = ink; ctx.fillRect(bx, 0, 1, F.h);
+  }
+  ctx.globalAlpha = 1;
+  fieldNums(scan);
+}
+function fieldNums(scan) {
+  const en = EN_(), k = inOut(scan);
+  $('fcount').textContent = `${en ? 'matched' : '已对上'} ${Math.round(k * LINES).toLocaleString('en-US')} / ${LINES.toLocaleString('en-US')} ${en ? 'lines' : '行'}`;
+  document.querySelectorAll('#flegend em').forEach((e) => (e.textContent = `${(+e.dataset.p * k).toFixed(1)}%`));
+}
+function fieldLoop(now) {
+  fieldDraw(now);
+  if (now - F.t0 >= INTRO + SCAN) { F.done = true; fieldDraw(now); return; }
+  F.raf = requestAnimationFrame(fieldLoop);
+}
+/** 文字（换语言）+ 尺寸（换窗口）+ 第一次进来时开演 */
+function field() {
+  const en = EN_();
+  $('fproj').textContent = en ? 'lumen · 612 commits · 5 AI tools · 112 days' : 'lumen · 612 次提交 · 5 个 AI 工具 · 112 天';
+  $('flegend').innerHTML = FT.map((k, j) => {
+    const r = shareRows().find((x) => x.key === k); if (!r) return '';
+    const t = DATA.tools.find((x) => x.name === r.name);
+    return `<span data-j="${j}" style="color:${k === 'unattributed' ? 'var(--hero-soft)' : AGC[k]}">${t ? t.svg : '<i></i>'}<b style="font-weight:400;color:var(--hero-soft)">${r.name}</b><em data-p="${r.pct}"></em></span>`;
+  }).join('');
+  const key = `${$('fcv').parentElement.clientWidth}x${$('fcv').parentElement.clientHeight}`;
+  if (key !== F.key) { F.key = key; fieldBuild(); F.hover = -1; }
+  if (!F.t0) { F.t0 = performance.now() + (RM ? -1e9 : 500); if (RM) F.done = true; }
+  cancelAnimationFrame(F.raf);
+  if (F.done) fieldDraw(performance.now()); else F.raf = requestAnimationFrame(fieldLoop);
+}
+// 悬停：一段 = 一个文件
+const ftip = $('ftip');
+$('fcv').addEventListener('pointermove', (e) => {
+  if (!F.done || !FINE) return;
+  const r = e.currentTarget.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  const c = Math.floor(x / (F.cw + F.gap)), row = Math.floor(y / PITCH);
+  const fi = (F.byCol[c] || []).find((j) => F.files[j].r0 <= row && row < F.files[j].r1) ?? -1;
+  if (fi !== F.hover) { F.hover = fi; fieldDraw(0); }
+  if (fi < 0) { ftip.hidden = true; return; }
+  const f = F.files[fi], sum = f.counts.reduce((a, b) => a + b, 0), en = EN_();
+  const lines = Math.round(((f.r1 - f.r0) * LINES) / (F.rows * F.cols * 0.82));
+  const top = f.counts.map((n, k) => [k, n]).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  ftip.innerHTML = `<b>${f.name}</b>${top.map(([k, n]) => { const row2 = shareRows().find((z) => z.key === FT[k]); return `<span><i style="background:${k === 5 ? 'var(--hero-soft)' : AGC[FT[k]]}"></i>${row2 ? row2.name : ''}<em>${Math.round((n / sum) * 100)}%</em></span>`; }).join('')}<span>${lines.toLocaleString('en-US')} ${en ? 'lines' : '行'}</span>`;
+  ftip.hidden = false;
+  const tw = ftip.offsetWidth, th = ftip.offsetHeight;
+  ftip.style.left = `${Math.min(x + 16, r.width * 0.78 - tw)}px`; ftip.style.top = `${Math.min(Math.max(0, y - th / 2), r.height - th)}px`;
 });
-$('sdots').onclick = (e) => { const b = e.target.closest('button'); if (b && +b.dataset.j !== hero.i) heroGo(+b.dataset.j); };
-// 鼠标在图上：停住，图微微朝鼠标转；点图放大看
-const stageEl = $('stage'), frameEl = $('frame');
-frameEl.onpointerenter = () => FINE && (hero.hover = true);
-frameEl.onpointerleave = () => { hero.hover = false; frameEl.style.setProperty('--tx', '0deg'); frameEl.style.setProperty('--ty', '0deg'); };
-frameEl.onpointermove = (e) => {
-  if (!FINE) return;
-  const r = frameEl.getBoundingClientRect();
-  frameEl.style.setProperty('--ty', `${((e.clientX - r.left) / r.width - 0.5) * 6}deg`);
-  frameEl.style.setProperty('--tx', `${(0.5 - (e.clientY - r.top) / r.height) * 5}deg`);
-};
+$('fcv').addEventListener('pointerleave', () => { ftip.hidden = true; if (F.hover >= 0) { F.hover = -1; F.done && fieldDraw(0); } });
+// 图例：只亮这个工具写的行
+const legendFocus = (j) => { F.focus = j; $('flegend').classList.toggle('focus', j >= 0); $('flegend').querySelectorAll('span').forEach((x) => x.classList.toggle('on', +x.dataset.j === j)); if (F.done) fieldDraw(0); };
+$('flegend').addEventListener('pointerover', (e) => { const s2 = e.target.closest('span[data-j]'); if (s2 && F.done) legendFocus(+s2.dataset.j); });
+$('flegend').addEventListener('pointerleave', () => legendFocus(-1));
+// 换主题：颜色重读一遍
+new MutationObserver(() => F.done && fieldDraw(0)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => F.done && fieldDraw(0));
 // 往下滚：标题慢慢退开
 const screenEl = $('screen');
 const parallax = () => {
@@ -737,7 +789,7 @@ function intro() {
   rise([document.querySelector('.title p'), document.querySelector('.acts')], { y: 30, delay: after, step: 120, dur: 1000 });
   document.querySelectorAll('#agents span').forEach((s, k) => s.animate(
     [{ transform: 'scale(.4)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 700, delay: after + 260 + k * 35, easing: SPRING, fill: 'backwards' }));
-  $('stage').animate([{ opacity: 0, transform: 'translateY(30px)' }, { opacity: 1, transform: 'none' }], { duration: 1300, delay: 300, easing: EASE, fill: 'backwards' });
+  rise([document.querySelector('.fcap'), $('flegend')], { y: 14, delay: 500, step: 200, dur: 900 });
 }
 
 // ───────── 风格墙 ─────────
@@ -1114,74 +1166,79 @@ const pct = (v) => `${v.toFixed(1)}%`;
 const FLOW = () => (EN_()
   ? { s: ['On your machine', 'On GitHub, every push', 'What you get'], pub: 'wrote credits.json\nonly line counts, tools, models and times — no code, prompts, emails or local paths', steps: [['Checkout', '1s'], ['creditia · badge, CREDITS.md, credits page', '9s'], ['Deploy to GitHub Pages', '14s']], run: 'credits', rb: 'README.md', new: 'updated' }
   : { s: ['在你的电脑上', 'GitHub 上，每次推送', '你得到'], pub: '已写入 credits.json\n只含行数、工具、模型、时间；不含代码、prompt、邮箱、本机路径', steps: [['Checkout', '1s'], ['creditia · 徽章、CREDITS.md、署名页', '9s'], ['发布到 GitHub Pages', '14s']], run: 'credits', rb: 'README.md', new: '已更新' });
-const YML = `<span class="k"># .github/workflows/credits.yml</span>
-on: { push: { branches: [main] } }
+const YML = `on: push
 jobs:
   credits:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 <span class="hl">      - uses: WroughtMind/creditia@main
-        with:
-          badge: credits.svg
-          doc: CREDITS.md
-          site: _site
-          style: ink</span>
+        with: { badge: credits.svg, doc: CREDITS.md, site: _site }</span>
       - uses: actions/upload-pages-artifact@v3
       - uses: actions/deploy-pages@v4`;
+const pubOut = (x) => `<span class="o">${esc(x.pub)}</span>`;
+const termAll = (x) => `<span class="p">$</span> npx creditia publish\n${pubOut(x)}\n<span class="p">$</span> git add credits.json && git commit -m credits\n<span class="p">$</span> git push\n<span class="ok">→ github.com/you/lumen  main</span>`;
 function flowFrame() {
   const x = FLOW(), L = lang();
   const rows = shareRows().filter((r) => r.key !== 'unattributed').slice(0, 3);
-  $('flow').innerHTML = `
-  <div class="st3" data-n="0"><div class="lb"><b>1</b>${x.s[0]}</div><div class="mt" id="fterm"></div></div>
-  <div class="pipe"><i></i></div>
-  <div class="st3" data-n="1"><div class="lb"><b>2</b>${x.s[1]}</div>
-    <div class="yml"><div class="fn">.github/workflows/credits.yml</div><pre>${YML.split('\n').slice(1).join('\n')}</pre></div>
-    <div class="run"><div class="rh"><i class="ico"></i><b>${x.run}</b><span>#12 · push</span></div>${x.steps.map(([n, d]) => `<div class="s"><i class="ico"></i>${n}<small>${d}</small></div>`).join('')}</div></div>
-  <div class="pipe"><i></i></div>
-  <div class="st3" data-n="2"><div class="lb"><b>3</b>${x.s[2]}</div><div class="res-col">
-    <div class="res"><div class="fn">README.md<em>${x.new}</em></div><div class="bd"><h5>lumen</h5><img class="cb" src="assets/usage/${L}-ink-badge.svg" alt="credits badge" width="${DATA.usage.ink.w}" height="${DATA.usage.ink.h}" style="width:${Math.round((20 * DATA.usage.ink.w) / DATA.usage.ink.h)}px"></div></div>
-    <div class="res"><div class="fn">CREDITS.md<em>${x.new}</em></div><div class="bd"><table>${rows.map((r) => `<tr><td>${r.name}</td><td>${r.model}</td><td class="n">${pct(r.pct)}</td></tr>`).join('')}</table></div></div>
-    <div class="res site"><div class="url"><i></i><i></i><i></i><span>you.github.io/lumen</span></div><img src="assets/usage/${L}-ink-share.png" alt="credits page" loading="lazy"><div class="fn" style="border:0;border-top:1px solid var(--line)">${EN_() ? 'credits page' : '署名页'}<em>${x.new}</em></div></div>
-  </div></div>`;
+  $('flow').innerHTML = `<ol class="fst">${x.s.map((t, k) => `${k ? '<i></i>' : ''}<li data-n="${k}"><b>${k + 1}</b><span>${t}</span></li>`).join('')}</ol>
+  <div class="fstage">
+    <div class="fpane" data-n="0"><div class="mt" id="fterm"></div></div>
+    <div class="fpane" data-n="1">
+      <div class="yml"><div class="fn">.github/workflows/credits.yml</div><pre>${YML}</pre></div>
+      <div class="run"><div class="rh"><i class="ico"></i><b>${x.run}</b><span>#12 · push</span></div>${x.steps.map(([n, d]) => `<div class="s"><i class="ico"></i>${n}<small>${d}</small></div>`).join('')}</div>
+    </div>
+    <div class="fpane" data-n="2">
+      <div class="res"><div class="fn">README.md<em>${x.new}</em></div><div class="bd"><h5>lumen</h5><img class="cb" src="assets/usage/${L}-ink-badge.svg" alt="credits badge" width="${DATA.usage.ink.w}" height="${DATA.usage.ink.h}" style="width:${Math.round((20 * DATA.usage.ink.w) / DATA.usage.ink.h)}px"></div></div>
+      <div class="fgrid">
+        <div class="res"><div class="fn">CREDITS.md<em>${x.new}</em></div><div class="bd"><table>${rows.map((r) => `<tr><td>${r.name}</td><td class="m">${r.model}</td><td class="n">${pct(r.pct)}</td></tr>`).join('')}</table></div></div>
+        <div class="res site"><div class="url"><i></i><i></i><i></i><span>you.github.io/lumen</span></div><img src="assets/usage/${L}-ink-share.png" alt="credits page" loading="lazy"><div class="fn" style="border:0;border-top:1px solid var(--line)">${EN_() ? 'credits page' : '署名页'}<em>${x.new}</em></div></div>
+      </div>
+    </div>
+  </div>`;
+  flowShow(0);
 }
+/** 显示第 n 步：之前的步骤打勾，连线变绿 */
+function flowShow(n) {
+  const f = $('flow');
+  f.querySelectorAll('.fpane').forEach((p) => p.classList.toggle('on', +p.dataset.n === n));
+  f.querySelectorAll('.fst li').forEach((l) => { const k = +l.dataset.n; l.classList.toggle('on', k === n); l.classList.toggle('done', k < n); });
+  f.querySelectorAll('.fst i').forEach((c, k) => c.classList.toggle('done', k < n));
+}
+function flowFinish() {
+  const f = $('flow');
+  $('fterm').innerHTML = termAll(FLOW());
+  f.querySelectorAll('.run .s').forEach((s) => s.classList.add('ok')); f.querySelector('.run .rh').classList.add('ok');
+  f.querySelectorAll('.res').forEach((r) => r.classList.add('new')); f.querySelector('.hl').classList.add('off');
+}
+// 演完（或者中途）点上面的步骤，直接看那一步
+$('flow').addEventListener('click', (e) => { const li = e.target.closest('.fst li'); if (!li) return; runs.flow = (runs.flow || 0) + 1; played.add('flow'); flowFinish(); flowShow(+li.dataset.n); done('flow'); });
 async function playFlow(fast) {
   const g = (runs.flow = (runs.flow || 0) + 1), live = () => runs.flow === g, x = FLOW();
   flowFrame();
-  const st = [...$('flow').querySelectorAll('.st3')], pipes = [...$('flow').querySelectorAll('.pipe i')], term = $('fterm');
-  const res = [...$('flow').querySelectorAll('.res')], steps = [...$('flow').querySelectorAll('.run .s')], rh = $('flow').querySelector('.run .rh');
-  const finish = () => { st.forEach((s) => s.classList.add('done')); steps.forEach((s) => s.classList.add('ok')); rh.classList.add('ok'); res.forEach((r) => r.classList.add('new')); $('flow').querySelector('.hl').classList.add('off'); };
-  const pubOut = `<span class="o">${esc(x.pub)}</span>`;
-  const termAll = `<span class="p">$</span> npx creditia publish\n${pubOut}\n<span class="p">$</span> git add credits.json && git commit -m credits\n<span class="p">$</span> git push\n<span class="ok">→ github.com/you/lumen  main</span>`;
-  if (fast || RM) { term.innerHTML = termAll; finish(); return done('flow'); }
-  const travel = (i) => pipes[i].animate([{ opacity: 0, left: '6px' }, { opacity: 1, offset: 0.15 }, { opacity: 1, offset: 0.85 }, { opacity: 0, left: 'calc(100% - 14px)' }], { duration: 800, easing: 'cubic-bezier(.5,0,.3,1)' }).finished;
+  const f = $('flow'), term = $('fterm'), res = [...f.querySelectorAll('.res')], steps = [...f.querySelectorAll('.run .s')], rh = f.querySelector('.run .rh');
+  if (fast || RM) { flowFinish(); flowShow(2); return done('flow'); }
   const typeIn = async (cmd) => { const sp = document.createElement('span'); term.append(Object.assign(document.createElement('span'), { className: 'p', textContent: '$ ' }), sp); for (let n = 1; n <= cmd.length; n += 2) { if (!live()) return; sp.textContent = cmd.slice(0, n); await sleep(22); } sp.textContent = cmd; term.append('\n'); await sleep(250); };
-  st[0].classList.add('on'); term.innerHTML = '';
+  term.innerHTML = '';
   await sleep(400);
   await typeIn('npx creditia publish'); if (!live()) return;
-  term.insertAdjacentHTML('beforeend', pubOut + '\n'); await sleep(900); if (!live()) return;
+  term.insertAdjacentHTML('beforeend', pubOut(x) + '\n'); await sleep(900); if (!live()) return;
   await typeIn('git add credits.json && git commit -m credits'); await typeIn('git push'); if (!live()) return;
   term.insertAdjacentHTML('beforeend', '<span class="ok">→ github.com/you/lumen  main</span>');
-  await sleep(300);
-  st[0].classList.replace('on', 'done');
-  await travel(0); if (!live()) return;
-  st[1].classList.add('on');
+  await sleep(1200); if (!live()) return;
+  flowShow(1); await sleep(700); if (!live()) return;
   rh.classList.add('go');
   for (const s of steps) { s.classList.add('go'); await sleep(s === steps[1] ? 1500 : 700); if (!live()) return; s.classList.replace('go', 'ok'); }
   rh.classList.replace('go', 'ok');
-  $('flow').querySelector('.hl').classList.add('off');
-  st[1].classList.replace('on', 'done');
-  await travel(1); if (!live()) return;
-  st[2].classList.add('on');
-  for (const r of res) { r.classList.add('new'); r.animate([{ boxShadow: '0 0 0 3px rgba(79,163,127,.45)' }, { boxShadow: '0 0 0 0 rgba(79,163,127,0)' }], { duration: 1200, easing: 'ease-out' }); await sleep(450); if (!live()) return; }
-  st[2].classList.replace('on', 'done');
+  f.querySelector('.hl').classList.add('off');
+  await sleep(1000); if (!live()) return;
+  flowShow(2); await sleep(500);
+  for (const r of res) { if (!live()) return; r.classList.add('new'); r.animate([{ boxShadow: '0 0 0 3px rgba(79,163,127,.45)' }, { boxShadow: '0 0 0 0 rgba(79,163,127,0)' }], { duration: 1200, easing: 'ease-out' }); await sleep(450); }
   done('flow');
 }
 
 /** App：一块桌面。终端里先 analyze，再从 Dock 打开真的 App（apps/desktop 打包成的网页），换风格、换版式、拖去导出，文件落到桌面上 */
-const DSTEPS = () => (EN_()
-  ? [['Analyze', 'In the project, run creditia analyze: it lines up your agents’ logs with git history.'], ['Open the app', 'Open creditia. Every analyzed project is there, and its pieces fill the wall.'], ['Pick a style', 'The dots at the bottom left are the 26 styles. One click restyles the whole wall.'], ['Change a layout', 'Hover a piece and step through its layouts.'], ['Drag to export', 'Drag a piece onto the export dock at the bottom right and pick a format.'], ['Get the file', 'The file lands on your desktop. Double-click to preview.'], ['', 'Your turn: click, hover and drag in the app above.']]
-  : [['分析', '在项目目录里运行 creditia analyze：把 agent 日志和 git 历史逐行对上。'], ['打开 App', '打开 creditia，分析过的项目都在，作品直接摆满一墙。'], ['换风格', '左下角的圆点是 26 种风格，点一下整墙换样子。'], ['换版式', '悬停一件作品，左右切换它的版式。'], ['拖去导出', '把作品拖到右下角的导出坞，选一种格式。'], ['拿到文件', '文件落在桌面上，双击预览。'], ['', '轮到你了：直接在上面的 App 里点、悬停、拖。']]);
+const DSTEPS = () => (EN_() ? ['Analyze', 'Open the app', 'Pick a style', 'Change a layout', 'Drag to export', 'Get the file', 'Your turn: click, hover, drag'] : ['分析', '打开 App', '换风格', '换版式', '拖去导出', '拿到文件', '轮到你了：点、悬停、拖']);
 const WP = (dark) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 800' preserveAspectRatio='xMidYMid slice'><defs><linearGradient id='s' x1='0' y1='0' x2='0' y2='1'>${dark ? "<stop offset='0' stop-color='#0B1026'/><stop offset='.55' stop-color='#2A1F4E'/><stop offset='1' stop-color='#5A2E55'/>" : "<stop offset='0' stop-color='#F7E3CC'/><stop offset='.5' stop-color='#F3BE98'/><stop offset='1' stop-color='#E39282'/>"}</linearGradient><radialGradient id='g' cx='.68' cy='.42' r='.4'><stop offset='0' stop-color='${dark ? '#B25E84' : '#FFF4DF'}' stop-opacity='.7'/><stop offset='1' stop-color='${dark ? '#B25E84' : '#FFF4DF'}' stop-opacity='0'/></radialGradient></defs><rect width='1280' height='800' fill='url(#s)'/><rect width='1280' height='800' fill='url(#g)'/>${(dark ? ['#3A2D66', '#2B2556', '#1E1C44', '#131430'] : ['#D88A93', '#B4709A', '#7E5F99', '#4B4D86']).map((c, i) => `<path d='M0 ${440 + i * 85} C 220 ${380 + i * 85} 380 ${520 + i * 80} 640 ${460 + i * 85} S 1060 ${390 + i * 90} 1280 ${450 + i * 80} V800 H0Z' fill='${c}'/>`).join('')}</svg>`)}")`;
 const FOLDER = '<svg viewBox="0 0 64 56"><path d="M4 10a5 5 0 0 1 5-5h15l5 6h26a5 5 0 0 1 5 5v31a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#3E8FE4"/><path d="M4 19a5 5 0 0 1 5-5h46a5 5 0 0 1 5 5v28a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#6CB3F7"/></svg>';
 const TERM_IC = '<svg viewBox="0 0 54 54"><rect x="2" y="2" width="50" height="50" rx="12" fill="#2B2B2E"/><rect x="2.5" y="2.5" width="49" height="49" rx="11.5" fill="none" stroke="#5A5A5E"/><path d="M13 19l7 6-7 6" stroke="#E8E8E8" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 33h12" stroke="#E8E8E8" stroke-width="3" stroke-linecap="round"/></svg>';
@@ -1189,7 +1246,7 @@ const TRASH_IC = '<svg viewBox="0 0 54 54"><path d="M12 12h30l-3 36a3 3 0 0 1-3 
 const DOC_IC = (ext) => `<svg viewBox="0 0 48 56"><path d="M6 2h26l12 12v38a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#fff" stroke="#c9c9c9"/><path d="M32 2v12h12" fill="#eee" stroke="#c9c9c9"/><text x="24" y="44" font-size="9" font-family="Helvetica,Arial" font-weight="700" text-anchor="middle" fill="#8a8a8a">${ext.toUpperCase()}</text></svg>`;
 const CURSOR = '<svg viewBox="0 0 20 20"><path d="M4 2.5v13.2l3.3-3.1 2.2 5.1 2.2-.95-2.15-5h4.6z" fill="#111" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 const D = { run: 0, started: false, cur: { x: 900, y: 600 }, files: [] };
-function deskScale() { const b = $('deskbox'); $('desk').style.setProperty('--ds', (b.clientWidth / 1280).toFixed(4)); }
+function deskScale() { const b = $('deskbox'); $('desk').style.setProperty('--ds', (b.clientWidth / 1040).toFixed(4)); }
 function deskFrame() {
   const en = EN_(), dark = isDark();
   const apple = DATA.icons.apple ? `<svg viewBox="0 0 24 24"><path d="${DATA.icons.apple}"/></svg>` : '';
@@ -1208,8 +1265,9 @@ function deskFrame() {
 function tickClock() { const el = $('dclock'); if (el) el.textContent = new Date().toLocaleString(EN_() ? 'en-US' : 'zh-CN', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
 setInterval(tickClock, 30000);
 function dsteps(i) {
-  const s = DSTEPS();
-  $('dsteps').innerHTML = `<ol>${s.slice(0, 6).map(([n], k) => `<li class="${k < i ? 'done' : k === i ? 'on' : ''}">${n}</li>`).join('')}</ol><p>${i >= 0 ? s[Math.min(i, 6)][1] : ''}</p>`;
+  const el = $('dsteps'), n = DSTEPS()[Math.min(i, 6)];
+  el.innerHTML = i < 0 ? '' : i >= 6 ? esc(n) : `<b>${i + 1}/6</b>${esc(n)}`;
+  if (!RM && i >= 0) el.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: EASE });
 }
 const front = (id) => { ['tw', 'aw'].forEach((w) => ($(w).style.zIndex = w === id ? 6 : 4)); };
 function winOpen(id, fromDock = true) {
@@ -1261,9 +1319,9 @@ function deskTake() {
 }
 const appDoc = () => { try { return $('appf').contentDocument; } catch (e) { return null; } };
 /** App 里某个元素的中心，换算到桌面坐标 */
-const AK = 0.8; // App 按真实窗口大小（1370×845）渲染，再缩进窗口
+const AK = 0.8; // App 按真实窗口大小（1125×875）渲染，再缩进窗口
 function inApp(el, fx = 0.5, fy = 0.5) { const r = el.getBoundingClientRect(), w = $('aw'); return { x: w.offsetLeft + (r.left + r.width * fx) * AK, y: w.offsetTop + (r.top + r.height * fy) * AK }; }
-function onDesk(el, fx = 0.5, fy = 0.5) { const r = el.getBoundingClientRect(), d = $('desk').getBoundingClientRect(), k = d.width / 1280; return { x: (r.left - d.left + r.width * fx) / k, y: (r.top - d.top + r.height * fy) / k }; }
+function onDesk(el, fx = 0.5, fy = 0.5) { const r = el.getBoundingClientRect(), d = $('desk').getBoundingClientRect(), k = d.width / 1040; return { x: (r.left - d.left + r.width * fx) / k, y: (r.top - d.top + r.height * fy) / k }; }
 async function curTo(p, ms) {
   const c = $('dcur'), f = D.cur; D.cur = p;
   ms ??= Math.min(1100, 300 + Math.hypot(p.x - f.x, p.y - f.y) * 0.9);
@@ -1328,19 +1386,20 @@ async function playDesk() {
   dsteps(4);
   const share = doc.querySelector('#board .tile .art');
   if (share) {
+    // 每一帧同时挪 App 里的指针事件和桌面上的光标，目标每帧重新量（导出坞在拖动开始时会挪到中间）
     const w = $('appf').contentWindow, r0 = share.getBoundingClientRect();
     const p0 = { x: r0.left + r0.width * 0.5, y: r0.top + r0.height * 0.4 };
     await curTo(inApp(share, 0.5, 0.4)); if (!live()) return;
     const ev = (t, p, target = w) => target.dispatchEvent(new w.PointerEvent(t, { bubbles: true, clientX: p.x, clientY: p.y, button: 0, buttons: 1, pointerId: 1, isPrimary: true }));
+    const setCur = (p) => { const c = { x: $('aw').offsetLeft + p.x * AK, y: $('aw').offsetTop + p.y * AK }; D.cur = c; $('dcur').style.transform = `translate(${c.x}px,${c.y}px)`; };
+    const tgt = () => { const r = doc.querySelector('#targets button[data-f="png"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * 0.4 }; };
+    const glide = (from, to, ms, ease) => new Promise((res) => { const t0 = performance.now(); const f = (now) => { if (!live()) return res(); const k = Math.min(1, (now - t0) / ms), e = ease(k), b = to(); const p = { x: from.x + (b.x - from.x) * e, y: from.y + (b.y - from.y) * e }; ev('pointermove', p); setCur(p); if (k < 1) requestAnimationFrame(f); else res(p); }; requestAnimationFrame(f); });
+    $('dcur').getAnimations().forEach((a) => a.cancel()); setCur(p0);
     ev('pointerdown', p0, share);
-    for (let k = 1; k <= 4; k++) { const p = { x: p0.x + k * 6, y: p0.y + k * 4 }; ev('pointermove', p); await curTo({ x: $('aw').offsetLeft + p.x * AK, y: $('aw').offsetTop + p.y * AK }, 40); }
-    await sleep(350);
-    const tgt = doc.querySelector('#targets button[data-f="png"]');
-    const r1 = tgt.getBoundingClientRect(), p1 = { x: r1.left + r1.width / 2, y: r1.top + r1.height / 2 };
-    const t0 = performance.now(), from = { x: p0.x + 24, y: p0.y + 16 };
-    while (live()) { const k = Math.min(1, (performance.now() - t0) / 1100), e2 = 1 - Math.pow(1 - k, 3); const p = { x: from.x + (p1.x - from.x) * e2, y: from.y + (p1.y - from.y) * e2 }; ev('pointermove', p); const c2 = { x: $('aw').offsetLeft + p.x * AK, y: $('aw').offsetTop + p.y * AK }; D.cur = c2; $('dcur').getAnimations().forEach((a) => a.cancel()); $('dcur').style.transform = `translate(${c2.x}px,${c2.y}px)`; if (k >= 1) break; await sleep(16); }
-    if (!live()) { ev('pointerup', p1); return; }
-    await sleep(450); ev('pointerup', p1);
+    const lift = await glide(p0, () => ({ x: p0.x + 40, y: p0.y + 30 }), 380, (k) => 1 - Math.pow(1 - k, 2)); if (!live()) { ev('pointerup', p0); return; }
+    await sleep(320);
+    const end = await glide(lift, tgt, 1300, (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2)); if (!live()) { ev('pointerup', end || p0); return; }
+    await sleep(500); ev('pointerup', end);
   }
   // 6 拿到文件
   dsteps(5);
@@ -1491,7 +1550,7 @@ function applyLang() {
   document.querySelectorAll('[data-i]').forEach((el) => (el.innerHTML = t(el.dataset.i)));
   $('lang').textContent = lang() === 'en' ? '中' : 'EN';
   document.title = lang() === 'en' ? 'creditia — which AI wrote your code' : 'creditia — 你的代码，是哪些 AI 写的';
-  reel(); wall(); lines(); usage(); install();
+  field(); wall(); lines(); usage(); install();
 }
 // 换语言：整页淡入淡出；换主题：从按钮那里一圈扩开
 const transition = (fn, circleFrom) => {
@@ -1522,7 +1581,7 @@ $('theme').onclick = (e) => {
 };
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (!document.documentElement.dataset.theme) onTheme(); });
 $('copy').dataset.copy = 'npx creditia analyze';
-let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { reel(); const k = W.k; if ((innerWidth < 640 ? 0.58 : innerWidth < 1000 ? 0.78 : 1) !== k) wall(); else measure(); }, 200); });
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { field(); const k = W.k; if ((innerWidth < 640 ? 0.58 : innerWidth < 1000 ? 0.78 : 1) !== k) wall(); else measure(); }, 200); });
 applyLang();
 intro();
 document.querySelectorAll('.rise').forEach((el) => io.observe(el));
