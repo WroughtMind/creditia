@@ -211,6 +211,17 @@ for (const lang of LANGS) {
   for (const v of ['flat', 'stack']) { const a = art('badge', vm, styleById('ukiyoe')!, { variant: v })!; write(`usage/${lang}-badge-${v}.svg`, exporter.svg(a)); meta.usage[v] = { w: a.w, h: a.h }; }
   if (own) meta.selfBadge = await draw(`usage/${lang}-self-badge`, 'badge', 'minimal-light', lang, { raw: own });
 }
+// creditia 自己的署名（首页「creditia 自己的署名」那一节）：各工具占比、模型、提交数、行数
+if (own) {
+  meta.self = {};
+  for (const lang of LANGS) {
+    const m = modelOf(own, lang, 'v');
+    meta.self[lang] = {
+      rows: m.rows.map((r: any) => ({ key: r.key, name: r.name, pct: r.pct, models: r.models.map((x: any) => x.name).join(' · ') })),
+      commits: m.commits, lines: m.linesAdded, from: m.range.from, to: m.range.to,
+    };
+  }
+}
 console.log('✓ usage');
 
 // 社交预览图
@@ -220,6 +231,18 @@ const tools = ['claude-code', 'codex', 'cursor', 'gemini', 'qwen', 'opencode', '
   const lg = LOGOS[LOGO_OF[k] ?? ''];
   return { name: TOOL_NAMES[k] ?? k, svg: lg ? `<svg viewBox="${lg.vb}" aria-hidden="true"><path d="${lg.d}"${lg.rule ? ` fill-rule="${lg.rule}"` : ''}/></svg>` : '' };
 });
+// 风格墙缩略图另存一份 WebP（同样清晰，体积约十分之一）；本机没有 Pillow 就照旧用 PNG
+const webp = spawnSync('python3', ['-c', `
+import sys, glob
+from PIL import Image
+for f in glob.glob(sys.argv[1] + '/**/*.png', recursive=True):
+    Image.open(f).save(f[:-4] + '.webp', 'WEBP', quality=86, method=6)
+`, path.join(OUT, 'assets/wall')], { stdio: 'inherit' });
+meta.thumbExt = webp.status === 0 ? 'webp' : 'png';
+console.log(`✓ wall thumbs: ${meta.thumbExt}`);
+// 手机上「App」那张卡放截图
+for (const t of ['dark', 'light']) cpSync(path.join(import.meta.dirname, `app-${t}.webp`), path.join(OUT, `assets/app-${t}.webp`));
+
 const logo = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo.svg'), 'utf8').replace(/#0E0E0E/g, 'currentColor').replace('<svg ', '<svg aria-hidden="true" ');
 
 let html = readFileSync(path.join(import.meta.dirname, 'index.html'), 'utf8');
@@ -227,6 +250,16 @@ html = html
   .replace('/*__DATA__*/', `const DATA = ${JSON.stringify({ ...meta, styles, tools, hasSelf: !!own, hasApp, icons: ICONS, version: JSON.parse(readFileSync(path.join(ROOT, 'packages/cli/package.json'), 'utf8')).version })};`)
   .replaceAll('<!--__LOGO__-->', logo);
 writeFileSync(path.join(OUT, 'index.html'), html);
+// 英文版：同一页，默认英文，分享出去的标题、描述、预览图也是英文（和 index.html 在同一目录，相对路径不用改）
+const EN_DESC = 'Matches your AI coding agents’ logs against git history line by line, works out how much each tool and each model wrote, and rolls it as end credits. Open source, runs locally.';
+writeFileSync(path.join(OUT, 'en.html'), html
+  .replace('<html lang="zh"', '<html lang="en" data-lang="en"')
+  .replace(/<title>[^<]*<\/title>/, '<title>creditia — which AI wrote your code</title>')
+  .replace(/(<meta name="description" content=")[^"]*/, `$1${EN_DESC}`)
+  .replace(/(<meta property="og:description" content=")[^"]*/, '$1Which AI wrote your code.')
+  .replace('assets/og-zh.png', 'assets/og-en.png')
+  .replace(/(<meta property="og:url" content=")[^"]*/, '$1https://wroughtmind.github.io/creditia/en.html')
+  .replace(/(<link rel="canonical" href=")[^"]*/, '$1https://wroughtmind.github.io/creditia/en.html'));
 writeFileSync(path.join(OUT, 'assets/favicon.svg'), logo.replace(/currentColor/g, '#111'));
 cpSync(path.join(ROOT, 'packages/render/assets/creditia/logo.svg'), path.join(OUT, 'assets/logo.svg'));
 writeFileSync(path.join(OUT, '.nojekyll'), '');
