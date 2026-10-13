@@ -76,6 +76,7 @@ const ERRORS: Record<string, [string, string]> = {
   no_home: ['找不到用户目录', 'Cannot find your home folder'],
   io: ['读写文件失败', 'Could not read or write the file'],
   store: ['读不到作品库', 'Cannot read the library'],
+  not_allowed: ['只能打开这次导出的文件', 'Only files exported in this session can be shown'],
 };
 function errText(e: any): string {
   const t = e?.code && ERRORS[e.code], d = e?.detail ? String(e.detail) : '';
@@ -647,7 +648,7 @@ async function withProgress<T>(name: string, job: () => Promise<T>): Promise<T> 
 }
 async function reanalyze(p: any) {
   try {
-    await withProgress(p.name, () => api('analyze', { projectId: p.id }));
+    const v: any = await withProgress(p.name, () => api('analyze', { projectId: p.id }));
     state.projects = await api('projects');
     const fresh = state.projects.find((x) => x.id === p.id) ?? p;
     // 正看着这个项目：原地换，不清空墙
@@ -657,7 +658,7 @@ async function reanalyze(p: any) {
       state.current = fresh; stampOf = await st;
       await swapRaw(raw);
     } else await openProject(fresh);
-    toast(L('已更新', 'Updated'));
+    done(L('已更新', 'Updated'), v?.warnings);
   } catch (e) { toast(errText(e), 6000); }
 }
 async function addProject() {
@@ -670,8 +671,24 @@ async function addProject() {
     state.projects = await api('projects');
     const p = state.projects.find((x) => x.id === r?.id);
     if (p) await openProject(p);
-    toast(L(`已添加 ${name}`, `Added ${name}`));
+    done(L(`已添加 ${name}`, `Added ${name}`), r?.result?.warnings);
   } catch (e) { toast(errText(e), 6000); }
+}
+
+/** 分析跑完：核心有提醒（某个数据源读不了之类）就在提示里给个「查看」 */
+function done(msg: string, warnings?: string[]) {
+  if (!warnings?.length) return toast(msg);
+  toast(L(`${msg} · ${warnings.length} 条提醒`, `${msg} · ${warnings.length} ${warnings.length > 1 ? 'notes' : 'note'}`), 10000, { acts: [{ label: L('查看', 'View'), run: () => showWarnings(warnings) }] });
+}
+function showWarnings(list: string[]) {
+  const el = $('#sheet');
+  el.hidden = false;
+  el.innerHTML = `<div class="panel glass">
+    <div class="head"><h2>${L('分析提醒', 'Analysis notes')}</h2>${closeBtn()}</div>
+    <p>${L('分析完成了，但核心报告了下面这些情况：', 'The analysis finished, and the core reported:')}</p>
+    <ul class="warn">${list.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>
+  </div>`;
+  el.onclick = (e) => { if (e.target === el || (e.target as HTMLElement).closest('[data-act="close"]')) closeSheet(); };
 }
 
 function closeSheet() { const el = $('#sheet'); el.hidden = true; el.innerHTML = ''; }
