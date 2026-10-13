@@ -110,9 +110,9 @@ async function paint() {
   const st = state.style;
   const token = ++state.token;
   const board = $('#board');
-  board.innerHTML = '';
-  state.arts.clear();
-  // 一张一张画，画好一张放一张；切了项目或主题就停
+  // 换风格时旧作品先留着，新的一张画好就原地替掉一张，位置滑过去，墙不会先空掉再一张张冒出来
+  const old = [...board.querySelectorAll('.tile')] as HTMLElement[];
+  const keep = new Set<string>();
   for (const [i, b] of tiles().entries()) {
     const k = keyOf(b, i);
     const variant = curVariant(b.id, k, b);
@@ -120,10 +120,11 @@ async function paint() {
     try { a = await drawArt(b.id, variant); } catch (e) { console.error(b.id, e); }
     if (token !== state.token) return;
     if (!a) continue;
-    state.arts.set(k, a);
+    state.arts.set(k, a); keep.add(k);
     const tile = document.createElement('div');
     tile.className = 'tile';
     tile.dataset.k = k;
+    tile.dataset.w = String(a.w); tile.dataset.h = String(a.h);
     tile.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : 1));
     const vs = st.variants(b.id);
     tile.innerHTML = tileHtml(b.id, vs, variant);
@@ -131,9 +132,18 @@ async function paint() {
     artEl.innerHTML = a.svg;
     mountHits(artEl, a.hits, a.w, a.h);
     wireTile(tile, b.id, k, vs, variant ?? '');
-    board.appendChild(tile);
+    const prev = old.shift();
+    if (prev) {
+      // 接着旧的那张的位置和宽度，淡入，再滑到自己的位置
+      tile.style.left = prev.style.left; tile.style.top = prev.style.top; tile.style.width = prev.style.width;
+      tile.classList.add('swap', 'placed');
+      prev.replaceWith(tile);
+    } else board.appendChild(tile);
     layout();
   }
+  old.forEach((t) => t.remove());
+  for (const k of [...state.arts.keys()]) if (!keep.has(k)) state.arts.delete(k);
+  layout();
 }
 function tileHtml(id: string, vs: string[], cur?: string) {
   return `<div class="name">${esc(state.style.pieceName(id, state.lang))}</div>
@@ -151,7 +161,7 @@ function layout() {
   const cw = (W - gap * (cols - 1)) / cols;
   const hs = new Array(cols).fill(0);
   for (const t of tiles) {
-    const a = state.arts.get(t.dataset.k!)!;
+    const a = { w: Number(t.dataset.w), h: Number(t.dataset.h) };
     let span = Math.min(cols, Number(t.dataset.span) || 1);
     const full = cw * span + gap * (span - 1);
     const w = Math.min(full, a.w * (a.w < 500 ? 1.15 : 1));
@@ -162,6 +172,7 @@ function layout() {
     const x = best * (cw + gap) + (full - w) / 2;
     t.style.left = `${x}px`; t.style.top = `${bestY}px`; t.style.width = `${w}px`;
     for (let c = best; c < best + span; c++) hs[c] = bestY + h + gap + 18;
+    if (!t.classList.contains('placed')) requestAnimationFrame(() => t.classList.add('placed')); // 第一次放好之后，再挪位置才有过渡
   }
   board.style.width = `${W}px`;
   board.style.height = `${Math.max(...hs)}px`;
@@ -193,7 +204,7 @@ async function repaintTile(tile: HTMLElement, id: string, k: string) {
   state.arts.set(k, a);
   const vs = state.style.variants(id);
   const fresh = document.createElement('div');
-  fresh.className = 'tile'; fresh.dataset.k = k; fresh.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : 1)); fresh.style.animation = 'none';
+  fresh.className = 'tile placed'; fresh.dataset.k = k; fresh.dataset.w = String(a.w); fresh.dataset.h = String(a.h); fresh.style.left = tile.style.left; fresh.style.top = tile.style.top; fresh.style.width = tile.style.width; fresh.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : 1)); fresh.style.animation = 'none';
   fresh.innerHTML = tileHtml(id, vs, variant);
   const artEl = fresh.querySelector('.art') as HTMLElement;
   artEl.innerHTML = a.svg;
@@ -257,30 +268,36 @@ function startDrag(e: PointerEvent, tile: HTMLElement, id: string, k: string) {
   let dragging = false;
   const ghost = $('#ghost');
   let over: HTMLElement | null = null;
+  // 作品抓在按下的那一点上跟手走；移到导出按钮上就缩小，让出按钮
+  const r0 = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const fx = (x0 - r0.left) / r0.width, fy = (y0 - r0.top) / r0.height;
   const move = (ev: PointerEvent) => {
     if (!dragging && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 6) {
       dragging = true;
       document.body.classList.add('dragging');
       const a = state.arts.get(k)!;
-      const w = Math.min(280, a.w);
+      const w = Math.min(240, a.w);
       ghost.style.width = `${w}px`;
+      ghost.style.transformOrigin = `${fx * 100}% ${fy * 100}%`;
       ghost.innerHTML = a.svg;
       ghost.hidden = false;
+      ghost.animate([{ scale: String(r0.width / w) }, { scale: '1' }], { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' });
       $('#hint').textContent = L('松手导出 · 选好尺寸', 'Drop to export · pick a size');
       document.querySelector('.ct-tip')?.classList.remove('on');
     }
     if (!dragging) return;
-    ghost.style.transform = `translate(${ev.clientX - ghost.offsetWidth - 18}px, ${ev.clientY - ghost.offsetHeight * 0.6}px) rotate(-2deg)`;
+    ghost.style.translate = `${ev.clientX - ghost.offsetWidth * fx}px ${ev.clientY - ghost.offsetHeight * fy}px`; // 用单独的 translate，缩放才不会连位置一起缩
     const t = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest('#targets button, #sizes button') as HTMLElement | null;
     if (t?.dataset.s) { state.size = t.dataset.s; store.set('size', state.size); document.querySelectorAll('#sizes button').forEach((b) => b.classList.toggle('on', b === t)); }
     const tb = t?.dataset.f ? t : null;
     if (tb !== over) { over?.classList.remove('over'); over = tb; over?.classList.add('over'); }
+    ghost.classList.toggle('small', !!t);
   };
   const up = () => {
     removeEventListener('pointermove', move); removeEventListener('pointerup', up);
     if (!dragging) return openFocus(id, k);
     document.body.classList.remove('dragging');
-    ghost.hidden = true; ghost.innerHTML = '';
+    ghost.hidden = true; ghost.innerHTML = ''; ghost.classList.remove('small');
     $('#hint').textContent = L('拖动作品到这里导出', 'Drag a piece here to export');
     if (over) { const f = over.dataset.f!; over.classList.remove('over'); doExport(f, id, k); }
   };
