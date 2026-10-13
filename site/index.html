@@ -170,6 +170,16 @@ section, #screen { scroll-margin-top: 64px; }
 #lb button:hover { background: rgba(238,233,223,.1); }
 #lb .x { position: absolute; top: 18px; right: 18px; }
 
+/* ───────── 首屏 → 出处：首屏钉住，镜头推进一个文件，线变成编辑器里的字（宽屏才这样，其余照常往下排） ───────── */
+#zcv { display: none; }
+html.zoom .zstage { position: sticky; top: 0; height: 100vh; overflow: hidden; }
+html.zoom #screen { height: 100%; min-height: 0; max-height: none; }
+html.zoom #lines { position: absolute; inset: 0; z-index: 2; padding: 64px 0 0; display: flex; flex-direction: column; justify-content: center; background: var(--bg); opacity: 0; pointer-events: none; }
+html.zoom #lines.live { pointer-events: auto; }
+html.zoom #lines .tx { opacity: var(--zt, 1); }
+html.zoom .title { z-index: 4; }
+html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; pointer-events: none; }
+
 /* ───────── 一行一行 ───────── */
 .legend { margin-top: 36px; display: flex; gap: 8px; flex-wrap: wrap; }
 .legend span { user-select: none; cursor: pointer; display: inline-flex; align-items: center; gap: 9px; height: 34px; padding: 0 13px; border-radius: 99px; border: 1px solid var(--line); font-size: 14px; color: var(--soft); transition: background-color .15s, color .15s; }
@@ -465,7 +475,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 <header>
   <div class="wrap">
     <a class="brand" href="#screen"><!--__LOGO__-->creditia</a>
-    <nav id="nav"><span class="pill"></span><a href="#looks" data-i="nav.looks">风格</a><a href="#lines" data-i="nav.lines">出处</a><a href="#use" data-i="nav.use">用法</a></nav>
+    <nav id="nav"><span class="pill"></span><a href="#lines" data-i="nav.lines">出处</a><a href="#looks" data-i="nav.looks">风格</a><a href="#use" data-i="nav.use">用法</a></nav>
     <div class="grow"></div>
     <div class="ctl">
       <button id="lang" aria-label="language">EN</button>
@@ -480,6 +490,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 </header>
 
 <main>
+  <div id="zoom"><div class="zstage" id="zstage">
   <div id="screen">
     <div class="field" id="field"><div class="fcap mono"><span id="fproj"></span><span id="fcount"></span></div><div class="fcv"><canvas id="fcv" aria-hidden="true"></canvas><div class="ftip" id="ftip" hidden></div></div><div class="fbar" id="fbar"></div><div class="flegend" id="flegend"></div></div>
     <div class="title">
@@ -493,13 +504,6 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
     </div>
   </div>
 
-  <section id="looks">
-    <div class="wrap">
-      <div class="head rise"><h2 class="serif" data-i="looks.t">同一份署名，二十六种样子</h2></div>
-    </div>
-    <div class="wall rise" id="wall"></div>
-  </section>
-
   <section id="lines">
     <div class="wrap">
       <div class="head rise">
@@ -511,6 +515,15 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
       <div class="legend rise" id="legend"></div>
       <div class="editor rise"><div class="code mono" id="code"></div></div>
     </div>
+  </section>
+  <canvas id="zcv" aria-hidden="true"></canvas>
+  </div></div>
+
+  <section id="looks">
+    <div class="wrap">
+      <div class="head rise"><h2 class="serif" data-i="looks.t">同一份署名，二十六种样子</h2></div>
+    </div>
+    <div class="wall rise" id="wall"></div>
   </section>
 
   <section id="use">
@@ -634,6 +647,7 @@ const F = { n: 0, cols: 0, rows: 0, w: 0, h: 0, dpr: 1, cw: 9, gap: 7, files: []
 const PITCH = 4.5, SH = 2, INTRO = 900, SCAN = 2700, LINES = 49360;
 const FDIRS = [['src/core', 'ts'], ['src/render', 'ts'], ['src/lens', 'ts'], ['src/ui', 'tsx'], ['crates/lumen-core/src', 'rs'], ['crates/lumen-cli/src', 'rs'], ['tests', 'ts'], ['scripts', 'sh']];
 const FNAMES = ['exposure', 'timeline', 'grain', 'histogram', 'palette', 'shutter', 'decode', 'export', 'session', 'layers', 'mask', 'tone', 'curve', 'bloom', 'viewport', 'cache', 'thumb', 'queue', 'worker', 'config', 'plugin', 'metadata', 'lut', 'raw', 'sharpen', 'crop', 'white_balance', 'preview', 'keymap', 'undo'];
+const zTool = (who) => { const w = Array.isArray(who) ? who[1] : who; return w.startsWith('Claude') ? 0 : w.startsWith('Codex') ? 1 : w.startsWith('Cursor') ? 2 : 5; };
 function rng(seed) { return () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const inOut = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
@@ -662,11 +676,27 @@ function fieldLay(seed) {
   const pick = () => { let v = R() * tot; for (let k = 0; k < wt.length; k++) { v -= wt[k]; if (v <= 0) return k; } return 0; };
   const X = [], Y = [], Wd = [], T = [], S = [];
   F.files = []; F.byCol = [];
+  // 地图里有一个真文件：src/core/analyze.ts，十六行的形状就是「出处」那一节编辑器里的十六行；往下滚时镜头推进它
+  const cz = Math.min(F.cols - 2, Math.max(0, Math.round(F.cols * 0.38))), rz = Math.round(F.rows * 0.42);
+  const special = (c, list) => {
+    const f = { name: 'src/core/analyze.ts', r0: rz, r1: rz + CODE.length, i0: X.length, counts: [0, 0, 0, 0, 0, 0], special: true }, cwz = F.cw / 62;
+    CODE.forEach(([tx, , who], r) => {
+      const tool = zTool(who);
+      for (const m of tx.matchAll(/\S+/g)) { X.push(c * (F.cw + F.gap) + m.index * cwz); Y.push((rz + r) * PITCH); Wd.push(Math.max(1.2, m[0].length * cwz)); T.push(tool); S.push(/^(export|async|function|const|await|for|of|return)$/.test(m[0]) ? 0 : 1); }
+      if (tx.trim()) f.counts[tool]++;
+    });
+    f.i1 = X.length; F.zi0 = f.i0; F.zi1 = f.i1;
+    list.push(F.files.length); F.files.push(f);
+  };
   for (let c = 0; c < F.cols; c++) {
     const list = []; F.byCol.push(list);
-    let y = Math.floor(R() * 5);
+    let y = Math.floor(R() * 5), zdone = c !== cz;
     while (y < F.rows - 6) {
-      const n = Math.min(F.rows - y, Math.max(10, Math.round(Math.exp(2.8 + R() * 1.6))));
+      let n = Math.min(F.rows - y, Math.max(10, Math.round(Math.exp(2.8 + R() * 1.6))));
+      if (!zdone && y + n > rz - 2) {
+        if (rz - 2 - y >= 8) n = rz - 2 - y;
+        else { special(c, list); y = rz + CODE.length + 2; zdone = true; continue; }
+      }
       const dir = FDIRS[Math.floor(R() * FDIRS.length)], f = { name: `${dir[0]}/${FNAMES[Math.floor(R() * FNAMES.length)]}.${dir[1]}`, r0: y, r1: y + n, i0: X.length, counts: [0, 0, 0, 0, 0, 0] };
       const dom = pick(); let tool = dom, block = 0, ind = 0;
       for (let i = 0; i < n; i++) {
@@ -776,11 +806,12 @@ const fproj = () => (EN_() ? 'lumen · 612 commits · 5 AI tools · 112 days' : 
 function liveNext() { clearTimeout(F.liveT); if (!RM) F.liveT = setTimeout(liveCommit, 4500 + Math.random() * 4000); }
 function liveCommit() {
   if (!F.done || document.hidden || !F.vis || F.hover >= 0 || F.focus >= 0 || F.live) return liveNext();
+  if (Z.p > 0) return liveNext();
   const f = F.files[Math.floor(Math.random() * F.files.length)], rows = f.r1 - f.r0, len = Math.min(rows, 6 + Math.floor(Math.random() * 12));
   const r0 = f.r0 + Math.floor(Math.random() * (rows - len + 1)), y0 = r0 * PITCH, y1 = (r0 + len) * PITCH;
   let i0 = -1, i1 = -1;
   for (let i = f.i0; i < f.i1; i++) if (F.y[i] >= y0 && F.y[i] < y1) { if (i0 < 0) i0 = i; i1 = i + 1; }
-  if (i0 < 0) return liveNext();
+  if (i0 < 0 || f.special) return liveNext();
   const wt = FT.slice(0, 5).map((k) => DATA.share.zh.find((r) => r.key === k)?.pct || 0); let v = Math.random() * wt.reduce((a, b) => a + b, 0), tool = 0;
   for (; tool < 4; tool++) { v -= wt[tool]; if (v <= 0) break; }
   F.live = { i0, i1, y0, y1, tool, old: F.t.slice(i0, i1), t0: performance.now() };
@@ -823,10 +854,119 @@ $('flegend').addEventListener('pointerleave', () => legendFocus(-1));
 // 换主题：颜色重读一遍
 new MutationObserver(() => F.done && fieldDraw(0)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => F.done && fieldDraw(0));
+// ───────── 首屏 → 出处：往下滚，首屏钉住，镜头推进 analyze.ts；别的文件散开，十六行线对准编辑器里的每个词，再换成字 ─────────
+const Z = { on: false, p: -1, d: 0, top: 0, toks: [], lns: [], w: 0, h: 0, dpr: 1, raf: 0, h2: false, scanned: false };
+function zoomSetup() {
+  const root = document.documentElement, was = Z.on;
+  root.classList.toggle('zoom', innerWidth >= 900 && !RM);
+  if (root.classList.contains('zoom') && innerHeight < 64 + $('lines').querySelector('.wrap').offsetHeight + 40) root.classList.remove('zoom');
+  Z.on = root.classList.contains('zoom');
+  const L = $('lines');
+  if (!Z.on) {
+    $('zoom').style.height = ''; L.style.opacity = ''; L.classList.remove('live'); $('fcv').style.visibility = '';
+    ['--py', '--po'].forEach((v) => screenEl.style.removeProperty(v)); Z.p = -1;
+    if (was) { curSec = undefined; spy(); }
+    return;
+  }
+  L.querySelectorAll('.rise').forEach((el) => el.classList.add('in')); // 舞台里的东西不靠滚动出场，量位置前先放到位
+  Z.d = Math.round(innerHeight * 1.35);
+  $('zoom').style.height = `${innerHeight + Z.d}px`;
+  const cv = $('zcv'); Z.dpr = Math.min(2, devicePixelRatio || 1); Z.w = cv.clientWidth; Z.h = cv.clientHeight;
+  cv.width = Math.round(Z.w * Z.dpr); cv.height = Math.round(Z.h * Z.dpr);
+  zoomMeasure();
+  Z.p = -1; zoomTick();
+}
+/** 编辑器里每个词的位置（相对舞台），和地图里 analyze.ts 的线一一对应 */
+function zoomMeasure() {
+  const st = $('zstage').getBoundingClientRect();
+  Z.toks = []; Z.lns = [];
+  document.querySelectorAll('#code .ln').forEach((ln) => {
+    const lr = ln.getBoundingClientRect(); Z.lns.push({ y: lr.top - st.top, h: lr.height });
+    const tx = ln.querySelector('.tx'), nodes = [], w = document.createTreeWalker(tx, NodeFilter.SHOW_TEXT);
+    let n, off = 0; while ((n = w.nextNode())) { nodes.push([n, off]); off += n.length; }
+    const at = (i) => { for (let k = nodes.length - 1; k >= 0; k--) if (nodes[k][1] <= i) return [nodes[k][0], Math.min(i - nodes[k][1], nodes[k][0].length)]; return [tx, 0]; };
+    for (const m of tx.textContent.matchAll(/\S+/g)) {
+      const r = document.createRange(); r.setStart(...at(m.index)); r.setEnd(...at(m.index + m[0].length));
+      const b = r.getBoundingClientRect(); Z.toks.push({ x: b.left - st.left, y: b.top - st.top, w: b.width, h: b.height });
+    }
+  });
+}
+const zp = () => (Z.on ? clamp01((scrollY - $('zoom').offsetTop) / Z.d) : 0); // 镜头推进到哪了，0～1
+function zoomTick() {
+  if (!Z.on) return;
+  const p = zp();
+  if (p === Z.p) return;
+  Z.p = p;
+  if (p > 0 && !F.done) { F.done = true; cancelAnimationFrame(F.raf); } // 首屏还没扫完就往下滚：直接用扫完的样子
+  if (p > 0) { ftip.hidden = true; F.hover = -1; }
+  // 首屏的字和图例先退场
+  screenEl.style.setProperty('--py', `${p * 220}px`);
+  screenEl.style.setProperty('--po', String(1 - clamp01(p / 0.16)));
+  $('fcv').style.visibility = p > 0 ? 'hidden' : '';
+  ['.fcap', '#fbar', '#flegend'].forEach((q) => (document.querySelector(q).style.opacity = String(1 - clamp01(p / 0.12))));
+  const L = $('lines');
+  L.style.opacity = String(clamp01((p - 0.45) / 0.22));
+  L.style.setProperty('--zt', String(clamp01((p - 0.8) / 0.14)));
+  L.classList.toggle('live', p > 0.97);
+  if (p > 0.5 && !Z.h2) { Z.h2 = true; if (!RM) rise(split(L.querySelector('h2')), { step: lang() === 'zh' ? 40 : 70, dur: 1000 }); }
+  if (p > 0.93 && !Z.scanned) { Z.scanned = true; scan(); }
+  zoomDraw(p);
+}
+function zoomDraw(p) {
+  const cv = $('zcv'), ctx = cv.getContext('2d');
+  ctx.setTransform(Z.dpr, 0, 0, Z.dpr, 0, 0); ctx.clearRect(0, 0, Z.w, Z.h);
+  const f = F.files.find((x) => x.special);
+  if (p <= 0 || p >= 1 || !f || !Z.toks.length || Z.toks.length !== F.zi1 - F.zi0) return;
+  const cs = getComputedStyle($('screen')), soft = cs.getPropertyValue('--hero-soft').trim();
+  const colorOf = (k) => (k === 5 ? soft : AGC[FT[k]]);
+  const st = $('zstage').getBoundingClientRect(), fr = $('fcv').getBoundingClientRect();
+  const O = { x: fr.left - st.left, y: fr.top - st.top };
+  // 镜头：地图里 analyze.ts 的左上角 B，最后落到编辑器第一行第一个词的位置 E；一行的间距从 PITCH 放到编辑器的行高
+  const B = { x: F.x[F.zi0], y: f.r0 * PITCH }, lh = Z.lns[1].y - Z.lns[0].y, sF = lh / PITCH;
+  const E = { x: Z.toks[0].x, y: Z.lns[0].y + (lh - SH * sF) / 2 };
+  const k = 1 - (1 - clamp01(p / 0.6)) ** 2.2, s = sF ** k, t = (s - 1) / (sF - 1); // 先快后慢：一开始就看得出在往里推
+  const A = { x: O.x + B.x + (E.x - O.x - B.x) * t, y: O.y + B.y + (E.y - O.y - B.y) * t };
+  const mx = 0.78 * F.w; // 首屏的地图右边是渐隐的，开头几帧照着它淡
+  const others = 1 - clamp01((p - 0.16) / 0.3);
+  if (others > 0) {
+    for (let tk = 0; tk < FT.length; tk++) {
+      ctx.fillStyle = colorOf(tk);
+      for (let sh = 0; sh < 3; sh++) {
+        ctx.beginPath();
+        for (let i = 0; i < F.n; i++) {
+          if (F.t[i] !== tk || F.s[i] !== sh || (i >= F.zi0 && i < F.zi1)) continue;
+          const x = A.x + (F.x[i] - B.x) * s; if (x > Z.w || x + F.wd[i] * s < 0) continue;
+          const y = A.y + (F.y[i] - B.y) * s; if (y > Z.h || y + SH * s < 0) continue;
+          ctx.rect(x, y, F.wd[i] * s, SH * s);
+        }
+        ctx.globalAlpha = (tk === 5 ? 0.6 : 1) * SHADE[sh] * others; ctx.fill();
+      }
+    }
+    // 右边渐隐那一段：盖一层底色
+    if (k < 1) {
+      const fx = A.x + (mx - B.x) * s, fw = (F.w - mx) * s, g = ctx.createLinearGradient(fx, 0, fx + fw, 0);
+      const bg = cs.getPropertyValue('--hero').trim(); g.addColorStop(0, 'transparent'); g.addColorStop(1, bg);
+      ctx.globalAlpha = 1 - k; ctx.fillStyle = g; ctx.fillRect(fx, 0, Z.w - fx, Z.h);
+    }
+  }
+  // analyze.ts 的线：先跟着镜头放大，再对准每个词，最后淡掉，换成字
+  const m = inOut(clamp01((p - 0.4) / 0.36)), fade = 1 - clamp01((p - 0.8) / 0.14);
+  for (let i = F.zi0; i < F.zi1; i++) {
+    const tk = Z.toks[i - F.zi0];
+    const cx = A.x + (F.x[i] - B.x) * s, cy = A.y + (F.y[i] - B.y) * s, cw = F.wd[i] * s, ch = SH * s;
+    const ty = tk.y + tk.h * 0.28, th = tk.h * 0.44;
+    ctx.globalAlpha = SHADE[F.s[i]] * fade; ctx.fillStyle = colorOf(F.t[i]);
+    ctx.fillRect(cx + (tk.x - cx) * m, cy + (ty - cy) * m, cw + (tk.w - cw) * m, ch + (th - ch) * m);
+  }
+  ctx.globalAlpha = 1;
+}
+addEventListener('scroll', () => { if (Z.on) { cancelAnimationFrame(Z.raf); Z.raf = requestAnimationFrame(zoomTick); } }, { passive: true });
+// 导航点「出处」：滚到镜头推完的位置
+document.querySelector('nav a[href="#lines"]').addEventListener('click', (e) => { if (!Z.on) return; e.preventDefault(); scrollTo({ top: $('zoom').offsetTop + Z.d, behavior: RM ? 'auto' : 'smooth' }); });
 // 往下滚：标题慢慢退开
 const screenEl = $('screen');
 const parallax = () => {
-  if (RM) return;
+  if (RM || Z.on) return;
   const p = Math.min(1, Math.max(0, scrollY / screenEl.offsetHeight));
   screenEl.style.setProperty('--py', `${p * 120}px`);
   screenEl.style.setProperty('--po', String(1 - p * 1.1));
@@ -1094,7 +1234,7 @@ function scan() {
   const ls = [...$('code').querySelectorAll('.ln')], per = 150, sc = $('code').querySelector('.scanner');
   ls.forEach((l, n) => {
     const d = 200 + n * per;
-    l.querySelector('.tx').animate([{ opacity: 0.12 }, { opacity: 1 }], { duration: 400, delay: d, fill: 'backwards' });
+    if (!Z.on) l.querySelector('.tx').animate([{ opacity: 0.12 }, { opacity: 1 }], { duration: 400, delay: d, fill: 'backwards' });
     l.querySelector('.mark').animate([{ transform: 'scaleY(0)' }, { transform: 'none' }], { duration: 500, delay: d + 80, easing: SPRING, fill: 'backwards' });
     l.querySelector('.who').animate([{ opacity: 0, transform: 'translateX(10px)' }, { opacity: 1, transform: 'none', offset: 0.15 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: 1500, delay: d + 60, easing: 'ease-out' });
   });
@@ -1572,7 +1712,7 @@ function install() {
 const hdr = document.querySelector('header');
 let hy = scrollY;
 addEventListener('scroll', () => {
-  const y = scrollY, past = y > screenEl.offsetHeight - 120;
+  const y = scrollY, past = Z.on ? zp() > 0.55 : y > screenEl.offsetHeight - 120;
   hdr.classList.toggle('solid', past);
   if (Math.abs(y - hy) > 6) { hdr.classList.toggle('away', past && y > hy && y > screenEl.offsetHeight + 200 && lb.hidden); hy = y; }
 }, { passive: true });
@@ -1583,9 +1723,9 @@ const navTo = (id) => {
   if (a) { navPill.style.left = `${a.offsetLeft}px`; navPill.style.width = `${a.offsetWidth}px`; navPill.style.opacity = 1; } else navPill.style.opacity = 0;
 };
 // 视口 40% 高度那条线落在哪一节，就是当前节
-const SECS = ['looks', 'lines', 'use', 'install'];
+const SECS = ['lines', 'looks', 'use', 'install'];
 let curSec;
-const spy = () => { let id = null; for (const k of SECS) if ($(k).getBoundingClientRect().top < innerHeight * 0.4) id = k; if (id !== curSec) { curSec = id; navTo(id); } };
+const spy = () => { let id = null; for (const k of SECS) if ((Z.on && k === 'lines' ? (zp() >= 0.5 ? 0 : 1e9) : $(k).getBoundingClientRect().top) < innerHeight * 0.4) id = k; if (id !== curSec) { curSec = id; navTo(id); } };
 addEventListener('scroll', spy, { passive: true });
 addEventListener('resize', () => { curSec = undefined; spy(); });
 
@@ -1595,6 +1735,7 @@ const io = new IntersectionObserver((es) => {
   es.forEach((x) => {
     if (!x.isIntersecting) return;
     const el = x.target; io.unobserve(el);
+    if (Z.on && el.closest('#lines')) return; // 舞台里的由镜头推进来出场
     el.style.transitionDelay = `${k++ * 90}ms`;
     el.classList.add('in');
     const h2 = el.querySelector('h2');
@@ -1608,7 +1749,7 @@ function applyLang() {
   document.querySelectorAll('[data-i]').forEach((el) => (el.innerHTML = t(el.dataset.i)));
   $('lang').textContent = lang() === 'en' ? '中' : 'EN';
   document.title = lang() === 'en' ? 'creditia — which AI wrote your code' : 'creditia — 你的代码，是哪些 AI 写的';
-  field(); wall(); lines(); usage(); install();
+  field(); wall(); lines(); usage(); install(); zoomSetup();
 }
 // 换语言：整页淡入淡出；换主题：从按钮那里一圈扩开
 const transition = (fn, circleFrom) => {
@@ -1639,9 +1780,10 @@ $('theme').onclick = (e) => {
 };
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (!document.documentElement.dataset.theme) onTheme(); });
 $('copy').dataset.copy = 'npx creditia analyze';
-let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { field(); const k = W.k; if ((innerWidth < 640 ? 0.58 : innerWidth < 1000 ? 0.78 : 1) !== k) wall(); else measure(); }, 200); });
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { field(); zoomSetup(); const k = W.k; if ((innerWidth < 640 ? 0.58 : innerWidth < 1000 ? 0.78 : 1) !== k) wall(); else measure(); }, 200); });
 applyLang();
 intro();
+document.fonts?.ready.then(() => Z.on && zoomSetup()); // 字体到了再量一次词的位置
 document.querySelectorAll('.rise').forEach((el) => io.observe(el));
 </script>
 </body>
