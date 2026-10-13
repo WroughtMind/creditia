@@ -281,11 +281,83 @@ fn home() -> Option<PathBuf> {
     { std::env::var_os("HOME").map(PathBuf::from) }
 }
 
-/// 导出写进「下载」目录；重名自动加序号
+// ───────────────────────── App 自己的设置（作品库目录里的 app.json） ─────────────────────────
+// 导出目录只能经系统的选文件夹对话框改，界面传不进任意路径
+
+fn app_settings_path() -> PathBuf {
+    creditia_store::data_dir().join("app.json")
+}
+fn app_settings() -> Value {
+    std::fs::read_to_string(app_settings_path()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}))
+}
+fn write_app_settings(v: &Value) -> Res<()> {
+    let p = app_settings_path();
+    if let Some(d) = p.parent() {
+        std::fs::create_dir_all(d).map_err(|e| Fail::with("io", e))?;
+    }
+    std::fs::write(p, serde_json::to_string_pretty(v).unwrap()).map_err(|e| Fail::with("io", e))
+}
+fn default_export_dir() -> Res<PathBuf> {
+    Ok(home().ok_or(Fail::new("no_home"))?.join("Downloads"))
+}
+/// 用户选过、而且还在的导出目录；否则「下载」
+fn export_dir() -> Res<PathBuf> {
+    match app_settings()["exportDir"].as_str().map(PathBuf::from) {
+        Some(d) if d.is_dir() => Ok(d),
+        _ => default_export_dir(),
+    }
+}
+
+#[tauri::command]
+fn app_info(app: tauri::AppHandle) -> Res<Value> {
+    let dir = export_dir()?;
+    Ok(json!({
+        "version": app.package_info().version.to_string(),
+        "library": creditia_store::data_dir().display().to_string(),
+        "exportDir": dir.display().to_string(),
+        "exportDefault": dir == default_export_dir()?,
+    }))
+}
+
+/// 弹出选文件夹对话框改导出目录；取消就返回 null
+#[tauri::command]
+async fn choose_export_dir(app: tauri::AppHandle) -> Res<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+    let Some(dir) = app.dialog().file().set_directory(export_dir()?).blocking_pick_folder() else { return Ok(None) };
+    let dir = dir.into_path().map_err(|e| Fail::with("io", e))?;
+    let mut v = app_settings();
+    v["exportDir"] = json!(dir.display().to_string());
+    write_app_settings(&v)?;
+    Ok(Some(dir.display().to_string()))
+}
+
+#[tauri::command]
+fn reset_export_dir() -> Res<String> {
+    let mut v = app_settings();
+    if let Some(o) = v.as_object_mut() {
+        o.remove("exportDir");
+    }
+    write_app_settings(&v)?;
+    Ok(default_export_dir()?.display().to_string())
+}
+
+/// 打开导出目录或作品库目录（只认这两个名字）
+#[tauri::command]
+fn open_folder(which: String) -> Res<()> {
+    let dir = match which.as_str() {
+        "exports" => export_dir()?,
+        "library" => creditia_store::data_dir(),
+        _ => return Err(Fail::new("io")),
+    };
+    std::fs::create_dir_all(&dir).map_err(|e| Fail::with("io", e))?;
+    open_path(dir.display().to_string())
+}
+
+/// 导出写进导出目录（默认「下载」）；重名自动加序号
 #[tauri::command]
 fn save_file(name: String, bytes: String, mime: Option<String>) -> Res<String> {
     let _ = mime;
-    let dir = home().ok_or(Fail::new("no_home"))?.join("Downloads");
+    let dir = export_dir()?;
     std::fs::create_dir_all(&dir).map_err(|e| Fail::with("io", e))?;
     let safe = name.replace(['/', '\\', ':'], "-");
     let mut path = dir.join(&safe);
@@ -367,7 +439,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             projects, credits, stamp, config_of, set_display, analyze, cancel_analyze, pick_folder, add_project, embed_snippet,
-            library_path, save_file, reveal, open_path, doctor
+            library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, open_path, doctor
         ])
         .run(tauri::generate_context!())
         .expect("启动 creditia App 失败");
