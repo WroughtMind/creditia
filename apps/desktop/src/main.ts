@@ -10,15 +10,18 @@ import { LOGO_SVG } from './logo.ts';
 
 // ───────────────────────── 桥：Tauri 或浏览器调试 ─────────────────────────
 const native = (window as any).__TAURI__?.core?.invoke as ((cmd: string, args?: any) => Promise<any>) | undefined;
+/** 官网上的演示：页面先放好样例档案（window.__CREDITIA_DEMO__），导出的文件交给外层页面摆到「桌面」上 */
+const demo = (window as any).__CREDITIA_DEMO__ as { projects: any[]; credits: Record<string, any>; doctor: any[] } | undefined;
 async function api(cmd: string, args: any = {}): Promise<any> {
   if (native) return native(cmd, args);
   const get = (u: string) => fetch(u).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
   switch (cmd) {
-    case 'projects': return get('/__dev/projects');
-    case 'credits': return get(`/__dev/credits?id=${encodeURIComponent(args.projectId)}`);
+    case 'projects': return demo ? demo.projects : get('/__dev/projects');
+    case 'credits': if (demo) { const c = demo.credits[args.projectId]; if (!c) throw new Error('not found'); return c; } return get(`/__dev/credits?id=${encodeURIComponent(args.projectId)}`);
     case 'config_of': return {};
-    case 'doctor': return get('/__dev/doctor');
+    case 'doctor': return demo ? demo.doctor : get('/__dev/doctor');
     case 'save_file': {
+      if (demo && parent !== window) { parent.postMessage({ type: 'creditia:saved', name: args.name, mime: args.mime, bytes: args.bytes }, location.origin); return `~/Desktop/${args.name}`; }
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([b64bytes(args.bytes) as BlobPart], { type: args.mime ?? 'application/octet-stream' }));
       a.download = args.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);

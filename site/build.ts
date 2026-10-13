@@ -37,6 +37,24 @@ if (own && !process.env.SKIP_SELF_PAGE) {
   console.log('✓ self page');
 }
 
+// 官网上的真 App：apps/desktop 的界面按网页打包，放进「桌面」演示里，用样例项目的档案。
+// 需要 apps/desktop 装好依赖并生成过字体（npm ci && npm run fonts）；本地不想打包可以设 SKIP_APP=1
+const DESK = path.join(ROOT, 'apps/desktop');
+const hasApp = !process.env.SKIP_APP && existsSync(path.join(DESK, 'node_modules/vite')) && existsSync(path.join(DESK, 'src/fonts/manifest.json'));
+if (hasApp) {
+  const r = spawnSync(process.execPath, [path.join(DESK, 'node_modules/vite/bin/vite.js'), 'build', '--base', './', '--outDir', path.join(OUT, 'app'), '--emptyOutDir', '--logLevel', 'warn'], { cwd: DESK, stdio: 'inherit' });
+  if (r.status !== 0) throw new Error('App 网页版打包失败');
+  const demo = {
+    projects: [{ id: 'lumen', name: 'lumen', path: '~/code/lumen', paths: ['~/code/lumen'], lastAnalyzed: Math.floor(Date.now() / 1000), evidence: 18234, exists: true, hasCredits: true }],
+    credits: { lumen: sample },
+    doctor: [{ id: 'claude-code', name: 'Claude Code', ok: true, detail: '' }, { id: 'codex', name: 'Codex', ok: true, detail: '' }, { id: 'cursor', name: 'Cursor', ok: true, detail: '' }],
+  };
+  const f = path.join(OUT, 'app/index.html');
+  writeFileSync(f, readFileSync(f, 'utf8').replace('<head>', `<head>\n<script>window.__CREDITIA_DEMO__ = ${JSON.stringify(demo)};</script>`));
+  cpSync(path.join(DESK, 'src-tauri/icons/128x128@2x.png'), path.join(OUT, 'assets/app-icon.png'));
+  console.log('✓ app');
+}
+
 /** 和原版重名、或原版已有对应的新风格不重复 */
 const V2_SKIP = new Set(['minimal', 'noir', 'glass', 'cinema', 'terminal']);
 const V2_STYLES = STYLES.filter((s) => !V2_SKIP.has(s.id));
@@ -184,18 +202,17 @@ console.log('✓ formats');
 
 // 用法 · agent：对话里导出的那张分享图
 // 用法 · GitHub：README 里的徽章（带风格的，不是空白条）和 Credits 段落里的署名条
-// 用法 · App：dock 里点到的几种风格，各一张分享图和署名榜
-const APP_STYLES = ['cinema', 'ukiyoe', 'terminal', 'pastel', 'neon', 'editorial', 'cyber', 'manga', 'woodblock', 'grimoire'];
-meta.app = APP_STYLES;
+const HERO_STYLES = ['cinema', 'woodblock', 'neon', 'pastel', 'editorial', 'cyber', 'manga', 'grimoire', 'broadsheet', 'baroque']; // 都是 1200×630，切换时画框不变形
+meta.heroStyles = HERO_STYLES;
 for (const lang of LANGS) {
   const vm = modelOf(sample, lang, 'v');
   const sh = art('share', vm, styleById('ukiyoe')!)!; write(`usage/${lang}-share.png`, exporter.png(sh, 640 / sh.w));
+  // GitHub Action 那一栏：README 例子里用的是 ink 风格
+  { const b = art('badge', vm, styleById('ink')!, { variant: 'flat' })!; write(`usage/${lang}-ink-badge.svg`, exporter.svg(b)); meta.usage.ink = { w: b.w, h: b.h }; }
+  { const a = art('share', vm, styleById('ink')!)!; write(`usage/${lang}-ink-share.png`, exporter.png(a, 560 / a.w)); }
   for (const v of ['flat', 'stack']) { const a = art('badge', vm, styleById('ukiyoe')!, { variant: v })!; write(`usage/${lang}-badge-${v}.svg`, exporter.svg(a)); meta.usage[v] = { w: a.w, h: a.h }; }
-  for (const id of APP_STYLES) {
-    await draw(`app/${lang}/${id}-share`, 'share', id, lang, { thumb: 560, noSvg: true });
-    await draw(`app/${lang}/${id}-tier`, 'tier', id, lang, { thumb: 300, noSvg: true });
-    for (const pc of ['donut', 'versions']) await draw(`app/${lang}/${id}-${pc}`, pc, id, lang, { thumb: 300, noSvg: true });
-  }
+  // 首屏：同一张分享图，在几种风格之间切换（SVG，文字已转路径，大屏也清楚）
+  for (const id of HERO_STYLES) await draw(`hero/${lang}/${id}`, 'share', id, lang);
   if (own) meta.selfBadge = await draw(`usage/${lang}-self-badge`, 'badge', 'minimal-light', lang, { raw: own });
 }
 console.log('✓ usage');
@@ -211,7 +228,7 @@ const logo = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo.
 
 let html = readFileSync(path.join(import.meta.dirname, 'index.html'), 'utf8');
 html = html
-  .replace('/*__DATA__*/', `const DATA = ${JSON.stringify({ ...meta, styles, tools, hasSelf: !!own, icons: ICONS, version: JSON.parse(readFileSync(path.join(ROOT, 'packages/cli/package.json'), 'utf8')).version })};`)
+  .replace('/*__DATA__*/', `const DATA = ${JSON.stringify({ ...meta, styles, tools, hasSelf: !!own, hasApp, icons: ICONS, version: JSON.parse(readFileSync(path.join(ROOT, 'packages/cli/package.json'), 'utf8')).version })};`)
   .replaceAll('<!--__LOGO__-->', logo);
 writeFileSync(path.join(OUT, 'index.html'), html);
 writeFileSync(path.join(OUT, 'assets/favicon.svg'), logo.replace(/currentColor/g, '#111'));

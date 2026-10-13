@@ -18,8 +18,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install fonttools brotli
       - run: npm ci --no-audit --no-fund
         working-directory: packages/render
+      # 首页「桌面 App」那一段里跑的是真的 App 前端（网页版，数据是 lumen 示例）
+      - run: npm ci --no-audit --no-fund
+        working-directory: apps/desktop
+      - name: App 字体子集
+        run: npm run fonts
+        working-directory: apps/desktop
       - name: 生成官网（首页 + creditia 自己的署名页）
         run: node site/build.ts _site
       - uses: actions/upload-pages-artifact@v3
