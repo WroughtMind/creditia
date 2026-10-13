@@ -227,6 +227,7 @@ async function paint() {
     state.arts.set(k, a); keep.add(k);
     const tile = document.createElement('div');
     tile.className = 'tile';
+    tileA11y(tile, b.id);
     tile.dataset.k = k;
     tile.dataset.w = String(a.w); tile.dataset.h = String(a.h);
     tile.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : 1));
@@ -304,6 +305,13 @@ function wireTile(tile: HTMLElement, id: string, k: string, vs: string[]) {
   });
   const artEl = tile.querySelector('.art') as HTMLElement;
   artEl.addEventListener('pointerdown', (e) => startDrag(e, tile, id, k));
+  tile.addEventListener('keydown', (e) => { if (e.target === tile && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openFocus(id, k); } });
+}
+/** 键盘也能用：Tab 走到每一张，回车放大 */
+function tileA11y(tile: HTMLElement, id: string) {
+  tile.tabIndex = 0;
+  tile.setAttribute('role', 'button');
+  tile.setAttribute('aria-label', `${state.style.pieceName(id, state.lang)} · ${L('回车放大', 'press Enter to enlarge')}`);
 }
 /** 只重画一张（换版式）。连着换的时候只认最后一次，换下来的是墙上现在那一张 */
 const tileSeq = new Map<string, number>();
@@ -321,6 +329,7 @@ async function repaintTile(id: string, k: string) {
   const vs = state.style.variants(id);
   const fresh = document.createElement('div');
   fresh.className = 'tile placed'; fresh.dataset.k = k; fresh.dataset.w = String(a.w); fresh.dataset.h = String(a.h); fresh.style.left = tile.style.left; fresh.style.top = tile.style.top; fresh.style.width = tile.style.width; fresh.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : 1)); fresh.style.animation = 'none';
+  tileA11y(fresh, id);
   fresh.innerHTML = tileHtml(id, vs, variant);
   const artEl = fresh.querySelector('.art') as HTMLElement;
   artEl.innerHTML = a.svg;
@@ -449,6 +458,8 @@ function startDrag(e: PointerEvent, tile: HTMLElement, id: string, k: string) {
 // ───────────────────────── 聚焦：大图 + 全部版式 ─────────────────────────
 /** 关掉最上面那一层：Esc 只是个快捷键，每一层都有看得见的关闭按钮，点空白处也能关 */
 let closeFocus: (() => void) | null = null;
+/** 放大视图开着时的方向键：← → 换版式，↑ ↓ 换作品 */
+let focusKeys: ((e: KeyboardEvent) => boolean) | null = null;
 function closeTop() {
   if (!$('#sheet').hidden) return closeSheet();
   if (closeFocus) return closeFocus();
@@ -474,8 +485,8 @@ function openFocus(id: string, k: string) {
     el.innerHTML = `${closeBtn()}
       <div class="big"><div class="art"></div></div>
       <div class="strip glass">
-        <b style="padding:0 8px">${esc(state.style.pieceName(id, state.lang))}</b><span style="color:var(--soft)">${esc(state.style.pieceQ(id, state.lang))}</span>
-        ${vs.length > 1 ? `<span class="sep"></span><span class="lab">${L('版式', 'Layout')}</span>${vs.map((v) => `<button data-v="${v}" class="${v === variant ? 'on' : ''}">${esc(state.style.variantName(v, state.lang))}</button>`).join('')}` : ''}
+        <b style="padding:0 8px">${esc(state.style.pieceName(id, state.lang))}</b><span style="color:var(--soft)">${esc(state.style.pieceQ(id, state.lang))}</span><span class="keys" title="${L('上一件 / 下一件作品', 'Previous / next piece')}"><kbd>↑</kbd><kbd>↓</kbd></span>
+        ${vs.length > 1 ? `<span class="sep"></span><span class="lab">${L('版式', 'Layout')}</span><span class="keys" title="${L('上一种 / 下一种版式', 'Previous / next layout')}"><kbd>←</kbd><kbd>→</kbd></span>${vs.map((v) => `<button data-v="${v}" class="${v === variant ? 'on' : ''}">${esc(state.style.variantName(v, state.lang))}</button>`).join('')}` : ''}
         <span class="sep"></span><span class="lab">${L('导出', 'Export')}</span>${exportsFor(id).map((f) => `<button data-f="${f.id}">${f.name}</button>`).join('')}
       </div>`;
     const artEl = el.querySelector('.art') as HTMLElement;
@@ -492,13 +503,31 @@ function openFocus(id: string, k: string) {
     if (b.dataset.v) { state.variants[k] = b.dataset.v; draw(); return; }
     if (b.dataset.f) doExport(b.dataset.f, id, k);
   };
-  // 只有换过版式才把墙上那一张换掉，别的作品不动
-  const close = () => {
-    open = false; el.hidden = true; el.innerHTML = ''; closeFocus = null;
+  // 只有换过版式才把墙上那一张换掉，别的作品不动；键盘焦点回到墙上这一张
+  const close = (refocus = true) => {
+    open = false; el.hidden = true; el.innerHTML = ''; closeFocus = null; focusKeys = null;
     document.querySelector('.ct-tip')?.classList.remove('on');
     if (curVariant(id, k, tiles()[i]) !== before) repaintTile(id, k);
+    if (refocus) (document.querySelector(`.tile[data-k="${k}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
   };
   closeFocus = close;
+  focusKeys = (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return false;
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && vs.length > 1) {
+      const j = vs.indexOf(curVariant(id, k, tiles()[i]) ?? '');
+      state.variants[k] = vs[(j + (e.key === 'ArrowRight' ? 1 : vs.length - 1)) % vs.length];
+      draw();
+      return true;
+    }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      const all = [...document.querySelectorAll<HTMLElement>('#board .tile')];
+      const at = all.findIndex((t) => t.dataset.k === k);
+      const next = all[at + (e.key === 'ArrowDown' ? 1 : -1)];
+      if (next) { close(false); openFocus(next.dataset.k!.split('#')[0], next.dataset.k!); next.scrollIntoView({ block: 'nearest' }); }
+      return true;
+    }
+    return false;
+  };
 }
 
 // ───────────────────────── 风格圆点 ─────────────────────────
@@ -544,7 +573,10 @@ function wireTop() {
   const pill = $('#project');
   pill.onclick = () => toggleMenu();
   pill.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') toggleMenu(); };
-  addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTop(); });
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') return closeTop();
+    if (focusKeys && $('#sheet').hidden && focusKeys(e)) e.preventDefault();
+  });
   const t = $('#toast');
   t.onmouseenter = () => clearTimeout(toastTimer);
   t.onmouseleave = () => { if (toastMs > 0) toastTimer = setTimeout(() => (t.hidden = true), 1500); };
@@ -562,20 +594,31 @@ function toggleMenu() {
   if (!menu.hidden) return closeMenu();
   pill.setAttribute('aria-expanded', 'true');
   menu.hidden = false;
-  menu.innerHTML = `<input id="q" placeholder="${L('搜索项目', 'Search projects')}" autocomplete="off"><div class="list" id="plist"></div>
+  menu.innerHTML = `<input id="q" placeholder="${L('搜索项目', 'Search projects')}" autocomplete="off"><div class="list" id="plist" role="listbox" aria-label="${L('项目', 'Projects')}"></div>
     <div class="foot"><button id="add">${L('＋ 添加项目', '+ Add project')}</button><button id="re">↻ ${L('重新分析', 'Re-analyze')}</button></div>`;
   const draw = () => {
     const q = ($('#q') as HTMLInputElement).value.trim().toLowerCase();
     $('#plist').innerHTML = state.projects.filter((p) => !q || `${p.name} ${p.path}`.toLowerCase().includes(q)).map((p) => `
-      <div class="item ${p.id === state.current?.id ? 'on' : ''} ${p.exists === false ? 'gone' : ''}" data-id="${esc(p.id)}">
+      <div class="item ${p.id === state.current?.id ? 'on' : ''} ${p.exists === false ? 'gone' : ''}" data-id="${esc(p.id)}" role="option" aria-selected="${p.id === state.current?.id}">
         <b>${esc(p.name)}${p.exists === false ? `<em class="tag">${L('目录不在了', 'folder missing')}</em>` : ''}</b><span class="r">${p.lastAnalyzed ? new Date(p.lastAnalyzed * 1000).toLocaleDateString(state.lang === 'zh' ? 'zh-CN' : 'en-US') : L('未分析', 'not analyzed')}</span>
         <span title="${esc(p.path)}">${esc(p.path)}</span><span class="r">${p.evidence ? `${fmt(p.evidence)} ${L('条证据', 'evidence')}` : ''}</span>
-        ${p.paths?.length > 1 ? `<span class="paths">${L('还在', 'also at')} ${esc(p.paths.slice(1, 3).join('、'))}${p.paths.length > 3 ? ' …' : ''}</span>` : ''}
+        ${p.paths?.length > 1 ? `<span class="paths">${L('还在', 'also at')} ${esc(p.paths.slice(1, 3).join(L('、', ', ')))}${p.paths.length > 3 ? ' …' : ''}</span>` : ''}
       </div>`).join('') || `<div class="item"><span>${L('没有匹配的项目', 'No match')}</span></div>`;
   };
+  // ↑ ↓ 选，回车打开（没选就开第一个）
+  let kb = -1;
+  const items = () => [...$('#plist').querySelectorAll<HTMLElement>('.item[data-id]')];
+  const mark = () => items().forEach((x, j) => { x.classList.toggle('kb', j === kb); if (j === kb) x.scrollIntoView({ block: 'nearest' }); });
   draw();
-  ($('#q') as HTMLInputElement).oninput = draw;
-  ($('#q') as HTMLInputElement).focus();
+  const q = $('#q') as HTMLInputElement;
+  q.oninput = () => { kb = -1; draw(); };
+  q.onkeydown = (e) => {
+    const n = items().length;
+    if (e.key === 'ArrowDown' && n) { kb = (kb + 1) % n; mark(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp' && n) { kb = (kb - 1 + n) % n; mark(); e.preventDefault(); }
+    else if (e.key === 'Enter' && n) { items()[Math.max(kb, 0)].click(); e.preventDefault(); }
+  };
+  q.focus();
   $('#plist').onclick = (e) => {
     const it = (e.target as HTMLElement).closest('.item') as HTMLElement | null; if (!it?.dataset.id) return;
     menu.hidden = true; pill.setAttribute('aria-expanded', 'false');
@@ -632,16 +675,45 @@ async function addProject() {
 }
 
 function closeSheet() { const el = $('#sheet'); el.hidden = true; el.innerHTML = ''; }
+const SIZE_USE: Record<string, [string, string]> = { og: ['链接预览', 'Link preview'], square: ['方图', 'Square'], portrait: ['竖图', 'Portrait'], story: ['竖屏', 'Story'] };
 async function settings() {
   const el = $('#sheet');
   el.hidden = false;
+  const info = native ? await api('app_info').catch(() => null) : null;
+  const sizes = SIZES.filter((s) => s.id !== 'a4').map((s) => `<button data-s="${s.id}" class="${s.id === state.size ? 'on' : ''}" title="${esc(SIZE_USE[s.id] ? L(...SIZE_USE[s.id]) : '')}">${s.w ? `${s.w}×${s.h}` : L('原尺寸', 'Native')}</button>`).join('');
   el.innerHTML = `<div class="panel glass">
     <div class="head"><h2>${L('设置', 'Settings')}</h2>${closeBtn()}</div>
+    <h3>${L('导出', 'Export')}</h3>
+    ${info ? `<div class="row kv" id="xrow"></div>` : ''}
+    <div class="row kv"><span class="k">${L('默认尺寸', 'Default size')}</span><div class="seg" id="defsize">${sizes}</div></div>
+    ${info ? `<h3>${L('作品库', 'Library')}</h3><div class="row kv"><span class="k">${L('位置', 'Location')}</span><span class="v path" title="${esc(info.library)}">${esc(short(info.library))}</span><button class="mini" data-x="open-library">${L('打开', 'Open')}</button></div>` : ''}
     <h3>${L('数据源', 'Data sources')}</h3><div id="doc"><p>${L('检查中…', 'Checking…')}</p></div>
     <h3>${L('关于', 'About')}</h3>
+    ${info ? `<p class="ver">creditia ${esc(info.version)}</p>` : ''}
     <p>${L('分析在本机完成：读各工具的日志和 git 历史，只保存行的哈希和时间、模型这类信息，不保存代码和 prompt，也不调用任何模型。', 'Analysis runs on this machine: it reads tool logs and git history, keeps only line hashes and metadata such as time and model, never code or prompts, and calls no models.')}</p>
   </div>`;
-  el.onclick = (e) => { if (e.target === el || (e.target as HTMLElement).closest('[data-act="close"]')) closeSheet(); };
+  const xrow = (x: any) => {
+    const r = el.querySelector('#xrow'); if (!r) return;
+    r.innerHTML = `<span class="k">${L('保存到', 'Save to')}</span><span class="v path" title="${esc(x.exportDir)}">${esc(short(x.exportDir))}</span><button class="mini" data-x="choose">${L('更改…', 'Change…')}</button>${x.exportDefault ? '' : `<button class="mini" data-x="reset">${L('恢复默认', 'Reset')}</button>`}<button class="mini" data-x="open-exports">${L('打开', 'Open')}</button>`;
+  };
+  if (info) xrow(info);
+  el.onclick = async (e) => {
+    const t = e.target as HTMLElement;
+    if (e.target === el || t.closest('[data-act="close"]')) return closeSheet();
+    const sz = t.closest('#defsize button') as HTMLElement | null;
+    if (sz) {
+      state.size = sz.dataset.s!; store.set('size', state.size);
+      el.querySelectorAll('#defsize button').forEach((b) => b.classList.toggle('on', b === sz));
+      return renderDock();
+    }
+    const x = (t.closest('[data-x]') as HTMLElement | null)?.dataset.x;
+    try {
+      if (x === 'choose') { if (await api('choose_export_dir')) xrow(await api('app_info')); }
+      else if (x === 'reset') { await api('reset_export_dir'); xrow(await api('app_info')); }
+      else if (x === 'open-exports') await api('open_folder', { which: 'exports' });
+      else if (x === 'open-library') await api('open_folder', { which: 'library' });
+    } catch (err) { toast(errText(err), 5000); }
+  };
   const doc = await api('doctor').catch(() => []);
   const detail = (d: any) => !d.ok ? L('没有找到', 'Not found')
     : d.records != null ? L(`${fmt(d.records)} 条记录`, `${fmt(d.records)} records`)
