@@ -109,6 +109,8 @@ section, #screen { scroll-margin-top: 64px; }
 .ftip b { display: block; font: 500 12px "JetBrains Mono", monospace; margin-bottom: 3px; }
 .ftip i { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
 .ftip span { display: block; color: var(--hero-soft); } .ftip span em { font-style: normal; color: var(--hero-ink); font-variant-numeric: tabular-nums; margin-left: 6px; }
+.fbar { display: flex; gap: 2px; height: 3px; margin: -4px max(32px, calc((100vw - 1120px) / 2)) 0 0; }
+.fbar i { height: 100%; border-radius: 2px; width: 0; }
 .flegend { display: flex; flex-wrap: wrap; gap: 6px 20px; padding-right: max(32px, calc((100vw - 1120px) / 2)); font-size: 13px; color: var(--hero-soft); }
 .flegend span { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; cursor: default; transition: color .2s, opacity .2s; }
 .flegend span svg { width: 15px; height: 15px; fill: currentColor; }
@@ -434,6 +436,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   .wrap, header .wrap { width: calc(100% - 40px); }
   .field { left: 20px; right: 0; top: 74px; bottom: auto; height: max(180px, calc(100svh - 610px)); gap: 10px; }
   .fcap, .flegend { padding-right: 20px; }
+  .fbar { margin-right: 20px; }
   .flegend { gap: 4px 12px; font-size: 12px; flex-wrap: nowrap; overflow: hidden; }
   .flegend span:nth-child(n+4) { display: none; }
   .fcap { font-size: 11px; } #fproj { display: none; }
@@ -478,7 +481,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 
 <main>
   <div id="screen">
-    <div class="field" id="field"><div class="fcap mono"><span id="fproj"></span><span id="fcount"></span></div><div class="fcv"><canvas id="fcv" aria-hidden="true"></canvas><div class="ftip" id="ftip" hidden></div></div><div class="flegend" id="flegend"></div></div>
+    <div class="field" id="field"><div class="fcap mono"><span id="fproj"></span><span id="fcount"></span></div><div class="fcv"><canvas id="fcv" aria-hidden="true"></canvas><div class="ftip" id="ftip" hidden></div></div><div class="fbar" id="fbar"></div><div class="flegend" id="flegend"></div></div>
     <div class="title">
       <h1 class="serif" data-i="hero.t">你的代码，<br>是哪些 AI 写的</h1>
       <p data-i="hero.p">把 agent 的日志和 git 历史逐行对上，算出每个工具、每个模型写了多少，做成片尾字幕。全在本地。</p>
@@ -657,7 +660,7 @@ function fieldLay(seed) {
   F.cols = Math.max(1, Math.floor((w + F.gap) / (F.cw + F.gap))); F.rows = Math.floor(h / PITCH);
   const R = rng(seed), wt = FT.map((k) => DATA.share.zh.find((r) => r.key === k)?.pct || 0), tot = wt.reduce((a, b) => a + b, 0);
   const pick = () => { let v = R() * tot; for (let k = 0; k < wt.length; k++) { v -= wt[k]; if (v <= 0) return k; } return 0; };
-  const X = [], Y = [], Wd = [], T = [];
+  const X = [], Y = [], Wd = [], T = [], S = [];
   F.files = []; F.byCol = [];
   for (let c = 0; c < F.cols; c++) {
     const list = []; F.byCol.push(list);
@@ -671,8 +674,13 @@ function fieldLay(seed) {
         block--;
         if (i > 0 && R() < 0.13) continue; // 空行
         ind = i === 0 ? 0 : Math.max(0, Math.min(4, ind + (R() < 0.22 ? 1 : R() < 0.25 ? -1 : 0)));
-        const step = F.cw / 11, avail = F.cw - ind * step;
-        X.push(c * (F.cw + F.gap) + ind * step); Y.push((y + i) * PITCH); Wd.push(Math.max(3, avail * (0.25 + R() * 0.75))); T.push(tool);
+        // 一行拆成几个“词”，深浅不一，像缩略图里的语法高亮
+        const step = F.cw / 11, x0 = c * (F.cw + F.gap) + ind * step, end = x0 + Math.max(3, (F.cw - ind * step) * (0.25 + R() * 0.75));
+        for (let x = x0, first = true; x < end - 1.5; first = false) {
+          const sw = Math.min(end - x, F.cw / 7 + R() * (F.cw / 2.2));
+          X.push(x); Y.push((y + i) * PITCH); Wd.push(sw); T.push(tool); S.push(first ? 0 : R() < 0.45 ? 1 : R() < 0.5 ? 2 : 0);
+          x += sw + 3;
+        }
         f.counts[tool]++;
       }
       f.i1 = X.length;
@@ -680,37 +688,58 @@ function fieldLay(seed) {
       y += n + 2;
     }
   }
-  F.n = X.length; F.x = Float32Array.from(X); F.y = Float32Array.from(Y); F.wd = Float32Array.from(Wd); F.t = Uint8Array.from(T);
+  F.n = X.length; F.x = Float32Array.from(X); F.y = Float32Array.from(Y); F.wd = Float32Array.from(Wd); F.t = Uint8Array.from(T); F.s = Uint8Array.from(S);
 }
+const SHADE = [1, 0.78, 0.6];
 function fieldDraw(now) {
   const ctx = $('fcv').getContext('2d'), cs = getComputedStyle($('screen'));
   const ink = cs.getPropertyValue('--hero-ink').trim(), soft = cs.getPropertyValue('--hero-soft').trim();
   const t = F.done ? 1e9 : now - F.t0;
   const reveal = clamp01(t / INTRO), scan = clamp01((t - INTRO) / SCAN), bx = inOut(scan) * (F.w + 80) - 40;
+  const L = F.live, lt = L ? (now || performance.now()) - L.t0 : 0, inL = (i) => L && i >= L.i0 && i < L.i1;
   ctx.setTransform(F.dpr, 0, 0, F.dpr, 0, 0); ctx.clearRect(0, 0, F.w, F.h);
   const shown = (i) => F.y[i] <= (reveal * 1.3 - (F.x[i] / F.w) * 0.3) * F.h; // 从上往下“写”出来，左边先
   const colorOf = (k) => (k === 5 ? soft : AGC[FT[k]]);
+  const base = (k) => (F.focus >= 0 ? (F.focus === k ? 1 : 0.08) : F.hover >= 0 ? 0.26 : k === 5 ? 0.6 : 1);
   // 还没扫到的：一片淡灰
   ctx.globalAlpha = 0.16; ctx.fillStyle = ink; ctx.beginPath();
   for (let i = 0; i < F.n; i++) if (F.x[i] >= bx && shown(i)) ctx.rect(F.x[i], F.y[i], F.wd[i], SH);
   ctx.fill();
-  // 扫过的：按工具上色；有悬停时别的淡下去
+  // 扫过的：按工具上色，同一种颜色分三档深浅
   for (let k = 0; k < FT.length; k++) {
-    ctx.globalAlpha = F.focus >= 0 ? (F.focus === k ? 1 : 0.08) : F.hover >= 0 ? 0.28 : k === 5 ? 0.6 : 1;
-    ctx.fillStyle = colorOf(k); ctx.beginPath();
-    for (let i = 0; i < F.n; i++) if (F.t[i] === k && F.x[i] < bx && shown(i)) ctx.rect(F.x[i], F.y[i], F.wd[i], SH);
-    ctx.fill();
+    ctx.fillStyle = colorOf(k);
+    for (let sh = 0; sh < 3; sh++) {
+      ctx.globalAlpha = base(k) * SHADE[sh]; ctx.beginPath();
+      for (let i = 0; i < F.n; i++) if (F.t[i] === k && F.s[i] === sh && F.x[i] < bx && shown(i) && !inL(i)) ctx.rect(F.x[i], F.y[i], F.wd[i], SH);
+      ctx.fill();
+    }
   }
-  if (F.hover >= 0) {
-    const f = F.files[F.hover]; ctx.globalAlpha = 1;
-    for (let i = f.i0; i < f.i1; i++) { ctx.fillStyle = colorOf(F.t[i]); ctx.fillRect(F.x[i], F.y[i], F.wd[i], SH); }
-  }
-  // 扫描的光
+  // 光刚扫过的行先亮一下，再落成颜色
   if (scan > 0 && scan < 1) {
+    ctx.fillStyle = ink;
+    for (let i = 0; i < F.n; i++) { const d = bx - F.x[i]; if (d > 0 && d < 150 && shown(i)) { ctx.globalAlpha = (1 - d / 150) ** 2 * 0.75; ctx.fillRect(F.x[i], F.y[i], F.wd[i], SH); } }
     const g = ctx.createLinearGradient(bx - 90, 0, bx + 2, 0);
     g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, ink);
-    ctx.globalAlpha = 0.1; ctx.fillStyle = g; ctx.fillRect(bx - 90, 0, 92, F.h);
+    ctx.globalAlpha = 0.08; ctx.fillStyle = g; ctx.fillRect(bx - 90, 0, 92, F.h);
     ctx.globalAlpha = 0.85; ctx.fillStyle = ink; ctx.fillRect(bx, 0, 1, F.h);
+  }
+  // 一次新的提交：这一段先褪成灰，再由新的工具从上往下重新写一遍
+  if (L) {
+    const fade = clamp01(lt / 350), prog = clamp01((lt - 450) / 900);
+    for (let i = L.i0; i < L.i1; i++) {
+      const ry = (F.y[i] - L.y0) / Math.max(1, L.y1 - L.y0 - PITCH);
+      if (ry <= prog && lt > 450) {
+        ctx.globalAlpha = base(L.tool) * SHADE[F.s[i]]; ctx.fillStyle = colorOf(L.tool); ctx.fillRect(F.x[i], F.y[i], F.wd[i], SH);
+        const fl = 1 - (prog - ry) * 5; if (fl > 0) { ctx.globalAlpha = fl * 0.8; ctx.fillStyle = ink; ctx.fillRect(F.x[i], F.y[i], F.wd[i], SH); }
+      } else if (lt <= 450) {
+        ctx.globalAlpha = base(L.old[i - L.i0]) * SHADE[F.s[i]] * (1 - fade); ctx.fillStyle = colorOf(L.old[i - L.i0]); ctx.fillRect(F.x[i], F.y[i], F.wd[i], SH);
+        ctx.globalAlpha = 0.16 * fade; ctx.fillStyle = ink; ctx.fillRect(F.x[i], F.y[i], F.wd[i], SH);
+      } else { ctx.globalAlpha = 0.16; ctx.fillStyle = ink; ctx.fillRect(F.x[i], F.y[i], F.wd[i], SH); }
+    }
+  }
+  if (F.hover >= 0) {
+    const f = F.files[F.hover];
+    for (let i = f.i0; i < f.i1; i++) { ctx.globalAlpha = SHADE[F.s[i]]; ctx.fillStyle = colorOf(F.t[i]); ctx.fillRect(F.x[i], F.y[i], F.wd[i], SH); }
   }
   ctx.globalAlpha = 1;
   fieldNums(scan);
@@ -719,27 +748,56 @@ function fieldNums(scan) {
   const en = EN_(), k = inOut(scan);
   $('fcount').textContent = `${en ? 'matched' : '已对上'} ${Math.round(k * LINES).toLocaleString('en-US')} / ${LINES.toLocaleString('en-US')} ${en ? 'lines' : '行'}`;
   document.querySelectorAll('#flegend em').forEach((e) => (e.textContent = `${(+e.dataset.p * k).toFixed(1)}%`));
+  document.querySelectorAll('#fbar i').forEach((e) => (e.style.width = `${+e.dataset.p * k}%`));
 }
 function fieldLoop(now) {
   fieldDraw(now);
-  if (now - F.t0 >= INTRO + SCAN) { F.done = true; fieldDraw(now); return; }
+  if (now - F.t0 >= INTRO + SCAN) { F.done = true; fieldDraw(now); liveNext(); return; }
   F.raf = requestAnimationFrame(fieldLoop);
 }
 /** 文字（换语言）+ 尺寸（换窗口）+ 第一次进来时开演 */
 function field() {
   const en = EN_();
-  $('fproj').textContent = en ? 'lumen · 612 commits · 5 AI tools · 112 days' : 'lumen · 612 次提交 · 5 个 AI 工具 · 112 天';
+  if (!F.live) $('fproj').textContent = fproj();
   $('flegend').innerHTML = FT.map((k, j) => {
     const r = shareRows().find((x) => x.key === k); if (!r) return '';
     const t = DATA.tools.find((x) => x.name === r.name);
     return `<span data-j="${j}" style="color:${k === 'unattributed' ? 'var(--hero-soft)' : AGC[k]}">${t ? t.svg : '<i></i>'}<b style="font-weight:400;color:var(--hero-soft)">${r.name}</b><em data-p="${r.pct}"></em></span>`;
   }).join('');
+  $('fbar').innerHTML = shareRows().map((r) => `<i data-p="${r.pct}" style="background:${r.key === 'unattributed' ? 'var(--hero-soft)' : AGC[r.key]}"></i>`).join('');
   const key = `${$('fcv').parentElement.clientWidth}x${$('fcv').parentElement.clientHeight}`;
-  if (key !== F.key) { F.key = key; fieldBuild(); F.hover = -1; }
+  if (key !== F.key) { F.key = key; F.live = null; fieldBuild(); F.hover = -1; }
   if (!F.t0) { F.t0 = performance.now() + (RM ? -1e9 : 500); if (RM) F.done = true; }
   cancelAnimationFrame(F.raf);
-  if (F.done) fieldDraw(performance.now()); else F.raf = requestAnimationFrame(fieldLoop);
+  if (F.done) { fieldDraw(performance.now()); liveNext(); } else F.raf = requestAnimationFrame(fieldLoop);
 }
+const fproj = () => (EN_() ? 'lumen · 612 commits · 5 AI tools · 112 days' : 'lumen · 612 次提交 · 5 个 AI 工具 · 112 天');
+// 扫完以后，隔几秒来一次“新提交”：随机一个文件里的一小段被某个工具重写
+function liveNext() { clearTimeout(F.liveT); if (!RM) F.liveT = setTimeout(liveCommit, 4500 + Math.random() * 4000); }
+function liveCommit() {
+  if (!F.done || document.hidden || !F.vis || F.hover >= 0 || F.focus >= 0 || F.live) return liveNext();
+  const f = F.files[Math.floor(Math.random() * F.files.length)], rows = f.r1 - f.r0, len = Math.min(rows, 6 + Math.floor(Math.random() * 12));
+  const r0 = f.r0 + Math.floor(Math.random() * (rows - len + 1)), y0 = r0 * PITCH, y1 = (r0 + len) * PITCH;
+  let i0 = -1, i1 = -1;
+  for (let i = f.i0; i < f.i1; i++) if (F.y[i] >= y0 && F.y[i] < y1) { if (i0 < 0) i0 = i; i1 = i + 1; }
+  if (i0 < 0) return liveNext();
+  const wt = FT.slice(0, 5).map((k) => DATA.share.zh.find((r) => r.key === k)?.pct || 0); let v = Math.random() * wt.reduce((a, b) => a + b, 0), tool = 0;
+  for (; tool < 4; tool++) { v -= wt[tool]; if (v <= 0) break; }
+  F.live = { i0, i1, y0, y1, tool, old: F.t.slice(i0, i1), t0: performance.now() };
+  const row = shareRows().find((r) => r.key === FT[tool]), en = EN_(), cap = $('fproj');
+  cap.innerHTML = `<b style="font-weight:400;color:${AGC[FT[tool]]}">+${Math.round((len * LINES) / (F.rows * F.cols * 0.82))} ${en ? 'lines' : '行'} · ${row.name}</b> · ${f.name}`;
+  if (!RM) cap.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: EASE });
+  const step = (now) => {
+    fieldDraw(now);
+    if (!F.live) return; // 中途换了尺寸，重摆过了
+    if (now - F.live.t0 < 1450) return requestAnimationFrame(step);
+    F.t.fill(tool, i0, i1); F.live = null; fieldDraw(now);
+    setTimeout(() => { if (!F.live) { cap.textContent = fproj(); cap.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 }); } }, 2200);
+    liveNext();
+  };
+  requestAnimationFrame(step);
+}
+new IntersectionObserver((es) => (F.vis = es[0].isIntersecting), { threshold: 0.3 }).observe($('screen'));
 // 悬停：一段 = 一个文件
 const ftip = $('ftip');
 $('fcv').addEventListener('pointermove', (e) => {
@@ -752,7 +810,7 @@ $('fcv').addEventListener('pointermove', (e) => {
   const f = F.files[fi], sum = f.counts.reduce((a, b) => a + b, 0), en = EN_();
   const lines = Math.round(((f.r1 - f.r0) * LINES) / (F.rows * F.cols * 0.82));
   const top = f.counts.map((n, k) => [k, n]).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  ftip.innerHTML = `<b>${f.name}</b>${top.map(([k, n]) => { const row2 = shareRows().find((z) => z.key === FT[k]); return `<span><i style="background:${k === 5 ? 'var(--hero-soft)' : AGC[FT[k]]}"></i>${row2 ? row2.name : ''}<em>${Math.round((n / sum) * 100)}%</em></span>`; }).join('')}<span>${lines.toLocaleString('en-US')} ${en ? 'lines' : '行'}</span>`;
+  ftip.innerHTML = `<b>${f.name}</b>${top.map(([k, n]) => { const row2 = shareRows().find((z) => z.key === FT[k]); return `<span><i style="background:${k === 5 ? 'var(--hero-soft)' : AGC[FT[k]]}"></i>${row2 ? row2.name : ''}${row2?.model ? ` · ${row2.model}` : ''}<em>${Math.round((n / sum) * 100)}%</em></span>`; }).join('')}<span>${lines.toLocaleString('en-US')} ${en ? 'lines' : '行'}</span>`;
   ftip.hidden = false;
   const tw = ftip.offsetWidth, th = ftip.offsetHeight;
   ftip.style.left = `${Math.min(x + 16, r.width * 0.78 - tw)}px`; ftip.style.top = `${Math.min(Math.max(0, y - th / 2), r.height - th)}px`;
