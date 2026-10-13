@@ -146,7 +146,32 @@ function rebuildModel() {
 
 // ───────────────────────── 展墙 ─────────────────────────
 const curVariant = (id: string, k: string, b: { variant?: string }) => state.style.current(id, state.variants[k] ?? b.variant);
-const drawArt = (id: string, variant?: string) => state.style.render(state.raw, state.lang, id, variant);
+
+/** 画过的作品按「档案 + 风格 + 语言 + 作品 + 版式」记住：切回看过的风格、来回换版式都不用再画。
+ *  存的是 Promise，同一张正在画的时候墙和放大视图共用一次；按 SVG 总长度限量，最久没用的先丢 */
+const cache = new Map<string, Promise<Art | null>>();
+const cacheLen = new Map<string, number>();
+let cacheRaw: any = null, cacheTotal = 0;
+const CACHE_MAX = 32e6; // SVG 字符数
+function drawArt(id: string, variant?: string): Promise<Art | null> {
+  if (cacheRaw !== state.raw) { cache.clear(); cacheLen.clear(); cacheTotal = 0; cacheRaw = state.raw; }
+  const key = `${state.style.id}|${state.lang}|${id}|${variant ?? ''}`;
+  let hit = cache.get(key);
+  if (hit) { cache.delete(key); cache.set(key, hit); return hit; } // 挪到最近用过
+  hit = state.style.render(state.raw, state.lang, id, variant);
+  cache.set(key, hit);
+  hit.then((a) => {
+    if (cache.get(key) !== hit) return;
+    const n = a?.svg.length ?? 0;
+    cacheLen.set(key, n); cacheTotal += n;
+    for (const old of cache.keys()) {
+      if (cacheTotal <= CACHE_MAX) break;
+      if (old === key) continue;
+      cacheTotal -= cacheLen.get(old) ?? 0; cacheLen.delete(old); cache.delete(old);
+    }
+  }, () => { if (cache.get(key) === hit) cache.delete(key); });
+  return hit;
+}
 
 async function paint() {
   const m = state.model; if (!m) return;
@@ -178,7 +203,7 @@ async function paint() {
     const artEl = tile.querySelector('.art') as HTMLElement;
     artEl.innerHTML = a.svg;
     mountHits(artEl, a.hits, a.w, a.h);
-    wireTile(tile, b.id, k, vs, variant ?? '');
+    wireTile(tile, b.id, k, vs);
     if (batch) { fresh.push(tile); continue; }
     board.appendChild(tile);
     layout();
@@ -230,29 +255,36 @@ function layout() {
   board.style.height = `${Math.max(...hs)}px`;
 }
 
-function wireTile(tile: HTMLElement, id: string, k: string, vs: string[], cur: string) {
+function wireTile(tile: HTMLElement, id: string, k: string, vs: string[]) {
   tile.querySelector('.bar')!.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest('button'); if (!b) return;
     e.stopPropagation();
     const act = b.dataset.act;
     if (act === 'prev' || act === 'next') {
-      const i = vs.indexOf(cur);
-      state.variants[k] = vs[(i + (act === 'next' ? 1 : vs.length - 1)) % vs.length];
-      return repaintTile(tile, id, k);
+      // 从现在选中的算起（不是这张画出来时的），连点两下就走两步；名字先换，图画好再换
+      const i = vs.indexOf(curVariant(id, k, tiles()[Number(k.split('#')[1])]) ?? '');
+      const v = vs[(i + (act === 'next' ? 1 : vs.length - 1)) % vs.length];
+      state.variants[k] = v;
+      const name = tile.querySelector('.vname'); if (name) name.textContent = state.style.variantName(v, state.lang);
+      return repaintTile(id, k);
     }
     if (act === 'export') toggleFormats(tile, id, k);
   });
   const artEl = tile.querySelector('.art') as HTMLElement;
   artEl.addEventListener('pointerdown', (e) => startDrag(e, tile, id, k));
 }
-/** 只重画一张（换版式） */
-async function repaintTile(tile: HTMLElement, id: string, k: string) {
+/** 只重画一张（换版式）。连着换的时候只认最后一次，换下来的是墙上现在那一张 */
+const tileSeq = new Map<string, number>();
+async function repaintTile(id: string, k: string) {
   const i = Number(k.split('#')[1]);
   const b = tiles()[i];
   const variant = curVariant(id, k, b);
-  const token = state.token;
+  const token = state.token, seq = (tileSeq.get(k) ?? 0) + 1;
+  tileSeq.set(k, seq);
   const a = await drawArt(id, variant);
-  if (!a || token !== state.token) return;
+  if (!a || token !== state.token || tileSeq.get(k) !== seq) return;
+  const tile = document.querySelector(`.tile[data-k="${k}"]`) as HTMLElement | null;
+  if (!tile) return;
   state.arts.set(k, a);
   const vs = state.style.variants(id);
   const fresh = document.createElement('div');
@@ -261,7 +293,8 @@ async function repaintTile(tile: HTMLElement, id: string, k: string) {
   const artEl = fresh.querySelector('.art') as HTMLElement;
   artEl.innerHTML = a.svg;
   mountHits(artEl, a.hits, a.w, a.h);
-  wireTile(fresh, id, k, vs, variant ?? '');
+  wireTile(fresh, id, k, vs);
+  if (tile.classList.contains('hover')) fresh.classList.add('hover');
   tile.replaceWith(fresh);
   layout();
 }
@@ -397,10 +430,14 @@ function openFocus(id: string, k: string) {
   const vs = state.style.variants(id);
   const i = Number(k.split('#')[1]);
   const before = curVariant(id, k, tiles()[i]);
+  let seq = 0, open = true;
+  // 快速连点几个版式：按钮立刻跟上，图只认最后一次（先点的画得慢，回来也不会盖掉后点的）
   const draw = async () => {
+    const my = ++seq;
     const variant = curVariant(id, k, tiles()[i]);
+    el.querySelectorAll<HTMLElement>('.strip button[data-v]').forEach((b) => b.classList.toggle('on', b.dataset.v === variant));
     const a = await drawArt(id, variant);
-    if (!a) return;
+    if (!a || my !== seq || !open) return;
     state.arts.set(k, a);
     el.innerHTML = `${closeBtn()}
       <div class="big"><div class="art"></div></div>
@@ -425,9 +462,9 @@ function openFocus(id: string, k: string) {
   };
   // 只有换过版式才把墙上那一张换掉，别的作品不动
   const close = () => {
-    el.hidden = true; el.innerHTML = ''; closeFocus = null;
+    open = false; el.hidden = true; el.innerHTML = ''; closeFocus = null;
     document.querySelector('.ct-tip')?.classList.remove('on');
-    if (curVariant(id, k, tiles()[i]) !== before) { const t = document.querySelector(`.tile[data-k="${k}"]`) as HTMLElement | null; if (t) repaintTile(t, id, k); }
+    if (curVariant(id, k, tiles()[i]) !== before) repaintTile(id, k);
   };
   closeFocus = close;
 }
