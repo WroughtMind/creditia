@@ -1,68 +1,85 @@
-<p align="center"><img src="packages/render/assets/creditia/logo.svg" width="56" alt=""></p>
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/readme/logo-dark.svg">
+  <img src=".github/readme/logo-light.svg" width="52" alt="">
+</picture>
 
 # creditia
 
-> 为人和 AI 一起做出的作品署名。
-> Credits for work made by people and agents together.
+**你的代码，是哪些 AI 写的。**
 
-**状态：开发中。** 官网：https://wroughtmind.github.io/creditia/
+读本机的 git 历史和 agent 日志，把每一行对上写它的工具和模型，<br>
+再做成徽章、CREDITS.md、片尾字幕和分享图。全程本地，不调用任何模型。
 
-## 做什么
+[![built with](https://wroughtmind.github.io/creditia/assets/usage/zh-self-badge.svg)](https://wroughtmind.github.io/creditia/self/)
 
-现在很多项目的代码是好几个 AI 工具、好几个模型一起写的。creditia 读你电脑上的 git 历史和这些工具留下的日志，算出每一行是哪个工具、哪个模型写的，再把结果做成能拿出去的东西：README 徽章、CREDITS.md、片尾字幕式的署名图、分享图、统计图，或者一个能放在项目网站上的署名页。
+[官网](https://wroughtmind.github.io/creditia/) · [安装](#安装) · [归因规则](ATTRIBUTION.md) · [English](README.en.md)
 
-分析在本机完成，不上传代码，也不调用任何大模型。
+</div>
 
-## 结果靠得住吗
+<br>
 
-- 一行代码如果在某个工具的日志里能找到（工具确实把这一行写进了文件），就算有逐行证据。
-- 没有日志的，看提交里的信息：提交邮箱、`Co-authored-by`、creditia 的提交盖章。
-- 两样都没有的，默认会做两种推断：同一个提交里其余的行跟着有证据的那个工具走；`codex/` 这类工具自动建的分支算那个工具。推断单独记，在图上和档案里都能看出来。不想要推断，用 `--level strict`。
-- 还是对不上的，记为「未确认」，不算到任何工具或人头上。
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/readme/map-dark.svg">
+  <img src=".github/readme/map-light.svg" alt="样例项目 lumen 的代码地图：一个文件一段，一行一道线，颜色是写它的 AI">
+</picture>
 
-完整规则和已知的边界在 [ATTRIBUTION.md](ATTRIBUTION.md)。
+## 一行命令
 
-## 只写 AI
+```text
+$ creditia analyze && creditia fetch
+lumen  2026-06-02 → 2026-09-21
+───────────────────────────────
+Claude Code     ███████████████░░░░░░░░░░  59.3%  Claude Opus 5.5
+Codex           ███████░░░░░░░░░░░░░░░░░░  27.6%  GPT-5.6 Sol
+Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   6.7%  Composer 2
+Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   3.1%  Kimi K3
+Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   1.3%  Grok 5 Code
+未确认          █░░░░░░░░░░░░░░░░░░░░░░░░   2.0%
 
-creditia 只回答「哪些 AI 工具和模型写了多少」。作品里不写人名，人写的行不算进占比，百分比按 AI 和「未确认」的行数算。
-
-## 支持的工具
-
-| 工具 | 读什么 | 逐行证据 | 模型 | 渠道 |
-|---|---|:-:|:-:|:-:|
-| Claude Code | `~/.claude/projects/*/*.jsonl` 的 Write / Edit / MultiEdit | ✓ | ✓ | Bedrock、Vertex、改写响应的中转站 |
-| Codex | `~/.codex` 线程库 + rollout 的 FileChange | ✓ | ✓ | `model_provider` |
-| Cursor | `ai-code-tracking.db` 逐行哈希（与 Cursor 自己的算法逐字节一致） | ✓ | ✓ | — |
-| Gemini CLI / Qwen Code | `~/.gemini/tmp/<项目哈希>/chats`（成功的 write / replace） | ✓ | ✓ | — |
-| OpenCode | `storage/session + message + part`（completed 的 edit / write） | ✓ | ✓ | `providerID`（含自定义中转站） |
-| Cline / Roo Code / Kilo Code | 各 VS Code 系编辑器里的 `tasks/*/ui_messages.json` | ✓ | ✓ | `model_provider_id` |
-| Grok、Kimi | 会话目录里的写文件调用 | ✓ | ✓ | — |
-| GitHub Copilot、Devin、Jules、Aider、Cursor 云端、bot | 提交邮箱、Co-authored-by、作者名 | 声明 | — | — |
-| 任何工具 | `creditia stamp` / 提交 hook 盖章（`Creditia-Harness` trailer） | 声明 | ✓ | — |
-
-## 快速上手
-
-```bash
-cd 你的仓库
-npx creditia analyze                # 分析（第一次会下载对应平台的分析程序）
-npx creditia doc                    # 写 CREDITS.md
-npx creditia export --piece tier --style ink --format png --out tier.png
-npx creditia export --list          # 全部作品、版式、风格、格式
-npx creditia hook install           # 以后每次提交自动盖章：日志被清理了也认得出是哪个工具写的
+提交 612  行 49,360  token 491M
 ```
 
-一般不用自己敲这些：让你的 agent 用 [skills/creditia/SKILL.md](skills/creditia/SKILL.md)，它会按步骤做，公开任何内容之前先问你。
-
-一个项目在好几个地方（worktree、临时克隆、换过电脑、搬过家）：`creditia paths` 看登记过的路径，`creditia link <路径>` 补上。
-
-## 放到 GitHub 上
-
-CI 里看不到任何人的 agent 日志，所以分析在本机做，CI 只负责把结果做成徽章、CREDITS.md 和署名页：
+分析完，结果可以拿去用：
 
 ```bash
-npx creditia publish                # 把档案写到仓库根目录的 credits.json，并列出将公开的内容
-git add credits.json && git commit -m "credits"
+creditia doc                                  # 写 CREDITS.md（只改标记区间）
+creditia export --piece roll --out roll.png   # 片尾字幕
+creditia export --list                        # 全部作品、版式、风格、格式
+creditia hook install                         # 以后每次提交自动盖章：日志被清理了也认得出
+creditia blame src/core/analyze.ts:12         # 这一行是哪个工具、哪个模型写的
 ```
+
+一个项目在好几个地方（worktree、临时克隆、换过电脑）：`creditia paths` 看登记过的路径，`creditia link <路径>` 补上。
+
+## 每一行，都有出处
+
+- **日志里对得上**　工具日志里有这一行的写入：Claude Code 的 Write / Edit、Codex 的 FileChange、Cursor 的逐行哈希……
+- **提交里写明了**　提交邮箱、`Co-authored-by`、creditia 的提交盖章
+- **推断**　同一提交里其余的行，跟着有证据的那个工具走；`codex/` 这类工具自动建的分支。单独记，`--level strict` 关掉
+- **未确认**　以上都对不上的行。不算给任何工具
+
+creditia 只回答「哪些 AI 工具和模型写了多少」：作品里不出现任何名字，百分比只在 AI 和「未确认」的行之间算。完整规则和已知的边界在 [ATTRIBUTION.md](ATTRIBUTION.md)。
+
+## 二十六种样子
+
+<img src=".github/readme/styles.png" alt="同一份署名，不同风格：影院片尾、浮世绘分享图、古籍竖排、漫画能力面板、赛博 HUD、霓虹环形图、报纸版本柱、魔典电影票、终端名片、巴洛克领奖台">
+
+同一份档案，二十种作品（署名榜、分享图、片尾字幕、小票、徽章、时间织带、作息图……）× 二十六个风格，出 PNG、SVG、PDF、GIF、HTML。每个风格是一整套视觉语言，不是换色；有的作品在某些风格下有专属版式：古籍的竖排、漫画的能力面板、赛博的 HUD、片尾字幕的十几种排法。
+
+> 极简 · 极简暗 · 玻璃 · 胶片 · 影院 · 杂志 · 报纸 · 节目单 · 颁奖礼 · 单色 · 海报 · 终端 · 磷光屏 · 霓虹 · 街机<br>
+> 水墨 · 浮世绘 · 古籍 · 巴洛克 · 魔典 · 手稿 · 对称 · 剪纸 · 夏日 · 漫画 · 赛博
+
+全部摆在一起看：[官网的风格墙](https://wroughtmind.github.io/creditia/#looks)。
+
+## 四种用法
+
+**命令行**　就是上面那些。所有命令都支持 `--json`。
+
+**交给 agent**　把 [skills/creditia](skills/creditia/SKILL.md) 装进你的 agent，跟它说「看看这个仓库是哪些 AI 写的」。它会按步骤分析、出图，公开或提交任何东西之前先问你。
+
+**GitHub Action**　CI 里看不到任何 agent 的日志，所以分析在本机做：`creditia publish` 把档案写到仓库根目录的 `credits.json`，提交上去；之后每次推送，Action 用它重画署名页，也可以顺带生成徽章（`badge:`）和 CREDITS.md（`doc:`）。
 
 ```yaml
 # .github/workflows/credits.yml
@@ -81,20 +98,47 @@ jobs:
       - uses: actions/deploy-pages@v4
 ```
 
-每次推送，署名页就跟着更新。也可以只生成徽章（`badge: assets/credits-badge.svg`）或 CREDITS.md（`doc: CREDITS.md`）。
+**App**　一面展墙：顶部切换项目，左下角的圆点切换风格，所有作品直接摆出来。悬停作品换版式、选格式导出，作品里的每一块都能悬停看细节；把作品拖到右下角的导出坞也能导出。[在官网上直接试](https://wroughtmind.github.io/creditia/#use)。
 
-## App
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="site/app-dark.webp">
+  <img src="site/app-light.webp" alt="creditia App：展墙上摆着样例项目的全部作品">
+</picture>
 
-macOS 的 App 目前没有签名（还没有开发者证书）：第一次打开时右键 → 打开，或者在终端运行 `xattr -cr /Applications/creditia.app`。
+## 支持的工具
 
-一面展墙：顶部切换项目，左下角的小圆点切换风格（悬停看风格名，每个圆点就是这个风格的缩影），所有作品直接摆出来。悬停作品会出现虚线框——换版式、选格式导出；作品里的每一块都能悬停看细节；把作品拖到右下角的导出坞也能导出，拖的时候其余作品会虚化。
+| | 工具 | 读什么 | 逐行 | 模型 |
+|:-:|---|---|:-:|:-:|
+| <img src=".github/readme/logo/claude-code.svg" width="18"> | Claude Code | `~/.claude/projects/*/*.jsonl` 的 Write / Edit / MultiEdit；渠道含 Bedrock、Vertex、中转站 | ✓ | ✓ |
+| <img src=".github/readme/logo/codex.svg" width="18"> | Codex | `~/.codex` 线程库 + rollout 的 FileChange；渠道看 `model_provider` | ✓ | ✓ |
+| <img src=".github/readme/logo/cursor.svg" width="18"> | Cursor | `ai-code-tracking.db` 逐行哈希，与 Cursor 自己的算法逐字节一致 | ✓ | ✓ |
+| <img src=".github/readme/logo/gemini.svg" width="18"> <img src=".github/readme/logo/qwen.svg" width="18"> | Gemini CLI · Qwen Code | `~/.gemini/tmp/<项目哈希>/chats` 里成功的 write / replace | ✓ | ✓ |
+| <img src=".github/readme/logo/opencode.svg" width="18"> | OpenCode | `storage/session + message + part` 里 completed 的 edit / write；渠道看 `providerID` | ✓ | ✓ |
+| <img src=".github/readme/logo/cline.svg" width="18"> <img src=".github/readme/logo/roo.svg" width="18"> <img src=".github/readme/logo/kilo.svg" width="18"> | Cline · Roo Code · Kilo Code | 各 VS Code 系编辑器里的 `tasks/*/ui_messages.json` | ✓ | ✓ |
+| <img src=".github/readme/logo/grok.svg" width="18"> <img src=".github/readme/logo/kimi.svg" width="18"> | Grok · Kimi | 会话目录里的写文件调用 | ✓ | ✓ |
+| <img src=".github/readme/logo/copilot.svg" width="18"> <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> <img src=".github/readme/logo/aider.svg" width="18"> | GitHub Copilot · Devin · Jules · Aider · Cursor 云端 · bot | 提交邮箱、`Co-authored-by`、作者名 | 声明 | — |
+| | 任何工具 | `creditia stamp` / 提交 hook 盖章（`Creditia-Harness` trailer） | 声明 | ✓ |
 
-## 风格
+## 安装
 
-极简、暗室、液态玻璃 · 水墨、浮世绘、古籍 · 黄金时代、巴洛克、魔典 · 手稿、对称、剪纸、夏日 · 漫画、赛博、终端。
-每个风格是一套完整的视觉语言（底、框、标题、条形、标记、分隔），不是换色；有的作品在某些风格下有专属版式（古籍的竖排、漫画的能力面板、赛博的 HUD、动画片尾……）。
+需要 Node 22+。npm、Homebrew、一行脚本和 App 安装包即将推出，现在从源码装：
 
-## 仓库结构
+```bash
+git clone https://github.com/WroughtMind/creditia && cd creditia/packages/cli && npm i && npm link
+# 或者只要 Rust 分析核心
+cargo install --git https://github.com/WroughtMind/creditia creditia-cli
+```
+
+Agent skill（Claude Code）：
+
+```bash
+git clone --depth 1 https://github.com/WroughtMind/creditia /tmp/creditia && cp -r /tmp/creditia/skills/creditia ~/.claude/skills/
+```
+
+GitHub Action 直接用 `WroughtMind/creditia@main`，不用装。
+
+<details>
+<summary><b>仓库结构</b></summary>
 
 ```
 crates/
@@ -108,11 +152,15 @@ packages/
   cli/        npm 包 creditia：档案、导出、终端名片
   embed/      <creditia-card> 网页组件
 apps/desktop/ Tauri 2 App（展墙与导出）
+site/         官网（build.ts）和这份 README 的图（readme.ts）
 skills/       给 agent 用的 skill
 spike/        阶段 0 验证工程（保留作记录）
 ```
 
-## 开发
+</details>
+
+<details>
+<summary><b>开发</b></summary>
 
 ```bash
 cargo build --release && cargo test           # Rust 核心（端到端测试用临时 HOME 里的假日志）
@@ -120,7 +168,13 @@ cd packages/render && npm i && npm test       # 渲染（全部作品 × 全部�
 npm run gallery                               # 样张：gallery/index.html
 cd apps/desktop && npm i && npm run fonts && npm run dev   # 浏览器里调 App（用 fixtures 里的样例档案）
 npm run core && npm run tauri dev             # 原生 App（core 把分析核心放进 App 的打包位置）
+node site/build.ts                            # 官网 → _site/
+node site/readme.ts                           # README 的图 → .github/readme/
 ```
+
+macOS 的 App 目前没有签名：自己打包的第一次打开时右键 → 打开，或者运行 `xattr -cr /Applications/creditia.app`。
+
+</details>
 
 ## 协议
 
