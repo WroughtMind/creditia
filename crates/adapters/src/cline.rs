@@ -3,6 +3,7 @@
 //! - ui_messages.json 里 tool 消息（JSON 文本）有 newFileCreated / editedExistingFile / appliedDiff，路径相对于工作目录；
 //! - 工作目录取自对话首条消息里的环境说明「Current Working Directory (…)」；
 //! - 模型和渠道取自 task_metadata.json 的 model_usage（新版本才有）。
+//!
 //! 被拒绝、失败的编辑也会出现在 ui_messages 里：每次编辑都要在对话记录里找到对应的工具结果（`[write_to_file for 'a.ts'] Result:`），
 //! 结果是成功写入才算证据；找不到结果、被拒绝、报错的一律不算（人后来自己写了同样的行，不会被记成 agent 的逐行证据）。
 

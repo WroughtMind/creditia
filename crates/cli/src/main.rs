@@ -199,7 +199,7 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
         }
         merged.push(p);
     }
-    merged.sort_by(|a, b| b.last.cmp(&a.last));
+    merged.sort_by_key(|p| std::cmp::Reverse(p.last));
     // 已经不存在、又只有零星活动的临时目录默认不列（--all 列出）
     let show_all = a.on("all");
     merged.retain(|p| show_all || p.exists || p.tools.values().sum::<u64>() >= 3);
@@ -226,9 +226,7 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
 
 /// 自动探测项目配置：主分支、主导者（最常见的人类提交者）、远程、路径关键词
 pub fn detect_config(repo: &Path) -> Config {
-    let mut c = Config::default();
-    c.repo = repo.display().to_string();
-    c.name = project_name(repo);
+    let mut c = Config { repo: repo.display().to_string(), name: project_name(repo), ..Default::default() };
     let cur = ad::git::git(repo, &["rev-parse", "--abbrev-ref", "HEAD"]).trim().to_string();
     c.branch = if !cur.is_empty() && cur != "HEAD" {
         cur
@@ -281,7 +279,8 @@ pub fn detect_config(repo: &Path) -> Config {
             }
         }
     }
-    let mut clusters: HashMap<usize, (usize, Vec<String>, HashMap<String, usize>)> = HashMap::new();
+    type Cluster = (usize, Vec<String>, HashMap<String, usize>);
+    let mut clusters: HashMap<usize, Cluster> = HashMap::new();
     for (i, k) in pairs.iter().enumerate() {
         let r = find(&mut parent, i);
         let e = clusters.entry(r).or_default();

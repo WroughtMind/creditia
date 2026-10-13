@@ -104,8 +104,11 @@ pub fn worktrees(repo: &Path) -> Vec<String> {
 // trailer 都指定 separator，这样 git 不会在值后面补换行，一条提交始终占一行
 const FMT: &str = "@@@C%x00%H%x00%ae%x00%an%x00%at%x00%ct%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Harness,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Model,valueonly,separator=%x7C)";
 
+/// 盖章表：提交哈希 → (工具, 模型)
+pub type Stamps = HashMap<String, (String, Option<String>)>;
+
 /// 解析 `git log -p` 输出。`range` 为空表示全量到 `rev`。返回提交和盖章表
-pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>, HashMap<String, (String, Option<String>)>) {
+pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>, Stamps) {
     let spec = range.map(|r| r.to_string()).unwrap_or_else(|| rev.to_string());
     let Ok(mut child) = Command::new("git")
         .arg("-C")

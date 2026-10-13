@@ -81,6 +81,7 @@ button { font: inherit; color: inherit; }
 .tile.swap { animation: swapin .45s ease-out both; }
 @keyframes swapin { from { opacity: 0; } }
 body.dragging .tile.placed { transition: none; }
+.tile .art, #focus .big .art { position: relative; } /* 悬停热区按作品本身摆，不然会盖住整层、挡住点空白处关闭 */
 .tile .art { border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 16px 44px rgba(0,0,0,.10); cursor: grab; background: transparent; }
 .tile .art svg { display: block; width: 100%; height: auto; }
 .tile::after { /* 悬停的虚线框 */
@@ -92,8 +93,9 @@ body.dragging .tile.placed { transition: none; }
 .tile .bar button { border: 0; background: transparent; height: 26px; min-width: 26px; padding: 0 9px; border-radius: 99px; cursor: pointer; font-size: 11.5px; color: var(--ink); display: inline-flex; align-items: center; gap: 4px; }
 .tile .bar button:hover { background: var(--glass2); }
 .tile .bar .vname { color: var(--soft); font-size: 11px; padding: 0 2px; }
-.tile .name { position: absolute; top: -21px; left: -2px; font-size: 11px; color: var(--soft); opacity: 0; transition: opacity .18s; pointer-events: none; white-space: nowrap; }
+.tile .name { position: absolute; top: -30px; left: -2px; max-width: 56%; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--soft); opacity: 0; transition: opacity .18s; pointer-events: none; white-space: nowrap; }
 .tile:hover .name, .tile.hover .name { opacity: 1; }
+.tile .name .how { color: var(--faint); margin-left: 10px; }
 .tile .fmts { position: absolute; top: 12px; right: -6px; z-index: 4; border-radius: 14px; padding: 5px; display: grid; gap: 1px; min-width: 168px; animation: drop2 .14s ease-out; }
 @keyframes drop2 { from { opacity: 0; transform: translateY(-4px); } }
 .fmts button { border: 0; background: transparent; text-align: left; padding: 7px 10px; border-radius: 9px; cursor: pointer; display: flex; justify-content: space-between; gap: 14px; }
@@ -101,6 +103,7 @@ body.dragging .tile.placed { transition: none; }
 .fmts button span { color: var(--soft); font-size: 11px; }
 
 /* 拖动：其余作品虚化，只看被拖的那张 */
+body.dragging, body.dragging * { cursor: grabbing !important; }
 body.dragging #board { filter: blur(7px) saturate(.5); opacity: .45; }
 body.dragging .tile .bar, body.dragging .tile::after { opacity: 0 !important; }
 #ghost { position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; border-radius: 10px; overflow: hidden; box-shadow: var(--lift); opacity: .92; rotate: -2deg; transition: scale .22s cubic-bezier(.2,.8,.2,1), opacity .22s; }
@@ -113,21 +116,24 @@ body.dragging .tile .bar, body.dragging .tile::after { opacity: 0 !important; }
 #dots button:hover { transform: scale(1.18); }
 #dots button svg { width: 22px; height: 22px; display: block; border-radius: 99px; }
 #dots button.on::after { content: ""; position: absolute; inset: -4px; border-radius: 99px; border: 1.5px solid var(--ink); }
+body.busy #dots button.on::after { border-color: transparent; border-top-color: var(--ink); border-right-color: var(--ink); animation: spin .8s linear infinite; } /* 新风格在后台画着 */
+@keyframes spin { to { rotate: 360deg; } }
 #tipname { position: fixed; z-index: 70; pointer-events: none; padding: 7px 11px 8px; border-radius: 12px; font-size: 12px; color: #F4F4F2; background: rgba(18,18,18,.78); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 8px 24px rgba(0,0,0,.25); max-width: 260px; }
 #tipname b { display: block; font-weight: 600; font-size: 12.5px; }
 #tipname span { color: rgba(244,244,242,.7); font-size: 11.5px; }
 
 /* ── 导出坞 ── */
-#dock { position: fixed; z-index: 20; right: 18px; bottom: 18px; height: 42px; padding: 0 6px 0 16px; border-radius: 99px; display: flex; align-items: center; gap: 10px; transition: all .3s cubic-bezier(.2,.7,.2,1); }
+#dock { position: fixed; z-index: 20; right: 18px; bottom: 18px; height: 42px; padding: 0 6px 0 16px; border-radius: 99px; display: flex; align-items: center; gap: 10px; }
 #dock .hint { color: var(--soft); font-size: 12px; white-space: nowrap; }
 #dock .targets { display: flex; gap: 2px; }
 #dock .targets button { border: 0; background: transparent; height: 30px; padding: 0 10px; border-radius: 99px; cursor: pointer; font-size: 11.5px; font-weight: 600; letter-spacing: .02em; color: var(--soft); transition: all .15s; }
 #dock .targets button:hover { color: var(--ink); background: var(--glass2); }
 #dock .sizes { display: none; }
-body.dragging #dock { left: 50%; right: auto; transform: translateX(-50%); bottom: 26px; height: auto; padding: 14px; border-radius: 26px; flex-direction: column; gap: 10px; background: var(--glass2); }
+body.dragging #dock { z-index: 25; left: 50%; right: auto; transform: translateX(-50%); bottom: 26px; height: auto; padding: 14px; border-radius: 26px; flex-direction: column; gap: 10px; background: var(--glass2); animation: dockin .24s cubic-bezier(.2,.8,.2,1); }
+@keyframes dockin { from { opacity: 0; transform: translate(-50%, 10px) scale(.97); } }
 body.dragging #dock .hint { color: var(--ink); font-weight: 600; }
 body.dragging #dock .targets { gap: 8px; }
-body.dragging #dock .targets button { height: 74px; min-width: 92px; padding: 0 12px; border-radius: 18px; flex-direction: column; display: flex; align-items: center; justify-content: center; gap: 4px; border: 1.25px dashed var(--dash); color: var(--ink); font-size: 13px; }
+body.dragging #dock .targets button { transition: background .15s, color .15s, transform .15s; height: 74px; min-width: 92px; padding: 0 12px; border-radius: 18px; flex-direction: column; display: flex; align-items: center; justify-content: center; gap: 4px; border: 1.25px dashed var(--dash); color: var(--ink); font-size: 13px; }
 body.dragging #dock .targets button span { font-weight: 400; font-size: 10.5px; color: var(--soft); letter-spacing: 0; }
 #dock .targets button span { display: none; }
 body.dragging #dock .targets button span { display: block; }
@@ -144,14 +150,24 @@ body.dragging #dock .sizes { display: flex; gap: 2px; padding: 3px; border-radiu
 #focus .big .art svg { display: block; width: 100%; height: auto; }
 #focus .strip { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 22px; margin-top: 18px; max-width: 100%; overflow-x: auto; }
 #focus .strip button { border: 0; background: transparent; cursor: pointer; padding: 6px 10px; border-radius: 12px; color: var(--soft); font-size: 12px; white-space: nowrap; }
+#focus .strip button:hover { background: var(--glass2); color: var(--ink); }
 #focus .strip button.on { background: var(--ink); color: var(--bg); }
 #focus .strip .sep { width: 1px; height: 20px; background: var(--edge); }
-#focus .close { position: fixed; top: 16px; right: 18px; }
+#focus .strip .lab { color: var(--faint); font-size: 11px; white-space: nowrap; }
+#focus > .closer { position: fixed; top: 15px; right: 18px; }
+
+/* 关闭：看得见的按钮，Esc 只是顺带提示的快捷键 */
+.closer { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 8px 0 13px; border: 0; border-radius: 99px; cursor: pointer; font-size: 12.5px; font-weight: 500; color: var(--ink); }
+.closer:hover { background: var(--glass2); }
+.closer kbd { font: 500 10.5px/1 Inter, -apple-system, sans-serif; color: var(--soft); padding: 4px 6px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--edge); }
 
 /* ── 设置 ── */
 #sheet { position: fixed; z-index: 45; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.18); animation: fade .2s; }
 #sheet .panel { width: min(560px, calc(100vw - 40px)); max-height: 86vh; overflow: auto; border-radius: 24px; padding: 22px 24px; background: var(--glass2); }
-#sheet h2 { margin: 0 0 4px; font-size: 16px; }
+#sheet .head { display: flex; align-items: center; justify-content: space-between; margin: -4px -8px 4px 0; }
+#sheet h2 { margin: 0; font-size: 16px; }
+#sheet .closer { box-shadow: none; background: transparent; }
+#sheet .closer:hover { background: var(--glass); }
 #sheet h3 { margin: 18px 0 8px; font-size: 11px; letter-spacing: .14em; color: var(--faint); font-weight: 600; text-transform: uppercase; }
 #sheet p { margin: 0 0 6px; color: var(--soft); font-size: 12.5px; }
 #sheet .row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--edge); }

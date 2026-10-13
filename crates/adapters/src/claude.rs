@@ -163,6 +163,8 @@ fn head_info(p: &Path) -> Option<(String, i64)> {
     let f = std::fs::File::open(p).ok()?;
     let mut cwd = None;
     let mut last = 0;
+    // 某一行不是合法 UTF-8 就跳过它接着读，不因为一行坏掉丢掉整个会话
+    #[allow(clippy::lines_filter_map_ok)]
     for (i, l) in BufReader::new(f).lines().flatten().enumerate() {
         if i > 40 && cwd.is_some() {
             break;
