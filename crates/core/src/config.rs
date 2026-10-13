@@ -155,3 +155,62 @@ impl Config {
         self.privacy.aliases.get(name).cloned().unwrap_or_else(|| name.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn minimal_file_gets_defaults() {
+        let c: Config = serde_json::from_str(r#"{"name":"demo","repo":"/tmp/demo","branch":"main"}"#).unwrap();
+        assert_eq!(c.level, "standard");
+        assert_eq!(c.version, 1);
+        assert_eq!(c.ignore_tags, ["archive/**"]);
+        assert!(!c.display.named);
+        assert!(c.directors.is_empty());
+    }
+
+    #[test]
+    fn own_ignore_tags_replace_default() {
+        let c: Config = serde_json::from_str(r#"{"name":"d","repo":"/d","branch":"main","ignoreTags":["nightly-*"]}"#).unwrap();
+        assert_eq!(c.ignore_tags, ["nightly-*"]);
+        let none: Config = serde_json::from_str(r#"{"name":"d","repo":"/d","branch":"main","ignoreTags":[]}"#).unwrap();
+        assert!(none.ignore_tags.is_empty());
+    }
+
+    #[test]
+    fn me_is_an_alias_of_directors() {
+        let c: Config = serde_json::from_str(r#"{"name":"d","repo":"/d","branch":"main","me":[{"id":"me","name":"Me","emails":["Me@Example.com","second@example.com"]}]}"#).unwrap();
+        assert_eq!(c.director_emails(), ["me@example.com", "second@example.com"]);
+    }
+
+    #[test]
+    fn save_then_load_round_trips() {
+        let dir = std::env::temp_dir().join(format!("creditia-config-test-{}", std::process::id()));
+        let p = dir.join("nested/config.json");
+        let mut c = Config { name: "demo".into(), repo: "/tmp/demo".into(), ..Config::default() };
+        c.privacy.aliases.insert("Real Name".into(), "R.".into());
+        c.save(&p).unwrap();
+        let back = Config::load(&p).unwrap();
+        assert_eq!(back.name, "demo");
+        assert_eq!(back.agent_emails.get("noreply@anthropic.com").map(String::as_str), Some("claude-code"));
+        assert_eq!(back.branch_prefixes.get("codex/").map(String::as_str), Some("codex"));
+        assert_eq!(back.ignore_tags, ["archive/**"]);
+        assert_eq!(back.display_name("Real Name"), "R.");
+        assert_eq!(back.display_name("Other"), "Other");
+        // 文件写成 camelCase
+        let raw = std::fs::read_to_string(&p).unwrap();
+        assert!(raw.contains("\"ignoreTags\"") && raw.contains("\"agentEmails\""), "{raw}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_reports_bad_files() {
+        let dir = std::env::temp_dir().join(format!("creditia-config-bad-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(Config::load(&dir.join("missing.json")).unwrap_err().contains("读取"));
+        std::fs::write(dir.join("bad.json"), "{ not json").unwrap();
+        assert!(Config::load(&dir.join("bad.json")).unwrap_err().contains("解析"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

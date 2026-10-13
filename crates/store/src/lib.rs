@@ -229,3 +229,119 @@ pub fn save_json<T: serde::Serialize>(p: &Path, v: &T) -> Result<(), String> {
     }
     std::fs::write(p, serde_json::to_vec(v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use creditia_core::model::FileGroup;
+    use std::sync::OnceLock;
+
+    /// 整个测试进程共用一个临时作品库（CREDITIA_HOME 只设一次，避免并行测试互相改环境变量）；各测试用不同的项目 id
+    fn lib() -> Library {
+        static HOME: OnceLock<PathBuf> = OnceLock::new();
+        HOME.get_or_init(|| {
+            let p = std::env::temp_dir().join(format!("creditia-store-test-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&p);
+            std::env::set_var("CREDITIA_HOME", &p);
+            p
+        });
+        Library::open().unwrap()
+    }
+
+    fn ev(rel: &str, key: u32, session: &str) -> Ev {
+        Ev { rel: rel.into(), key, src: Src::Codex, model: "gpt-test".into(), session: session.into(), ts: 100, tab: false }
+    }
+
+    fn session(id: &str, provider: Option<&str>) -> Session {
+        Session { src: Src::Claude, id: id.into(), model: "claude-test".into(), start: 10, end: 20, tokens: 30, branch: Some("main".into()), prompts: 2, reviewer: false, has_content: true, provider: provider.map(String::from) }
+    }
+
+    #[test]
+    fn evidence_round_trip_is_idempotent() {
+        let mut l = lib();
+        let mut store = Store::default();
+        store.groups.insert("g1".into(), FileGroup { fp: (1, 1), evs: vec![ev("src/a.rs", 1, "s1"), ev("src/a.rs", 2, "s1")], sessions: vec![session("c1", Some("bedrock"))] });
+        assert_eq!(l.save_evidence("p-ev", &store).unwrap(), 2);
+        // 同样的证据再存一次不重复
+        assert_eq!(l.save_evidence("p-ev", &store).unwrap(), 0);
+        assert_eq!(l.evidence_count("p-ev"), 2);
+        let (evs, ses) = l.load_evidence("p-ev").unwrap();
+        assert_eq!(evs.len(), 2);
+        assert!(evs.iter().all(|e| e.src == Src::Codex && e.model == "gpt-test" && e.rel == "src/a.rs"));
+        assert_eq!(ses.len(), 1);
+        assert_eq!(ses[0].provider.as_deref(), Some("bedrock"));
+        assert_eq!(ses[0].branch.as_deref(), Some("main"));
+        // 别的项目看不到
+        assert_eq!(l.evidence_count("p-other"), 0);
+    }
+
+    #[test]
+    fn projects_upsert_keeps_last_head() {
+        let l = lib();
+        let p = Project { id: "p-up".into(), name: "demo".into(), path: "/tmp/demo".into(), root_commit: "abc".into(), remotes: vec!["git@x:demo.git".into()], last_head: Some("h1".into()), last_analyzed: Some(5) };
+        l.upsert_project(&p).unwrap();
+        // 再登记一次但不带 head：保留原来的
+        l.upsert_project(&Project { name: "demo2".into(), last_head: None, last_analyzed: None, ..p.clone() }).unwrap();
+        let got = l.projects().unwrap().into_iter().find(|x| x.id == "p-up").unwrap();
+        assert_eq!(got.name, "demo2");
+        assert_eq!(got.last_head.as_deref(), Some("h1"));
+        assert_eq!(got.remotes, vec!["git@x:demo.git".to_string()]);
+    }
+
+    #[test]
+    fn snapshots_latest_wins() {
+        let l = lib();
+        assert_eq!(l.snapshot_json("p-snap").unwrap(), None);
+        l.save_snapshot("p-snap", "h1", "2026-01-01T00:00:00Z", r#"{"n":1}"#).unwrap();
+        l.save_snapshot("p-snap", "h2", "2026-02-01T00:00:00Z", r#"{"n":2}"#).unwrap();
+        assert_eq!(l.snapshot_json("p-snap").unwrap().as_deref(), Some(r#"{"n":2}"#));
+        assert_eq!(l.snapshots("p-snap").unwrap().iter().map(|(h, _)| h.as_str()).collect::<Vec<_>>(), ["h1", "h2"]);
+    }
+
+    #[test]
+    fn manual_paths_stay_manual() {
+        let l = lib();
+        l.add_path("p-path", "/old/demo", "manual").unwrap();
+        // 后来自动扫描又见到这个路径：类型仍是 manual
+        l.add_path("p-path", "/old/demo", "worktree").unwrap();
+        l.add_path("p-path", "/tmp/clone", "clone").unwrap();
+        let ps = l.paths("p-path").unwrap();
+        assert!(ps.contains(&("/old/demo".to_string(), "manual".to_string())), "{ps:?}");
+        assert_eq!(ps.len(), 2);
+        assert_eq!(l.remove_path("p-path", "/tmp/clone").unwrap(), 1);
+        assert_eq!(l.remove_path("p-path", "/tmp/clone").unwrap(), 0);
+        assert_eq!(l.paths("p-path").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn set_display_keeps_other_fields() {
+        let repo = std::env::temp_dir().join(format!("creditia-store-display-{}", std::process::id()));
+        std::fs::create_dir_all(repo.join(".creditia")).unwrap();
+        std::fs::write(repo.join(".creditia/config.json"), r#"{"name":"demo","level":"strict"}"#).unwrap();
+        Library::set_display(&repo, true, "— demo").unwrap();
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(repo.join(".creditia/config.json")).unwrap()).unwrap();
+        assert_eq!(v["name"], "demo");
+        assert_eq!(v["level"], "strict");
+        assert_eq!(v["display"]["named"], true);
+        assert_eq!(v["display"]["sign"], "— demo");
+        // 没有配置文件也能写
+        let fresh = repo.join("fresh");
+        Library::set_display(&fresh, false, "").unwrap();
+        assert!(fresh.join(".creditia/config.json").exists());
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[test]
+    fn json_cache_round_trip() {
+        let p = std::env::temp_dir().join(format!("creditia-store-json-{}/a/b.json", std::process::id()));
+        save_json(&p, &vec![1, 2, 3]).unwrap();
+        let v: Vec<i32> = load_json(&p);
+        assert_eq!(v, [1, 2, 3]);
+        // 不存在或坏掉的文件：返回默认值
+        let missing: Vec<i32> = load_json(&p.with_file_name("none.json"));
+        assert!(missing.is_empty());
+        std::fs::write(&p, "not json").unwrap();
+        let bad: Vec<i32> = load_json(&p);
+        assert!(bad.is_empty());
+    }
+}

@@ -197,3 +197,87 @@ pub fn any_ts(v: &serde_json::Value) -> Option<i64> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn new_text_by_tool_kind() {
+        assert_eq!(new_text("Write", &json!({ "file_path": "a", "content": "x = 1" })).as_deref(), Some("x = 1"));
+        assert_eq!(new_text("create_file", &json!({ "file_text": "y" })).as_deref(), Some("y"));
+        assert_eq!(new_text("Edit", &json!({ "old_string": "a", "new_string": "b" })).as_deref(), Some("b"));
+        assert_eq!(new_text("edit", &json!({ "oldString": "a", "newString": "c" })).as_deref(), Some("c"));
+        // MultiEdit：每段的新文本连起来
+        assert_eq!(new_text("MultiEdit", &json!({ "edits": [{ "new_string": "one" }, { "newString": "two" }] })).as_deref(), Some("one\ntwo"));
+        // 读文件、跑命令这类不算写入
+        assert_eq!(new_text("Read", &json!({ "file_path": "a", "content": "x" })), None);
+        assert_eq!(new_text("Bash", &json!({ "command": "ls" })), None);
+    }
+
+    #[test]
+    fn path_arg_field_names() {
+        for k in ["file_path", "filePath", "path", "absolute_path", "target_file"] {
+            assert_eq!(path_arg(&json!({ k: "/r/a.rs" })).as_deref(), Some("/r/a.rs"), "{k}");
+        }
+        assert_eq!(path_arg(&json!({ "command": "ls" })), None);
+    }
+
+    #[test]
+    fn added_lines_from_diffs() {
+        let unified = "--- a/x.rs\n+++ b/x.rs\n@@ -1,2 +1,3 @@\n keep\n-old\n+new one\n+new two\n";
+        assert_eq!(added_from_diff(unified), "new one\nnew two\n");
+        let search_replace = "<<<<<<< SEARCH\nold line\n=======\nreplacement a\nreplacement b\n>>>>>>> REPLACE\n";
+        assert_eq!(added_from_diff(search_replace), "replacement a\nreplacement b\n");
+        // Roo 的写法
+        let roo = "<<<<<<< SEARCH\n:start_line:3\n-------\nold\n=======\nfresh\n+++++++ REPLACE\n";
+        assert_eq!(added_from_diff(roo), "fresh\n");
+    }
+
+    #[test]
+    fn percent_decoding() {
+        assert_eq!(percent_decode("%2FUsers%2Fme%2F%E7%A4%BA%E4%BE%8B"), "/Users/me/示例");
+        assert_eq!(percent_decode("plain-name"), "plain-name");
+        // 不完整的转义原样保留
+        assert_eq!(percent_decode("50%"), "50%");
+        assert_eq!(percent_decode("%zz"), "%zz");
+    }
+
+    #[test]
+    fn timestamps_in_any_unit() {
+        assert_eq!(any_ts(&json!(1_787_000_000)), Some(1_787_000_000));
+        assert_eq!(any_ts(&json!(1_787_000_000_123i64)), Some(1_787_000_000));
+        assert_eq!(any_ts(&json!(1_787_000_000.5)), Some(1_787_000_000));
+        assert_eq!(any_ts(&json!("1787000000123")), Some(1_787_000_000));
+        assert_eq!(any_ts(&json!("2026-08-17T20:53:20.000Z")), Some(1_787_000_000));
+        assert_eq!(any_ts(&json!(null)), None);
+        assert_eq!(any_ts(&json!("yesterday")), None);
+    }
+
+    #[test]
+    fn push_text_skips_short_lines_and_foreign_paths() {
+        let pm = PathMap { known: ["src/a.rs".to_string()].into_iter().collect(), markers: vec!["/demo/".into()], excludes: vec![] };
+        let mut out = vec![];
+        let text = "fn main() { run(); }\n}\n\n  let value = compute();\n";
+        assert!(push_text(&mut out, &pm, "/home/me/demo/src/a.rs", text, Src::Claude, "m", "s", 1));
+        // 「}」和空行太短，不算
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().all(|e| e.rel == "src/a.rs" && e.src == Src::Claude));
+        // 别的项目的路径：不映射
+        assert!(!push_text(&mut out, &pm, "/home/me/other/src/a.rs", text, Src::Claude, "m", "s", 1));
+        assert_eq!(out.len(), 2);
+    }
+
+    #[test]
+    fn zstd_or_plain() {
+        let dir = std::env::temp_dir().join(format!("creditia-zst-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.jsonl"), "plain\n").unwrap();
+        std::fs::write(dir.join("b.jsonl.zst"), zstd::stream::encode_all(&b"packed\n"[..], 3).unwrap()).unwrap();
+        assert_eq!(read_maybe_zst(&dir.join("a.jsonl")), "plain\n");
+        assert_eq!(read_maybe_zst(&dir.join("b.jsonl.zst")), "packed\n");
+        assert_eq!(read_maybe_zst(&dir.join("missing")), "");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

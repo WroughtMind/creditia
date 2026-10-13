@@ -411,3 +411,120 @@ fn new_sources_levels_and_paths() {
     assert!(!ok);
     let _ = fs::remove_dir_all(&env.root);
 }
+
+/// Grok、Kimi、Roo Code、Kilo Code 四种数据源；archive 标签不算版本，ignoreTags 可以自己加
+#[test]
+fn grok_kimi_roo_kilo_and_ignored_tags() {
+    let env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base: i64 = 1_789_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    let lines = |tag: &str, n: usize| -> Vec<String> { (0..n).map(|i| format!("pub fn {tag}_line_{i}() -> u32 {{ {i} * 11 }}")).collect() };
+    let (grok_a, grok_b) = (lines("grok_write", 8), lines("grok_replace", 4));
+    let (kimi_a, kimi_b) = (lines("kimi_write", 7), lines("kimi_edit", 5));
+    let roo: Vec<String> = (0..4).map(|i| format!("export const rooValue{i} = {i} + 40;")).collect();
+    let kilo: Vec<String> = (0..3).map(|i| format!("export const kiloValue{i} = {i} + 70;")).collect();
+
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join("README.md"), "# demo project for more adapters\n").unwrap();
+    commit(&repo, "init", "me@example.com", &d(base - 86400));
+    fs::write(repo.join("src/grok_a.rs"), grok_a.join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/grok_b.rs"), grok_b.join("\n") + "\n").unwrap();
+    commit(&repo, "grok work", "me@example.com", &d(base + 60));
+    git(&repo, &["tag", "v0.3.0"]);
+    fs::write(repo.join("src/kimi_a.rs"), kimi_a.join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/kimi_b.rs"), kimi_b.join("\n") + "\n").unwrap();
+    commit(&repo, "kimi work", "me@example.com", &d(base + 160));
+    git(&repo, &["tag", "archive/site-old"]);
+    fs::write(repo.join("src/roo.ts"), roo.join("\n") + "\n").unwrap();
+    commit(&repo, "roo work", "me@example.com", &d(base + 260));
+    git(&repo, &["tag", "nightly-1"]);
+    fs::write(repo.join("src/kilo.ts"), kilo.join("\n") + "\n").unwrap();
+    commit(&repo, "kilo work", "me@example.com", &d(base + 360));
+
+    // Grok：目录名是 URL 编码的 cwd；一次 write（参数是对象），一次 search_replace（参数是 JSON 字符串）
+    let gs = env.root.join("grok/sessions").join(rs.replace('/', "%2F")).join("u1");
+    fs::create_dir_all(&gs).unwrap();
+    fs::write(gs.join("summary.json"), serde_json::json!({ "info": { "cwd": rs }, "current_model_id": "grok-test", "created_at": base - 300, "updated_at": base, "head_branch": "main" }).to_string()).unwrap();
+    let hist = [
+        serde_json::json!({ "role": "user", "content": "write it" }),
+        serde_json::json!({ "role": "assistant", "model_id": "grok-test", "ts": base - 200, "tool_calls": [{ "name": "write", "args": { "file_path": format!("{rs}/src/grok_a.rs"), "content": grok_a.join("\n") } }] }),
+        serde_json::json!({ "role": "assistant", "model_id": "grok-test", "ts": base - 100, "tool_calls": [{ "function": { "name": "search_replace", "arguments": serde_json::json!({ "file_path": format!("{rs}/src/grok_b.rs"), "old_string": "x", "new_string": grok_b.join("\n") }).to_string() } }] }),
+    ];
+    fs::write(gs.join("chat_history.jsonl"), hist.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n") + "\n").unwrap();
+
+    // Kimi：一个会话 state.json 里有 cwd（Write 包在 context.append_loop_event 里）；
+    // 另一个会话没写 cwd，靠 session_index.jsonl 找回工作目录（直接的 tool.call Edit）
+    let kb = env.root.join("kimi");
+    let (s1, s2) = (kb.join("sessions/wd/session_k1"), kb.join("sessions/wd/session_k2"));
+    for s in [&s1, &s2] {
+        fs::create_dir_all(s.join("agents/main")).unwrap();
+    }
+    fs::write(s1.join("state.json"), serde_json::json!({ "cwd": rs }).to_string()).unwrap();
+    fs::write(s2.join("state.json"), "{}").unwrap();
+    fs::write(kb.join("session_index.jsonl"), serde_json::json!({ "sessionDir": s2.display().to_string(), "workDir": rs }).to_string() + "\n").unwrap();
+    let w1 = [
+        serde_json::json!({ "type": "turn.prompt", "time": base + 100 }),
+        serde_json::json!({ "type": "llm.request", "time": base + 101, "payload": { "model": "kimi-test" } }),
+        serde_json::json!({ "type": "usage.record", "time": base + 102, "payload": { "usage": { "inputOther": 100, "output": 40 } } }),
+        serde_json::json!({ "type": "context.append_loop_event", "time": base + 103, "payload": { "event": { "type": "tool.call", "call": { "name": "Write", "args": { "path": format!("{rs}/src/kimi_a.rs"), "content": kimi_a.join("\n") } } } } }),
+    ];
+    let w2 = [
+        serde_json::json!({ "type": "llm.request", "time": base + 120, "payload": { "model": "kimi-test" } }),
+        serde_json::json!({ "type": "tool.call", "time": base + 121, "payload": { "name": "Edit", "args": { "file_path": format!("{rs}/src/kimi_b.rs"), "old_string": "x", "new_string": kimi_b.join("\n") } } }),
+    ];
+    fs::write(s1.join("agents/main/wire.jsonl"), w1.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n") + "\n").unwrap();
+    fs::write(s2.join("agents/main/wire.jsonl"), w2.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n") + "\n").unwrap();
+
+    // Roo Code 和 Kilo Code：和 Cline 同一种格式，放在各自的扩展目录里
+    let task = |ext: &str, id: &str, result: &str, ui: serde_json::Value, model: &str| {
+        let t = env.root.join("vscode").join(ext).join("tasks").join(id);
+        fs::create_dir_all(&t).unwrap();
+        fs::write(t.join("api_conversation_history.json"), serde_json::json!([
+            { "role": "user", "content": [{ "type": "text", "text": format!("# Current Working Directory ({rs}) Files") }] },
+            { "role": "user", "content": [{ "type": "text", "text": result }] }
+        ]).to_string()).unwrap();
+        fs::write(t.join("ui_messages.json"), ui.to_string()).unwrap();
+        fs::write(t.join("task_metadata.json"), serde_json::json!({ "model_usage": [{ "model_id": model, "model_provider_id": "anthropic" }] }).to_string()).unwrap();
+    };
+    task("rooveterinaryinc.roo-cline", "r1", "[write_to_file for 'src/roo.ts'] Result:\nThe content was successfully saved to src/roo.ts.", serde_json::json!([
+        { "ts": (base + 200) * 1000, "say": "task", "text": "add roo values" },
+        { "ts": (base + 210) * 1000, "ask": "tool", "text": serde_json::json!({ "tool": "newFileCreated", "path": "src/roo.ts", "content": roo.join("\n") }).to_string() }
+    ]), "roo-model");
+    let diff = format!("--- a/src/kilo.ts\n+++ b/src/kilo.ts\n@@ -0,0 +1,3 @@\n{}\n", kilo.iter().map(|l| format!("+{l}")).collect::<Vec<_>>().join("\n"));
+    task("kilocode.kilo-code", "k1", "[apply_diff for 'src/kilo.ts'] Result:\nChanges successfully applied to src/kilo.ts.", serde_json::json!([
+        { "ts": (base + 300) * 1000, "say": "task", "text": "add kilo values" },
+        { "ts": (base + 310) * 1000, "ask": "tool", "text": serde_json::json!({ "tool": "appliedDiff", "path": "src/kilo.ts", "diff": diff }).to_string() }
+    ]), "kilo-model");
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let read = || -> serde_json::Value { serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap() };
+    let credits = read();
+    let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+    assert_eq!(verified("a:grok/grok-test"), 12, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:kimi/kimi-test"), 12, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:roo/roo-model"), 4, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:kilo/kilo-model"), 3, "{}", credits["breakdown"]);
+    // 会话也记下了：Kimi 两个、Grok 一个
+    let sessions = |h: &str| credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with(&format!("a:{h}/"))).count();
+    assert_eq!(sessions("kimi"), 2, "{}", credits["sessions"]);
+    assert_eq!(sessions("grok"), 1, "{}", credits["sessions"]);
+
+    // 版本：archive/ 默认不算；nightly-1 默认算
+    let tags = |c: &serde_json::Value| c["versions"].as_array().unwrap().iter().map(|v| v["tag"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    assert_eq!(tags(&credits), ["v0.3.0", "nightly-1"]);
+    // 自己加一条规则：nightly-* 也不算
+    let cfg_path = repo.join(".creditia/config.json");
+    let mut cfg: serde_json::Value = serde_json::from_str(&fs::read_to_string(&cfg_path).unwrap()).unwrap();
+    assert_eq!(cfg["ignoreTags"], serde_json::json!(["archive/**"]));
+    cfg["ignoreTags"] = serde_json::json!(["archive/**", "nightly-*"]);
+    fs::write(&cfg_path, cfg.to_string()).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(tags(&read()), ["v0.3.0"]);
+    let _ = fs::remove_dir_all(&env.root);
+}
