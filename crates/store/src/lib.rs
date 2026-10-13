@@ -44,14 +44,28 @@ pub struct Library {
 
 impl Library {
     pub fn open() -> Result<Library, String> {
-        let dir = data_dir();
+        Self::open_in(data_dir())
+    }
+    fn open_in(dir: PathBuf) -> Result<Library, String> {
         std::fs::create_dir_all(&dir).map_err(|e| format!("创建作品库目录失败 {}: {e}", dir.display()))?;
         let conn = Connection::open(dir.join("library.sqlite")).map_err(|e| e.to_string())?;
         // App 和命令行可能同时打开作品库：被锁住时等一会儿，而不是直接报 database is locked
         conn.busy_timeout(std::time::Duration::from_secs(5)).map_err(|e| e.to_string())?;
+        // 切到 WAL 要独占整个库，busy_timeout 管不到这一步：两个进程（或并行的测试）同时第一次打开新库，
+        // 其中一个会直接报 database is locked。被锁就稍等重试；已经是 WAL 的库这一步不需要锁
+        let mut tries = 0;
+        loop {
+            match conn.query_row("pragma journal_mode=wal", [], |r| r.get::<_, String>(0)) {
+                Ok(_) => break,
+                Err(e) if tries < 50 && e.to_string().contains("locked") => {
+                    tries += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                Err(e) => return Err(e.to_string()),
+            }
+        }
         conn.execute_batch(
-            "pragma journal_mode=wal;
-             create table if not exists projects(
+            "create table if not exists projects(
                id text primary key, name text not null, path text not null, root_commit text not null,
                remotes text not null default '[]', last_head text, last_analyzed integer);
              create table if not exists evidence(
@@ -275,6 +289,29 @@ mod tests {
         assert_eq!(ses[0].branch.as_deref(), Some("main"));
         // 别的项目看不到
         assert_eq!(l.evidence_count("p-other"), 0);
+    }
+
+    /// 几个进程同时第一次打开一个新库（App 和命令行、并行的测试）：都要打开成功，不能报 database is locked
+    #[test]
+    fn concurrent_first_opens_succeed() {
+        for round in 0..40 {
+            let dir = std::env::temp_dir().join(format!("creditia-store-race-{}-{round}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            let bar = std::sync::Arc::new(std::sync::Barrier::new(8));
+            let hs: Vec<_> = (0..8)
+                .map(|_| {
+                    let (bar, dir) = (bar.clone(), dir.clone());
+                    std::thread::spawn(move || {
+                        bar.wait();
+                        Library::open_in(dir).map(|_| ())
+                    })
+                })
+                .collect();
+            for h in hs {
+                h.join().unwrap().unwrap();
+            }
+            let _ = std::fs::remove_dir_all(&dir);
+        }
     }
 
     #[test]
