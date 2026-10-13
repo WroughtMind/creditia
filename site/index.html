@@ -444,17 +444,38 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 
 @media (max-width: 900px) {
   .wrap, header .wrap { width: calc(100% - 40px); }
-  .field { left: 20px; right: 0; top: 74px; bottom: auto; height: max(180px, calc(100svh - 610px)); gap: 10px; }
+  /* 手机首屏：上面是代码地图（占满标题以外的高度），下面是标题、一句话、一条命令、一排 logo */
+  #screen { min-height: 600px; }
+  .field { left: 20px; right: 0; top: 72px; bottom: auto; height: max(200px, calc(100svh - 452px)); gap: 10px; }
   .fcap, .flegend { padding-right: 20px; }
   .fbar { margin-right: 20px; }
-  .flegend { gap: 4px 12px; font-size: 12px; flex-wrap: nowrap; overflow: hidden; }
-  .flegend span:nth-child(n+4) { display: none; }
+  .flegend { display: grid; grid-template-columns: repeat(3, max-content); justify-content: space-between; gap: 7px 6px; font-size: 11px; }
+  .flegend span { gap: 5px; }
+  .flegend span svg { width: 13px; height: 13px; }
+  .flegend span i { width: 11px; height: 11px; }
   .fcap { font-size: 11px; } #fproj { display: none; }
   .fcv { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
-  .title { top: auto; bottom: 48px; transform: none; left: 20px; right: 20px; width: auto; }
-  .title p { font-size: 16px; }
-  .agents { gap: 12px 14px; }
-  .agents svg { width: 22px; height: 22px; }
+  .title { top: auto; bottom: 34px; transform: none; left: 20px; right: 20px; width: auto; }
+  .title h1 { font-size: 46px; }
+  .title p { margin-top: 16px; font-size: 15px; line-height: 1.65; }
+  .acts { margin-top: 20px; }
+  .acts .cmd { flex: 1; justify-content: space-between; height: 44px; font-size: 14px; }
+  #herodl { display: none; }
+  .agents { margin-top: 20px; gap: 14px; flex-wrap: nowrap; overflow: hidden; max-width: none; -webkit-mask-image: linear-gradient(90deg, #000 80%, transparent); mask-image: linear-gradient(90deg, #000 80%, transparent); }
+  .agents span { flex: none; }
+  .agents svg { width: 18px; height: 18px; }
+  /* 出处：手机上自动换行，不横向滚；悬停 / 点一行时谁写的浮在行尾 */
+  .code { font-size: 10.5px; line-height: 1.8; overflow-x: hidden; padding: 10px 0 12px; }
+  .ln { min-width: 0; grid-template-columns: 30px 3px 1fr; align-items: start; padding-right: 10px; position: relative; }
+  .ln .no { padding-right: 9px; font-size: 10px; }
+  .ln .tx { padding-left: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .ln .who { position: absolute; right: 8px; top: 50%; translate: 0 -50%; font-size: 10.5px; padding: 1px 8px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); box-shadow: -14px 0 14px var(--card); pointer-events: none; }
+  .legend { margin-top: 24px; gap: 6px; }
+  .legend span { height: 30px; padding: 0 11px; font-size: 13px; gap: 7px; }
+  .plat { grid-template-columns: 22px 1fr; }
+  .ib h3 { flex-wrap: wrap; row-gap: 4px; }
+  .plat .fmts { grid-column: 2; flex-wrap: wrap; }
+  .term .mdl { display: none; }
   .wall, .band { gap: 10px; }
   .ways { grid-template-columns: 1fr; }
   nav { display: none; }
@@ -463,7 +484,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   #lb .bar { flex-wrap: wrap; gap: 8px 12px; }
   #lb .bar .cp { max-width: 92vw; order: 9; }
   .way h3 { flex-wrap: wrap; gap: 2px 10px; }
-  .term { font-size: 10.5px; padding: 14px 14px 18px; }
+  .term { font-size: 10px; padding: 12px 12px 16px; }
   .way { padding: 16px 16px 0; }
   .way .body { height: 380px; }
   .fst li:not(.on) span { display: none; }
@@ -1282,8 +1303,9 @@ async function playTerm(fast) {
   await type('npx creditia fetch'); if (!live()) return;
   const C = (k) => (k === 'unattributed' ? '#8C877D' : AGC[k] || 'inherit');
   for (const line of DATA.fetch[lang()]) {
-    add(line.map((sg) => {
+    add(line.map((sg, i) => {
       const tx = esc(sg.text);
+      if (i === 4 && line[0].color) return `<span class="d mdl">${tx}</span>`; // 模型名：手机上放不下，藏起来
       if (/^█+$/.test(sg.text)) return `<span class="g" style="color:${C(sg.color)}">${tx}</span>`;
       if (sg.bold) return `<span class="bd">${tx}</span>`;
       if (sg.dim) return `<span class="d">${tx}</span>`;
