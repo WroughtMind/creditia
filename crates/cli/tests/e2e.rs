@@ -275,6 +275,14 @@ fn end_to_end() {
     assert!(ok, "{v}");
     assert!(v["projects"].as_array().unwrap().iter().any(|p| p["name"] == "示例项目"), "{v}");
 
+    // Claude Code 的日志被清理了：证据库把那个会话的证据补回来，文档仍是逐行证据
+    fs::remove_dir_all(env.root.join("claude/projects")).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &repo.display().to_string(), "--fresh"]);
+    assert!(ok, "{v}");
+    let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    let doc = credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == "a:claude-code/claude-test").unwrap();
+    assert_eq!(doc["byEvidence"]["verified"]["linesAdded"], 12, "{doc}");
+
     let _ = fs::remove_dir_all(&env.root);
 }
 

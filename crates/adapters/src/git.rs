@@ -174,6 +174,10 @@ pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>
                     cur = Some(FileAdd { rel, binary: true, ..Default::default() });
                 }
             }
+        } else if line.starts_with("@@ ") {
+            if let Some(f) = cur.as_mut() {
+                f.hunks.push(f.keys.len() as u32);
+            }
         } else if let Some(a) = line.strip_prefix('+') {
             if let Some(f) = cur.as_mut() {
                 let n = normalize(a, &ext);
