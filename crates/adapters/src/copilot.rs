@@ -481,7 +481,7 @@ pub fn doctor() -> Vec<Health> {
     let dirs = user_dirs();
     let vs = Health {
         source: "copilot-vscode".into(),
-        path: dirs.first().map(|p| p.display().to_string()).unwrap_or_else(|| creditia_core::tr!("（未安装）", "(not installed)")),
+        path: dirs.first().map(|p| p.display().to_string()).unwrap_or_default(),
         readable: !dirs.is_empty(),
         format: "workspaceStorage/<ws>/chatSessions/*.jsonl · GitHub.copilot-chat/transcripts/*.jsonl".into(),
         records: files.len() as u64,
