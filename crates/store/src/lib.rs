@@ -87,6 +87,8 @@ impl Library {
         .map_err(|e| e.to_string())?;
         // 旧库补列：会话的渠道
         let _ = conn.execute("alter table sessions add column provider text", []);
+        // 证据的下一行
+        let _ = conn.execute("alter table evidence add column next integer not null default 0", []);
         Ok(Library { conn })
     }
 
@@ -128,14 +130,14 @@ impl Library {
         let mut n = 0;
         {
             let mut ins = tx
-                .prepare("insert or ignore into evidence(project,rel,key,src,model,session,ts,tab) values(?1,?2,?3,?4,?5,?6,?7,?8)")
+                .prepare("insert or ignore into evidence(project,rel,key,src,model,session,ts,tab,next) values(?1,?2,?3,?4,?5,?6,?7,?8,?9)")
                 .map_err(|e| e.to_string())?;
             let mut ses = tx
                 .prepare("insert or replace into sessions(project,src,id,model,start,end,tokens,branch,prompts,reviewer,has_content,provider) values(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)")
                 .map_err(|e| e.to_string())?;
             for g in store.groups.values() {
                 for e in &g.evs {
-                    n += ins.execute(params![project, e.rel, e.key as i64, e.src.harness(), e.model, e.session, e.ts, e.tab as i64]).map_err(|x| x.to_string())?;
+                    n += ins.execute(params![project, e.rel, e.key as i64, e.src.harness(), e.model, e.session, e.ts, e.tab as i64, e.next as i64]).map_err(|x| x.to_string())?;
                 }
                 for s in &g.sessions {
                     ses.execute(params![project, s.src.harness(), s.id, s.model, s.start, s.end, s.tokens, s.branch, s.prompts, s.reviewer as i64, s.has_content as i64, s.provider]).map_err(|x| x.to_string())?;
@@ -149,14 +151,14 @@ impl Library {
     /// 从证据库读回（日志已被清理时仍能归因）
     pub fn load_evidence(&self, project: &str) -> Result<(Vec<Ev>, Vec<Session>), String> {
         let src_of = Src::from_harness;
-        let mut st = self.conn.prepare("select rel,key,src,model,session,ts,tab from evidence where project=?1").map_err(|e| e.to_string())?;
+        let mut st = self.conn.prepare("select rel,key,src,model,session,ts,tab,next from evidence where project=?1").map_err(|e| e.to_string())?;
         let evs = st
             .query_map([project], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?, r.get::<_, i64>(5)?, r.get::<_, i64>(6)?))
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?, r.get::<_, i64>(5)?, (r.get::<_, i64>(6)?, r.get::<_, i64>(7)?)))
             })
             .map_err(|e| e.to_string())?
             .flatten()
-            .filter_map(|(rel, key, src, model, session, ts, tab)| src_of(&src).map(|src| Ev { rel, key: key as u32, src, model, session, ts, tab: tab != 0 }))
+            .filter_map(|(rel, key, src, model, session, ts, (tab, next))| src_of(&src).map(|src| Ev { rel, key: key as u32, src, model, session, ts, tab: tab != 0, next: next as u32 }))
             .collect();
         let mut st2 = self.conn.prepare("select src,id,model,start,end,tokens,branch,prompts,reviewer,has_content,provider from sessions where project=?1").map_err(|e| e.to_string())?;
         let sessions = st2
@@ -265,7 +267,7 @@ mod tests {
     }
 
     fn ev(rel: &str, key: u32, session: &str) -> Ev {
-        Ev { rel: rel.into(), key, src: Src::Codex, model: "gpt-test".into(), session: session.into(), ts: 100, tab: false }
+        Ev { rel: rel.into(), key, src: Src::Codex, model: "gpt-test".into(), session: session.into(), ts: 100, tab: false, next: 0 }
     }
 
     fn session(id: &str, provider: Option<&str>) -> Session {

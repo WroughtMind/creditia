@@ -94,7 +94,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         let e = conv.entry(r.conv.clone()).or_insert((ts, ts, model.clone()));
         e.0 = e.0.min(ts);
         e.1 = e.1.max(ts);
-        g.evs.push(Ev { rel, key, src: Src::Cursor, model, session: r.conv, ts, tab: r.source == "tab" });
+        g.evs.push(Ev { rel, key, src: Src::Cursor, model, session: r.conv, ts, tab: r.source == "tab", next: 0 });
     }
     for (id, (start, end, model)) in conv {
         g.sessions.push(Session { src: Src::Cursor, id, model, start, end, tokens: 0, branch: None, prompts: 0, reviewer: false, has_content: true, provider: None });

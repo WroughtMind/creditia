@@ -19,7 +19,7 @@ const DAY: i64 = 86400;
 #[derive(Clone, Debug)]
 struct L {
     text: String,
-    /// "claude-code/opus-x"、"codex"（只知道工具）、"me"（不是 AI）
+    /// "claude-code/opus-x"、"codex"（只知道工具）、"me"（人写的）、"gen"（脚本生成的：按约定不算给 AI）
     who: &'static str,
 }
 
@@ -341,9 +341,10 @@ impl Sim {
                 let added: Vec<&str> = new.iter().filter(|l| !old.contains(l)).map(|s| s.as_str()).collect();
                 format!("python3 - <<'PY'\np = '{path}'\ns = open(p).read()\ns = s.replace(\"__ANCHOR__\", \"\"\"\n{}\n\"\"\")\nopen(p, 'w').write(s)\nPY", added.join("\n"))
             }
+            "gen" => format!("node scripts/gen.mjs > {path}"),
             _ => format!("cat {path} | head -50 && grep -n fn {path}"),
         };
-        if how != "read" {
+        if how != "read" && how != "gen" {
             let prev = self.files.get(path).cloned().unwrap_or_default();
             let mut next = vec![];
             for (c, i, j) in diff(&old, &new) {
@@ -375,6 +376,15 @@ impl Sim {
             }
             _ => unreachable!(),
         }
+    }
+
+    /// agent 跑了一个生成脚本：文件内容是程序写的，日志里只有那条命令
+    fn generated(&mut self, agent: &'static str, path: &str, n: usize) {
+        self.t += 120;
+        let v = self.gen(path, n);
+        self.files.insert(path.to_string(), v.into_iter().map(|text| L { text, who: "gen" }).collect());
+        self.write_disk(path);
+        self.agent_shell(agent, path, vec![], "gen");
     }
 
     fn agent_new(&mut self, who: &'static str, path: &str, n: usize) {
@@ -532,7 +542,7 @@ struct Tally {
 }
 impl Tally {
     fn add(&mut self, truth: &str, pred: &str) {
-        if truth == "me" {
+        if truth == "me" || truth == "gen" {
             self.human += 1;
             if pred.starts_with("a:") {
                 self.claimed += 1;
@@ -735,9 +745,7 @@ fn accuracy_bench() {
 
     s.scene("18b 生成脚本的输出");
     s.agent_edit(GPT, "web/b.ts", 30, 0, 8);
-    s.lost = true; // 内容是程序生成的，日志里只有一条命令
-    s.agent_new(GPT, "web/generated.ts", 40);
-    s.lost = false;
+    s.generated(GPT, "web/generated.ts", 40);
     s.commit("codex edit + generator output");
 
     s.scene("18c agent 只读了人写的文件");
@@ -791,11 +799,11 @@ fn accuracy_bench() {
                     continue;
                 }
                 let p = p.as_str().unwrap();
-                if std::env::var_os("CREDITIA_BENCH_VERBOSE").is_some() && (l.who == "me") == p.starts_with("a:") || (l.who != "me" && !p.starts_with(&format!("a:{}", harness(l.who)))) {
+                if std::env::var_os("CREDITIA_BENCH_VERBOSE").is_some() && (l.who == "me" || l.who == "gen") == p.starts_with("a:") || (l.who != "me" && l.who != "gen" && !p.starts_with(&format!("a:{}", harness(l.who)))) {
                     println!("  ✗ {scene} {rel}:{ln} 真实 {} 算出 {p}  {}", l.who, l.text.trim());
                 }
                 by_scene.entry(scene).or_default().add(l.who, p);
-                *share_t.entry(if l.who == "me" { "未确认".into() } else { harness(l.who).to_string() }).or_default() += 1;
+                *share_t.entry(if l.who == "me" || l.who == "gen" { "未确认".into() } else { harness(l.who).to_string() }).or_default() += 1;
                 *share_p.entry(bucket(p)).or_default() += 1;
             }
         }
@@ -813,7 +821,7 @@ fn accuracy_bench() {
     }
 
     let mut all = Tally::default();
-    println!("\n场景                         AI行  工具对%  模型对%  错给别的AI%  漏掉%   人写行  误认%");
+    println!("\n场景                         AI行  工具对%  模型对%  错给别的AI%  漏掉%   非AI行  误认%");
     for (k, t) in &by_scene {
         all.merge(t);
         println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}", k, t.ai, pct(t.exact + t.tool_only, t.ai), pct(t.exact, t.ai), pct(t.wrong_tool, t.ai), pct(t.missed, t.ai), t.human, pct(t.claimed, t.human));
@@ -842,9 +850,9 @@ fn accuracy_bench() {
         fs::write(p, serde_json::to_string_pretty(&out).unwrap()).unwrap();
     }
     let _ = fs::remove_dir_all(&s.root);
-    // 底线（日志丢失、shell 写文件这两个场景本来就找不回来，已经算在里面）
-    assert!(all.claimed * 100 <= all.human * 2, "人写的行被算给 AI：{}/{}", all.claimed, all.human);
+    // 底线（日志丢失这个场景本来就找不回来，已经算在里面）
+    assert!(all.claimed * 100 <= all.human, "人写的行被算给 AI：{}/{}", all.claimed, all.human);
     assert!(all.wrong_tool * 100 <= all.ai, "错给别的 AI：{}/{}", all.wrong_tool, all.ai);
-    assert!((all.exact + all.tool_only) * 100 >= all.ai * 90, "工具对的比例：{}/{}", all.exact + all.tool_only, all.ai);
-    assert!(l1 / 2.0 <= 0.06, "份额总偏差 {:.1} 个百分点", l1 / 2.0 * 100.0);
+    assert!((all.exact + all.tool_only) * 100 >= all.ai * 95, "工具对的比例：{}/{}", all.exact + all.tool_only, all.ai);
+    assert!(l1 / 2.0 <= 0.04, "份额总偏差 {:.1} 个百分点", l1 / 2.0 * 100.0);
 }

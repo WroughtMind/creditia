@@ -65,6 +65,10 @@ pub struct Ev {
     /// Cursor 的 Tab 补全算人的 AI 补全，不算 agent
     #[serde(default)]
     pub tab: bool,
+    /// 同一次写入里紧跟在它后面的那一行（下一条长行）的键；0 是不知道或它是最后一行。
+    /// 证据里本来相邻的两行，提交里中间多出来的行不是这次写入写的
+    #[serde(default)]
+    pub next: u32,
 }
 
 /// 会话元数据（泳道图、作息图、精力小票用）
@@ -101,7 +105,7 @@ pub struct Store {
 }
 
 /// 日志缓存的格式版本：adapter 的读法变了就加一，升级后整份重新解析（2：编辑只记新增的行）
-pub const STORE_VERSION: u32 = 2;
+pub const STORE_VERSION: u32 = 3;
 
 pub fn fingerprint(path: &std::path::Path) -> (u64, u64) {
     match std::fs::metadata(path) {
@@ -142,6 +146,12 @@ pub struct FileAdd {
     /// 每个改动块（diff 的 hunk）在 keys 里的起点；空表示整个文件算一块
     #[serde(default)]
     pub hunks: Vec<u32>,
+    /// 每个新增行如果过短（keys 里是 0），这里是它本身的哈希（short_hash）；长行是 0
+    #[serde(default)]
+    pub short: Vec<u32>,
+    /// 每个新增行在提交后的文件里是第几行（从 1 起）：存活代码按 blame 的原行号对回来
+    #[serde(default)]
+    pub at: Vec<u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
@@ -187,6 +197,9 @@ pub struct BlameLine {
     pub commit: String,
     pub rel: String,
     pub key: u32,
+    /// 这一行在引入它的提交里是第几行（blame 的原行号）；0 是旧缓存
+    #[serde(default)]
+    pub orig: u32,
 }
 
 // ───────────────────────── 归因 ─────────────────────────

@@ -51,7 +51,7 @@ struct CommitCache {
     stamps: HashMap<String, (String, Option<String>)>,
 }
 
-const COMMIT_CACHE_VERSION: u32 = 2;
+const COMMIT_CACHE_VERSION: u32 = 3;
 
 /// 读配置：指定了就用指定的；仓库里有就用仓库的；都没有就现场探测（不落盘）。空着的字段自动补
 pub fn load_config(repo: &Path, override_path: Option<&Path>) -> Config {
@@ -299,7 +299,9 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     }
 
     // ---- 存活代码
-    let mut bc: HashMap<String, Vec<BlameLine>> = load_json(&cache.join("blame.json"));
+    // blame.json 是没有原行号的旧缓存
+    let _ = std::fs::remove_file(cache.join("blame.json"));
+    let mut bc: HashMap<String, Vec<BlameLine>> = load_json(&cache.join("blame2.json"));
     let mut blame = ad::git::blame_head(repo, &head, &mut bc);
     if !gen.is_empty() {
         blame.retain(|(p, _)| !gen_hit(p));
@@ -312,15 +314,18 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         .iter()
         .map(|(h, a)| {
             let c = commit_by_hash[h.as_str()];
-            let mut m = HashMap::new();
+            let (mut m, mut by_line) = (HashMap::new(), HashMap::new());
             for (f, fl) in c.files.iter().zip(&a.lines) {
-                for (&k, &at) in f.keys.iter().zip(fl) {
+                for (i, (&k, &at)) in f.keys.iter().zip(fl).enumerate() {
                     if k != 0 {
                         m.insert((f.rel.clone(), k), at);
                     }
+                    if let Some(&n) = f.at.get(i).filter(|&&n| n > 0) {
+                        by_line.insert((f.rel.clone(), n), at);
+                    }
                 }
             }
-            (h.clone(), (m, a.main.map(|w| Attr { who: w, level: Level::Declared })))
+            (h.clone(), engine::CommitLines { by_key: m, by_line, main: a.main.map(|w| Attr { who: w, level: Level::Declared }) })
         })
         .collect();
     let unattr = eng.reg.unattributed();
@@ -632,7 +637,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         lib.save_snapshot(&proj.id, &head, &generated_at, &credits.to_string())?;
     }
     save_json(&cache.join("commits.json"), &cc)?;
-    save_json(&cache.join("blame.json"), &bc)?;
+    save_json(&cache.join("blame2.json"), &bc)?;
 
     // 终端里的一行 tier
     let mut groups: BTreeMap<String, usize> = BTreeMap::new();
