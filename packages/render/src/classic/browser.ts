@@ -1,7 +1,7 @@
 // 浏览器端：satori standalone 出 SVG（文字已转成路径）。字体按主题取：App 给出字体文件的地址，用到哪个取哪个。
 import satori, { init as initSatori } from 'satori/standalone';
 import layoutUrl from 'satori/layout.wasm?url';
-import { classicArt } from './art.ts';
+import { classicArt, classicFrames } from './art.ts';
 import { fontsFor } from './fonts.ts';
 import type { Ctx } from './registry.ts';
 import type { Model } from './data.ts';
@@ -31,4 +31,9 @@ function fontsOf(t: Theme) {
 export async function render(id: string, m: Model, t: Theme, ctx: Ctx) {
   await boot;
   return classicArt(id, m, t, ctx, satori as any, await fontsOf(t));
+}
+
+export async function frames(id: string, m: Model, t: Theme, ctx: Ctx, n = 24) {
+  await boot;
+  return classicFrames(id, m, t, ctx, satori as any, await fontsOf(t), n);
 }

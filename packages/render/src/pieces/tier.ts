@@ -80,7 +80,7 @@ function vertical(m: Model, st: Style, o: PieceOpts): Scene {
   const th = Math.min(560, measureV(m.project || '', st, 46) + 56);
   s.add(rect(tx - 34, c.y + 40, 68, th, { fill: st.c.paper, stroke: st.c.ink, strokeWidth: 1.2 }));
   s.vtext(m.project || '', tx, c.y + 66, { font: st.f.display, size: 46, fill: st.c.ink });
-  inkSeal(s, tx, c.y + 40 + th + 46, 52, '合作', { color: st.c.accent });
+  inkSeal(s, tx, c.y + 40 + th + 46, 52, zh(m) ? '合作' : 'AI', { color: st.c.accent });
   // 界栏
   const top = c.y + 40, bottom = c.y + c.h - 120;
   const xs = (i: number) => tx - 120 - i * colW;

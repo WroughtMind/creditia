@@ -14,10 +14,10 @@ async function deflate(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await out.arrayBuffer());
 }
 
-/** st 为空：原版作品，文字已经是路径，不需要字体；新风格的作品按风格取字体 */
+/** 文字已经是路径的（原版作品）不需要字体；有 <text> 的按风格取字体 */
 async function exporter(st: Style | null, svg: string) {
   await init();
-  const fonts = st ? await fontBytes(st, svg) : [];
+  const fonts = st && svg.includes('<text') ? await fontBytes(st, svg) : [];
   const opts = (width?: number) => ({ font: { fontBuffers: fonts, loadSystemFonts: false, defaultFontFamily: 'Noto Sans SC' }, fitTo: width ? { mode: 'width' as const, value: Math.round(width) } : undefined });
   const raster: Raster = {
     png: (svg, w) => { const r = new Resvg(svg, opts(w)); const out = r.render().asPng(); r.free(); return out; },
@@ -29,7 +29,7 @@ async function exporter(st: Style | null, svg: string) {
 
 export type Format = 'png' | 'svg' | 'pdf' | 'gif' | 'html';
 /** 按格式出文件。frames 只在 GIF 时用 */
-export async function exportArt(fmt: Format, st: Style | null, a: Art, size: string, frames?: () => Art[]): Promise<{ bytes: Uint8Array; mime: string; ext: string }> {
+export async function exportArt(fmt: Format, st: Style | null, a: Art, size: string, frames?: () => Art[] | Promise<Art[]>): Promise<{ bytes: Uint8Array; mime: string; ext: string }> {
   const ex = await exporter(st, a.svg);
   const sz = SIZES.find((x) => x.id === size);
   const fit = (x: Art) => (sz && sz.w ? sized(x, sz.w, sz.h) : x);
@@ -40,7 +40,7 @@ export async function exportArt(fmt: Format, st: Style | null, a: Art, size: str
     case 'pdf': return { bytes: await ex.pdf(fit(a), sz?.id === 'a4' ? 1 : Math.min(3, 4000 / Math.max(a.w, a.h))), mime: 'application/pdf', ext: 'pdf' };
     case 'html': return { bytes: enc.encode(ex.html([a], { title: a.title })), mime: 'text/html', ext: 'html' };
     case 'gif': {
-      const fr = (frames ? frames() : [a]).map(fit);
+      const fr = (frames ? await frames() : [a]).map(fit);
       return { bytes: ex.gif(fr, { width: Math.min(fr[0].w, 800) }), mime: 'image/gif', ext: 'gif' };
     }
   }

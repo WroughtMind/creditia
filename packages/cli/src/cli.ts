@@ -5,18 +5,22 @@ import { spawnSync } from 'node:child_process';
 import { deflateSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { art, buildModel, FORMS, themeById, raster, type Model, type Theme } from '../../render/src/classic/index.ts';
+import { art, frames as classicFrames, animatedClassic, buildModel, FORMS, themeById, raster, type Model, type Theme } from '../../render/src/classic/index.ts';
 import { ORDERED_THEMES, themeDot, themeName, themeNote, pieceName, pieceQ, variantName } from '../../render/src/classic/catalog.ts';
 import { makeExporter, sized, SIZES, FORMATS, type Art } from '../../render/src/export.ts';
 import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, fetchSegs } from '../../render/src/text.ts';
 import { BRAND } from '../../render/src/style.ts';
 import * as V2 from '../../render/src/index.ts';
+import { BRIDGED } from '../../render/src/classic/bridge.ts';
+import { variantsOf } from '../../render/src/classic/art.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../..');
 const deflate = (d: Uint8Array) => new Uint8Array(deflateSync(d));
-// 原版作品的文字已经是路径，栅格化不需要字体；新风格的作品要带字体
-const ex = makeExporter(raster, deflate);
+// 原版作品的文字已经是路径，栅格化不需要字体；新风格的作品要带字体。
+// 原版主题里借新风格画的作品（河流、留存……）还是 <text>，按内容挑
+const pick = (svg: string) => (svg.includes('<text') ? V2.raster : raster);
+const ex = makeExporter({ png: (s, w) => pick(s).png(s, w), rgba: (s, w) => pick(s).rgba(s, w), flat: (s) => pick(s).flat(s) }, deflate);
 const exV2 = makeExporter(V2.raster, deflate);
 
 // ───────────────────────── 参数 ─────────────────────────
@@ -185,7 +189,7 @@ function loadCredits(repo: string, refresh = false): any {
   return JSON.parse(readFileSync(p, 'utf8'));
 }
 /** 能出图的作品：需要额外数据的（个人履历、逐行溯源）不在这里 */
-const PIECE_IDS = [...Object.keys(FORMS).filter((id) => id !== 'profile' && id !== 'blame'), 'badge'];
+const PIECE_IDS = [...Object.keys(FORMS).filter((id) => id !== 'profile' && id !== 'blame'), 'badge', ...BRIDGED];
 /** 新风格里和原版重名、或者原版已经有对应的，用原版 */
 const V2_SKIP = new Set(['minimal', 'noir', 'glass', 'cinema', 'terminal']);
 const V2_STYLES = V2.STYLES.filter((s) => !V2_SKIP.has(s.id));
@@ -213,6 +217,11 @@ async function artOf(id: string, raw: any, l: Look, variant?: string): Promise<A
   return V2.art(id, V2.buildModel(raw, { lang: LANG(), named: false, sign: '' }), l.s, { variant });
 }
 const ctxOf = (variant?: string) => ({ lang: LANG(), variant });
+/** 动画帧；不会动的作品返回 null */
+async function framesOf(id: string, raw: any, l: Look, variant: string | undefined, n: number): Promise<Art[] | null> {
+  if (l.kind === 'v2') return V2.PIECES[id]?.animated ? V2.frames(id, V2.buildModel(raw, { lang: LANG(), named: false, sign: '' }), l.s, { variant }, n) : null;
+  return animatedClassic(id) ? classicFrames(id, buildModel(raw, { director: false, lang: LANG() }), l.t, ctxOf(variant), n) : null;
+}
 /** 文字类输出（CREDITS.md、发版说明、PR 评论、终端名片）用新模型：带模型名、好读的模型名 */
 const textModel = (raw: any) => V2.buildModel(raw, { lang: LANG(), named: false, sign: '' });
 function modelOf(repo: string, refresh = false): { m: Model; raw: any } {
@@ -270,14 +279,14 @@ const FORMAT_EN: Record<string, string> = { png: 'social posts, chats, documents
 
 function listAll() {
   const lang = LANG();
-  const pieces = PIECE_IDS.map((id) => ({ id, name: pieceName(id, lang), question: pieceQ(id, lang), variants: FORMS[id]?.variants ?? [] }));
+  const pieces = PIECE_IDS.map((id) => ({ id, name: pieceName(id, lang), question: pieceQ(id, lang), variants: variantsOf(id), animated: animatedClassic(id) }));
   const v2pieces = Object.entries(V2.PIECES).filter(([id]) => id !== 'hand').map(([id, p]) => ({ id, name: lang === 'en' ? p.en : p.name, question: lang === 'en' ? p.qEn : p.q, variants: p.variants ?? [], animated: !!p.animated }));
   const styles = LOOKS.map((l) => ({ id: lookId(l), name: lookName(l, 'zh'), en: lookName(l, 'en'), renderer: l.kind, note: l.kind === 'classic' ? themeNote(l.t, lang) : lang === 'en' ? l.s.noteEn : l.s.note }));
   const formats = FORMATS.filter((f) => f.id !== 'embed').map((f) => ({ ...f, note: lang === 'en' ? FORMAT_EN[f.id] ?? f.note : f.note }));
   if (json) return console.log(JSON.stringify({ pieces, v2pieces, styles, formats: [...formats.map((f) => f.id), 'json'], sizes: SIZES.map((s) => s.id) }));
   const nameOf = (s: (typeof styles)[number]) => (lang === 'en' ? s.en : s.name);
   console.log(L('作品（原版主题）', 'Pieces (classic themes)'));
-  for (const p of pieces) console.log(`  ${p.id.padEnd(10)} ${p.name.padEnd(lang === 'en' ? 16 : 8)} ${p.question}${p.variants.length ? `\n${''.padEnd(13)}${L('版式：', 'layouts: ')}${p.variants.map((v) => L(`${v}（${variantName(v, 'zh')}）`, `${v} (${variantName(v, 'en')})`)).join(' ')}` : ''}`);
+  for (const p of pieces) console.log(`  ${p.id.padEnd(10)} ${p.name.padEnd(lang === 'en' ? 16 : 8)} ${p.question}${p.animated ? L(' · 会动', ' · animated') : ''}${p.variants.length ? `\n${''.padEnd(13)}${L('版式：', 'layouts: ')}${p.variants.map((v) => L(`${v}（${variantName(v, 'zh')}）`, `${v} (${variantName(v, 'en')})`)).join(' ')}` : ''}`);
   console.log(L('\n原版主题', '\nClassic themes'));
   for (const s of styles.filter((x) => x.renderer === 'classic')) console.log(`  ${s.id.padEnd(14)} ${nameOf(s).padEnd(lang === 'en' ? 14 : 6)} ${s.note}`);
   console.log(L('\n新风格（作品：', '\nNewer styles (pieces: ') + v2pieces.map((p) => p.id).join(' ') + L('；gif 只在会动的作品上）', '; gif only for animated pieces)'));
@@ -313,8 +322,8 @@ async function exportCmd() {
     case 'pdf': return write(flags.out, await e.pdf(a, flags.size === 'a4' ? 1 : 3));
     case 'html': return write(flags.out, e.html([a0], { title: a0.title, lang: LANG() }));
     case 'gif': {
-      if (look.kind !== 'v2' || !V2.PIECES[piece]?.animated) die(L(`${piece} 在这个风格下不会动；换 png`, `${piece} isn't animated in this style; use png`));
-      const fr = V2.frames(piece, V2.buildModel(raw, { lang: LANG(), named: false, sign: '' }), look.s, { variant: flags.variant }, Number(flags.frames ?? 24)).map(fit);
+      const fr = (await framesOf(piece, raw, look, flags.variant, Number(flags.frames ?? 24)))?.map(fit);
+      if (!fr?.length) die(L(`${piece} 在这个风格下不会动；换 png`, `${piece} isn't animated in this style; use png`));
       return write(flags.out, e.gif(fr, { width: Number(flags.width ?? Math.min(fr[0].w, 800)) }));
     }
     default: die(L(`未知格式：${format}`, `unknown format: ${format}`));
@@ -322,7 +331,7 @@ async function exportCmd() {
 }
 
 const boardIds = (l: Look) => (l.kind === 'classic'
-  ? ['share', 'tier', 'roll', 'receipt', 'donut', 'ribbon', 'waffle', 'mosaic', 'versions', 'area', 'lanes', 'clock', 'settle']
+  ? ['share', 'tier', 'roll', 'receipt', 'donut', 'ribbon', 'stream', 'waffle', 'mosaic', 'versions', 'area', 'lanes', 'clock', 'settle', 'survival', 'evidence', 'areas', 'codemap', 'calendar']
   : ['share', 'tier', 'roll', 'receipt', 'donut', 'stream', 'survival', 'evidence', 'versions', 'areas', 'lanes', 'clock', 'mosaic', 'codemap', 'calendar']);
 async function artsOf(ids: string[], raw: any, l: Look): Promise<Art[]> {
   const out: Art[] = [];

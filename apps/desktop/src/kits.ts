@@ -3,8 +3,9 @@
 import * as C from '../../../packages/render/src/classic/data.ts';
 import { themeById } from '../../../packages/render/src/classic/themes.ts';
 import { ORDERED_THEMES, themeDot, themeName, themeNote, pieceName as cPiece, pieceQ as cQ, variantName as cVariant } from '../../../packages/render/src/classic/catalog.ts';
-import { variantsOf, defaultVariant } from '../../../packages/render/src/classic/art.ts';
-import { prepare, render as classicRender } from '../../../packages/render/src/classic/browser.ts';
+import { variantsOf, defaultVariant, animatedClassic } from '../../../packages/render/src/classic/art.ts';
+import { prepare, render as classicRender, frames as classicFrames } from '../../../packages/render/src/classic/browser.ts';
+import { isBridged, bridgeStyle } from '../../../packages/render/src/classic/bridge.ts';
 import { STYLES } from '../../../packages/render/src/styles/index.ts';
 import * as V from '../../../packages/render/src/data.ts';
 import { PIECES, art as v2Art, frames as v2Frames, variantName as v2Variant } from '../../../packages/render/src/registry.ts';
@@ -16,7 +17,7 @@ type Lang = 'zh' | 'en';
 export interface Tile { id: string; variant?: string; span?: number }
 export interface Kit {
   id: string;
-  /** 新风格要带字体导出；原版的文字已经是路径 */
+  /** 导出带的字体：新风格按风格取；原版主题自己的作品文字已经是路径，借新风格画的作品按原版的字体取 */
   style: Style | null;
   dot: string;
   name(lang: Lang): string;
@@ -24,7 +25,7 @@ export interface Kit {
   board: Tile[];
   /** raw 档案 → 这一套的模型（按语言缓存） */
   render(raw: any, lang: Lang, id: string, variant?: string): Promise<Art | null>;
-  frames?(raw: any, lang: Lang, id: string, variant?: string): Art[];
+  frames?(raw: any, lang: Lang, id: string, variant?: string): Art[] | Promise<Art[]>;
   variants(id: string): string[];
   current(id: string, variant?: string): string | undefined;
   animated(id: string): boolean;
@@ -49,8 +50,10 @@ const v2Model = memo((raw, lang) => V.buildModel(raw, { lang, named: false, sign
 const CLASSIC_BOARD: Tile[] = [
   { id: 'share', span: 2 }, { id: 'tier' }, { id: 'roll' }, { id: 'receipt' }, { id: 'donut' },
   { id: 'ribbon', span: 2 }, { id: 'waffle' }, { id: 'mosaic' }, { id: 'versions' }, { id: 'area' },
+  { id: 'stream', span: 2 }, { id: 'survival' }, { id: 'evidence' }, { id: 'areas' },
   { id: 'lanes' }, { id: 'clock' }, { id: 'settle' }, { id: 'app' }, { id: 'fetch' },
-  { id: 'byline', span: 2 }, { id: 'badge' },
+  { id: 'codemap', span: 2 }, { id: 'calendar', span: 2 },
+  { id: 'byline', span: 2 }, { id: 'badge' }, { id: 'badge', variant: 'emblem' }, { id: 'badge', variant: 'stack' },
 ];
 const V2_BOARD: Tile[] = [
   { id: 'share', span: 2 }, { id: 'tier' }, { id: 'roll' }, { id: 'receipt' }, { id: 'donut' },
@@ -59,13 +62,21 @@ const V2_BOARD: Tile[] = [
 ];
 
 const classicKits: Kit[] = ORDERED_THEMES.map((t) => ({
-  id: t.id, style: null, dot: themeDot(t),
+  id: t.id, style: bridgeStyle(t), dot: themeDot(t),
   name: (lang) => themeName(t, lang), note: (lang) => themeNote(t, lang),
   board: CLASSIC_BOARD,
-  render: (raw, lang, id, variant) => classicRender(id, classicModel(raw, lang), t, { lang, variant }),
+  // 原版没有的作品、追加的新风格版式按这个主题的颜色、字体、框线用新风格的画法画，先等字体
+  render: async (raw, lang, id, variant) => {
+    if (isBridged(id, variant)) await ready(bridgeStyle(t));
+    return classicRender(id, classicModel(raw, lang), t, { lang, variant });
+  },
+  frames: async (raw, lang, id, variant) => {
+    if (isBridged(id, variant)) await ready(bridgeStyle(t));
+    return classicFrames(id, classicModel(raw, lang), t, { lang, variant }, 24);
+  },
   variants: variantsOf,
   current: (id, variant) => variant ?? defaultVariant(id, t) ?? variantsOf(id)[0],
-  animated: () => false,
+  animated: animatedClassic,
   pieceName: cPiece, pieceQ: cQ, variantName: cVariant,
 }));
 

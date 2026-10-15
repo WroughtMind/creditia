@@ -27,7 +27,7 @@ description: 分析一个仓库的代码是哪些 AI 工具和模型写的：读
    - 档案：`creditia doc --json`
    - 徽章：`creditia export --piece badge --format svg --out assets/credits-badge.svg`
    - 分享图：`creditia export --piece share --style glass --format png --size og --out assets/credits.png`
-   - 片尾字幕：`creditia export --piece roll --variant slate --format png --out credits.png`（版式见 `--list`，`--format gif` 只在新风格的会动作品上有）
+   - 片尾字幕：`creditia export --piece roll --variant slate --format png --out credits.png`（版式见 `--list`；`--format gif` 出动画，`--list` 里标了哪些作品会动）
    - 全部作品一页：`creditia board --style minimal --out credits.html`
    - 放到 GitHub：`creditia publish --json`（写仓库根目录的 credits.json，返回将公开的字段，先念给用户确认），再按 README「放到 GitHub 上」加 workflow
 8. **接入**：改官网 / README 时先给用户看 diff，确认后再写。
