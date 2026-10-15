@@ -61,7 +61,7 @@ export const LOGO_OF: Record<string, string> = {
 export const BRAND: Record<string, string> = {
   'claude-code': '#D97757', codex: '#10A37F', cursor: '#3B82F6', grok: '#6B6B70', kimi: '#2F6BFF', gemini: '#8E75B2', qwen: '#615CED',
   opencode: '#E8A33D', cline: '#5B8DEF', roo: '#C2410C', kilo: '#E5484D', copilot: '#6E40C9', aider: '#14B014', amp: '#F34E3F',
-  windsurf: '#0FBF8F', trae: '#FF4D4F', crush: '#6B50FF', goose: '#1A1A1A', continue: '#3B3B3B', deepseek: '#4D6BFE', 'github-actions': '#2088FF', devin: '#1F2937', jules: '#7C5CFF',
+  windsurf: '#0FBF8F', trae: '#FF4D4F', crush: '#6B50FF', goose: '#1A1A1A', continue: '#3B3B3B', zed: '#084CCF', deepseek: '#4D6BFE', 'github-actions': '#2088FF', devin: '#1F2937', jules: '#7C5CFF',
 };
 
 /** 画 logo；没有 logo 的工具画首字母 */

@@ -67,6 +67,7 @@ fn setup() -> Env {
     vars.insert("CREDITIA_VSCODE_STORAGE".into(), root.join("vscode").display().to_string());
     vars.insert("CREDITIA_GOOSE_DIR".into(), root.join("goose").display().to_string());
     vars.insert("CREDITIA_CONTINUE_DIR".into(), root.join("continue").display().to_string());
+    vars.insert("CREDITIA_ZED_DIR".into(), root.join("zed").display().to_string());
     Env { root, repo, vars }
 }
 
@@ -259,8 +260,8 @@ fn end_to_end() {
 
     // doctor 能跑
     let (_, v) = run(&env, &["doctor"]);
-    // 11 个老数据源 + Aider、Amp、TRAE CLI、Crush、Goose、Continue、Copilot（VS Code、命令行）；没装的 Windsurf、TRAE IDE 不列
-    assert_eq!(v["sources"].as_array().unwrap().len(), 19);
+    // 11 个老数据源 + Aider、Amp、TRAE CLI、Crush、Goose、Continue、Zed、Copilot（VS Code、命令行）；没装的 Windsurf、TRAE IDE 不列
+    assert_eq!(v["sources"].as_array().unwrap().len(), 20);
 
     // hook：安装后提交信息自动带 trailer（用盖章文件触发）
     let (ok, _) = run(&env, &["hook", "install", "--repo", &repo.display().to_string()]);
@@ -876,5 +877,71 @@ fn continue_sessions() {
     assert_eq!(verified("a:continue/gpt-5"), cli.len() as u64, "{}", credits["breakdown"]);
     let s = credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with("a:continue/")).count();
     assert_eq!(s, 2, "{}", credits["sessions"]);
+    let _ = fs::remove_dir_all(&env.root);
+}
+
+/// Zed：threads.db 里 zstd 压缩的线程，edit_file / write_file 的结果带改前改后的内容；报错的不算，别的项目的线程不读
+#[test]
+fn zed_threads() {
+    let env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let root_name = repo.file_name().unwrap().to_string_lossy().to_string();
+    let base: i64 = 1_794_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    let lines = |tag: &str, n: usize| -> Vec<String> { (0..n).map(|i| format!("pub fn {tag}_part_{i}() -> usize {{ {} }}", i * 19 + 1)).collect() };
+    let (old, wrote, edited, failed) = (lines("kept", 2), lines("zed_write", 4), lines("zed_edit", 3), lines("zed_failed", 2));
+
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join("src/lib.rs"), old.join("\n") + "\n").unwrap();
+    commit(&repo, "init", "me@example.com", &d(base - 86400));
+    fs::write(repo.join("src/new.rs"), [wrote.clone(), failed.clone()].concat().join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/lib.rs"), [old.clone(), edited.clone()].concat().join("\n") + "\n").unwrap();
+    commit(&repo, "zed work", "me@example.com", &d(base + 600));
+
+    let dir = env.root.join("zed/threads");
+    fs::create_dir_all(&dir).unwrap();
+    let c = rusqlite::Connection::open(dir.join("threads.db")).unwrap();
+    c.execute_batch("CREATE TABLE threads (id TEXT PRIMARY KEY, summary TEXT NOT NULL, updated_at TEXT NOT NULL, data_type TEXT NOT NULL, data BLOB NOT NULL, parent_id TEXT, folder_paths TEXT, folder_paths_order TEXT, created_at TEXT);").unwrap();
+    let tool = |id: &str, name: &str, input: serde_json::Value| serde_json::json!({ "ToolUse": { "id": id, "name": name, "raw_input": input.to_string(), "input": { "type": "json", "value": input }, "is_input_complete": true } });
+    let ok = |id: &str, name: &str, out: serde_json::Value| serde_json::json!({ "tool_use_id": id, "tool_name": name, "is_error": false, "content": "done", "output": out });
+    let lib = format!("{root_name}/src/lib.rs");
+    let both = [old.clone(), edited.clone()].concat().join("\n") + "\n";
+    let new = format!("{root_name}/src/new.rs");
+    let thread = serde_json::json!({
+        "version": "0.3.0", "title": "t", "updated_at": iso(base + 300),
+        "model": { "provider": "anthropic", "model": "claude-sonnet-4-5" },
+        "cumulative_token_usage": { "input_tokens": 2000, "output_tokens": 300 },
+        "messages": [
+            { "User": { "id": "u1", "content": [{ "Text": "add things" }] } },
+            { "Agent": {
+                "content": [tool("t1", "write_file", serde_json::json!({ "path": new })), tool("t2", "edit_file", serde_json::json!({ "path": lib })), tool("t3", "edit_file", serde_json::json!({ "path": new }))],
+                "tool_results": {
+                    "t1": ok("t1", "write_file", serde_json::json!({ "input_path": new, "old_text": "", "new_text": wrote.join("\n") + "\n", "diff": "" })),
+                    "t2": ok("t2", "edit_file", serde_json::json!({ "input_path": lib, "old_text": old.join("\n") + "\n", "new_text": both, "diff": "" })),
+                    "t3": { "tool_use_id": "t3", "tool_name": "edit_file", "is_error": true, "content": "no match", "output": { "error": "no match", "input_path": new } }
+                },
+                "reasoning_details": null } }
+        ]
+    });
+    let blob = zstd::stream::encode_all(thread.to_string().as_bytes(), 3).unwrap();
+    let ts = |t: i64| iso(t).replace(".000Z", "Z");
+    c.execute("INSERT INTO threads (id, summary, updated_at, data_type, data, folder_paths, folder_paths_order, created_at) VALUES ('z1', 't', ?1, 'zstd', ?2, ?3, '0', ?4)", rusqlite::params![ts(base + 300), blob, rs, ts(base + 5)]).unwrap();
+    // 别的项目：解不开也不该去读
+    c.execute("INSERT INTO threads (id, summary, updated_at, data_type, data, folder_paths, created_at) VALUES ('z2', 't', ?1, 'zstd', x'00', '/elsewhere/proj', ?1)", rusqlite::params![ts(base)]).unwrap();
+    drop(c);
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+    // 报错的 t3 没有证据：failed 两行跟在 write 那段后面，只按块推断
+    assert_eq!(verified("a:zed/claude-sonnet-4-5"), (wrote.len() + edited.len()) as u64, "{}", credits["breakdown"]);
+    let s = credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with("a:zed/")).count();
+    assert_eq!(s, 1, "{}", credits["sessions"]);
+    let (_, v) = run(&env, &["discover"]);
+    assert!(v.to_string().contains("\"zed\""), "{v}");
     let _ = fs::remove_dir_all(&env.root);
 }
