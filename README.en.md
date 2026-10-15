@@ -14,7 +14,7 @@ and turns the result into badges, CREDITS.md, end credits and share cards. Runs 
 
 [![built with](https://wroughtmind.github.io/creditia/assets/usage/en-self-badge.svg)](https://wroughtmind.github.io/creditia/self/en/)
 
-[Website](https://wroughtmind.github.io/creditia/) · [Install](#install) · [Attribution rules](ATTRIBUTION.md) · [中文](README.md)
+[Website](https://wroughtmind.github.io/creditia/) · [Install](#install) · [Attribution rules](ATTRIBUTION.en.md) · [中文](README.md)
 
 </div>
 
@@ -60,7 +60,7 @@ One project in several places (worktrees, scratch clones, another machine): `cre
 - **Inferred** — When most of a contiguous change has line-level evidence from one tool, the rest of that change follows it; branches tools create themselves, like `codex/`. Kept separate; turn off with `--level strict`
 - **Unattributed** — Anything that matches none of the above. Counted toward no tool
 
-creditia answers one question — which AI tools and models wrote how much. No names appear in any piece, and percentages are taken over AI and unattributed lines only. Full rules and known limits: [ATTRIBUTION.md](ATTRIBUTION.md).
+creditia answers one question — which AI tools and models wrote how much. No names appear in any piece, and percentages are taken over AI and unattributed lines only. Full rules and known limits: [ATTRIBUTION.en.md](ATTRIBUTION.en.md).
 
 ## Twenty-six looks
 
