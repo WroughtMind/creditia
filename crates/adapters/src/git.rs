@@ -102,7 +102,7 @@ pub fn worktrees(repo: &Path) -> Vec<String> {
 }
 
 // trailer 都指定 separator，这样 git 不会在值后面补换行，一条提交始终占一行
-const FMT: &str = "@@@C%x00%H%x00%ae%x00%an%x00%at%x00%ct%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Harness,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Model,valueonly,separator=%x7C)";
+const FMT: &str = "@@@C%x00%H%x00%ae%x00%an%x00%at%x00%ct%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Harness,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Model,valueonly,separator=%x7C)%x00%(trailers:key=Assisted-by,valueonly,separator=%x7C)";
 
 /// 盖章表：提交哈希 → (工具, 模型)
 pub type Stamps = HashMap<String, (String, Option<String>)>;
@@ -161,6 +161,7 @@ pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>
                 commit_ts: p[4].parse().unwrap_or(0),
                 subject: p[5].into(),
                 coauthors: p[6].split('|').filter(|x| !x.is_empty()).map(|x| x.to_lowercase()).collect(),
+                assisted: p.get(9).map(|s| s.split('|').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
                 files: vec![],
             });
         } else if line.starts_with("diff --git ") {

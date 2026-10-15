@@ -180,6 +180,7 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
     acts.extend(ad::copilot::discover());
     acts.extend(ad::amp::discover());
     acts.extend(ad::trae::discover());
+    acts.extend(ad::crush::discover());
     // 把 cwd 归到 git 仓库：存在的目录用根提交；不存在的用远程地址或目录名
     #[derive(Default)]
     struct P {
@@ -498,7 +499,7 @@ use creditia_core::tr;
         ad::codex::doctor(), ad::claude::doctor(), ad::cursor::doctor(), ad::grok::doctor(), ad::kimi::doctor(),
         ad::gemini::doctor(Src::Gemini), ad::gemini::doctor(Src::Qwen), ad::opencode::doctor(),
         ad::cline::doctor(Src::Cline), ad::cline::doctor(Src::Roo), ad::cline::doctor(Src::Kilo),
-        ad::aider::doctor(), ad::amp::doctor(), ad::trae::doctor(),
+        ad::aider::doctor(), ad::amp::doctor(), ad::trae::doctor(), ad::crush::doctor(),
     ];
     hs.extend(ad::copilot::doctor());
     hs.extend(ad::others::doctor());
@@ -647,6 +648,10 @@ pub fn detect_agent(env: &HashMap<String, String>) -> Option<(String, Option<Str
     }
     if has("OPENCODE") || has("OPENCODE_SESSION") {
         return Some(("opencode".into(), None));
+    }
+    // Crush 给它跑的命令设 CRUSH=1、AI_AGENT=crush
+    if has("CRUSH") || env.get("AI_AGENT").map(|v| v == "crush").unwrap_or(false) {
+        return Some(("crush".into(), None));
     }
     if has("AIDER_MODEL") || has("AIDER_CHAT_HISTORY_FILE") {
         return Some(("aider".into(), env.get("AIDER_MODEL").cloned()));

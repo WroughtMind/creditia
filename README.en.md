@@ -56,7 +56,7 @@ One project in several places (worktrees, scratch clones, another machine): `cre
 ## Every line has a source
 
 - **Matched in logs** — The tool's own log recorded writing this line: Claude Code Write / Edit, Codex FileChange, Cursor line hashes…
-- **Declared in commits** — Commit email, `Co-authored-by`, creditia's commit stamp
+- **Declared in commits** — Commit email, `Co-authored-by`, `Assisted-by`, creditia's commit stamp
 - **Inferred** — When most of a contiguous change has line-level evidence from one tool, the rest of that change follows it; branches tools create themselves, like `codex/`. Kept separate; turn off with `--level strict`
 - **Unattributed** — Anything that matches none of the above. Counted toward no tool
 
@@ -119,7 +119,8 @@ jobs:
 | <img src=".github/readme/logo/copilot.svg" width="18"> | GitHub Copilot | Successful edits in VS Code `chatSessions` and agent transcripts; Copilot CLI `~/.copilot/session-state` | ✓ | ✓ |
 | <img src=".github/readme/logo/aider.svg" width="18"> | Aider | The repo's `.aider.chat.history.md`: only files confirmed by "Applied edit", timed by its commit | ✓ | ✓ |
 | | Amp · TRAE CLI | Completed edits in Amp's local `threads/*.json`; TRAE CLI session rollouts | ✓ | ✓ |
-| <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> | Copilot cloud · Devin · Jules · Cursor cloud · bots | Commit email, `Co-authored-by`, author name | declared | — |
+| | Crush | The project's `.crush/crush.db`: lines added between consecutive file versions in the `files` table; `Assisted-by: Crush:<model>` in commits | ✓ | ✓ |
+| <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> | Copilot cloud · Devin · Jules · Cursor cloud · bots | Commit email, `Co-authored-by`, `Assisted-by`, author name | declared | — |
 | | Any tool | `creditia stamp` / commit-hook stamp (`Creditia-Harness` trailer) | declared | ✓ |
 
 ## Install

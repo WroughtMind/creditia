@@ -51,7 +51,7 @@ struct CommitCache {
     stamps: HashMap<String, (String, Option<String>)>,
 }
 
-const COMMIT_CACHE_VERSION: u32 = 3;
+const COMMIT_CACHE_VERSION: u32 = 4;
 
 /// 读配置：指定了就用指定的；仓库里有就用仓库的；都没有就现场探测（不落盘）。空着的字段自动补
 pub fn load_config(repo: &Path, override_path: Option<&Path>) -> Config {
@@ -130,6 +130,7 @@ fn scan_all(store: &mut Store, pm: &PathMap, roots: &[String], st: &mut ad::Stat
     ad::copilot::scan(store, pm, st);
     ad::amp::scan(store, pm, st);
     ad::trae::scan(store, pm, st);
+    ad::crush::scan(store, pm, roots, st);
 }
 
 /// 把这次见到的路径登记进作品库：以后这些目录删了、日志里还留着它们，也能认出是本项目

@@ -257,8 +257,8 @@ fn end_to_end() {
 
     // doctor 能跑
     let (_, v) = run(&env, &["doctor"]);
-    // 11 个老数据源 + Aider、Amp、TRAE CLI、Copilot（VS Code、命令行）；没装的 Windsurf、TRAE IDE 不列
-    assert_eq!(v["sources"].as_array().unwrap().len(), 16);
+    // 11 个老数据源 + Aider、Amp、TRAE CLI、Crush、Copilot（VS Code、命令行）；没装的 Windsurf、TRAE IDE 不列
+    assert_eq!(v["sources"].as_array().unwrap().len(), 17);
 
     // hook：安装后提交信息自动带 trailer（用盖章文件触发）
     let (ok, _) = run(&env, &["hook", "install", "--repo", &repo.display().to_string()]);
@@ -677,5 +677,73 @@ fn aider_copilot_amp_trae() {
         let t = texts(&v);
         assert!(!t.is_empty() && t.iter().all(|s| !cjk(s)), "{args:?}: {t:?}");
     }
+    let _ = fs::remove_dir_all(&env.root);
+}
+
+/// Crush：项目里的 .crush/crush.db（files 表逐版存内容），用户在两次编辑之间手改的不算；
+/// 另一个文件只靠提交里的 `Assisted-by: Crush:模型` trailer 认
+#[test]
+fn crush_db_and_assisted_by() {
+    let env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base: i64 = 1_791_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    let lines = |tag: &str, n: usize| -> Vec<String> { (0..n).map(|i| format!("let {tag}_value_{i} = compute_{tag}({i}, {});", i * 17)).collect() };
+    let (first, mine, second, trailer) = (lines("crush_first", 4), lines("by_hand", 2), lines("crush_second", 3), lines("assisted", 5));
+
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join(".gitignore"), ".crush/\n").unwrap();
+    fs::write(repo.join("README.md"), "# crush demo\n").unwrap();
+    commit(&repo, "init", "me@example.com", &d(base - 86400));
+    let all = [first.clone(), mine.clone(), second.clone()].concat();
+    fs::write(repo.join("src/app.rs"), all.join("\n") + "\n").unwrap();
+    commit(&repo, "crush work", "me@example.com", &d(base + 300));
+    fs::write(repo.join("src/assisted.rs"), trailer.join("\n") + "\n").unwrap();
+    commit(&repo, "more work\n\nAssisted-by: Crush:gpt-5", "me@example.com", &d(base + 400));
+
+    // .crush/crush.db：v0 空文件 → v1 AI 写 first → v2 用户手改后的样子（加了 mine）→ 同一秒 v3 AI 写 second
+    fs::create_dir_all(repo.join(".crush")).unwrap();
+    let c = rusqlite::Connection::open(repo.join(".crush/crush.db")).unwrap();
+    c.execute_batch(
+        "CREATE TABLE sessions (id TEXT PRIMARY KEY, parent_session_id TEXT, title TEXT, message_count INTEGER, prompt_tokens INTEGER, completion_tokens INTEGER, cost REAL, updated_at INTEGER, created_at INTEGER, summary_message_id TEXT, todos TEXT);
+         CREATE TABLE messages (id TEXT PRIMARY KEY, session_id TEXT, role TEXT, parts TEXT, model TEXT, created_at INTEGER, updated_at INTEGER, finished_at INTEGER, provider TEXT, is_summary_message INTEGER);
+         CREATE TABLE files (id TEXT PRIMARY KEY, session_id TEXT, path TEXT, content TEXT, version INTEGER, created_at INTEGER, updated_at INTEGER);",
+    )
+    .unwrap();
+    let abs = format!("{rs}/src/app.rs");
+    c.execute("INSERT INTO sessions VALUES ('cs1', NULL, 'build app', 6, 4000, 900, 0.1, ?1, ?2, NULL, NULL)", rusqlite::params![base + 250, base]).unwrap();
+    let msgs = [("u1", "user", r#"[{"type":"text","data":{"text":"write app.rs"}}]"#, "", base + 10), ("a1", "assistant", "[]", "claude-sonnet-4-5", base + 20), ("u2", "user", r#"[{"type":"text","data":{"text":"add more"}}]"#, "", base + 150), ("a2", "assistant", "[]", "claude-sonnet-4-5", base + 160)];
+    for (id, role, parts, model, ts) in msgs {
+        c.execute("INSERT INTO messages VALUES (?1, 'cs1', ?2, ?3, ?4, ?5, ?5, ?5, 'anthropic', 0)", rusqlite::params![id, role, parts, model, ts]).unwrap();
+    }
+    let vs = [(0, String::new(), base + 30), (1, first.join("\n") + "\n", base + 30), (2, [first.clone(), mine.clone()].concat().join("\n") + "\n", base + 170), (3, all.join("\n") + "\n", base + 170)];
+    for (v, content, ts) in vs {
+        c.execute("INSERT INTO files VALUES (?1, 'cs1', ?2, ?3, ?4, ?5, ?5)", rusqlite::params![format!("f{v}"), abs, content, v, ts]).unwrap();
+    }
+    drop(c);
+    // 全局登记表：discover 从这里找到项目
+    let g = env.root.join(".local/share/crush");
+    fs::create_dir_all(&g).unwrap();
+    fs::write(g.join("projects.json"), serde_json::json!({ "projects": [{ "path": rs, "data_dir": format!("{rs}/.crush"), "last_accessed": "2026-09-22T10:00:00Z" }] }).to_string()).unwrap();
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+    // 用户手改的两行不在 AI 的证据里
+    assert_eq!(verified("a:crush/claude-sonnet-4-5"), (first.len() + second.len()) as u64, "{}", credits["breakdown"]);
+    let declared = credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == "a:crush/gpt-5").map(|b| b["linesAdded"].as_u64().unwrap_or(0)).unwrap_or(0);
+    assert_eq!(declared, trailer.len() as u64, "{}", credits["breakdown"]);
+    let s: Vec<&serde_json::Value> = credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with("a:crush/")).collect();
+    assert_eq!(s.len(), 1, "{}", credits["sessions"]);
+
+    let (_, v) = run(&env, &["discover"]);
+    assert!(v.to_string().contains("crush"), "{v}");
+    let (_, v) = run(&env, &["doctor"]);
+    let h = v["sources"].as_array().unwrap().iter().find(|h| h["source"] == "crush").cloned().unwrap_or_default();
+    assert_eq!(h["records"], 1, "{v}");
     let _ = fs::remove_dir_all(&env.root);
 }

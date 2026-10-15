@@ -253,7 +253,7 @@ impl<'a> Engine<'a> {
         out
     }
 
-    /// 提交本身写明的来源。按优先级：盖章 trailer → agent 提交邮箱 → Co-authored-by → bot → aider 的作者名 → 别人的提交（算那个人）
+    /// 提交本身写明的来源。按优先级：盖章 trailer → agent 提交邮箱 → Co-authored-by → Assisted-by → bot → aider 的作者名 → 别人的提交（算那个人）
     fn declared(&mut self, c: &Commit) -> Option<(Attr, String)> {
         if let Some((h, m)) = self.stamps.get(&c.hash).cloned() {
             return Some((Attr { who: self.reg.agent(&h, m.as_deref()), level: Level::Declared }, crate::tr!("Creditia 盖章", "Creditia stamp")));
@@ -266,6 +266,11 @@ impl<'a> Engine<'a> {
                 let h = h.clone();
                 let m = coauthor_model(co);
                 return Some((Attr { who: self.reg.agent(&h, m.as_deref()), level: Level::Declared }, format!("Co-authored-by {co}")));
+            }
+        }
+        for a in &c.assisted {
+            if let Some((h, m)) = assisted_by(a) {
+                return Some((Attr { who: self.reg.agent(&h, m.as_deref()), level: Level::Declared }, format!("Assisted-by {a}")));
             }
         }
         if self.cfg.bot_emails.contains(&c.email) || c.email.contains("[bot]") {
@@ -322,6 +327,33 @@ fn coauthor_model(co: &str) -> Option<String> {
     let name = co.split('<').next().unwrap_or("").trim();
     let words: Vec<&str> = name.split_whitespace().collect();
     (words.len() >= 2 && name.chars().any(|c| c.is_ascii_digit())).then(|| words.join("-").to_lowercase())
+}
+
+/// `Assisted-by: 工具:模型 [别的工具…]`（Linux 内核的 AI 署名格式，Crush 默认写这个）→ (工具, 模型)。
+/// 写人名和邮箱的老用法（`Assisted-by: 某人 <a@b>`）不算
+fn assisted_by(v: &str) -> Option<(String, Option<String>)> {
+    let (name, rest) = match v.split_once(':') {
+        Some((n, r)) if !n.contains('<') => (n.trim(), r.trim()),
+        _ => (v.trim(), ""),
+    };
+    let key = name.to_lowercase().split_whitespace().collect::<Vec<_>>().join("-");
+    let h = match key.as_str() {
+        "claude" | "claude-code" | "anthropic-claude" => "claude-code",
+        "codex" | "openai-codex" => "codex",
+        "copilot" | "github-copilot" => "copilot",
+        "gemini" | "gemini-cli" => "gemini",
+        "qwen" | "qwen-code" => "qwen",
+        "roo" | "roo-code" => "roo",
+        "kilo" | "kilo-code" => "kilo",
+        k => k,
+    };
+    // 没写模型、又不是认识的工具名：多半是人
+    let known = Src::all().iter().any(|s| s.harness() == h) || ["devin", "jules", "windsurf"].contains(&h);
+    if h.is_empty() || v.contains('@') || (rest.is_empty() && !known) {
+        return None;
+    }
+    let model = rest.split_whitespace().next().map(|m| m.to_string());
+    Some((h.to_string(), model))
 }
 
 /// 一个文件的新增行按改动块切开：[(起, 止)]。没记改动块的（旧缓存）整个文件算一块
@@ -399,7 +431,7 @@ mod tests {
     }
 
     fn commit(email: &str, keys: Vec<u32>) -> Commit {
-        Commit { hash: "a".repeat(40), email: email.into(), name: "".into(), author_ts: 1000, commit_ts: 1000, subject: "s".into(), coauthors: vec![], files: vec![FileAdd { rel: "a.rs".into(), keys, ..Default::default() }] }
+        Commit { hash: "a".repeat(40), email: email.into(), name: "".into(), author_ts: 1000, commit_ts: 1000, subject: "s".into(), coauthors: vec![], assisted: vec![], files: vec![FileAdd { rel: "a.rs".into(), keys, ..Default::default() }] }
     }
 
     #[test]
@@ -547,6 +579,24 @@ mod tests {
         c.coauthors = vec!["claude opus 5.5 <noreply@anthropic.com>".into()];
         let a = e.attribute(&c);
         assert_eq!(e.reg.list[a.lines[0][0].who].id, "a:claude-code/claude-opus-5-5");
+    }
+
+    #[test]
+    fn assisted_by_trailers() {
+        assert_eq!(assisted_by("Crush:claude-sonnet-4-5"), Some(("crush".into(), Some("claude-sonnet-4-5".into()))));
+        assert_eq!(assisted_by("Claude:claude-3-opus coccinelle sparse"), Some(("claude-code".into(), Some("claude-3-opus".into()))));
+        assert_eq!(assisted_by("GitHub Copilot"), Some(("copilot".into(), None)));
+        // 人名、邮箱不算
+        assert_eq!(assisted_by("Jane Doe <jane@example.com>"), None);
+        assert_eq!(assisted_by("Jane Doe"), None);
+        let store = Store::default();
+        let idx = Index::build(&store);
+        let cfg = cfg();
+        let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+        let mut c = commit("me@x.com", vec![1]);
+        c.assisted = vec!["Crush:gpt-5".into()];
+        let a = e.attribute(&c);
+        assert_eq!(e.reg.list[a.lines[0][0].who].id, "a:crush/gpt-5");
     }
 
     #[test]
