@@ -155,11 +155,13 @@ async function openProject(p: any) {
   rebuildModel();
   loadPlugs(p);
   await paint();
+  void refreshIfChanged(); // 打开时就看一眼有没有新提交
 }
 
 // ───────────────────────── 档案变了就原地刷新 ─────────────────────────
 // 在终端里 creditia analyze、提交时的 hook 都会改档案。App 回到前台、或者每 30 秒，比一下版本；
 // 变了就读新档案，墙上的作品原地换掉（不清空、不跳回顶部），换过的版式也留着。
+// 档案没变、但仓库里有了新提交，就在后台跟上（keepUp）。
 let stampOf = '', refreshing = false;
 const readStamp = (p: any): Promise<string> => (native ? api('stamp', { projectId: p.id }).then(String, () => '') : Promise.resolve(''));
 async function refreshIfChanged() {
@@ -168,7 +170,7 @@ async function refreshIfChanged() {
   refreshing = true;
   try {
     const st = await readStamp(p);
-    if (!st || st === stampOf || p !== state.current) return;
+    if (!st || st === stampOf || p !== state.current) { await keepUp(p); return; }
     const raw = await api('credits', { projectId: p.id });
     if (p !== state.current) return;
     stampOf = st;
@@ -176,6 +178,18 @@ async function refreshIfChanged() {
     state.projects = await api('projects').catch(() => state.projects);
     toast(L('档案有更新，已换成最新的', 'Credits changed — showing the latest'));
   } catch { /* 读不到就等下一次 */ } finally { refreshing = false; }
+}
+/** 跟上新提交：仓库里有了档案之后的新提交，就在后台增量分析一次（只处理新的提交，通常几秒）。
+ *  同一个提交只试一次，失败了不反复跑；项目菜单里能关 */
+const autoFresh = () => store.get('autofresh') !== 'off';
+let triedHead = '';
+async function keepUp(p: any) {
+  if (!autoFresh() || p.exists === false || !state.raw?.head) return;
+  const h: string = await api('head', { projectId: p.id }).catch(() => '');
+  if (!h || h === state.raw.head || h === triedHead || p !== state.current) return;
+  triedHead = h;
+  refreshing = false; // reanalyze 自己会换档案
+  await reanalyze(p, true);
 }
 /** 换一份档案，墙上原地换 */
 async function swapRaw(raw: any) {
@@ -686,7 +700,8 @@ function toggleMenu() {
   pill.setAttribute('aria-expanded', 'true');
   menu.hidden = false;
   menu.innerHTML = `<input id="q" placeholder="${L('搜索项目', 'Search projects')}" autocomplete="off"><div class="list" id="plist" role="listbox" aria-label="${L('项目', 'Projects')}"></div>
-    <div class="foot"><button id="add">${L('＋ 添加项目', '+ Add project')}</button><button id="re">↻ ${L('重新分析', 'Re-analyze')}</button></div>`;
+    <div class="foot"><button id="add">${L('＋ 添加项目', '+ Add project')}</button><button id="re">↻ ${L('重新分析', 'Re-analyze')}</button></div>
+    <div class="foot"><button id="auto" role="switch" aria-checked="${autoFresh()}" title="${L('有新提交时在后台增量分析，作品跟着更新', 'Analyze new commits in the background so pieces stay current')}">${autoFresh() ? '●' : '○'} ${L('自动跟上新提交', 'Keep up with new commits')}</button></div>`;
   const draw = () => {
     const q = ($('#q') as HTMLInputElement).value.trim().toLowerCase();
     $('#plist').innerHTML = state.projects.filter((p) => !q || `${p.name} ${p.path}`.toLowerCase().includes(q)).map((p) => `
@@ -721,13 +736,18 @@ function toggleMenu() {
   ($('#add') as HTMLButtonElement).disabled = analyzing;
   $('#add').onclick = () => { closeMenu(); addProject(); };
   re.onclick = () => { closeMenu(); if (state.current) reanalyze(state.current); };
+  $('#auto').onclick = () => {
+    store.set('autofresh', autoFresh() ? 'off' : 'on');
+    const b = $('#auto'); b.setAttribute('aria-checked', String(autoFresh())); b.textContent = `${autoFresh() ? '●' : '○'} ${L('自动跟上新提交', 'Keep up with new commits')}`;
+    if (autoFresh()) refreshIfChanged();
+  };
   setTimeout(() => document.addEventListener('click', function off(e) { if (!menu.contains(e.target as Node) && !pill.contains(e.target as Node)) { menu.hidden = true; pill.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', off); } }), 0);
 }
 
 // ───────────────────────── 分析：进度、取消 ─────────────────────────
 let analyzing = false;
 /** 跑一次分析：一直挂着进度提示（秒数、取消），跑完或出错再换成结果 */
-async function withProgress<T>(name: string, job: () => Promise<T>): Promise<T> {
+async function withProgress<T>(name: string, job: () => Promise<T>, auto = false): Promise<T> {
   if (analyzing) throw { code: 'busy' };
   analyzing = true;
   const t0 = Date.now();
@@ -738,14 +758,14 @@ async function withProgress<T>(name: string, job: () => Promise<T>): Promise<T> 
     const p = e.payload ?? {}, n = STAGES[p.stage];
     if (n) stage = `${L(...n)}${p.total ? ` ${fmt(p.done)}/${fmt(p.total)}` : ''}`;
   }).catch(() => null) ?? null;
-  const text = () => { const s = Math.round((Date.now() - t0) / 1000); const st = stage ? ` · ${stage}` : ''; return L(`正在分析 ${name}…${s ? ` ${s} 秒` : ''}${st}`, `Analyzing ${name}…${s ? ` ${s}s` : ''}${st}`); };
+  const text = () => { const s = Math.round((Date.now() - t0) / 1000); const st = stage ? ` · ${stage}` : ''; return auto ? L(`有新提交，正在跟上…${s ? ` ${s} 秒` : ''}${st}`, `New commits — catching up…${s ? ` ${s}s` : ''}${st}`) : L(`正在分析 ${name}…${s ? ` ${s} 秒` : ''}${st}`, `Analyzing ${name}…${s ? ` ${s}s` : ''}${st}`); };
   toast(text(), 0, { spin: true, acts: [{ label: L('取消', 'Cancel'), run: () => { toast(L('正在取消…', 'Cancelling…'), 0, { spin: true }); api('cancel_analyze').catch(() => null); } }] });
   const tick = setInterval(() => { const m = document.querySelector('#toast .msg'); if (m && document.querySelector('#toast button')) m.textContent = text(); }, 1000);
   try { return await job(); } finally { clearInterval(tick); unlisten?.(); analyzing = false; }
 }
-async function reanalyze(p: any) {
+async function reanalyze(p: any, auto = false) {
   try {
-    const v: any = await withProgress(p.name, () => api('analyze', { projectId: p.id, lang: state.lang }));
+    const v: any = await withProgress(p.name, () => api('analyze', { projectId: p.id, lang: state.lang }), auto);
     state.projects = await api('projects');
     const fresh = state.projects.find((x) => x.id === p.id) ?? p;
     // 正看着这个项目：原地换，不清空墙
@@ -755,8 +775,10 @@ async function reanalyze(p: any) {
       state.current = fresh; stampOf = await st;
       await swapRaw(raw);
     } else await openProject(fresh);
-    done(L('已更新', 'Updated'), v?.warnings);
-  } catch (e) { toast(errText(e), 6000); }
+    const n = Number(v?.newCommits) || 0;
+    if (auto) toast(n ? L(`已跟上 ${n} 个新提交`, `Caught up with ${n} new commit${n > 1 ? 's' : ''}`) : L('已更新', 'Updated'));
+    else done(L('已更新', 'Updated'), v?.warnings);
+  } catch (e) { if (!auto || (e as any)?.code !== 'busy') toast(errText(e), 6000); }
 }
 async function addProject() {
   let dir: string | null;

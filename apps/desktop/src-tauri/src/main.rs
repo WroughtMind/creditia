@@ -94,6 +94,26 @@ fn stamp(project_id: String) -> Res<String> {
     Ok(format!("{modified}:{}", p.last_analyzed.unwrap_or(0)))
 }
 
+/// 仓库现在的提交（档案里记的 head 和它不一样，说明有了新提交）。分析的分支在 .creditia/config.json 的 branch 里，没写就是 HEAD
+#[tauri::command]
+fn head(project_id: String) -> Res<String> {
+    let lib = Library::open()?;
+    let p = project(&lib, &project_id)?;
+    let cfg: Value = std::fs::read_to_string(PathBuf::from(&p.path).join(".creditia/config.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let rev = |r: &str| -> String {
+        let mut c = Command::new("git");
+        c.arg("-C").arg(&p.path).args(["rev-parse", "--verify", "-q", r]);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        c.output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default()
+    };
+    let h = cfg["branch"].as_str().map(rev).filter(|h| !h.is_empty()).unwrap_or_else(|| rev("HEAD"));
+    Ok(h)
+}
+
 #[tauri::command]
 fn config_of(project_id: String) -> Res<Value> {
     let lib = Library::open()?;
@@ -507,7 +527,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            projects, credits, stamp, config_of, set_display, analyze, cancel_analyze, pick_folder, add_project, integrations, set_integration, embed_snippet,
+            projects, credits, stamp, head, config_of, set_display, analyze, cancel_analyze, pick_folder, add_project, integrations, set_integration, embed_snippet,
             library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor
         ])
         .run(tauri::generate_context!())
