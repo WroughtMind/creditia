@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
-import { buildModel, STYLES, PIECES, art, frames, raster } from '../src/index.ts';
+import { buildModel, STYLES, PIECES, MODEL_VARIANTS, art, frames, raster } from '../src/index.ts';
 import { makeExporter, sized } from '../src/export.ts';
 import { creditsBlock, fetchSegs, commitsComment, mergeMarked } from '../src/text.ts';
 import { hanzi, modelName, resolveGroup } from '../src/data.ts';
@@ -144,7 +144,7 @@ test('按模型分组：key 是「工具/模型」，占比合计不变，按工
   }
 });
 
-test('按模型分组：每种作品在每种风格下都能出图；英文里没有中日文；分段、分组、内外环也能画按工具的', () => {
+test('按模型分组：每种作品在每种风格下都能出图；英文里没有中日文；分层画模型的版式（分段、分组、内外环、分部、明细、分块……）也能画按工具的', () => {
   const mm = buildModel(single, { lang: 'en' });
   for (const st of STYLES) {
     for (const [id, p] of Object.entries(PIECES)) {
@@ -156,7 +156,7 @@ test('按模型分组：每种作品在每种风格下都能出图；英文里�
       }
     }
   }
-  for (const [id, v] of [['tier', 'split'], ['tier', 'grouped'], ['donut', 'nested']]) {
+  for (const [id, v] of Object.entries(MODEL_VARIANTS).flatMap(([id, vs]) => vs.map((v) => [id, v]))) {
     const a = art(id, m, STYLES[0], { variant: v })!;
     assert.ok(a.hits.some((h) => /Claude Fable 5\.1/.test(JSON.stringify(h))), `${id}/${v} 没有分出模型`);
   }

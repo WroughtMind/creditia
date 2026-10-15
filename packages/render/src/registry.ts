@@ -6,8 +6,8 @@ import type { Scene } from './svg.ts';
 import type { PieceOpts } from './pieces/common.ts';
 import { tier, TIER_VARIANTS } from './pieces/tier.ts';
 import { roll, ROLL_VARIANTS } from './pieces/roll.ts';
-import { DONUT_VARIANTS, donut, waffle, stream, lanes, clock, versions, survival, mosaic, calendar, evidence, areas } from './pieces/charts.ts';
-import { receipt, RECEIPT_VARIANTS, share, badge, BADGE_VARIANTS, byline, hand } from './pieces/cards.ts';
+import { DONUT_VARIANTS, WAFFLE_VARIANTS, donut, waffle, stream, lanes, clock, versions, survival, mosaic, calendar, evidence, areas } from './pieces/charts.ts';
+import { receipt, RECEIPT_VARIANTS, share, badge, BADGE_VARIANTS, byline, BYLINE_VARIANTS, hand } from './pieces/cards.ts';
 import { codemap } from './pieces/map.ts';
 
 export interface PieceDef {
@@ -28,10 +28,10 @@ export const PIECES: Record<string, PieceDef> = {
   hand: { name: '人', en: 'People', q: '人做了多少：消息、review、人写的代码', qEn: 'What people did: messages, reviews, hand-written code', animated: true, render: hand },
   receipt: { name: '小票', en: 'Receipt', q: '花了多少时间、会话和 token', qEn: 'Time, sessions and tokens spent', variants: RECEIPT_VARIANTS, render: receipt },
   badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', qEn: 'README, profile page', variants: BADGE_VARIANTS, render: badge },
-  byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', render: byline },
+  byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', variants: BYLINE_VARIANTS, render: byline },
   roll: { name: '片尾字幕', en: 'Credits Roll', q: '谁担任了什么角色', qEn: 'Who played which role', variants: ROLL_VARIANTS, animated: true, render: roll },
   donut: { name: '环形图', en: 'Donut', q: '占比', qEn: 'Shares', variants: DONUT_VARIANTS, animated: true, render: donut },
-  waffle: { name: '华夫饼图', en: 'Waffle', q: '一格 1%', qEn: 'One square is 1%', animated: true, render: waffle },
+  waffle: { name: '华夫饼图', en: 'Waffle', q: '一格 1%', qEn: 'One square is 1%', variants: WAFFLE_VARIANTS, animated: true, render: waffle },
   stream: { name: '河流图', en: 'Stream', q: '每周新增代码', qEn: 'New code each week', animated: true, render: stream },
   lanes: { name: '会话泳道', en: 'Sessions', q: '各工具什么时候在干活', qEn: 'When each tool was at work', animated: true, render: lanes },
   clock: { name: '作息打卡', en: 'Punch Card', q: '星期 × 小时', qEn: 'Weekday × hour', animated: true, render: clock },
@@ -49,7 +49,12 @@ export const VARIANT_NAMES: Record<string, [string, string]> = {
   rows: ['条形', 'Rows'], center: ['对称', 'Centered'], podium: ['领奖台', 'Podium'], vertical: ['竖排', 'Vertical'], hud: ['面板', 'HUD'], stats: ['能力', 'Stats'],
   classic: ['双栏', 'Classic'], scroll: ['银幕滚动', 'Scrolling'], card: ['终卡', 'End card'], ed: ['动画片尾', 'Anime ED'], billing: ['海报', 'Billing'], terminal: ['终端', 'Terminal'],
   split: ['分段', 'Split'], grouped: ['分组', 'Grouped'], nested: ['内外环', 'Nested'], ring: ['单环', 'Ring'],
+  troupe: ['分部', 'Troupe'], itemized: ['明细', 'Itemized'], grid: ['方阵', 'Grid'], blocks: ['分块', 'Blocks'], line: ['一行', 'One line'], models: ['带模型', 'With models'],
   slip: ['小票', 'Slip'], ticket: ['电影票', 'Ticket'], flat: ['扁平', 'Flat'], stack: ['条形', 'Stack'], emblem: ['徽记', 'Emblem'],
+};
+/** 一个工具里有几个模型时最合适的版式：工具和它下面的模型分层画出来（两套渲染器都有） */
+export const MODEL_VARIANTS: Record<string, string[]> = {
+  tier: ['split', 'grouped'], donut: ['nested'], roll: ['troupe'], receipt: ['itemized'], waffle: ['blocks'], badge: ['split'], byline: ['models'],
 };
 export const variantName = (v: string, lang: 'zh' | 'en') => VARIANT_NAMES[v]?.[lang === 'zh' ? 0 : 1] ?? v;
 

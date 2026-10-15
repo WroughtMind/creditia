@@ -1,7 +1,8 @@
 // creditia App：一面展墙。顶部切换项目，左下角圆点切换风格，所有作品直接摆出来；
 // 悬停看细节、换版式、选格式导出；拖到右下角的导出坞也能导出。
 import { buildModel, type Model } from '../../../packages/render/src/classic/data.ts';
-import { nameOf } from '../../../packages/render/src/data.ts';
+import { nameOf, resolveGroup } from '../../../packages/render/src/data.ts';
+import { MODEL_VARIANTS } from '../../../packages/render/src/registry.ts';
 import { creditsBlock, mergeCreditsMd } from '../../../packages/render/src/classic/text.ts';
 import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts';
 import { INTERACT_CSS, mountHits } from '../../../packages/render/src/interact.ts';
@@ -570,11 +571,13 @@ function openFocus(id: string, k: string) {
     const a = await drawArt(id, variant);
     if (!a || my !== seq || !open) return;
     state.arts.set(k, a);
+    // 一个工具里有几个模型：分层画工具和模型的版式加个小点
+    const multiModel = !!state.raw && resolveGroup(state.raw, 'auto') === 'model';
     el.innerHTML = `${closeBtn()}
       <div class="big"><div class="art"></div></div>
       <div class="strip glass">
         <b style="padding:0 8px">${esc(state.style.pieceName(id, state.lang))}</b><span style="color:var(--soft)">${esc(state.style.pieceQ(id, state.lang))}</span><span class="keys" title="${L('上一件 / 下一件作品', 'Previous / next piece')}"><kbd>↑</kbd><kbd>↓</kbd></span>
-        ${vs.length > 1 ? `<span class="sep"></span><span class="lab">${L('版式', 'Layout')}</span><span class="keys" title="${L('上一种 / 下一种版式', 'Previous / next layout')}"><kbd>←</kbd><kbd>→</kbd></span>${vs.map((v) => `<button data-v="${v}" class="${v === variant ? 'on' : ''}">${esc(state.style.variantName(v, state.lang))}</button>`).join('')}` : ''}
+        ${vs.length > 1 ? `<span class="sep"></span><span class="lab">${L('版式', 'Layout')}</span><span class="keys" title="${L('上一种 / 下一种版式', 'Previous / next layout')}"><kbd>←</kbd><kbd>→</kbd></span>${vs.map((v) => { const mm = multiModel && MODEL_VARIANTS[id]?.includes(v); return `<button data-v="${v}" class="${v === variant ? 'on' : ''}${mm ? ' mm' : ''}"${mm ? ` title="${L('工具和它的各个模型分层画出来', 'Draws each tool with its models underneath')}"` : ''}>${esc(state.style.variantName(v, state.lang))}</button>`; }).join('')}` : ''}
         <span class="sep"></span><span class="lab">${L('导出', 'Export')}</span>${exportsFor(id).map((f) => `<button data-f="${f.id}">${f.name}</button>`).join('')}
       </div>`;
     const artEl = el.querySelector('.art') as HTMLElement;

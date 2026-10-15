@@ -73,3 +73,13 @@ export function measureV(str: string, st: Style, size: number, font = st.f.displ
   }
   return h;
 }
+
+/** 排序位置：按工具分组时就是排名；按模型分组时先按工具的排名、再按工具内的排名，同一工具的模型挨在一起。没上榜的排最后 */
+export function keyRank(m: Model, k: string): number {
+  const i = m.rows.findIndex((x) => x.key === k);
+  if (m.group !== 'model') return i + 1 || 500;
+  const ti = m.tools.findIndex((x) => x.key === k.split('/')[0]);
+  return ti < 0 ? (i + 1 || 50) * 1000 : ti * 50 + (i + 1 || 49);
+}
+/** 图例的顺序：同上 */
+export const legendRows = (m: Model) => [...m.rows].sort((a, b) => keyRank(m, a.key) - keyRank(m, b.key));
