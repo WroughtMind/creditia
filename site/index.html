@@ -623,7 +623,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   <div class="wrap">
     <span>creditia · MIT</span>
     <a href="https://github.com/WroughtMind/creditia">GitHub</a>
-    <a href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md" data-i="foot.rules">归因规则</a>
+    <a href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md" data-en-href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.en.md" data-i="foot.rules">归因规则</a>
     <div class="grow"></div>
     <a class="self" id="selflink" href="self/" aria-label="creditia credits"><img id="selfbadge" alt="creditia credits badge"></a>
   </div>
@@ -1833,6 +1833,8 @@ const io = new IntersectionObserver((es) => {
 // ───────── 语言、主题、复制 ─────────
 function applyLang() {
   document.querySelectorAll('[data-i]').forEach((el) => (el.innerHTML = t(el.dataset.i)));
+  // 有英文版的文档：链接跟着语言换
+  document.querySelectorAll('[data-en-href]').forEach((a) => { a.dataset.zhHref ??= a.getAttribute('href'); a.setAttribute('href', lang() === 'en' ? a.dataset.enHref : a.dataset.zhHref); });
   $('lang').textContent = lang() === 'en' ? '中' : 'EN';
   document.title = lang() === 'en' ? 'creditia — which AI wrote your code' : 'creditia — 你的代码，是哪些 AI 写的';
   field(); wall(); lines(); usage(); install(); zoomSetup();

@@ -1,5 +1,7 @@
 # creditia 怎么归因
 
+[English](ATTRIBUTION.en.md)
+
 这份文档说明 creditia 如何判断「这一行是谁写的」。原则：**不调用大模型；证据和推断分开记、分开显示；每个结论都能复查**。
 
 要说清楚的是：默认口径（standard）**会做两种推断**——同一改动块内的延伸、分支前缀；它们都记为「推断」，不会混进逐行证据或明确声明。只想要有证据的结论，用 `strict`。
@@ -81,7 +83,7 @@
 
 ## 6. 人
 
-人不和 AI 工具排同一个百分比。credits.json 的 `human` 和展示里「人」这一块记录：
+作品只回答一个问题：哪些 AI 工具和模型写了多少。人不和 AI 工具排同一个百分比，也不出现在任何作品里：百分比只在 AI 写的行和「未确认」的行之间算，作品里不写人名、不写人写了多少。本机档案 credits.json 的 `human` 里仍然记着下面这些，只供你自己查看：
 
 - **发给 AI 的消息**：会话里人发出的消息数（各工具日志里的 user 消息）；
 - **review**：GitHub PR 上你本人的 review（`--github`），bot 的 review 单独计；
@@ -89,13 +91,13 @@
 - **AI 写的代码去了哪**：AI 在会话里写的行 → 提交了的行 → 现在还在的行；
 - **Tab 补全**：Cursor 的 Tab 补全算人的辅助输入，不算 agent。
 
-人名默认不出现在任何展示里；`display.named` 打开才写，`display.sign` 是你主动写的落款。
+配置里的 `display.named`、`display.sign` 只保留在档案里，作品不会因此写出人名。
 
 ## 7. 不计入的内容
 
 - lockfile（npm、yarn、pnpm、bun、Cargo、go.sum、poetry、uv、Gemfile、composer、Podfile、pubspec、flake）、`dist/`、`build/`、`node_modules/`、`vendor/`、`third_party/`、`.min.`、protobuf 生成物；
 - `.gitattributes` 里标了 `linguist-generated`、`linguist-vendored`、`-diff`、`binary` 的路径；
-- 过短的行（规范化后不到 4 个字符）不作证据，跟随所在改动块里最多的那一方；
+- 过短的行（规范化后不到 4 个字符）不单独按内容作证据：按位置对上一次写入（见第 2 节），对不上的跟随同一改动块里它上面最近的长行；
 - 二进制文件只计数，不计行。
 
 ## 8. 已知的边界
