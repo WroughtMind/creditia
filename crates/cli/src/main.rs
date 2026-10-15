@@ -113,6 +113,7 @@ fn main() {
         creditia_core::i18n::set(l);
     }
     let json = a.on("json");
+    creditia_core::progress::init();
     let r: R<(Value, Vec<String>)> = match a.cmd.as_str() {
         "discover" => cmd_discover(&a),
         "init" => cmd_init(&a),
@@ -134,6 +135,7 @@ fn main() {
         }
         other => Err(tr!("未知命令：{other}\n\n{}", "unknown command: {other}\n\n{}", usage())),
     };
+    creditia_core::progress::done();
     match r {
         Ok((v, warnings)) => {
             if json {

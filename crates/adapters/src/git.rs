@@ -110,6 +110,8 @@ pub type Stamps = HashMap<String, (String, Option<String>)>;
 /// 解析 `git log -p` 输出。`range` 为空表示全量到 `rev`。返回提交和盖章表
 pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>, Stamps) {
     let spec = range.map(|r| r.to_string()).unwrap_or_else(|| rev.to_string());
+    let total: usize = git(repo, &["rev-list", "--count", "--no-merges", &spec]).trim().parse().unwrap_or(0);
+    creditia_core::progress::tick("history", 0, total);
     let Ok(mut child) = Command::new("git")
         .arg("-C")
         .arg(repo)
@@ -150,6 +152,7 @@ pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>
                 let model = p.get(8).and_then(|s| s.split('|').next()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
                 stamps.insert(hash.clone(), (h.to_lowercase(), model));
             }
+            creditia_core::progress::tick("history", out.len() + 1, total);
             out.push(Commit {
                 hash,
                 email: p[1].to_lowercase(),
@@ -304,26 +307,47 @@ pub fn blame_head(repo: &Path, rev: &str, cache: &mut HashMap<String, BlameFile>
             (m.get(1) == Some(&"blob") && !excluded(path) && text.contains(path)).then(|| (m[2].to_string(), path.to_string()))
         })
         .collect();
-    let todo: Vec<(String, String)> = files.iter().filter(|(b, _)| !cache.contains_key(b)).cloned().collect();
+    // 缓存按「blob 路径」存：内容一样的两个文件路径不同，行哈希和 blame 也不同
+    let ck = |b: &str, p: &str| format!("{b} {p}");
+    // 只留 HEAD 上还在的文件，缓存不会越攒越大
+    let live: HashSet<String> = files.iter().map(|(b, p)| ck(b, p)).collect();
+    cache.retain(|k, _| live.contains(k));
+    let mut todo: Vec<(String, String)> = files.iter().filter(|(b, p)| !cache.contains_key(&ck(b, p))).cloned().collect();
+    // 创建以后再没改过的文件不用跑 blame
+    if todo.len() > 50 {
+        let fresh = unchanged_since_created(repo, rev, &todo);
+        if !fresh.is_empty() {
+            for (k, bf) in fresh {
+                cache.insert(k, bf);
+            }
+            todo.retain(|(b, p)| !cache.contains_key(&ck(b, p)));
+            save(cache);
+        }
+    }
     if !todo.is_empty() {
         let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(10);
         let next = std::sync::atomic::AtomicUsize::new(0);
         let (tx, rx) = std::sync::mpsc::channel::<(String, BlameFile)>();
+        let ck = &ck;
         std::thread::scope(|s| {
             for _ in 0..n {
                 let (tx, next, todo) = (tx.clone(), &next, &todo);
                 s.spawn(move || loop {
                     let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let Some((blob, path)) = todo.get(i) else { break };
-                    if tx.send((blob.clone(), blame_file(repo, rev, path))).is_err() {
+                    if tx.send((ck(blob, path), blame_file(repo, rev, path))).is_err() {
                         break;
                     }
                 });
             }
             drop(tx);
             let mut saved = std::time::Instant::now();
-            for (blob, bf) in rx {
-                cache.insert(blob, bf);
+            let mut done = 0;
+            creditia_core::progress::tick("blame", 0, todo.len());
+            for (k, bf) in rx {
+                cache.insert(k, bf);
+                done += 1;
+                creditia_core::progress::tick("blame", done, todo.len());
                 if saved.elapsed().as_secs() >= 60 {
                     save(cache);
                     saved = std::time::Instant::now();
@@ -331,7 +355,107 @@ pub fn blame_head(repo: &Path, rev: &str, cache: &mut HashMap<String, BlameFile>
             }
         });
     }
-    files.into_iter().map(|(b, p)| (p, cache.get(&b).cloned().unwrap_or_default())).collect()
+    files.into_iter().map(|(b, p)| { let bf = cache.get(&ck(&b, &p)).cloned().unwrap_or_default(); (p, bf) }).collect()
+}
+
+/// 创建以后再没改过的文件：HEAD 上的 blob 正是某个提交新建这个文件时写下的（不是改名、复制来的），
+/// 那每一行都出自那个提交、行号也一样，和 git blame 的结果相同，却只要一遍 `git log --raw` 加读一次文件内容。
+/// 大仓库里这样的文件常常占一大半。返回 (「blob 路径」, blame)
+fn unchanged_since_created(repo: &Path, rev: &str, todo: &[(String, String)]) -> Vec<(String, BlameFile)> {
+    let want: HashSet<(&str, &str)> = todo.iter().map(|(b, p)| (b.as_str(), p.as_str())).collect();
+    let Ok(mut child) = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["-c", "core.quotepath=false", "log", "--raw", "--no-abbrev", "--no-merges", "-M", "--format=@@%H", rev])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return vec![];
+    };
+    // (blob, 路径) → 新建它的提交。git log 从新到旧，每个路径只看最近的那一次改动：
+    // 它是新建、而且写下的正是 HEAD 上的 blob 才算。最近一次是改名、复制过来的，或者改过又改回原样的，
+    // git blame 会算到别的提交上，这些照常跑 blame
+    // 新建它的那个提交里还删了、改名了别的文件时也不算：git blame 可能把它当成从那个文件改名来的
+    let mut created: HashMap<(String, String), String> = HashMap::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut commit = String::new();
+    let (mut pending, mut moved): (Vec<(String, String)>, bool) = (vec![], false);
+    let mut flush = |commit: &str, pending: &mut Vec<(String, String)>, moved: bool| {
+        for k in pending.drain(..) {
+            if !moved {
+                created.insert(k, commit.to_string());
+            }
+        }
+    };
+    for line in BufReader::new(child.stdout.take().unwrap()).lines().map_while(Result::ok) {
+        if let Some(h) = line.strip_prefix("@@") {
+            flush(&commit, &mut pending, moved);
+            moved = false;
+            commit = h.to_string();
+        } else if let Some(meta) = line.strip_prefix(':') {
+            let Some((m, paths)) = meta.split_once('\t') else { continue };
+            // 改名、复制是「旧路径<TAB>新路径」，看新路径
+            let path = paths.rsplit('\t').next().unwrap_or(paths);
+            let f: Vec<&str> = m.split(' ').collect();
+            if f.len() >= 5 && (f[4] == "D" || f[4].starts_with('R') || f[4].starts_with('C')) {
+                moved = true;
+            }
+            if !seen.insert(path.to_string()) {
+                continue;
+            }
+            if f.len() >= 5 && f[4] == "A" && want.contains(&(f[3], path)) {
+                pending.push((f[3].to_string(), path.to_string()));
+            }
+        }
+    }
+    flush(&commit, &mut pending, moved);
+    let _ = child.wait();
+    if created.is_empty() {
+        return vec![];
+    }
+    // 一次 cat-file --batch 读出这些文件的内容
+    let Ok(mut cat) = Command::new("git").arg("-C").arg(repo).args(["cat-file", "--batch"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() else {
+        return vec![];
+    };
+    let list: Vec<(String, String, String)> = created.into_iter().map(|((b, p), c)| (b, p, c)).collect();
+    let mut stdin = cat.stdin.take().unwrap();
+    let ids: Vec<String> = list.iter().map(|(b, _, _)| b.clone()).collect();
+    let writer = std::thread::spawn(move || {
+        use std::io::Write;
+        for id in ids {
+            if writeln!(stdin, "{id}").is_err() {
+                break;
+            }
+        }
+    });
+    let mut r = BufReader::new(cat.stdout.take().unwrap());
+    let mut out = vec![];
+    for (blob, path, commit) in &list {
+        let mut head = String::new();
+        if r.read_line(&mut head).unwrap_or(0) == 0 {
+            break;
+        }
+        // `<id> missing`：没有内容可读，跳过（这个文件照常跑 blame）
+        let Some(size) = head.split(' ').nth(2).and_then(|x| x.trim().parse::<usize>().ok()) else { continue };
+        let mut buf = vec![0u8; size + 1];
+        if std::io::Read::read_exact(&mut r, &mut buf).is_err() {
+            break;
+        }
+        buf.pop();
+        let text = String::from_utf8_lossy(&buf);
+        let ext = ext_of(path);
+        let mut bf = BlameFile::default();
+        for (i, l) in text.lines().enumerate() {
+            let n = normalize(l, &ext);
+            let key = if n.chars().count() < 4 { 0 } else { line_key(path, &n) };
+            bf.push(commit, path, key, i as u32 + 1);
+        }
+        out.push((format!("{blob} {path}"), bf));
+    }
+    let _ = writer.join();
+    let _ = cat.wait();
+    out
 }
 
 fn blame_file(repo: &Path, rev: &str, path: &str) -> BlameFile {
@@ -416,7 +540,7 @@ pub fn mailmap_emails(repo: &Path, canonical: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{glob_re, tag_re};
+    use super::*;
     #[test]
     fn globs() {
         let m = |p: &str, f: &str| regex::Regex::new(&glob_re(p)).unwrap().is_match(f);
@@ -436,5 +560,31 @@ mod tests {
         assert!(!m("archive/**", "release/archive/x"));
         assert!(m("nightly-*", "nightly-2026-10-13"));
         assert!(!m("nightly-*", "v1-nightly-2"));
+    }
+
+
+    /// 跳过 blame 的捷径和真跑 git blame 结果一致。CREDITIA_BLAME_CHECK=<仓库> 时拿真仓库对照（手动跑）
+    #[test]
+    #[ignore]
+    fn unchanged_files_match_real_blame() {
+        let Some(repo) = std::env::var_os("CREDITIA_BLAME_CHECK") else { return };
+        let repo = Path::new(&repo);
+        let tree = git(repo, &["ls-tree", "-r", "HEAD"]);
+        let todo: Vec<(String, String)> = tree.lines().filter_map(|l| { let (m, p) = l.split_once('\t')?; let f: Vec<&str> = m.split(' ').collect(); (f[1] == "blob").then(|| (f[2].to_string(), p.to_string())) }).collect();
+        let fast = unchanged_since_created(repo, "HEAD", &todo);
+        let mut bad = 0;
+        let n: usize = std::env::var("CREDITIA_BLAME_CHECK_N").ok().and_then(|x| x.parse().ok()).unwrap_or(400);
+        for (k, bf) in fast.iter().take(n) {
+            let path = k.split_once(' ').unwrap().1;
+            let real = blame_file(repo, "HEAD", path);
+            let a: Vec<_> = bf.iter().map(|l| (l.commit.to_string(), l.key, l.orig)).collect();
+            let b: Vec<_> = real.iter().map(|l| (l.commit.to_string(), l.key, l.orig)).collect();
+            if a != b {
+                bad += 1;
+                eprintln!("differs: {path} {:?}", a.iter().zip(&b).find(|(x, y)| x != y).map(|(x, y)| (x.clone(), y.clone())).or(Some(((String::new(), a.len() as u32, 0), (String::new(), b.len() as u32, 0)))));
+            }
+        }
+        eprintln!("checked {} of {} unchanged files ({} in tree)", fast.len().min(n), fast.len(), todo.len());
+        assert_eq!(bad, 0);
     }
 }

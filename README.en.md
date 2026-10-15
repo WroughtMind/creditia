@@ -142,6 +142,8 @@ The GitHub Action needs no install: use `WroughtMind/creditia@main`.
 
 The command line speaks Chinese by default; add `--lang en` or set `CREDITIA_LANG=en` for English.
 
+The first analysis of a large repository traces every current line back to its commit, which takes a while: a repo with 12,000 commits and 9,000 files takes tens of minutes on a single core, much less on more. The terminal and the app show which step it is on; cancel midway and the next run picks up where it stopped. After that, only new commits are analyzed.
+
 <details>
 <summary><b>Repository layout</b></summary>
 

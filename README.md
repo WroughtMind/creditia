@@ -142,6 +142,8 @@ GitHub Action 直接用 `WroughtMind/creditia@main`，不用装。
 
 命令行默认说中文；加 `--lang en` 或设 `CREDITIA_LANG=en` 改说英文。
 
+大仓库第一次分析要逐个文件追溯现在的每一行，比较慢：一万多个提交、九千个文件的仓库，单核机器上要几十分钟，多核快得多。终端和 App 里都能看到走到哪一步；中途取消，下次接着跑；之后每次只算新提交。
+
 <details>
 <summary><b>仓库结构</b></summary>
 

@@ -641,10 +641,17 @@ async function withProgress<T>(name: string, job: () => Promise<T>): Promise<T> 
   if (analyzing) throw { code: 'busy' };
   analyzing = true;
   const t0 = Date.now();
-  const text = () => { const s = Math.round((Date.now() - t0) / 1000); return L(`正在分析 ${name}…${s ? ` ${s} 秒` : ''}`, `Analyzing ${name}…${s ? ` ${s}s` : ''}`); };
+  // 核心报来的进度：大仓库第一次分析要很久，让人看到走到哪一步了
+  let stage = '';
+  const STAGES: Record<string, [string, string]> = { history: ['读提交历史', 'Reading history'], logs: ['读各工具的日志', 'Reading tool logs'], attribute: ['逐个提交归因', 'Attributing commits'], blame: ['追溯现在的每个文件', 'Tracing current files'] };
+  const unlisten: (() => void) | null = await (window as any).__TAURI__?.event?.listen('analyze-progress', (e: any) => {
+    const p = e.payload ?? {}, n = STAGES[p.stage];
+    if (n) stage = `${L(...n)}${p.total ? ` ${fmt(p.done)}/${fmt(p.total)}` : ''}`;
+  }).catch(() => null) ?? null;
+  const text = () => { const s = Math.round((Date.now() - t0) / 1000); const st = stage ? ` · ${stage}` : ''; return L(`正在分析 ${name}…${s ? ` ${s} 秒` : ''}${st}`, `Analyzing ${name}…${s ? ` ${s}s` : ''}${st}`); };
   toast(text(), 0, { spin: true, acts: [{ label: L('取消', 'Cancel'), run: () => { toast(L('正在取消…', 'Cancelling…'), 0, { spin: true }); api('cancel_analyze').catch(() => null); } }] });
   const tick = setInterval(() => { const m = document.querySelector('#toast .msg'); if (m && document.querySelector('#toast button')) m.textContent = text(); }, 1000);
-  try { return await job(); } finally { clearInterval(tick); analyzing = false; }
+  try { return await job(); } finally { clearInterval(tick); unlisten?.(); analyzing = false; }
 }
 async function reanalyze(p: any) {
   try {
