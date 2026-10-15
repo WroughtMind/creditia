@@ -27,6 +27,7 @@ pub enum Src {
     Goose,
     Continue,
     Zed,
+    AmazonQ,
 }
 
 impl Src {
@@ -51,10 +52,11 @@ impl Src {
             Src::Goose => "goose",
             Src::Continue => "continue",
             Src::Zed => "zed",
+            Src::AmazonQ => "amazon-q",
         }
     }
-    pub fn all() -> [Src; 19] {
-        [Src::Codex, Src::Claude, Src::Cursor, Src::Grok, Src::Kimi, Src::Gemini, Src::Qwen, Src::OpenCode, Src::Cline, Src::Roo, Src::Kilo, Src::Aider, Src::Copilot, Src::Amp, Src::Trae, Src::Crush, Src::Goose, Src::Continue, Src::Zed]
+    pub fn all() -> [Src; 20] {
+        [Src::Codex, Src::Claude, Src::Cursor, Src::Grok, Src::Kimi, Src::Gemini, Src::Qwen, Src::OpenCode, Src::Cline, Src::Roo, Src::Kilo, Src::Aider, Src::Copilot, Src::Amp, Src::Trae, Src::Crush, Src::Goose, Src::Continue, Src::Zed, Src::AmazonQ]
     }
     pub fn from_harness(h: &str) -> Option<Src> {
         Src::all().into_iter().find(|s| s.harness() == h)

@@ -10,8 +10,8 @@
 
 | 来源 | 内容 | 证据等级 |
 |---|---|---|
-| agent 日志 | 每次**成功**写进文件的内容（Write、Edit、FileChange、write_file、replace、patch……），连同会话、模型、时间、渠道。读得到的有 Claude Code、Codex、Cursor、Gemini CLI、Qwen Code、OpenCode、Cline、Roo Code、Kilo Code、Grok、Kimi、GitHub Copilot（VS Code 与命令行）、Aider、Amp、TRAE 命令行、Crush、Goose、Continue、Zed；报错、被拒绝、没应用的编辑都不算 | 逐行证据（verified） |
-| agent 的 shell 命令 | 成功执行的命令原文（heredoc、`printf`、python 脚本里的新文本），作为命令里提到的仓库文件的候选证据（Claude Code 的 Bash、Codex、Amp、TRAE 命令行、Goose、Continue、Zed 的 shell） | 逐行证据 |
+| agent 日志 | 每次**成功**写进文件的内容（Write、Edit、FileChange、write_file、replace、patch……），连同会话、模型、时间、渠道。读得到的有 Claude Code、Codex、Cursor、Gemini CLI、Qwen Code、OpenCode、Cline、Roo Code、Kilo Code、Grok、Kimi、GitHub Copilot（VS Code 与命令行）、Aider、Amp、TRAE 命令行、Crush、Goose、Continue、Zed、Amazon Q 命令行；报错、被拒绝、没应用的编辑都不算 | 逐行证据（verified） |
+| agent 的 shell 命令 | 成功执行的命令原文（heredoc、`printf`、python 脚本里的新文本），作为命令里提到的仓库文件的候选证据（Claude Code 的 Bash、Codex、Amp、TRAE 命令行、Goose、Continue、Zed、Amazon Q 命令行的 shell） | 逐行证据 |
 | Cursor 行级库 | Cursor 自己记下的逐行哈希。creditia 复现了它的规范化与哈希算法，逐字节一致 | 逐行证据 |
 | 提交 trailer | `Creditia-Harness` / `Creditia-Model`（`creditia stamp` 或 hook 写入） | 明确声明（declared） |
 | 提交元数据 | agent 的提交邮箱（Cursor 云端、Copilot、Devin、Jules…）、`Co-authored-by`、`Assisted-by: 工具:模型`（Crush 默认写它，Linux 内核的 AI 署名也是这个格式；写人名、邮箱的不算）、bot 账号、aider 改写的作者名 | 明确声明 |
@@ -107,7 +107,7 @@
 - agent 用 shell 命令写文件时，内容写在命令里的（`cat > file <<EOF`、`printf`、python 脚本里的新文本）按逐行证据算：命令原文的每一行只有真出现在那个文件的提交新增行里才算数，只读文件的命令（`cat`、`grep`）不会带来误认。内容是程序生成的（脚手架、代码生成脚本、`curl > file`）记「未确认」：那不是模型写的，和生成物一样不署给 AI。
 - 日志被工具自动清理后，只要之前跑过一次 `analyze` / `collect`，证据库里还留着；从没采集过的就只剩提交元数据。
 - 透传官方响应的中转站，渠道无法确定，不写。
-- 有些工具的本地记录读不出编辑：Windsurf 的 Cascade 记录是加密的；TRAE IDE 的格式没有公开；2026 年 3 月以后的 Amp 把线程存在服务器上。它们只能靠提交元数据或盖章，`creditia doctor` 会标「不支持」。TRAE 命令行按它公开的 rollout 格式读，还没在大量真实日志上验证过；Crush 按它的源码读（`files` 表逐版存的文件内容，用户在两次编辑之间手改后存的中间版本不算），也还没用真实日志核对过；Goose 按它的源码读 `sessions.db`（只认工具结果成功的调用），同样还没用真实日志核对过。Continue 也按源码读（只认状态为 done 的工具调用）；它的记录没有逐条时间，证据时间取会话的创建时间，模型是用户在配置里给模型起的标题。Zed 也按源码读（`threads.db` 里 0.3.0 格式的线程，编辑结果带改前改后的完整内容，报错的不算）；线程里同样没有逐条时间，模型按线程记。
+- 有些工具的本地记录读不出编辑：Windsurf 的 Cascade 记录是加密的；TRAE IDE 的格式没有公开；2026 年 3 月以后的 Amp 把线程存在服务器上。它们只能靠提交元数据或盖章，`creditia doctor` 会标「不支持」。TRAE 命令行按它公开的 rollout 格式读，还没在大量真实日志上验证过；Crush 按它的源码读（`files` 表逐版存的文件内容，用户在两次编辑之间手改后存的中间版本不算），也还没用真实日志核对过；Goose 按它的源码读 `sessions.db`（只认工具结果成功的调用），同样还没用真实日志核对过。Continue 也按源码读（只认状态为 done 的工具调用）；它的记录没有逐条时间，证据时间取会话的创建时间，模型是用户在配置里给模型起的标题。Zed 也按源码读（`threads.db` 里 0.3.0 格式的线程，编辑结果带改前改后的完整内容，报错的不算）；线程里同样没有逐条时间，模型按线程记。Amazon Q 命令行也按源码读（`data.sqlite3` 的 conversations 表），它每个目录只存最近一次对话，之前的只有分析过才留在证据库里。
 - Copilot 在 VS Code 里的 agent 记录不一定带模型名：同一会话的 chatSessions 或调试日志里有就用，都没有就只记工具。
 - Aider 的历史文件没有逐次编辑的时间：有「Commit」行的用那次提交的时间，没有的按仓库最后一次提交的时区估。
 - 各工具的日志格式会变：`creditia doctor` 会列出每个数据源读到了多少、最早最晚是哪天；读不懂的格式会报警告，不会默默算错。
