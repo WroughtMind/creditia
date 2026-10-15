@@ -116,7 +116,10 @@ jobs:
 | <img src=".github/readme/logo/opencode.svg" width="18"> | OpenCode | `storage/session + message + part` 里 completed 的 edit / write；渠道看 `providerID` | ✓ | ✓ |
 | <img src=".github/readme/logo/cline.svg" width="18"> <img src=".github/readme/logo/roo.svg" width="18"> <img src=".github/readme/logo/kilo.svg" width="18"> | Cline · Roo Code · Kilo Code | 各 VS Code 系编辑器里的 `tasks/*/ui_messages.json` | ✓ | ✓ |
 | <img src=".github/readme/logo/grok.svg" width="18"> <img src=".github/readme/logo/kimi.svg" width="18"> | Grok · Kimi | 会话目录里的写文件调用 | ✓ | ✓ |
-| <img src=".github/readme/logo/copilot.svg" width="18"> <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> <img src=".github/readme/logo/aider.svg" width="18"> | GitHub Copilot · Devin · Jules · Aider · Cursor 云端 · bot | 提交邮箱、`Co-authored-by`、作者名 | 声明 | — |
+| <img src=".github/readme/logo/copilot.svg" width="18"> | GitHub Copilot | VS Code 的 `chatSessions` 与 agent 记录里成功的编辑；Copilot 命令行的 `~/.copilot/session-state` | ✓ | ✓ |
+| <img src=".github/readme/logo/aider.svg" width="18"> | Aider | 仓库里的 `.aider.chat.history.md`：只算「Applied edit」确认过的文件，时间取它的提交 | ✓ | ✓ |
+| | Amp · TRAE 命令行 | Amp 本地的 `threads/*.json`（完成的编辑）；TRAE CLI 的会话 rollout | ✓ | ✓ |
+| <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> | Copilot 云端 · Devin · Jules · Cursor 云端 · bot | 提交邮箱、`Co-authored-by`、作者名 | 声明 | — |
 | | 任何工具 | `creditia stamp` / 提交 hook 盖章（`Creditia-Harness` trailer） | 声明 | ✓ |
 
 ## 安装
@@ -136,6 +139,8 @@ git clone --depth 1 https://github.com/WroughtMind/creditia /tmp/creditia && cp 
 ```
 
 GitHub Action 直接用 `WroughtMind/creditia@main`，不用装。
+
+命令行默认说中文；加 `--lang en` 或设 `CREDITIA_LANG=en` 改说英文。
 
 <details>
 <summary><b>仓库结构</b></summary>

@@ -6,6 +6,7 @@ mod analyze;
 use creditia_adapters as ad;
 use creditia_core::config::{Config, Director};
 use creditia_core::model::Src;
+use creditia_core::tr;
 use creditia_store::{Library, Project};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
@@ -49,16 +50,16 @@ impl Args {
     }
     fn repo(&self) -> R<PathBuf> {
         let p = self.flags.get("repo").map(PathBuf::from).unwrap_or(std::env::current_dir().map_err(|e| e.to_string())?);
-        let p = p.canonicalize().map_err(|_| format!("目录不存在：{}", p.display()))?;
+        let p = p.canonicalize().map_err(|_| tr!("目录不存在：{}", "no such folder: {}", p.display()))?;
         if !ad::git::git_ok(&p, &["rev-parse", "--git-dir"]) {
-            return Err(format!("不是 git 仓库：{}", p.display()));
+            return Err(tr!("不是 git 仓库：{}", "not a git repository: {}", p.display()));
         }
         // worktree 映射回主仓库
         Ok(ad::git::main_worktree(&p).unwrap_or(p))
     }
 }
 
-const USAGE: &str = "用法：creditia-core <命令> [选项]
+const USAGE_ZH: &str = "用法：creditia-core <命令> [选项]
 
   discover                         列出本机检测到 agent 活动的项目
   init      [--repo P] [--force]   在仓库写 .creditia/config.json
@@ -78,10 +79,39 @@ const USAGE: &str = "用法：creditia-core <命令> [选项]
   unlink    <路径> [--repo P]      取消关联
   whoami                           当前在哪个 agent 里运行（agent 给自己盖章用）
 
-所有命令支持 --json。退出码：0 成功，1 失败，2 有警告。";
+所有命令支持 --json 和 --lang zh|en（也可以设环境变量 CREDITIA_LANG）。退出码：0 成功，1 失败，2 有警告。";
+
+const USAGE_EN: &str = "Usage: creditia-core <command> [options]
+
+  discover                         list projects on this machine with agent activity
+  init      [--repo P] [--force]   write .creditia/config.json in the repository
+  analyze   [--repo P] [--fresh] [--github] [--level strict|standard|loose] [--out F] [--config F]
+                                   analyze and write .creditia/credits.json (all local, never calls a model)
+  update    [--repo P]             incremental update (same as analyze)
+  collect   [--repo P | --all]     only collect evidence into the library
+  doctor                           check every data source
+  blame     <path>:<line> [--repo P]  which tool and model wrote this line
+  stamp     --harness H [--model M] [--share S]   stamp the next commit
+  hook      install|uninstall [--repo P]           install the commit-stamp hook
+  hook-trailers <msgfile>          (called by the hook) append Creditia-* trailers
+  evidence  export [--out F] | import <file>   merge evidence between machines
+  projects                         projects in the library
+  paths     [--repo P]             every path recorded for this project (main, worktrees, temp clones, old paths)
+  link      <path> [--repo P]      link a path to this project (a path on another machine, a deleted temp folder)
+  unlink    <path> [--repo P]      remove a link
+  whoami                           which agent this is running in (for agents stamping themselves)
+
+Every command takes --json and --lang zh|en (or set CREDITIA_LANG). Exit codes: 0 ok, 1 failed, 2 warnings.";
+
+fn usage() -> &'static str {
+    if creditia_core::i18n::en() { USAGE_EN } else { USAGE_ZH }
+}
 
 fn main() {
     let a = parse_args();
+    if let Some(l) = a.flags.get("lang") {
+        creditia_core::i18n::set(l);
+    }
     let json = a.on("json");
     let r: R<(Value, Vec<String>)> = match a.cmd.as_str() {
         "discover" => cmd_discover(&a),
@@ -99,10 +129,10 @@ fn main() {
         "link" | "unlink" => cmd_link(&a),
         "whoami" => cmd_whoami(&a),
         "" | "help" | "-h" | "--help" => {
-            println!("{USAGE}");
+            println!("{}", usage());
             return;
         }
-        other => Err(format!("未知命令：{other}\n\n{USAGE}")),
+        other => Err(tr!("未知命令：{other}\n\n{}", "unknown command: {other}\n\n{}", usage())),
     };
     match r {
         Ok((v, warnings)) => {
@@ -115,7 +145,7 @@ fn main() {
             } else if let Some(s) = v["summary"].as_str() {
                 println!("{s}");
                 for w in &warnings {
-                    eprintln!("警告：{w}");
+                    eprintln!("{}{w}", tr!("警告：", "warning: "));
                 }
             } else {
                 println!("{}", serde_json::to_string_pretty(&v).unwrap());
@@ -126,7 +156,7 @@ fn main() {
             if json {
                 println!("{}", json!({ "error": e }));
             } else {
-                eprintln!("错误：{e}");
+                eprintln!("{}{e}", tr!("错误：", "error: "));
             }
             std::process::exit(1);
         }
@@ -145,6 +175,9 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
     acts.extend(ad::gemini::discover());
     acts.extend(ad::opencode::discover());
     acts.extend(ad::cline::discover());
+    acts.extend(ad::copilot::discover());
+    acts.extend(ad::amp::discover());
+    acts.extend(ad::trae::discover());
     // 把 cwd 归到 git 仓库：存在的目录用根提交；不存在的用远程地址或目录名
     #[derive(Default)]
     struct P {
@@ -203,7 +236,7 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
     // 已经不存在、又只有零星活动的临时目录默认不列（--all 列出）
     let show_all = a.on("all");
     merged.retain(|p| show_all || p.exists || p.tools.values().sum::<u64>() >= 3);
-    let status = |p: &P| if p.exists { p.path.clone() } else if PathBuf::from(&p.path).is_dir() { format!("{}  (不是 git 仓库)", p.path) } else { format!("{}  (目录已不存在)", p.path) };
+    let status = |p: &P| if p.exists { p.path.clone() } else if PathBuf::from(&p.path).is_dir() { tr!("{}  (不是 git 仓库)", "{}  (not a git repository)", p.path) } else { tr!("{}  (目录已不存在)", "{}  (folder no longer exists)", p.path) };
     let list: Vec<Value> = merged
         .iter()
         .map(|p| {
@@ -398,17 +431,19 @@ fn cmd_init(a: &Args) -> R<(Value, Vec<String>)> {
     let repo = a.repo()?;
     let path = repo.join(".creditia/config.json");
     if path.exists() && !a.on("force") {
-        return Err(format!("{} 已存在；加 --force 覆盖", path.display()));
+        return Err(tr!("{} 已存在；加 --force 覆盖", "{} already exists; add --force to overwrite", path.display()));
     }
     let c = detect_config(&repo);
     c.save(&path)?;
     let v = serde_json::to_value(&c).unwrap();
-    let summary = format!(
+    let who = c.directors.first().map(|d| d.name.clone()).unwrap_or_else(|| tr!("（未识别）", "(not found)"));
+    let summary = tr!(
         "已写入 {}\n项目 {} · 分支 {} · 你的提交身份 {}\n可在该文件里调整你的邮箱、口径（level）、其他路径（paths）、隐私选项。",
+        "Wrote {}\nproject {} · branch {} · your commit identity {}\nEdit that file to change your emails, the level, other paths (paths) and privacy options.",
         path.display(),
         c.name,
         c.branch,
-        c.directors.first().map(|d| d.name.as_str()).unwrap_or("（未识别）")
+        who
     );
     Ok((json!({ "path": path, "config": v, "summary": summary }), vec![]))
 }
@@ -420,8 +455,9 @@ fn cmd_analyze(a: &Args) -> R<(Value, Vec<String>)> {
     let invoked = std::env::current_dir().ok().and_then(|p| p.canonicalize().ok());
     let opts = analyze::Opts { fresh: a.on("fresh"), github: a.on("github"), out: a.flags.get("out").map(PathBuf::from), blame: None, config: a.flags.get("config").map(PathBuf::from), level: a.flags.get("level").cloned(), invoked };
     let r = analyze::run(&repo, &opts)?;
-    let summary = format!(
+    let summary = tr!(
         "{}：{} 个提交（新增 {}），{} 项，{} 行；{:.1}s\n{}\n写入 {}",
+        "{}: {} commits ({} new), {} items, {} lines; {:.1}s\n{}\nwrote {}",
         r.name,
         r.commits,
         r.new_commits,
@@ -447,7 +483,7 @@ fn cmd_collect(a: &Args) -> R<(Value, Vec<String>)> {
         warnings.extend(w);
         out.push(json!({ "repo": repo, "project": pid, "newEvidence": n }));
     }
-    let summary = out.iter().map(|o| format!("{}：新增证据 {} 条", o["repo"].as_str().unwrap_or(""), o["newEvidence"])).collect::<Vec<_>>().join("\n");
+    let summary = out.iter().map(|o| tr!("{}：新增证据 {} 条", "{}: {} new pieces of evidence", o["repo"].as_str().unwrap_or(""), o["newEvidence"])).collect::<Vec<_>>().join("\n");
     Ok((json!({ "collected": out, "summary": summary }), warnings))
 }
 
@@ -455,11 +491,15 @@ fn cmd_collect(a: &Args) -> R<(Value, Vec<String>)> {
 
 fn cmd_doctor(_a: &Args) -> R<(Value, Vec<String>)> {
     use creditia_core::model::Src;
-    let hs = vec![
+use creditia_core::tr;
+    let mut hs = vec![
         ad::codex::doctor(), ad::claude::doctor(), ad::cursor::doctor(), ad::grok::doctor(), ad::kimi::doctor(),
         ad::gemini::doctor(Src::Gemini), ad::gemini::doctor(Src::Qwen), ad::opencode::doctor(),
         ad::cline::doctor(Src::Cline), ad::cline::doctor(Src::Roo), ad::cline::doctor(Src::Kilo),
+        ad::aider::doctor(), ad::amp::doctor(), ad::trae::doctor(),
     ];
+    hs.extend(ad::copilot::doctor());
+    hs.extend(ad::others::doctor());
     let git_ok = std::process::Command::new("git").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
     let gh_ok = std::process::Command::new("gh").args(["auth", "status"]).output().map(|o| o.status.success()).unwrap_or(false);
     let lib = Library::open().ok();
@@ -468,10 +508,10 @@ fn cmd_doctor(_a: &Args) -> R<(Value, Vec<String>)> {
     let mut lines = vec![];
     for h in &hs {
         lines.push(format!(
-            "{:<12} {}  {}{}{}",
+            "{:<15} {}  {}{}{}",
             h.source,
-            if h.readable { "可读" } else { "不可读" },
-            if h.records > 0 { format!("{} 条", h.records) } else { String::new() },
+            if h.readable { tr!("可读", "readable") } else if h.unsupported { tr!("不支持", "unsupported") } else { tr!("不可读", "unreadable") },
+            if h.records > 0 { tr!("{} 条", "{} records", h.records) } else { String::new() },
             match (&h.earliest, &h.latest) {
                 (Some(a), Some(b)) => format!("  {a} → {b}"),
                 _ => String::new(),
@@ -479,11 +519,11 @@ fn cmd_doctor(_a: &Args) -> R<(Value, Vec<String>)> {
             if h.note.is_empty() { String::new() } else { format!("  {}", h.note) }
         ));
     }
-    lines.push(format!("git          {}", if git_ok { "可用" } else { "未找到" }));
-    lines.push(format!("gh           {}", if gh_ok { "已登录" } else { "未登录或未安装（PR 元数据会缺少分支名）" }));
-    lines.push(format!("作品库       {lib_path}  {n_proj} 个项目"));
+    lines.push(format!("{:<15} {}", "git", if git_ok { tr!("可用", "available") } else { tr!("未找到", "not found") }));
+    lines.push(format!("{:<15} {}", "gh", if gh_ok { tr!("已登录", "signed in") } else { tr!("未登录或未安装（PR 元数据会缺少分支名）", "not signed in or not installed (PR metadata will lack branch names)") }));
+    lines.push(format!("{:<15} {lib_path}  {}", tr!("作品库", "library"), if creditia_core::i18n::en() { format!("{n_proj} project{}", if n_proj == 1 { "" } else { "s" }) } else { format!("{n_proj} 个项目") }));
     // 没装的工具不算问题；装了却读不了才警告
-    let warnings: Vec<String> = hs.iter().filter(|h| !h.readable && std::path::Path::new(&h.path).exists()).map(|h| format!("{} 不可读：{}", h.source, h.path)).collect();
+    let warnings: Vec<String> = hs.iter().filter(|h| !h.readable && !h.unsupported && std::path::Path::new(&h.path).exists()).map(|h| tr!("{} 不可读：{}", "{} unreadable: {}", h.source, h.path)).collect();
     Ok((json!({ "sources": hs, "git": git_ok, "gh": gh_ok, "library": { "path": lib_path, "projects": n_proj }, "summary": lines.join("\n") }), warnings))
 }
 
@@ -491,7 +531,7 @@ fn cmd_doctor(_a: &Args) -> R<(Value, Vec<String>)> {
 
 fn cmd_blame(a: &Args) -> R<(Value, Vec<String>)> {
     let repo = a.repo()?;
-    let q = a.pos.first().ok_or("用法：creditia-core blame <路径>:<行号>")?;
+    let q = a.pos.first().ok_or_else(|| tr!("用法：creditia-core blame <路径>:<行号>", "usage: creditia-core blame <path>:<line>"))?;
     let (file, line) = q.rsplit_once(':').map(|(f, l)| (f.to_string(), l.parse::<usize>().unwrap_or(1))).unwrap_or((q.clone(), 1));
     // 路径允许是绝对路径或相对 cwd 的路径，统一成仓库内相对路径
     let abs = PathBuf::from(&file);
@@ -501,14 +541,15 @@ fn cmd_blame(a: &Args) -> R<(Value, Vec<String>)> {
     };
     let opts = analyze::Opts { fresh: false, github: false, out: None, blame: Some((rel.clone(), line)), config: a.flags.get("config").map(PathBuf::from), level: a.flags.get("level").cloned(), invoked: None };
     let r = analyze::run(&repo, &opts)?;
-    let b = r.blame.ok_or(format!("没找到 {rel}:{line}"))?;
-    let who = b["harness"].as_str().map(|h| h.to_string()).or(b["name"].as_str().map(String::from)).unwrap_or("未确认".into());
-    let summary = format!(
+    let b = r.blame.ok_or_else(|| tr!("没找到 {rel}:{line}", "not found: {rel}:{line}"))?;
+    let who = b["harness"].as_str().map(|h| h.to_string()).or(b["name"].as_str().map(String::from)).unwrap_or_else(|| tr!("未确认", "unattributed"));
+    let summary = tr!(
         "{rel}:{line}\n作者  {who}{}\n提交  {} {}\n{}证据  {}",
+        "{rel}:{line}\nwritten by  {who}{}\ncommit      {} {}\n{}evidence    {}",
         b["model"].as_str().map(|m| format!("  {m}")).unwrap_or_default(),
         b["commit"].as_str().unwrap_or(""),
         b["date"].as_str().unwrap_or(""),
-        b["unit"].as_str().map(|u| format!("项    {u}  {}\n", b["unitTitle"].as_str().unwrap_or(""))).unwrap_or_default(),
+        b["unit"].as_str().map(|u| tr!("项    {u}  {}\n", "item        {u}  {}\n", b["unitTitle"].as_str().unwrap_or(""))).unwrap_or_default(),
         b["evidence"].as_str().unwrap_or("")
     );
     let mut v = b;
@@ -521,7 +562,7 @@ fn cmd_blame(a: &Args) -> R<(Value, Vec<String>)> {
 fn git_dir(repo: &Path) -> R<PathBuf> {
     let d = ad::git::git(repo, &["rev-parse", "--git-dir"]).trim().to_string();
     if d.is_empty() {
-        return Err("不是 git 仓库".into());
+        return Err(tr!("不是 git 仓库", "not a git repository"));
     }
     let p = PathBuf::from(&d);
     Ok(if p.is_absolute() { p } else { repo.join(p) })
@@ -529,11 +570,11 @@ fn git_dir(repo: &Path) -> R<PathBuf> {
 
 fn cmd_stamp(a: &Args) -> R<(Value, Vec<String>)> {
     let repo = a.flags.get("repo").map(PathBuf::from).unwrap_or(std::env::current_dir().map_err(|e| e.to_string())?);
-    let harness = a.flags.get("harness").ok_or("需要 --harness")?.to_lowercase();
+    let harness = a.flags.get("harness").ok_or_else(|| tr!("需要 --harness", "--harness is required"))?.to_lowercase();
     let v = json!({ "harness": harness, "model": a.flags.get("model"), "share": a.flags.get("share") });
     let p = git_dir(&repo)?.join("creditia-stamp.json");
     std::fs::write(&p, v.to_string()).map_err(|e| e.to_string())?;
-    Ok((json!({ "stamp": v, "path": p, "summary": format!("下一次提交将盖章：{}", v) }), vec![]))
+    Ok((json!({ "stamp": v, "path": p, "summary": tr!("下一次提交将盖章：{}", "the next commit will be stamped: {}", v) }), vec![]))
 }
 
 const HOOK_MARK: &str = "# creditia-stamp";
@@ -547,7 +588,7 @@ fn cmd_hook(a: &Args) -> R<(Value, Vec<String>)> {
         Some("install") => {
             let existing = std::fs::read_to_string(&hook).unwrap_or_default();
             if existing.contains(HOOK_MARK) {
-                return Ok((json!({ "path": hook, "summary": "hook 已安装" }), vec![]));
+                return Ok((json!({ "path": hook, "summary": tr!("hook 已安装", "hook already installed") }), vec![]));
             }
             let content = if existing.is_empty() { format!("#!/bin/sh\n{line}\n") } else { format!("{}\n{line}\n", existing.trim_end()) };
             std::fs::create_dir_all(hook.parent().unwrap()).map_err(|e| e.to_string())?;
@@ -557,7 +598,7 @@ fn cmd_hook(a: &Args) -> R<(Value, Vec<String>)> {
                 use std::os::unix::fs::PermissionsExt;
                 let _ = std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755));
             }
-            Ok((json!({ "path": hook, "summary": format!("已安装 {}", hook.display()) }), vec![]))
+            Ok((json!({ "path": hook, "summary": tr!("已安装 {}", "installed {}", hook.display()) }), vec![]))
         }
         Some("uninstall") => {
             let existing = std::fs::read_to_string(&hook).unwrap_or_default();
@@ -567,9 +608,9 @@ fn cmd_hook(a: &Args) -> R<(Value, Vec<String>)> {
             } else {
                 std::fs::write(&hook, kept.join("\n") + "\n").map_err(|e| e.to_string())?;
             }
-            Ok((json!({ "path": hook, "summary": "已卸载" }), vec![]))
+            Ok((json!({ "path": hook, "summary": tr!("已卸载", "uninstalled") }), vec![]))
         }
-        _ => Err("用法：creditia-core hook install|uninstall".into()),
+        _ => Err(tr!("用法：creditia-core hook install|uninstall", "usage: creditia-core hook install|uninstall")),
     }
 }
 
@@ -607,7 +648,7 @@ pub fn detect_agent(env: &HashMap<String, String>) -> Option<(String, Option<Str
 }
 
 fn cmd_hook_trailers(a: &Args) -> R<(Value, Vec<String>)> {
-    let msgfile = a.pos.first().ok_or("需要提交信息文件路径")?;
+    let msgfile = a.pos.first().ok_or_else(|| tr!("需要提交信息文件路径", "the commit message file path is required"))?;
     let repo = a.flags.get("repo").map(PathBuf::from).unwrap_or(std::env::current_dir().map_err(|e| e.to_string())?);
     let stamp_path = git_dir(&repo)?.join("creditia-stamp.json");
     let (harness, model, share) = if let Ok(s) = std::fs::read_to_string(&stamp_path) {
@@ -683,16 +724,16 @@ fn cmd_evidence(a: &Args) -> R<(Value, Vec<String>)> {
             let v = json!({ "creditia": "evidence", "version": 1, "project": proj.id, "name": proj.name, "rootCommit": proj.root_commit, "evidence": evs, "sessions": sessions });
             let out = a.flags.get("out").map(PathBuf::from).unwrap_or(PathBuf::from(format!("creditia-evidence-{}.json", proj.id)));
             std::fs::write(&out, serde_json::to_string(&v).unwrap()).map_err(|e| e.to_string())?;
-            Ok((json!({ "path": out, "evidence": evs.len(), "sessions": sessions.len(), "summary": format!("已导出 {} 条证据、{} 个会话到 {}（只含路径、行哈希和元数据）", evs.len(), sessions.len(), out.display()) }), vec![]))
+            Ok((json!({ "path": out, "evidence": evs.len(), "sessions": sessions.len(), "summary": tr!("已导出 {} 条证据、{} 个会话到 {}（只含路径、行哈希和元数据）", "exported {} pieces of evidence and {} sessions to {} (paths, line hashes and metadata only)", evs.len(), sessions.len(), out.display()) }), vec![]))
         }
         Some("import") => {
-            let file = a.pos.get(1).ok_or("用法：creditia-core evidence import <文件>")?;
+            let file = a.pos.get(1).ok_or_else(|| tr!("用法：creditia-core evidence import <文件>", "usage: creditia-core evidence import <file>"))?;
             let v: Value = serde_json::from_str(&std::fs::read_to_string(file).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
             if v["creditia"] != "evidence" {
-                return Err("不是 creditia 的证据文件".into());
+                return Err(tr!("不是 creditia 的证据文件", "not a creditia evidence file"));
             }
             if v["rootCommit"].as_str().map(|r| !proj.root_commit.is_empty() && r != proj.root_commit).unwrap_or(false) {
-                return Err("这份证据属于另一个仓库（根提交不同）".into());
+                return Err(tr!("这份证据属于另一个仓库（根提交不同）", "this evidence belongs to another repository (different root commit)"));
             }
             let evs: Vec<creditia_core::model::Ev> = serde_json::from_value(v["evidence"].clone()).map_err(|e| e.to_string())?;
             let sessions: Vec<creditia_core::model::Session> = serde_json::from_value(v["sessions"].clone()).unwrap_or_default();
@@ -700,9 +741,9 @@ fn cmd_evidence(a: &Args) -> R<(Value, Vec<String>)> {
             store.groups.insert("import".into(), creditia_core::model::FileGroup { fp: (0, 0), evs, sessions });
             lib.upsert_project(&proj)?;
             let n = lib.save_evidence(&proj.id, &store)?;
-            Ok((json!({ "imported": n, "summary": format!("合并了 {n} 条新证据；下次 analyze 会用上") }), vec![]))
+            Ok((json!({ "imported": n, "summary": tr!("合并了 {n} 条新证据；下次 analyze 会用上", "merged {n} new pieces of evidence; the next analyze will use them") }), vec![]))
         }
-        _ => Err("用法：creditia-core evidence export [--out F] | import <文件>".into()),
+        _ => Err(tr!("用法：creditia-core evidence export [--out F] | import <文件>", "usage: creditia-core evidence export [--out F] | import <file>")),
     }
 }
 
@@ -715,8 +756,8 @@ fn cmd_projects(_a: &Args) -> R<(Value, Vec<String>)> {
         .iter()
         .map(|p| json!({ "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "lastHead": p.last_head, "lastAnalyzed": p.last_analyzed.map(creditia_core::util::date_cn), "evidence": lib.evidence_count(&p.id) }))
         .collect();
-    let summary = ps.iter().map(|p| format!("{:<28} {}  {}", p.name, p.last_analyzed.map(creditia_core::util::date_cn).unwrap_or("未分析".into()), p.path)).collect::<Vec<_>>().join("\n");
-    Ok((json!({ "projects": list, "summary": if summary.is_empty() { "作品库为空；先 creditia-core analyze".into() } else { summary } }), vec![]))
+    let summary = ps.iter().map(|p| format!("{:<28} {}  {}", p.name, p.last_analyzed.map(creditia_core::util::date_cn).unwrap_or_else(|| tr!("未分析", "not analyzed")), p.path)).collect::<Vec<_>>().join("\n");
+    Ok((json!({ "projects": list, "summary": if summary.is_empty() { tr!("作品库为空；先 creditia-core analyze", "the library is empty; run creditia-core analyze first") } else { summary } }), vec![]))
 }
 
 // ───────────────────────── 路径：一个项目在多处 ─────────────────────────
@@ -730,38 +771,38 @@ fn cmd_paths(a: &Args) -> R<(Value, Vec<String>)> {
     for p in &cfg.paths {
         list.push(json!({ "path": p, "kind": "config", "exists": Path::new(p).is_dir() }));
     }
-    let summary = list.iter().map(|v| format!("{:<9} {}{}", v["kind"].as_str().unwrap_or(""), v["path"].as_str().unwrap_or(""), if v["exists"] == true { "" } else { "  （目录已不在）" })).collect::<Vec<_>>().join("\n");
-    Ok((json!({ "project": proj.id, "paths": list, "summary": if summary.is_empty() { "还没有登记过路径；先 analyze".into() } else { summary } }), vec![]))
+    let summary = list.iter().map(|v| format!("{:<9} {}{}", v["kind"].as_str().unwrap_or(""), v["path"].as_str().unwrap_or(""), if v["exists"] == true { String::new() } else { tr!("  （目录已不在）", "  (folder no longer exists)") })).collect::<Vec<_>>().join("\n");
+    Ok((json!({ "project": proj.id, "paths": list, "summary": if summary.is_empty() { tr!("还没有登记过路径；先 analyze", "no paths recorded yet; run analyze first") } else { summary } }), vec![]))
 }
 
 fn cmd_link(a: &Args) -> R<(Value, Vec<String>)> {
     let repo = a.repo()?;
-    let target = a.pos.first().ok_or("用法：creditia-core link <路径>")?;
+    let target = a.pos.first().ok_or_else(|| tr!("用法：creditia-core link <路径>", "usage: creditia-core link <path>"))?;
     let cfg = analyze::load_config(&repo, a.flags.get("config").map(Path::new));
     let lib = Library::open()?;
     let proj = analyze::project_of(&repo, &cfg, Some(&lib));
     lib.upsert_project(&proj)?;
     if a.cmd == "unlink" {
         let n = lib.remove_path(&proj.id, target)?;
-        return Ok((json!({ "removed": n, "summary": if n > 0 { format!("已取消关联 {target}") } else { format!("{target} 本来就没有关联") } }), vec![]));
+        return Ok((json!({ "removed": n, "summary": if n > 0 { tr!("已取消关联 {target}", "unlinked {target}") } else { tr!("{target} 本来就没有关联", "{target} was not linked") } }), vec![]));
     }
     // 目录还在的话，确认它真是同一个仓库（根提交一致）
     let p = Path::new(target);
     if p.is_dir() && ad::git::git_ok(p, &["rev-parse", "--git-dir"]) {
         let (root, _) = ad::git::identity(p);
         if !root.is_empty() && !proj.root_commit.is_empty() && root != proj.root_commit {
-            return Err(format!("{target} 是另一个仓库（根提交不同），没有关联"));
+            return Err(tr!("{target} 是另一个仓库（根提交不同），没有关联", "{target} is another repository (different root commit); not linked"));
         }
     }
     lib.add_path(&proj.id, target.trim_end_matches('/'), "manual")?;
-    Ok((json!({ "linked": target, "project": proj.id, "summary": format!("已把 {target} 关联到 {}；下次 analyze 起，日志里这个路径下的改动也算本项目", proj.name) }), vec![]))
+    Ok((json!({ "linked": target, "project": proj.id, "summary": tr!("已把 {target} 关联到 {}；下次 analyze 起，日志里这个路径下的改动也算本项目", "linked {target} to {}; from the next analyze, changes under this path in the logs count for this project", proj.name) }), vec![]))
 }
 
 fn cmd_whoami(_a: &Args) -> R<(Value, Vec<String>)> {
     let env: HashMap<String, String> = std::env::vars().collect();
     match detect_agent(&env) {
         Some((h, m)) => Ok((json!({ "agent": h, "model": m, "summary": format!("{h}{}", m.as_deref().map(|m| format!(" · {m}")).unwrap_or_default()) }), vec![])),
-        None => Ok((json!({ "agent": null, "summary": "没有检测到 agent（可能是人在终端里直接运行）" }), vec![])),
+        None => Ok((json!({ "agent": null, "summary": tr!("没有检测到 agent（可能是人在终端里直接运行）", "no agent detected (probably run directly in a terminal)") }), vec![])),
     }
 }
 

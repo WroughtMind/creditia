@@ -115,7 +115,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         store.groups.insert(gk, g);
     }
     if n > 0 {
-        st.notes.push(format!("grok: 项目相关会话 {n} 个"));
+        st.notes.push(creditia_core::tr!("grok: 项目相关会话 {n} 个", "grok: {n} sessions for this project"));
     }
 }
 
@@ -140,7 +140,8 @@ pub fn doctor() -> Health {
         records: ss.len() as u64,
         earliest: ss.iter().map(|s| s.start).filter(|&t| t > 0).min().map(date_cn),
         latest: ss.iter().map(|s| s.end).max().filter(|&t| t > 0).map(date_cn),
-        note: "无逐请求 token".into(),
+        note: creditia_core::tr!("无逐请求 token", "no per-request tokens"),
+        ..Default::default()
     }
 }
 

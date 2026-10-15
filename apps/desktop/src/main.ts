@@ -648,7 +648,7 @@ async function withProgress<T>(name: string, job: () => Promise<T>): Promise<T> 
 }
 async function reanalyze(p: any) {
   try {
-    const v: any = await withProgress(p.name, () => api('analyze', { projectId: p.id }));
+    const v: any = await withProgress(p.name, () => api('analyze', { projectId: p.id, lang: state.lang }));
     state.projects = await api('projects');
     const fresh = state.projects.find((x) => x.id === p.id) ?? p;
     // 正看着这个项目：原地换，不清空墙
@@ -667,7 +667,7 @@ async function addProject() {
   if (!dir) return;
   const name = dir.split(/[\\/]/).filter(Boolean).pop() ?? dir;
   try {
-    const r = await withProgress(name, () => api('add_project', { path: dir }));
+    const r = await withProgress(name, () => api('add_project', { path: dir, lang: state.lang }));
     state.projects = await api('projects');
     const p = state.projects.find((x) => x.id === r?.id);
     if (p) await openProject(p);
@@ -731,12 +731,16 @@ async function settings() {
       else if (x === 'open-library') await api('open_folder', { which: 'library' });
     } catch (err) { toast(errText(err), 5000); }
   };
+  /** doctor 的数据源名：一个工具有两处记录时分开写 */
+  const SOURCES: Record<string, [string, string]> = { 'copilot-vscode': ['Copilot（VS Code）', 'Copilot (VS Code)'], 'copilot-cli': ['Copilot 命令行', 'Copilot CLI'], 'trae-cli': ['TRAE 命令行', 'TRAE CLI'], 'trae-ide': ['TRAE IDE', 'TRAE IDE'], windsurf: ['Windsurf', 'Windsurf'] };
+  const sourceName = (id: string) => (SOURCES[id] ? L(...SOURCES[id]) : nameOf(id, state.lang));
   const doc = await api('doctor').catch(() => []);
-  const detail = (d: any) => !d.ok ? L('没有找到', 'Not found')
+  const detail = (d: any) => d.unsupported ? L('读不了编辑记录', 'Edits not readable')
+    : !d.ok ? L('没有找到', 'Not found')
     : d.records != null ? L(`${fmt(d.records)} 条记录`, `${fmt(d.records)} records`)
     : d.entries != null ? L(`${fmt(d.entries)} 个条目`, `${fmt(d.entries)} entries`)
     : L('已就绪', 'Ready');
-  $('#doc').innerHTML = doc.length ? doc.map((d: any) => `<div class="row" title="${esc(d.path ?? '')}"><i class="dot ${d.ok ? 'ok' : ''}"></i><span class="k">${esc(nameOf(d.id, state.lang))}</span><span class="v">${esc(detail(d))}</span></div>`).join('') : `<p>${L('没有可用的数据源', 'No data sources found')}</p>`;
+  $('#doc').innerHTML = doc.length ? doc.map((d: any) => `<div class="row" title="${esc(d.path ?? '')}"><i class="dot ${d.ok && !d.unsupported ? 'ok' : ''}"></i><span class="k">${esc(sourceName(d.id))}</span><span class="v">${esc(detail(d))}</span></div>`).join('') : `<p>${L('没有可用的数据源', 'No data sources found')}</p>`;
 }
 
 boot();

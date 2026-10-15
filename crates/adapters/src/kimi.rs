@@ -134,7 +134,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         store.groups.insert(gk, g);
     }
     if n > 0 {
-        st.notes.push(format!("kimi: 项目相关会话 {n} 个"));
+        st.notes.push(creditia_core::tr!("kimi: 项目相关会话 {n} 个", "kimi: {n} sessions for this project"));
     }
 }
 
@@ -165,6 +165,7 @@ pub fn doctor() -> Health {
         records: ss.len() as u64,
         earliest: mt.iter().min().copied().map(date_cn),
         latest: mt.iter().max().copied().map(date_cn),
-        note: format!("{no_cwd} 个会话无 cwd（已用 session_index 回退）"),
+        note: creditia_core::tr!("{no_cwd} 个会话无 cwd（已用 session_index 回退）", "{no_cwd} sessions without cwd (recovered from session_index)"),
+        ..Default::default()
     }
 }

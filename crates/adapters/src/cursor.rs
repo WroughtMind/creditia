@@ -20,10 +20,10 @@ struct Row {
 }
 
 fn rows() -> Result<Vec<Row>, String> {
-    let conn = open_ro(&db_path()).map_err(|e| format!("cursor: 行级记录不可读 {e}"))?;
+    let conn = open_ro(&db_path()).map_err(|e| creditia_core::tr!("cursor: 行级记录不可读 {e}", "cursor: line records unreadable {e}"))?;
     let mut stmt = conn
         .prepare("select hash, source, coalesce(fileName,''), coalesce(conversationId,''), coalesce(timestamp,createdAt), coalesce(model,'') from ai_code_hashes")
-        .map_err(|e| format!("cursor: ai_code_hashes 表结构不认识 {e}"))?;
+        .map_err(|e| creditia_core::tr!("cursor: ai_code_hashes 表结构不认识 {e}", "cursor: unknown ai_code_hashes table layout {e}"))?;
     let r = stmt
         .query_map([], |r| Ok(Row { hash: r.get(0)?, source: r.get(1)?, file: r.get(2)?, conv: r.get(3)?, ts_ms: r.get(4)?, model: r.get(5)? }))
         .map_err(|e| e.to_string())?
@@ -99,7 +99,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
     for (id, (start, end, model)) in conv {
         g.sessions.push(Session { src: Src::Cursor, id, model, start, end, tokens: 0, branch: None, prompts: 0, reviewer: false, has_content: true, provider: None });
     }
-    st.notes.push(format!("cursor: 行级记录 {total} 条，无法映射到仓库路径 {unmapped} 条"));
+    st.notes.push(creditia_core::tr!("cursor: 行级记录 {total} 条，无法映射到仓库路径 {unmapped} 条", "cursor: {total} line records, {unmapped} not mapped to a repository path"));
     store.groups.insert(gk, g);
 }
 
@@ -147,7 +147,7 @@ pub fn doctor() -> Health {
             h.latest = r.iter().map(|x| x.ts_ms / 1000).max().map(date_cn);
             let auto = r.iter().filter(|x| x.model == "default").count();
             let vscdb = cursor_global_storage().join("state.vscdb");
-            h.note = format!("只保留 30 天；{auto} 条模型为 Auto；对话库 {}", if vscdb.exists() { "可用" } else { "未找到" });
+            h.note = if vscdb.exists() { creditia_core::tr!("只保留 30 天；{auto} 条模型为 Auto；对话库可用", "kept for 30 days; {auto} records with model Auto; chat database found") } else { creditia_core::tr!("只保留 30 天；{auto} 条模型为 Auto；对话库未找到", "kept for 30 days; {auto} records with model Auto; chat database not found") };
         }
         Err(e) => h.note = e,
     }

@@ -76,7 +76,7 @@ pub fn scan_src(src: Src, store: &mut Store, pm: &PathMap, roots: &[String], st:
         }
     }
     if n > 0 {
-        st.notes.push(format!("{}: 项目相关会话 {n} 个（按项目路径哈希识别）", src.harness()));
+        st.notes.push(creditia_core::tr!("{}: 项目相关会话 {n} 个（按项目路径哈希识别）", "{}: {n} sessions for this project (by project path hash)", src.harness()));
     }
 }
 
@@ -147,11 +147,12 @@ pub fn doctor(src: Src) -> Health {
         source: src.harness().into(),
         path: base.display().to_string(),
         readable: base.is_dir(),
-        format: "tmp/<项目哈希>/chats/session-*.json".into(),
+        format: creditia_core::tr!("tmp/<项目哈希>/chats/session-*.json", "tmp/<project hash>/chats/session-*.json"),
         records: files.len() as u64,
         earliest: mt.iter().min().copied().map(date_cn),
         latest: mt.iter().max().copied().map(date_cn),
-        note: format!("{} 个项目目录（按项目路径的 SHA-256 对应）", ps.len()),
+        note: creditia_core::tr!("{} 个项目目录（按项目路径的 SHA-256 对应）", "{} project folders (matched by SHA-256 of the project path)", ps.len()),
+        ..Default::default()
     }
 }
 

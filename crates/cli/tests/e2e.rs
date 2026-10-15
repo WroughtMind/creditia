@@ -257,7 +257,8 @@ fn end_to_end() {
 
     // doctor 能跑
     let (_, v) = run(&env, &["doctor"]);
-    assert_eq!(v["sources"].as_array().unwrap().len(), 11);
+    // 11 个老数据源 + Aider、Amp、TRAE CLI、Copilot（VS Code、命令行）；没装的 Windsurf、TRAE IDE 不列
+    assert_eq!(v["sources"].as_array().unwrap().len(), 16);
 
     // hook：安装后提交信息自动带 trailer（用盖章文件触发）
     let (ok, _) = run(&env, &["hook", "install", "--repo", &repo.display().to_string()]);
@@ -534,5 +535,140 @@ fn grok_kimi_roo_kilo_and_ignored_tags() {
     let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
     assert!(ok, "{v}");
     assert_eq!(tags(&read()), ["v0.3.0"]);
+    let _ = fs::remove_dir_all(&env.root);
+}
+
+/// Aider、GitHub Copilot（VS Code + 命令行）、Amp、TRAE CLI：各写一个文件，被拒绝 / 报错 / 没应用的编辑不算
+#[test]
+fn aider_copilot_amp_trae() {
+    let env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base: i64 = 1_790_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    let lines = |tag: &str, n: usize| -> Vec<String> { (0..n).map(|i| format!("value_{tag}_{i} = compute_{tag}({i}, {})", i * 13)).collect() };
+    let (aider, vs, cli, amp, trae) = (lines("aider", 6), lines("vscode", 5), lines("cli", 4), lines("amp", 4), lines("trae", 3));
+    let human = lines("human", 3);
+
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join(".gitignore"), ".aider*\n").unwrap();
+    fs::write(repo.join("README.md"), "# demo project for the newer readers\n").unwrap();
+    commit(&repo, "init", "me@example.com", &d(base - 86400));
+    fs::write(repo.join("src/aider.py"), aider.join("\n") + "\n").unwrap();
+    // --no-attribute-author：作者名里没有 (aider)，只能靠记录逐行认
+    let aider_commit = commit(&repo, "feat: aider work", "me@example.com", &d(base + 60));
+    fs::write(repo.join("src/vscode.ts"), vs.join("\n") + "\n").unwrap();
+    commit(&repo, "copilot chat work", "me@example.com", &d(base + 160));
+    fs::write(repo.join("src/cli.rs"), cli.join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/human.rs"), human.join("\n") + "\n").unwrap();
+    commit(&repo, "copilot cli work", "me@example.com", &d(base + 260));
+    fs::write(repo.join("src/amp.ts"), amp.join("\n") + "\n").unwrap();
+    commit(&repo, "amp work", "me@example.com", &d(base + 360));
+    fs::write(repo.join("src/trae.go"), trae.join("\n") + "\n").unwrap();
+    commit(&repo, "trae work", "me@example.com", &d(base + 460));
+
+    // Aider：仓库根目录的 .aider.chat.history.md，开始时间是本地时间（+0800）
+    let local = |t: i64| {
+        let t = t + 8 * 3600;
+        let (y, m, dd) = creditia_core::util::civil_from_days(t.div_euclid(86400));
+        let s = t.rem_euclid(86400);
+        format!("{y:04}-{m:02}-{dd:02} {:02}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+    };
+    let history = format!(
+        "\n# aider chat started at {}\n\n> Aider v0.86.1  \n> Main model: anthropic/claude-sonnet-4-5-20250929 with diff edit format  \n\n#### add the values  \n\nsrc/aider.py\n```python\n<<<<<<< SEARCH\n=======\n{}\n>>>>>>> REPLACE\n```\n\nsrc/human.rs\n```\n<<<<<<< SEARCH\n=======\n{}\n>>>>>>> REPLACE\n```\n\n> Tokens: 3.1k sent, 210 received.  \n> Applied edit to src/aider.py  \n> Commit {} feat: aider work  \n",
+        local(base - 300),
+        aider.join("\n"),
+        human.join("\n"),
+        &aider_commit[..7]
+    );
+    fs::write(repo.join(".aider.chat.history.md"), history).unwrap();
+
+    // Copilot Chat（VS Code）：workspaceStorage 里的 chatSessions，增量 jsonl；workspace.json 的地址是百分号编码的
+    let enc: String = rs.bytes().map(|b| if b.is_ascii_alphanumeric() || b"/-_.".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
+    let ws = env.root.join(".config/Code/User/workspaceStorage/0123abcd");
+    fs::create_dir_all(ws.join("chatSessions")).unwrap();
+    fs::write(ws.join("workspace.json"), serde_json::json!({ "folder": format!("file://{enc}") }).to_string()).unwrap();
+    let chat = [
+        serde_json::json!({ "kind": 0, "v": { "sessionId": "vs1", "creationDate": (base + 100) * 1000, "requests": [] } }),
+        serde_json::json!({ "kind": 2, "k": ["requests"], "v": [{ "timestamp": (base + 120) * 1000, "modelId": "copilot/gpt-5.2", "result": { "metadata": { "toolCallRounds": [{ "toolCalls": [
+            { "id": "c1", "name": "create_file", "arguments": serde_json::json!({ "filePath": format!("{rs}/src/vscode.ts"), "content": vs.join("\n") }).to_string() },
+            { "id": "c2", "name": "create_file", "arguments": serde_json::json!({ "filePath": format!("{rs}/src/human.rs"), "content": human.join("\n") }).to_string() }
+        ] }], "toolCallResults": { "c2": { "content": [{ "value": "ERROR while calling tool: File already exists" }] } } } } }] }),
+    ];
+    fs::write(ws.join("chatSessions/vs1.jsonl"), chat.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n") + "\n").unwrap();
+
+    // Copilot 命令行：events.jsonl；被拒绝的编辑（human.rs）不算
+    let cs = env.root.join(".copilot/session-state/cli1");
+    fs::create_dir_all(&cs).unwrap();
+    let ev = |t: &str, ts: i64, data: serde_json::Value| serde_json::json!({ "type": t, "timestamp": iso(ts), "id": "x", "parentId": null, "data": data }).to_string();
+    let events = [
+        ev("session.start", base + 200, serde_json::json!({ "sessionId": "cli1", "startTime": iso(base + 200), "selectedModel": "claude-sonnet-4.5", "context": { "cwd": rs } })),
+        ev("user.message", base + 201, serde_json::json!({ "content": "write cli.rs" })),
+        ev("tool.execution_start", base + 210, serde_json::json!({ "toolCallId": "t1", "toolName": "create", "arguments": { "path": "src/cli.rs", "file_text": cli.join("\n") } })),
+        ev("tool.execution_complete", base + 211, serde_json::json!({ "toolCallId": "t1", "success": true, "model": "claude-sonnet-4.5" })),
+        ev("tool.execution_start", base + 220, serde_json::json!({ "toolCallId": "t2", "toolName": "create", "arguments": { "path": format!("{rs}/src/human.rs"), "file_text": human.join("\n") } })),
+        ev("tool.execution_complete", base + 221, serde_json::json!({ "toolCallId": "t2", "success": false, "error": { "message": "The user rejected this tool call." } })),
+        ev("assistant.usage", base + 222, serde_json::json!({ "model": "claude-sonnet-4.5", "inputTokens": 900, "outputTokens": 100 })),
+    ];
+    fs::write(cs.join("events.jsonl"), events.join("\n") + "\n").unwrap();
+
+    // Amp：threads/T-*.json；create_file 完成了，edit_file 被拒绝
+    let at = env.root.join(".local/share/amp/threads");
+    fs::create_dir_all(&at).unwrap();
+    fs::write(at.join("T-amp1.json"), serde_json::json!({
+        "v": 1, "id": "T-amp1", "created": (base + 300) * 1000,
+        "env": { "initial": { "trees": [{ "uri": format!("file://{enc}") }], "tags": ["model:claude-opus-4-6"] } },
+        "messages": [
+            { "role": "user", "content": [{ "type": "text", "text": "write amp.ts" }], "meta": { "sentAt": (base + 300) * 1000 } },
+            { "role": "assistant", "usage": { "model": "claude-opus-4-6", "inputTokens": 50, "outputTokens": 20, "timestamp": iso(base + 310) }, "content": [
+                { "type": "tool_use", "id": "a1", "name": "create_file", "input": { "path": format!("{rs}/src/amp.ts"), "content": amp.join("\n") } },
+                { "type": "tool_use", "id": "a2", "name": "edit_file", "input": { "path": format!("{rs}/src/human.rs"), "old_str": "", "new_str": human.join("\n") } }
+            ] },
+            { "role": "user", "content": [
+                { "type": "tool_result", "toolUseID": "a1", "run": { "status": "done", "result": {} } },
+                { "type": "tool_result", "toolUseID": "a2", "run": { "status": "rejected-by-user" } }
+            ] }
+        ]
+    }).to_string()).unwrap();
+
+    // TRAE CLI：Codex 格式的 rollout，放在 ~/.trae/cli/sessions 下
+    let tr = env.root.join(".trae/cli/sessions/2026/09/22");
+    fs::create_dir_all(&tr).unwrap();
+    let rollout = [
+        serde_json::json!({ "timestamp": iso(base + 400), "type": "session_meta", "payload": { "id": "trae1", "cwd": rs, "model_provider": "trae" } }),
+        serde_json::json!({ "timestamp": iso(base + 401), "type": "turn_context", "payload": { "cwd": rs, "model": "doubao-seed-code" } }),
+        serde_json::json!({ "timestamp": iso(base + 402), "type": "event_msg", "payload": { "type": "user_message", "message": "write trae.go" } }),
+        serde_json::json!({ "timestamp": iso(base + 410), "type": "event_msg", "payload": { "type": "item_completed", "item": { "type": "FileChange", "changes": { format!("{rs}/src/trae.go"): { "type": "add", "content": trae.join("\n") } } } } }),
+    ];
+    fs::write(tr.join("rollout-2026-09-22T10-00-00-trae1.jsonl"), rollout.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n") + "\n").unwrap();
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+    assert_eq!(verified("a:aider/claude-sonnet-4-5"), 6, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:copilot/gpt-5.2"), 5, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:copilot/claude-sonnet-4-5"), 4, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:amp/claude-opus-4-6"), 4, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:trae/doubao-seed-code"), 3, "{}", credits["breakdown"]);
+    // human.rs：没应用、报错、被拒绝的编辑都不算，记「未确认」
+    let unattr = credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == "unattributed").map(|b| b["linesAdded"].as_u64().unwrap_or(0)).unwrap_or(0);
+    assert!(unattr >= 3, "{}", credits["breakdown"]);
+    let sessions = |h: &str| credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with(&format!("a:{h}/"))).count();
+    for h in ["aider", "amp", "trae"] {
+        assert_eq!(sessions(h), 1, "{h}: {}", credits["sessions"]);
+    }
+    assert_eq!(sessions("copilot"), 2, "{}", credits["sessions"]);
+
+    // 英文模式：提醒、备注、摘要、doctor 都不带中文（项目名本身是中文，先去掉）
+    let cjk = |s: &str| s.replace("示例项目", "").chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c) || ('\u{3000}'..='\u{303f}').contains(&c) || ('\u{ff00}'..='\u{ffef}').contains(&c));
+    let texts = |v: &serde_json::Value| -> Vec<String> { ["notes", "warnings", "tier"].iter().flat_map(|k| v[*k].as_array().cloned().unwrap_or_default()).filter_map(|x| x.as_str().map(String::from)).chain(v["summary"].as_str().map(String::from)).chain(v["tier"].as_str().map(String::from)).chain(v["sources"].as_array().into_iter().flatten().filter_map(|h| h["note"].as_str().map(String::from))).collect() };
+    for args in [&["analyze", "--repo", rs.as_str(), "--lang", "en"][..], &["doctor", "--lang", "en"][..], &["discover", "--lang", "en"][..]] {
+        let (_, v) = run(&env, args);
+        let t = texts(&v);
+        assert!(!t.is_empty() && t.iter().all(|s| !cjk(s)), "{args:?}: {t:?}");
+    }
     let _ = fs::remove_dir_all(&env.root);
 }

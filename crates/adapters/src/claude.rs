@@ -36,7 +36,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         sessions += g.sessions.len();
         store.groups.insert(gk, g);
     }
-    st.notes.push(format!("claude-code: 项目相关会话 {sessions} 个（按 cwd 识别）"));
+    st.notes.push(creditia_core::tr!("claude-code: 项目相关会话 {sessions} 个（按 cwd 识别）", "claude-code: {sessions} sessions for this project (by cwd)"));
 }
 
 fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
@@ -229,6 +229,6 @@ pub fn doctor() -> Health {
         h.earliest = Some(date_cn(lo));
         h.latest = Some(date_cn(hi));
     }
-    h.note = "逐条记录含 cwd、model、Edit/Write 内容".into();
+    h.note = creditia_core::tr!("逐条记录含 cwd、model、Edit/Write 内容", "each record has cwd, model and Edit/Write content");
     h
 }

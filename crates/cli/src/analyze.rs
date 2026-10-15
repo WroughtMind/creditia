@@ -126,6 +126,10 @@ fn scan_all(store: &mut Store, pm: &PathMap, roots: &[String], st: &mut ad::Stat
     ad::gemini::scan(store, pm, roots, st);
     ad::opencode::scan(store, pm, st);
     ad::cline::scan(store, pm, st);
+    ad::aider::scan(store, pm, roots, st);
+    ad::copilot::scan(store, pm, st);
+    ad::amp::scan(store, pm, st);
+    ad::trae::scan(store, pm, st);
 }
 
 /// 把这次见到的路径登记进作品库：以后这些目录删了、日志里还留着它们，也能认出是本项目
@@ -187,7 +191,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         head = ad::git::git(repo, &["rev-parse", "HEAD"]).trim().to_string();
     }
     if head.is_empty() {
-        return Err("仓库没有提交".into());
+        return Err(creditia_core::tr!("仓库没有提交", "the repository has no commits"));
     }
     let mut cc: CommitCache = load_json(&cache.join("commits.json"));
     if cc.version != COMMIT_CACHE_VERSION {
@@ -223,7 +227,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     if opts.github {
         let fresh = ad::git::github_prs(repo);
         if fresh.is_empty() {
-            warnings.push("gh 没有返回 PR 列表（未安装、未登录或仓库不在 GitHub）".into());
+            warnings.push(creditia_core::tr!("gh 没有返回 PR 列表（未安装、未登录或仓库不在 GitHub）", "gh returned no pull requests (not installed, not signed in, or the repository is not on GitHub)"));
         } else {
             prs = fresh;
             let v: Vec<Value> = prs.iter().map(|p| json!({ "source": p.source, "number": p.number, "title": p.title, "branch": p.branch, "author": p.author, "reviews": p.reviews })).collect();
@@ -278,7 +282,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     }
     let restored = extra.evs.len();
     if restored > 0 {
-        st.notes.push(format!("证据库补回 {restored} 条已不在日志里的证据"));
+        st.notes.push(creditia_core::tr!("证据库补回 {restored} 条已不在日志里的证据", "restored {restored} pieces of evidence from the library that are no longer in the logs"));
         store.groups.insert("library".into(), extra);
     }
     let idx = Index::build(&store);
@@ -301,7 +305,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         blame.retain(|(p, _)| !gen_hit(p));
     }
     if skipped_generated > 0 {
-        st.notes.push(format!(".gitattributes 标为生成物、第三方的文件改动 {skipped_generated} 处不计入"));
+        st.notes.push(creditia_core::tr!(".gitattributes 标为生成物、第三方的文件改动 {skipped_generated} 处不计入", "{skipped_generated} changes to files marked generated or vendored in .gitattributes are not counted"));
     }
     let commit_by_hash: HashMap<&str, &Commit> = cc.commits.iter().map(|c| (c.hash.as_str(), c)).collect();
     let per_commit: engine::CommitAttrs = attrs
@@ -503,7 +507,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         let mut areas: Vec<&str> = areas.into_iter().collect();
         areas.sort();
         let ver = u.commits.iter().find_map(|h| ver_of.get(h)).cloned();
-        let title = if hide_t { if u.id.starts_with("pr:") { format!("PR #{}", &u.id[3..]) } else { "提交".into() } } else { u.title.clone() };
+        let title = if hide_t { if u.id.starts_with("pr:") { format!("PR #{}", &u.id[3..]) } else { u.commits.first().map(|h| h.chars().take(7).collect()).unwrap_or_default() } } else { u.title.clone() };
         unit_json.push(json!({ "id": u.id, "title": title, "date": date_cn(u.ts), "version": ver, "commits": u.commits, "areas": areas, "shares": shares, "lines": total }));
     }
 
@@ -624,7 +628,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         if let Some(d) = out.parent() {
             std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
         }
-        std::fs::write(&out, serde_json::to_string(&credits).unwrap()).map_err(|e| format!("写入 {} 失败：{e}", out.display()))?;
+        std::fs::write(&out, serde_json::to_string(&credits).unwrap()).map_err(|e| creditia_core::tr!("写入 {} 失败：{e}", "couldn't write {}: {e}", out.display()))?;
         lib.save_snapshot(&proj.id, &head, &generated_at, &credits.to_string())?;
     }
     save_json(&cache.join("commits.json"), &cc)?;
@@ -637,9 +641,12 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     }
     let mut gl: Vec<(String, usize)> = groups.into_iter().collect();
     gl.sort_by_key(|g| std::cmp::Reverse(g.1));
+    // 只算 AI 和「未确认」：人的提交不出现在这一行里，也不进分母（同作品里的份额口径）
+    let ai_total: usize = gl.iter().filter(|(k, _)| !k.starts_with("h:")).map(|(_, n)| *n).sum();
     let tier = gl
         .iter()
-        .map(|(k, n)| format!("{} {:.1}%", if k == UNATTR { "未确认".to_string() } else if k.starts_with("h:") { reg.list.iter().find(|w| &w.id == k).and_then(|w| w.name.clone()).unwrap_or(k.clone()) } else { k.clone() }, *n as f64 / total_lines.max(1) as f64 * 100.0))
+        .filter(|(k, _)| !k.starts_with("h:"))
+        .map(|(k, n)| format!("{} {:.1}%", if k == UNATTR { creditia_core::tr!("未确认", "unattributed") } else { k.clone() }, *n as f64 / ai_total.max(1) as f64 * 100.0))
         .collect::<Vec<_>>()
         .join(" · ");
     Ok(Report { name: cfg.name.clone(), head, commits: cc.commits.len(), new_commits: n_new, units: unit_json.len(), lines: total_lines, secs: t0.elapsed().as_secs_f64(), out, tier, notes: st.notes, warnings, blame: blame_out })

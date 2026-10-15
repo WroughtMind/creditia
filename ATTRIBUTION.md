@@ -8,8 +8,8 @@
 
 | 来源 | 内容 | 证据等级 |
 |---|---|---|
-| agent 日志 | 每次**成功**写进文件的内容（Write、Edit、FileChange、write_file、replace、patch……），连同会话、模型、时间、渠道 | 逐行证据（verified） |
-| agent 的 shell 命令 | 成功执行的命令原文（heredoc、`printf`、python 脚本里的新文本），作为命令里提到的仓库文件的候选证据（Claude Code 的 Bash、Codex 的 shell） | 逐行证据 |
+| agent 日志 | 每次**成功**写进文件的内容（Write、Edit、FileChange、write_file、replace、patch……），连同会话、模型、时间、渠道。读得到的有 Claude Code、Codex、Cursor、Gemini CLI、Qwen Code、OpenCode、Cline、Roo Code、Kilo Code、Grok、Kimi、GitHub Copilot（VS Code 与命令行）、Aider、Amp、TRAE 命令行；报错、被拒绝、没应用的编辑都不算 | 逐行证据（verified） |
+| agent 的 shell 命令 | 成功执行的命令原文（heredoc、`printf`、python 脚本里的新文本），作为命令里提到的仓库文件的候选证据（Claude Code 的 Bash、Codex、Amp、TRAE 命令行的 shell） | 逐行证据 |
 | Cursor 行级库 | Cursor 自己记下的逐行哈希。creditia 复现了它的规范化与哈希算法，逐字节一致 | 逐行证据 |
 | 提交 trailer | `Creditia-Harness` / `Creditia-Model`（`creditia stamp` 或 hook 写入） | 明确声明（declared） |
 | 提交元数据 | agent 的提交邮箱（Cursor 云端、Copilot、Devin、Jules…）、`Co-authored-by`、bot 账号、aider 改写的作者名 | 明确声明 |
@@ -101,15 +101,18 @@
 - agent 用 shell 命令写文件时，内容写在命令里的（`cat > file <<EOF`、`printf`、python 脚本里的新文本）按逐行证据算：命令原文的每一行只有真出现在那个文件的提交新增行里才算数，只读文件的命令（`cat`、`grep`）不会带来误认。内容是程序生成的（脚手架、代码生成脚本、`curl > file`）记「未确认」：那不是模型写的，和生成物一样不署给 AI。
 - 日志被工具自动清理后，只要之前跑过一次 `analyze` / `collect`，证据库里还留着；从没采集过的就只剩提交元数据。
 - 透传官方响应的中转站，渠道无法确定，不写。
+- 有些工具的本地记录读不出编辑：Windsurf 的 Cascade 记录是加密的；TRAE IDE 的格式没有公开；2026 年 3 月以后的 Amp 把线程存在服务器上。它们只能靠提交元数据或盖章，`creditia doctor` 会标「不支持」。TRAE 命令行按它公开的 rollout 格式读，还没在大量真实日志上验证过。
+- Copilot 在 VS Code 里的 agent 记录不一定带模型名：同一会话的 chatSessions 或调试日志里有就用，都没有就只记工具。
+- Aider 的历史文件没有逐次编辑的时间：有「Commit」行的用那次提交的时间，没有的按仓库最后一次提交的时区估。
 - 各工具的日志格式会变：`creditia doctor` 会列出每个数据源读到了多少、最早最晚是哪天；读不懂的格式会报警告，不会默默算错。
 
 ## 9. 准确率基准
 
-`crates/cli/tests/bench.rs` 模拟一个项目的开发过程，每一行是谁写的都已知：几个 agent 各写各的、编辑带上下文、整文件覆盖写入、混合提交、格式化拆行、人改几个字、盖章、云端分支、同一工具两个模型、中文文档、日志丢失、重命名、同文件重复的常见行、多个 agent 交替改同一文件、agent 用 shell 写文件（heredoc、python 脚本）、生成脚本的输出、agent 只读人写的文件、人在 agent 代码中间插行。用真实二进制分析，逐行对答案：
+`crates/cli/tests/bench.rs` 模拟一个项目的开发过程，每一行是谁写的都已知：几个 agent 各写各的、编辑带上下文、整文件覆盖写入、混合提交、格式化拆行、人改几个字、盖章、云端分支、同一工具两个模型、中文文档、日志丢失、重命名、同文件重复的常见行、多个 agent 交替改同一文件、agent 用 shell 写文件（heredoc、python 脚本）、生成脚本的输出、agent 只读人写的文件、人在 agent 代码中间插行、Aider 与 Copilot 的编辑、Copilot 报错的编辑。用真实二进制分析，逐行对答案：
 
 | | 工具对 | 模型对 | 错给别的 AI | 漏掉 | 人写的行被算给 AI | 份额总偏差 |
 |---|--:|--:|--:|--:|--:|--:|
-| 当前 | 92.9% | 92.9% | 0.4% | 6.7% | 0.7% | 4.5 个百分点 |
+| 当前 | 93.2% | 93.2% | 0.4% | 6.3% | 0.7% | 4.3 个百分点 |
 
 「漏掉」几乎都来自日志丢失和生成脚本的输出这两个找不回来（后者也不该算）的场景；「人写的行被算给 AI」来自中间插行。CI 每次都跑，结果变差测试就失败。`cargo test -p creditia-cli --test bench -- --nocapture` 看分场景的表格。
 
