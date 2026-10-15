@@ -5,6 +5,7 @@
 pub mod aider;
 pub mod amazonq;
 pub mod amp;
+pub mod antigravity;
 pub mod claude;
 pub mod cline;
 pub mod codex;
@@ -62,6 +63,8 @@ pub fn source_dir(src: Src) -> PathBuf {
         Src::Continue => cont::global_dir(),
         Src::Zed => zed::data_dir(),
         Src::AmazonQ => amazonq::data_dir(),
+        // Antigravity CLI（agy）；Antigravity 编辑器在 ~/.gemini/antigravity，存的是 .pb，读不了
+        Src::Antigravity => env("CREDITIA_ANTIGRAVITY_DIR").unwrap_or_else(|| home().join(".gemini/antigravity-cli")),
         // Aider 的记录在每个仓库根目录里（.aider.chat.history.md），没有统一位置
         Src::Aider => home(),
     }

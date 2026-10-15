@@ -22,6 +22,7 @@ export const BRANDS: Record<string, Brand> = {
   continue: { color: '#3B3B3B', onDark: '#E6E6E3' },
   zed: { color: '#084CCF' },
   'amazon-q': { color: '#8C4FFF' },
+  antigravity: { color: '#3279F9' },
   opencode: { logo: 'opencode', color: '#E8A33D' },
   roo: { logo: 'roocode', color: '#C2410C' },
   kilo: { logo: 'kilocode', color: '#E5484D' },
