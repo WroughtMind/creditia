@@ -28,6 +28,15 @@ inputs:
   group:
     description: 按工具（tool）还是按模型（model）分行；auto 在一个工具占九成以上、下面有几个模型时按模型
     default: auto
+  release-notes:
+    description: 发 Release 时（release published）把这一版的署名写进 Release 说明；再发一次只换掉上次写的那段
+    default: 'false'
+  pr-comment:
+    description: PR 上评论这个 PR 的署名（按 PR 分支上的提交，从 credits.json 里找），之后每次推送更新同一条评论
+    default: 'false'
+  token:
+    description: 写 Release 说明、发 PR 评论用的 token（需要 contents 和 pull-requests 的写权限）
+    default: ${{ github.token }}
 runs:
   using: composite
   steps:
@@ -54,3 +63,47 @@ runs:
         if [ -n "$BADGE" ]; then $CT export --credits "$CREDITS" --piece badge --style "$STYLE" --lang "$LANG_CT" --group "$GROUP" --format svg --out "$BADGE"; fi
         if [ -n "$DOC" ]; then $CT doc --credits "$CREDITS" --lang "$LANG_CT" --out "$DOC"; fi
         if [ -n "$SITE" ]; then $CT site --credits "$CREDITS" --style "$STYLE" --lang "$LANG_CT" --group "$GROUP" --out "$SITE"; fi
+    - name: 跟着发版
+      if: inputs.release-notes == 'true' || inputs.pr-comment == 'true'
+      shell: bash
+      env:
+        CT: node ${{ github.action_path }}/packages/cli/bin/creditia.mjs
+        CREDITS: ${{ inputs.credits }}
+        LANG_CT: ${{ inputs.lang }}
+        GROUP: ${{ inputs.group }}
+        NOTES: ${{ inputs.release-notes }}
+        PRC: ${{ inputs.pr-comment }}
+        GH_TOKEN: ${{ inputs.token }}
+        REPO: ${{ github.repository }}
+        EVENT: ${{ github.event_name }}
+        TAG: ${{ github.event.release.tag_name }}
+        PR: ${{ github.event.pull_request.number }}
+        BASE: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        set -e
+        say() { if [ "$LANG_CT" = en ]; then echo "$2"; else echo "$1"; fi; }
+        O=(--credits "$CREDITS" --lang "$LANG_CT" --group "$GROUP")
+        if [ "$EVENT" = release ] && [ "$NOTES" = true ] && [ -n "$TAG" ]; then
+          gh release view "$TAG" --repo "$REPO" --json body -q .body > "$RUNNER_TEMP/notes.md"
+          # credits.json 里有这个 tag 就用它；发版前 publish 的档案里这一版还叫 unreleased
+          if $CT release-notes "$TAG" "${O[@]}" --into "$RUNNER_TEMP/notes.md" --out "$RUNNER_TEMP/new.md" 2>/dev/null \
+            || $CT release-notes unreleased "${O[@]}" --into "$RUNNER_TEMP/notes.md" --out "$RUNNER_TEMP/new.md" 2>/dev/null; then
+            gh release edit "$TAG" --repo "$REPO" --notes-file "$RUNNER_TEMP/new.md" >/dev/null || say "::warning::creditia: 没能写入 Release 说明（token 需要 contents: write）" "::warning::creditia: couldn't update the release notes (the token needs contents: write)"
+          else
+            say "::notice::creditia: credits.json 里没有 $TAG 的署名。发版前在本机 creditia analyze && creditia publish 并提交。" "::notice::creditia: credits.json has nothing for $TAG. Before releasing, run creditia analyze && creditia publish locally and commit."
+          fi
+        fi
+        if [ "$EVENT" = pull_request ] && [ "$PRC" = true ] && [ -n "$PR" ]; then
+          shas=$(git log --format=%H "$BASE..$HEAD_SHA" 2>/dev/null | tr '\n' ',')
+          [ -n "$shas" ] || { say "::notice::creditia: 拿不到 PR 的提交（actions/checkout 需要 fetch-depth: 0）" "::notice::creditia: couldn't list the PR's commits (actions/checkout needs fetch-depth: 0)"; exit 0; }
+          if $CT pr-comment --commits "$shas" "${O[@]}" --out "$RUNNER_TEMP/pr.md" 2>/dev/null; then
+            body="<!-- creditia:pr -->
+        $(cat "$RUNNER_TEMP/pr.md")"
+            id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate -q '.[] | select(.body | startswith("<!-- creditia:pr -->")) | .id' | head -1)
+            if [ -n "$id" ]; then gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" >/dev/null; else gh pr comment "$PR" --repo "$REPO" --body "$body" >/dev/null; fi \
+              || say "::warning::creditia: 没能发 PR 评论（token 需要 pull-requests: write；来自 fork 的 PR 拿不到写权限）" "::warning::creditia: couldn't comment on the PR (the token needs pull-requests: write; PRs from forks don't get it)"
+          else
+            say "::notice::creditia: credits.json 里还没有这个 PR 的提交。在分支上 creditia analyze && creditia publish 并提交后再推送。" "::notice::creditia: none of this PR's commits are in credits.json yet. Run creditia analyze && creditia publish on the branch, commit and push."
+          fi
+        fi

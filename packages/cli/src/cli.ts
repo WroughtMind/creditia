@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { art, frames as classicFrames, animatedClassic, buildModel, FORMS, themeById, raster, type Model, type Theme } from '../../render/src/classic/index.ts';
 import { ORDERED_THEMES, themeDot, themeName, themeNote, pieceName, pieceQ, variantName } from '../../render/src/classic/catalog.ts';
 import { makeExporter, sized, SIZES, FORMATS, type Art } from '../../render/src/export.ts';
-import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, fetchSegs } from '../../render/src/text.ts';
+import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, commitsComment, mergeMarked, fetchSegs } from '../../render/src/text.ts';
 import { BRAND } from '../../render/src/style.ts';
 import * as V2 from '../../render/src/index.ts';
 import { BRIDGED } from '../../render/src/classic/bridge.ts';
@@ -60,13 +60,15 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   paths | link <路径> | unlink <路径>   一个项目的多处路径
   whoami                            当前在哪个 agent 里运行
   stamp     --harness H [--model M] 给下一次提交盖章
-  hook      install|uninstall       提交盖章 hook
+  hook      install|uninstall|status   提交盖章：在 agent 里提交时自动加 Creditia-* trailer
+  release   install|uninstall|status   跟着发版：写 .github/workflows/creditia.yml（Release 说明、PR 评论）
+  integrations                      上面两项的现状（init / analyze 在终端里会问一次要不要装）
   projects                          作品库里的项目
 
 档案与展示
   doc            [--out CREDITS.md]                     生成或更新 CREDITS.md（只改标记区间）
-  release-notes  <tag|unreleased>                       该版本的 credits 段落
-  pr-comment     <N>                                    该 PR 的一句话归因
+  release-notes  <tag|unreleased> [--into 说明.md]      该版本的 credits 段落；--into 时放进已有说明，输出整篇
+  pr-comment     <N> | --commits a,b,c                  该 PR（或这几个提交）的一句话归因
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
                  [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group auto|tool|model] [--out FILE]
   export         --list                                 全部作品、版式、风格、格式
@@ -93,13 +95,15 @@ Analysis (Rust core, all local, never calls a model)
   paths | link <path> | unlink <path>   one project in several places
   whoami                            which agent this is running in
   stamp     --harness H [--model M] stamp the next commit
-  hook      install|uninstall       the commit-stamp hook
+  hook      install|uninstall|status   commit stamps: Creditia-* trailers on commits made inside an agent
+  release   install|uninstall|status   release credits: write .github/workflows/creditia.yml (release notes, PR comments)
+  integrations                      where those two stand (init / analyze ask once in a terminal)
   projects                          projects in the library
 
 Credits and pieces
   doc            [--out CREDITS.md]                     write or update CREDITS.md (only between the markers)
-  release-notes  <tag|unreleased>                       the credits paragraph for a version
-  pr-comment     <N>                                    a one-line attribution for a PR
+  release-notes  <tag|unreleased> [--into notes.md]     the credits paragraph for a version; with --into, merged into existing notes
+  pr-comment     <N> | --commits a,b,c                  a one-line attribution for a PR (or for these commits)
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
                  [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group auto|tool|model] [--out FILE]
   export         --list                                 every piece, layout, style and format
@@ -242,7 +246,7 @@ function write(out: string | undefined, data: string | Uint8Array) {
 }
 
 // ───────────────────────── 命令 ─────────────────────────
-const PASS = new Set(['discover', 'init', 'analyze', 'update', 'collect', 'doctor', 'blame', 'projects', 'stamp', 'hook', 'hook-trailers', 'paths', 'link', 'unlink', 'whoami', 'evidence']);
+const PASS = new Set(['discover', 'init', 'analyze', 'update', 'collect', 'doctor', 'blame', 'projects', 'stamp', 'hook', 'hook-trailers', 'release', 'integrations', 'paths', 'link', 'unlink', 'whoami', 'evidence']);
 
 async function main() {
   if (!cmd || cmd === 'help' || cmd === '-h' || cmd === '--help') return console.log(USAGE());
@@ -262,10 +266,22 @@ async function main() {
       console.log(json ? JSON.stringify({ path: out, project: m.project, updated: existing !== null }) : `${existing ? L('已更新', 'Updated') : L('已写入', 'Wrote')} ${out}`);
       return;
     }
-    case 'release-notes': { const { raw } = modelOf(repoOf()); return write(flags.out, releaseNotes(textModel(raw), pos[0] ?? 'unreleased')); }
-    case 'pr-comment': {
-      const id = pos[0] ? (/^\d+$/.test(pos[0]) ? `pr:${pos[0]}` : pos[0]) : die(L('需要 PR 编号', 'a PR number is required'));
+    case 'release-notes': {
       const { raw } = modelOf(repoOf());
+      const s = releaseNotes(textModel(raw), pos[0] ?? 'unreleased');
+      // --into FILE：把这一段放进已有的说明（换掉上次放的那段），输出整篇
+      if (flags.into !== undefined) { if (!s) die(L(`档案里没有 ${pos[0] ?? 'unreleased'}`, `not in the credits: ${pos[0] ?? 'unreleased'}`)); return write(flags.out, mergeMarked(existsSync(flags.into) ? readFileSync(flags.into, 'utf8') : '', s)); }
+      return write(flags.out, s);
+    }
+    case 'pr-comment': {
+      const { raw } = modelOf(repoOf());
+      // --commits a,b,c：PR 分支上的提交（PR 还没合并时档案里没有 pr:N，只有这些提交）
+      if (flags.commits !== undefined) {
+        const s = commitsComment(textModel(raw), flags.commits.split(/[\s,]+/).filter(Boolean));
+        if (!s) die(L('档案里还没有这些提交：在分支上 creditia analyze && creditia publish 后提交', 'none of these commits are in the credits yet: run creditia analyze && creditia publish on the branch and commit'));
+        return write(flags.out, s);
+      }
+      const id = pos[0] ? (/^\d+$/.test(pos[0]) ? `pr:${pos[0]}` : pos[0]) : die(L('需要 PR 编号', 'a PR number is required'));
       const s = prComment(textModel(raw), id);
       if (!s) die(L(`没有找到 ${id}`, `not found: ${id}`));
       return write(flags.out, s);

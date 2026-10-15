@@ -1199,3 +1199,56 @@ fn qwen_code_projects_jsonl() {
     assert!(v["sources"].as_array().unwrap().iter().any(|h| h["source"] == "qwen" && h["records"] == 1), "{v}");
     let _ = fs::remove_dir_all(&env.root);
 }
+
+/// 两项接入：没决定过的列在 ask 里；装、卸都记下决定；core.hooksPath 指向别处时 hook 写到那里；不是 creditia 写的 workflow 不覆盖
+#[test]
+fn integrations_switches() {
+    let env = setup();
+    let repo = env.repo.display().to_string();
+    fs::write(env.repo.join("a.txt"), "a\n").unwrap();
+    commit(&env.repo, "init", "me@example.com", "2026-10-01T10:00:00Z");
+
+    let (ok, v) = run(&env, &["init", "--repo", &repo]);
+    assert!(ok, "{v}");
+    assert_eq!(v["ask"], serde_json::json!(["hook", "release"]), "{v}");
+    assert!(v.get("askRepo").is_none(), "内部字段不出现在 JSON 里：{v}");
+
+    git(&env.repo, &["config", "core.hooksPath", ".githooks"]);
+    let (ok, v) = run(&env, &["hook", "install", "--repo", &repo]);
+    assert!(ok, "{v}");
+    assert!(fs::read_to_string(env.repo.join(".githooks/prepare-commit-msg")).unwrap().contains("# creditia-stamp"));
+
+    let (ok, v) = run(&env, &["release", "uninstall", "--repo", &repo]);
+    assert!(ok, "{v}");
+    let (_, v) = run(&env, &["integrations", "--repo", &repo]);
+    assert_eq!((v["hook"]["installed"].as_bool(), v["hook"]["decided"].as_bool()), (Some(true), Some(true)), "{v}");
+    assert_eq!((v["release"]["installed"].as_bool(), v["release"]["decided"].as_bool()), (Some(false), Some(false)), "{v}");
+    let (_, v) = run(&env, &["analyze", "--repo", &repo]);
+    assert!(v.get("ask").is_none(), "决定过就不再问：{v}");
+
+    // 用户自己的同名 workflow 不覆盖；creditia 写的能装能删
+    let wf = env.repo.join(".github/workflows/creditia.yml");
+    fs::create_dir_all(wf.parent().unwrap()).unwrap();
+    fs::write(&wf, "name: mine\n").unwrap();
+    let (ok, v) = run(&env, &["release", "install", "--repo", &repo]);
+    assert!(!ok, "{v}");
+    assert_eq!(fs::read_to_string(&wf).unwrap(), "name: mine\n");
+    fs::remove_file(&wf).unwrap();
+    let (ok, v) = run(&env, &["release", "install", "--repo", &repo]);
+    assert!(ok, "{v}");
+    let text = fs::read_to_string(&wf).unwrap();
+    assert!(text.starts_with("# creditia-release") && text.contains("release-notes: true") && text.contains("fetch-depth: 0"), "{text}");
+    let (ok, _) = run(&env, &["release", "uninstall", "--repo", &repo]);
+    assert!(ok && !wf.exists());
+
+    // 先拨了开关（半份配置）再 init：不算已初始化，决定带过去
+    fs::remove_file(env.repo.join(".creditia/config.json")).unwrap();
+    let (ok, _) = run(&env, &["hook", "uninstall", "--repo", &repo]);
+    assert!(ok);
+    let (ok, v) = run(&env, &["init", "--repo", &repo]);
+    assert!(ok, "{v}");
+    assert_eq!(v["config"]["integrations"], serde_json::json!({ "hook": false }), "{v}");
+    assert_eq!(v["ask"], serde_json::json!(["release"]), "{v}");
+
+    let _ = fs::remove_dir_all(&env.root);
+}

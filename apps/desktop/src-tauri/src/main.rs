@@ -292,6 +292,29 @@ async fn add_project(app: tauri::AppHandle, path: String, lang: Option<String>) 
     Ok(json!({ "id": id, "result": v }))
 }
 
+/// 两项接入（提交盖章 hook、跟着发版的 workflow）的现状和用户的决定
+#[tauri::command]
+fn integrations(project_id: String) -> Res<Value> {
+    let lib = Library::open()?;
+    let p = project(&lib, &project_id)?;
+    if !PathBuf::from(&p.path).is_dir() {
+        return Err(Fail::with("dir_missing", p.path));
+    }
+    run_core(&["integrations", "--repo", p.path.as_str()])
+}
+
+/// 开或关一项：交给核心的 hook / release install|uninstall，它会把决定记进项目的 .creditia/config.json
+#[tauri::command]
+fn set_integration(project_id: String, which: String, on: bool, lang: Option<String>) -> Res<Value> {
+    if which != "hook" && which != "release" {
+        return Err(Fail::with("switch_failed", which));
+    }
+    let lib = Library::open()?;
+    let p = project(&lib, &project_id)?;
+    let lang = lang.unwrap_or_else(|| "zh".into());
+    run_core(&[which.as_str(), if on { "install" } else { "uninstall" }, "--repo", p.path.as_str(), "--lang", lang.as_str()]).map_err(|e| Fail { code: "switch_failed", detail: e.detail })
+}
+
 #[tauri::command]
 fn embed_snippet(project_id: String, piece: String, theme: String) -> Res<String> {
     let lib = Library::open()?;
@@ -484,7 +507,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            projects, credits, stamp, config_of, set_display, analyze, cancel_analyze, pick_folder, add_project, embed_snippet,
+            projects, credits, stamp, config_of, set_display, analyze, cancel_analyze, pick_folder, add_project, integrations, set_integration, embed_snippet,
             library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor
         ])
         .run(tauri::generate_context!())

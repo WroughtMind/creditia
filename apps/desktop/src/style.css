@@ -84,6 +84,27 @@ button { font: inherit; color: inherit; }
 /* ── 展墙 ── */
 #stage { position: absolute; inset: 0; overflow: auto; padding: 84px 0 140px; scrollbar-width: none; }
 #stage::-webkit-scrollbar { display: none; }
+/* 接入开关：每个项目的提交盖章、跟着发版。没决定过时描一圈边，放在墙的最上面 */
+#plug { width: min(760px, calc(100vw - 32px)); margin: 0 auto 26px; border-radius: 22px; padding: 14px 16px; box-sizing: border-box; position: relative; }
+#plug[hidden] { display: none; }
+#plug.ask { box-shadow: var(--shadow), inset 0 0 0 1.5px var(--ink), inset 0 1px 0 var(--rim); }
+#plug .q { margin: 2px 4px 12px; font-size: 13px; color: var(--soft); }
+#plug .q b { color: var(--ink); font-weight: 600; margin-right: 8px; }
+#plug .row { display: flex; gap: 10px; }
+#plug .sw { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 12px; border-radius: 16px; background: var(--glass); }
+#plug .sw .t { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+#plug .sw b { font-size: 13.5px; font-weight: 600; }
+#plug .sw small { font-size: 12px; line-height: 1.45; color: var(--soft); }
+#plug .sw small.note { color: var(--ink); }
+#plug .sw button { flex: none; width: 40px; height: 24px; border: 0; border-radius: 99px; padding: 0; cursor: pointer; position: relative; background: color-mix(in srgb, var(--ink) 18%, transparent); transition: background .2s; }
+#plug .sw button i { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 99px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s, background .2s; }
+#plug .sw.on button { background: var(--ink); }
+#plug .sw.on button i { transform: translateX(16px); background: var(--bg); }
+#plug .sw.busy button { opacity: .5; cursor: progress; }
+#plug .sw button:disabled { cursor: progress; }
+#plug .later { position: absolute; top: 12px; right: 16px; border: 0; background: none; color: var(--soft); font-size: 12px; cursor: pointer; padding: 2px 4px; }
+#plug .later:hover { color: var(--ink); }
+@media (max-width: 720px) { #plug .row { flex-direction: column; } }
 #board { position: relative; margin: 0 auto; transition: filter .25s, opacity .25s; }
 .tile { position: absolute; transition: transform .35s cubic-bezier(.2,.7,.2,1), opacity .3s, filter .25s; animation: enter .6s cubic-bezier(.2,.7,.2,1) both; }
 @keyframes enter { from { opacity: 0; transform: translateY(14px) scale(.985); filter: blur(4px); } }

@@ -48,12 +48,15 @@ creditia doc                                  # 写 CREDITS.md（只改标记区
 creditia export --piece roll --out roll.png   # 片尾字幕
 creditia export --list                        # 全部作品、版式、风格、格式
 creditia hook install                         # 以后每次提交自动盖章：日志被清理了也认得出
+creditia release install                      # 跟着发版：Release 说明、PR 评论里写上署名
 creditia blame src/core/analyze.ts:12         # 这一行是哪个工具、哪个模型写的
 ```
 
 一个项目在好几个地方（worktree、临时克隆、换过电脑）：`creditia paths` 看登记过的路径，`creditia link <路径>` 补上。
 
 作品默认按工具分行；一个工具写了绝大部分、下面又换过几个模型时，自动改成按模型分。`--group tool` / `--group model` 指定，App 顶栏也能切换、随时切回自动。多模型的条形图还有「分段」「分组」两种版式，环形图有「内外环」。
+
+提交盖章和跟着发版都会改你的仓库，所以每个项目由你决定：`init` / `analyze` 在终端里会问一次（答案记进 `.creditia/config.json`，不再问），App 里每个项目的作品墙最上面也有这两个开关，随时能拨回去。`creditia integrations` 看现状。
 
 ## 每一行，都有出处
 
@@ -81,7 +84,7 @@ creditia 只回答「哪些 AI 工具和模型写了多少」：作品里不出�
 
 **交给 agent**　把 [skills/creditia](skills/creditia/SKILL.md) 装进你的 agent，跟它说「看看这个仓库是哪些 AI 写的」。它会按步骤分析、出图，公开或提交任何东西之前先问你。
 
-**GitHub Action**　CI 里看不到任何 agent 的日志，所以分析在本机做：`creditia publish` 把档案写到仓库根目录的 `credits.json`，提交上去；之后每次推送，Action 用它重画署名页，也可以顺带生成徽章（`badge:`）和 CREDITS.md（`doc:`）。
+**GitHub Action**　CI 里看不到任何 agent 的日志，所以分析在本机做：`creditia publish` 把档案写到仓库根目录的 `credits.json`，提交上去；之后每次推送，Action 用它重画署名页，也可以顺带生成徽章（`badge:`）和 CREDITS.md（`doc:`）。发 Release 时把这一版的署名写进说明（`release-notes: true`）、在 PR 上评论这个 PR 的署名并随推送更新（`pr-comment: true`）：`creditia release install` 直接写好这份 workflow。
 
 ```yaml
 # .github/workflows/credits.yml
