@@ -1,0 +1,24 @@
+p01 share cinema
+p02 share ukiyoe
+p03 tier baroque
+p04 share cyber
+p05 tier manga
+p06 roll cinema classic
+p07 donut neon
+p08 receipt minimal-light thermal
+p09 fetch terminal
+p10 codemap ink
+p11 waffle arcade
+p12 versions broadsheet
+p13 share cutout
+p14 tier pastel
+p15 share meadow
+p16 tier grimoire
+p17 share manuscript
+p18 tier crt
+p19 share woodblock
+p20 tier gala podium
+p21 share glass
+p22 roll ukiyoe
+p23 badge minimal-light
+p24 share poster

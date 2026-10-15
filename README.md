@@ -16,6 +16,8 @@
 
 [官网](https://wroughtmind.github.io/creditia/) · [安装](#安装) · [归因规则](ATTRIBUTION.md) · [English](README.en.md)
 
+<a href="https://wroughtmind.github.io/creditia/promo.mp4"><img src="site/promo.jpg" width="720" alt="播放 creditia 宣传片（52 秒，有声）"></a>
+
 </div>
 
 <br>

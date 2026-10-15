@@ -242,6 +242,8 @@ meta.thumbExt = webp.status === 0 ? 'webp' : 'png';
 console.log(`✓ wall thumbs: ${meta.thumbExt}`);
 // 手机上「App」那张卡放截图
 for (const t of ['dark', 'light']) cpSync(path.join(import.meta.dirname, `app-${t}.webp`), path.join(OUT, `assets/app-${t}.webp`));
+// 宣传片（promo/ 生成，成片放在 site/ 下）：放在站上，README 的封面图链到这里直接播放
+for (const f of ['promo.mp4', 'promo.jpg']) if (existsSync(path.join(import.meta.dirname, f))) cpSync(path.join(import.meta.dirname, f), path.join(OUT, f));
 
 const logo = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo.svg'), 'utf8').replace(/#0E0E0E/g, 'currentColor').replace('<svg ', '<svg aria-hidden="true" ');
 

@@ -16,6 +16,8 @@ and turns the result into badges, CREDITS.md, end credits and share cards. Runs 
 
 [Website](https://wroughtmind.github.io/creditia/) · [Install](#install) · [Attribution rules](ATTRIBUTION.en.md) · [中文](README.md)
 
+<a href="https://wroughtmind.github.io/creditia/promo.mp4"><img src="site/promo.jpg" width="720" alt="Play the creditia film (52 s, with sound)"></a>
+
 </div>
 
 <br>
