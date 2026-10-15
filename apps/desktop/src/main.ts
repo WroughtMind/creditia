@@ -111,6 +111,9 @@ async function boot() {
   const st = document.createElement('style'); st.textContent = INTERACT_CSS; document.head.appendChild(st);
   $('#logo').innerHTML = LOGO_SVG;
   applyLang(); renderDots(); renderDock(); wireTop();
+  // 滚动之后顶栏垫一层渐隐的玻璃，作品不再直接透到项目名和按钮后面
+  const stageEl = $('#stage');
+  stageEl.addEventListener('scroll', () => document.body.classList.toggle('scrolled', stageEl.scrollTop > 8), { passive: true });
   try { state.projects = await api('projects'); } catch (e: any) { return empty(() => [L('读不到作品库', 'Cannot read the library'), errText(e)]); }
   if (!state.projects.length) return empty(() => [L('还没有分析过的项目', 'No analyzed projects yet'), '', 'creditia analyze', native ? { label: L('添加项目…', 'Add a project…'), run: addProject } : undefined]);
   const last = (store.get('project') === ALL_ID && state.projects.length > 1 ? allProject() : null) ?? state.projects.find((p) => p.id === store.get('project')) ?? state.projects[0];
@@ -244,15 +247,17 @@ function renderPlugs() {
   const ask = (['hook', 'release'] as const).filter((k) => plugs![k].decided == null);
   el.hidden = false;
   el.classList.toggle('ask', ask.length > 0);
+  el.classList.toggle('done', ask.length === 0);
   const rel = plugs.release;
   const item = (k: 'hook' | 'release', title: string, desc: string, note = '') => {
     const on = plugs![k].installed;
-    return `<div class="sw${on ? ' on' : ''}${plugBusy === k ? ' busy' : ''}${plugs![k].decided == null ? ' new' : ''}">
+    // 决定过之后收成一行：说明放进悬停提示，只有提醒（note）还摆出来
+    return `<div class="sw${on ? ' on' : ''}${plugBusy === k ? ' busy' : ''}${plugs![k].decided == null ? ' new' : ''}"${ask.length ? '' : ` title="${esc(desc)}"`}>
       <span class="t"><b>${esc(title)}</b><small>${esc(desc)}</small>${note ? `<small class="note">${esc(note)}</small>` : ''}</span>
       <button role="switch" aria-checked="${on}" aria-label="${esc(title)}" data-k="${k}" ${plugBusy ? 'disabled' : ''}><i></i></button></div>`;
   };
   el.innerHTML = (ask.length ? `<p class="q"><b>${L('这个项目要接入下面两项吗？', 'Add these to this project?')}</b>${L('都只改这一个仓库，随时能关。', 'Each changes only this repository and can be turned off any time.')}</p>` : '')
-    + `<div class="row">${item('hook', L('提交盖章', 'Commit stamps'), L('提交信息自动带上工具、模型和各工具写的行数。日志清理后也认得出，PR 评论读它', 'Commits carry the tool, model and lines per tool, so they stay recognizable after logs are cleaned up; PR comments read them'))}`
+    + `<div class="row">${ask.length ? '' : `<span class="lab">${L('接入', 'Integrations')}</span>`}${item('hook', L('提交盖章', 'Commit stamps'), L('提交信息自动带上工具、模型和各工具写的行数。日志清理后也认得出，PR 评论读它', 'Commits carry the tool, model and lines per tool, so they stay recognizable after logs are cleaned up; PR comments read them'))}`
     + item('release', L('跟着发版', 'Release credits'), L('发 Release 时把署名写进说明，PR 上评论署名。写一个 GitHub workflow，要你提交', 'Credits go into release notes and PR comments. Writes a GitHub workflow for you to commit'),
       rel.installed && !rel.published && !plugs.hook.installed ? L('它读提交盖章记下的行数：把左边的提交盖章也打开', 'It reads the line counts from commit stamps: turn those on too') : rel.github === false && !rel.installed ? L('这个仓库没有 GitHub 远程', 'This repository has no GitHub remote') : '')
     + `</div>` + (ask.length ? `<button class="later" data-act="later">${L(ask.length > 1 ? '都先不用' : '先不用', ask.length > 1 ? 'Not now, neither' : 'Not now')}</button>` : '');
@@ -351,7 +356,7 @@ async function paint() {
     tileA11y(tile, b.id);
     tile.dataset.k = k;
     tile.dataset.w = String(a.w); tile.dataset.h = String(a.h);
-    tile.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : 1));
+    tile.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : ''));
     const vs = st.variants(b.id);
     tile.innerHTML = tileHtml(b.id, vs, variant);
     const artEl = tile.querySelector('.art') as HTMLElement;
@@ -382,27 +387,45 @@ function tileHtml(id: string, vs: string[], cur?: string) {
       <div class="art"></div>`;
 }
 
-/** 瀑布流：一栏宽度跟着窗口变，横向作品跨两栏，小件不放大 */
+/** 瀑布流：一栏宽度跟着窗口变，横向作品跨两栏，小件不放大。
+ *  跨栏的作品会在矮的那栏下面留洞，所以每次往后看几张，挑放下去最高、留洞最少的那张先放 */
 function layout() {
   const board = $('#board');
   const tiles = [...board.querySelectorAll('.tile')] as HTMLElement[];
   const W = Math.min(innerWidth - 120, 1680);
-  const gap = 44;
-  const cols = Math.max(1, Math.min(5, Math.floor((W + gap) / (360 + gap))));
+  const gap = 40;
+  const cols = Math.max(1, Math.min(4, Math.floor((W + gap) / (400 + gap))));
   const cw = (W - gap * (cols - 1)) / cols;
   const hs = new Array(cols).fill(0);
-  for (const t of tiles) {
+  const at = (t: HTMLElement, span: number) => {
     const a = { w: Number(t.dataset.w), h: Number(t.dataset.h) };
-    let span = Math.min(cols, Number(t.dataset.span) || 1);
     const full = cw * span + gap * (span - 1);
     const w = Math.min(full, a.w * (a.w < 500 ? 1.15 : 1));
-    const h = (w / a.w) * a.h;
-    // 找能放下的最矮位置
-    let best = 0, bestY = Infinity;
-    for (let c = 0; c + span <= cols; c++) { const y = Math.max(...hs.slice(c, c + span)); if (y < bestY - 1) { bestY = y; best = c; } }
-    const x = best * (cw + gap) + (full - w) / 2;
-    t.style.left = `${x}px`; t.style.top = `${bestY}px`; t.style.width = `${w}px`;
-    for (let c = best; c < best + span; c++) hs[c] = bestY + h + gap + 18;
+    let best = 0, y = Infinity;
+    for (let c = 0; c + span <= cols; c++) { const v = Math.max(...hs.slice(c, c + span)); if (v < y - 1) { y = v; best = c; } }
+    let hole = 0; for (let c = best; c < best + span; c++) hole += y - hs[c];
+    return { span, full, w, h: (w / a.w) * a.h, best, y, hole };
+  };
+  const fit = (t: HTMLElement) => {
+    const set = Number(t.dataset.span);
+    const small = Number(t.dataset.w) < 500; // 徽章这种小件，跨栏也只是居中，有洞时放一栏
+    if (set && !(small && set > 1)) return at(t, Math.min(cols, set));
+    // 很扁的图表在窄栏里字太小，三栏以上时让它跨两栏；跨了会留大洞就还是放一栏
+    const wide = small ? set > 1 : cols >= 3 && Number(t.dataset.w) / Number(t.dataset.h) > 1.7;
+    const two = wide ? at(t, 2) : null;
+    return two && two.hole < 160 && two.y - Math.min(...hs) < 160 ? two : at(t, 1);
+  };
+  const queue = tiles.slice();
+  while (queue.length) {
+    let pick = 0, f = fit(queue[0]), score = f.y + f.hole;
+    for (let j = 1; j < Math.min(4, queue.length); j++) {
+      const g = fit(queue[j]), sc = g.y + g.hole + j * 80; // 越往后越不愿意提前，尽量保持原来的顺序
+      if (sc < score - 1) { pick = j; f = g; score = sc; }
+    }
+    const t = queue.splice(pick, 1)[0];
+    const x = f.best * (cw + gap) + (f.full - f.w) / 2;
+    t.style.left = `${x}px`; t.style.top = `${f.y}px`; t.style.width = `${f.w}px`;
+    for (let c = f.best; c < f.best + f.span; c++) hs[c] = f.y + f.h + gap + 22;
     if (!t.classList.contains('placed')) requestAnimationFrame(() => t.classList.add('placed')); // 第一次放好之后，再挪位置才有过渡
   }
   board.style.width = `${W}px`;
@@ -449,7 +472,7 @@ async function repaintTile(id: string, k: string) {
   state.arts.set(k, a);
   const vs = state.style.variants(id);
   const fresh = document.createElement('div');
-  fresh.className = 'tile placed'; fresh.dataset.k = k; fresh.dataset.w = String(a.w); fresh.dataset.h = String(a.h); fresh.style.left = tile.style.left; fresh.style.top = tile.style.top; fresh.style.width = tile.style.width; fresh.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : 1)); fresh.style.animation = 'none';
+  fresh.className = 'tile placed'; fresh.dataset.k = k; fresh.dataset.w = String(a.w); fresh.dataset.h = String(a.h); fresh.style.left = tile.style.left; fresh.style.top = tile.style.top; fresh.style.width = tile.style.width; fresh.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : '')); fresh.style.animation = 'none';
   tileA11y(fresh, id);
   fresh.innerHTML = tileHtml(id, vs, variant);
   const artEl = fresh.querySelector('.art') as HTMLElement;
@@ -657,7 +680,7 @@ function openFocus(id: string, k: string) {
 function renderDots() {
   const nav = $('#dots');
   // 原版主题和新风格之间留一道细线
-  nav.innerHTML = KITS.map((t, i) => `${i === CLASSIC_COUNT ? '<i class="divider"></i>' : ''}<button data-s="${t.id}" class="${t.id === state.style.id ? 'on' : ''}" aria-label="${esc(t.name(state.lang))}"><svg viewBox="0 0 24 24">${t.dot}</svg></button>`).join('');
+  nav.innerHTML = `<span class="cur" id="curstyle">${esc(state.style.name(state.lang))}</span>` + KITS.map((t, i) => `${i === CLASSIC_COUNT ? '<i class="divider"></i>' : ''}<button data-s="${t.id}" class="${t.id === state.style.id ? 'on' : ''}" aria-label="${esc(t.name(state.lang))}"><svg viewBox="0 0 24 24">${t.dot}</svg></button>`).join('');
   const tipEl = $('#tipname');
   nav.onmouseover = (e) => {
     const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
@@ -674,6 +697,7 @@ function renderDots() {
     if (t.id === state.style.id) return;
     state.style = t; store.set('theme', t.id);
     nav.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    $('#curstyle').textContent = t.name(state.lang);
     state.variants = {};
     await paint();
   };

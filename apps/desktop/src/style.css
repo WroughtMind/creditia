@@ -42,6 +42,17 @@ button { font: inherit; color: inherit; }
 
 /* ── 顶栏 ── */
 #top { position: fixed; z-index: 20; top: 0; left: 0; right: 0; height: 64px; display: flex; align-items: center; justify-content: center; padding: 0 18px; }
+#top::before { /* 滚动后才出现：一层往下渐隐的磨砂，托住顶栏 */
+  content: ""; position: absolute; z-index: -1; inset: 0 0 -28px; pointer-events: none; opacity: 0; transition: opacity .25s;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 82%, transparent) 30%, color-mix(in srgb, var(--bg) 0%, transparent));
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent); mask-image: linear-gradient(180deg, #000 55%, transparent);
+}
+body.scrolled #top::before { opacity: 1; }
+body::after { /* 底下渐隐，浮在下面的风格栏和导出坞不和作品打架 */
+  content: ""; position: fixed; z-index: 15; left: 0; right: 0; bottom: 0; height: 96px; pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 0%, transparent), color-mix(in srgb, var(--bg) 88%, transparent));
+}
 .brand { position: absolute; left: 86px; display: flex; align-items: center; gap: 9px; color: var(--ink); }
 .brand .logo { width: 20px; height: 20px; display: inline-block; }
 .brand .logo svg { width: 100%; height: 100%; }
@@ -90,7 +101,21 @@ button { font: inherit; color: inherit; }
 /* 接入开关：每个项目的提交盖章、跟着发版。没决定过时描一圈边，放在墙的最上面 */
 #plug { width: min(760px, calc(100vw - 32px)); margin: 0 auto 26px; border-radius: 22px; padding: 14px 16px; box-sizing: border-box; position: relative; }
 #plug[hidden] { display: none; }
-#plug.ask { box-shadow: var(--shadow), inset 0 0 0 1.5px var(--ink), inset 0 1px 0 var(--rim); }
+#plug.ask { box-shadow: var(--shadow), inset 0 0 0 1px color-mix(in srgb, var(--ink) 24%, transparent), inset 0 1px 0 var(--rim); }
+#plug.ask .q b::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 99px; background: var(--ink); margin-right: 8px; vertical-align: 2px; }
+/* 决定过了：收成一行小胶囊，开关还在，说明悬停看 */
+#plug.done { width: fit-content; max-width: calc(100vw - 32px); padding: 5px 6px 5px 16px; border-radius: 99px; margin-bottom: 30px; box-shadow: var(--shadow), inset 0 0 0 1px var(--edge), inset 0 1px 0 var(--rim); }
+#plug.done .row { align-items: center; gap: 4px; flex-direction: row; flex-wrap: wrap; }
+#plug.done .lab { font-size: 11px; color: var(--faint); margin-right: 6px; white-space: nowrap; }
+#plug.done .sw { flex: none; background: transparent; padding: 4px 6px 4px 10px; gap: 10px; border-radius: 99px; }
+#plug.done .sw:hover { background: var(--glass2); }
+#plug.done .sw .t { flex-direction: row; align-items: baseline; gap: 10px; }
+#plug.done .sw b { font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+#plug.done .sw small:not(.note) { display: none; }
+#plug.done .sw small.note { font-size: 11.5px; }
+#plug.done .sw button { width: 32px; height: 20px; }
+#plug.done .sw button i { width: 14px; height: 14px; }
+#plug.done .sw.on button i { transform: translateX(12px); }
 #plug .q { margin: 2px 4px 12px; font-size: 13px; color: var(--soft); }
 #plug .q b { color: var(--ink); font-weight: 600; margin-right: 8px; }
 #plug .row { display: flex; gap: 10px; }
@@ -130,9 +155,10 @@ body.dragging .tile.placed { transition: none; }
 .tile .bar button { border: 0; background: transparent; height: 26px; min-width: 26px; padding: 0 9px; border-radius: 99px; cursor: pointer; font-size: 11.5px; color: var(--ink); display: inline-flex; align-items: center; gap: 4px; }
 .tile .bar button:hover { background: var(--glass2); }
 .tile .bar .vname { color: var(--soft); font-size: 11px; padding: 0 2px; }
-.tile .name { position: absolute; top: -30px; left: -2px; max-width: 56%; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--soft); opacity: 0; transition: opacity .18s; pointer-events: none; white-space: nowrap; }
-.tile:hover .name, .tile.hover .name { opacity: 1; }
-.tile .name .how { color: var(--faint); margin-left: 10px; }
+.tile .name { position: absolute; top: -26px; left: 0; max-width: 56%; overflow: hidden; text-overflow: ellipsis; font-size: 11px; letter-spacing: .01em; color: var(--faint); transition: color .18s; pointer-events: none; white-space: nowrap; }
+.tile:hover .name, .tile.hover .name { color: var(--soft); }
+.tile .name .how { color: var(--faint); margin-left: 10px; display: none; } /* 名字一直在，操作提示悬停才出 */
+.tile:hover .name .how, .tile.hover .name .how { display: inline; }
 .tile .fmts { position: absolute; top: 12px; right: -6px; z-index: 4; border-radius: 14px; padding: 5px; display: grid; gap: 1px; min-width: 168px; animation: drop2 .14s ease-out; }
 @keyframes drop2 { from { opacity: 0; transform: translateY(-4px); } }
 .fmts button { border: 0; background: transparent; text-align: left; padding: 7px 10px; border-radius: 9px; cursor: pointer; display: flex; justify-content: space-between; gap: 14px; }
@@ -148,10 +174,11 @@ body.dragging .tile .bar, body.dragging .tile::after { opacity: 0 !important; }
 #ghost svg { display: block; width: 100%; height: auto; }
 
 /* ── 风格圆点 ── */
-#dots { position: fixed; z-index: 20; left: 18px; bottom: 18px; display: flex; flex-wrap: wrap; gap: 7px; padding: 8px 10px; border-radius: 99px; max-width: calc(100vw - 36px - 520px); }
-#dots button { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 99px; background: none; cursor: pointer; position: relative; transition: transform .16s; }
+#dots { position: fixed; z-index: 20; left: 18px; bottom: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 11px 14px 11px 16px; border-radius: 21px; max-width: calc(100vw - 36px - 420px); }
+#dots .cur { font-size: 12px; font-weight: 600; white-space: nowrap; margin-right: 8px; min-width: 4.5em; } /* 现在用的风格叫什么 */
+#dots button { width: 20px; height: 20px; padding: 0; border: 0; border-radius: 99px; background: none; cursor: pointer; position: relative; transition: transform .16s; }
 #dots button:hover { transform: scale(1.18); }
-#dots button svg { width: 22px; height: 22px; display: block; border-radius: 99px; }
+#dots button svg { width: 20px; height: 20px; display: block; border-radius: 99px; }
 #dots button.on::after { content: ""; position: absolute; inset: -4px; border-radius: 99px; border: 1.5px solid var(--ink); }
 body.busy #dots button.on::after { border-color: transparent; border-top-color: var(--ink); border-right-color: var(--ink); animation: spin .8s linear infinite; } /* 新风格在后台画着 */
 @keyframes spin { to { rotate: 360deg; } }
@@ -241,4 +268,4 @@ body.dragging #dock .sizes { display: flex; gap: 2px; padding: 3px; border-radiu
 #empty .go { margin-top: 16px; height: 36px; padding: 0 18px; border: 0; border-radius: 99px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--ink); }
 #empty .go:hover { background: var(--glass2); }
 #empty code { font: 12px "JetBrains Mono", ui-monospace, monospace; background: var(--glass); padding: 6px 10px; border-radius: 8px; display: inline-block; margin-top: 10px; }
-#dots .divider{width:1px;height:16px;background:var(--line,rgba(0,0,0,.15));margin:0 4px;align-self:center;flex:none}
+#dots .divider{width:1px;height:16px;background:color-mix(in srgb, var(--ink) 16%, transparent);margin:0 4px;align-self:center;flex:none}
