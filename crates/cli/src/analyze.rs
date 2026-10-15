@@ -220,6 +220,10 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     }
     cc.stamps.extend(new_stamps);
     cc.head = Some(head.clone());
+    // 读历史是最慢的几步之一：读完先存下，后面被取消也不用重读
+    if n_new > 0 {
+        save_json(&cache.join("commits.json"), &cc)?;
+    }
 
     // ---- PR 元数据（gh 只读；缓存）
     let prs_path = cache.join("prs.json");
@@ -245,6 +249,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         store = Store { version: STORE_VERSION, ..Default::default() };
     }
     let mut st = ad::Stats::default();
+    creditia_core::progress::tick("logs", 0, 0);
     scan_all(&mut store, &pm, &roots, &mut st);
     save_json(&cache.join("store.json"), &store)?;
     warnings.extend(st.warnings.clone());
@@ -294,8 +299,10 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     // 按时间先后归因：一条证据只认领一次，先提交的先用
     let mut order: Vec<&Commit> = cc.commits.iter().collect();
     order.sort_by_key(|c| (c.commit_ts, c.author_ts));
-    for c in order {
+    let n_commits = order.len();
+    for (i, c) in order.into_iter().enumerate() {
         attrs.insert(c.hash.clone(), eng.attribute(c));
+        creditia_core::progress::tick("attribute", i + 1, n_commits);
     }
 
     // ---- 存活代码

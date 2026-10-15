@@ -5,4 +5,5 @@ pub mod engine;
 pub mod hash;
 pub mod i18n;
 pub mod model;
+pub mod progress;
 pub mod util;

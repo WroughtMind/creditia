@@ -173,8 +173,34 @@ fn drain<R: std::io::Read + Send + 'static>(r: Option<R>) -> Option<std::thread:
     })
 }
 
-/// lang：界面当前的语言（zh / en），核心的提醒按它写
-fn run_analysis(repo: &str, lang: Option<&str>) -> Res<Value> {
+/// stderr 一行一行读：`@progress {…}` 转成给界面的事件，其余的攒起来（出错时当细节）
+fn drain_err<R: std::io::Read + Send + 'static>(r: Option<R>, app: Option<tauri::AppHandle>) -> Option<std::thread::JoinHandle<Vec<u8>>> {
+    use std::io::BufRead;
+    use tauri::Emitter;
+    r.map(|r| {
+        std::thread::spawn(move || {
+            let mut rest = vec![];
+            for line in std::io::BufReader::new(r).split(b'\n').map_while(Result::ok) {
+                match (line.strip_prefix(b"@progress "), &app) {
+                    (Some(p), Some(app)) => {
+                        if let Ok(v) = serde_json::from_slice::<Value>(p) {
+                            let _ = app.emit("analyze-progress", v);
+                        }
+                    }
+                    (Some(_), None) => {}
+                    _ => {
+                        rest.extend_from_slice(&line);
+                        rest.push(b'\n');
+                    }
+                }
+            }
+            rest
+        })
+    })
+}
+
+/// lang：界面当前的语言（zh / en），核心的提醒按它写；app 在时把进度转给界面
+fn run_analysis(repo: &str, lang: Option<&str>, app: Option<tauri::AppHandle>) -> Res<Value> {
     let (out, err) = {
         let mut slot = RUNNING.lock().unwrap();
         if slot.is_some() {
@@ -184,9 +210,10 @@ fn run_analysis(repo: &str, lang: Option<&str>) -> Res<Value> {
         if let Some(l) = lang {
             cmd.env("CREDITIA_LANG", l);
         }
+        cmd.env("CREDITIA_PROGRESS", "1");
         let mut c = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| Fail::with("core_missing", e))?;
         CANCELLED.store(false, std::sync::atomic::Ordering::SeqCst);
-        let pipes = (drain(c.stdout.take()), drain(c.stderr.take()));
+        let pipes = (drain(c.stdout.take()), drain_err(c.stderr.take(), app));
         *slot = Some(c);
         pipes
     };
@@ -236,13 +263,13 @@ fn cancel_analyze() {
 
 /// 重新分析一个项目（在它的仓库目录里跑核心）
 #[tauri::command]
-async fn analyze(project_id: String, lang: Option<String>) -> Res<Value> {
+async fn analyze(app: tauri::AppHandle, project_id: String, lang: Option<String>) -> Res<Value> {
     let lib = Library::open()?;
     let p = project(&lib, &project_id)?;
     if !PathBuf::from(&p.path).is_dir() {
         return Err(Fail::with("dir_missing", p.path));
     }
-    tauri::async_runtime::spawn_blocking(move || run_analysis(&p.path, lang.as_deref())).await.map_err(|e| Fail::with("core_failed", e))?
+    tauri::async_runtime::spawn_blocking(move || run_analysis(&p.path, lang.as_deref(), Some(app))).await.map_err(|e| Fail::with("core_failed", e))?
 }
 
 /// 选一个文件夹（只选，不分析；分析交给 add_project，界面这期间能显示进度）
@@ -255,9 +282,9 @@ async fn pick_folder(app: tauri::AppHandle) -> Res<Option<String>> {
 
 /// 把一个文件夹加进作品库：先分析一遍
 #[tauri::command]
-async fn add_project(path: String, lang: Option<String>) -> Res<Value> {
+async fn add_project(app: tauri::AppHandle, path: String, lang: Option<String>) -> Res<Value> {
     let p = path.clone();
-    let v = tauri::async_runtime::spawn_blocking(move || run_analysis(&p, lang.as_deref())).await.map_err(|e| Fail::with("core_failed", e))??;
+    let v = tauri::async_runtime::spawn_blocking(move || run_analysis(&p, lang.as_deref(), Some(app))).await.map_err(|e| Fail::with("core_failed", e))??;
     let lib = Library::open()?;
     let path = PathBuf::from(path);
     let repo = path.canonicalize().unwrap_or(path);
@@ -493,18 +520,18 @@ mod tests {
 
         // 成功（有警告时退出码 2 也算成功）
         std::env::set_var("CREDITIA_CORE", fake_core(&dir, r#"echo '{"ok":true}'; exit 2"#));
-        assert_eq!(run_analysis("/tmp", None).unwrap()["ok"], true);
+        assert_eq!(run_analysis("/tmp", None, None).unwrap()["ok"], true);
 
         // 核心报错：带上它的原话
         std::env::set_var("CREDITIA_CORE", fake_core(&dir, r#"echo '{"error":"not a git repo"}'; exit 1"#));
-        let e = run_analysis("/tmp", None).unwrap_err();
+        let e = run_analysis("/tmp", None, None).unwrap_err();
         assert_eq!((e.code, e.detail.as_deref()), ("core_failed", Some("not a git repo")));
 
         // 跑着的时候不能再开第二个；取消之后返回 cancelled，槽位也空出来
         std::env::set_var("CREDITIA_CORE", fake_core(&dir, "sleep 30; echo '{}'"));
-        let t = std::thread::spawn(|| run_analysis("/tmp", None));
+        let t = std::thread::spawn(|| run_analysis("/tmp", None, None));
         std::thread::sleep(std::time::Duration::from_millis(300));
-        assert_eq!(run_analysis("/tmp", None).unwrap_err().code, "busy");
+        assert_eq!(run_analysis("/tmp", None, None).unwrap_err().code, "busy");
         let t0 = std::time::Instant::now();
         cancel_analyze();
         assert_eq!(t.join().unwrap().unwrap_err().code, "cancelled");
@@ -513,7 +540,7 @@ mod tests {
 
         // 找不到核心
         std::env::set_var("CREDITIA_CORE", dir.join("nope"));
-        assert_eq!(run_analysis("/tmp", None).unwrap_err().code, "core_missing");
+        assert_eq!(run_analysis("/tmp", None, None).unwrap_err().code, "core_missing");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -665,6 +665,13 @@ fn aider_copilot_amp_trae() {
     // 英文模式：提醒、备注、摘要、doctor 都不带中文（项目名本身是中文，先去掉）
     let cjk = |s: &str| s.replace("示例项目", "").chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c) || ('\u{3000}'..='\u{303f}').contains(&c) || ('\u{ff00}'..='\u{ffef}').contains(&c));
     let texts = |v: &serde_json::Value| -> Vec<String> { ["notes", "warnings", "tier"].iter().flat_map(|k| v[*k].as_array().cloned().unwrap_or_default()).filter_map(|x| x.as_str().map(String::from)).chain(v["summary"].as_str().map(String::from)).chain(v["tier"].as_str().map(String::from)).chain(v["sources"].as_array().into_iter().flatten().filter_map(|h| h["note"].as_str().map(String::from))).collect() };
+    // App 要的进度：stderr 里一行一条，stdout 仍是完整的 JSON
+    let o = Command::new(env!("CARGO_BIN_EXE_creditia-core")).args(["analyze", "--repo", &rs, "--fresh", "--json"]).env_clear().envs(&env.vars).env("PATH", std::env::var("PATH").unwrap()).env("CREDITIA_PROGRESS", "1").output().unwrap();
+    let err = String::from_utf8_lossy(&o.stderr);
+    for stage in ["history", "logs", "attribute", "blame"] {
+        assert!(err.lines().any(|l| l.starts_with("@progress ") && l.contains(&format!("\"stage\":\"{stage}\""))), "{stage}: {err}");
+    }
+    assert!(serde_json::from_slice::<serde_json::Value>(&o.stdout).is_ok());
     for args in [&["analyze", "--repo", rs.as_str(), "--lang", "en"][..], &["doctor", "--lang", "en"][..], &["discover", "--lang", "en"][..]] {
         let (_, v) = run(&env, args);
         let t = texts(&v);
