@@ -113,8 +113,8 @@ jobs:
 | <img src=".github/readme/logo/codex.svg" width="18"> | Codex | `~/.codex` 线程库 + rollout 的 FileChange；渠道看 `model_provider` | ✓ | ✓ |
 | <img src=".github/readme/logo/cursor.svg" width="18"> | Cursor | `ai-code-tracking.db` 逐行哈希，与 Cursor 自己的算法逐字节一致 | ✓ | ✓ |
 | <img src=".github/readme/logo/gemini.svg" width="18"> <img src=".github/readme/logo/qwen.svg" width="18"> | Gemini CLI · Qwen Code | `~/.gemini/tmp/<项目哈希>/chats` 里成功的 write / replace | ✓ | ✓ |
-| <img src=".github/readme/logo/opencode.svg" width="18"> | OpenCode | `storage/session + message + part` 里 completed 的 edit / write；渠道看 `providerID` | ✓ | ✓ |
-| <img src=".github/readme/logo/cline.svg" width="18"> <img src=".github/readme/logo/roo.svg" width="18"> <img src=".github/readme/logo/kilo.svg" width="18"> | Cline · Roo Code · Kilo Code | 各 VS Code 系编辑器里的 `tasks/*/ui_messages.json` | ✓ | ✓ |
+| <img src=".github/readme/logo/opencode.svg" width="18"> | OpenCode | `opencode.db`（新版的 SQLite，v1、v2 两代表结构都读）和老版的 `storage/*.json` 里 completed 的 edit / write / patch；渠道看 `providerID` | ✓ | ✓ |
+| <img src=".github/readme/logo/cline.svg" width="18"> <img src=".github/readme/logo/roo.svg" width="18"> <img src=".github/readme/logo/kilo.svg" width="18"> | Cline · Roo Code · Kilo Code | 各 VS Code 系编辑器里的 `tasks/*/ui_messages.json`；Kilo 命令行的 `kilo.db`（OpenCode 的分支） | ✓ | ✓ |
 | <img src=".github/readme/logo/grok.svg" width="18"> <img src=".github/readme/logo/kimi.svg" width="18"> | Grok · Kimi | 会话目录里的写文件调用 | ✓ | ✓ |
 | <img src=".github/readme/logo/copilot.svg" width="18"> | GitHub Copilot | VS Code 的 `chatSessions` 与 agent 记录里成功的编辑；Copilot 命令行的 `~/.copilot/session-state` | ✓ | ✓ |
 | <img src=".github/readme/logo/aider.svg" width="18"> | Aider | 仓库里的 `.aider.chat.history.md`：只算「Applied edit」确认过的文件，时间取它的提交 | ✓ | ✓ |

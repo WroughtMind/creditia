@@ -739,7 +739,7 @@ async function settings() {
     } catch (err) { toast(errText(err), 5000); }
   };
   /** doctor 的数据源名：一个工具有两处记录时分开写 */
-  const SOURCES: Record<string, [string, string]> = { 'copilot-vscode': ['Copilot（VS Code）', 'Copilot (VS Code)'], 'copilot-cli': ['Copilot 命令行', 'Copilot CLI'], 'trae-cli': ['TRAE 命令行', 'TRAE CLI'], 'trae-ide': ['TRAE IDE', 'TRAE IDE'], windsurf: ['Windsurf', 'Windsurf'] };
+  const SOURCES: Record<string, [string, string]> = { 'copilot-vscode': ['Copilot（VS Code）', 'Copilot (VS Code)'], 'copilot-cli': ['Copilot 命令行', 'Copilot CLI'], 'trae-cli': ['TRAE 命令行', 'TRAE CLI'], 'trae-ide': ['TRAE IDE', 'TRAE IDE'], 'kilo-cli': ['Kilo 命令行', 'Kilo CLI'], windsurf: ['Windsurf', 'Windsurf'] };
   const sourceName = (id: string) => (SOURCES[id] ? L(...SOURCES[id]) : nameOf(id, state.lang));
   const doc = await api('doctor').catch(() => []);
   const detail = (d: any) => d.unsupported ? L('读不了编辑记录', 'Edits not readable')

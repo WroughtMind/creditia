@@ -501,10 +501,11 @@ fn cmd_doctor(_a: &Args) -> R<(Value, Vec<String>)> {
 use creditia_core::tr;
     let mut hs = vec![
         ad::codex::doctor(), ad::claude::doctor(), ad::cursor::doctor(), ad::grok::doctor(), ad::kimi::doctor(),
-        ad::gemini::doctor(Src::Gemini), ad::gemini::doctor(Src::Qwen), ad::opencode::doctor(),
+        ad::gemini::doctor(Src::Gemini), ad::gemini::doctor(Src::Qwen),
         ad::cline::doctor(Src::Cline), ad::cline::doctor(Src::Roo), ad::cline::doctor(Src::Kilo),
         ad::aider::doctor(), ad::amp::doctor(), ad::trae::doctor(), ad::crush::doctor(), ad::goose::doctor(), ad::cont::doctor(), ad::zed::doctor(), ad::amazonq::doctor(),
     ];
+    hs.extend(ad::opencode::doctor());
     hs.extend(ad::copilot::doctor());
     hs.extend(ad::others::doctor());
     let git_ok = std::process::Command::new("git").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);

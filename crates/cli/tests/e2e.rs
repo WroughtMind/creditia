@@ -1001,3 +1001,84 @@ fn amazon_q_conversations() {
     assert_eq!(s, 1, "{}", credits["sessions"]);
     let _ = fs::remove_dir_all(&env.root);
 }
+
+/// OpenCode 新版的 SQLite：v1 表（session / message / part）和 v2 表（session_v2 / session_message）都读；
+/// JSON 文件和库里同一个会话只算一次；Kilo 命令行（OpenCode 的分支）的 kilo.db 记成 Kilo Code
+#[test]
+fn opencode_sqlite_and_kilo_cli() {
+    let env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base: i64 = 1_796_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    let lines = |tag: &str, n: usize| -> Vec<String> { (0..n).map(|i| format!("export function {tag}Step{i}(x: number) {{ return x * {} }}", i + 7)).collect() };
+    let (v1, v2, patch, kilo) = (lines("legacyTable", 3), lines("sessionV2", 4), lines("patched", 2), lines("kiloCli", 3));
+
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join("README.md"), "# oc demo\n").unwrap();
+    commit(&repo, "init", "me@example.com", &d(base - 86400));
+    fs::write(repo.join("src/v1.ts"), v1.join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/v2.ts"), [v2.clone(), patch.clone()].concat().join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/kilo.ts"), kilo.join("\n") + "\n").unwrap();
+    commit(&repo, "oc work", "me@example.com", &d(base + 600));
+
+    let ms = |t: i64| t * 1000;
+    let schema = "CREATE TABLE session (id text PRIMARY KEY, project_id text NOT NULL, parent_id text, slug text NOT NULL, directory text NOT NULL, title text NOT NULL, version text NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL);
+        CREATE TABLE message (id text PRIMARY KEY, session_id text NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL);
+        CREATE TABLE part (id text PRIMARY KEY, message_id text NOT NULL, session_id text NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL);
+        CREATE TABLE session_v2 (id text PRIMARY KEY, project_id text NOT NULL, slug text NOT NULL, directory text NOT NULL, version text NOT NULL, tokens_input integer DEFAULT 0 NOT NULL, tokens_output integer DEFAULT 0 NOT NULL, tokens_reasoning integer DEFAULT 0 NOT NULL, tokens_cache_read integer DEFAULT 0 NOT NULL, tokens_cache_write integer DEFAULT 0 NOT NULL, model text, time_created integer NOT NULL, time_updated integer NOT NULL);
+        CREATE TABLE session_message (id text PRIMARY KEY, session_id text NOT NULL, type text NOT NULL, seq integer NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL);";
+    let v1_session = |c: &rusqlite::Connection, sid: &str, path: &str, model: &str, text: &[String]| {
+        c.execute("INSERT INTO session VALUES (?1, 'p', NULL, 's', ?2, 't', '1', ?3, ?4)", rusqlite::params![sid, rs, ms(base), ms(base + 100)]).unwrap();
+        c.execute("INSERT INTO message VALUES (?1, ?2, ?3, ?3, ?4)", rusqlite::params![format!("{sid}-u"), sid, ms(base + 5), serde_json::json!({ "role": "user", "time": { "created": ms(base + 5) } }).to_string()]).unwrap();
+        c.execute("INSERT INTO message VALUES (?1, ?2, ?3, ?3, ?4)", rusqlite::params![format!("{sid}-a"), sid, ms(base + 10), serde_json::json!({ "role": "assistant", "modelID": model, "providerID": "anthropic", "time": { "created": ms(base + 10) }, "path": { "cwd": rs }, "tokens": { "input": 100, "output": 20 } }).to_string()]).unwrap();
+        c.execute("INSERT INTO part VALUES (?1, ?2, ?3, ?4, ?4, ?5)", rusqlite::params![format!("{sid}-p"), format!("{sid}-a"), sid, ms(base + 12), serde_json::json!({ "type": "tool", "tool": "write", "state": { "status": "completed", "input": { "filePath": format!("{rs}/{path}"), "content": text.join("\n") }, "time": { "end": ms(base + 12) } } }).to_string()]).unwrap();
+    };
+
+    // OpenCode：opencode.db 里一个 v1 会话、一个 v2 会话
+    let oc = env.root.join("opencode");
+    fs::create_dir_all(&oc).unwrap();
+    let c = rusqlite::Connection::open(oc.join("opencode.db")).unwrap();
+    c.execute_batch(schema).unwrap();
+    v1_session(&c, "ses_v1", "src/v1.ts", "claude-sonnet-4-5", &v1);
+    c.execute("INSERT INTO session_v2 (id, project_id, slug, directory, version, tokens_input, tokens_output, time_created, time_updated) VALUES ('ses_v2', 'p', 's', ?1, '2', 3000, 500, ?2, ?3)", rusqlite::params![rs, ms(base), ms(base + 200)]).unwrap();
+    let tool = |name: &str, input: serde_json::Value| serde_json::json!({ "type": "tool", "id": name, "name": name, "state": { "status": "completed", "input": input, "content": [{ "type": "text", "text": "ok" }] }, "time": { "created": ms(base + 30), "completed": ms(base + 31) } });
+    let assistant = serde_json::json!({ "agent": "build", "model": { "id": "gpt-5", "providerID": "openai" }, "time": { "created": ms(base + 30) }, "content": [
+        tool("write", serde_json::json!({ "path": "src/v2.ts", "content": v2.join("\n") })),
+        tool("patch", serde_json::json!({ "patchText": format!("*** Begin Patch\n*** Update File: src/v2.ts\n@@\n{}\n*** End Patch", patch.iter().map(|l| format!("+{l}")).collect::<Vec<_>>().join("\n")) })),
+        { "type": "tool", "id": "x", "name": "write", "state": { "status": "error", "input": { "path": "src/kilo.ts", "content": kilo.join("\n") }, "error": { "type": "x" } }, "time": { "created": ms(base + 32) } }
+    ] });
+    c.execute("INSERT INTO session_message VALUES ('m1', 'ses_v2', 'user', 1, ?1, ?1, ?2)", rusqlite::params![ms(base + 20), serde_json::json!({ "text": "go", "time": { "created": ms(base + 20) } }).to_string()]).unwrap();
+    c.execute("INSERT INTO session_message VALUES ('m2', 'ses_v2', 'assistant', 2, ?1, ?1, ?2)", rusqlite::params![ms(base + 30), assistant.to_string()]).unwrap();
+    drop(c);
+    // 同一个 v1 会话也留在老的 JSON 文件里：只算一次
+    let st = oc.join("storage");
+    fs::create_dir_all(st.join("session/p")).unwrap();
+    fs::write(st.join("session/p/ses_v1.json"), serde_json::json!({ "id": "ses_v1", "directory": rs, "time": { "created": ms(base), "updated": ms(base + 100) } }).to_string()).unwrap();
+
+    // Kilo 命令行
+    let k = env.root.join("kilo");
+    fs::create_dir_all(&k).unwrap();
+    let c = rusqlite::Connection::open(k.join("kilo.db")).unwrap();
+    c.execute_batch(schema).unwrap();
+    v1_session(&c, "ses_kilo", "src/kilo.ts", "claude-opus-4-6", &kilo);
+    drop(c);
+    let mut env = env;
+    env.vars.insert("CREDITIA_KILO_CLI_DIR".into(), k.display().to_string());
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+    assert_eq!(verified("a:opencode/claude-sonnet-4-5"), v1.len() as u64, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:opencode/gpt-5"), (v2.len() + patch.len()) as u64, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:kilo/claude-opus-4-6"), kilo.len() as u64, "{}", credits["breakdown"]);
+    let sessions = |h: &str| credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with(&format!("a:{h}/"))).count();
+    assert_eq!(sessions("opencode"), 2, "{}", credits["sessions"]);
+    assert_eq!(sessions("kilo"), 1, "{}", credits["sessions"]);
+    let (_, v) = run(&env, &["doctor"]);
+    assert!(v["sources"].as_array().unwrap().iter().any(|h| h["source"] == "kilo-cli" && h["records"] == 1), "{v}");
+    let _ = fs::remove_dir_all(&env.root);
+}

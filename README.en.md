@@ -113,8 +113,8 @@ jobs:
 | <img src=".github/readme/logo/codex.svg" width="18"> | Codex | `~/.codex` thread store + rollout FileChange; provider from `model_provider` | ✓ | ✓ |
 | <img src=".github/readme/logo/cursor.svg" width="18"> | Cursor | `ai-code-tracking.db` line hashes, byte-for-byte the same as Cursor's own | ✓ | ✓ |
 | <img src=".github/readme/logo/gemini.svg" width="18"> <img src=".github/readme/logo/qwen.svg" width="18"> | Gemini CLI · Qwen Code | Successful write / replace in `~/.gemini/tmp/<project hash>/chats` | ✓ | ✓ |
-| <img src=".github/readme/logo/opencode.svg" width="18"> | OpenCode | Completed edit / write in `storage/session + message + part`; provider from `providerID` | ✓ | ✓ |
-| <img src=".github/readme/logo/cline.svg" width="18"> <img src=".github/readme/logo/roo.svg" width="18"> <img src=".github/readme/logo/kilo.svg" width="18"> | Cline · Roo Code · Kilo Code | `tasks/*/ui_messages.json` in each VS Code–family editor | ✓ | ✓ |
+| <img src=".github/readme/logo/opencode.svg" width="18"> | OpenCode | Completed edit / write / patch in `opencode.db` (the SQLite store of newer versions, both its v1 and v2 tables) and the older `storage/*.json`; provider from `providerID` | ✓ | ✓ |
+| <img src=".github/readme/logo/cline.svg" width="18"> <img src=".github/readme/logo/roo.svg" width="18"> <img src=".github/readme/logo/kilo.svg" width="18"> | Cline · Roo Code · Kilo Code | `tasks/*/ui_messages.json` in each VS Code–family editor; the Kilo CLI's `kilo.db` (a fork of OpenCode) | ✓ | ✓ |
 | <img src=".github/readme/logo/grok.svg" width="18"> <img src=".github/readme/logo/kimi.svg" width="18"> | Grok · Kimi | File-write calls in their session directories | ✓ | ✓ |
 | <img src=".github/readme/logo/copilot.svg" width="18"> | GitHub Copilot | Successful edits in VS Code `chatSessions` and agent transcripts; Copilot CLI `~/.copilot/session-state` | ✓ | ✓ |
 | <img src=".github/readme/logo/aider.svg" width="18"> | Aider | The repo's `.aider.chat.history.md`: only files confirmed by "Applied edit", timed by its commit | ✓ | ✓ |
