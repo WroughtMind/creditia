@@ -261,6 +261,11 @@ fn end_to_end() {
     assert!(ok, "{v}");
     assert_eq!(v["projects"].as_array().unwrap().len(), 1);
     assert!(v["projects"][0]["evidence"].as_u64().unwrap() >= 59);
+    // 跨项目汇总读每个项目最新的档案
+    let (ok, v) = run(&env, &["all-credits"]);
+    assert!(ok, "{v}");
+    assert_eq!(v["projects"].as_array().unwrap().len(), 1);
+    assert_eq!(v["projects"][0]["credits"]["totals"]["commits"], 7, "{v}");
 
     // doctor 能跑
     let (_, v) = run(&env, &["doctor"]);
