@@ -84,7 +84,7 @@ See them all side by side on the [website's style wall](https://wroughtmind.gith
 
 **Your agent** — install [skills/creditia](skills/creditia/SKILL.md) into your agent and ask it which AIs wrote this repo. It analyzes and renders step by step, and asks you before publishing or committing anything.
 
-**GitHub Action** — CI can't see anyone's agent logs, so analysis runs locally: `creditia publish` writes the record to `credits.json` at the repo root; commit it. On every push the Action redraws the credits page from it, and can also write a badge (`badge:`) and CREDITS.md (`doc:`). It can put each release's credits into its release notes (`release-notes: true`) and comment a PR's credits on it, updated on every push (`pr-comment: true`); `creditia release install` writes that workflow for you.
+**GitHub Action** — CI can't see anyone's agent logs, so analysis runs locally: `creditia publish` writes the record to `credits.json` at the repo root; commit it. On every push the Action redraws the credits page from it, and can also write a badge (`badge:`) and CREDITS.md (`doc:`). It can put each release's credits into its release notes (`release-notes: true`) and comment a PR's credits on it, updated on every push (`pr-comment: true`); `creditia release install` writes that workflow for you. Those two don't need credits.json: with commit stamps on, every commit carries a `Creditia-Lines` trailer (lines per tool, computed locally at commit time, no code), and that's all CI reads.
 
 ```yaml
 # .github/workflows/credits.yml

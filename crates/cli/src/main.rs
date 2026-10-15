@@ -70,7 +70,7 @@ const USAGE_ZH: &str = "用法：creditia-core <命令> [选项]
   doctor                           检查各数据源
   blame     <路径>:<行号> [--repo P]  这一行是谁写的
   stamp     --harness H [--model M] [--share S]   给下一次提交盖章
-  hook      install|uninstall|status [--repo P]    提交盖章 hook：在 agent 里提交时自动加 Creditia-* trailer
+  hook      install|uninstall|status [--repo P]    提交盖章 hook：提交时自动加 Creditia-* trailer（工具、模型、各工具行数）
   release   install|uninstall|status [--repo P]    跟着发版：写 .github/workflows/creditia.yml（Release 说明、PR 评论）
   integrations [--repo P]          上面两项的现状
   hook-trailers <msgfile>          （hook 调用）追加 Creditia-* trailer
@@ -97,7 +97,7 @@ const USAGE_EN: &str = "Usage: creditia-core <command> [options]
   doctor                           check every data source
   blame     <path>:<line> [--repo P]  which tool and model wrote this line
   stamp     --harness H [--model M] [--share S]   stamp the next commit
-  hook      install|uninstall|status [--repo P]    commit stamps: add Creditia-* trailers to commits made inside an agent
+  hook      install|uninstall|status [--repo P]    commit stamps: Creditia-* trailers on commits (tool, model, lines per tool)
   release   install|uninstall|status [--repo P]    release credits: write .github/workflows/creditia.yml (release notes, PR comments)
   integrations [--repo P]          where those two stand
   hook-trailers <msgfile>          (called by the hook) append Creditia-* trailers
@@ -124,6 +124,7 @@ fn main() {
     }
     let json = a.on("json");
     creditia_core::progress::init();
+    refresh_shim(false);
     let r: R<(Value, Vec<String>)> = match a.cmd.as_str() {
         "discover" => cmd_discover(&a),
         "init" => cmd_init(&a),
@@ -627,6 +628,56 @@ fn hook_path(repo: &Path) -> R<PathBuf> {
     Ok(if p.is_absolute() { p } else { repo.join(p) }.join("prepare-commit-msg"))
 }
 
+/// hook 里的那一行。核心的位置会变（App 挪了位置、npm 升级换了目录），所以依次试：
+/// 数据目录里的固定入口（每次运行核心都会把它指向自己）、装 hook 时的核心、PATH 里的 creditia-core
+fn hook_line() -> R<String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let shim = shim_path();
+    Ok(format!(
+        "for c in \"{}\" \"{}\" creditia-core; do if command -v \"$c\" >/dev/null 2>&1; then \"$c\" hook-trailers \"$1\" --repo \"$(git rev-parse --show-toplevel)\" >/dev/null 2>&1; break; fi; done; true {HOOK_MARK}",
+        shim.display(),
+        exe.display()
+    ))
+}
+
+/// 固定入口：数据目录下的 bin/creditia-core，指向最近运行过的核心
+fn shim_path() -> PathBuf {
+    creditia_store::data_dir().join("bin").join(if cfg!(windows) { "creditia-core.exe" } else { "creditia-core" })
+}
+
+/// 让固定入口指向正在运行的这个核心。Unix 上是符号链接；Windows 上不做（hook 里还有另外两个候选）。
+/// 没装过 hook 的电脑上不创建（force 为假时只更新已有的）
+fn refresh_shim(force: bool) {
+    #[cfg(unix)]
+    {
+        let Ok(exe) = std::env::current_exe() else { return };
+        let link = shim_path();
+        if !force && std::fs::symlink_metadata(&link).is_err() {
+            return;
+        }
+        if std::fs::read_link(&link).ok().as_deref() == Some(exe.as_path()) {
+            return;
+        }
+        let _ = std::fs::create_dir_all(link.parent().unwrap());
+        let tmp = link.with_extension("tmp");
+        let _ = std::fs::remove_file(&tmp);
+        if std::os::unix::fs::symlink(&exe, &tmp).is_ok() {
+            let _ = std::fs::rename(&tmp, &link);
+        }
+    }
+}
+
+/// 旧版本装的 hook 写死了当时核心的路径：换成现在这一行
+fn upgrade_hook(repo: &Path) {
+    let (Ok(hook), Ok(line)) = (hook_path(repo), hook_line()) else { return };
+    let Ok(text) = std::fs::read_to_string(&hook) else { return };
+    if !text.contains(HOOK_MARK) || text.lines().any(|l| l == line) {
+        return;
+    }
+    let out: Vec<&str> = text.lines().map(|l| if l.contains(HOOK_MARK) { line.as_str() } else { l }).collect();
+    let _ = std::fs::write(&hook, out.join("\n") + "\n");
+}
+
 fn hook_installed(repo: &Path) -> bool {
     hook_path(repo).ok().and_then(|p| std::fs::read_to_string(p).ok()).is_some_and(|t| t.contains(HOOK_MARK))
 }
@@ -640,8 +691,7 @@ fn cmd_hook(a: &Args) -> R<(Value, Vec<String>)> {
 /// install / uninstall / status。装和卸都算用户做了决定，记进 .creditia/config.json，之后不再问
 fn hook_set(repo: &Path, act: Option<&str>) -> R<Value> {
     let hook = hook_path(repo)?;
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let line = format!("\"{}\" hook-trailers \"$1\" --repo \"$(git rev-parse --show-toplevel)\" >/dev/null 2>&1 || true {HOOK_MARK}", exe.display());
+    let line = hook_line()?;
     match act {
         Some("status") => {
             let on = hook_installed(repo);
@@ -649,8 +699,10 @@ fn hook_set(repo: &Path, act: Option<&str>) -> R<Value> {
         }
         Some("install") => {
             Integrations::record(repo, "hook", true)?;
+            refresh_shim(true);
             let existing = std::fs::read_to_string(&hook).unwrap_or_default();
             if existing.contains(HOOK_MARK) {
+                upgrade_hook(repo);
                 return Ok(json!({ "installed": true, "path": hook, "summary": tr!("hook 已安装", "hook already installed") }));
             }
             let content = if existing.is_empty() { format!("#!/bin/sh\n{line}\n") } else { format!("{}\n{line}\n", existing.trim_end()) };
@@ -696,9 +748,9 @@ fn release_installed(repo: &Path) -> bool {
 /// 写进用户仓库的 workflow。CI 里没有 agent 日志，用的是仓库里的 credits.json（creditia publish 写出）
 fn release_workflow(lang: &str) -> String {
     let head = if lang == "en" {
-        "# Written by `creditia release install`; `creditia release uninstall` removes it.\n# When a release is published, its credits go into the release notes; pull requests get a comment with their credits.\n# CI has no agent logs: this reads the credits.json in the repo (run `creditia publish` and commit it)."
+        "# Written by `creditia release install`; `creditia release uninstall` removes it.\n# When a release is published, its credits go into the release notes; pull requests get a comment with their credits.\n# CI has no agent logs: this reads the line counts that commit stamps (`creditia hook install`) put on each commit, or credits.json if the repo has one."
     } else {
-        "# 由 creditia release install 写入；creditia release uninstall 删除。\n# 发 Release 时把这一版的署名写进说明；PR 上评论这个 PR 的署名。\n# CI 里没有 agent 日志：用的是仓库里的 credits.json（本机 creditia publish 写出、提交上来）。"
+        "# 由 creditia release install 写入；creditia release uninstall 删除。\n# 发 Release 时把这一版的署名写进说明；PR 上评论这个 PR 的署名。\n# CI 里没有 agent 日志：读提交盖章（creditia hook install）在每个提交上记下的各工具行数；仓库里有 credits.json 时优先用它。"
     };
     format!(
         "{RELEASE_MARK}\n{head}\nname: creditia\non:\n  pull_request:\n  release:\n    types: [published]\npermissions:\n  contents: write\n  pull-requests: write\njobs:\n  credits:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n      - uses: WroughtMind/creditia@main\n        with:\n          release-notes: true\n          pr-comment: true\n          lang: {lang}\n"
@@ -726,10 +778,14 @@ fn release_set(repo: &Path, act: Option<&str>) -> R<Value> {
             Integrations::record(repo, "release", true)?;
             std::fs::create_dir_all(wf.parent().unwrap()).map_err(|e| e.to_string())?;
             std::fs::write(&wf, release_workflow(lang)).map_err(|e| e.to_string())?;
-            let next = if repo.join("credits.json").exists() { String::new() } else { tr!("\n仓库根目录还没有 credits.json：先运行 creditia publish。", "\nThere's no credits.json at the repo root yet: run creditia publish first.") };
+            let next = if hook_installed(repo) || repo.join("credits.json").exists() {
+                String::new()
+            } else {
+                tr!("\n提交盖章还没打开：打开后，之后的提交会自动带上各工具写的行数，PR 评论和 Release 说明就有内容了（creditia hook install）。", "\nCommit stamps are off: turn them on and new commits carry each tool's line count, which is what PR comments and release notes read (creditia hook install).")
+            };
             Ok(json!({ "installed": true, "path": wf, "summary": tr!(
-                "已写入 {}\n提交并推送后生效。它读仓库根目录的 credits.json：每次发版前运行 creditia publish 并提交。{next}",
-                "Wrote {}\nCommit and push it to turn it on. It reads credits.json at the repo root: run creditia publish and commit before each release.{next}",
+                "已写入 {}\n提交并推送后生效。它读每个提交上的盖章（各工具写了几行）；仓库根目录有 credits.json 时优先用它。{next}",
+                "Wrote {}\nCommit and push it to turn it on. It reads the stamps on each commit (lines per tool), or credits.json at the repo root if there is one.{next}",
                 wf.display()
             ) }))
         }
@@ -749,6 +805,9 @@ fn release_set(repo: &Path, act: Option<&str>) -> R<Value> {
 fn cmd_integrations(a: &Args) -> R<(Value, Vec<String>)> {
     let repo = a.repo()?;
     let d = Integrations::of(&repo);
+    if hook_installed(&repo) {
+        upgrade_hook(&repo);
+    }
     let github = ad::git::git(&repo, &["remote", "-v"]).contains("github.com");
     let v = json!({
         "hook": { "installed": hook_installed(&repo), "decided": d.hook, "path": hook_path(&repo)? },
@@ -784,13 +843,13 @@ fn ask_integrations(repo: &Path, todo: &[Value]) {
     for k in todo.iter().filter_map(Value::as_str) {
         let q = if k == "hook" {
             tr!(
-                "\n· 提交盖章：在 git 的 prepare-commit-msg hook 里加一行。在 agent 里提交时，提交信息末尾自动加上 Creditia-Harness / Creditia-Model，日志清理了也认得出。只影响这个仓库。\n  装吗？[y/N] ",
-                "\n· Commit stamps: adds one line to git's prepare-commit-msg hook. Commits made inside an agent get Creditia-Harness / Creditia-Model trailers, so they stay recognizable after logs are cleaned up. Only this repository.\n  Install? [y/N] "
+                "\n· 提交盖章：在 git 的 prepare-commit-msg hook 里加一行。在 agent 里提交时，提交信息末尾自动加上 Creditia-Harness / Creditia-Model；提交里有 AI 写的行时再加一行 Creditia-Lines（各工具写了几行，不含代码）。日志清理了也认得出，PR 评论和 Release 说明也读它。只影响这个仓库。\n  装吗？[y/N] ",
+                "\n· Commit stamps: adds one line to git's prepare-commit-msg hook. Commits made inside an agent get Creditia-Harness / Creditia-Model trailers, and commits containing AI-written lines get a Creditia-Lines trailer (lines per tool, no code). They stay recognizable after logs are cleaned up, and PR comments and release notes read them. Only this repository.\n  Install? [y/N] "
             )
         } else {
             tr!(
-                "\n· 跟着发版：写 .github/workflows/creditia.yml（要你提交）。发 Release 时把这一版的署名写进说明，PR 上评论这个 PR 的署名。读的是仓库里的 credits.json（creditia publish 写出）。\n  加吗？[y/N] ",
-                "\n· Release credits: writes .github/workflows/creditia.yml (you commit it). Published releases get their credits in the notes; pull requests get a comment with theirs. It reads credits.json in the repo (from creditia publish).\n  Add it? [y/N] "
+                "\n· 跟着发版：写 .github/workflows/creditia.yml（要你提交）。发 Release 时把这一版的署名写进说明，PR 上评论这个 PR 的署名。读的是提交盖章记下的行数，或仓库里的 credits.json。\n  加吗？[y/N] ",
+                "\n· Release credits: writes .github/workflows/creditia.yml (you commit it). Published releases get their credits in the notes; pull requests get a comment with theirs. It reads the line counts from commit stamps, or credits.json in the repo.\n  Add it? [y/N] "
             )
         };
         eprint!("{q}");
@@ -864,28 +923,58 @@ fn cmd_hook_trailers(a: &Args) -> R<(Value, Vec<String>)> {
             None => (None, None, None),
         }
     };
-    let Some(h) = harness else { return Ok((json!({ "added": false, "summary": "" }), vec![])) };
     let msg = std::fs::read_to_string(msgfile).map_err(|e| e.to_string())?;
-    if msg.contains("Creditia-Harness:") {
+    // 这次提交里各工具写了几行：本机日志里有证据的才算。CI 里没有日志，PR 评论和 Release 说明读这一行。
+    // 扫日志最多等几秒，等不到就不写，不耽误提交
+    let lines = if msg.contains("Creditia-Lines:") { None } else { staged_lines(&repo) };
+    let harness = harness.filter(|_| !msg.contains("Creditia-Harness:"));
+    if harness.is_none() && lines.is_none() {
         return Ok((json!({ "added": false, "summary": "" }), vec![]));
     }
     // 在注释行之前插入 trailer（git 会在 # 开头的注释后截断）
     let (body, comments) = split_comments(&msg);
     let mut out = body.trim_end().to_string();
     out.push_str(if ends_with_trailers(&out) { "\n" } else { "\n\n" });
-    out.push_str(&format!("Creditia-Harness: {h}\n"));
-    if let Some(m) = &model {
-        out.push_str(&format!("Creditia-Model: {m}\n"));
+    if let Some(h) = &harness {
+        out.push_str(&format!("Creditia-Harness: {h}\n"));
+        if let Some(m) = &model {
+            out.push_str(&format!("Creditia-Model: {m}\n"));
+        }
+        if let Some(s) = &share {
+            out.push_str(&format!("Creditia-Share: {s}\n"));
+        }
     }
-    if let Some(s) = &share {
-        out.push_str(&format!("Creditia-Share: {s}\n"));
+    if let Some(l) = &lines {
+        out.push_str(&format!("Creditia-Lines: {l}\n"));
     }
     if !comments.is_empty() {
         out.push('\n');
         out.push_str(&comments);
     }
     std::fs::write(msgfile, out).map_err(|e| e.to_string())?;
-    Ok((json!({ "added": true, "harness": h, "model": model, "summary": "" }), vec![]))
+    Ok((json!({ "added": true, "harness": harness, "model": model, "lines": lines, "summary": "" }), vec![]))
+}
+
+/// `Creditia-Lines` 的值：`工具/模型 行数, 工具 行数 / 暂存区新增总行数`。没有 AI 写的行、或超时，返回 None
+fn staged_lines(repo: &Path) -> Option<String> {
+    let secs = std::env::var("CREDITIA_HOOK_TIMEOUT").ok().and_then(|v| v.parse().ok()).unwrap_or(8u64);
+    if secs == 0 {
+        return None;
+    }
+    let (tx, rx) = std::sync::mpsc::channel();
+    let repo = repo.to_path_buf();
+    std::thread::spawn(move || {
+        let _ = tx.send(analyze::staged(&repo));
+    });
+    let (by, total) = rx.recv_timeout(std::time::Duration::from_secs(secs)).ok()?.ok()?;
+    if by.is_empty() {
+        return None;
+    }
+    Some(lines_value(&by, total))
+}
+
+fn lines_value(by: &[(String, usize)], total: usize) -> String {
+    format!("{} / {total}", by.iter().map(|(k, n)| format!("{k} {n}")).collect::<Vec<_>>().join(", "))
 }
 
 /// 正文最后一段是不是已有的 trailer 块（如 Signed-off-by），是的话新 trailer 直接接在后面。

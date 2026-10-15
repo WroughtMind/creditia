@@ -1,5 +1,6 @@
 # creditia 的 GitHub Action：用仓库里公开的 credits.json（本机 creditia publish 写出）生成徽章、CREDITS.md 和一个署名小网站。
 # CI 里没有任何人的 agent 日志，所以分析要在本机做；这里只负责把结果做成能看的东西。
+# PR 评论和 Release 说明在没有 credits.json 时读提交上的盖章（本机提交盖章 hook 在提交时记下各工具写了几行），不用手动 publish。
 name: creditia
 description: 把 credits.json 做成徽章、CREDITS.md 和一个随提交更新的署名页
 author: WroughtMind
@@ -32,7 +33,7 @@ inputs:
     description: 发 Release 时（release published）把这一版的署名写进 Release 说明；再发一次只换掉上次写的那段
     default: 'false'
   pr-comment:
-    description: PR 上评论这个 PR 的署名（按 PR 分支上的提交，从 credits.json 里找），之后每次推送更新同一条评论
+    description: PR 上评论这个 PR 的署名（按 PR 分支上的提交：先从 credits.json 里找，没有就读提交盖章），之后每次推送更新同一条评论
     default: 'false'
   token:
     description: 写 Release 说明、发 PR 评论用的 token（需要 contents 和 pull-requests 的写权限）
@@ -59,7 +60,11 @@ runs:
         SITE: ${{ inputs.site }}
       run: |
         set -e
-        if [ ! -f "$CREDITS" ]; then echo "::error::没有 $CREDITS。先在本机运行 creditia analyze && creditia publish，把 credits.json 提交进仓库。"; exit 1; fi
+        if [ ! -f "$CREDITS" ]; then
+          # 只写 PR 评论、Release 说明时不需要 credits.json（读提交盖章）
+          if [ -z "$BADGE$DOC$SITE" ]; then exit 0; fi
+          echo "::error::没有 $CREDITS。先在本机运行 creditia analyze && creditia publish，把 credits.json 提交进仓库。"; exit 1
+        fi
         if [ -n "$BADGE" ]; then $CT export --credits "$CREDITS" --piece badge --style "$STYLE" --lang "$LANG_CT" --group "$GROUP" --format svg --out "$BADGE"; fi
         if [ -n "$DOC" ]; then $CT doc --credits "$CREDITS" --lang "$LANG_CT" --out "$DOC"; fi
         if [ -n "$SITE" ]; then $CT site --credits "$CREDITS" --style "$STYLE" --lang "$LANG_CT" --group "$GROUP" --out "$SITE"; fi
@@ -91,7 +96,7 @@ runs:
             || $CT release-notes unreleased "${O[@]}" --into "$RUNNER_TEMP/notes.md" --out "$RUNNER_TEMP/new.md" 2>/dev/null; then
             gh release edit "$TAG" --repo "$REPO" --notes-file "$RUNNER_TEMP/new.md" >/dev/null || say "::warning::creditia: 没能写入 Release 说明（token 需要 contents: write）" "::warning::creditia: couldn't update the release notes (the token needs contents: write)"
           else
-            say "::notice::creditia: credits.json 里没有 $TAG 的署名。发版前在本机 creditia analyze && creditia publish 并提交。" "::notice::creditia: credits.json has nothing for $TAG. Before releasing, run creditia analyze && creditia publish locally and commit."
+            say "::notice::creditia: credits.json 里没有 $TAG 的署名，这一版的提交上也没有盖章。在本机打开提交盖章（creditia hook install），或者发版前 creditia publish 并提交。" "::notice::creditia: neither credits.json nor commit stamps say anything about $TAG. Turn on commit stamps locally (creditia hook install), or run creditia publish and commit before releasing."
           fi
         fi
         if [ "$EVENT" = pull_request ] && [ "$PRC" = true ] && [ -n "$PR" ]; then
@@ -104,6 +109,6 @@ runs:
             if [ -n "$id" ]; then gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" >/dev/null; else gh pr comment "$PR" --repo "$REPO" --body "$body" >/dev/null; fi \
               || say "::warning::creditia: 没能发 PR 评论（token 需要 pull-requests: write；来自 fork 的 PR 拿不到写权限）" "::warning::creditia: couldn't comment on the PR (the token needs pull-requests: write; PRs from forks don't get it)"
           else
-            say "::notice::creditia: credits.json 里还没有这个 PR 的提交。在分支上 creditia analyze && creditia publish 并提交后再推送。" "::notice::creditia: none of this PR's commits are in credits.json yet. Run creditia analyze && creditia publish on the branch, commit and push."
+            say "::notice::creditia: 这个 PR 的提交既不在 credits.json 里，也没有盖章。在本机打开提交盖章（creditia hook install）后提交的会自动带上。" "::notice::creditia: this PR's commits are neither in credits.json nor stamped. Turn on commit stamps locally (creditia hook install) and new commits carry them automatically."
           fi
         fi

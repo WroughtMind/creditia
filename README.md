@@ -84,7 +84,7 @@ creditia 只回答「哪些 AI 工具和模型写了多少」：作品里不出�
 
 **交给 agent**　把 [skills/creditia](skills/creditia/SKILL.md) 装进你的 agent，跟它说「看看这个仓库是哪些 AI 写的」。它会按步骤分析、出图，公开或提交任何东西之前先问你。
 
-**GitHub Action**　CI 里看不到任何 agent 的日志，所以分析在本机做：`creditia publish` 把档案写到仓库根目录的 `credits.json`，提交上去；之后每次推送，Action 用它重画署名页，也可以顺带生成徽章（`badge:`）和 CREDITS.md（`doc:`）。发 Release 时把这一版的署名写进说明（`release-notes: true`）、在 PR 上评论这个 PR 的署名并随推送更新（`pr-comment: true`）：`creditia release install` 直接写好这份 workflow。
+**GitHub Action**　CI 里看不到任何 agent 的日志，所以分析在本机做：`creditia publish` 把档案写到仓库根目录的 `credits.json`，提交上去；之后每次推送，Action 用它重画署名页，也可以顺带生成徽章（`badge:`）和 CREDITS.md（`doc:`）。发 Release 时把这一版的署名写进说明（`release-notes: true`）、在 PR 上评论这个 PR 的署名并随推送更新（`pr-comment: true`）：`creditia release install` 直接写好这份 workflow。这两项不需要 credits.json：打开提交盖章后，每次提交都会带上一行 `Creditia-Lines`（各工具写了几行，在本机提交时算好，不含代码），CI 读它就够了。
 
 ```yaml
 # .github/workflows/credits.yml

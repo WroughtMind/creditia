@@ -220,9 +220,9 @@ function renderPlugs() {
       <button role="switch" aria-checked="${on}" aria-label="${esc(title)}" data-k="${k}" ${plugBusy ? 'disabled' : ''}><i></i></button></div>`;
   };
   el.innerHTML = (ask.length ? `<p class="q"><b>${L('这个项目要接入下面两项吗？', 'Add these to this project?')}</b>${L('都只改这一个仓库，随时能关。', 'Each changes only this repository and can be turned off any time.')}</p>` : '')
-    + `<div class="row">${item('hook', L('提交盖章', 'Commit stamps'), L('在 agent 里提交时，提交信息自动带上工具和模型。日志清理后也认得出', 'Commits made in an agent carry the tool and model, so they stay recognizable after logs are cleaned up'))}`
+    + `<div class="row">${item('hook', L('提交盖章', 'Commit stamps'), L('提交信息自动带上工具、模型和各工具写的行数。日志清理后也认得出，PR 评论读它', 'Commits carry the tool, model and lines per tool, so they stay recognizable after logs are cleaned up; PR comments read them'))}`
     + item('release', L('跟着发版', 'Release credits'), L('发 Release 时把署名写进说明，PR 上评论署名。写一个 GitHub workflow，要你提交', 'Credits go into release notes and PR comments. Writes a GitHub workflow for you to commit'),
-      rel.installed && !rel.published ? L('仓库根目录还没有 credits.json：在项目里运行 creditia publish', 'No credits.json at the repo root yet: run creditia publish in the project') : rel.github === false && !rel.installed ? L('这个仓库没有 GitHub 远程', 'This repository has no GitHub remote') : '')
+      rel.installed && !rel.published && !plugs.hook.installed ? L('它读提交盖章记下的行数：把左边的提交盖章也打开', 'It reads the line counts from commit stamps: turn those on too') : rel.github === false && !rel.installed ? L('这个仓库没有 GitHub 远程', 'This repository has no GitHub remote') : '')
     + `</div>` + (ask.length ? `<button class="later" data-act="later">${L(ask.length > 1 ? '都先不用' : '先不用', ask.length > 1 ? 'Not now, neither' : 'Not now')}</button>` : '');
   el.querySelectorAll<HTMLElement>('button[data-k]').forEach((b) => (b.onclick = () => setPlug(b.dataset.k as 'hook' | 'release', !plugs![b.dataset.k as 'hook' | 'release'].installed)));
   const later = el.querySelector<HTMLElement>('.later');

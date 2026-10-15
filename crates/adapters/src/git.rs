@@ -3,7 +3,7 @@
 use creditia_core::hash::{ext_of, line_key, normalize};
 use creditia_core::model::{excluded, BlameFile, Commit, FileAdd, PrMeta, Unit};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -125,6 +125,27 @@ pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>
         return (vec![], HashMap::new());
     };
     let rd = BufReader::with_capacity(1 << 20, child.stdout.take().unwrap());
+    let r = parse_log(rd, total);
+    let _ = child.wait();
+    r
+}
+
+/// 暂存区（`git diff --cached`）当成一个还没提交的提交：提交盖章 hook 用它算这次提交里各工具写了几行
+pub fn staged_commit(repo: &Path, email: &str, ts: i64) -> Commit {
+    let diff = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["-c", "core.quotepath=false", "diff", "--cached", "-M", "--unified=0", "--no-color", "--no-ext-diff"])
+        .stderr(Stdio::null())
+        .output()
+        .map(|o| o.stdout)
+        .unwrap_or_default();
+    let head = format!("@@@C\0staged\0{email}\0\0{ts}\0{ts}\0\0\0\0\0\n");
+    let (mut out, _) = parse_log(head.as_bytes().chain(&diff[..]), 0);
+    out.pop().unwrap_or(Commit { hash: "staged".into(), email: email.into(), name: String::new(), author_ts: ts, commit_ts: ts, subject: String::new(), coauthors: vec![], assisted: vec![], files: vec![] })
+}
+
+fn parse_log(rd: impl BufRead, total: usize) -> (Vec<Commit>, Stamps) {
     let mut out: Vec<Commit> = vec![];
     let mut stamps = HashMap::new();
     let mut cur: Option<FileAdd> = None;
@@ -197,7 +218,6 @@ pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>
         }
     }
     flush(&mut out, &mut cur);
-    let _ = child.wait();
     (out, stamps)
 }
 

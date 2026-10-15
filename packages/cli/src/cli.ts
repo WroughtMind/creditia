@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { art, frames as classicFrames, animatedClassic, buildModel, FORMS, themeById, raster, type Model, type Theme } from '../../render/src/classic/index.ts';
 import { ORDERED_THEMES, themeDot, themeName, themeNote, pieceName, pieceQ, variantName } from '../../render/src/classic/catalog.ts';
 import { makeExporter, sized, SIZES, FORMATS, type Art } from '../../render/src/export.ts';
-import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, commitsComment, mergeMarked, fetchSegs } from '../../render/src/text.ts';
+import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, commitsComment, mergeMarked, fetchSegs, stampedComment, type Stamped } from '../../render/src/text.ts';
 import { BRAND } from '../../render/src/style.ts';
 import * as V2 from '../../render/src/index.ts';
 import { BRIDGED } from '../../render/src/classic/bridge.ts';
@@ -60,7 +60,7 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   paths | link <路径> | unlink <路径>   一个项目的多处路径
   whoami                            当前在哪个 agent 里运行
   stamp     --harness H [--model M] 给下一次提交盖章
-  hook      install|uninstall|status   提交盖章：在 agent 里提交时自动加 Creditia-* trailer
+  hook      install|uninstall|status   提交盖章：提交时自动加 Creditia-* trailer（工具、模型、各工具行数）
   release   install|uninstall|status   跟着发版：写 .github/workflows/creditia.yml（Release 说明、PR 评论）
   integrations                      上面两项的现状（init / analyze 在终端里会问一次要不要装）
   projects                          作品库里的项目
@@ -95,7 +95,7 @@ Analysis (Rust core, all local, never calls a model)
   paths | link <path> | unlink <path>   one project in several places
   whoami                            which agent this is running in
   stamp     --harness H [--model M] stamp the next commit
-  hook      install|uninstall|status   commit stamps: Creditia-* trailers on commits made inside an agent
+  hook      install|uninstall|status   commit stamps: Creditia-* trailers on commits (tool, model, lines per tool)
   release   install|uninstall|status   release credits: write .github/workflows/creditia.yml (release notes, PR comments)
   integrations                      where those two stand (init / analyze ask once in a terminal)
   projects                          projects in the library
@@ -196,6 +196,36 @@ function loadCredits(repo: string, refresh = false): any {
   if (!existsSync(p)) die(L(`没有 ${p}；先运行 creditia analyze`, `no ${p}; run creditia analyze first`));
   return JSON.parse(readFileSync(p, 'utf8'));
 }
+/** 现成的档案，没有就是 null（不现场分析）：CI 里写 PR 评论、Release 说明用，没有档案时改读提交盖章 */
+function existingCredits(repo: string): any | null {
+  const f = [flags.credits && path.resolve(flags.credits), path.join(repo, '.creditia/credits.json'), path.join(repo, 'credits.json')].find((x) => x && existsSync(x));
+  return f ? JSON.parse(readFileSync(f, 'utf8')) : null;
+}
+/** 提交上的盖章和各提交新增的行数。walk 为假时 revs 就是那几个提交，否则是一个范围 */
+function stampedOf(repo: string, revs: string[], walk: boolean): Stamped[] {
+  if (!revs.length) return [];
+  const fmt = '--format=@@@%x00%(trailers:key=Creditia-Lines,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Harness,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Model,valueonly,separator=%x7C)';
+  const out = sh(repo, ['log', ...(walk ? [] : ['--no-walk=unsorted']), '--no-merges', '--numstat', fmt, ...revs]);
+  const cs: Stamped[] = [];
+  for (const line of out.split('\n')) {
+    if (line.startsWith('@@@\0')) {
+      const [, l, h, m] = line.split('\0').map((x) => x.split('|')[0].trim() || undefined);
+      cs.push({ lines: l, harness: h, model: m, added: 0 });
+    } else {
+      const m = /^(\d+)\t\d+\t/.exec(line);
+      if (m && cs.length) cs[cs.length - 1].added += Number(m[1]);
+    }
+  }
+  return cs;
+}
+/** 一个版本包含的提交范围：上一个 tag 到这个 tag；unreleased 是最后一个 tag 到 HEAD */
+function releaseRange(repo: string, tag: string): string[] {
+  const end = tag === 'unreleased' ? 'HEAD' : tag;
+  if (!sh(repo, ['rev-parse', '--verify', '-q', end])) return [];
+  const prev = sh(repo, ['describe', '--tags', '--abbrev=0', tag === 'unreleased' ? 'HEAD' : `${tag}^`]);
+  return [prev ? `${prev}..${end}` : end];
+}
+
 /** 能出图的作品：需要额外数据的（个人履历、逐行溯源）不在这里 */
 const PIECE_IDS = [...Object.keys(FORMS).filter((id) => id !== 'profile' && id !== 'blame'), 'badge', ...BRIDGED];
 /** 新风格里和原版重名、或者原版已经有对应的，用原版 */
@@ -254,7 +284,9 @@ async function main() {
   // 只有要做分析时才需要核心：透传给核心的命令、--refresh、或者仓库里还没有任何档案
   const top = sh(path.resolve(flags.repo ?? process.cwd()), ['rev-parse', '--show-toplevel']);
   const hasCredits = !!flags.credits || (!!top && (existsSync(path.join(top, '.creditia/credits.json')) || existsSync(path.join(top, 'credits.json'))));
-  if (PASS.has(cmd) || on.has('refresh') || (!hasCredits && !on.has('list'))) coreBin = await ensureCore();
+  // CI 里写 PR 评论、Release 说明：没有档案时读提交盖章，不用核心
+  const stampsOnly = (cmd === 'pr-comment' && flags.commits !== undefined) || (cmd === 'release-notes' && flags.into !== undefined);
+  if (PASS.has(cmd) || on.has('refresh') || (!hasCredits && !on.has('list') && !stampsOnly)) coreBin = await ensureCore();
   if (PASS.has(cmd)) process.exit(core(argv).code);
   switch (cmd) {
     case 'doc': {
@@ -267,20 +299,28 @@ async function main() {
       return;
     }
     case 'release-notes': {
+      const tag = pos[0] ?? 'unreleased';
+      // --into FILE：把这一段放进已有的说明（换掉上次放的那段），输出整篇。CI 里用：档案里没有这一版就读这一版提交上的盖章
+      if (flags.into !== undefined) {
+        const repo = repoOf(), raw = existingCredits(repo);
+        const s = (raw && releaseNotes(textModel(raw), tag)) || stampedComment(stampedOf(repo, releaseRange(repo, tag), true), LANG());
+        if (!s) die(L(`档案里没有 ${tag}，这一版的提交上也没有盖章`, `${tag} isn't in the credits and its commits carry no stamps`));
+        return write(flags.out, mergeMarked(existsSync(flags.into) ? readFileSync(flags.into, 'utf8') : '', s));
+      }
       const { raw } = modelOf(repoOf());
-      const s = releaseNotes(textModel(raw), pos[0] ?? 'unreleased');
-      // --into FILE：把这一段放进已有的说明（换掉上次放的那段），输出整篇
-      if (flags.into !== undefined) { if (!s) die(L(`档案里没有 ${pos[0] ?? 'unreleased'}`, `not in the credits: ${pos[0] ?? 'unreleased'}`)); return write(flags.out, mergeMarked(existsSync(flags.into) ? readFileSync(flags.into, 'utf8') : '', s)); }
-      return write(flags.out, s);
+      return write(flags.out, releaseNotes(textModel(raw), tag));
     }
     case 'pr-comment': {
-      const { raw } = modelOf(repoOf());
-      // --commits a,b,c：PR 分支上的提交（PR 还没合并时档案里没有 pr:N，只有这些提交）
+      // --commits a,b,c：PR 分支上的提交（PR 还没合并时档案里没有 pr:N，只有这些提交）。
+      // 先找档案；档案里没有（CI 里通常没有）就读这些提交上的盖章（提交盖章 hook 记下的各工具行数）
       if (flags.commits !== undefined) {
-        const s = commitsComment(textModel(raw), flags.commits.split(/[\s,]+/).filter(Boolean));
-        if (!s) die(L('档案里还没有这些提交：在分支上 creditia analyze && creditia publish 后提交', 'none of these commits are in the credits yet: run creditia analyze && creditia publish on the branch and commit'));
+        const repo = repoOf(), raw = existingCredits(repo);
+        const shas = flags.commits.split(/[\s,]+/).filter(Boolean);
+        const s = (raw && commitsComment(textModel(raw), shas)) || stampedComment(stampedOf(repo, shas, false), LANG());
+        if (!s) die(L('档案里没有这些提交，提交上也没有盖章：打开提交盖章，或者在分支上 creditia publish 后提交', 'these commits are neither in the credits nor stamped: turn on commit stamps, or run creditia publish on the branch and commit'));
         return write(flags.out, s);
       }
+      const { raw } = modelOf(repoOf());
       const id = pos[0] ? (/^\d+$/.test(pos[0]) ? `pr:${pos[0]}` : pos[0]) : die(L('需要 PR 编号', 'a PR number is required'));
       const s = prComment(textModel(raw), id);
       if (!s) die(L(`没有找到 ${id}`, `not found: ${id}`));
