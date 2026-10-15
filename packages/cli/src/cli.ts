@@ -10,6 +10,7 @@ import { ORDERED_THEMES, themeDot, themeName, themeNote, pieceName, pieceQ, vari
 import { makeExporter, sized, SIZES, FORMATS, type Art } from '../../render/src/export.ts';
 import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, commitsComment, mergeMarked, fetchSegs, stampedComment, shieldsBadge, badgeShares, stampedBadgeShares, type Stamped } from '../../render/src/text.ts';
 import { BRAND } from '../../render/src/style.ts';
+import { check, redact, CATS, CAT_NAMES, RISK_NAMES, type Cat } from './privacy.ts';
 import * as V2 from '../../render/src/index.ts';
 import { BRIDGED } from '../../render/src/classic/bridge.ts';
 import { variantsOf } from '../../render/src/classic/art.ts';
@@ -24,7 +25,7 @@ const ex = makeExporter({ png: (s, w) => pick(s).png(s, w), rgba: (s, w) => pick
 const exV2 = makeExporter(V2.raster, deflate);
 
 // ───────────────────────── 参数 ─────────────────────────
-const SWITCHES = new Set(['json', 'fresh', 'force', 'github', 'all', 'yes', 'list', 'no-color', 'refresh']);
+const SWITCHES = new Set(['json', 'fresh', 'force', 'github', 'all', 'yes', 'list', 'no-color', 'refresh', 'check']);
 const argv = process.argv.slice(2);
 const cmd = argv[0] ?? '';
 const pos: string[] = [];
@@ -75,7 +76,9 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   export         --list                                 全部作品、版式、风格、格式
   board          [--style S] [--out credits.html]       全部作品放进一个可交互的 HTML 页面
   site           [--out 目录] [--style S]               一个小网站：首页是全部作品，每种风格一页（给 GitHub Pages）
-  publish        [--out credits.json]                   把档案放到仓库根目录，准备公开（会列出将公开的内容）
+  publish        [--out credits.json] [--check] [--hide titles,paths,people,hours,repos] [--yes]
+                 把档案放到仓库根目录，准备公开。先做隐私检查：列出将公开的内容，在终端里逐类问；
+                 --check 只检查不写；看起来像密钥、邮箱、本机路径的内容要 --yes 才写
 
 任何展示命令都可以加 --credits FILE，直接用一份现成的档案（CI 里没有 agent 日志，用的就是仓库里公开的 credits.json）
 任何展示命令都可以加 --group auto|tool|model：按工具还是按模型分行（默认 auto：一个工具占九成以上、下面有几个模型时按模型）
@@ -111,7 +114,10 @@ Credits and pieces
   export         --list                                 every piece, layout, style and format
   board          [--style S] [--out credits.html]       every piece on one interactive HTML page
   site           [--out DIR] [--style S]                a small site: all pieces on the home page, one page per style (for GitHub Pages)
-  publish        [--out credits.json]                   put the credits file at the repository root for publishing (lists what becomes public)
+  publish        [--out credits.json] [--check] [--hide titles,paths,people,hours,repos] [--yes]
+                 put the credits file at the repository root for publishing. Runs a privacy check first: lists what
+                 becomes public and asks per category in a terminal; --check only checks; anything that looks like a
+                 secret, email or local path needs --yes
 
 Every display command takes --credits FILE to use an existing credits file (CI has no agent logs; it uses the public credits.json in the repository)
 Every display command takes --group auto|tool|model: one row per tool or per model (default auto: per model when one tool wrote over 90% with several models)
@@ -337,7 +343,7 @@ async function main() {
     case 'export': return exportCmd();
     case 'board': return boardCmd();
     case 'site': return siteCmd();
-    case 'publish': return publishCmd();
+    case 'publish': return await publishCmd();
     case 'fetch': { const { raw } = modelOf(repoOf()); console.log(ansi(fetchSegs(textModel(raw)))); return; }
     default: die(L(`未知命令：${cmd}\n\n${USAGE()}`, `unknown command: ${cmd}\n\n${USAGE()}`));
   }
@@ -417,28 +423,63 @@ async function boardCmd() {
 }
 
 /** 公开档案：从本机分析结果复制到仓库根目录，并列出将公开的内容让人确认 */
-function publishCmd() {
+async function publishCmd() {
   const repo = repoOf();
   const { m, raw } = modelOf(repo, on.has('refresh'));
   const out = flags.out ?? path.join(repo, 'credits.json');
-  // 隐藏标题时 PR 写成「PR #12」、提交写成短哈希：都不算标题
-  const titles = (raw.units ?? []).filter((u: any) => u.title && !/^PR #\d+$/.test(u.title) && !/^[0-9a-f]{7}$/.test(u.title)).length;
-  const paths = (raw.files ?? []).filter((f: any) => f.path).length;
-  // 作品里不写人名；档案里仍有提交者的显示名，公开前列出来
-  const people = [...new Set((raw.contributors ?? []).filter((c: any) => c.kind === 'human' && c.name).map((c: any) => c.name as string))];
-  const report = { path: out, project: m.project, prTitles: titles, filePaths: paths, people, note: L('只含行数、工具、模型、时间与上面这些字段；不含代码、prompt、邮箱、本机路径', 'Only line counts, tools, models, times and the fields above; no code, prompts, emails or local paths') };
-  writeFileSync(out, JSON.stringify(raw, null, 1) + '\n');
-  if (json) return console.log(JSON.stringify(report));
-  console.log(L(
-    `已写入 ${out}\n将公开：项目名「${m.project}」、${titles} 个 PR / 提交标题、${paths} 个文件路径、人名：${people.join('、') || '无'}\n${report.note}\n不想公开标题、路径或人名：改 .creditia/config.json 的 privacy 后重新 analyze。`,
-    `Wrote ${out}\nThis makes public: the project name "${m.project}", ${titles} PR / commit titles, ${paths} file paths, people's names: ${people.join(', ') || 'none'}\n${report.note}\nTo keep titles, paths or names private: change privacy in .creditia/config.json and analyze again.`,
-  ));
+  const lang = LANG();
+  const name = (c: Cat) => CAT_NAMES[c][lang === 'zh' ? 0 : 1];
+  const hide = new Set<Cat>((flags.hide ?? '').split(/[\s,]+/).filter((x): x is Cat => (CATS as string[]).includes(x)));
+  const rep = check(raw);
+  const risky = (c: Cat) => rep.risks.some((r) => r.cat === c);
+  const note = L('只含行数、工具、模型、时间与上面这些字段；不含代码、prompt、邮箱、本机路径', 'Only line counts, tools, models, times and the fields above; no code, prompts, emails or local paths');
+  const lines = () => [
+    L(`将公开：项目名「${m.project}」`, `This makes public: the project name "${m.project}"`),
+    ...CATS.filter((c) => rep.cats[c].n > 0).map((c) => `  ${hide.has(c) ? '✕' : '·'} ${name(c)}${c === 'hours' ? '' : ` ${rep.cats[c].n}`}${rep.cats[c].samples.length ? L(`，例如：${rep.cats[c].samples.join('、')}`, `, e.g. ${rep.cats[c].samples.join(', ')}`) : ''}${hide.has(c) ? L('（隐藏）', ' (hidden)') : ''}`),
+    ...(rep.risks.some((r) => !hide.has(r.cat)) ? [L('看起来不该公开的：', 'Looks like it should stay private:'), ...rep.risks.filter((r) => !hide.has(r.cat)).map((r) => `  ! ${name(r.cat)} · ${RISK_NAMES[r.kind][lang === 'zh' ? 0 : 1]}${L('：', ': ')}${r.text}`)] : []),
+  ];
+  const report = () => ({ path: out, project: m.project, write: !on.has('check'), categories: Object.fromEntries(CATS.map((c) => [c, { ...rep.cats[c], hidden: hide.has(c) }])), risks: rep.risks.filter((r) => !hide.has(r.cat)), hidden: [...hide], note });
+  // 只检查
+  if (on.has('check')) {
+    if (json) return console.log(JSON.stringify(report()));
+    return console.log([...lines(), note, L('（只检查，没有写入）', '(check only; nothing written)')].join('\n'));
+  }
+  // 终端里：逐类问。有可疑内容的那一类默认不公开
+  if (process.stdin.isTTY && process.stderr.isTTY && !json && !on.has('yes')) {
+    const { createInterface } = await import('node:readline');
+    const rl = createInterface({ input: process.stdin });
+    // 用迭代器读行：一次贴进来几行回答也不会丢
+    const it = rl[Symbol.asyncIterator]();
+    const ask = async (q: string) => { process.stderr.write(q); const r = await it.next(); return r.done ? '' : String(r.value); };
+    try {
+      console.error(lines().join('\n'));
+      console.error(L('\n公开前逐项确认（直接回车用括号里大写的那个）：', '\nConfirm each before publishing (Enter picks the capital letter):'));
+      for (const c of CATS) {
+        if (rep.cats[c].n === 0 || hide.has(c)) continue;
+        const def = risky(c) ? 'n' : 'y';
+        const a = (await ask(L(`  公开「${name(c)}」？[${def === 'y' ? 'Y/n' : 'y/N'}] `, `  Publish ${name(c)}? [${def === 'y' ? 'Y/n' : 'y/N'}] `))).trim().toLowerCase() || def;
+        if (!a.startsWith('y')) hide.add(c);
+      }
+      const go = (await ask(L(`写入 ${out}？[Y/n] `, `Write ${out}? [Y/n] `))).trim().toLowerCase();
+      if (go && !go.startsWith('y')) return console.error(L('没有写入', 'Nothing written'));
+    } finally { rl.close(); }
+  } else if (rep.risks.some((r) => !hide.has(r.cat)) && !on.has('yes')) {
+    // 不能问的时候：有可疑内容就不写，列出来，让人决定（--hide 隐藏那一类，或 --yes 确认）
+    if (json) { console.log(JSON.stringify({ ...report(), write: false })); process.exit(1); }
+    die([...lines(), L('有看起来不该公开的内容，没有写入。用 --hide 隐藏那一类，或确认无误后加 --yes。', 'Found things that look private; nothing written. Hide that category with --hide, or add --yes once you have checked.')].join('\n'));
+  }
+  writeFileSync(out, JSON.stringify(redact(raw, hide), null, 1) + '\n');
+  if (json) return console.log(JSON.stringify(report()));
+  console.log([L(`已写入 ${out}`, `Wrote ${out}`), ...lines(), note, ...(hide.size ? [L(`以后都这样：加 --hide ${[...hide].join(',')}；标题和路径也可以在 .creditia/config.json 的 privacy 里关掉`, `To always do this: add --hide ${[...hide].join(',')}; titles and paths can also be turned off under privacy in .creditia/config.json`)] : [])].join('\n'));
 }
 
 /** 小网站：首页是默认风格的全部作品，每种风格一页（四件代表作），顶部一排风格圆点 */
 async function siteCmd() {
   const repo = repoOf();
-  const { m, raw } = modelOf(repo, on.has('refresh'));
+  const { m, raw: full } = modelOf(repo, on.has('refresh'));
+  // 网站也是公开的：--hide 和 publish 一样；有看起来不该公开的内容时提醒（CI 里跑，不拦）
+  const raw = redact(full, new Set((flags.hide ?? '').split(/[\s,]+/).filter((x): x is Cat => (CATS as string[]).includes(x))));
+  for (const r of check(raw).risks) console.error(L(`注意：${CAT_NAMES[r.cat][0]}里有${RISK_NAMES[r.kind][0]}：${r.text}`, `note: ${CAT_NAMES[r.cat][1]} contain a ${RISK_NAMES[r.kind][1]}: ${r.text}`));
   const out = flags.out ?? path.join(repo, '_credits');
   mkdirSync(out, { recursive: true });
   const main = lookOf(flags.style);
