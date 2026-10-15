@@ -70,8 +70,9 @@ export function mark(key: string, t: Theme, size: number, color?: string): Node 
   const uri = logoUri(key, color ?? t.ink);
   if (uri) return image(uri, size, size, { flexShrink: 0 });
   // 没有 logo 的工具写首字母，人、「其他」只留空位对齐
-  if (!BRANDS[key]) return box({ width: size, height: size, flexShrink: 0 });
-  const initials = (NAMES[key] ?? key).split(/[\s-]+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  const tool = key.split('/')[0];
+  if (!BRANDS[tool]) return box({ width: size, height: size, flexShrink: 0 });
+  const initials = (NAMES[tool] ?? tool).split(/[\s-]+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   return box({ width: size, height: size, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 99, border: `${Math.max(1, size / 16)}px solid ${color ?? t.ink}` },
     txt({ fontFamily: 'Inter, Noto Sans SC', fontWeight: 700, fontSize: size * (initials.length > 1 ? 0.36 : 0.48), color: color ?? t.ink, lineHeight: 1 }, initials));
 }

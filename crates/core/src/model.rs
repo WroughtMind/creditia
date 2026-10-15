@@ -377,6 +377,14 @@ impl Registry {
         self.by_id.insert(id, self.list.len() - 1);
         self.list.len() - 1
     }
+    /// 带模型的分组：agent 用贡献者 id（工具 + 模型），人按人；按天、按文件的统计用它，渲染时再按工具或模型归并
+    pub fn fine(&self, i: usize) -> String {
+        let w = &self.list[i];
+        match w.kind {
+            "agent" | "human" => w.id.clone(),
+            _ => UNATTR.into(),
+        }
+    }
     /// 展示用的分组：agent 按工具，人按人
     pub fn group(&self, i: usize) -> String {
         let w = &self.list[i];

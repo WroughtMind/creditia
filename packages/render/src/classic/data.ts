@@ -1,7 +1,11 @@
 // credits.json → 展示用模型。所有形式只读这一份模型。
+import { resolveGroup, modelGroups, type Group, type GroupOpt } from '../data.ts';
+
 export interface Contributor {
   key: string;
   name: string;
+  /** 按模型分组时这一行的模型 id（key 是「工具/模型」） */
+  model?: string;
   pct: number;
   lines: number;
   /** 该工具下按新增行排序的模型 */
@@ -13,12 +17,17 @@ export interface Options {
   /** 在各形式里写出主导者（默认 false） */
   director: boolean;
   lang: 'zh' | 'en';
+  /** 分组方式，默认 auto（和新风格同一套规则） */
+  group?: GroupOpt;
 }
-export const DEFAULTS: Options = { director: false, lang: 'zh' };
+export const DEFAULTS: Options = { director: false, lang: 'zh', group: 'auto' };
 
 export interface Model {
   project: string;
   director: string;
+  group: Group;
+  /** 贡献者 id（或旧档案里的工具名）→ 当前分组 key */
+  keyOf: (id: string) => string;
   range: { from: string; to: string };
   /** 排行榜：agent（含「其他」）+ 合并的「人」+「未确认」。人不单独参与 agent 排名 */
   rows: Contributor[];
@@ -52,9 +61,11 @@ const n = (x: unknown) => (typeof x === 'number' && isFinite(x) && x > 0 ? x : 0
 export function buildModel(c: any, opt: Options = DEFAULTS): Model {
   const contribs: any[] = c.contributors ?? [];
   const byId = new Map(contribs.map((x) => [x.id, x]));
+  const group = resolveGroup(c, opt.group);
+  const mg = group === 'model' ? modelGroups(c, opt.lang) : null;
   const groupOf = (id: string) => {
     const x = byId.get(id);
-    if (x?.harness) return { key: x.harness as string, kind: 'agent' as const };
+    if (x?.harness) return { key: (mg?.keyOf(id) ?? x.harness) as string, kind: 'agent' as const };
     if (id === 'unattributed') return { key: 'unattributed', kind: 'unknown' as const };
     // 人按显示名归并：同一个人用了多个邮箱时只出一行
     const name = x?.name ?? id.replace(/^h:/, '');
@@ -66,7 +77,7 @@ export function buildModel(c: any, opt: Options = DEFAULTS): Model {
   for (const b of c.breakdown ?? []) {
     if (directors.has(b.contributor)) continue;
     const g = groupOf(b.contributor);
-    const e = acc.get(g.key) ?? { key: g.key, name: (g as any).name ?? nameOf(g.key, opt.lang), pct: 0, lines: 0, models: [], kind: g.kind };
+    const e = acc.get(g.key) ?? { key: g.key, name: (g as any).name ?? (mg && g.kind === 'agent' ? mg.name(g.key) : nameOf(g.key, opt.lang)), model: g.key.includes('/') ? g.key.slice(g.key.indexOf('/') + 1) : undefined, pct: 0, lines: 0, models: [], kind: g.kind };
     e.lines += n(b.linesAdded);
     acc.set(g.key, e);
     const model = byId.get(b.contributor)?.model;
@@ -80,7 +91,8 @@ export function buildModel(c: any, opt: Options = DEFAULTS): Model {
   const total = [...acc.values()].filter((x) => x.kind !== 'human').reduce((s, x) => s + x.lines, 0);
   for (const e of acc.values()) {
     e.pct = total ? (e.lines / total) * 100 : 0;
-    e.models = [...(modelLines.get(e.key) ?? new Map()).entries()].sort((a, b) => b[1] - a[1]).map(([m]) => (m === 'auto' ? 'Auto' : m));
+    // 按模型分组时一行就是一个模型：模型那一栏写它用的工具
+    e.models = e.model ? [nameOf(e.key.split('/')[0], opt.lang)] : [...(modelLines.get(e.key) ?? new Map()).entries()].sort((a, b) => b[1] - a[1]).map(([m]) => (m === 'auto' ? 'Auto' : m));
   }
   const unknown = acc.get('unattributed') ?? null;
   const agentsAll = [...acc.values()].filter((x) => x.kind === 'agent').sort((a, b) => b.pct - a.pct);
@@ -98,8 +110,12 @@ export function buildModel(c: any, opt: Options = DEFAULTS): Model {
   const reviewers = contribs
     .filter((x) => x.kind === 'agent' && (x.roles ?? []).length === 1 && x.roles[0] === 'reviewer')
     .map((x) => ({ key: x.harness, name: nameOf(x.harness, opt.lang), model: x.model ?? '' }));
+  const keyOf = (id: string) => {
+    if (byId.has(id) || id.startsWith('a:')) return id.startsWith('a:') && !byId.has(id) ? (mg?.keyOf(id) ?? id.slice(2).split('/')[0]) : groupOf(id).key;
+    return id;
+  };
   return {
-    project: c.project?.name ?? '',
+    project: c.project?.name ?? '', group, keyOf,
     // 不写任何人的名字：主导者和个人名单都不出现，人写的行数只作为一行合计
     director: '',
     range: { from: range.from ?? '', to: range.to ?? '' },

@@ -5,6 +5,7 @@ import type { Model, Agent } from '../data.ts';
 import { fmt, pct, compact } from '../data.ts';
 import type { Style, Box } from '../style.ts';
 import { T, colorOf, tip, canvas, handTip, type PieceOpts } from './common.ts';
+import { segsOf, segTip } from './tier.ts';
 
 /** 图的外框：标签 + 标题 + 图例，返回绘图区 */
 function frame(m: Model, st: Style, W: number, plotH: number, kicker: string, title: string, legend = true): { s: Scene; p: Box } {
@@ -37,10 +38,13 @@ const orderKeys = (m: Model, keys: Iterable<string>) => [...new Set(keys)].sort(
 
 // ───────────────────────── 环形 ─────────────────────────
 
+export const DONUT_VARIANTS = ['ring', 'nested'];
+
 export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
+  if (o.variant === 'nested') return nested(m, st, o);
   if (!m.rows.length) return null;
   const t = o.t ?? 1;
-  const { s, p } = frame(m, st, 1000, 640, T(m, '占比', 'SHARE'), T(m, '各工具写了多少', 'Who wrote the code'));
+  const { s, p } = frame(m, st, 1000, 640, T(m, '占比', 'SHARE'), m.group === 'model' ? T(m, '各模型写了多少', 'Who wrote the code') : T(m, '各工具写了多少', 'Who wrote the code'));
   const cx = p.x + p.w * 0.36, cy = p.y + p.h / 2, R1 = 270, R0 = 170;
   let a0 = -Math.PI / 2;
   m.rows.forEach((a, i) => {
@@ -61,6 +65,58 @@ export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
     st.num(s, pct(a.pct), p.x + p.w, y, 18, 'end', { fill: st.c.soft });
     s.hit(p.x + p.w * 0.72, y - 26, p.w * 0.28, 40, tip(m, a));
     y += 62;
+  }
+  return s;
+}
+
+/** 内外环：内环是工具，外环是各工具下的模型，和内环对齐 */
+function nested(m: Model, st: Style, o: PieceOpts): Scene | null {
+  if (!m.tools.length) return null;
+  const t = o.t ?? 1;
+  const { s, p } = frame(m, st, 1000, 640, T(m, '占比', 'SHARE'), T(m, '工具和模型', 'Tools and models'), false);
+  const cx = p.x + p.w * 0.31, cy = p.y + p.h / 2;
+  const [Ri0, Ri1, Ro0, Ro1] = [140, 200, 208, 262];
+  let a0 = -Math.PI / 2;
+  m.tools.forEach((a, i) => {
+    const sweep = (a.pct / 100) * Math.PI * 2 * ease(t, i, m.tools.length, 0.8);
+    const gap = Math.min(0.012, sweep / 4);
+    const unk = a.key === 'unattributed';
+    if (sweep > 0) s.add(path(arc(cx, cy, Ri1, Ri0, a0 + gap, a0 + sweep - gap), { fill: unk ? st.hatch(s) : colorOf(st, a) }));
+    const mid = a0 + sweep / 2;
+    s.hit(cx + Math.cos(mid) * (Ri0 + Ri1) / 2 - 26, cy + Math.sin(mid) * (Ri0 + Ri1) / 2 - 26, 52, 52, tip(m, a));
+    // 外环：这一段按模型再切
+    let b0 = a0;
+    for (const q of segsOf(m, st, a)) {
+      const sw = sweep * (q.lines / Math.max(1, a.lines));
+      const gg = Math.min(0.01, sw / 4);
+      if (sw > 0) s.add(path(arc(cx, cy, Ro1, Ro0, b0 + gg, b0 + sw - gg), { fill: unk ? st.hatch(s) : q.color }));
+      const qm = b0 + sw / 2;
+      if (sw > 0.04) s.hit(cx + Math.cos(qm) * (Ro0 + Ro1) / 2 - 22, cy + Math.sin(qm) * (Ro0 + Ro1) / 2 - 22, 44, 44, segTip(m, a, q));
+      b0 += sw;
+    }
+    a0 += sweep;
+  });
+  st.num(s, fmt(m.linesAdded), cx, cy + 6, 40, 'middle');
+  s.text(T(m, '行', 'lines'), cx, cy + 40, { font: st.f.body, size: 17, fill: st.c.soft, anchor: 'middle' });
+  // 右侧：工具一行，下面缩进写它的模型
+  const lx = p.x + p.w * 0.68, rx = p.x + p.w;
+  let y = p.y + 40;
+  for (const a of m.tools) {
+    if (y > p.y + p.h) break;
+    st.mark(s, a.key, lx + 10, y - 8, 24);
+    s.text(a.name, lx + 32, y, { font: st.f.body, size: 18, fill: st.c.ink, maxW: rx - lx - 110 });
+    st.num(s, pct(a.pct), rx, y, 18, 'end', { fill: st.c.soft });
+    s.hit(lx - 4, y - 24, rx - lx + 8, 34, tip(m, a));
+    y += 34;
+    const segs = segsOf(m, st, a);
+    if (segs.length > 1) for (const q of segs) {
+      s.add(rect(lx + 32, y - 11, 10, 10, { fill: q.color, rx: Math.min(2, st.radius) }));
+      s.text(q.name, lx + 50, y, { font: st.f.body, size: 14, fill: st.c.soft, maxW: rx - lx - 120 });
+      s.text(pct(q.pct), rx, y, { font: st.f.body, size: 14, fill: st.c.soft, anchor: 'end' });
+      s.hit(lx + 28, y - 18, rx - lx - 28, 26, segTip(m, a, q));
+      y += 26;
+    }
+    y += 16;
   }
   return s;
 }
@@ -139,7 +195,7 @@ export function lanes(m: Model, st: Style, o: PieceOpts): Scene | null {
   const t = o.t ?? 1;
   const keys = orderKeys(m, ss.map((x) => x.key));
   const laneH = 64;
-  const { s, p } = frame(m, st, 1400, keys.length * laneH, T(m, '会话', 'SESSIONS'), T(m, '各工具的会话', 'Sessions by tool'), false);
+  const { s, p } = frame(m, st, 1400, keys.length * laneH, T(m, '会话', 'SESSIONS'), m.group === 'model' ? T(m, '各模型的会话', 'Sessions by model') : T(m, '各工具的会话', 'Sessions by tool'), false);
   const t0 = Math.min(...ss.map((x) => x.start)), t1 = Math.max(...ss.map((x) => x.end));
   const X = (v: number) => p.x + 170 + ((v - t0) / Math.max(1, t1 - t0)) * (p.w - 170);
   keys.forEach((k, li) => {

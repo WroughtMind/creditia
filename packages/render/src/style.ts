@@ -3,6 +3,7 @@
 import { Scene, el, g, rect, path, circle, line, r, esc, measure, mix, alpha, lum, type FontSpec, type Attrs } from './svg.ts';
 import { LOGOS } from './logos.ts';
 import type { Model } from './data.ts';
+import { SHADES } from './data.ts';
 
 export interface Box { x: number; y: number; w: number; h: number }
 export interface Palette {
@@ -64,8 +65,18 @@ export const BRAND: Record<string, string> = {
   windsurf: '#0FBF8F', trae: '#FF4D4F', crush: '#6B50FF', goose: '#1A1A1A', continue: '#3B3B3B', zed: '#084CCF', 'amazon-q': '#8C4FFF', antigravity: '#3279F9', deepseek: '#4D6BFE', 'github-actions': '#2088FF', devin: '#1F2937', jules: '#7C5CFF',
 };
 
-/** 画 logo；没有 logo 的工具画首字母 */
+/** 品牌色：按模型分组时 key 是「工具/模型」，同一工具的第二、三个模型在品牌色上依次调深、调浅 */
+export function brandOf(key: string): string | undefined {
+  const i = key.indexOf('/');
+  const b = BRAND[i < 0 ? key : key.slice(0, i)];
+  if (!b || i < 0) return b;
+  const k = SHADES.get(key) ?? 0;
+  return k === 0 ? b : mix(b, k % 2 ? '#000000' : '#FFFFFF', Math.min(0.6, 0.28 + 0.14 * Math.floor((k - 1) / 2)));
+}
+
+/** 画 logo；没有 logo 的工具画首字母。按模型分组时 key 是「工具/模型」，画工具的 logo */
 export function logo(key: string, cx: number, cy: number, size: number, fill: string, font: FontSpec = { family: 'Inter, Noto Sans SC', weight: 700 }): string {
+  key = key.split('/')[0];
   const lg = LOGOS[LOGO_OF[key] ?? ''];
   if (lg) {
     const [, , vw, vh] = lg.vb.split(/\s+/).map(Number);

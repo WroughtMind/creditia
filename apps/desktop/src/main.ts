@@ -5,7 +5,7 @@ import { nameOf } from '../../../packages/render/src/data.ts';
 import { creditsBlock, mergeCreditsMd } from '../../../packages/render/src/classic/text.ts';
 import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts';
 import { INTERACT_CSS, mountHits } from '../../../packages/render/src/interact.ts';
-import { KITS, CLASSIC_COUNT, kitById, bootKits, type Kit } from './kits.ts';
+import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, groupOf, hasModels, type Kit } from './kits.ts';
 import { exportArt, type Format } from './engine.ts';
 import { LOGO_SVG } from './logo.ts';
 
@@ -120,6 +120,7 @@ async function openProject(p: any) {
   const seq = ++state.openSeq;
   state.current = p; store.set('project', p.id);
   state.raw = null; state.model = null; state.arts.clear(); state.variants = {};
+  $('#group').hidden = true;
   ++state.token; // 让正在画的旧项目停下
   $('#board').innerHTML = '';
   $('#pname').textContent = p.name; $('#pmeta').textContent = L('读取中…', 'Loading…');
@@ -137,6 +138,7 @@ async function openProject(p: any) {
   stampOf = await st;
   state.raw = raw;
   $('#empty').hidden = true; emptyView = null;
+  setGroup(groupPref());
   rebuildModel();
   await paint();
 }
@@ -171,10 +173,37 @@ addEventListener('focus', refreshIfChanged);
 document.addEventListener('visibilitychange', refreshIfChanged);
 setInterval(refreshIfChanged, 30000);
 function rebuildModel() {
-  state.model = buildModel(state.raw, { director: false, lang: state.lang });
+  state.model = buildModel(state.raw, { director: false, lang: state.lang, group: groupPref() });
   const m = state.model;
   $('#pname').textContent = m.project || state.current?.name;
   $('#pmeta').textContent = `${fmt(m.commits)} ${L('次提交', 'commits')} · ${fmt(m.linesAdded)} ${L('行', 'lines')}`;
+  renderGroup();
+}
+
+// ───────────────────────── 分组：按工具 / 按模型 ─────────────────────────
+// 默认「自动」：一个工具占了绝大部分、下面又有几个模型时自动按模型分。点一下就钉住这个项目的选择，
+// 「↺ 自动」随时切回去。档案里一个模型都没记下就不显示。
+type GroupPref = 'auto' | 'tool' | 'model';
+const groupPref = (): GroupPref => { const g = state.current ? store.get('group.' + state.current.id) : null; return g === 'tool' || g === 'model' ? g : 'auto'; };
+function renderGroup() {
+  const el = $('#group');
+  if (!state.raw || !hasModels(state.raw)) { el.hidden = true; return; }
+  const pref = groupPref(), now = groupOf(state.raw);
+  const auto = pref === 'auto';
+  el.hidden = false;
+  el.setAttribute('aria-label', L('分组方式', 'Group by'));
+  el.innerHTML = (['tool', 'model'] as const).map((g) => `<button data-g="${g}" class="${g === now ? 'on' : ''}" aria-pressed="${g === now}">${g === 'tool' ? L('按工具', 'By tool') : L('按模型', 'By model')}</button>`).join('')
+    + (auto ? `<span class="auto" title="${L('按档案自动选的，点左边可以改', 'Picked automatically from the credits — click to change')}">${L('自动', 'Auto')}</span>`
+            : `<button data-g="auto" class="back" title="${L('交给 creditia 自动选', 'Let creditia pick')}">↺ ${L('自动', 'Auto')}</button>`);
+  el.querySelectorAll<HTMLElement>('button').forEach((b) => (b.onclick = () => pickGroup(b.dataset.g as GroupPref)));
+}
+async function pickGroup(g: GroupPref) {
+  const p = state.current; if (!p || !state.raw) return;
+  if (g === groupPref() && g !== 'auto') return;
+  try { if (g === 'auto') localStorage.removeItem('creditia.group.' + p.id); else store.set('group.' + p.id, g); } catch { /* 没有存储也能用 */ }
+  setGroup(g);
+  rebuildModel();
+  await paint();
 }
 
 // ───────────────────────── 展墙 ─────────────────────────
@@ -188,7 +217,7 @@ let cacheRaw: any = null, cacheTotal = 0;
 const CACHE_MAX = 32e6; // SVG 字符数
 function drawArt(id: string, variant?: string): Promise<Art | null> {
   if (cacheRaw !== state.raw) { cache.clear(); cacheLen.clear(); cacheTotal = 0; cacheRaw = state.raw; }
-  const key = `${state.style.id}|${state.lang}|${id}|${variant ?? ''}`;
+  const key = `${state.style.id}|${state.lang}|${groupPref()}|${id}|${variant ?? ''}`;
   let hit = cache.get(key);
   if (hit) { cache.delete(key); cache.set(key, hit); return hit; } // 挪到最近用过
   hit = state.style.render(state.raw, state.lang, id, variant);

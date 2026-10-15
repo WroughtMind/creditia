@@ -6,7 +6,8 @@ import { deflateSync } from 'node:zlib';
 import { buildModel, STYLES, PIECES, art, frames, raster } from '../src/index.ts';
 import { makeExporter, sized } from '../src/export.ts';
 import { creditsBlock, fetchSegs } from '../src/text.ts';
-import { hanzi, modelName } from '../src/data.ts';
+import { hanzi, modelName, resolveGroup } from '../src/data.ts';
+import * as C from '../src/classic/data.ts';
 import { creditsOf } from '../src/pieces/roll.ts';
 
 const raw = JSON.parse(readFileSync(new URL('../fixtures/lumen.json', import.meta.url), 'utf8'));
@@ -102,4 +103,68 @@ test('银幕滚动的 GIF：取景框扫过整张字幕', () => {
   assert.ok(fr.length > 30);
   assert.equal(fr[0].h, Math.round((1080 * 9) / 16));
   assert.notEqual(fr[0].svg, fr[fr.length - 1].svg);
+});
+
+// ───────────────────────── 按模型分组 ─────────────────────────
+
+/** 只留一个工具（Claude Code，两个模型） */
+const single = (() => {
+  const one = structuredClone(raw);
+  const keep = new Set(one.contributors.filter((c: any) => c.harness === 'claude-code' || c.kind !== 'agent').map((c: any) => c.id));
+  one.contributors = one.contributors.filter((c: any) => keep.has(c.id));
+  one.breakdown = one.breakdown.filter((b: any) => keep.has(b.contributor));
+  return one;
+})();
+
+test('分组：多个工具时 auto 按工具；一个工具占九成以上、下面有两个模型时按模型；指定的照办', () => {
+  assert.equal(resolveGroup(raw), 'tool');
+  assert.equal(m.group, 'tool');
+  assert.equal(resolveGroup(single), 'model');
+  const ms = buildModel(single);
+  assert.equal(ms.group, 'model');
+  assert.ok(ms.groupAuto);
+  assert.deepEqual(ms.rows.filter((r) => r.kind === 'agent').map((r) => r.name), ['Claude Opus 5.5', 'Claude Fable 5.1']);
+  assert.equal(buildModel(single, { group: 'tool' }).group, 'tool');
+  assert.equal(buildModel(raw, { group: 'model' }).group, 'model');
+});
+
+test('按模型分组：key 是「工具/模型」，占比合计不变，按工具的排名还在 tools 里，两套渲染器数字一致', () => {
+  const mm = buildModel(raw, { group: 'model' });
+  assert.ok(mm.rows.some((r) => r.key === 'claude-code/claude-opus-5-5' && r.tool === 'claude-code' && r.toolName === 'Claude Code'));
+  const sum = mm.rows.reduce((s, r) => s + r.pct, 0);
+  assert.ok(Math.abs(sum - 100) < 0.5, `占比合计 ${sum}`);
+  assert.deepEqual(mm.tools.map((r) => r.key), m.rows.map((r) => r.key));
+  // 按周、按天的 key 也换成了模型
+  assert.ok(mm.weeks.some((w) => 'claude-code/claude-fable-5-1' in w.by));
+  const cm = C.buildModel(raw, { director: false, lang: 'zh', group: 'model' });
+  for (const r of mm.rows) {
+    const c = cm.rows.find((x) => x.key === r.key);
+    assert.ok(c, r.key);
+    assert.ok(Math.abs(c!.pct - r.pct) < 0.05, `${r.key}: ${c!.pct} vs ${r.pct}`);
+  }
+});
+
+test('按模型分组：每种作品在每种风格下都能出图；英文里没有中日文；分段、分组、内外环也能画按工具的', () => {
+  const mm = buildModel(single, { lang: 'en' });
+  for (const st of STYLES) {
+    for (const [id, p] of Object.entries(PIECES)) {
+      for (const v of p.variants ?? [undefined]) {
+        const a = art(id, mm, st, { variant: v });
+        assert.ok(a && !/NaN|undefined/.test(a.svg), `${id}/${v}/${st.id}`);
+        const left = (a!.svg.replace(/<[^>]+>/g, ' ') + JSON.stringify(a!.hits)).match(/[　-鿿＀-￯]+/g);
+        assert.equal(left, null, `${id}/${v}/${st.id}: ${left}`);
+      }
+    }
+  }
+  for (const [id, v] of [['tier', 'split'], ['tier', 'grouped'], ['donut', 'nested']]) {
+    const a = art(id, m, STYLES[0], { variant: v })!;
+    assert.ok(a.hits.some((h) => /Claude Fable 5\.1/.test(JSON.stringify(h))), `${id}/${v} 没有分出模型`);
+  }
+});
+
+test('旧档案：按天、按文件的 key 是工具名时，按模型分组也能画', () => {
+  const old = structuredClone(single);
+  for (const d of old.days ?? []) d.by = Object.fromEntries(Object.entries(d.by).map(([k, v]) => [k.startsWith('a:') ? k.slice(2).split('/')[0] : k, v]));
+  const mm = buildModel(old);
+  for (const id of ['calendar', 'mosaic', 'codemap']) assert.ok(art(id, mm, STYLES[0], {}), id);
 });

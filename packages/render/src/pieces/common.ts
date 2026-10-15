@@ -21,8 +21,8 @@ export const colorOf = (st: Style, a: Agent) => st.color(a.key, a.rank);
 export const fillOf = (s: Scene, st: Style, a: Agent) => (a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a));
 export const tip = tipOf;
 
-/** 模型名一行：最多三个 */
-export const modelLine = (a: Agent, n = 3) => a.models.slice(0, n).map((x) => x.name).join(' · ') + (a.models.length > n ? ` +${a.models.length - n}` : '');
+/** 模型名一行：最多三个。按模型分组时这一行本身就是模型，写它用的工具 */
+export const modelLine = (a: Agent, n = 3) => a.model ? a.toolName : a.models.slice(0, n).map((x) => x.name).join(' · ') + (a.models.length > n ? ` +${a.models.length - n}` : '');
 
 /** 人做了什么：只写数字。v 是数字，k 是放在数字下面的短标签，text 是放进一句话里的说法 */
 export function handFacts(m: Model): { v: string; k: string; text: string }[] {

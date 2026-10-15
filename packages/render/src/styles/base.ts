@@ -1,5 +1,5 @@
 // 基础三套：极简（白）、暗室（黑）、液态玻璃。克制、干净，品牌色只出现在 logo 和玻璃的光里。
-import { defineStyle, grain, linear, radial, blur, BRAND, logo, type Style } from '../style.ts';
+import { defineStyle, grain, linear, radial, blur, brandOf, logo, type Style } from '../style.ts';
 import { el, g, rect, circle, line, r, mix, alpha } from '../svg.ts';
 
 const SANS = 'Inter, Noto Sans SC';
@@ -58,7 +58,7 @@ export const glass: Style = defineStyle({
   dot: () => `<defs><radialGradient id="gd" cx=".3" cy=".3" r=".9"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#C9D4FF"/><stop offset="1" stop-color="#FFD3C2"/></radialGradient></defs><circle cx="12" cy="12" r="11" fill="url(#gd)"/><circle cx="12" cy="12" r="10.4" fill="none" stroke="#FFFFFF" stroke-opacity=".9" stroke-width="1.2"/><ellipse cx="9" cy="7.5" rx="5" ry="2.4" fill="#FFFFFF" fill-opacity=".75"/>`,
   ground(s, b, m) {
     s.bg = glass.c.bg;
-    const cols = m.rows.filter((x) => x.kind === 'agent').slice(0, 3).map((x) => BRAND[x.key] ?? '#8EA2FF');
+    const cols = m.rows.filter((x) => x.kind === 'agent').slice(0, 3).map((x) => brandOf(x.key) ?? '#8EA2FF');
     while (cols.length < 3) cols.push(['#8EA2FF', '#FFB38E', '#7FE0C8'][cols.length]);
     s.add(rect(b.x, b.y, b.w, b.h, { fill: linear(s, 'gl-bg', [[0, '#F3F4F8'], [1, '#E4E8F0']]) }));
     const orbs = g({ id: s.id + '-orbs' },
@@ -96,11 +96,12 @@ export const glass: Style = defineStyle({
     if (key === 'unattributed') return glass.c.faint;
     if (key === 'other') return '#B8BDC8';
     if (key === 'human') return '#5B6170';
-    return BRAND[key] ? mix(BRAND[key], '#FFFFFF', 0.08) : glass.series[Math.min(rank, 5)];
+    const b = brandOf(key);
+    return b ? mix(b, '#FFFFFF', 0.08) : glass.series[Math.min(rank, 5)];
   },
   mark(s, key, cx, cy, size) {
     if (key === 'unattributed') { s.add(circle(cx, cy, size * 0.3, { fill: 'none', stroke: glass.c.faint, strokeWidth: 1.4, strokeDasharray: '2.5 2.5' })); return; }
-    const c = BRAND[key] ?? '#5B6170';
+    const c = brandOf(key) ?? '#5B6170';
     s.add(circle(cx, cy, size * 0.62, { fill: '#FFFFFF', opacity: 0.7 }));
     s.add(circle(cx, cy, size * 0.62, { fill: alpha(c, 0.14), stroke: '#FFFFFF', strokeWidth: 1.2 }));
     s.add(logo(key, cx, cy, size * 0.62, c));

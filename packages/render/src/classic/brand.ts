@@ -1,6 +1,8 @@
 // 各家 logo 与熟悉的品牌色；版式家族给贡献方一套家族化的填充。
 import type { Theme } from './themes.ts';
 import { LOGOS } from '../logos.ts';
+import { SHADES } from '../data.ts';
+import { mix } from '../svg.ts';
 
 interface Brand { logo?: string; color: string; onDark?: string }
 export const BRANDS: Record<string, Brand> = {
@@ -42,7 +44,8 @@ export function useLogoSource(s: LogoSource) { source = s; }
 
 const svgCache = new Map<string, string | null>();
 export function logoSvg(key: string): string | null {
-  const b = BRANDS[key];
+  // 按模型分组时 key 是「工具/模型」：用工具的标志
+  const b = BRANDS[key.split('/')[0]];
   if (!b?.logo) return null;
   if (!svgCache.has(b.logo)) svgCache.set(b.logo, source?.svg(b.logo) ?? null);
   return svgCache.get(b.logo)!;
@@ -66,9 +69,12 @@ function b64(s: string) {
 /** 品牌色。photographs、embed 里也用这份。 */
 export function colorOf(key: string, t: Theme, rank = 0): string {
   if (key === 'unattributed' || key === 'other') return t.faint;
-  const b = BRANDS[key];
+  const b = BRANDS[key.split('/')[0]];
   if (!b) return t.soft;
-  return t.dark && b.onDark ? b.onDark : b.color;
+  const base = t.dark && b.onDark ? b.onDark : b.color;
+  // 同一工具的第二、三个模型：在品牌色上依次调深、调浅（和新风格同一规则）
+  const k = key.includes('/') ? SHADES.get(key) ?? 0 : 0;
+  return k === 0 ? base : mix(base, k % 2 ? '#000000' : '#FFFFFF', Math.min(0.6, 0.28 + 0.14 * Math.floor((k - 1) / 2)));
 }
 
 // 家族色阶：片尾字幕是奶油色、杂志是黑、单色是灰阶；其余家族用各家品牌色
