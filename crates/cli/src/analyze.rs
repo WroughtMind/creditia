@@ -237,6 +237,8 @@ pub fn staged(repo: &Path) -> Result<(Vec<(String, usize)>, usize), String> {
     // 这次提交的作者和时间：和 git 自己用的一样（认 GIT_AUTHOR_DATE、--date）
     let ident = ad::git::git(repo, &["var", "GIT_AUTHOR_IDENT"]);
     let email = ident.split_once('<').and_then(|(_, r)| r.split_once('>')).map(|(e, _)| e.trim().to_lowercase()).unwrap_or_default();
+    // 没配身份时 git var 会报错：只为拿时间再问一次
+    let ident = if ident.trim().is_empty() { ad::git::git(repo, &["-c", "user.name=-", "-c", "user.email=-", "var", "GIT_AUTHOR_IDENT"]) } else { ident };
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
     let ts = ident.rsplit_once('>').and_then(|(_, r)| r.split_whitespace().next()?.parse().ok()).unwrap_or(now);
     let c = ad::git::staged_commit(repo, &email, ts);
