@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { art, frames as classicFrames, animatedClassic, buildModel, FORMS, themeById, raster, type Model, type Theme } from '../../render/src/classic/index.ts';
 import { ORDERED_THEMES, themeDot, themeName, themeNote, pieceName, pieceQ, variantName } from '../../render/src/classic/catalog.ts';
 import { makeExporter, sized, SIZES, FORMATS, type Art } from '../../render/src/export.ts';
-import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, commitsComment, mergeMarked, fetchSegs, stampedComment, type Stamped } from '../../render/src/text.ts';
+import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, commitsComment, mergeMarked, fetchSegs, stampedComment, shieldsBadge, badgeShares, stampedBadgeShares, type Stamped } from '../../render/src/text.ts';
 import { BRAND } from '../../render/src/style.ts';
 import * as V2 from '../../render/src/index.ts';
 import { BRIDGED } from '../../render/src/classic/bridge.ts';
@@ -69,6 +69,7 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   doc            [--out CREDITS.md]                     生成或更新 CREDITS.md（只改标记区间）
   release-notes  <tag|unreleased> [--into 说明.md]      该版本的 credits 段落；--into 时放进已有说明，输出整篇
   pr-comment     <N> | --commits a,b,c                  该 PR（或这几个提交）的一句话归因
+  badge-json     [--out badge.json]                     shields.io 动态徽章的数据（没有档案时读提交盖章）
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
                  [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group auto|tool|model] [--out FILE]
   export         --list                                 全部作品、版式、风格、格式
@@ -104,6 +105,7 @@ Credits and pieces
   doc            [--out CREDITS.md]                     write or update CREDITS.md (only between the markers)
   release-notes  <tag|unreleased> [--into notes.md]     the credits paragraph for a version; with --into, merged into existing notes
   pr-comment     <N> | --commits a,b,c                  a one-line attribution for a PR (or for these commits)
+  badge-json     [--out badge.json]                     data for a shields.io dynamic badge (reads commit stamps when there are no credits)
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
                  [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group auto|tool|model] [--out FILE]
   export         --list                                 every piece, layout, style and format
@@ -285,7 +287,7 @@ async function main() {
   const top = sh(path.resolve(flags.repo ?? process.cwd()), ['rev-parse', '--show-toplevel']);
   const hasCredits = !!flags.credits || (!!top && (existsSync(path.join(top, '.creditia/credits.json')) || existsSync(path.join(top, 'credits.json'))));
   // CI 里写 PR 评论、Release 说明：没有档案时读提交盖章，不用核心
-  const stampsOnly = (cmd === 'pr-comment' && flags.commits !== undefined) || (cmd === 'release-notes' && flags.into !== undefined);
+  const stampsOnly = (cmd === 'pr-comment' && flags.commits !== undefined) || (cmd === 'release-notes' && flags.into !== undefined) || cmd === 'badge-json';
   if (PASS.has(cmd) || on.has('refresh') || (!hasCredits && !on.has('list') && !stampsOnly)) coreBin = await ensureCore();
   if (PASS.has(cmd)) process.exit(core(argv).code);
   switch (cmd) {
@@ -325,6 +327,12 @@ async function main() {
       const s = prComment(textModel(raw), id);
       if (!s) die(L(`没有找到 ${id}`, `not found: ${id}`));
       return write(flags.out, s);
+    }
+    case 'badge-json': {
+      // shields.io endpoint 徽章：有档案用档案，没有（CI 里）就汇总全部提交上的盖章
+      const repo = repoOf(), raw = existingCredits(repo);
+      const shares = raw ? badgeShares(textModel(raw)) : stampedBadgeShares(stampedOf(repo, ['HEAD'], true));
+      return write(flags.out, JSON.stringify(shieldsBadge(shares, LANG())) + '\n');
     }
     case 'export': return exportCmd();
     case 'board': return boardCmd();
@@ -441,6 +449,8 @@ async function siteCmd() {
     return exOf(l).html(arts, { title: `${m.project} · credits · ${lookName(l, lang)}`, lang, bg: lookBg(l), note: `${m.project} · ${lookName(l, lang)}` }).replace('<body', `<body style="color:${lookDark(l) ? '#eee' : '#111'}"`).replace(/(<body[^>]*>)/, `$1${nav(lookId(l))}`);
   };
   writeFileSync(path.join(out, 'index.html'), await page(main, boardIds(main)));
+  // 动态徽章：README 里用 https://img.shields.io/endpoint?url=<网站地址>/badge.json
+  writeFileSync(path.join(out, 'badge.json'), JSON.stringify(shieldsBadge(badgeShares(textModel(raw)), lang)) + '\n');
   for (const l of LOOKS) if (lookId(l) !== lookId(main)) writeFileSync(path.join(out, `${lookId(l)}.html`), await page(l, ['share', 'tier', 'roll', 'receipt']));
   if (json) console.log(JSON.stringify({ path: out, pages: LOOKS.length }));
   else console.error(L(`→ ${out}/index.html（${LOOKS.length} 页）`, `→ ${out}/index.html (${LOOKS.length} pages)`));

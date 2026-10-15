@@ -17,6 +17,9 @@ inputs:
   badge:
     description: 徽章写到哪里（留空不生成），例如 assets/credits-badge.svg
     default: ''
+  badge-json:
+    description: 动态徽章的数据写到哪里（留空不生成），例如 badge.json。README 里用 https://img.shields.io/endpoint?url=<这个文件的地址>；没有 credits.json 时读提交盖章。site 目录里总会带一份 badge.json
+    default: ''
   doc:
     description: CREDITS.md 写到哪里（留空不生成）
     default: ''
@@ -56,10 +59,12 @@ runs:
         LANG_CT: ${{ inputs.lang }}
         GROUP: ${{ inputs.group }}
         BADGE: ${{ inputs.badge }}
+        BADGE_JSON: ${{ inputs.badge-json }}
         DOC: ${{ inputs.doc }}
         SITE: ${{ inputs.site }}
       run: |
         set -e
+        if [ -n "$BADGE_JSON" ]; then $CT badge-json --credits "$CREDITS" --lang "$LANG_CT" --group "$GROUP" --out "$BADGE_JSON"; fi
         if [ ! -f "$CREDITS" ]; then
           # 只写 PR 评论、Release 说明时不需要 credits.json（读提交盖章）
           if [ -z "$BADGE$DOC$SITE" ]; then exit 0; fi

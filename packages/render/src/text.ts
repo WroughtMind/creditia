@@ -2,6 +2,7 @@
 import type { Model } from './data.ts';
 import { fmt, pct, compact, nameOf, modelName } from './data.ts';
 import { handFacts, peopleNames } from './pieces/common.ts';
+import { BRAND } from './style.ts';
 
 export const MARK_START = '<!-- creditia:start -->';
 export const MARK_END = '<!-- creditia:end -->';
@@ -139,6 +140,29 @@ export function stampedComment(cs: Stamped[], lang: 'zh' | 'en'): string {
   if (!parts.length) return '';
   const note = lang === 'zh' ? `按提交盖章：新增 ${fmt(total)} 行里各工具写的` : `from commit stamps: shares of ${fmt(total)} lines added`;
   return `**creditia** · ${parts.join(' · ')}\n<sub>${note}</sub>\n`;
+}
+
+/** shields.io 的 endpoint 徽章：README 里写 `https://img.shields.io/endpoint?url=<这份 JSON 的地址>`，JSON 更新了徽章就跟着变 */
+const SHIELDS_LOGO: Record<string, string> = { 'claude-code': 'claude', codex: 'openai', cursor: 'cursor', gemini: 'googlegemini', copilot: 'githubcopilot', windsurf: 'windsurf', zed: 'zedindustries' };
+export function shieldsBadge(shares: [string, number][], lang: 'zh' | 'en'): object {
+  const top = shares.filter(([, p]) => p >= 0.5).slice(0, 2);
+  const tool = top[0]?.[0].split('/')[0] ?? '';
+  const name = (k: string) => { const [t, mdl] = k.split('/'); return mdl ? `${nameOf(t, lang)} (${modelName(mdl)})` : nameOf(t, lang); };
+  return {
+    schemaVersion: 1,
+    label: lang === 'zh' ? 'AI 参与' : 'written with',
+    message: top.length ? top.map(([k, p]) => `${name(k)} ${Math.round(p)}%`).join(' · ') : lang === 'zh' ? '暂无' : 'none yet',
+    color: (BRAND[tool] ?? '#555555').replace('#', ''),
+    ...(SHIELDS_LOGO[tool] ? { namedLogo: SHIELDS_LOGO[tool], logoColor: 'white' } : {}),
+    cacheSeconds: 3600,
+  };
+}
+/** 从档案：各工具（按当前分组）的占比 */
+export const badgeShares = (m: Model): [string, number][] => m.rows.filter((a) => a.kind === 'agent').map((a) => [a.model ? `${a.tool}/${a.model}` : a.tool, a.pct]);
+/** 从提交盖章 */
+export function stampedBadgeShares(cs: Stamped[]): [string, number][] {
+  const { by, total } = stampedShares(cs);
+  return total ? by.map(([k, n]) => [k, (n / total) * 100]) : [];
 }
 
 /** 把一段署名放进已有的文字（Release 说明、PR 评论）：有标记就换掉标记之间的，没有就接在后面 */

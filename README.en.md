@@ -86,6 +86,8 @@ See them all side by side on the [website's style wall](https://wroughtmind.gith
 
 **GitHub Action** — CI can't see anyone's agent logs, so analysis runs locally: `creditia publish` writes the record to `credits.json` at the repo root; commit it. On every push the Action redraws the credits page from it, and can also write a badge (`badge:`) and CREDITS.md (`doc:`). It can put each release's credits into its release notes (`release-notes: true`) and comment a PR's credits on it, updated on every push (`pr-comment: true`); `creditia release install` writes that workflow for you. Those two don't need credits.json: with commit stamps on, every commit carries a `Creditia-Lines` trailer (lines per tool, computed locally at commit time, no code), and that's all CI reads.
 
+**Dynamic badge** — the credits site (`site:`) always includes a `badge.json`. Publish it to GitHub Pages and put `![credits](https://img.shields.io/endpoint?url=https://<user>.github.io/<repo>/badge.json)` in your README; the badge follows every push. On its own: `creditia badge-json --out badge.json`, or `badge-json:` in the Action. Without credits.json it sums the stamps on all commits.
+
 ```yaml
 # .github/workflows/credits.yml
 on: { push: { branches: [main] } }

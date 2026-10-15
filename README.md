@@ -86,6 +86,8 @@ creditia 只回答「哪些 AI 工具和模型写了多少」：作品里不出�
 
 **GitHub Action**　CI 里看不到任何 agent 的日志，所以分析在本机做：`creditia publish` 把档案写到仓库根目录的 `credits.json`，提交上去；之后每次推送，Action 用它重画署名页，也可以顺带生成徽章（`badge:`）和 CREDITS.md（`doc:`）。发 Release 时把这一版的署名写进说明（`release-notes: true`）、在 PR 上评论这个 PR 的署名并随推送更新（`pr-comment: true`）：`creditia release install` 直接写好这份 workflow。这两项不需要 credits.json：打开提交盖章后，每次提交都会带上一行 `Creditia-Lines`（各工具写了几行，在本机提交时算好，不含代码），CI 读它就够了。
 
+**动态徽章**　署名网站（`site:`）里总会带一份 `badge.json`；发布到 GitHub Pages 后，README 里放 `![credits](https://img.shields.io/endpoint?url=https://<用户>.github.io/<仓库>/badge.json)`，每次推送徽章跟着变。也可以单独生成：`creditia badge-json --out badge.json`，Action 里是 `badge-json:`；没有 credits.json 时它汇总全部提交上的盖章。
+
 ```yaml
 # .github/workflows/credits.yml
 on: { push: { branches: [main] } }
