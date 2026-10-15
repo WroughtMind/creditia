@@ -95,6 +95,17 @@ pub fn line_key(rel: &str, norm: &str) -> u32 {
     murmur_js(&format!("{rel}:+{norm}"))
 }
 
+/// 过短的行（`}`、空行）本身的哈希；0 留给长行
+pub fn short_hash(norm: &str) -> u32 {
+    murmur_js(&format!("short:{norm}")).max(1)
+}
+
+/// 过短的行靠它旁边的长行定位：`anchor` 是同一段里它上面（dir = 'v'）或下面（dir = '^'）最近的长行，
+/// `ord` 是从那一行数过来第几个短行。一次写入里 `}` 跟在哪一行后面，提交里也一样，才对得上
+pub fn short_key(rel: &str, anchor: u32, dir: char, ord: usize, short: u32) -> u32 {
+    murmur_js(&format!("{rel}:{dir}{anchor}:{ord}:{short}")).max(1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

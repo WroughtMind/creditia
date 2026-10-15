@@ -17,7 +17,7 @@ pub mod opencode;
 pub mod others;
 pub mod trae;
 
-use creditia_core::hash::{ext_of, line_key, normalize};
+use creditia_core::hash::{ext_of, line_key, normalize, short_hash, short_key};
 use creditia_core::model::{Ev, PathMap, Src};
 use rusqlite::{Connection, OpenFlags};
 use std::path::{Path, PathBuf};
@@ -142,10 +142,38 @@ pub fn shell_targets(cmd: &str, cwd: &str, pm: &PathMap) -> Vec<String> {
 /// 把一段文本记成某个仓库内相对路径的证据（push_text 的相对路径版）
 pub fn push_rel(out: &mut Vec<Ev>, rel: &str, text: &str, src: Src, model: &str, session: &str, ts: i64) {
     let ext = ext_of(rel);
-    for line in text.lines() {
-        let n = normalize(line, &ext);
-        if n.chars().count() >= 4 {
-            out.push(Ev { rel: rel.to_string(), key: line_key(rel, &n), src, model: model.to_string(), session: session.to_string(), ts, tab: false });
+    let ev = |key: u32| Ev { rel: rel.to_string(), key, src, model: model.to_string(), session: session.to_string(), ts, tab: false, next: 0 };
+    // 每一行：长行的键，或者短行本身的哈希
+    let lines: Vec<(bool, u32)> = text
+        .lines()
+        .map(|line| {
+            let n = normalize(line, &ext);
+            if n.chars().count() >= 4 { (true, line_key(rel, &n)) } else { (false, short_hash(&n)) }
+        })
+        .collect();
+    let start = out.len();
+    out.extend(lines.iter().filter(|l| l.0).map(|l| ev(l.1)));
+    // 一次写入里的长行按顺序串起来（短行不算，和提交那边一样跳过）
+    for i in start + 1..out.len() {
+        out[i - 1].next = out[i].key;
+    }
+    // 短行：按它上面、下面最近的长行各记一条
+    let mut anchor = (None, 0);
+    for &(long, k) in &lines {
+        if long {
+            anchor = (Some(k), 0);
+        } else if let Some(a) = anchor.0 {
+            anchor.1 += 1;
+            out.push(ev(short_key(rel, a, 'v', anchor.1, k)));
+        }
+    }
+    let mut anchor = (None, 0);
+    for &(long, k) in lines.iter().rev() {
+        if long {
+            anchor = (Some(k), 0);
+        } else if let Some(a) = anchor.0 {
+            anchor.1 += 1;
+            out.push(ev(short_key(rel, a, '^', anchor.1, k)));
         }
     }
 }
@@ -247,14 +275,7 @@ pub fn open_ro(p: &Path) -> rusqlite::Result<Connection> {
 #[allow(clippy::too_many_arguments)]
 pub fn push_text(out: &mut Vec<Ev>, pm: &PathMap, abs: &str, text: &str, src: Src, model: &str, session: &str, ts: i64) -> bool {
     let Some(rel) = pm.to_rel(abs) else { return false };
-    let ext = ext_of(&rel);
-    for line in text.lines() {
-        let n = normalize(line, &ext);
-        if n.chars().count() < 4 {
-            continue;
-        }
-        out.push(Ev { rel: rel.clone(), key: line_key(&rel, &n), src, model: model.to_string(), session: session.to_string(), ts, tab: false });
-    }
+    push_rel(out, &rel, text, src, model, session, ts);
     true
 }
 
@@ -422,12 +443,19 @@ mod tests {
         let mut out = vec![];
         let text = "fn main() { run(); }\n}\n\n  let value = compute();\n";
         assert!(push_text(&mut out, &pm, "/home/me/demo/src/a.rs", text, Src::Claude, "m", "s", 1));
-        // 「}」和空行太短，不算
-        assert_eq!(out.len(), 2);
+        // 两条长行，第一条记着下一条；「}」和空行本身不作证据，只按它上下的长行各记一条位置
+        let ext = ext_of("src/a.rs");
+        let k = |l: &str| line_key("src/a.rs", &normalize(l, &ext));
+        assert_eq!(out[0].key, k("fn main() { run(); }"));
+        assert_eq!(out[0].next, k("let value = compute();"));
+        assert_eq!(out[1].next, 0);
+        let brace = short_key("src/a.rs", out[0].key, 'v', 1, short_hash("}"));
+        assert!(out[2..].iter().any(|e| e.key == brace));
+        assert_eq!(out.len(), 6);
         assert!(out.iter().all(|e| e.rel == "src/a.rs" && e.src == Src::Claude));
         // 别的项目的路径：不映射
         assert!(!push_text(&mut out, &pm, "/home/me/other/src/a.rs", text, Src::Claude, "m", "s", 1));
-        assert_eq!(out.len(), 2);
+        assert_eq!(out.len(), 6);
     }
 
     #[test]

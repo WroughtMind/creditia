@@ -127,6 +127,7 @@ pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>
     let mut stamps = HashMap::new();
     let mut cur: Option<FileAdd> = None;
     let mut ext = String::new();
+    let mut newline: u32 = 0;
     let flush = |out: &mut Vec<Commit>, cur: &mut Option<FileAdd>| {
         if let (Some(f), Some(c)) = (cur.take(), out.last_mut()) {
             if !f.keys.is_empty() || f.binary {
@@ -177,11 +178,17 @@ pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>
         } else if line.starts_with("@@ ") {
             if let Some(f) = cur.as_mut() {
                 f.hunks.push(f.keys.len() as u32);
+                // `@@ -a,b +c,d @@`：新文件从第 c 行起
+                newline = line.split(' ').nth(2).and_then(|p| p.trim_start_matches('+').split(',').next()?.parse().ok()).unwrap_or(0);
             }
         } else if let Some(a) = line.strip_prefix('+') {
             if let Some(f) = cur.as_mut() {
                 let n = normalize(a, &ext);
-                f.keys.push(if n.chars().count() < 4 { 0 } else { line_key(&f.rel, &n) });
+                let long = n.chars().count() >= 4;
+                f.keys.push(if long { line_key(&f.rel, &n) } else { 0 });
+                f.short.push(if long { 0 } else { creditia_core::hash::short_hash(&n) });
+                f.at.push(newline);
+                newline += 1;
             }
         }
     }
@@ -318,14 +325,14 @@ pub fn blame_head(repo: &Path, rev: &str, cache: &mut HashMap<String, Vec<BlameL
 fn blame_file(repo: &Path, rev: &str, path: &str) -> Vec<BlameLine> {
     let out = git(repo, &["blame", "--porcelain", rev, "--", path]);
     let mut res = vec![];
-    let (mut commit, mut file) = (String::new(), String::new());
+    let (mut commit, mut file, mut orig) = (String::new(), String::new(), 0u32);
     let mut files: HashMap<String, String> = HashMap::new();
     for l in out.lines() {
         if let Some(code) = l.strip_prefix('\t') {
             let rel = files.get(&commit).cloned().unwrap_or_else(|| file.clone());
             let n = normalize(code, &ext_of(&rel));
             let key = if n.chars().count() < 4 { 0 } else { line_key(&rel, &n) };
-            res.push(BlameLine { commit: commit.clone(), rel, key });
+            res.push(BlameLine { commit: commit.clone(), rel, key, orig });
         } else if let Some(f) = l.strip_prefix("filename ") {
             file = f.to_string();
             files.insert(commit.clone(), file.clone());
@@ -334,6 +341,7 @@ fn blame_file(repo: &Path, rev: &str, path: &str) -> Vec<BlameLine> {
             if let Some(h) = it.next() {
                 if h.len() == 40 && h.bytes().all(|b| b.is_ascii_hexdigit()) {
                     commit = h.to_string();
+                    orig = it.next().and_then(|x| x.parse().ok()).unwrap_or(0);
                 }
             }
         }

@@ -1,6 +1,7 @@
 //! 归因引擎：逐个非 merge 提交、逐行匹配证据，再按降级链补全。
 
 use crate::config::Config;
+use crate::hash::short_key;
 use crate::model::{Attr, BlameLine, Commit, CommitAttr, Index, Level, Registry, Session, Src, Unit};
 use std::collections::{HashMap, HashSet};
 
@@ -78,33 +79,25 @@ impl<'a> Engine<'a> {
         for f in &c.files {
             let mut fl = vec![];
             let mut el = vec![];
-            for &k in &f.keys {
+            let ranges = hunk_ranges(f);
+            for (i, &k) in f.keys.iter().enumerate() {
                 el.push(None);
                 if k == 0 {
-                    fl.push(None);
+                    // 短行：按同一改动块里它上面、下面最近的长行定位，对上了就跟那次写入走
+                    let (s, e) = ranges.iter().copied().find(|&(s, e)| s <= i && i < e).unwrap_or((0, f.keys.len()));
+                    let sh = f.short.get(i).copied().unwrap_or(0);
+                    let up = (s..i).rev().find(|&j| f.keys[j] != 0).map(|j| (j, 'v', (j + 1..=i).filter(|&x| f.keys[x] == 0).count()));
+                    let down = (i + 1..e).find(|&j| f.keys[j] != 0).map(|j| (j, '^', (i..j).filter(|&x| f.keys[x] == 0).count()));
+                    let hit = if sh == 0 { None } else { [up, down].into_iter().flatten().find_map(|(j, d, ord)| self.take(&f.rel, short_key(&f.rel, f.keys[j], d, ord, sh), lo, hi, c.author_ts).map(|(b, _)| b)) };
+                    fl.push(hit.filter(|b| !b.tab).map(|b| Attr { who: self.reg.agent(b.src.harness(), Some(&b.model)), level: Level::Declared }));
                     continue;
                 }
-                let id = (f.rel.clone(), k);
-                let Some(all) = self.idx.map.get(&id) else {
+                let Some((best, multi)) = self.take(&f.rel, k, lo, hi, c.author_ts) else {
                     fl.push(None);
                     continue;
                 };
-                let used = self.used.entry(id).or_insert_with(|| vec![false; all.len()]);
-                let cands: Vec<usize> = (0..all.len()).filter(|&i| all[i].ts >= lo && all[i].ts <= hi && !used[i]).collect();
-                if cands.is_empty() {
-                    fl.push(None);
-                    continue;
-                }
-                let srcs: HashSet<Src> = cands.iter().map(|&i| all[i].src).collect();
-                if srcs.len() > 1 {
+                if multi {
                     conflicts += 1;
-                }
-                // 取时间最接近提交的那条
-                let bi = *cands.iter().min_by_key(|&&i| (c.author_ts - all[i].ts).abs()).unwrap();
-                let best = &all[bi];
-                // Cursor 的行哈希表一行只存一次，不按次数消耗
-                if best.src != Src::Cursor {
-                    used[bi] = true;
                 }
                 if best.tab {
                     tab_lines += 1;
@@ -128,6 +121,7 @@ impl<'a> Engine<'a> {
         let declared_h = declared.as_ref().map(|d| self.reg.list[d.0.who].harness.clone());
         if self.strictness != Strictness::Strict {
             for (fi, f) in c.files.iter().enumerate() {
+                let inserted = self.inserted(f, &ev_of[fi]);
                 for (s, e) in hunk_ranges(f) {
                     let long = (s..e).filter(|&i| f.keys[i] != 0).count();
                     let evs: Vec<&(&'static str, String)> = (s..e).filter_map(|i| ev_of[fi][i].as_ref()).collect();
@@ -151,8 +145,8 @@ impl<'a> Engine<'a> {
                     }
                     let (&m, &mn) = by_m.iter().max_by_key(|(m, n)| (**n, std::cmp::Reverse(**m))).unwrap();
                     let who = self.reg.agent(h, (mn * 5 >= n * 4).then_some(m));
-                    for (l, &k) in lines[fi][s..e].iter_mut().zip(&f.keys[s..e]) {
-                        if k != 0 && l.is_none() {
+                    for ((l, &k), &ins) in lines[fi][s..e].iter_mut().zip(&f.keys[s..e]).zip(&inserted[s..e]) {
+                        if k != 0 && l.is_none() && !ins {
                             *l = Some(Attr { who, level: Level::Inferred });
                         }
                     }
@@ -185,7 +179,10 @@ impl<'a> Engine<'a> {
         for (fi, fl) in lines.into_iter().enumerate() {
             let f = &c.files[fi];
             let mut res: Vec<Attr> = fl.iter().map(|a| a.unwrap_or(fallback)).collect();
-            // 过短的行（`}`、空行）跟随所在改动块里最多的那个；块里没有长行就跟随整个提交的主要贡献者
+            // 自己对上了写入的短行不再跟随别人
+            let placed: Vec<bool> = fl.iter().zip(&f.keys).map(|(a, &k)| k == 0 && a.is_some()).collect();
+            // 过短的行（`}`、空行）跟随同一改动块里它上面最近的长行（`}` 收的是上面那段代码），
+            // 上面没有就跟随下面最近的；块里没有长行时，跟随块里最多的那个，再不行跟随整个提交的主要贡献者
             for (s, e) in hunk_ranges(f) {
                 let mut cnt: HashMap<usize, (usize, Level)> = HashMap::new();
                 for i in (s..e).filter(|&i| f.keys[i] != 0) {
@@ -198,13 +195,62 @@ impl<'a> Engine<'a> {
                     .max_by_key(|(w, (n, _))| (*n, std::cmp::Reverse(**w)))
                     .map(|(&w, &(_, lv))| Attr { who: w, level: if lv == Level::Verified { Level::Declared } else { lv } })
                     .unwrap_or(main_attr);
-                for i in (s..e).filter(|&i| f.keys[i] == 0) {
-                    res[i] = follow;
+                let near = |i: usize| (s..i).rev().chain(i + 1..e).find(|&j| f.keys[j] != 0);
+                for i in (s..e).filter(|&i| f.keys[i] == 0 && !placed[i]) {
+                    res[i] = match near(i) {
+                        Some(j) => Attr { who: res[j].who, level: if res[j].level == Level::Verified { Level::Declared } else { res[j].level } },
+                        None => follow,
+                    };
                 }
             }
             out.push(res);
         }
         CommitAttr { lines: out, hits, conflicts, main, tab_lines, reason }
+    }
+
+    /// 取一条还没被认领、时间在窗口里的证据：时间最接近提交的那条。返回它和「候选里是否有不止一个工具」
+    fn take(&mut self, rel: &str, key: u32, lo: i64, hi: i64, at: i64) -> Option<(crate::model::Ev, bool)> {
+        let id = (rel.to_string(), key);
+        let all = self.idx.map.get(&id)?;
+        let used = self.used.entry(id).or_insert_with(|| vec![false; all.len()]);
+        let cands: Vec<usize> = (0..all.len()).filter(|&i| all[i].ts >= lo && all[i].ts <= hi && !used[i]).collect();
+        let bi = *cands.iter().min_by_key(|&&i| (at - all[i].ts).abs())?;
+        let multi = cands.iter().map(|&i| all[i].src).collect::<HashSet<Src>>().len() > 1;
+        // Cursor 的行哈希表一行只存一次，不按次数消耗
+        if all[bi].src != Src::Cursor {
+            used[bi] = true;
+        }
+        Some((all[bi].clone(), multi))
+    }
+
+    /// 夹在两行逐行证据之间、自己没有证据的行，而那两行在同一个工具的某次写入里本来是紧挨着的：
+    /// 这几行是后来插进去的，不是那次写入写的，不能被改动块推断带走。返回每一行是否是这样插进去的
+    fn inserted(&self, f: &crate::model::FileAdd, ev: &[Option<(&'static str, String)>]) -> Vec<bool> {
+        let n = f.keys.len();
+        let mut out = vec![false; n];
+        for (s, e) in hunk_ranges(f) {
+            let long: Vec<usize> = (s..e).filter(|&i| f.keys[i] != 0).collect();
+            let mut i = 0;
+            while i < long.len() {
+                if ev[long[i]].is_some() {
+                    i += 1;
+                    continue;
+                }
+                let j = (i..long.len()).find(|&j| ev[long[j]].is_some()).unwrap_or(long.len());
+                if i > 0 && j < long.len() {
+                    let (a, b) = (long[i - 1], long[j]);
+                    let h = ev[a].as_ref().map(|x| x.0);
+                    let adjacent = self.idx.map.get(&(f.rel.clone(), f.keys[a])).is_some_and(|all| all.iter().any(|x| x.next == f.keys[b] && Some(x.src.harness()) == h));
+                    if adjacent {
+                        for &k in &long[i..j] {
+                            out[k] = true;
+                        }
+                    }
+                }
+                i = j;
+            }
+        }
+        out
     }
 
     /// 提交本身写明的来源。按优先级：盖章 trailer → agent 提交邮箱 → Co-authored-by → bot → aider 的作者名 → 别人的提交（算那个人）
@@ -295,15 +341,23 @@ pub fn person_id(email: &str) -> String {
     format!("h:{:010x}", h & 0xff_ffff_ffff)
 }
 
-/// 每个提交的归因：(路径, 行哈希) → 归因，和这个提交整体的归因（没有逐行证据时用）
-pub type CommitAttrs = HashMap<String, (HashMap<(String, u32), Attr>, Option<Attr>)>;
+/// 一个提交里每一行的归因：按 (路径, 行号) 和 (路径, 行哈希) 各存一份，和这个提交整体的归因（都对不上时用）
+pub struct CommitLines {
+    pub by_line: HashMap<(String, u32), Attr>,
+    pub by_key: HashMap<(String, u32), Attr>,
+    pub main: Option<Attr>,
+}
+pub type CommitAttrs = HashMap<String, CommitLines>;
 
-/// 存活代码归因：blame 行 → 引入它的提交里同路径同哈希的那一行
+/// 存活代码归因：blame 行 → 引入它的提交里同一行（按原行号；旧缓存没有行号时按同路径同哈希）
 pub fn survival(blame: &[(String, Vec<BlameLine>)], per_commit: &CommitAttrs, unattr: usize) -> Vec<Attr> {
     let mut out = vec![];
     for (_, lines) in blame {
         for b in lines {
-            let a = per_commit.get(&b.commit).and_then(|(m, main)| m.get(&(b.rel.clone(), b.key)).copied().or(*main));
+            let a = per_commit.get(&b.commit).and_then(|c| {
+                let line = (b.orig > 0).then(|| c.by_line.get(&(b.rel.clone(), b.orig))).flatten();
+                line.or_else(|| (b.key != 0).then(|| c.by_key.get(&(b.rel.clone(), b.key))).flatten()).copied().or(c.main)
+            });
             out.push(a.unwrap_or(Attr { who: unattr, level: Level::Unattributed }));
         }
     }
@@ -343,7 +397,7 @@ mod tests {
     fn verified_wins_and_short_lines_follow_main() {
         let mut store = Store::default();
         let g = store.groups.entry("x".into()).or_default();
-        g.evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false });
+        g.evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false, next: 0 });
         let idx = Index::build(&store);
         let cfg = cfg();
         let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
@@ -401,7 +455,7 @@ mod tests {
         }
         // strict 下，同提交里没对上的行不延伸给有逐行证据的 agent
         let mut store = Store::default();
-        store.groups.entry("x".into()).or_default().evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false });
+        store.groups.entry("x".into()).or_default().evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false, next: 0 });
         let idx = Index::build(&store);
         let mut c = cfg();
         c.level = "strict".into();
@@ -412,7 +466,7 @@ mod tests {
     }
 
     fn ev(key: u32, src: Src, model: &str) -> Ev {
-        Ev { rel: "a.rs".into(), key, src, model: model.into(), session: "s".into(), ts: 900, tab: false }
+        Ev { rel: "a.rs".into(), key, src, model: model.into(), session: "s".into(), ts: 900, tab: false, next: 0 }
     }
 
     #[test]
@@ -484,6 +538,43 @@ mod tests {
         c.coauthors = vec!["claude opus 5.5 <noreply@anthropic.com>".into()];
         let a = e.attribute(&c);
         assert_eq!(e.reg.list[a.lines[0][0].who].id, "a:claude-code/claude-opus-5-5");
+    }
+
+    #[test]
+    fn lines_inserted_between_adjacent_evidence_are_not_inferred() {
+        // Codex 一次写了 1、2、3（1 后面紧跟 2）：提交里 1 和 2 之间多了 8、9，是别人插进去的；
+        // 3 后面没有证据的 4 是 Codex 那次写入之外的，但不在两行紧挨的证据之间，照常推断
+        let mut store = Store::default();
+        let mk = |key, next| Ev { next, ..ev(key, Src::Codex, "m") };
+        store.groups.entry("x".into()).or_default().evs.extend([mk(1, 2), mk(2, 3), mk(3, 0), mk(5, 0)]);
+        let idx = Index::build(&store);
+        let cfg = cfg();
+        let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+        let a = e.attribute(&commit("me@x.com", vec![1, 8, 9, 2, 3, 4, 5]));
+        let l = &a.lines[0];
+        assert_eq!(l[1].level, Level::Unattributed);
+        assert_eq!(l[2].level, Level::Unattributed);
+        assert_eq!(l[5].level, Level::Inferred);
+    }
+
+    #[test]
+    fn short_lines_follow_their_own_write() {
+        // `}` 跟在 Claude 的第 2 行后面写下：提交里它上面紧挨的是 Codex 的行，也照样算 Claude
+        let mut store = Store::default();
+        let g = store.groups.entry("x".into()).or_default();
+        let sh = crate::hash::short_hash("}");
+        g.evs.extend([ev(1, Src::Codex, "m"), ev(2, Src::Claude, "c"), ev(3, Src::Codex, "m")]);
+        g.evs.push(ev(crate::hash::short_key("a.rs", 2, 'v', 1, sh), Src::Claude, "c"));
+        let idx = Index::build(&store);
+        let cfg = cfg();
+        let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+        let mut c = commit("me@x.com", vec![2, 0, 1, 0, 3]);
+        c.files[0].short = vec![0, sh, 0, sh, 0];
+        let a = e.attribute(&c);
+        let l = &a.lines[0];
+        assert_eq!(e.reg.list[l[1].who].id, "a:claude-code/c");
+        // 没有自己证据的短行跟随它上面最近的长行
+        assert_eq!(e.reg.list[l[3].who].id, "a:codex/m");
     }
 
     #[test]
