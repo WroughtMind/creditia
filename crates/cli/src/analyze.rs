@@ -131,6 +131,8 @@ fn scan_all(store: &mut Store, pm: &PathMap, roots: &[String], st: &mut ad::Stat
     ad::amp::scan(store, pm, st);
     ad::trae::scan(store, pm, st);
     ad::crush::scan(store, pm, roots, st);
+    ad::goose::scan(store, pm, st);
+    ad::cont::scan(store, pm, st);
 }
 
 /// 把这次见到的路径登记进作品库：以后这些目录删了、日志里还留着它们，也能认出是本项目

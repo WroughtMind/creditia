@@ -119,6 +119,8 @@ jobs:
 | <img src=".github/readme/logo/copilot.svg" width="18"> | GitHub Copilot | VS Code 的 `chatSessions` 与 agent 记录里成功的编辑；Copilot 命令行的 `~/.copilot/session-state` | ✓ | ✓ |
 | <img src=".github/readme/logo/aider.svg" width="18"> | Aider | 仓库里的 `.aider.chat.history.md`：只算「Applied edit」确认过的文件，时间取它的提交 | ✓ | ✓ |
 | | Amp · TRAE 命令行 | Amp 本地的 `threads/*.json`（完成的编辑）；TRAE CLI 的会话 rollout | ✓ | ✓ |
+| | Goose | `~/.local/share/goose/sessions/sessions.db`：成功的 write / edit / text_editor（配上同 id 的工具结果）和 shell 命令；模型取每次调用的用量记录 | ✓ | ✓ |
+| | Continue | `~/.continue/sessions/*.json`（编辑器扩展和 `cn` 命令行共用）：状态为 done 的编辑与命令；被拒绝的 diff 不算 | ✓ | ✓ |
 | | Crush | 项目里的 `.crush/crush.db`：`files` 表逐版存的文件内容，相邻两版多出来的行；提交里的 `Assisted-by: Crush:模型` | ✓ | ✓ |
 | <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> | Copilot 云端 · Devin · Jules · Cursor 云端 · bot | 提交邮箱、`Co-authored-by`、`Assisted-by`、作者名 | 声明 | — |
 | | 任何工具 | `creditia stamp` / 提交 hook 盖章（`Creditia-Harness` trailer） | 声明 | ✓ |

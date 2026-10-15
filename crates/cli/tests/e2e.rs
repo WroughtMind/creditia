@@ -65,6 +65,8 @@ fn setup() -> Env {
     vars.insert("CREDITIA_QWEN_DIR".into(), root.join("qwen").display().to_string());
     vars.insert("CREDITIA_OPENCODE_DIR".into(), root.join("opencode").display().to_string());
     vars.insert("CREDITIA_VSCODE_STORAGE".into(), root.join("vscode").display().to_string());
+    vars.insert("CREDITIA_GOOSE_DIR".into(), root.join("goose").display().to_string());
+    vars.insert("CREDITIA_CONTINUE_DIR".into(), root.join("continue").display().to_string());
     Env { root, repo, vars }
 }
 
@@ -257,8 +259,8 @@ fn end_to_end() {
 
     // doctor 能跑
     let (_, v) = run(&env, &["doctor"]);
-    // 11 个老数据源 + Aider、Amp、TRAE CLI、Crush、Copilot（VS Code、命令行）；没装的 Windsurf、TRAE IDE 不列
-    assert_eq!(v["sources"].as_array().unwrap().len(), 17);
+    // 11 个老数据源 + Aider、Amp、TRAE CLI、Crush、Goose、Continue、Copilot（VS Code、命令行）；没装的 Windsurf、TRAE IDE 不列
+    assert_eq!(v["sources"].as_array().unwrap().len(), 19);
 
     // hook：安装后提交信息自动带 trailer（用盖章文件触发）
     let (ok, _) = run(&env, &["hook", "install", "--repo", &repo.display().to_string()]);
@@ -745,5 +747,134 @@ fn crush_db_and_assisted_by() {
     let (_, v) = run(&env, &["doctor"]);
     let h = v["sources"].as_array().unwrap().iter().find(|h| h["source"] == "crush").cloned().unwrap_or_default();
     assert_eq!(h["records"], 1, "{v}");
+    let _ = fs::remove_dir_all(&env.root);
+}
+
+/// Goose：sessions.db 里 toolRequest 配同 id 的 toolResponse，成功的 write / edit / shell 才算；报错的、别的项目的不算
+#[test]
+fn goose_sessions_db() {
+    let env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base: i64 = 1_792_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    let lines = |tag: &str, n: usize| -> Vec<String> { (0..n).map(|i| format!("def {tag}_step_{i}(x): return x * {} + {i}", i + 3)).collect() };
+    let (written, edited, shell, failed) = (lines("goose_write", 4), lines("goose_edit", 2), lines("goose_shell", 3), lines("goose_failed", 2));
+
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join("README.md"), "# goose demo\n").unwrap();
+    commit(&repo, "init", "me@example.com", &d(base - 86400));
+    fs::write(repo.join("src/main.py"), [written.clone(), edited.clone(), failed.clone()].concat().join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/tool.py"), shell.join("\n") + "\n").unwrap();
+    commit(&repo, "goose work", "me@example.com", &d(base + 600));
+
+    let dir = env.root.join("goose/sessions");
+    fs::create_dir_all(&dir).unwrap();
+    let c = rusqlite::Connection::open(dir.join("sessions.db")).unwrap();
+    c.execute_batch(
+        "CREATE TABLE sessions (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', session_type TEXT NOT NULL DEFAULT 'user', working_dir TEXT NOT NULL, created_at TIMESTAMP, updated_at TIMESTAMP, total_tokens INTEGER, accumulated_total_tokens INTEGER, provider_name TEXT, model_config_json TEXT);
+         CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT, session_id TEXT NOT NULL, role TEXT NOT NULL, content_json TEXT NOT NULL, created_timestamp INTEGER NOT NULL, timestamp TIMESTAMP, tokens INTEGER, metadata_json TEXT);
+         CREATE TABLE usage_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, created_timestamp INTEGER NOT NULL, model TEXT, input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, cost REAL, cost_source TEXT, is_compaction INTEGER DEFAULT 0);",
+    )
+    .unwrap();
+    let iso_sql = |t: i64| iso(t).replace('T', " ").trim_end_matches(".000Z").to_string();
+    c.execute("INSERT INTO sessions (id, working_dir, created_at, updated_at, total_tokens, accumulated_total_tokens, provider_name, model_config_json) VALUES ('g1', ?1, ?2, ?3, 900, 5000, 'anthropic', '{\"model_name\":\"claude-sonnet-4-5\"}')", rusqlite::params![rs, iso_sql(base), iso_sql(base + 500)]).unwrap();
+    c.execute("INSERT INTO sessions (id, working_dir, created_at, updated_at, model_config_json) VALUES ('other', '/somewhere/else', ?1, ?1, '{\"model_name\":\"gpt-5\"}')", rusqlite::params![iso_sql(base)]).unwrap();
+    c.execute("INSERT INTO usage_ledger (session_id, created_timestamp, model) VALUES ('g1', ?1, 'claude-sonnet-4-5-20250929')", rusqlite::params![base + 15]).unwrap();
+    let req = |id: &str, name: &str, args: serde_json::Value| serde_json::json!({ "type": "toolRequest", "id": id, "toolCall": { "status": "success", "value": { "name": name, "arguments": args } } });
+    let res = |id: &str, err: bool| serde_json::json!({ "type": "toolResponse", "id": id, "toolResult": { "status": "success", "value": { "content": [{ "type": "text", "text": "ok" }], "isError": err } } });
+    let main = format!("{rs}/src/main.py");
+    let msgs = [
+        ("user", serde_json::json!([{ "type": "text", "text": "write the module" }]), base + 10),
+        ("assistant", serde_json::json!([req("t1", "developer__write", serde_json::json!({ "path": main, "content": written.join("\n") }))]), base + 20),
+        ("user", serde_json::json!([res("t1", false)]), base + 21),
+        ("assistant", serde_json::json!([req("t2", "edit", serde_json::json!({ "path": "src/main.py", "before": written[3], "after": format!("{}\n{}", written[3], edited.join("\n")) })), req("t3", "edit", serde_json::json!({ "path": main, "before": "missing", "after": failed.join("\n") }))]), base + 30),
+        ("user", serde_json::json!([res("t2", false), res("t3", true)]), base + 31),
+        ("assistant", serde_json::json!([req("t4", "shell", serde_json::json!({ "command": format!("cat > src/tool.py <<'EOF'\n{}\nEOF", shell.join("\n")) }))]), base + 40),
+        ("user", serde_json::json!([res("t4", false)]), base + 41),
+    ];
+    for (role, content, ts) in msgs {
+        c.execute("INSERT INTO messages (session_id, role, content_json, created_timestamp) VALUES ('g1', ?1, ?2, ?3)", rusqlite::params![role, content.to_string(), ts]).unwrap();
+    }
+    c.execute("INSERT INTO messages (session_id, role, content_json, created_timestamp) VALUES ('other', 'assistant', '[]', ?1)", rusqlite::params![base]).unwrap();
+    drop(c);
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+    // 报错的那次 edit（failed 两行）不算
+    assert_eq!(verified("a:goose/claude-sonnet-4-5"), (written.len() + edited.len() + shell.len()) as u64, "{}", credits["breakdown"]);
+    let s: Vec<&serde_json::Value> = credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with("a:goose/")).collect();
+    assert_eq!(s.len(), 1, "{}", credits["sessions"]);
+    let (_, v) = run(&env, &["doctor"]);
+    let h = v["sources"].as_array().unwrap().iter().find(|h| h["source"] == "goose").cloned().unwrap_or_default();
+    assert_eq!(h["records"], 2, "{v}");
+    let _ = fs::remove_dir_all(&env.root);
+}
+
+/// Continue：sessions/<id>.json 里 toolCallStates 为 done 的编辑才算；用户拒绝（canceled）、报错（errored）的不算
+#[test]
+fn continue_sessions() {
+    let env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base: i64 = 1_793_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    let lines = |tag: &str, n: usize| -> Vec<String> { (0..n).map(|i| format!("export const {tag}Item{i} = make{tag}({i}, {});", i * 11)).collect() };
+    let (created, replaced, rejected, cli) = (lines("Created", 4), lines("Replaced", 2), lines("Rejected", 3), lines("Cli", 3));
+
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join("README.md"), "# continue demo\n").unwrap();
+    commit(&repo, "init", "me@example.com", &d(base - 86400));
+    fs::write(repo.join("src/a.ts"), [created.clone(), replaced.clone(), rejected.clone()].concat().join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/b.ts"), cli.join("\n") + "\n").unwrap();
+    commit(&repo, "continue work", "me@example.com", &d(base + 600));
+
+    let dir = env.root.join("continue/sessions");
+    fs::create_dir_all(&dir).unwrap();
+    let call = |id: &str, name: &str, args: serde_json::Value, status: &str| serde_json::json!({ "toolCallId": id, "toolCall": { "id": id, "type": "function", "function": { "name": name, "arguments": args.to_string() } }, "status": status, "parsedArgs": args });
+    let uri = format!("file://{}", rs.replace(' ', "%20"));
+    let ide = serde_json::json!({
+        "sessionId": "c1", "title": "t", "workspaceDirectory": uri, "chatModelTitle": "Claude Sonnet 4.5",
+        "usage": { "promptTokens": 3000, "completionTokens": 400, "totalCost": 0.1 },
+        "history": [
+            { "message": { "role": "user", "content": "make a.ts" }, "contextItems": [] },
+            { "message": { "role": "assistant", "content": "" }, "contextItems": [], "promptLogs": [{ "modelTitle": "Claude Sonnet 4.5", "modelProvider": "anthropic", "prompt": "", "completion": "" }],
+              "toolCallStates": [call("t1", "create_new_file", serde_json::json!({ "filepath": "src/a.ts", "contents": created.join("\n") }), "done")] },
+            { "message": { "role": "tool", "content": "ok", "toolCallId": "t1" }, "contextItems": [] },
+            { "message": { "role": "assistant", "content": "" }, "contextItems": [],
+              "toolCallStates": [
+                  call("t2", "single_find_and_replace", serde_json::json!({ "filepath": "src/a.ts", "old_string": created[3], "new_string": format!("{}\n{}", created[3], replaced.join("\n")) }), "done"),
+                  call("t3", "edit_existing_file", serde_json::json!({ "filepath": "src/a.ts", "changes": format!("// ... existing code ...\n{}", rejected.join("\n")) }), "canceled"),
+                  call("t4", "multi_edit", serde_json::json!({ "filepath": "src/a.ts", "edits": [{ "old_string": "zz", "new_string": rejected.join("\n") }] }), "errored"),
+              ] },
+        ]
+    });
+    fs::write(dir.join("c1.json"), ide.to_string()).unwrap();
+    // 命令行（cn）：同样的格式，工具名是 Write / Edit
+    let cn = serde_json::json!({
+        "sessionId": "c2", "title": "t", "workspaceDirectory": rs, "chatModelTitle": "gpt-5",
+        "history": [
+            { "message": { "role": "user", "content": "make b.ts" }, "contextItems": [] },
+            { "message": { "role": "assistant", "content": "" }, "contextItems": [], "toolCallStates": [call("w1", "Write", serde_json::json!({ "file_path": format!("{rs}/src/b.ts"), "content": cli.join("\n") }), "done")] },
+        ]
+    });
+    fs::write(dir.join("c2.json"), cn.to_string()).unwrap();
+    fs::write(dir.join("sessions.json"), serde_json::json!([{ "sessionId": "c1", "title": "t", "dateCreated": ((base + 10) * 1000).to_string(), "workspaceDirectory": uri }, { "sessionId": "c2", "title": "t", "dateCreated": ((base + 20) * 1000).to_string(), "workspaceDirectory": rs }]).to_string()).unwrap();
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+    // 被拒绝、报错的那几行没有逐行证据（和前面同一个改动块，只按块推断，不算 verified）
+    assert_eq!(verified("a:continue/claude-sonnet-4-5"), (created.len() + replaced.len()) as u64, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:continue/gpt-5"), cli.len() as u64, "{}", credits["breakdown"]);
+    let s = credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with("a:continue/")).count();
+    assert_eq!(s, 2, "{}", credits["sessions"]);
     let _ = fs::remove_dir_all(&env.root);
 }

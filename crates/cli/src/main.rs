@@ -181,6 +181,8 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
     acts.extend(ad::amp::discover());
     acts.extend(ad::trae::discover());
     acts.extend(ad::crush::discover());
+    acts.extend(ad::goose::discover());
+    acts.extend(ad::cont::discover());
     // 把 cwd 归到 git 仓库：存在的目录用根提交；不存在的用远程地址或目录名
     #[derive(Default)]
     struct P {
@@ -499,7 +501,7 @@ use creditia_core::tr;
         ad::codex::doctor(), ad::claude::doctor(), ad::cursor::doctor(), ad::grok::doctor(), ad::kimi::doctor(),
         ad::gemini::doctor(Src::Gemini), ad::gemini::doctor(Src::Qwen), ad::opencode::doctor(),
         ad::cline::doctor(Src::Cline), ad::cline::doctor(Src::Roo), ad::cline::doctor(Src::Kilo),
-        ad::aider::doctor(), ad::amp::doctor(), ad::trae::doctor(), ad::crush::doctor(),
+        ad::aider::doctor(), ad::amp::doctor(), ad::trae::doctor(), ad::crush::doctor(), ad::goose::doctor(), ad::cont::doctor(),
     ];
     hs.extend(ad::copilot::doctor());
     hs.extend(ad::others::doctor());

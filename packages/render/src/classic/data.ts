@@ -41,7 +41,7 @@ export interface Model {
 export const NAMES: Record<string, string> = {
   'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor', grok: 'Grok', kimi: 'Kimi', gemini: 'Gemini CLI', qwen: 'Qwen Code',
   opencode: 'OpenCode', cline: 'Cline', roo: 'Roo Code', kilo: 'Kilo Code', copilot: 'GitHub Copilot', aider: 'Aider', devin: 'Devin',
-  jules: 'Jules', amp: 'Amp', windsurf: 'Windsurf', trae: 'Trae', crush: 'Crush', deepseek: 'DeepSeek', 'github-actions': 'GitHub Actions',
+  jules: 'Jules', amp: 'Amp', windsurf: 'Windsurf', trae: 'Trae', crush: 'Crush', goose: 'Goose', continue: 'Continue', deepseek: 'DeepSeek', 'github-actions': 'GitHub Actions',
   dependabot: 'Dependabot', renovate: 'Renovate', other: '其他', unattributed: '未确认',
 };
 const EN: Record<string, string> = { other: 'Others', unattributed: 'Unattributed' };
