@@ -23,6 +23,7 @@ pub enum Src {
     Copilot,
     Amp,
     Trae,
+    Crush,
 }
 
 impl Src {
@@ -43,10 +44,11 @@ impl Src {
             Src::Copilot => "copilot",
             Src::Amp => "amp",
             Src::Trae => "trae",
+            Src::Crush => "crush",
         }
     }
-    pub fn all() -> [Src; 15] {
-        [Src::Codex, Src::Claude, Src::Cursor, Src::Grok, Src::Kimi, Src::Gemini, Src::Qwen, Src::OpenCode, Src::Cline, Src::Roo, Src::Kilo, Src::Aider, Src::Copilot, Src::Amp, Src::Trae]
+    pub fn all() -> [Src; 16] {
+        [Src::Codex, Src::Claude, Src::Cursor, Src::Grok, Src::Kimi, Src::Gemini, Src::Qwen, Src::OpenCode, Src::Cline, Src::Roo, Src::Kilo, Src::Aider, Src::Copilot, Src::Amp, Src::Trae, Src::Crush]
     }
     pub fn from_harness(h: &str) -> Option<Src> {
         Src::all().into_iter().find(|s| s.harness() == h)
@@ -165,6 +167,9 @@ pub struct Commit {
     pub subject: String,
     #[serde(default)]
     pub coauthors: Vec<String>,
+    /// `Assisted-by: 工具:模型` trailer（Crush 默认写这个，Linux 内核的 AI 署名也用这个格式）
+    #[serde(default)]
+    pub assisted: Vec<String>,
     #[serde(default)]
     pub files: Vec<FileAdd>,
 }

@@ -105,7 +105,7 @@ export const DEFAULTS: Options = { lang: 'zh', named: false, sign: '' };
 export const TOOL_NAMES: Record<string, string> = {
   'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor', grok: 'Grok', kimi: 'Kimi', gemini: 'Gemini CLI', qwen: 'Qwen Code',
   opencode: 'OpenCode', cline: 'Cline', roo: 'Roo Code', kilo: 'Kilo Code', copilot: 'GitHub Copilot', aider: 'Aider', devin: 'Devin',
-  jules: 'Jules', amp: 'Amp', windsurf: 'Windsurf', trae: 'Trae', deepseek: 'DeepSeek', 'github-actions': 'GitHub Actions',
+  jules: 'Jules', amp: 'Amp', windsurf: 'Windsurf', trae: 'Trae', crush: 'Crush', deepseek: 'DeepSeek', 'github-actions': 'GitHub Actions',
   dependabot: 'Dependabot', renovate: 'Renovate',
 };
 const BOTS = new Set(['github-actions', 'dependabot', 'renovate']);

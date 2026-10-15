@@ -17,6 +17,7 @@ export const BRANDS: Record<string, Brand> = {
   amp: { logo: 'amp', color: '#F34E3F' },
   windsurf: { logo: 'windsurf', color: '#0FBF8F' },
   trae: { logo: 'trae', color: '#FF4D4F' },
+  crush: { color: '#6B50FF' },
   opencode: { logo: 'opencode', color: '#E8A33D' },
   roo: { logo: 'roocode', color: '#C2410C' },
   kilo: { logo: 'kilocode', color: '#E5484D' },

@@ -56,7 +56,7 @@ creditia blame src/core/analyze.ts:12         # 这一行是哪个工具、哪�
 ## 每一行，都有出处
 
 - **日志里对得上**　工具日志里有这一行的写入：Claude Code 的 Write / Edit、Codex 的 FileChange、Cursor 的逐行哈希……
-- **提交里写明了**　提交邮箱、`Co-authored-by`、creditia 的提交盖章
+- **提交里写明了**　提交邮箱、`Co-authored-by`、`Assisted-by`、creditia 的提交盖章
 - **推断**　同一段改动里大半有某个工具的逐行证据，其余的行跟着它走；`codex/` 这类工具自动建的分支。单独记，`--level strict` 关掉
 - **未确认**　以上都对不上的行。不算给任何工具
 
@@ -119,7 +119,8 @@ jobs:
 | <img src=".github/readme/logo/copilot.svg" width="18"> | GitHub Copilot | VS Code 的 `chatSessions` 与 agent 记录里成功的编辑；Copilot 命令行的 `~/.copilot/session-state` | ✓ | ✓ |
 | <img src=".github/readme/logo/aider.svg" width="18"> | Aider | 仓库里的 `.aider.chat.history.md`：只算「Applied edit」确认过的文件，时间取它的提交 | ✓ | ✓ |
 | | Amp · TRAE 命令行 | Amp 本地的 `threads/*.json`（完成的编辑）；TRAE CLI 的会话 rollout | ✓ | ✓ |
-| <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> | Copilot 云端 · Devin · Jules · Cursor 云端 · bot | 提交邮箱、`Co-authored-by`、作者名 | 声明 | — |
+| | Crush | 项目里的 `.crush/crush.db`：`files` 表逐版存的文件内容，相邻两版多出来的行；提交里的 `Assisted-by: Crush:模型` | ✓ | ✓ |
+| <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> | Copilot 云端 · Devin · Jules · Cursor 云端 · bot | 提交邮箱、`Co-authored-by`、`Assisted-by`、作者名 | 声明 | — |
 | | 任何工具 | `creditia stamp` / 提交 hook 盖章（`Creditia-Harness` trailer） | 声明 | ✓ |
 
 ## 安装
