@@ -86,13 +86,89 @@ pub fn new_text(name: &str, args: &serde_json::Value) -> Option<String> {
         return get(&["content", "file_text", "contents", "text"]);
     }
     if n.contains("edit") || n.contains("replace") || n.contains("patch") {
+        // 编辑的新文本里通常带着几行没改的上下文：减掉旧文本里已有的行
+        let old_of = |e: &serde_json::Value| ["old_string", "oldString", "old_str"].iter().find_map(|k| e[*k].as_str()).unwrap_or("").to_string();
         if let Some(edits) = args["edits"].as_array() {
-            let all: Vec<String> = edits.iter().filter_map(|e| e["new_string"].as_str().or(e["newString"].as_str()).map(String::from)).collect();
-            if !all.is_empty() { return Some(all.join("\n")); }
+            let all: Vec<String> = edits.iter().filter_map(|e| e["new_string"].as_str().or(e["newString"].as_str()).map(|t| added_lines(&old_of(e), t))).collect();
+            if !all.is_empty() { return Some(all.concat()); }
         }
-        return get(&["new_string", "newString", "new_str", "replacement", "content"]);
+        return get(&["new_string", "newString", "new_str", "replacement", "content"]).map(|t| added_lines(&old_of(args), &t));
     }
     None
+}
+
+/// shell 命令里提到的仓库内文件（相对路径按命令的工作目录和命令里 `cd` 过的目录解析）。
+/// 命令原文（heredoc、printf、python 脚本里的新文本）作为这些文件的候选证据：只有真出现在提交新增行里的才算数
+pub fn shell_targets(cmd: &str, cwd: &str, pm: &PathMap) -> Vec<String> {
+    use std::sync::OnceLock;
+    static CD: OnceLock<regex::Regex> = OnceLock::new();
+    let cd = CD.get_or_init(|| regex::Regex::new(r#"(?:^|[;&|(]\s*)cd\s+["']?([^\s;&|)"']+)"#).unwrap());
+    let join = |base: &str, p: &str| if p.starts_with('/') { p.to_string() } else { format!("{}/{}", base.trim_end_matches('/'), p) };
+    let mut dirs = vec![cwd.to_string()];
+    for c in cd.captures_iter(cmd) {
+        dirs.push(join(cwd, &c[1]));
+    }
+    let mut out: Vec<String> = vec![];
+    for tok in cmd.split(|c: char| c.is_whitespace() || ";&|<>()=,`'\"{}[]".contains(c)) {
+        let tok = tok.trim_end_matches(':');
+        if tok.len() < 3 || tok.starts_with('-') || tok.starts_with('$') || !(tok.contains('/') || tok.contains('.')) {
+            continue;
+        }
+        let cands: Vec<String> = if tok.starts_with('/') { vec![tok.to_string()] } else { dirs.iter().map(|d| join(d, tok)).collect() };
+        for abs in cands {
+            if let Some(rel) = pm.to_rel(&abs) {
+                if !out.contains(&rel) {
+                    out.push(rel);
+                }
+                break;
+            }
+        }
+    }
+    out
+}
+
+/// 把一段文本记成某个仓库内相对路径的证据（push_text 的相对路径版）
+pub fn push_rel(out: &mut Vec<Ev>, rel: &str, text: &str, src: Src, model: &str, session: &str, ts: i64) {
+    let ext = ext_of(rel);
+    for line in text.lines() {
+        let n = normalize(line, &ext);
+        if n.chars().count() >= 4 {
+            out.push(Ev { rel: rel.to_string(), key: line_key(rel, &n), src, model: model.to_string(), session: session.to_string(), ts, tab: false });
+        }
+    }
+}
+
+/// new 里比 old 多出来的行（按行计数相减，顺序不变）：编辑的上下文行、原样保留的行都不算新写的
+pub fn added_lines(old: &str, new: &str) -> String {
+    let mut have: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for l in old.lines() {
+        *have.entry(l.trim_end()).or_default() += 1;
+    }
+    let mut out = String::new();
+    for l in new.lines() {
+        match have.get_mut(l.trim_end()) {
+            Some(n) if *n > 0 => *n -= 1,
+            _ => {
+                out.push_str(l);
+                out.push('\n');
+            }
+        }
+    }
+    out
+}
+
+/// Claude Code 等工具结果里的 structuredPatch（统一 diff 的 hunk 列表）中新增的行
+pub fn added_from_patch(patch: &serde_json::Value) -> String {
+    let mut out = String::new();
+    for h in patch.as_array().into_iter().flatten() {
+        for l in h["lines"].as_array().into_iter().flatten().filter_map(|l| l.as_str()) {
+            if let Some(a) = l.strip_prefix('+') {
+                out.push_str(a);
+                out.push('\n');
+            }
+        }
+    }
+    out
 }
 
 /// 文件路径参数（各家字段名不同）
@@ -208,13 +284,35 @@ mod tests {
     fn new_text_by_tool_kind() {
         assert_eq!(new_text("Write", &json!({ "file_path": "a", "content": "x = 1" })).as_deref(), Some("x = 1"));
         assert_eq!(new_text("create_file", &json!({ "file_text": "y" })).as_deref(), Some("y"));
-        assert_eq!(new_text("Edit", &json!({ "old_string": "a", "new_string": "b" })).as_deref(), Some("b"));
-        assert_eq!(new_text("edit", &json!({ "oldString": "a", "newString": "c" })).as_deref(), Some("c"));
-        // MultiEdit：每段的新文本连起来
-        assert_eq!(new_text("MultiEdit", &json!({ "edits": [{ "new_string": "one" }, { "newString": "two" }] })).as_deref(), Some("one\ntwo"));
+        assert_eq!(new_text("Edit", &json!({ "old_string": "a", "new_string": "b" })).as_deref(), Some("b\n"));
+        assert_eq!(new_text("edit", &json!({ "oldString": "a", "newString": "c" })).as_deref(), Some("c\n"));
+        // 新文本里带着的上下文行（旧文本里就有）不算新写的
+        assert_eq!(new_text("Edit", &json!({ "old_string": "ctx\nold\nctx2", "new_string": "ctx\nnew\nctx2" })).as_deref(), Some("new\n"));
+        // MultiEdit：每段新增的行连起来
+        assert_eq!(new_text("MultiEdit", &json!({ "edits": [{ "new_string": "one" }, { "old_string": "k", "newString": "k\ntwo" }] })).as_deref(), Some("one\ntwo\n"));
         // 读文件、跑命令这类不算写入
         assert_eq!(new_text("Read", &json!({ "file_path": "a", "content": "x" })), None);
         assert_eq!(new_text("Bash", &json!({ "command": "ls" })), None);
+    }
+
+    #[test]
+    fn shell_targets_resolve_repo_files() {
+        let pm = PathMap { known: ["src/a.rs".to_string(), "web/b.ts".to_string(), "README.md".to_string()].into_iter().collect(), markers: vec!["/demo/".into()], excludes: vec![] };
+        // 相对路径按工作目录解析；绝对路径直接认；`cd` 过的目录也算
+        assert_eq!(shell_targets("cat > src/a.rs <<'EOF'\nfn x() {}\nEOF", "/home/me/demo", &pm), vec!["src/a.rs"]);
+        assert_eq!(shell_targets("tee /home/me/demo/web/b.ts < x", "/tmp", &pm), vec!["web/b.ts"]);
+        assert_eq!(shell_targets("cd web && printf 'a' > b.ts", "/home/me/demo", &pm), vec!["web/b.ts"]);
+        // 仓库外的文件、选项、变量不算
+        assert!(shell_targets("ls -la /etc/hosts $HOME/x.rs --out=foo.rs", "/home/me/demo", &pm).is_empty());
+    }
+
+    #[test]
+    fn added_lines_and_patch() {
+        // 按次数相减：旧文本里有一行 x，新文本里两行 x，多出来的那一行算新写的
+        assert_eq!(added_lines("x\ny", "x\nx\ny\nz"), "x\nz\n");
+        let patch = json!([{ "oldStart": 1, "oldLines": 3, "newStart": 1, "newLines": 3, "lines": [" keep", "-gone", "+fresh", " keep2"] }, { "lines": ["+tail"] }]);
+        assert_eq!(added_from_patch(&patch), "fresh\ntail\n");
+        assert_eq!(added_from_patch(&json!([])), "");
     }
 
     #[test]

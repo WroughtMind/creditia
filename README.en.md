@@ -57,7 +57,7 @@ One project in several places (worktrees, scratch clones, another machine): `cre
 
 - **Matched in logs** — The tool's own log recorded writing this line: Claude Code Write / Edit, Codex FileChange, Cursor line hashes…
 - **Declared in commits** — Commit email, `Co-authored-by`, creditia's commit stamp
-- **Inferred** — Other lines in the same commit follow the tool with evidence; branches tools create themselves, like `codex/`. Kept separate; turn off with `--level strict`
+- **Inferred** — When most of a contiguous change has line-level evidence from one tool, the rest of that change follows it; branches tools create themselves, like `codex/`. Kept separate; turn off with `--level strict`
 - **Unattributed** — Anything that matches none of the above. Counted toward no tool
 
 creditia answers one question — which AI tools and models wrote how much. No names appear in any piece, and percentages are taken over AI and unattributed lines only. Full rules and known limits: [ATTRIBUTION.md](ATTRIBUTION.md).

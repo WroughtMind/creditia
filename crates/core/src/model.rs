@@ -92,7 +92,8 @@ pub struct Store {
     pub groups: HashMap<String, FileGroup>,
 }
 
-pub const STORE_VERSION: u32 = 1;
+/// 日志缓存的格式版本：adapter 的读法变了就加一，升级后整份重新解析（2：编辑只记新增的行）
+pub const STORE_VERSION: u32 = 2;
 
 pub fn fingerprint(path: &std::path::Path) -> (u64, u64) {
     match std::fs::metadata(path) {
@@ -130,6 +131,9 @@ pub struct FileAdd {
     pub keys: Vec<u32>,
     #[serde(default)]
     pub binary: bool,
+    /// 每个改动块（diff 的 hunk）在 keys 里的起点；空表示整个文件算一块
+    #[serde(default)]
+    pub hunks: Vec<u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
