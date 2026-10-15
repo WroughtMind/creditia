@@ -18,7 +18,7 @@ export interface Credits {
   timeline?: { week: string; byContributor: Record<string, number> }[];
   days?: { date: DateStr; by: Record<string, number> }[];
   clock?: number[][];
-  files?: { path?: string; lines: number; by: Record<string, number> }[];
+  files?: { path?: string; lines: number; by: Record<string, number>; /** 按行顺序的连续分段 [贡献方 id, 行数] */ runs?: [string, number][] }[];
   sessions?: { contributor: string; start: number; end: number; tokens?: number; review?: boolean; prompts?: number }[];
   units: Unit[];
   conflictLines?: number;

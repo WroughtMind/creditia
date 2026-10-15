@@ -452,12 +452,19 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         let mut i = 0;
         for (path, lines) in &blame {
             let mut g: BTreeMap<String, usize> = BTreeMap::new();
+            // 按行顺序的分段：[[贡献方 id, 连续行数], …]，代码地图用（只有归属，没有代码；id 带模型）
+            let mut runs: Vec<(&str, usize)> = vec![];
             for _ in lines {
                 *g.entry(reg.group(surv[i].who)).or_default() += 1;
+                let id = reg.list[surv[i].who].id.as_str();
+                match runs.last_mut() {
+                    Some((last, n)) if *last == id => *n += 1,
+                    _ => runs.push((id, 1)),
+                }
                 i += 1;
             }
             if !lines.is_empty() {
-                let mut v = json!({ "lines": lines.len(), "by": g });
+                let mut v = json!({ "lines": lines.len(), "by": g, "runs": runs });
                 if !cfg.privacy.hide_paths {
                     v["path"] = json!(path);
                 }
