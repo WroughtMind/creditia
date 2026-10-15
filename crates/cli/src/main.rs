@@ -647,6 +647,10 @@ pub fn detect_agent(env: &HashMap<String, String>) -> Option<(String, Option<Str
     if has("KIMI_SESSION_ID") || has("KIMI_CODE") {
         return Some(("kimi".into(), None));
     }
+    // Antigravity（agy 命令行和编辑器）给它跑的命令设 ANTIGRAVITY_AGENT=1 和 ANTIGRAVITY_TRAJECTORY_ID
+    if has("ANTIGRAVITY_AGENT") || has("ANTIGRAVITY_TRAJECTORY_ID") {
+        return Some(("antigravity".into(), None));
+    }
     if has("GEMINI_CLI") {
         return Some(("gemini".into(), env.get("GEMINI_MODEL").cloned()));
     }
@@ -831,7 +835,16 @@ fn _src(_: Src) {}
 
 #[cfg(test)]
 mod hook_tests {
-    use super::ends_with_trailers;
+    use super::{detect_agent, ends_with_trailers};
+    use std::collections::HashMap;
+
+    #[test]
+    fn detects_antigravity() {
+        let env: HashMap<String, String> = [("ANTIGRAVITY_AGENT".to_string(), "1".to_string())].into();
+        assert_eq!(detect_agent(&env), Some(("antigravity".to_string(), None)));
+        let env: HashMap<String, String> = [("ANTIGRAVITY_TRAJECTORY_ID".to_string(), "t1".to_string()), ("GEMINI_CLI".to_string(), "1".to_string())].into();
+        assert_eq!(detect_agent(&env).map(|(h, _)| h), Some("antigravity".to_string()));
+    }
 
     #[test]
     fn conventional_subject_is_not_a_trailer_block() {
