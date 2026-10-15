@@ -1,6 +1,7 @@
 //! 归因准确率基准：模拟一个项目的开发过程，每一行是谁写的都已知；用真实二进制分析，逐行对答案。
 //! 场景覆盖常见的难点：编辑带上下文、整文件覆盖写入、混合提交、格式化拆行、人改几个字、盖章、云端分支、
-//! 同一工具两个模型、中文文档、日志丢失、重命名、同文件重复行、多个 agent 交替改同一文件。
+//! 同一工具两个模型、中文文档、日志丢失、重命名、同文件重复行、多个 agent 交替改同一文件、
+//! Aider 的 SEARCH/REPLACE 记录、Copilot Chat 的编辑工具（含报错没写进去的编辑）。
 //!
 //! 运行：cargo test -p creditia-cli --test bench -- --nocapture（看表格；CREDITIA_BENCH_VERBOSE=1 列出每一行错的）
 //! 结果同时写到 $CREDITIA_BENCH_OUT（如果设置了）。末尾的断言是底线：改引擎让它们变差，测试就失败。
@@ -34,6 +35,10 @@ struct Sim {
     claude_n: usize,
     codex: Vec<Value>,
     cursor: Vec<(String, String, i64, String)>,
+    /// .aider.chat.history.md 的内容
+    aider: String,
+    /// Copilot Chat 一个会话里的请求
+    copilot: Vec<Value>,
     /// 提交 → (场景, 提交时的文件内容)
     snaps: HashMap<String, (&'static str, BTreeMap<String, Vec<L>>)>,
     /// 不写日志（模拟日志被清理且从没采集过）
@@ -134,7 +139,7 @@ impl Sim {
         ] {
             vars.insert(k.to_string(), root.join(v).display().to_string());
         }
-        Sim { root, repo, vars, t: 1_780_000_000, rng: 0x9e37_79b9_7f4a_7c15, scenario: "", files: BTreeMap::new(), claude: vec![], claude_n: 0, codex: vec![], cursor: vec![], snaps: HashMap::new(), lost: false, old_claude: false }
+        Sim { root, repo, vars, t: 1_780_000_000, rng: 0x9e37_79b9_7f4a_7c15, scenario: "", files: BTreeMap::new(), claude: vec![], claude_n: 0, codex: vec![], cursor: vec![], aider: String::new(), copilot: vec![], snaps: HashMap::new(), lost: false, old_claude: false }
     }
 
     fn rand(&mut self, n: usize) -> usize {
@@ -275,8 +280,46 @@ impl Sim {
                     }
                 }
             }
+            "aider" | "copilot" => {
+                // 和 Claude 的 Edit 一样：改动范围加两行上下文；新文件整份写
+                let (os, ns) = if !existed {
+                    (String::new(), new.join("\n"))
+                } else {
+                    let d = diff(&old, &new);
+                    let first = d.iter().position(|x| x.0 != ' ').unwrap_or(0);
+                    let last = d.iter().rposition(|x| x.0 != ' ').unwrap_or(0);
+                    let seg = &d[first.saturating_sub(2)..=(last + 2).min(d.len() - 1)];
+                    (seg.iter().filter(|x| x.0 != '+').map(|x| old[x.1].as_str()).collect::<Vec<_>>().join("\n"), seg.iter().filter(|x| x.0 != '-').map(|x| new[x.2].as_str()).collect::<Vec<_>>().join("\n"))
+                };
+                if h == "aider" {
+                    let (y, mo, dd) = creditia_core::util::civil_from_days(self.t.div_euclid(DAY));
+                    let sec = self.t.rem_euclid(DAY);
+                    let local = format!("{y:04}-{mo:02}-{dd:02} {:02}:{:02}:{:02}", sec / 3600, sec / 60 % 60, sec % 60);
+                    self.aider.push_str(&format!("\n# aider chat started at {local}\n\n> Main model: {model} with diff edit format  \n\n#### change {path}  \n\n{path}\n```\n<<<<<<< SEARCH\n{os}\n=======\n{ns}\n>>>>>>> REPLACE\n```\n\n> Applied edit to {path}  \n"));
+                } else {
+                    let (name, args) = if existed { ("replace_string_in_file", json!({ "filePath": abs, "oldString": os, "newString": ns })) } else { ("create_file", json!({ "filePath": abs, "content": ns })) };
+                    self.copilot_request(model, name, args, false);
+                }
+            }
             _ => unreachable!(),
         }
+    }
+
+    fn copilot_request(&mut self, model: &str, name: &str, args: Value, failed: bool) {
+        let id = format!("call_{}", self.copilot.len());
+        let results = if failed { json!({ id.clone(): { "content": [{ "value": "ERROR while calling tool: The user cancelled the edit" }] } }) } else { json!({}) };
+        self.copilot.push(json!({ "timestamp": self.t * 1000, "modelId": format!("copilot/{model}"), "result": { "metadata": { "toolCallRounds": [{ "toolCalls": [{ "id": id, "name": name, "arguments": args.to_string() }] }], "toolCallResults": results } } }));
+    }
+
+    /// Copilot 提出的新文件报错没写进去，人自己把同样的内容敲了进去：这些行是人的
+    fn copilot_failed_then_human(&mut self, model: &str, path: &str, n: usize) {
+        self.t += 120;
+        let v = self.gen(path, n);
+        let abs = self.repo.join(path).display().to_string();
+        self.copilot_request(model, "create_file", json!({ "filePath": abs, "content": v.join("\n") }), true);
+        self.t += 300;
+        self.files.insert(path.to_string(), v.into_iter().map(|text| L { text, who: "me" }).collect());
+        self.write_disk(path);
     }
 
     /// agent 在 at 处删 del 行、插入 n 行新代码
@@ -416,6 +459,13 @@ impl Sim {
     }
 
     fn flush_logs(&self) {
+        fs::write(self.repo.join(".aider.chat.history.md"), &self.aider).unwrap();
+        fs::write(self.repo.join(".git/info/exclude"), ".aider*\n").unwrap();
+        let ws = self.root.join(".config/Code/User/workspaceStorage/bench");
+        fs::create_dir_all(ws.join("chatSessions")).unwrap();
+        fs::write(ws.join("workspace.json"), json!({ "folder": format!("file://{}", self.repo.display()) }).to_string()).unwrap();
+        fs::write(ws.join("chatSessions/b1.json"), json!({ "version": 3, "sessionId": "b1", "creationDate": 1_780_000_000_000i64, "requests": self.copilot }).to_string()).unwrap();
+
         let dir = self.root.join("claude/projects/-work-bench-app");
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("s1.jsonl"), self.claude.iter().map(|v| v.to_string() + "\n").collect::<String>()).unwrap();
@@ -700,6 +750,19 @@ fn accuracy_bench() {
     s.agent_new(OPUS, "src/mid.rs", 40);
     s.human_edit("src/mid.rs", 20, 4);
     s.commit("agent block with human lines inside");
+
+    const AIDER: &str = "aider/sonnet-z";
+    const COP: &str = "copilot/gpt-c";
+    s.scene("20 Aider 和 Copilot");
+    s.agent_new(AIDER, "py/tool.py", 40);
+    s.agent_edit(COP, "py/tool.py", 12, 0, 6);
+    s.agent_new(COP, "web/cop.ts", 30);
+    s.agent_edit(AIDER, "web/cop.ts", 20, 2, 5);
+    s.commit("aider and copilot");
+
+    s.scene("21 Copilot 报错的编辑");
+    s.copilot_failed_then_human("gpt-c", "web/failed.ts", 30);
+    s.commit("written by hand after copilot failed");
 
     s.flush_logs();
     let rs = s.repo.display().to_string();

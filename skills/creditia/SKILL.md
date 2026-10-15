@@ -46,6 +46,8 @@ creditia stamp --harness <工具> --model <模型>
 
 ## 常用命令
 
+用户用英文时，每条命令加 `--lang en`（或设 `CREDITIA_LANG=en`），提醒和摘要就都是英文。
+
 ```
 creditia discover --json
 creditia init --json

@@ -96,7 +96,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         store.groups.insert(gk, g);
     }
     if n > 0 {
-        st.notes.push(format!("opencode: 项目相关会话 {n} 个"));
+        st.notes.push(creditia_core::tr!("opencode: 项目相关会话 {n} 个", "opencode: {n} sessions for this project"));
     }
 }
 
@@ -120,6 +120,7 @@ pub fn doctor() -> Health {
         records: ss.len() as u64,
         earliest: ss.iter().map(|s| s.created).filter(|&t| t > 0).min().map(date_cn),
         latest: ss.iter().map(|s| s.updated).max().filter(|&t| t > 0).map(date_cn),
-        note: "逐条消息含 modelID、providerID 与 token".into(),
+        note: creditia_core::tr!("逐条消息含 modelID、providerID 与 token", "each message has modelID, providerID and tokens"),
+        ..Default::default()
     }
 }

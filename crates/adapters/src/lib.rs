@@ -1,15 +1,21 @@
-//! 各数据源 adapter：git、Codex、Claude Code、Cursor、Grok、Kimi、Gemini CLI、Qwen Code、OpenCode、Cline / Roo / Kilo。
+//! 各数据源 adapter：git、Codex、Claude Code、Cursor、Grok、Kimi、Gemini CLI、Qwen Code、OpenCode、Cline / Roo / Kilo、
+//! Aider、GitHub Copilot（VS Code 和命令行）、Amp、TRAE CLI。
 //! 只读打开，输出统一的行级证据和会话元数据。只认「成功写进文件」的编辑；路径映射回仓库内相对路径。
 
+pub mod aider;
+pub mod amp;
 pub mod claude;
 pub mod cline;
 pub mod codex;
+pub mod copilot;
 pub mod cursor;
 pub mod gemini;
 pub mod git;
 pub mod grok;
 pub mod kimi;
 pub mod opencode;
+pub mod others;
+pub mod trae;
 
 use creditia_core::hash::{ext_of, line_key, normalize};
 use creditia_core::model::{Ev, PathMap, Src};
@@ -41,6 +47,12 @@ pub fn source_dir(src: Src) -> PathBuf {
         Src::OpenCode => env("CREDITIA_OPENCODE_DIR").unwrap_or_else(|| xdg_data().join("opencode")),
         // VS Code 扩展：真实位置有多个（Code、Cursor、Windsurf……），见 cline::roots
         Src::Cline | Src::Roo | Src::Kilo => env("CREDITIA_VSCODE_STORAGE").unwrap_or_else(vscode_storage),
+        // Copilot 命令行；VS Code 里的 Copilot Chat 见 copilot::user_dirs
+        Src::Copilot => env("CREDITIA_COPILOT_DIR").or_else(|| env("COPILOT_HOME")).unwrap_or_else(|| home().join(".copilot")),
+        Src::Amp => env("CREDITIA_AMP_DIR").unwrap_or_else(|| xdg_data().join("amp")),
+        Src::Trae => env("CREDITIA_TRAE_DIR").or_else(|| env("TRAECLI_HOME")).or_else(|| env("TRAE_HOME").map(|p| p.join("cli"))).unwrap_or_else(|| home().join(".trae/cli")),
+        // Aider 的记录在每个仓库根目录里（.aider.chat.history.md），没有统一位置
+        Src::Aider => home(),
     }
 }
 
@@ -66,9 +78,9 @@ pub fn xdg_data() -> PathBuf {
 pub fn vscode_storage() -> PathBuf {
     vscode_user_dirs().into_iter().next().unwrap_or_default().join("globalStorage")
 }
-/// 各个 VS Code 系编辑器的 User 目录：Code、Code - Insiders、Cursor、Windsurf、VSCodium、Trae
+/// 各个 VS Code 系编辑器的 User 目录：Code、Code - Insiders、Cursor、Windsurf、VSCodium、Trae（国际版、国内版）
 pub fn vscode_user_dirs() -> Vec<PathBuf> {
-    let names = ["Code", "Code - Insiders", "Cursor", "Windsurf", "VSCodium", "Trae"];
+    let names = ["Code", "Code - Insiders", "Cursor", "Windsurf", "VSCodium", "Trae", "Trae CN"];
     #[cfg(target_os = "macos")]
     let base = home().join("Library/Application Support");
     #[cfg(target_os = "windows")]
@@ -171,6 +183,39 @@ pub fn added_from_patch(patch: &serde_json::Value) -> String {
     out
 }
 
+/// apply_patch 格式（Codex 发明，Copilot、Amp、TRAE 也用）里每个文件新增的行：
+/// `*** Add File: p` 下面全是新内容，`*** Update File: p` 下面 `+` 开头的行是新增的；`*** Move to:` 换成新路径
+pub fn apply_patch_files(patch: &str) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = vec![];
+    let mut cur: Option<usize> = None;
+    for l in patch.lines() {
+        let t = l.trim_end();
+        if let Some(p) = t.strip_prefix("*** Add File: ").or(t.strip_prefix("*** Update File: ")) {
+            out.push((p.trim().to_string(), String::new()));
+            cur = Some(out.len() - 1);
+        } else if let Some(p) = t.strip_prefix("*** Move to: ") {
+            if let Some(i) = cur { out[i].0 = p.trim().to_string(); }
+        } else if t.starts_with("*** ") {
+            // Delete File、End Patch、End of File
+            if !t.starts_with("*** End of File") { cur = None; }
+        } else if let (Some(i), Some(a)) = (cur, l.strip_prefix('+')) {
+            out[i].1.push_str(a);
+            out[i].1.push('\n');
+        }
+    }
+    out.retain(|(_, t)| !t.is_empty());
+    out
+}
+
+/// `file:///Users/me/x`、`file:///c%3A/work` 这类地址 → 本地路径；不是 file 地址原样返回
+pub fn file_uri_path(uri: &str) -> String {
+    let Some(rest) = uri.strip_prefix("file://") else { return uri.to_string() };
+    let p = percent_decode(rest.strip_prefix("localhost").unwrap_or(rest));
+    // /C:/work → C:/work
+    let b = p.as_bytes();
+    if b.len() >= 3 && b[0] == b'/' && b[2] == b':' && b[1].is_ascii_alphabetic() { p[1..].to_string() } else { p }
+}
+
 /// 文件路径参数（各家字段名不同）
 pub fn path_arg(args: &serde_json::Value) -> Option<String> {
     ["file_path", "filePath", "path", "absolute_path", "target_file"].iter().find_map(|k| args[*k].as_str().map(String::from))
@@ -235,6 +280,9 @@ pub struct Health {
     pub earliest: Option<String>,
     pub latest: Option<String>,
     pub note: String,
+    /// 装了、但 creditia 读不了它的编辑记录（Windsurf、TRAE IDE）：只说明，不算警告
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub unsupported: bool,
 }
 
 /// discover 用：某个工具在某个目录下的活动
@@ -313,6 +361,20 @@ mod tests {
         let patch = json!([{ "oldStart": 1, "oldLines": 3, "newStart": 1, "newLines": 3, "lines": [" keep", "-gone", "+fresh", " keep2"] }, { "lines": ["+tail"] }]);
         assert_eq!(added_from_patch(&patch), "fresh\ntail\n");
         assert_eq!(added_from_patch(&json!([])), "");
+    }
+
+    #[test]
+    fn apply_patch_and_file_uris() {
+        let patch = "*** Begin Patch\n*** Add File: src/new.rs\n+fn a() {}\n+fn b() {}\n*** Update File: src/old.rs\n@@ fn main\n-    old();\n+    new();\n     keep();\n*** Update File: src/moved.rs\n*** Move to: src/there.rs\n@@\n+moved line\n*** Delete File: gone.rs\n*** End Patch";
+        assert_eq!(apply_patch_files(patch), vec![
+            ("src/new.rs".to_string(), "fn a() {}\nfn b() {}\n".to_string()),
+            ("src/old.rs".to_string(), "    new();\n".to_string()),
+            ("src/there.rs".to_string(), "moved line\n".to_string()),
+        ]);
+        assert!(apply_patch_files("no patch here").is_empty());
+        assert_eq!(file_uri_path("file:///Users/me/my%20app"), "/Users/me/my app");
+        assert_eq!(file_uri_path("file:///c%3A/work/x"), "c:/work/x");
+        assert_eq!(file_uri_path("/plain/path"), "/plain/path");
     }
 
     #[test]

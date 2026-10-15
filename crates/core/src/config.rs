@@ -137,8 +137,8 @@ pub fn default_agent_emails() -> HashMap<String, String> {
 
 impl Config {
     pub fn load(path: &Path) -> Result<Config, String> {
-        let s = std::fs::read_to_string(path).map_err(|e| format!("读取 {} 失败：{e}", path.display()))?;
-        serde_json::from_str(&s).map_err(|e| format!("解析 {} 失败：{e}", path.display()))
+        let s = std::fs::read_to_string(path).map_err(|e| crate::tr!("读取 {} 失败：{e}", "couldn't read {}: {e}", path.display()))?;
+        serde_json::from_str(&s).map_err(|e| crate::tr!("解析 {} 失败：{e}", "couldn't parse {}: {e}", path.display()))
     }
     pub fn save(&self, path: &Path) -> Result<(), String> {
         if let Some(dir) = path.parent() {

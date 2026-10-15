@@ -173,13 +173,18 @@ fn drain<R: std::io::Read + Send + 'static>(r: Option<R>) -> Option<std::thread:
     })
 }
 
-fn run_analysis(repo: &str) -> Res<Value> {
+/// lang：界面当前的语言（zh / en），核心的提醒按它写
+fn run_analysis(repo: &str, lang: Option<&str>) -> Res<Value> {
     let (out, err) = {
         let mut slot = RUNNING.lock().unwrap();
         if slot.is_some() {
             return Err(Fail::new("busy"));
         }
-        let mut c = core_cmd(&["analyze", "--repo", repo]).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| Fail::with("core_missing", e))?;
+        let mut cmd = core_cmd(&["analyze", "--repo", repo]);
+        if let Some(l) = lang {
+            cmd.env("CREDITIA_LANG", l);
+        }
+        let mut c = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| Fail::with("core_missing", e))?;
         CANCELLED.store(false, std::sync::atomic::Ordering::SeqCst);
         let pipes = (drain(c.stdout.take()), drain(c.stderr.take()));
         *slot = Some(c);
@@ -231,13 +236,13 @@ fn cancel_analyze() {
 
 /// 重新分析一个项目（在它的仓库目录里跑核心）
 #[tauri::command]
-async fn analyze(project_id: String) -> Res<Value> {
+async fn analyze(project_id: String, lang: Option<String>) -> Res<Value> {
     let lib = Library::open()?;
     let p = project(&lib, &project_id)?;
     if !PathBuf::from(&p.path).is_dir() {
         return Err(Fail::with("dir_missing", p.path));
     }
-    tauri::async_runtime::spawn_blocking(move || run_analysis(&p.path)).await.map_err(|e| Fail::with("core_failed", e))?
+    tauri::async_runtime::spawn_blocking(move || run_analysis(&p.path, lang.as_deref())).await.map_err(|e| Fail::with("core_failed", e))?
 }
 
 /// 选一个文件夹（只选，不分析；分析交给 add_project，界面这期间能显示进度）
@@ -250,9 +255,9 @@ async fn pick_folder(app: tauri::AppHandle) -> Res<Option<String>> {
 
 /// 把一个文件夹加进作品库：先分析一遍
 #[tauri::command]
-async fn add_project(path: String) -> Res<Value> {
+async fn add_project(path: String, lang: Option<String>) -> Res<Value> {
     let p = path.clone();
-    let v = tauri::async_runtime::spawn_blocking(move || run_analysis(&p)).await.map_err(|e| Fail::with("core_failed", e))??;
+    let v = tauri::async_runtime::spawn_blocking(move || run_analysis(&p, lang.as_deref())).await.map_err(|e| Fail::with("core_failed", e))??;
     let lib = Library::open()?;
     let path = PathBuf::from(path);
     let repo = path.canonicalize().unwrap_or(path);
@@ -420,7 +425,7 @@ fn open_path(path: String) -> Res<()> {
 fn doctor() -> Value {
     if let Ok(v) = run_core(&["doctor"]) {
         if let Some(a) = v["sources"].as_array() {
-            return json!(a.iter().map(|h| json!({ "id": h["source"], "path": h["path"], "ok": h["readable"], "records": h["records"] })).collect::<Vec<_>>());
+            return json!(a.iter().map(|h| json!({ "id": h["source"], "path": h["path"], "ok": h["readable"], "records": h["records"], "unsupported": h["unsupported"].as_bool().unwrap_or(false) })).collect::<Vec<_>>());
         }
     }
     doctor_local()
@@ -488,18 +493,18 @@ mod tests {
 
         // 成功（有警告时退出码 2 也算成功）
         std::env::set_var("CREDITIA_CORE", fake_core(&dir, r#"echo '{"ok":true}'; exit 2"#));
-        assert_eq!(run_analysis("/tmp").unwrap()["ok"], true);
+        assert_eq!(run_analysis("/tmp", None).unwrap()["ok"], true);
 
         // 核心报错：带上它的原话
         std::env::set_var("CREDITIA_CORE", fake_core(&dir, r#"echo '{"error":"not a git repo"}'; exit 1"#));
-        let e = run_analysis("/tmp").unwrap_err();
+        let e = run_analysis("/tmp", None).unwrap_err();
         assert_eq!((e.code, e.detail.as_deref()), ("core_failed", Some("not a git repo")));
 
         // 跑着的时候不能再开第二个；取消之后返回 cancelled，槽位也空出来
         std::env::set_var("CREDITIA_CORE", fake_core(&dir, "sleep 30; echo '{}'"));
-        let t = std::thread::spawn(|| run_analysis("/tmp"));
+        let t = std::thread::spawn(|| run_analysis("/tmp", None));
         std::thread::sleep(std::time::Duration::from_millis(300));
-        assert_eq!(run_analysis("/tmp").unwrap_err().code, "busy");
+        assert_eq!(run_analysis("/tmp", None).unwrap_err().code, "busy");
         let t0 = std::time::Instant::now();
         cancel_analyze();
         assert_eq!(t.join().unwrap().unwrap_err().code, "cancelled");
@@ -508,7 +513,7 @@ mod tests {
 
         // 找不到核心
         std::env::set_var("CREDITIA_CORE", dir.join("nope"));
-        assert_eq!(run_analysis("/tmp").unwrap_err().code, "core_missing");
+        assert_eq!(run_analysis("/tmp", None).unwrap_err().code, "core_missing");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

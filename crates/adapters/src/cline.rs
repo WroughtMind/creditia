@@ -136,7 +136,7 @@ pub fn scan_src(src: Src, store: &mut Store, pm: &PathMap, st: &mut Stats) {
         store.groups.insert(gk, g);
     }
     if n > 0 {
-        st.notes.push(format!("{}: 项目相关任务 {n} 个；没有确认写入成功（被拒绝、报错或找不到结果）的编辑 {unconfirmed} 次，不计入", src.harness()));
+        st.notes.push(creditia_core::tr!("{}: 项目相关任务 {n} 个；没有确认写入成功（被拒绝、报错或找不到结果）的编辑 {unconfirmed} 次，不计入", "{}: {n} tasks for this project; {unconfirmed} edits without a confirmed write (rejected, failed or no result) are not counted", src.harness()));
     }
 }
 
@@ -166,12 +166,13 @@ pub fn doctor(src: Src) -> Health {
     let rs = roots(src);
     Health {
         source: src.harness().into(),
-        path: rs.first().map(|p| p.display().to_string()).unwrap_or_else(|| "（未安装）".into()),
+        path: rs.first().map(|p| p.display().to_string()).unwrap_or_else(|| creditia_core::tr!("（未安装）", "(not installed)")),
         readable: !rs.is_empty(),
-        format: "globalStorage/<扩展>/tasks/<任务>/ui_messages.json".into(),
+        format: creditia_core::tr!("globalStorage/<扩展>/tasks/<任务>/ui_messages.json", "globalStorage/<extension>/tasks/<task>/ui_messages.json"),
         records: ts.len() as u64,
         earliest: mt.iter().min().copied().map(date_cn),
         latest: mt.iter().max().copied().map(date_cn),
-        note: format!("{} 个编辑器里装了这个扩展", rs.len()),
+        note: creditia_core::tr!("{} 个编辑器里装了这个扩展", "installed in {} editors", rs.len()),
+        ..Default::default()
     }
 }

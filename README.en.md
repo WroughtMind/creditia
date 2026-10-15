@@ -116,7 +116,10 @@ jobs:
 | <img src=".github/readme/logo/opencode.svg" width="18"> | OpenCode | Completed edit / write in `storage/session + message + part`; provider from `providerID` | ✓ | ✓ |
 | <img src=".github/readme/logo/cline.svg" width="18"> <img src=".github/readme/logo/roo.svg" width="18"> <img src=".github/readme/logo/kilo.svg" width="18"> | Cline · Roo Code · Kilo Code | `tasks/*/ui_messages.json` in each VS Code–family editor | ✓ | ✓ |
 | <img src=".github/readme/logo/grok.svg" width="18"> <img src=".github/readme/logo/kimi.svg" width="18"> | Grok · Kimi | File-write calls in their session directories | ✓ | ✓ |
-| <img src=".github/readme/logo/copilot.svg" width="18"> <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> <img src=".github/readme/logo/aider.svg" width="18"> | GitHub Copilot · Devin · Jules · Aider · Cursor cloud · bots | Commit email, `Co-authored-by`, author name | declared | — |
+| <img src=".github/readme/logo/copilot.svg" width="18"> | GitHub Copilot | Successful edits in VS Code `chatSessions` and agent transcripts; Copilot CLI `~/.copilot/session-state` | ✓ | ✓ |
+| <img src=".github/readme/logo/aider.svg" width="18"> | Aider | The repo's `.aider.chat.history.md`: only files confirmed by "Applied edit", timed by its commit | ✓ | ✓ |
+| | Amp · TRAE CLI | Completed edits in Amp's local `threads/*.json`; TRAE CLI session rollouts | ✓ | ✓ |
+| <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> | Copilot cloud · Devin · Jules · Cursor cloud · bots | Commit email, `Co-authored-by`, author name | declared | — |
 | | Any tool | `creditia stamp` / commit-hook stamp (`Creditia-Harness` trailer) | declared | ✓ |
 
 ## Install
@@ -136,6 +139,8 @@ git clone --depth 1 https://github.com/WroughtMind/creditia /tmp/creditia && cp 
 ```
 
 The GitHub Action needs no install: use `WroughtMind/creditia@main`.
+
+The command line speaks Chinese by default; add `--lang en` or set `CREDITIA_LANG=en` for English.
 
 <details>
 <summary><b>Repository layout</b></summary>

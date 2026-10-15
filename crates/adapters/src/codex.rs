@@ -21,10 +21,10 @@ struct Thread {
 
 fn threads(base: &Path) -> Result<Vec<Thread>, String> {
     let db = base.join("state_5.sqlite");
-    let conn = open_ro(&db).map_err(|e| format!("codex: 线程索引不可读 {e}"))?;
+    let conn = open_ro(&db).map_err(|e| creditia_core::tr!("codex: 线程索引不可读 {e}", "codex: thread index unreadable {e}"))?;
     let mut stmt = conn
         .prepare("select id, rollout_path, created_at, updated_at, tokens_used, coalesce(model,''), git_branch, cwd, coalesce(git_origin_url,'') from threads")
-        .map_err(|e| format!("codex: threads 表结构不认识 {e}"))?;
+        .map_err(|e| creditia_core::tr!("codex: threads 表结构不认识 {e}", "codex: unknown threads table layout {e}"))?;
     let rows = stmt
         .query_map([], |r| {
             Ok(Thread {
@@ -168,7 +168,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         g.sessions.push(Session { src: Src::Codex, id: t.id.clone(), model: t.model, start: t.start, end: t.end, tokens: t.tokens, branch: t.branch, prompts, reviewer, has_content: file.is_some(), provider });
         store.groups.insert(gk, g);
     }
-    st.notes.push(format!("codex: 线程 {} 个，内容文件存在 {found}，缺失 {missing}", found + missing));
+    st.notes.push(creditia_core::tr!("codex: 线程 {} 个，内容文件存在 {found}，缺失 {missing}", "codex: {} threads, {found} with content files, {missing} missing", found + missing));
 }
 
 pub fn discover() -> Vec<Activity> {
@@ -197,7 +197,7 @@ pub fn doctor() -> Health {
             h.latest = rows.iter().map(|t| t.end).max().map(date_cn);
             let files = rollout_files(&base);
             let have = rows.iter().filter(|t| files.contains_key(&Path::new(&t.rollout).file_name().map(|s| s.to_string_lossy().replace(".zst", "")).unwrap_or_default())).count();
-            h.note = format!("{} 个线程有内容文件", have);
+            h.note = creditia_core::tr!("{} 个线程有内容文件", "{} threads have content files", have);
         }
         Err(e) => h.note = e,
     }
@@ -205,7 +205,7 @@ pub fn doctor() -> Health {
 }
 
 /// Codex 的 shell 调用：`shell` / `exec_command` 的参数（JSON 字符串），或 `local_shell_call` 的 action。返回（命令原文，工作目录）
-fn shell_call(p: &Value, cwd: &str) -> Option<(String, String)> {
+pub(crate) fn shell_call(p: &Value, cwd: &str) -> Option<(String, String)> {
     let args: Value = match p["type"].as_str() {
         Some("local_shell_call") => p["action"].clone(),
         _ => {
@@ -230,7 +230,7 @@ fn shell_call(p: &Value, cwd: &str) -> Option<(String, String)> {
 }
 
 /// shell 调用的结果是否失败：JSON 里的 exit_code，或文本里的「exit code N」「exited with code N」
-fn call_failed(out: &Value) -> bool {
+pub(crate) fn call_failed(out: &Value) -> bool {
     let text = match out {
         Value::String(s) => s.clone(),
         v => v.to_string(),

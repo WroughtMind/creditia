@@ -156,7 +156,7 @@ impl<'a> Engine<'a> {
                             *l = Some(Attr { who, level: Level::Inferred });
                         }
                     }
-                    reason.get_or_insert_with(|| "同一改动块内有逐行证据（推断）".into());
+                    reason.get_or_insert_with(|| crate::tr!("同一改动块内有逐行证据（推断）", "line evidence in the same change (inferred)"));
                 }
             }
         }
@@ -210,10 +210,10 @@ impl<'a> Engine<'a> {
     /// 提交本身写明的来源。按优先级：盖章 trailer → agent 提交邮箱 → Co-authored-by → bot → aider 的作者名 → 别人的提交（算那个人）
     fn declared(&mut self, c: &Commit) -> Option<(Attr, String)> {
         if let Some((h, m)) = self.stamps.get(&c.hash).cloned() {
-            return Some((Attr { who: self.reg.agent(&h, m.as_deref()), level: Level::Declared }, "Creditia 盖章".into()));
+            return Some((Attr { who: self.reg.agent(&h, m.as_deref()), level: Level::Declared }, crate::tr!("Creditia 盖章", "Creditia stamp")));
         }
         if let Some(h) = self.cfg.agent_emails.get(&c.email).cloned() {
-            return Some((Attr { who: self.reg.agent(&h, None), level: Level::Declared }, format!("agent 提交邮箱 {}", c.email)));
+            return Some((Attr { who: self.reg.agent(&h, None), level: Level::Declared }, crate::tr!("agent 提交邮箱 {}", "agent commit email {}", c.email)));
         }
         for co in &c.coauthors {
             if let Some((_, h)) = self.cfg.agent_emails.iter().find(|(e, _)| co.contains(e.as_str())) {
@@ -224,17 +224,17 @@ impl<'a> Engine<'a> {
         }
         if self.cfg.bot_emails.contains(&c.email) || c.email.contains("[bot]") {
             let h = if c.email.contains("dependabot") { "dependabot" } else if c.email.contains("renovate") { "renovate" } else { "github-actions" };
-            return Some((Attr { who: self.reg.agent(h, None), level: Level::Declared }, "bot 账号".into()));
+            return Some((Attr { who: self.reg.agent(h, None), level: Level::Declared }, crate::tr!("bot 账号", "bot account")));
         }
         if c.name.trim_end().ends_with("(aider)") {
-            return Some((Attr { who: self.reg.agent("aider", None), level: Level::Declared }, "aider 署名的作者".into()));
+            return Some((Attr { who: self.reg.agent("aider", None), level: Level::Declared }, crate::tr!("aider 署名的作者", "author marked (aider)")));
         }
         if !self.director_emails.contains(&c.email) {
             // 以邮箱为身份，显示 git 作者名
             let name = if c.name.is_empty() { c.email.clone() } else { c.name.clone() };
             let name = self.cfg.display_name(&name);
             // id 用邮箱的短哈希：档案可能被公开，不能带出邮箱
-            return Some((Attr { who: self.reg.human(&person_id(&c.email), &name), level: Level::Declared }, "其他人的提交".into()));
+            return Some((Attr { who: self.reg.human(&person_id(&c.email), &name), level: Level::Declared }, crate::tr!("其他人的提交", "someone else's commit")));
         }
         None
     }
@@ -244,18 +244,18 @@ impl<'a> Engine<'a> {
         if self.strictness == Strictness::Loose {
             if let Some(s) = self.session_at(c, None) {
                 let (h, m) = (s.src.harness(), s.model.clone());
-                return (Attr { who: self.reg.agent(h, Some(&m)), level: Level::Inferred }, format!("提交时 {h} 会话正在进行（推断）"));
+                return (Attr { who: self.reg.agent(h, Some(&m)), level: Level::Inferred }, crate::tr!("提交时 {h} 会话正在进行（推断）", "a {h} session was running at commit time (inferred)"));
             }
         }
         if self.strictness != Strictness::Strict {
             if let Some(b) = self.unit_branch.get(&c.hash) {
                 if let Some((_, h)) = self.cfg.branch_prefixes.iter().find(|(p, _)| b.starts_with(p.as_str())) {
                     let h = h.clone();
-                    return (Attr { who: self.reg.agent(&h, None), level: Level::Inferred }, format!("分支前缀 {b}（推断）"));
+                    return (Attr { who: self.reg.agent(&h, None), level: Level::Inferred }, crate::tr!("分支前缀 {b}（推断）", "branch prefix {b} (inferred)"));
                 }
             }
         }
-        (Attr { who: self.reg.unattributed(), level: Level::Unattributed }, "没有证据".into())
+        (Attr { who: self.reg.unattributed(), level: Level::Unattributed }, crate::tr!("没有证据", "no evidence"))
     }
 
     /// 提交时间落在某个写代码会话里（会话结束后 30 分钟内也算）；分支一致的优先
