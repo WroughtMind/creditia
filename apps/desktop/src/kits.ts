@@ -39,13 +39,20 @@ export function bootKits() {
   registerFonts();
 }
 
-/** 同一份档案同一种语言只建一次模型 */
+/** 分组方式（按工具 / 按模型 / 自动），每个项目各记各的，由 main 在打开项目时设好 */
+let group: V.GroupOpt = 'auto';
+export function setGroup(g: V.GroupOpt) { group = g; }
+export const groupOf = (raw: any) => V.resolveGroup(raw, group);
+/** 档案里有没有记下模型：一个都没有就不用给分组开关 */
+export const hasModels = (raw: any) => (raw?.contributors ?? []).some((c: any) => !!V.agentOf(raw, c.id)?.model);
+
+/** 同一份档案、同一种语言、同一种分组只建一次模型 */
 function memo<M>(build: (raw: any, lang: Lang) => M) {
-  let k: [any, Lang] | null = null, v: M;
-  return (raw: any, lang: Lang) => { if (!k || k[0] !== raw || k[1] !== lang) { v = build(raw, lang); k = [raw, lang]; } return v; };
+  let k: [any, Lang, V.GroupOpt] | null = null, v: M;
+  return (raw: any, lang: Lang) => { if (!k || k[0] !== raw || k[1] !== lang || k[2] !== group) { v = build(raw, lang); k = [raw, lang, group]; } return v; };
 }
-const classicModel = memo((raw, lang) => C.buildModel(raw, { director: false, lang }));
-const v2Model = memo((raw, lang) => V.buildModel(raw, { lang, named: false, sign: '' }));
+const classicModel = memo((raw, lang) => C.buildModel(raw, { director: false, lang, group }));
+const v2Model = memo((raw, lang) => V.buildModel(raw, { lang, named: false, sign: '', group }));
 
 const CLASSIC_BOARD: Tile[] = [
   { id: 'share', span: 2 }, { id: 'tier' }, { id: 'roll' }, { id: 'receipt' }, { id: 'donut' },

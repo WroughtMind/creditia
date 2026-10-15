@@ -67,7 +67,7 @@ export function mergeCreditsMd(existing: string | null, block: string): string {
 export function releaseNotes(m: Model, tag: string): string {
   const v = m.versions.find((x) => x.tag === tag);
   if (!v) return '';
-  const parts = Object.entries(v.by).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${nameOf(k, m.lang)} ${pct((n / v.total) * 100)}`);
+  const parts = Object.entries(v.by).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${m.agents.find((a) => a.key === k)?.name ?? nameOf(k, m.lang)} ${pct((n / v.total) * 100)}`);
   return `### Credits\n\n${parts.join(' · ')}\n`;
 }
 

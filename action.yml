@@ -25,6 +25,9 @@ inputs:
   lang:
     description: zh 或 en
     default: zh
+  group:
+    description: 按工具（tool）还是按模型（model）分行；auto 在一个工具占九成以上、下面有几个模型时按模型
+    default: auto
 runs:
   using: composite
   steps:
@@ -41,12 +44,13 @@ runs:
         CREDITS: ${{ inputs.credits }}
         STYLE: ${{ inputs.style }}
         LANG_CT: ${{ inputs.lang }}
+        GROUP: ${{ inputs.group }}
         BADGE: ${{ inputs.badge }}
         DOC: ${{ inputs.doc }}
         SITE: ${{ inputs.site }}
       run: |
         set -e
         if [ ! -f "$CREDITS" ]; then echo "::error::没有 $CREDITS。先在本机运行 creditia analyze && creditia publish，把 credits.json 提交进仓库。"; exit 1; fi
-        if [ -n "$BADGE" ]; then $CT export --credits "$CREDITS" --piece badge --style "$STYLE" --lang "$LANG_CT" --format svg --out "$BADGE"; fi
+        if [ -n "$BADGE" ]; then $CT export --credits "$CREDITS" --piece badge --style "$STYLE" --lang "$LANG_CT" --group "$GROUP" --format svg --out "$BADGE"; fi
         if [ -n "$DOC" ]; then $CT doc --credits "$CREDITS" --lang "$LANG_CT" --out "$DOC"; fi
-        if [ -n "$SITE" ]; then $CT site --credits "$CREDITS" --style "$STYLE" --lang "$LANG_CT" --out "$SITE"; fi
+        if [ -n "$SITE" ]; then $CT site --credits "$CREDITS" --style "$STYLE" --lang "$LANG_CT" --group "$GROUP" --out "$SITE"; fi

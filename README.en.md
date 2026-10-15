@@ -53,6 +53,8 @@ creditia blame src/core/analyze.ts:12         # which tool and model wrote this 
 
 One project in several places (worktrees, scratch clones, another machine): `creditia paths` lists the registered paths, `creditia link <path>` adds one.
 
+Pieces list one row per tool by default. When one tool wrote nearly everything and switched models along the way, they switch to one row per model on their own. Pick with `--group tool` / `--group model`, or flip it in the App's top bar and go back to automatic any time. Multi-model bars also come in "split" and "grouped" layouts, and the donut has a "nested" one.
+
 ## Every line has a source
 
 - **Matched in logs** — The tool's own log recorded writing this line: Claude Code Write / Edit, Codex FileChange, Cursor line hashes…

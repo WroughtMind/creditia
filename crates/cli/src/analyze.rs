@@ -438,7 +438,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
                 *by_area.entry(at.who).or_default().entry(ar).or_default() += 1;
                 *by_ver.entry(at.who).or_default().entry(ver.clone()).or_default() += 1;
                 *by_week.entry(iso_week(c.author_ts)).or_default().entry(reg.list[at.who].id.clone()).or_default() += 1;
-                *by_day.entry(d.clone()).or_default().entry(reg.group(at.who)).or_default() += 1;
+                *by_day.entry(d.clone()).or_default().entry(reg.fine(at.who)).or_default() += 1;
                 let e = seg.entry(sg.clone()).or_default();
                 if k != 0 {
                     e.long += 1;
@@ -464,7 +464,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
             // 按行顺序的分段：[[贡献方 id, 连续行数], …]，代码地图用（只有归属，没有代码；id 带模型）
             let mut runs: Vec<(&str, usize)> = vec![];
             for _ in lines.iter() {
-                *g.entry(reg.group(surv[i].who)).or_default() += 1;
+                *g.entry(reg.fine(surv[i].who)).or_default() += 1;
                 let id = reg.list[surv[i].who].id.as_str();
                 match runs.last_mut() {
                     Some((last, n)) if *last == id => *n += 1,

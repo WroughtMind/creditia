@@ -53,6 +53,8 @@ creditia blame src/core/analyze.ts:12         # 这一行是哪个工具、哪�
 
 一个项目在好几个地方（worktree、临时克隆、换过电脑）：`creditia paths` 看登记过的路径，`creditia link <路径>` 补上。
 
+作品默认按工具分行；一个工具写了绝大部分、下面又换过几个模型时，自动改成按模型分。`--group tool` / `--group model` 指定，App 顶栏也能切换、随时切回自动。多模型的条形图还有「分段」「分组」两种版式，环形图有「内外环」。
+
 ## 每一行，都有出处
 
 - **日志里对得上**　工具日志里有这一行的写入：Claude Code 的 Write / Edit、Codex 的 FileChange、Cursor 的逐行哈希……

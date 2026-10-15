@@ -3,7 +3,7 @@
 import { defineStyle, logo, type Style, type Box } from '../style.ts';
 import { el, rect, circle, line, path, r, mix } from '../svg.ts';
 import type { Scene } from '../svg.ts';
-import { buildModel as buildV2, type Model as V2Model } from '../data.ts';
+import { buildModel as buildV2, type Model as V2Model, type Group } from '../data.ts';
 import { art as v2Art, frames as v2Frames } from '../registry.ts';
 import { TIER_VARIANTS } from '../pieces/tier.ts';
 import { BADGE_VARIANTS } from '../pieces/cards.ts';
@@ -131,19 +131,22 @@ export const BRIDGED_LAYOUTS: Record<string, string[]> = {
   tier: TIER_VARIANTS,
   roll: ['card', 'vertical', 'ed', 'terminal'],
   badge: BADGE_VARIANTS,
+  donut: ['nested'],
 };
 export const isBridged = (id: string, variant?: string) => BRIDGED.includes(id) || (!!variant && !!BRIDGED_LAYOUTS[id]?.includes(variant));
 
-/** 新作品读新模型；同一份档案同一种语言只建一次 */
-const models = new WeakMap<object, Partial<Record<'zh' | 'en', V2Model>>>();
-export function v2ModelOf(raw: any, lang: 'zh' | 'en'): V2Model {
+/** 新作品读新模型；同一份档案、同一种语言、同一种分组只建一次 */
+const models = new WeakMap<object, Record<string, V2Model>>();
+export function v2ModelOf(raw: any, lang: 'zh' | 'en', group: Group = 'tool'): V2Model {
   const k = raw && typeof raw === 'object' ? raw : {};
   const hit = models.get(k) ?? {};
-  if (!hit[lang]) { hit[lang] = buildV2(raw, { lang, named: false, sign: '' }); models.set(k, hit); }
-  return hit[lang]!;
+  const key = `${lang}|${group}`;
+  if (!hit[key]) { hit[key] = buildV2(raw, { lang, named: false, sign: '', group }); models.set(k, hit); }
+  return hit[key];
 }
 
-export const bridgeArt = (id: string, m: { raw: any }, t: Theme, o: { lang: 'zh' | 'en'; variant?: string }): Art | null =>
-  v2Art(id, v2ModelOf(m.raw, o.lang), bridgeStyle(t), { variant: o.variant });
-export const bridgeFrames = (id: string, m: { raw: any }, t: Theme, o: { lang: 'zh' | 'en'; variant?: string }, n = 24): Art[] =>
-  v2Frames(id, v2ModelOf(m.raw, o.lang), bridgeStyle(t), { variant: o.variant }, n);
+// 分组方式跟着原版模型走（它已经按 auto 选好了），两套渲染器的数字一致
+export const bridgeArt = (id: string, m: { raw: any; group?: Group }, t: Theme, o: { lang: 'zh' | 'en'; variant?: string }): Art | null =>
+  v2Art(id, v2ModelOf(m.raw, o.lang, m.group), bridgeStyle(t), { variant: o.variant });
+export const bridgeFrames = (id: string, m: { raw: any; group?: Group }, t: Theme, o: { lang: 'zh' | 'en'; variant?: string }, n = 24): Art[] =>
+  v2Frames(id, v2ModelOf(m.raw, o.lang, m.group), bridgeStyle(t), { variant: o.variant }, n);

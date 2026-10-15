@@ -12,6 +12,14 @@ export interface ModelLine { id: string; name: string; lines: number; share: num
 export interface Agent {
   key: string;
   name: string;
+  /** 所属工具（harness）；按模型分组时 key 是「工具/模型」，这里仍是工具 */
+  tool: string;
+  /** 按模型分组时这一行的模型 id */
+  model?: string;
+  /** 工具的显示名 */
+  toolName: string;
+  /** 同一工具下第几个模型（按行数排），用来在品牌色上分出深浅 */
+  shade: number;
   kind: 'agent' | 'bot' | 'other' | 'unknown';
   lines: number;
   pct: number;
@@ -51,9 +59,21 @@ export interface Hand {
   sessions: number;
 }
 
+/** 分组方式：按工具，或按模型（同一工具的不同模型各成一行）；auto 按数据自动选 */
+export type Group = 'tool' | 'model';
+export type GroupOpt = Group | 'auto';
+
 export interface Model {
   project: string;
   lang: Lang;
+  /** 实际用的分组方式 */
+  group: Group;
+  /** 分组方式是自动选的 */
+  groupAuto: boolean;
+  /** 按工具的排名（不论分组方式都有）：分段、分组这类版式用它，组内模型在 models 里 */
+  tools: Agent[];
+  /** 贡献者 id → 当前分组 key */
+  keyOf: (id: string) => string;
   range: { from: string; to: string };
   spanDays: number;
   activeDays: number;
@@ -97,8 +117,10 @@ export interface Options {
   named: boolean;
   /** 署名（用户主动填写） */
   sign: string;
+  /** 分组方式，默认 auto */
+  group?: GroupOpt;
 }
-export const DEFAULTS: Options = { lang: 'zh', named: false, sign: '' };
+export const DEFAULTS: Options = { lang: 'zh', named: false, sign: '', group: 'auto' };
 
 // ───────────────────────── 名称 ─────────────────────────
 
@@ -132,6 +154,72 @@ export function modelName(id: string): string {
   return out.join(' ').replace(/^GPT (\d)/, 'GPT-$1');
 }
 
+// ───────────────────────── 分组 ─────────────────────────
+
+/** 贡献者 id → (工具, 模型)；人、未确认返回 null */
+export function agentOf(c: any, id: string): { tool: string; model: string } | null {
+  const x = (c.contributors ?? []).find((q: any) => q.id === id);
+  if (id === 'unattributed' || x?.kind === 'unattributed') return null;
+  if (x?.harness) return { tool: x.harness, model: x.model ?? '' };
+  if (id.startsWith('a:')) { const [tool, ...rest] = id.slice(2).split('/'); return { tool, model: rest.join('/') }; }
+  return null;
+}
+
+/** 每个工具下各模型的行数（不含机器人） */
+function toolModels(c: any): Map<string, Map<string, number>> {
+  const out = new Map<string, Map<string, number>>();
+  for (const b of c.breakdown ?? []) {
+    const a = agentOf(c, b.contributor);
+    if (!a || BOTS.has(a.tool)) continue;
+    const mm = out.get(a.tool) ?? new Map<string, number>();
+    mm.set(a.model, (mm.get(a.model) ?? 0) + n(b.linesAdded));
+    out.set(a.tool, mm);
+  }
+  return out;
+}
+
+/** auto：一个工具写了 AI 代码的九成以上，而且它下面至少两个模型各占它的 2% 以上，就按模型分；否则按工具 */
+export function resolveGroup(c: any, g: GroupOpt = 'auto'): Group {
+  if (g === 'tool' || g === 'model') return g;
+  const tm = toolModels(c);
+  const total = [...tm.values()].reduce((s, mm) => s + [...mm.values()].reduce((a, b) => a + b, 0), 0);
+  if (!total) return 'tool';
+  for (const mm of tm.values()) {
+    const t = [...mm.values()].reduce((a, b) => a + b, 0);
+    if (t / total < 0.9) continue;
+    return [...mm.entries()].filter(([m, v]) => m && v / t >= 0.02).length >= 2 ? 'model' : 'tool';
+  }
+  return 'tool';
+}
+
+/** 按模型分组时同一工具下各模型的序号：品牌色按它分深浅（两套渲染器共用） */
+export const SHADES = new Map<string, number>();
+
+/** 按模型分组：key 是「工具/模型」，没记模型的仍是工具；同一个模型出现在几个工具下时名字后面带上工具 */
+export function modelGroups(c: any, lang: Lang) {
+  const tm = toolModels(c);
+  const toolsOf = new Map<string, Set<string>>();
+  for (const [tool, mm] of tm) for (const m of mm.keys()) if (m) { const set = toolsOf.get(m) ?? new Set(); set.add(tool); toolsOf.set(m, set); }
+  const shade = new Map<string, number>();
+  for (const [tool, mm] of tm) [...mm.entries()].filter(([m]) => m).sort((a, b) => b[1] - a[1]).forEach(([m], i) => shade.set(`${tool}/${m}`, i));
+  for (const [k, i] of shade) SHADES.set(k, i);
+  const keyOf = (id: string): string | null => {
+    const a = agentOf(c, id);
+    if (!a) return null;
+    return a.model && !BOTS.has(a.tool) ? `${a.tool}/${a.model}` : a.tool;
+  };
+  const name = (key: string): string => {
+    const i = key.indexOf('/');
+    if (i < 0) {
+      const named = [...(tm.get(key)?.keys() ?? [])].some((m) => m);
+      return nameOf(key, lang) + (named ? (lang === 'zh' ? '（未记录模型）' : ' (model not recorded)') : '');
+    }
+    const tool = key.slice(0, i), m = key.slice(i + 1);
+    return modelName(m) + ((toolsOf.get(m)?.size ?? 0) > 1 ? ` · ${nameOf(tool, lang)}` : '');
+  };
+  return { keyOf, name, shade: (key: string) => shade.get(key) ?? 0 };
+}
+
 // ───────────────────────── 构建 ─────────────────────────
 
 const n = (x: unknown) => (typeof x === 'number' && isFinite(x) && x > 0 ? x : 0);
@@ -142,12 +230,15 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
   const lang = o.lang;
   const contribs: any[] = c.contributors ?? [];
   const byId = new Map(contribs.map((x) => [x.id, x]));
+  const group = resolveGroup(c, o.group);
+  const mg = group === 'model' ? modelGroups(c, lang) : null;
+  const toolOfKey = (k: string) => k.split('/')[0];
   /** 贡献者 id → 展示分组 key */
   const groupOf = (id: string): { key: string; kind: 'agent' | 'bot' | 'human' | 'unknown'; name?: string } => {
     const x = byId.get(id);
     if (id === 'unattributed' || x?.kind === 'unattributed') return { key: 'unattributed', kind: 'unknown' };
-    if (x?.harness) return { key: x.harness, kind: BOTS.has(x.harness) || x.kind === 'bot' ? 'bot' : 'agent' };
-    if (id.startsWith('a:')) { const h = id.slice(2).split('/')[0]; return { key: h, kind: BOTS.has(h) ? 'bot' : 'agent' }; }
+    if (x?.harness) return { key: mg?.keyOf(id) ?? x.harness, kind: BOTS.has(x.harness) || x.kind === 'bot' ? 'bot' : 'agent' };
+    if (id.startsWith('a:')) { const h = id.slice(2).split('/')[0]; return { key: mg?.keyOf(id) ?? h, kind: BOTS.has(h) ? 'bot' : 'agent' }; }
     const name = x?.name ?? id.replace(/^h:/, '');
     return { key: `h:${name.toLowerCase().trim()}`, kind: 'human', name };
   };
@@ -169,7 +260,8 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
       peopleBy.set(gr.key, p);
       continue;
     }
-    const a = agentsBy.get(gr.key) ?? { key: gr.key, name: nameOf(gr.key, lang), kind: gr.kind === 'unknown' ? 'unknown' : gr.kind, lines: 0, pct: 0, surviving: 0, survival: 0, verified: 0, models: [], providers: [], sessions: 0, tokens: 0, first: '', last: '', rank: 0 } as Agent;
+    const tool = toolOfKey(gr.key), isModel = gr.key.includes('/');
+    const a = agentsBy.get(gr.key) ?? { key: gr.key, name: mg ? mg.name(gr.key) : nameOf(gr.key, lang), tool, toolName: nameOf(tool, lang), model: isModel ? gr.key.slice(tool.length + 1) : undefined, shade: mg ? mg.shade(gr.key) : 0, kind: gr.kind === 'unknown' ? 'unknown' : gr.kind, lines: 0, pct: 0, surviving: 0, survival: 0, verified: 0, models: [], providers: [], sessions: 0, tokens: 0, first: '', last: '', rank: 0 } as Agent;
     a.lines += lines; a.surviving += surv;
     verifiedBy.set(gr.key, (verifiedBy.get(gr.key) ?? 0) + ver);
     const pf = (a.proof ??= { verified: 0, declared: 0, inferred: 0 });
@@ -204,7 +296,8 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
     a.verified = a.lines ? Math.min(1, (verifiedBy.get(a.key) ?? 0) / a.lines) : 0;
     const mm = [...(modelLines.get(a.key) ?? new Map()).entries()].sort((x, y) => y[1] - x[1]);
     const mt = mm.reduce((s, [, v]) => s + v, 0) || 1;
-    a.models = mm.map(([id, v]) => ({ id, name: modelName(id), lines: v, share: v / mt }));
+    // 按模型分组时一行就是一个模型，组内不再列模型
+    a.models = a.model ? [] : mm.map(([id, v]) => ({ id, name: modelName(id), lines: v, share: v / mt }));
   }
   for (const p of peopleBy.values()) p.pct = pctOf(p.lines);
 
@@ -217,7 +310,7 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
   const restLines = rest.reduce((s, x) => s + x.lines, 0);
   if (pctOf(restLines) >= 0.1) {
     const sum = (k: 'verified' | 'declared' | 'inferred') => rest.reduce((s, x) => s + (x.proof?.[k] ?? 0), 0);
-    rows.push({ key: 'other', name: nameOf('other', lang), kind: 'other', lines: restLines, pct: pctOf(restLines), surviving: rest.reduce((s, x) => s + x.surviving, 0), survival: 0, verified: 0, proof: { verified: sum('verified'), declared: sum('declared'), inferred: sum('inferred') }, models: [], providers: [], sessions: rest.reduce((s, x) => s + x.sessions, 0), tokens: 0, first: '', last: '', rank: rows.length });
+    rows.push({ key: 'other', name: nameOf('other', lang), tool: 'other', toolName: nameOf('other', lang), shade: 0, kind: 'other', lines: restLines, pct: pctOf(restLines), surviving: rest.reduce((s, x) => s + x.surviving, 0), survival: 0, verified: 0, proof: { verified: sum('verified'), declared: sum('declared'), inferred: sum('inferred') }, models: [], providers: [], sessions: rest.reduce((s, x) => s + x.sessions, 0), tokens: 0, first: '', last: '', rank: rows.length });
   }
   if (unknown && unknown.pct >= 0.05) { unknown.name = nameOf('unattributed', lang); unknown.rank = 99; rows.push(unknown); }
 
@@ -271,8 +364,9 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
     .map((x) => ({ key: x.harness, name: nameOf(x.harness, lang), model: x.model ?? '', reviews: n(x.reviews) }));
   // 旧档案里的 directors 只用来认出「本机用户」是人；不再生成「主导」字样
   const sign = o.sign || '';
+  const tools = group === 'model' ? buildModel(c, { ...o, group: 'tool' }).rows : rows;
   return {
-    project: c.project?.name ?? '', lang,
+    project: c.project?.name ?? '', lang, group, groupAuto: (o.group ?? 'auto') === 'auto', tools, keyOf,
     range: { from: range.from ?? '', to: range.to ?? '' }, spanDays: span, activeDays: n(t.days),
     agents, rows, unknown, people, named: o.named, sign, hand, showHand: false,
     commits: n(t.commits), units: n(t.units), linesAdded: n(t.linesAdded) || total, linesSurviving: n(t.linesSurviving), tokens: n(t.tokens), sessions: n(t.sessions),
@@ -318,6 +412,7 @@ export function tipOf(m: Model, a: Agent): { k: string; t: string; d: string[] }
   if (a.kind === 'unknown') return { k: a.key, t: a.name, d: [zh ? `${fmt(a.lines)} 行 · ${pct(a.pct)}` : `${fmt(a.lines)} lines · ${pct(a.pct)}`, zh ? '找不到证据，不算到任何人头上' : 'No evidence for anyone, so not credited'] };
   const d = [zh ? `${fmt(a.lines)} 行 · ${pct(a.pct)}` : `${fmt(a.lines)} lines · ${pct(a.pct)}`];
   if (a.models.length) d.push(a.models.slice(0, 3).map((x) => `${x.name} ${Math.round(x.share * 100)}%`).join(' · '));
+  if (a.model) d.push(zh ? `用 ${a.toolName}` : `via ${a.toolName}`);
   if (a.surviving) d.push(zh ? `现在还在 ${fmt(a.surviving)} 行（${Math.round(a.survival * 100)}%）` : `${fmt(a.surviving)} still in the code (${Math.round(a.survival * 100)}%)`);
   if (a.sessions) d.push(zh ? `${a.sessions} 个会话${a.tokens ? ` · ${compact(a.tokens)} token` : ''}` : `${a.sessions} sessions${a.tokens ? ` · ${compact(a.tokens)} tokens` : ''}`);
   if (a.verified) d.push(zh ? `${Math.round(a.verified * 100)}% 能在日志里对上` : `${Math.round(a.verified * 100)}% line-level evidence`);

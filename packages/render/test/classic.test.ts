@@ -64,7 +64,8 @@ test('片尾字幕新版式：内容少时整体放大，不缩在画面中间�
   const keep = new Set(one.contributors.filter((c: any) => c.harness === 'claude-code' || c.kind !== 'agent').map((c: any) => c.id));
   one.contributors = one.contributors.filter((c: any) => keep.has(c.id));
   one.breakdown = one.breakdown.filter((b: any) => keep.has(b.contributor));
-  const m1 = buildModel(one, { director: false, lang: 'zh' });
+  // 只有一个工具时 auto 会按模型分；这里要的是「内容少」，固定按工具
+  const m1 = buildModel(one, { director: false, lang: 'zh', group: 'tool' });
   assert.deepEqual(FORMS.roll.variants!.slice(0, 11), ['classic', 'columns', 'billing', 'title', 'crawl', 'cast', 'scroll', 'cards', 'end', 'block', 'program']);
   for (const v of ['opening', 'production', 'crew']) {
     const a = await art('roll', m1, themeById('film')!, { lang: 'zh', variant: v });
@@ -112,4 +113,17 @@ test('原版作品会动：条形从零长出来，滚字升上来，最后一�
   const roll = await frames('roll', m, themeById('crt')!, { lang: 'zh', variant: 'crawl' }, 4);
   assert.equal(roll.length, 5);
   assert.ok((await frames('stream', m, themeById('cinema')!, { lang: 'zh' }, 4)).length === 5);
+});
+
+test('按模型分组：原版的全部作品在代表主题下都能出图，模型各占一行', async () => {
+  const mm = buildModel(raw, { director: false, lang: 'en', group: 'model' });
+  assert.equal(mm.group, 'model');
+  assert.ok(mm.rows.some((r) => r.key === 'claude-code/claude-opus-5-5' && r.name === 'Claude Opus 5.5'));
+  for (const tid of ['minimal-light', 'glass', 'cinema', 'arcade']) {
+    const t = themeById(tid)!;
+    for (const id of [...Object.keys(FORMS).filter((x) => x !== 'profile' && x !== 'blame'), 'badge']) {
+      const a = await art(id, mm, t, { lang: 'en' });
+      assert.ok(a && a.svg.startsWith('<svg') && a.w > 0 && a.h > 0, `${id} × ${tid}`);
+    }
+  }
 });

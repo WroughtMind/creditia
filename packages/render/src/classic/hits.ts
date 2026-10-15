@@ -15,7 +15,7 @@ const inside = (a: Seen, b: Seen, slack = 1) =>
   a.left >= b.left - slack && a.top >= b.top - slack && a.left + a.width <= b.left + b.width + slack && a.top + a.height <= b.top + b.height + slack;
 
 export function hitsOf(nodes: Seen[], m: Model, t: Theme, lang: 'zh' | 'en', W: number, H: number): Hit[] {
-  const v2 = v2ModelOf(m.raw, lang);
+  const v2 = v2ModelOf(m.raw, lang, m.group);
   const tips = new Map<string, ReturnType<typeof tipOf>>();
   for (const a of v2.rows) tips.set(a.key, tipOf(v2, a));
   const byName = new Map<string, string>();

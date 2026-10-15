@@ -44,6 +44,8 @@ const json = on.has('json');
 /** 文案语言：--lang，其次环境变量 CREDITIA_LANG，默认中文。也传给核心 */
 const LANG = (): 'zh' | 'en' => ((flags.lang ?? process.env.CREDITIA_LANG ?? 'zh').toLowerCase().startsWith('en') ? 'en' : 'zh');
 const L = (zh: string, en: string) => (LANG() === 'en' ? en : zh);
+/** 分组方式：--group auto|tool|model，默认 auto（一个工具占九成以上、下面有几个模型时按模型分） */
+const GROUP = (): 'auto' | 'tool' | 'model' => { const g = (flags.group ?? 'auto').toLowerCase(); return g === 'tool' || g === 'model' ? g : 'auto'; };
 
 const USAGE_ZH = `用法：creditia <命令> [选项]
 
@@ -66,13 +68,14 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   release-notes  <tag|unreleased>                       该版本的 credits 段落
   pr-comment     <N>                                    该 PR 的一句话归因
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
-                 [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--out FILE]
+                 [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group auto|tool|model] [--out FILE]
   export         --list                                 全部作品、版式、风格、格式
   board          [--style S] [--out credits.html]       全部作品放进一个可交互的 HTML 页面
   site           [--out 目录] [--style S]               一个小网站：首页是全部作品，每种风格一页（给 GitHub Pages）
   publish        [--out credits.json]                   把档案放到仓库根目录，准备公开（会列出将公开的内容）
 
 任何展示命令都可以加 --credits FILE，直接用一份现成的档案（CI 里没有 agent 日志，用的就是仓库里公开的 credits.json）
+任何展示命令都可以加 --group auto|tool|model：按工具还是按模型分行（默认 auto：一个工具占九成以上、下面有几个模型时按模型）
   fetch                                                 终端名片
 
 所有命令支持 --json 和 --lang zh|en（也可以设环境变量 CREDITIA_LANG）。`;
@@ -98,13 +101,14 @@ Credits and pieces
   release-notes  <tag|unreleased>                       the credits paragraph for a version
   pr-comment     <N>                                    a one-line attribution for a PR
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
-                 [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--out FILE]
+                 [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group auto|tool|model] [--out FILE]
   export         --list                                 every piece, layout, style and format
   board          [--style S] [--out credits.html]       every piece on one interactive HTML page
   site           [--out DIR] [--style S]                a small site: all pieces on the home page, one page per style (for GitHub Pages)
   publish        [--out credits.json]                   put the credits file at the repository root for publishing (lists what becomes public)
 
 Every display command takes --credits FILE to use an existing credits file (CI has no agent logs; it uses the public credits.json in the repository)
+Every display command takes --group auto|tool|model: one row per tool or per model (default auto: per model when one tool wrote over 90% with several models)
   fetch                                                 terminal card
 
 Every command takes --json and --lang zh|en (or set CREDITIA_LANG).`;
@@ -213,20 +217,20 @@ const V2_PIECES = Object.keys(V2.PIECES).filter((id) => id !== 'hand');
 const piecesOf = (l: Look) => (l.kind === 'classic' ? PIECE_IDS : V2_PIECES);
 const LOOKS: Look[] = [...ORDERED_THEMES.map((t) => ({ kind: 'classic' as const, t })), ...V2_STYLES.map((s) => ({ kind: 'v2' as const, s }))];
 async function artOf(id: string, raw: any, l: Look, variant?: string): Promise<Art | null> {
-  if (l.kind === 'classic') return art(id, buildModel(raw, { director: false, lang: LANG() }), l.t, ctxOf(variant));
-  return V2.art(id, V2.buildModel(raw, { lang: LANG(), named: false, sign: '' }), l.s, { variant });
+  if (l.kind === 'classic') return art(id, buildModel(raw, { director: false, lang: LANG(), group: GROUP() }), l.t, ctxOf(variant));
+  return V2.art(id, V2.buildModel(raw, { lang: LANG(), named: false, sign: '', group: GROUP() }), l.s, { variant });
 }
 const ctxOf = (variant?: string) => ({ lang: LANG(), variant });
 /** 动画帧；不会动的作品返回 null */
 async function framesOf(id: string, raw: any, l: Look, variant: string | undefined, n: number): Promise<Art[] | null> {
-  if (l.kind === 'v2') return V2.PIECES[id]?.animated ? V2.frames(id, V2.buildModel(raw, { lang: LANG(), named: false, sign: '' }), l.s, { variant }, n) : null;
-  return animatedClassic(id) ? classicFrames(id, buildModel(raw, { director: false, lang: LANG() }), l.t, ctxOf(variant), n) : null;
+  if (l.kind === 'v2') return V2.PIECES[id]?.animated ? V2.frames(id, V2.buildModel(raw, { lang: LANG(), named: false, sign: '', group: GROUP() }), l.s, { variant }, n) : null;
+  return animatedClassic(id) ? classicFrames(id, buildModel(raw, { director: false, lang: LANG(), group: GROUP() }), l.t, ctxOf(variant), n) : null;
 }
 /** 文字类输出（CREDITS.md、发版说明、PR 评论、终端名片）用新模型：带模型名、好读的模型名 */
-const textModel = (raw: any) => V2.buildModel(raw, { lang: LANG(), named: false, sign: '' });
+const textModel = (raw: any) => V2.buildModel(raw, { lang: LANG(), named: false, sign: '', group: GROUP() });
 function modelOf(repo: string, refresh = false): { m: Model; raw: any } {
   const raw = loadCredits(repo, refresh);
-  const m = buildModel(raw, { director: false, lang: LANG() });
+  const m = buildModel(raw, { director: false, lang: LANG(), group: GROUP() });
   return { m, raw };
 }
 function write(out: string | undefined, data: string | Uint8Array) {

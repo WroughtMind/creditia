@@ -14,7 +14,8 @@ import { box, col, txt, label, mark, backdrop, ornament, fit, spread, eq, MONO_F
 export const ROLL_NEW = ['opening', 'production', 'slate', 'crew'];
 
 const W = 1080, H = 1350;
-const isAi = (k: string) => !!BRANDS[k] && !BOTS.has(k);
+// 按模型分组时 key 是「工具/模型」，按工具判断
+const isAi = (k: string) => !!BRANDS[k.split('/')[0]] && !BOTS.has(k);
 const keysOf = (m: Model) => m.rows.map((r) => r.key);
 const hexA = (hex: string, a: string) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + a : hex);
 const serifOf = (t: Theme) => t.display !== t.sans;

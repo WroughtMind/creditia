@@ -1,7 +1,7 @@
 // 小票、分享图、徽章、署名行、人的部分。
 import { Scene, rect, line, path, circle, el, g, r, ease, measure, rng, hash, mix, alpha } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
-import { fmt, compact, pct } from '../data.ts';
+import { fmt, compact, pct, modelName } from '../data.ts';
 import type { Style } from '../style.ts';
 import { T, zh, colorOf, tip, handFacts, handTip, peopleNames, canvas, range, summary, modelLine, type PieceOpts } from './common.ts';
 
@@ -122,8 +122,9 @@ export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
   const x0 = c.x + 56, x1 = c.x + c.w - 56;
   st.label(s, T(m, '署名', 'CREDITS'), x0, c.y + 70, { size: 14 });
   st.title(s, m.project || 'Untitled', x0, c.y + 170, 96, 'start', { maxW: x1 - x0 });
-  const ag = m.agents.filter((a) => a.kind === 'agent');
-  const models = [...new Set(ag.flatMap((a) => a.models.map((q) => q.name)))];
+  // 工具数、模型数不随分组方式变
+  const ag = [...new Set(m.agents.filter((a) => a.kind === 'agent').map((a) => a.tool))];
+  const models = [...new Set(m.agents.filter((a) => a.kind === 'agent').flatMap((a) => (a.model ? [modelName(a.model)] : a.models.map((q) => q.name))))];
   s.text(T(m, `${ag.length} 个 AI 工具 · ${models.length} 个模型 · ${fmt(m.linesAdded)} 行${m.spanDays ? ` · ${m.spanDays} 天` : ''}`, `${ag.length} AI tools · ${models.length} models · ${fmt(m.linesAdded)} lines${m.spanDays ? ` · ${m.spanDays} days` : ''}`), x0, c.y + 228, { font: st.f.body, size: 24, fill: st.c.soft, maxW: x1 - x0 });
   s.hit(x0, c.y + 200, x1 - x0, 40, { t: T(m, '模型', 'Models'), d: models });
   // 一条贯穿的堆叠条

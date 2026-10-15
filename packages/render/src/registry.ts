@@ -6,7 +6,7 @@ import type { Scene } from './svg.ts';
 import type { PieceOpts } from './pieces/common.ts';
 import { tier, TIER_VARIANTS } from './pieces/tier.ts';
 import { roll, ROLL_VARIANTS } from './pieces/roll.ts';
-import { donut, waffle, stream, lanes, clock, versions, survival, mosaic, calendar, evidence, areas } from './pieces/charts.ts';
+import { DONUT_VARIANTS, donut, waffle, stream, lanes, clock, versions, survival, mosaic, calendar, evidence, areas } from './pieces/charts.ts';
 import { receipt, RECEIPT_VARIANTS, share, badge, BADGE_VARIANTS, byline, hand } from './pieces/cards.ts';
 import { codemap } from './pieces/map.ts';
 
@@ -30,7 +30,7 @@ export const PIECES: Record<string, PieceDef> = {
   badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', qEn: 'README, profile page', variants: BADGE_VARIANTS, render: badge },
   byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', render: byline },
   roll: { name: '片尾字幕', en: 'Credits Roll', q: '谁担任了什么角色', qEn: 'Who played which role', variants: ROLL_VARIANTS, animated: true, render: roll },
-  donut: { name: '环形图', en: 'Donut', q: '占比', qEn: 'Shares', animated: true, render: donut },
+  donut: { name: '环形图', en: 'Donut', q: '占比', qEn: 'Shares', variants: DONUT_VARIANTS, animated: true, render: donut },
   waffle: { name: '华夫饼图', en: 'Waffle', q: '一格 1%', qEn: 'One square is 1%', animated: true, render: waffle },
   stream: { name: '河流图', en: 'Stream', q: '每周新增代码', qEn: 'New code each week', animated: true, render: stream },
   lanes: { name: '会话泳道', en: 'Sessions', q: '各工具什么时候在干活', qEn: 'When each tool was at work', animated: true, render: lanes },
@@ -48,6 +48,7 @@ export const PIECES: Record<string, PieceDef> = {
 export const VARIANT_NAMES: Record<string, [string, string]> = {
   rows: ['条形', 'Rows'], center: ['对称', 'Centered'], podium: ['领奖台', 'Podium'], vertical: ['竖排', 'Vertical'], hud: ['面板', 'HUD'], stats: ['能力', 'Stats'],
   classic: ['双栏', 'Classic'], scroll: ['银幕滚动', 'Scrolling'], card: ['终卡', 'End card'], ed: ['动画片尾', 'Anime ED'], billing: ['海报', 'Billing'], terminal: ['终端', 'Terminal'],
+  split: ['分段', 'Split'], grouped: ['分组', 'Grouped'], nested: ['内外环', 'Nested'], ring: ['单环', 'Ring'],
   slip: ['小票', 'Slip'], ticket: ['电影票', 'Ticket'], flat: ['扁平', 'Flat'], stack: ['条形', 'Stack'], emblem: ['徽记', 'Emblem'],
 };
 export const variantName = (v: string, lang: 'zh' | 'en') => VARIANT_NAMES[v]?.[lang === 'zh' ? 0 : 1] ?? v;

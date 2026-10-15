@@ -14,7 +14,8 @@ const keysOf = (m: Model) => m.rows.map((r) => r.key);
 const castOf = (m: Model, n: number) => m.rows.filter((r) => r.kind === 'agent' && isAi(r.key)).slice(0, n).map((r) => r.name);
 const rankOf = (m: Model, key: string) => Math.max(0, m.rows.findIndex((r) => r.key === key));
 /** 真正的 AI 工具（CI 机器人不算）*/
-const isAi = (k: string) => !!BRANDS[k] && !BOTS.has(k);
+// 按模型分组时 key 是「工具/模型」，按工具判断
+const isAi = (k: string) => !!BRANDS[k.split('/')[0]] && !BOTS.has(k);
 /** 细线：杂志和单色风格的 line 是纯黑，只适合描边，分隔线要调淡 */
 const hair = (t: Theme) => (t.family === 'editorial' ? 'rgba(18,17,16,0.28)' : t.family === 'mono' ? 'rgba(0,0,0,0.18)' : t.line);
 const hexA = (hex: string, a: string) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + a : hex);
@@ -1460,7 +1461,7 @@ export function ribbon(m: Model, t: Theme): Out | null {
   if (!days.length) return null;
   const start = Date.parse(days[0].date), end = Date.parse(days[days.length - 1].date);
   const n = Math.round((end - start) / 86400000) + 1;
-  const map = new Map(days.map((d) => [d.date, d.by]));
+  const map = new Map(days.map((d) => [d.date, regroup(m, d.by)]));
   const W = 1200, inner = W - 160, gap = n > 120 ? 2 : 4;
   const cw = (inner - gap * (n - 1)) / n;
   const dates = Array.from({ length: n }, (_, i) => new Date(start + i * 86400000).toISOString().slice(0, 10));
@@ -1518,7 +1519,7 @@ export function mosaic(m: Model, t: Theme): Out | null {
   if (!files.length) return null;
   const W = 1200, H = 860, bw = W - 160, bh = H - 64 - 56 - 80 - 70;
   const items = files.map((f) => {
-    const ent = Object.entries(f.by).sort((a, b) => b[1] - a[1])[0];
+    const ent = Object.entries(regroup(m, f.by)).sort((a, b) => b[1] - a[1])[0];
     const key = ent ? (ent[0].startsWith('h:') ? 'human' : ent[0]) : 'unattributed';
     return { v: f.lines, key };
   }).sort((a, b) => b.v - a.v);
@@ -1589,10 +1590,16 @@ function weekLabel(w: string, notBefore = 0) {
 }
 const groupFn = (m: Model) => (id: string) => {
   const c = (m.raw.contributors ?? []).find((x: any) => x.id === id);
-  if (c?.harness) return m.rows.some((r) => r.key === c.harness) ? c.harness : 'other';
+  if (c?.harness) { const k = m.keyOf(id); return m.rows.some((r) => r.key === k) ? k : 'other'; }
   if (id === 'unattributed') return 'unattributed';
   if (c?.kind === 'human') return 'human';
   return m.rows.some((r) => r.key === id) ? id : 'other';
+};
+/** 按天、按文件的统计：新档案的 key 是贡献者 id（带模型），旧档案是工具名，都换成当前分组 key */
+const regroup = (m: Model, by: Record<string, number>) => {
+  const out: Record<string, number> = {};
+  for (const [id, v] of Object.entries(by ?? {})) { const k = id.startsWith('h:') ? id : m.keyOf(id); out[k] = (out[k] ?? 0) + v; }
+  return out;
 };
 const hex = (c: string) => {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(c);

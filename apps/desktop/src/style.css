@@ -52,6 +52,12 @@ button { font: inherit; color: inherit; }
 .pmeta { color: var(--soft); font-size: 12px; white-space: nowrap; }
 .chev { color: var(--soft); transition: transform .2s; }
 .pill[aria-expanded="true"] .chev { transform: rotate(180deg); }
+#group { margin-left: 10px; align-items: center; height: 36px; padding: 3px; box-sizing: border-box; }
+#group[hidden] { display: none; }
+#group button { height: 30px; padding: 0 13px; }
+#group .auto { font-size: 11px; color: var(--soft); padding: 0 10px 0 6px; white-space: nowrap; }
+#group .back { color: var(--soft); font-size: 11px; padding: 0 10px; }
+#group .back:hover { color: var(--ink); }
 .tools { position: absolute; right: 18px; display: flex; gap: 8px; }
 .round { width: 34px; height: 34px; border-radius: 99px; border: 0; display: grid; place-items: center; cursor: pointer; font-size: 12px; font-weight: 600; }
 .round:hover { background: var(--glass2); }

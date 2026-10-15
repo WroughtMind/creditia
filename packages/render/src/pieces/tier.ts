@@ -1,5 +1,5 @@
 // Tier：谁写的、各占多少。版式：rows（条形榜）、vertical（竖排，古籍/水墨）、hud（赛博面板）、podium（领奖台）
-import { Scene, rect, line, path, circle, el, g, r, ease, measure, capOf, mix } from '../svg.ts';
+import { Scene, rect, line, path, circle, el, g, r, ease, measure, capOf, mix, lum } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
 import { pct, fmt, hanzi } from '../data.ts';
 import type { Style } from '../style.ts';
@@ -8,7 +8,7 @@ import { measureV } from './common.ts';
 import { T, zh, colorOf, fillOf, tip, modelLine, handLine, handTip, peopleNames, summary, range, canvas, type PieceOpts } from './common.ts';
 import { inkSeal } from '../styles/east.ts';
 
-export const TIER_VARIANTS = ['rows', 'center', 'podium', 'vertical', 'hud', 'stats'];
+export const TIER_VARIANTS = ['rows', 'center', 'podium', 'vertical', 'hud', 'stats', 'split', 'grouped'];
 
 export function tier(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (!m.rows.length) return null;
@@ -18,6 +18,8 @@ export function tier(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (v === 'podium') return podium(m, st, o);
   if (v === 'center') return center(m, st, o);
   if (v === 'stats') return stats(m, st, o);
+  if (v === 'split') return split(m, st, o);
+  if (v === 'grouped') return grouped(m, st, o);
   return rows(m, st, o);
 }
 
@@ -249,8 +251,7 @@ export function abilities(m: Model, a: Agent) {
   const areaCount = (key: string) => {
     let n = 0;
     for (const b of m.raw.breakdown ?? []) {
-      const c = (m.raw.contributors ?? []).find((x: any) => x.id === b.contributor);
-      if (c?.harness === key) n = Math.max(n, Object.values(b.byArea ?? {}).filter((v: any) => v > 0).length);
+      if (m.keyOf(b.contributor) === key) n = Math.max(n, Object.values(b.byArea ?? {}).filter((v: any) => v > 0).length);
     }
     return n;
   };
@@ -301,5 +302,129 @@ function stats(m: Model, st: Style, o: PieceOpts): Scene {
     });
     s.hit(x, y, cw, 80, tip(m, a));
   });
+  return s;
+}
+
+// ───────────────────────── 工具里分模型 ─────────────────────────
+
+interface Seg { key: string; name: string; lines: number; pct: number; color: string; unknown?: boolean }
+/** 一个工具按模型切成几段：按模型分组时颜色和别的作品里那一行一致，否则在工具色上分深浅；没记模型的部分单独一段 */
+export function segsOf(m: Model, st: Style, a: Agent): Seg[] {
+  const base = colorOf(st, a);
+  const per = a.lines ? a.pct / a.lines : 0;
+  // 深色往浅里调、浅色往深里调，黑白风格里也分得开
+  const toward = lum(base) < 0.5 ? st.c.paper : st.c.ink;
+  const shade = (j: number) => (j === 0 ? base : mix(base, toward, Math.min(0.72, 0.34 * j)));
+  const out: Seg[] = a.models.map((q, j) => {
+    const row = m.group === 'model' ? m.rows.find((x) => x.key === `${a.key}/${q.id}`) : undefined;
+    return { key: `${a.key}/${q.id}`, name: q.name, lines: q.lines, pct: q.lines * per, color: row ? colorOf(st, row) : shade(j) };
+  });
+  const rest = a.lines - out.reduce((s2, x) => s2 + x.lines, 0);
+  if (out.length && rest > 0) out.push({ key: a.key, name: T(m, '未记录模型', 'Model not recorded'), lines: rest, pct: rest * per, color: mix(base, st.c.paper, 0.65), unknown: true });
+  return out.length ? out : [{ key: a.key, name: a.name, lines: a.lines, pct: a.pct, color: base }];
+}
+export const segTip = (m: Model, a: Agent, x: Seg) => ({ k: x.key, t: x.unknown ? `${a.name} · ${x.name}` : x.name, d: [T(m, `${fmt(x.lines)} 行 · ${pct(x.pct)}`, `${fmt(x.lines)} lines · ${pct(x.pct)}`), T(m, `用 ${a.name}`, `via ${a.name}`)] });
+
+/** 分段：一个工具一行，条按模型切成几段，段间留缝；条下面写各段的模型和占比 */
+function split(m: Model, st: Style, o: PieceOpts): Scene {
+  const t = o.t ?? 1;
+  const list = m.tools;
+  const W = 920, M = 34, P = 50;
+  const rowH = (a: Agent) => (segsOf(m, st, a).length > 1 ? 128 : 96);
+  const { s, c } = canvas(m, st, W, P + 132 + list.reduce((h, a) => h + rowH(a), 0) + 24 + 70, M);
+  const x0 = c.x + P, x1 = c.x + c.w - P;
+  let y = c.y + P;
+  st.label(s, T(m, '署名', 'CREDITS'), x0, y + 10, { size: 13 });
+  st.label(s, range(m), x1, y + 10, { size: 12, anchor: 'end', fill: st.c.faint });
+  st.title(s, m.project || 'Untitled', x0, y + 78, 56, 'start', { maxW: x1 - x0 });
+  y += 132;
+  list.forEach((a, i) => {
+    const k = ease(t, i, list.length);
+    const nx = x0 + 58, bw = x1 - nx, bh = 12, by = y + 68;
+    st.mark(s, a.key, x0 + 20, y + 24, 34);
+    s.text(a.name, nx, y + 33, { font: st.f.display, size: 27, fill: st.c.ink, maxW: x1 - nx - 140 });
+    st.num(s, pct(a.pct * (t >= 1 ? 1 : k)), x1, y + 36, 32, 'end');
+    st.track(s, nx, by, bw, bh);
+    const segs = segsOf(m, st, a);
+    const full = Math.max(a.pct > 0 ? 3 : 0, (bw * a.pct) / 100) * k;
+    const gap = segs.length > 1 ? 3 : 0;
+    let x = nx;
+    segs.forEach((q, j) => {
+      const w = Math.max(0, (full * q.lines) / Math.max(1, a.lines) - (j < segs.length - 1 ? gap : 0));
+      if (a.key === 'unattributed') s.add(rect(x, by, w, bh, { fill: st.hatch(s), rx: Math.min(st.radius, bh / 2) }));
+      else st.bar(s, x, by, w, bh, q.color, i);
+      if (segs.length > 1) s.hit(x, by - 6, Math.max(w, 6), bh + 12, segTip(m, a, q));
+      x += w + gap;
+    });
+    if (segs.length > 1) {
+      // 条下面：各段的模型名和占比，色块对应
+      let lx = nx;
+      for (const q of segs) {
+        if (lx > x1 - 80) break;
+        s.add(rect(lx, by + 30, 10, 10, { fill: q.color, rx: Math.min(2, st.radius) }));
+        const w = s.text(`${q.name} ${pct(q.pct)}`, lx + 16, by + 40, { font: st.f.body, size: 14, fill: st.c.soft, maxW: x1 - lx - 16, overflow: 'clip' });
+        s.hit(lx - 4, by + 24, w + 24, 22, segTip(m, a, q));
+        lx += w + 40;
+      }
+    }
+    s.hit(x0 - 8, y - 6, x1 - x0 + 16, 60, tip(m, a));
+    y += rowH(a);
+  });
+  y += 40;
+  s.text(summary(m), x0, y, { font: st.f.body, size: 14, fill: st.c.soft });
+  s.text('creditia', x1, y, { font: st.f.label, size: 13, fill: st.c.faint, anchor: 'end', track: 0.12 });
+  return s;
+}
+
+/** 分组：工具是小标题，下面每个模型一行、各有自己的条；只有一个模型的工具写成一行 */
+function grouped(m: Model, st: Style, o: PieceOpts): Scene {
+  const t = o.t ?? 1;
+  const list = m.tools;
+  const W = 920, M = 34, P = 50, headH = 64, subH = 58;
+  const blockH = (a: Agent) => { const n = segsOf(m, st, a).length; return headH + (n > 1 ? n * subH : 26) + 22; };
+  const { s, c } = canvas(m, st, W, P + 132 + list.reduce((h, a) => h + blockH(a), 0) + 70, M);
+  const x0 = c.x + P, x1 = c.x + c.w - P;
+  let y = c.y + P;
+  st.label(s, T(m, '署名', 'CREDITS'), x0, y + 10, { size: 13 });
+  st.label(s, range(m), x1, y + 10, { size: 12, anchor: 'end', fill: st.c.faint });
+  st.title(s, m.project || 'Untitled', x0, y + 78, 56, 'start', { maxW: x1 - x0 });
+  y += 132;
+  let row = 0;
+  const total = list.reduce((n2, a) => n2 + Math.max(1, segsOf(m, st, a).length), 0);
+  list.forEach((a, i) => {
+    const segs = segsOf(m, st, a);
+    st.mark(s, a.key, x0 + 18, y + 22, 30);
+    s.text(a.name, x0 + 50, y + 32, { font: st.f.display, size: 25, fill: st.c.ink, maxW: x1 - x0 - 200 });
+    st.num(s, pct(a.pct), x1, y + 32, 26, 'end');
+    s.hit(x0 - 8, y - 4, x1 - x0 + 16, headH - 8, tip(m, a));
+    st.rule(s, x0, y + 50, x1 - x0, 'thin');
+    y += headH;
+    const nx = x0 + 50, bw = x1 - nx - 110;
+    if (segs.length <= 1) {
+      // 只有一个模型：一条细条，模型名写在条后
+      const k = ease(t, row++, total);
+      st.track(s, nx, y - 4, bw, 8);
+      if (a.key === 'unattributed') s.add(rect(nx, y - 4, (bw * a.pct) / 100 * k, 8, { fill: st.hatch(s) }));
+      else st.bar(s, nx, y - 4, Math.max(3, (bw * a.pct) / 100) * k, 8, segs[0]?.color ?? colorOf(st, a), i);
+      const ml = modelLine(a);
+      if (ml) s.text(ml, x1, y + 4, { font: st.f.body, size: 14, fill: st.c.soft, anchor: 'end', maxW: 100, overflow: 'clip' });
+      y += 26 + 22;
+      return;
+    }
+    for (const q of segs) {
+      const k = ease(t, row++, total);
+      s.add(rect(nx, y + 2, 10, 10, { fill: q.color, rx: Math.min(2, st.radius) }));
+      s.text(q.name, nx + 18, y + 12, { font: st.f.body, size: 18, fill: q.unknown ? st.c.soft : st.c.ink, maxW: bw - 18 });
+      st.num(s, pct(q.pct * (t >= 1 ? 1 : k)), x1, y + 14, 20, 'end', { fill: st.c.soft });
+      st.track(s, nx, y + 26, bw, 7);
+      st.bar(s, nx, y + 26, Math.max(3, (bw * q.pct) / 100) * k, 7, q.color, i);
+      s.hit(nx - 6, y - 8, x1 - nx + 12, subH - 6, segTip(m, a, q));
+      y += subH;
+    }
+    y += 22;
+  });
+  y += 30;
+  s.text(summary(m), x0, y, { font: st.f.body, size: 14, fill: st.c.soft });
+  s.text('creditia', x1, y, { font: st.f.label, size: 13, fill: st.c.faint, anchor: 'end', track: 0.12 });
   return s;
 }
