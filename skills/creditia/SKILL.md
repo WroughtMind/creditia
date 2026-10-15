@@ -1,6 +1,6 @@
 ---
 name: creditia
-description: 给人和 AI agent 一起做出的作品署名。分析本机日志与 git 历史（不调用大模型），生成 CREDITS.md、credits.json，导出署名榜、片尾字幕、徽章、统计图等（PNG / SVG / PDF / GIF / 可交互 HTML）。公开任何内容前必须让用户确认。
+description: 分析一个仓库的代码是哪些 AI 工具和模型写的：读本机 agent 日志与 git 历史（不调用大模型），生成 CREDITS.md、credits.json，导出署名榜、片尾字幕、徽章、统计图等（PNG / SVG / PDF / GIF / 可交互 HTML）。公开任何内容前必须让用户确认。
 ---
 
 # creditia
