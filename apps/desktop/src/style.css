@@ -186,6 +186,7 @@ body.dragging #dock .sizes { display: flex; gap: 2px; padding: 3px; border-radiu
 #focus .strip button { border: 0; background: transparent; cursor: pointer; padding: 6px 10px; border-radius: 12px; color: var(--soft); font-size: 12px; white-space: nowrap; }
 #focus .strip button:hover { background: var(--glass2); color: var(--ink); }
 #focus .strip button.on { background: var(--ink); color: var(--bg); }
+#focus .strip button.mm::after { content: ''; display: inline-block; width: 5px; height: 5px; margin-left: 5px; border-radius: 50%; background: currentColor; opacity: .55; vertical-align: 2px; }
 #focus .strip .sep { width: 1px; height: 20px; background: var(--edge); }
 #focus .strip .lab { color: var(--faint); font-size: 11px; white-space: nowrap; }
 #focus .strip .keys { display: inline-flex; gap: 2px; margin-left: -4px; }

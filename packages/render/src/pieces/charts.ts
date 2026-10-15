@@ -4,7 +4,7 @@ import { Scene, rect, line, path, circle, el, g, r, ease, arc, mix } from '../sv
 import type { Model, Agent } from '../data.ts';
 import { fmt, pct, compact } from '../data.ts';
 import type { Style, Box } from '../style.ts';
-import { T, colorOf, tip, canvas, handTip, type PieceOpts } from './common.ts';
+import { T, colorOf, tip, canvas, handTip, keyRank, legendRows, type PieceOpts } from './common.ts';
 import { segsOf, segTip } from './tier.ts';
 
 /** 图的外框：标签 + 标题 + 图例，返回绘图区 */
@@ -18,7 +18,7 @@ function frame(m: Model, st: Style, W: number, plotH: number, kicker: string, ti
   if (legend) {
     let x = x0;
     const y = c.y + 170 + plotH + 40;
-    for (const a of m.rows) {
+    for (const a of legendRows(m)) {
       if (x > x1 - 120) break;
       if (a.key === 'unattributed') s.add(rect(x, y - 11, 14, 14, { fill: st.hatch(s), rx: 3 }));
       else s.add(rect(x, y - 11, 14, 14, { fill: colorOf(st, a), rx: Math.min(3, st.radius) }));
@@ -33,8 +33,8 @@ function frame(m: Model, st: Style, W: number, plotH: number, kicker: string, ti
 const agentOf = (m: Model, k: string): Agent | undefined => m.rows.find((a) => a.key === k) ?? (m.rows.find((a) => a.key === 'other') && !m.rows.some((a) => a.key === k) && k !== 'human' && k !== 'unattributed' ? m.rows.find((a) => a.key === 'other') : undefined);
 const fillKey = (s: Scene, st: Style, m: Model, k: string) => (k === 'unattributed' ? st.hatch(s) : k === 'human' ? st.color('human', 0) : colorOf(st, agentOf(m, k) ?? { key: k, rank: 5 } as Agent));
 const tipKey = (m: Model, k: string) => { const a = agentOf(m, k); return a ? tip(m, a) : k === 'human' ? handTip(m) : { k, t: k }; };
-/** 一组数据里出现的 key，按排名排序 */
-const orderKeys = (m: Model, keys: Iterable<string>) => [...new Set(keys)].sort((a, b) => (m.rows.findIndex((x) => x.key === a) + 1 || 50) - (m.rows.findIndex((x) => x.key === b) + 1 || 50));
+/** 一组数据里出现的 key，按排名排序；按模型分组时同一工具的模型挨在一起（堆叠图里成一整块，深浅相邻） */
+const orderKeys = (m: Model, keys: Iterable<string>) => [...new Set(keys)].sort((a, b) => keyRank(m, a) - keyRank(m, b));
 
 // ───────────────────────── 环形 ─────────────────────────
 
@@ -99,10 +99,14 @@ function nested(m: Model, st: Style, o: PieceOpts): Scene | null {
   st.num(s, fmt(m.linesAdded), cx, cy + 6, 40, 'middle');
   s.text(T(m, '行', 'lines'), cx, cy + 40, { font: st.f.body, size: 17, fill: st.c.soft, anchor: 'middle' });
   // 右侧：工具一行，下面缩进写它的模型
-  const lx = p.x + p.w * 0.68, rx = p.x + p.w;
-  let y = p.y + 40;
+  toolLegend(s, m, st, p.x + p.w * 0.68, p.x + p.w, p.y + 40, p.y + p.h);
+  return s;
+}
+
+/** 工具和模型的名单：工具一行，下面缩进写它的各个模型（内外环、分块华夫饼共用） */
+function toolLegend(s: Scene, m: Model, st: Style, lx: number, rx: number, y: number, maxY: number) {
   for (const a of m.tools) {
-    if (y > p.y + p.h) break;
+    if (y > maxY) break;
     st.mark(s, a.key, lx + 10, y - 8, 24);
     s.text(a.name, lx + 32, y, { font: st.f.body, size: 18, fill: st.c.ink, maxW: rx - lx - 110 });
     st.num(s, pct(a.pct), rx, y, 18, 'end', { fill: st.c.soft });
@@ -118,12 +122,14 @@ function nested(m: Model, st: Style, o: PieceOpts): Scene | null {
     }
     y += 16;
   }
-  return s;
 }
 
 // ───────────────────────── 华夫饼：一格 1% ─────────────────────────
 
+export const WAFFLE_VARIANTS = ['grid', 'blocks'];
+
 export function waffle(m: Model, st: Style, o: PieceOpts): Scene | null {
+  if (o.variant === 'blocks') return blocks(m, st, o);
   if (!m.rows.length) return null;
   const t = o.t ?? 1;
   const { s, p } = frame(m, st, 1000, 560, T(m, '一格 = 1%', 'ONE CELL = 1%'), T(m, '一百格', 'A hundred cells'));
@@ -146,6 +152,50 @@ export function waffle(m: Model, st: Style, o: PieceOpts): Scene | null {
     else s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill: colorOf(st, a), rx: Math.min(st.radius, ss / 4) }));
     s.hit(x, y, size, size, tip(m, a));
   });
+  return s;
+}
+
+/** 分块：一百格按工具连成一块，块里按模型分深浅，块与块之间空一格；右边是工具和模型的名单 */
+function blocks(m: Model, st: Style, o: PieceOpts): Scene | null {
+  if (!m.tools.length) return null;
+  const t = o.t ?? 1;
+  const { s, p } = frame(m, st, 1000, 560, T(m, '一格 = 1%', 'ONE CELL = 1%'), T(m, '工具和模型', 'Tools and models'), false);
+  // 先按段（工具下的模型）用最大余数法分 100 格
+  const segs = m.tools.flatMap((a) => segsOf(m, st, a).map((q) => ({ a, q })));
+  const raw = segs.map((x) => x.q.pct);
+  const base = raw.map(Math.floor);
+  let left = 100 - base.reduce((x, y) => x + y, 0);
+  raw.map((v, i) => [v - base[i], i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (left-- > 0) base[i]++; });
+  // 一列 10 格，从上往下、从左往右排；每个工具从新的一列开始，和前一个工具隔开一列的缝
+  type Cell = { a: Agent; q: (typeof segs)[number]['q'] } | null;
+  const rows = 10;
+  const cells: Cell[] = [];
+  const breaks: number[] = [];
+  segs.forEach((x, i) => {
+    if (i > 0 && segs[i - 1].a !== x.a && base[i] > 0 && cells.length) {
+      while (cells.length % rows) cells.push(null);
+      breaks.push(cells.length / rows);
+    }
+    for (let k = 0; k < base[i]; k++) cells.push(x);
+  });
+  const cols = Math.ceil(cells.length / rows);
+  const gw = p.w * 0.62, gap = 5, split = 14;
+  const size = Math.min(p.h / rows - gap, (gw - breaks.length * split) / cols - gap);
+  const gx = p.x, gy = p.y + (p.h - rows * (size + gap)) / 2;
+  const colX = (col: number) => gx + col * (size + gap) + breaks.filter((b) => b <= col).length * split;
+  let n = 0;
+  cells.forEach((c, i) => {
+    if (!c) return;
+    const col = Math.floor(i / rows), row = i % rows;
+    const x = colX(col), y = gy + row * (size + gap);
+    const k = ease(t, n++, 100, 0.3);
+    if (k <= 0) return;
+    const ss = size * k;
+    const fill = c.a.key === 'unattributed' ? st.hatch(s) : c.q.color;
+    s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill, rx: Math.min(st.radius, ss / 4) }));
+    s.hit(x, y, size, size, segsOf(m, st, c.a).length > 1 ? segTip(m, c.a, c.q) : tip(m, c.a));
+  });
+  toolLegend(s, m, st, p.x + p.w * 0.68, p.x + p.w, p.y + 40, p.y + p.h);
   return s;
 }
 

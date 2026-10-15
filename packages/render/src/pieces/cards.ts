@@ -4,10 +4,11 @@ import type { Model, Agent } from '../data.ts';
 import { fmt, compact, pct, modelName } from '../data.ts';
 import type { Style } from '../style.ts';
 import { T, zh, colorOf, tip, handFacts, handTip, peopleNames, canvas, range, summary, modelLine, type PieceOpts } from './common.ts';
+import { segsOf, segTip } from './tier.ts';
 
 // ───────────────────────── 精力小票 ─────────────────────────
 
-export const RECEIPT_VARIANTS = ['slip', 'ticket'];
+export const RECEIPT_VARIANTS = ['slip', 'ticket', 'itemized'];
 
 function effort(m: Model): { k: string; v: string; d?: string }[] {
   const h = m.hand;
@@ -25,10 +26,18 @@ function effort(m: Model): { k: string; v: string; d?: string }[] {
 }
 
 export function receipt(m: Model, st: Style, o: PieceOpts): Scene | null {
-  if ((o.variant ?? st.prefer.receipt) === 'ticket') return ticket(m, st, o);
+  const v = o.variant ?? st.prefer.receipt;
+  if (v === 'ticket') return ticket(m, st, o);
+  return slip(m, st, v === 'itemized');
+}
+
+/** 热敏小票。itemized（明细）：分项按工具列，每个工具下面再逐个列它的模型 */
+function slip(m: Model, st: Style, itemized: boolean): Scene {
   const items = effort(m);
   const W = 720, P = 70, lh = 46;
-  const inner = 250 + items.length * lh + 60 + m.rows.length * 40 + 250;
+  const list = itemized ? m.tools : m.rows;
+  const subs = (a: Agent) => { if (!itemized) return []; const q = segsOf(m, st, a); return q.length > 1 ? q : []; };
+  const inner = 250 + items.length * lh + 60 + list.reduce((h, a) => h + 40 + subs(a).length * 30, 0) + 250;
   const { s, c } = canvas(m, st, W, inner, 40);
   // 热敏纸：上下锯齿边
   const px = c.x + 30, pw = c.w - 60, py = c.y + 10, ph = c.h - 20;
@@ -55,13 +64,21 @@ export function receipt(m: Model, st: Style, o: PieceOpts): Scene | null {
   }
   dash(y - 14); y += 30;
   // 分项：各工具
-  for (const a of m.rows) {
+  for (const a of list) {
     st.mark(s, a.key, x0 + 12, y - 7, 20);
     s.text(a.name, x0 + 34, y, { font: st.f.body, size: 17, fill: st.c.ink, maxW: 260 });
     s.text(`× ${fmt(a.lines)}`, x1 - 110, y, { font: mono, size: 15, fill: st.c.soft, anchor: 'end' });
     st.num(s, pct(a.pct), x1, y, 17, 'end');
     s.hit(x0 - 8, y - 24, x1 - x0 + 16, 36, tip(m, a));
     y += 40;
+    // 明细：模型一行，缩进，小一号
+    for (const q of subs(a)) {
+      s.text(`· ${q.name}`, x0 + 34, y - 6, { font: mono, size: 13, fill: st.c.soft, maxW: 300, overflow: 'clip' });
+      s.text(`× ${fmt(q.lines)}`, x1 - 110, y - 6, { font: mono, size: 13, fill: st.c.faint, anchor: 'end' });
+      s.text(pct(q.pct), x1, y - 6, { font: mono, size: 13, fill: st.c.soft, anchor: 'end' });
+      s.hit(x0 + 24, y - 26, x1 - x0 - 16, 28, segTip(m, a, q));
+      y += 30;
+    }
   }
   dash(y - 8); y += 40;
   s.text(T(m, '合计', 'TOTAL'), x0, y, { font: st.f.display, size: 24, fill: st.c.ink });
@@ -161,7 +178,7 @@ export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
 
 // ───────────────────────── 徽章 ─────────────────────────
 
-export const BADGE_VARIANTS = ['flat', 'stack', 'emblem'];
+export const BADGE_VARIANTS = ['flat', 'stack', 'emblem', 'split'];
 
 export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
   const v = o.variant ?? 'flat';
@@ -183,6 +200,7 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.hit(40, 40, S - 80, S - 80, tip(m, lead[0]));
     return s;
   }
+  if (v === 'split') return splitBadge(m, st);
   if (v === 'stack') {
     const W = 420, H = 76;
     const s = new Scene(W, H);
@@ -219,9 +237,45 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
   return s;
 }
 
+/** 分段徽章：条按工具分块、块里按模型分深浅；文字写第一的工具和它的前两个模型 */
+function splitBadge(m: Model, st: Style): Scene | null {
+  const tools = m.tools.filter((a) => a.lines > 0);
+  const top = tools.find((a) => a.kind === 'agent');
+  if (!top) return null;
+  const W = 460, H = 96;
+  const s = new Scene(W, H);
+  s.bg = st.c.paper;
+  s.add(rect(0.5, 0.5, W - 1, H - 1, { fill: st.c.paper, stroke: st.c.ink, strokeOpacity: 0.25, rx: Math.min(st.radius, 14) }));
+  s.text(T(m, 'AI 参与编写', 'Written with AI'), 18, 28, { font: st.f.label, size: 13, fill: st.c.soft });
+  s.text(`${top.name} ${Math.round(top.pct)}%`, W - 18, 28, { font: st.f.body, size: 13, fill: st.c.ink, anchor: 'end', maxW: W - 160 });
+  let x = 18;
+  const bw = W - 36;
+  for (const a of tools) {
+    const w = (bw * a.pct) / 100;
+    let sx = x;
+    for (const q of segsOf(m, st, a)) {
+      const qw = (w * q.lines) / Math.max(1, a.lines);
+      if (a.key === 'unattributed') s.add(rect(sx, 40, qw, 14, { fill: st.hatch(s) }));
+      else s.add(rect(sx, 40, Math.max(0, qw - 0.75), 14, { fill: q.color }));
+      s.hit(sx, 34, qw, 26, segTip(m, a, q));
+      sx += qw;
+    }
+    // 工具之间留一道缝，比模型之间宽
+    x += w;
+    if (w > 3) s.add(rect(x - 2, 40, 2, 14, { fill: st.c.paper }));
+  }
+  const segs = segsOf(m, st, top).filter((q) => !q.unknown).slice(0, 2);
+  const sub = segs.length > 1 ? segs.map((q) => `${q.name} ${Math.round(q.pct)}%`).join(' · ') : modelLine(top);
+  if (sub) s.text(sub, 18, 78, { font: st.f.body, size: 13, fill: st.c.soft, maxW: W - 36, overflow: 'clip' });
+  return s;
+}
+
 // ───────────────────────── 署名行（页脚） ─────────────────────────
 
-export function byline(m: Model, st: Style, _o: PieceOpts): Scene | null {
+export const BYLINE_VARIANTS = ['line', 'models'];
+
+export function byline(m: Model, st: Style, o: PieceOpts): Scene | null {
+  if (o.variant === 'models') return bylineModels(m, st);
   const lead = m.rows.filter((a) => a.kind === 'agent');
   if (!lead.length) return null;
   const W = 1200, H = 120;
@@ -240,6 +294,33 @@ export function byline(m: Model, st: Style, _o: PieceOpts): Scene | null {
     if (x > W - 300) break;
   }
   s.text(T(m, '写成', ''), x - 10, 72, { font: st.f.body, size: 20, fill: st.c.soft });
+  s.text(summary(m), W - 48, 72, { font: st.f.label, size: 14, fill: st.c.faint, anchor: 'end' });
+  return s;
+}
+
+/** 带模型的署名行：每个工具后面用小字写它的模型，按工具分不丢模型 */
+function bylineModels(m: Model, st: Style): Scene | null {
+  const lead = m.tools.filter((a) => a.kind === 'agent');
+  if (!lead.length) return null;
+  const W = 1200, H = 120;
+  const s = new Scene(W, H);
+  st.ground(s, { x: 0, y: 0, w: W, h: H }, m);
+  let x = 48;
+  x += st.title(s, m.project, x, 74, 34) + 26;
+  s.add(line(x, 44, x, 80, { stroke: st.c.ink, strokeOpacity: 0.3 }));
+  x += 26;
+  x += s.text(T(m, '用', 'with'), x, 66, { font: st.f.body, size: 20, fill: st.c.soft }) + 16;
+  for (const a of lead.slice(0, 3)) {
+    st.mark(s, a.key, x + 12, 58, 22);
+    const w = s.text(a.name, x + 30, 66, { font: st.f.body, size: 20, fill: st.c.ink });
+    const segs = segsOf(m, st, a).filter((q) => !q.unknown);
+    const sub = segs.length > 1 ? segs.slice(0, 3).map((q) => q.name).join(' · ') : modelLine(a);
+    const sw = sub ? s.text(sub, x + 30, 90, { font: st.f.body, size: 13, fill: st.c.soft, maxW: 260, overflow: 'clip' }) : 0;
+    s.hit(x - 4, 38, Math.max(w, sw) + 40, 60, tip(m, a));
+    x += Math.max(w, Math.min(sw, 260)) + 54;
+    if (x > W - 300) break;
+  }
+  s.text(T(m, '写成', ''), x - 10, 66, { font: st.f.body, size: 20, fill: st.c.soft });
   s.text(summary(m), W - 48, 72, { font: st.f.label, size: 14, fill: st.c.faint, anchor: 'end' });
   return s;
 }

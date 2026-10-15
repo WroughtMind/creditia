@@ -1,13 +1,14 @@
 // 片尾字幕：谁担任了什么角色。角色来自数据（哪个工具写了核心、界面、测试、文档），不是按名次编头衔。
-// 版式：classic（双栏）、scroll（银幕滚动，HTML/GIF 会动）、card（终卡）、vertical（竖排）、ed（动画片尾）、billing（海报署名块）、terminal
+// 版式：classic（双栏）、scroll（银幕滚动，HTML/GIF 会动）、card（终卡）、vertical（竖排）、ed（动画片尾）、billing（海报署名块）、terminal、troupe（分部：工具一部，下面列它的模型）
 import { Scene, rect, line, path, el, g, r, ease, measure, mix } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
 import { fmt, compact, pct, nameOf, hanzi } from '../data.ts';
 import type { Style } from '../style.ts';
 import { T, zh, tip, handFacts, handTip, peopleNames, canvas, range, measureV, type PieceOpts } from './common.ts';
+import { segsOf, segTip } from './tier.ts';
 import { inkSeal } from '../styles/east.ts';
 
-export const ROLL_VARIANTS = ['classic', 'scroll', 'card', 'vertical', 'ed', 'billing', 'terminal'];
+export const ROLL_VARIANTS = ['classic', 'scroll', 'card', 'vertical', 'ed', 'billing', 'terminal', 'troupe'];
 
 interface Credit { name: string; sub?: string; key?: string }
 interface Section { head: string; credits: Credit[]; key?: string }
@@ -81,6 +82,7 @@ export function roll(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (v === 'ed') return ed(m, st, secs, o);
   if (v === 'billing') return billing(m, st, secs, o);
   if (v === 'terminal') return terminalRoll(m, st, secs, o);
+  if (v === 'troupe') return troupe(m, st, o);
   const s = classic(m, st, secs, v === 'scroll');
   return s;
 }
@@ -301,3 +303,45 @@ function terminalRoll(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene
 
 void line; void path; void el; void g; void r; void mix; void hanzi; void zh;
 export type { Agent };
+
+/** 分部：每个工具是一部，部名下面用点线引到占比，逐个列出它用过的模型；一个工具里多个模型时最清楚 */
+function troupe(m: Model, st: Style, o: PieceOpts): Scene | null {
+  const list = m.tools.filter((a) => a.kind === 'agent' && a.lines > 0);
+  if (!list.length) return null;
+  const t = o.t ?? 1;
+  const W = 1080, headH = 96, subH = 46, gapH = 56;
+  const segsFor = (a: Agent) => { const q = segsOf(m, st, a); return q.length > 1 ? q : []; };
+  const inner = 340 + list.reduce((h, a) => h + headH + segsFor(a).length * subH + gapH, 0) + 240;
+  const { s, c } = canvas(m, st, W, inner, 40);
+  const cx = W / 2, x0 = c.x + 150, x1 = c.x + c.w - 150;
+  let y = c.y + 110;
+  st.label(s, T(m, '片尾字幕', 'END CREDITS'), cx, y, { anchor: 'middle', size: 14 });
+  st.title(s, m.project || 'Untitled', cx, y + 92, 78, 'middle', { maxW: c.w - 120 });
+  st.rule(s, cx - 140, y + 140, 280, 'orn');
+  y += 240;
+  list.forEach((a, i) => {
+    const k = ease(t, i, list.length);
+    y += gapH;
+    // 部名：标志 + 工具名，居中；占比写在下面
+    const nw = measure(a.name, st.f.display, 34);
+    st.mark(s, a.key, cx - nw / 2 - 26, y - 12, 34);
+    s.text(a.name, cx + 4, y, { font: st.f.display, size: 34, fill: st.c.ink, anchor: 'middle', maxW: c.w - 240, opacity: k });
+    s.text(T(m, `${pct(a.pct)} 的代码`, `${pct(a.pct)} of the code`), cx, y + 36, { font: st.f.label, size: 15, fill: st.c.soft, anchor: 'middle', track: 0.08 });
+    s.hit(c.x + 60, y - 40, c.w - 120, headH - 10, tip(m, a));
+    y += headH;
+    for (const q of segsFor(a)) {
+      // 模型 ······ 占比
+      const nwq = s.text(q.name, x0, y, { font: st.f.body, size: 22, fill: q.unknown ? st.c.soft : st.c.ink, maxW: x1 - x0 - 120 });
+      const pw = measure(pct(q.pct), st.f.body, 20);
+      s.add(line(x0 + nwq + 14, y - 6, x1 - pw - 14, y - 6, { stroke: st.c.ink, strokeOpacity: 0.3, strokeDasharray: '1.5 7', strokeLinecap: 'round', strokeWidth: 2 }));
+      s.text(pct(q.pct), x1, y, { font: st.f.body, size: 20, fill: st.c.soft, anchor: 'end' });
+      s.hit(x0 - 10, y - 30, x1 - x0 + 20, subH, segTip(m, a, q));
+      y += subH;
+    }
+  });
+  y += 110;
+  st.rule(s, cx - 60, y - 40, 120, 'thin');
+  s.text(closing(m), cx, y + 10, { font: st.f.body, size: 18, fill: st.c.soft, anchor: 'middle' });
+  s.text(range(m), cx, y + 44, { font: st.f.label, size: 14, fill: st.c.faint, anchor: 'middle', track: 0.2 });
+  return s;
+}

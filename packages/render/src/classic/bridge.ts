@@ -129,9 +129,13 @@ export const BRIDGED = ['stream', 'survival', 'evidence', 'areas', 'codemap', 'c
 /** 原版作品追加的新风格版式（和原版版式重名的不追加）；原版自己的画法叫 original，仍是默认 */
 export const BRIDGED_LAYOUTS: Record<string, string[]> = {
   tier: TIER_VARIANTS,
-  roll: ['card', 'vertical', 'ed', 'terminal'],
+  roll: ['card', 'vertical', 'ed', 'terminal', 'troupe'],
   badge: BADGE_VARIANTS,
   donut: ['nested'],
+  // 一个工具里多个模型时的版式
+  receipt: ['itemized'],
+  waffle: ['blocks'],
+  byline: ['models'],
 };
 export const isBridged = (id: string, variant?: string) => BRIDGED.includes(id) || (!!variant && !!BRIDGED_LAYOUTS[id]?.includes(variant));
 
