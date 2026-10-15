@@ -76,6 +76,7 @@ const USAGE_ZH: &str = "用法：creditia-core <命令> [选项]
   hook-trailers <msgfile>          （hook 调用）追加 Creditia-* trailer
   evidence  export [--out F] | import <文件>   多台电脑之间合并证据库
   projects                         作品库里的项目
+  all-credits                      作品库里每个项目最新的档案（跨项目汇总用）
   paths     [--repo P]             本项目登记过的全部路径（主仓库、worktree、临时克隆、旧路径）
   link      <路径> [--repo P]      把一个路径关联到本项目（别的电脑上的路径、已删除的临时目录）
   unlink    <路径> [--repo P]      取消关联
@@ -103,6 +104,7 @@ const USAGE_EN: &str = "Usage: creditia-core <command> [options]
   hook-trailers <msgfile>          (called by the hook) append Creditia-* trailers
   evidence  export [--out F] | import <file>   merge evidence between machines
   projects                         projects in the library
+  all-credits                      the latest credits of every project in the library (for the cross-project summary)
   paths     [--repo P]             every path recorded for this project (main, worktrees, temp clones, old paths)
   link      <path> [--repo P]      link a path to this project (a path on another machine, a deleted temp folder)
   unlink    <path> [--repo P]      remove a link
@@ -139,6 +141,7 @@ fn main() {
         "hook-trailers" => cmd_hook_trailers(&a),
         "evidence" => cmd_evidence(&a),
         "projects" => cmd_projects(&a),
+        "all-credits" => cmd_all_credits(&a),
         "paths" => cmd_paths(&a),
         "link" | "unlink" => cmd_link(&a),
         "whoami" => cmd_whoami(&a),
@@ -1049,6 +1052,24 @@ fn cmd_projects(_a: &Args) -> R<(Value, Vec<String>)> {
         .collect();
     let summary = ps.iter().map(|p| format!("{:<28} {}  {}", p.name, p.last_analyzed.map(creditia_core::util::date_cn).unwrap_or_else(|| tr!("未分析", "not analyzed")), p.path)).collect::<Vec<_>>().join("\n");
     Ok((json!({ "projects": list, "summary": if summary.is_empty() { tr!("作品库为空；先 creditia-core analyze", "the library is empty; run creditia-core analyze first") } else { summary } }), vec![]))
+}
+
+/// 作品库里每个项目最新的档案（仓库里的 .creditia/credits.json，读不到用作品库里的快照）：跨项目汇总用
+fn cmd_all_credits(_a: &Args) -> R<(Value, Vec<String>)> {
+    let lib = Library::open()?;
+    let mut list = vec![];
+    for p in lib.projects()? {
+        let live = std::fs::read_to_string(Path::new(&p.path).join(".creditia/credits.json")).ok();
+        let text = match live {
+            Some(t) => Some(t),
+            None => lib.snapshot_json(&p.id)?,
+        };
+        if let Some(v) = text.and_then(|t| serde_json::from_str::<Value>(&t).ok()) {
+            list.push(json!({ "id": p.id, "name": p.name, "credits": v }));
+        }
+    }
+    let n = list.len();
+    Ok((json!({ "projects": list, "summary": tr!("{n} 个项目有档案", "{n} projects have credits") }), vec![]))
 }
 
 // ───────────────────────── 路径：一个项目在多处 ─────────────────────────

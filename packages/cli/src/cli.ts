@@ -11,6 +11,7 @@ import { makeExporter, sized, SIZES, FORMATS, type Art } from '../../render/src/
 import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, commitsComment, mergeMarked, fetchSegs, stampedComment, shieldsBadge, badgeShares, stampedBadgeShares, type Stamped } from '../../render/src/text.ts';
 import { BRAND } from '../../render/src/style.ts';
 import { check, redact, CATS, CAT_NAMES, RISK_NAMES, type Cat } from './privacy.ts';
+import { mergeCredits } from '../../render/src/merge.ts';
 import * as V2 from '../../render/src/index.ts';
 import { BRIDGED } from '../../render/src/classic/bridge.ts';
 import { variantsOf } from '../../render/src/classic/art.ts';
@@ -25,7 +26,7 @@ const ex = makeExporter({ png: (s, w) => pick(s).png(s, w), rgba: (s, w) => pick
 const exV2 = makeExporter(V2.raster, deflate);
 
 // ───────────────────────── 参数 ─────────────────────────
-const SWITCHES = new Set(['json', 'fresh', 'force', 'github', 'all', 'yes', 'list', 'no-color', 'refresh', 'check']);
+const SWITCHES = new Set(['json', 'fresh', 'force', 'github', 'all', 'yes', 'list', 'no-color', 'refresh', 'check', 'all-projects']);
 const argv = process.argv.slice(2);
 const cmd = argv[0] ?? '';
 const pos: string[] = [];
@@ -71,6 +72,7 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   release-notes  <tag|unreleased> [--into 说明.md]      该版本的 credits 段落；--into 时放进已有说明，输出整篇
   pr-comment     <N> | --commits a,b,c                  该 PR（或这几个提交）的一句话归因
   badge-json     [--out badge.json]                     shields.io 动态徽章的数据（没有档案时读提交盖章）
+  summary        [--out all.json]                       跨项目汇总：作品库里全部项目并成一份；其他命令加 --all-projects 也一样
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
                  [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group auto|tool|model] [--out FILE]
   export         --list                                 全部作品、版式、风格、格式
@@ -109,6 +111,7 @@ Credits and pieces
   release-notes  <tag|unreleased> [--into notes.md]     the credits paragraph for a version; with --into, merged into existing notes
   pr-comment     <N> | --commits a,b,c                  a one-line attribution for a PR (or for these commits)
   badge-json     [--out badge.json]                     data for a shields.io dynamic badge (reads commit stamps when there are no credits)
+  summary        [--out all.json]                       cross-project summary: every project in the library in one; other commands take --all-projects too
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
                  [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group auto|tool|model] [--out FILE]
   export         --list                                 every piece, layout, style and format
@@ -189,6 +192,7 @@ function repoOf(): string {
 }
 /** 档案从哪来：--credits 指定的文件 → 本机分析结果 .creditia/credits.json（必要时现场分析）→ 仓库根目录公开的 credits.json */
 function loadCredits(repo: string, refresh = false): any {
+  if (on.has('all-projects')) return allProjects();
   if (flags.credits) {
     const f = path.resolve(flags.credits);
     if (!existsSync(f)) die(L(`没有 ${f}`, `no such file: ${f}`));
@@ -203,6 +207,15 @@ function loadCredits(repo: string, refresh = false): any {
   }
   if (!existsSync(p)) die(L(`没有 ${p}；先运行 creditia analyze`, `no ${p}; run creditia analyze first`));
   return JSON.parse(readFileSync(p, 'utf8'));
+}
+/** 作品库里全部项目并成一份档案（跨项目汇总）。格式和单个项目一样，每种作品都能画 */
+function allProjects(): any {
+  const r = core(['all-credits', '--json'], false);
+  let v: any = null;
+  try { v = JSON.parse(r.out); } catch { /* 下面报错 */ }
+  const parts = (v?.projects ?? []).map((p: any) => ({ name: p.name, raw: p.credits }));
+  if (!parts.length) die(L('作品库里还没有分析过的项目；先在项目里 creditia analyze', 'no analyzed projects in the library yet; run creditia analyze in a project first'));
+  return mergeCredits(parts, LANG());
 }
 /** 现成的档案，没有就是 null（不现场分析）：CI 里写 PR 评论、Release 说明用，没有档案时改读提交盖章 */
 function existingCredits(repo: string): any | null {
@@ -294,7 +307,7 @@ async function main() {
   const hasCredits = !!flags.credits || (!!top && (existsSync(path.join(top, '.creditia/credits.json')) || existsSync(path.join(top, 'credits.json'))));
   // CI 里写 PR 评论、Release 说明：没有档案时读提交盖章，不用核心
   const stampsOnly = (cmd === 'pr-comment' && flags.commits !== undefined) || (cmd === 'release-notes' && flags.into !== undefined) || cmd === 'badge-json';
-  if (PASS.has(cmd) || on.has('refresh') || (!hasCredits && !on.has('list') && !stampsOnly)) coreBin = await ensureCore();
+  if (PASS.has(cmd) || on.has('refresh') || on.has('all-projects') || cmd === 'summary' || (!hasCredits && !on.has('list') && !stampsOnly)) coreBin = await ensureCore();
   if (PASS.has(cmd)) process.exit(core(argv).code);
   switch (cmd) {
     case 'doc': {
@@ -333,6 +346,15 @@ async function main() {
       const s = prComment(textModel(raw), id);
       if (!s) die(L(`没有找到 ${id}`, `not found: ${id}`));
       return write(flags.out, s);
+    }
+    case 'summary': {
+      // 跨项目汇总：作品库里全部项目。--out 写成一份档案（再用 --credits 出任何作品），否则在终端里印一张名片
+      const raw = allProjects();
+      if (flags.out) return write(flags.out, JSON.stringify(raw, null, 1) + '\n');
+      if (json) return console.log(JSON.stringify({ projects: raw.projects, totals: raw.totals, contributors: raw.breakdown.map((b: any) => ({ id: b.contributor, linesAdded: b.linesAdded })) }));
+      console.log(ansi(fetchSegs(textModel(raw))));
+      console.log('\n' + raw.projects.map((p: any) => `  ${p.name}  ${p.range?.from ?? ''} → ${p.range?.to ?? ''}  ${p.linesAdded} ${L('行', 'lines')}`).join('\n'));
+      return;
     }
     case 'badge-json': {
       // shields.io endpoint 徽章：有档案用档案，没有（CI 里）就汇总全部提交上的盖章
