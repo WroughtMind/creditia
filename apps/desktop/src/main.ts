@@ -110,7 +110,7 @@ async function boot() {
   bootKits();
   const st = document.createElement('style'); st.textContent = INTERACT_CSS; document.head.appendChild(st);
   $('#logo').innerHTML = LOGO_SVG;
-  applyLang(); renderDots(); renderDock(); wireTop();
+  applyLang(); renderDots(); renderDock(); wireTop(); wireRoam();
   // 滚动之后顶栏垫一层渐隐的玻璃，作品不再直接透到项目名和按钮后面
   const stageEl = $('#stage');
   stageEl.addEventListener('scroll', () => document.body.classList.toggle('scrolled', stageEl.scrollTop > 8), { passive: true });
@@ -118,7 +118,7 @@ async function boot() {
   if (!state.projects.length) return empty(() => [L('还没有分析过的项目', 'No analyzed projects yet'), '', 'creditia analyze', native ? { label: L('添加项目…', 'Add a project…'), run: addProject } : undefined]);
   const last = (store.get('project') === ALL_ID && state.projects.length > 1 ? allProject() : null) ?? state.projects.find((p) => p.id === store.get('project')) ?? state.projects[0];
   await openProject(last);
-  addEventListener('resize', () => layout());
+  addEventListener('resize', () => { layout(); if (roam.ready) roamReset(); });
 }
 /** 空状态。传进来的是函数：换语言时按新语言重写一遍 */
 type EmptyView = () => [title: string, detail?: string, cmd?: string, act?: Act];
@@ -128,6 +128,7 @@ function empty(view: EmptyView, keepName = false) {
   const [title, detail = '', cmd = '', act] = view();
   $('#board').innerHTML = ''; document.body.classList.remove('busy');
   const el = $('#empty'); el.hidden = false;
+  applyView();
   el.innerHTML = `<div><b>${esc(title)}</b>${esc(detail)}${act ? `<br><button class="go glass">${esc(act.label)}</button>` : ''}${cmd ? `<br><span>${act ? L('或者在项目目录里运行', 'or run in your project') : L('在项目目录里运行', 'Run in your project')}</span><br><code>${esc(cmd)}</code>` : ''}</div>`;
   if (act) (el.querySelector('.go') as HTMLElement).onclick = act.run;
   if (!keepName) { $('#pname').textContent = 'creditia'; $('#pmeta').textContent = ''; }
@@ -336,6 +337,7 @@ async function paint() {
   const st = state.style;
   const token = ++state.token;
   const board = $('#board');
+  applyView(); if (roam.ready) roamReset();
   // 墙上已经有作品（换风格、换语言）：旧的先留着，新的在后台全部画好，再一次原地换上，整面墙只滑动一次；
   // 一张一张换的话，每换一张后面的都要重排，墙会连着抽动十几次。空墙就画一张摆一张。
   const old = [...board.querySelectorAll('.tile')] as HTMLElement[];
@@ -676,6 +678,207 @@ function openFocus(id: string, k: string) {
   };
 }
 
+// ───────────────────────── 漫游：上下左右没有尽头的画布 ─────────────────────────
+// 墙之外的另一种看法。每一栏自己往上往下无限延伸，栏和栏也无限往左右排；作品按顺序轮着出现，
+// 每轮一圈就换下一种版式，所以走得越远，看到的是同一件作品的别的画法，而不是原样复制。
+// 拖动（或滚轮、触控板）移动画布；点一下放大，悬停点「导出」。只把视口附近的作品放进页面。
+type RItem = { r: number; y: number; h: number; w: number; id: string; k: string; v?: string; a: Art };
+type RCol = { items: RItem[]; busy: boolean };
+const roam = { x: 0, y: 0, cols: new Map<number, RCol>(), els: new Map<string, HTMLElement>(), gen: 0, vx: 0, vy: 0, raf: 0, ready: false };
+const CAP = 30, RGAP = 56, STEP = 5;
+const view = () => (store.get('view') === 'roam' ? 'roam' : 'wall');
+const rcw = () => Math.round(Math.max(380, Math.min(520, innerWidth / 3.1)));
+const pitch = () => rcw() + RGAP;
+const mod = (a: number, n: number) => ((a % n) + n) % n;
+/** 每一栏起点错开一点，栏和栏的作品不会排成一行一行 */
+const colOff = (X: number) => mod(Math.imul(X ^ 0x5bd1e995, 0x27d4eb2d) >>> 0, 997) / 997 * 420;
+
+/** 第 X 栏第 r 个是哪件作品、哪个版式 */
+function slot(X: number, r: number) {
+  const list = tiles(), n = list.length;
+  const v = X + r * STEP, i = mod(v, n), lap = Math.floor(v / n);
+  const b = list[i], k = keyOf(b, i);
+  const vs = state.style.variants(b.id);
+  const base = curVariant(b.id, k, b);
+  const j = vs.indexOf(base ?? '');
+  return { b, k, v: vs.length > 1 ? vs[mod((j < 0 ? 0 : j) + lap, vs.length)] : base };
+}
+async function rItem(X: number, r: number): Promise<RItem | null> {
+  const s = slot(X, r);
+  let a: Art | null = null;
+  try { a = await drawArt(s.b.id, s.v); } catch (e) { console.error(s.b.id, e); }
+  if (!a) return null;
+  const cw = rcw(), w = Math.min(cw, a.w < 500 ? a.w * 1.15 : cw);
+  return { r, y: 0, w, h: (w / a.w) * a.h, id: s.b.id, k: s.k, v: s.v, a };
+}
+/** 让第 X 栏盖住 [top, bottom]；一栏同时只长一处，长完再看一遍 */
+async function grow(X: number, top: number, bottom: number) {
+  let col = roam.cols.get(X);
+  if (!col) { col = { items: [], busy: false }; roam.cols.set(X, col); }
+  if (col.busy) return;
+  col.busy = true;
+  const gen = roam.gen;
+  try {
+    let guard = 0;
+    while (gen === roam.gen && guard++ < 40) {
+      const it = col.items;
+      if (!it.length) {
+        const f = await rItem(X, 0); if (gen !== roam.gen) return;
+        if (!f) break;
+        f.y = colOff(X); it.push(f); continue;
+      }
+      const last = it[it.length - 1], first = it[0];
+      if (last.y + last.h < bottom) {
+        const f = await rItem(X, last.r + 1); if (gen !== roam.gen) return;
+        if (!f) { last.r++; continue; } // 画不出来的跳过
+        f.y = last.y + last.h + RGAP + CAP; it.push(f);
+      } else if (first.y - CAP > top) {
+        const f = await rItem(X, first.r - 1); if (gen !== roam.gen) return;
+        if (!f) { first.r--; continue; }
+        f.y = first.y - CAP - RGAP - f.h; it.unshift(f);
+      } else break;
+      place();
+    }
+  } finally { col.busy = false; }
+  if (gen === roam.gen) place();
+}
+/** 只把视口附近的作品放进页面，远的拿掉；缺的让那一栏去长 */
+function place() {
+  if (!roam.ready) return;
+  const plane = $('#roam .plane');
+  plane.style.transform = `translate3d(${-roam.x}px, ${-roam.y}px, 0)`;
+  const P = pitch(), cw = rcw(), m = 700;
+  const top = roam.y - m, bottom = roam.y + innerHeight + m;
+  const want = new Set<string>();
+  for (let X = Math.floor((roam.x - m) / P); X <= Math.floor((roam.x + innerWidth + m) / P); X++) {
+    const col = roam.cols.get(X);
+    const it = col?.items ?? [];
+    if (!it.length || it[0].y - CAP > top || it[it.length - 1].y + it[it.length - 1].h < bottom) grow(X, top, bottom);
+    for (const t of it) {
+      if (t.y + t.h < top || t.y - CAP > bottom) continue;
+      const key = `${X}:${t.r}`;
+      want.add(key);
+      if (roam.els.has(key)) continue;
+      const el = document.createElement('div');
+      el.className = 'tile rt';
+      el.style.left = `${X * P + (cw - t.w) / 2}px`; el.style.top = `${t.y}px`; el.style.width = `${t.w}px`;
+      el.innerHTML = `<div class="name">${esc(state.style.pieceName(t.id, state.lang))}${t.v && state.style.variants(t.id).length > 1 ? `<span class="vn">${esc(state.style.variantName(t.v, state.lang))}</span>` : ''}</div>
+        <div class="bar glass"><button data-act="export" title="${L('导出', 'Export')}">${L('导出', 'Export')} ↓</button></div><div class="art"></div>`;
+      const artEl = el.querySelector('.art') as HTMLElement;
+      artEl.innerHTML = t.a.svg;
+      mountHits(artEl, t.a.hits, t.a.w, t.a.h);
+      (el as any)._item = t;
+      plane.appendChild(el);
+      roam.els.set(key, el);
+    }
+  }
+  for (const [key, el] of roam.els) if (!want.has(key)) { el.remove(); roam.els.delete(key); }
+}
+/** 墙上那件作品借用这一张的版式和画好的图：放大、导出都照这一张来 */
+function adopt(t: RItem) { state.variants[t.k] = t.v ?? ''; state.arts.set(t.k, t.a); }
+/** 回到起点：第一栏贴着左边居中排开，最上面让出顶栏 */
+function home(): [number, number] {
+  const P = pitch(), n = Math.max(1, Math.floor((innerWidth + RGAP) / P));
+  return [-Math.round((innerWidth - (n * P - RGAP)) / 2), -96];
+}
+function roamReset() {
+  roam.gen++;
+  roam.cols.clear(); roam.els.clear();
+  $('#roam .plane').innerHTML = '';
+  if (view() === 'roam' && state.model) place();
+}
+function glide(tx: number, ty: number) {
+  cancelAnimationFrame(roam.raf);
+  const x0 = roam.x, y0 = roam.y, t0 = performance.now(), d = 520;
+  const step = (now: number) => {
+    const p = Math.min(1, (now - t0) / d), e = 1 - Math.pow(1 - p, 3);
+    roam.x = x0 + (tx - x0) * e; roam.y = y0 + (ty - y0) * e; place();
+    if (p < 1) roam.raf = requestAnimationFrame(step);
+  };
+  roam.raf = requestAnimationFrame(step);
+}
+function wireRoam() {
+  const el = $('#roam');
+  let drag: { x: number; y: number; px: number; py: number; moved: boolean; t: number; hist: [number, number, number][] } | null = null;
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('button, .fmts')) return;
+    cancelAnimationFrame(roam.raf);
+    drag = { x: e.clientX, y: e.clientY, px: roam.x, py: roam.y, moved: false, t: performance.now(), hist: [] };
+    el.setPointerCapture(e.pointerId);
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) > 5) { drag.moved = true; el.classList.add('panning'); closeFormats(); }
+    if (!drag.moved) return;
+    roam.x = drag.px - dx; roam.y = drag.py - dy;
+    drag.hist.push([performance.now(), roam.x, roam.y]); if (drag.hist.length > 6) drag.hist.shift();
+    place();
+  });
+  const up = (e: PointerEvent) => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    el.classList.remove('panning');
+    if (!d.moved) {
+      if (e.type !== 'pointerup') return;
+      // 没拖动就是点了一下：放大这一张
+      const tile = document.elementsFromPoint(e.clientX, e.clientY).find((x) => x.classList.contains('rt')) as HTMLElement | undefined;
+      const t = (tile as any)?._item as RItem | undefined;
+      if (t) { adopt(t); openFocus(t.id, t.k); }
+      return;
+    }
+    // 松手后按最后一小段的速度滑一会儿
+    const h = d.hist; if (h.length < 2) return;
+    const [t1, x1, y1] = h[0], [t2, x2, y2] = h[h.length - 1], dt = Math.max(16, t2 - t1);
+    if (performance.now() - t2 > 80) return;
+    let vx = ((x2 - x1) / dt) * 16, vy = ((y2 - y1) / dt) * 16;
+    const coast = () => {
+      vx *= 0.94; vy *= 0.94;
+      if (Math.hypot(vx, vy) < 0.3) return;
+      roam.x += vx; roam.y += vy; place();
+      roam.raf = requestAnimationFrame(coast);
+    };
+    roam.raf = requestAnimationFrame(coast);
+  };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  el.addEventListener('wheel', (e) => {
+    e.preventDefault(); cancelAnimationFrame(roam.raf);
+    const k = e.deltaMode === 1 ? 16 : 1;
+    // 普通鼠标滚轮只有上下：按住 Shift 就是左右
+    if (e.shiftKey && !e.deltaX) roam.x += e.deltaY * k; else { roam.x += e.deltaX * k; roam.y += e.deltaY * k; }
+    place();
+  }, { passive: false });
+  el.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('button[data-act="export"]'); if (!b) return;
+    e.stopPropagation();
+    const tile = b.closest('.rt') as HTMLElement, t = (tile as any)._item as RItem;
+    adopt(t); toggleFormats(tile, t.id, t.k);
+  });
+  $('#home').onclick = () => glide(...home());
+  $('#view').onclick = (e) => {
+    const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
+    store.set('view', b.dataset.v!); applyView();
+  };
+  addEventListener('keydown', (e) => {
+    if (view() !== 'roam' || !document.body.classList.contains('roam') || closeFocus || !$('#sheet').hidden || !$('#menu').hidden) return;
+    if ((e.target as HTMLElement).closest('input, textarea')) return;
+    const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (d) { e.preventDefault(); glide(roam.x + d[0] * pitch(), roam.y + d[1] * innerHeight * 0.6); }
+    if (e.key === 'Home' || e.key === '0') glide(...home());
+  });
+}
+/** 墙 / 漫游。没有作品（空状态）时总是墙，空状态的说明在墙上 */
+function applyView() {
+  const on = view() === 'roam' && !!state.model && $('#empty').hidden;
+  document.querySelectorAll<HTMLElement>('#view button').forEach((b) => b.classList.toggle('on', b.dataset.v === view()));
+  $('#view').hidden = !state.model;
+  const was = document.body.classList.contains('roam');
+  document.body.classList.toggle('roam', on);
+  $('#roam').hidden = !on; $('#home').hidden = !on;
+  if (on && !roam.ready) { roam.ready = true; [roam.x, roam.y] = home(); roamReset(); }
+  else if (on && !was) place();
+}
+
 // ───────────────────────── 风格圆点 ─────────────────────────
 function renderDots() {
   const nav = $('#dots');
@@ -715,6 +918,11 @@ function applyLang() {
   $('#project').setAttribute('aria-label', L('切换项目', 'Switch project'));
   $('#dots').setAttribute('aria-label', L('风格', 'Styles'));
   $('#dock').setAttribute('aria-label', L('导出', 'Export'));
+  const [w, r] = document.querySelectorAll<HTMLElement>('#view button');
+  w.textContent = L('墙', 'Wall'); r.textContent = L('漫游', 'Roam');
+  w.title = L('整理好的一面墙', 'Everything on one tidy wall'); r.title = L('没有尽头的画布：拖动、滚动随便走，越远看到越多版式', 'An endless canvas: drag or scroll anywhere; the farther you go, the more layouts you see');
+  $('#view').setAttribute('aria-label', L('视图', 'View'));
+  $('#home').innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="2.2"/><path d="M7 1v2.2M7 10.8V13M1 7h2.2M10.8 7H13"/></svg>${L('回到起点', 'Back to start')}`;
 }
 function wireTop() {
   const pill = $('#project');

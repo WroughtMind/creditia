@@ -269,3 +269,23 @@ body.dragging #dock .sizes { display: flex; gap: 2px; padding: 3px; border-radiu
 #empty .go:hover { background: var(--glass2); }
 #empty code { font: 12px "JetBrains Mono", ui-monospace, monospace; background: var(--glass); padding: 6px 10px; border-radius: 8px; display: inline-block; margin-top: 10px; }
 #dots .divider{width:1px;height:16px;background:color-mix(in srgb, var(--ink) 16%, transparent);margin:0 4px;align-self:center;flex:none}
+
+/* ── 视图切换：墙 / 漫游 ── */
+.tools { align-items: center; }
+#view { height: 34px; padding: 2px; box-sizing: border-box; margin-right: 2px; }
+#view button { height: 30px; padding: 0 12px; }
+
+/* ── 漫游：没有尽头的画布 ── */
+#roam { position: fixed; inset: 0; overflow: hidden; cursor: grab; touch-action: none; }
+#roam.panning, #roam.panning * { cursor: grabbing !important; }
+#roam .plane { position: absolute; left: 0; top: 0; will-change: transform; }
+#roam .rt { animation: rin .5s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes rin { from { opacity: 0; filter: blur(6px); } }
+#roam .rt .art { cursor: inherit; }
+#roam.panning .rt .bar, #roam.panning .rt::after { opacity: 0 !important; }
+#roam .rt .name .vn { margin-left: 8px; color: var(--faint); opacity: .8; }
+#roam .rt .name { max-width: calc(100% - 90px); }
+body.roam #stage, body.roam #dock { display: none; }
+body.roam #top::before { opacity: 1; }
+#home { position: fixed; z-index: 20; right: 18px; bottom: 18px; height: 42px; padding: 0 16px 0 14px; border: 0; border-radius: 99px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12.5px; color: var(--ink); }
+#home:hover { background: var(--glass2); }
