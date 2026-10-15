@@ -1,0 +1,746 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>creditia promo</title>
+<style>
+  @font-face { font-family: 'Serif'; src: url('../packages/cli/node_modules/@expo-google-fonts/instrument-serif/400Regular/InstrumentSerif_400Regular.ttf'); }
+  @font-face { font-family: 'SerifI'; src: url('../packages/cli/node_modules/@expo-google-fonts/instrument-serif/400Regular_Italic/InstrumentSerif_400Regular_Italic.ttf'); }
+  @font-face { font-family: 'Sans'; font-weight: 400; src: url('../packages/cli/node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf'); }
+  @font-face { font-family: 'Sans'; font-weight: 500; src: url('../packages/cli/node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf'); }
+  @font-face { font-family: 'Sans'; font-weight: 600; src: url('../packages/cli/node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf'); }
+  @font-face { font-family: 'Mono'; font-weight: 400; src: url('../packages/cli/node_modules/@expo-google-fonts/jetbrains-mono/400Regular/JetBrainsMono_400Regular.ttf'); }
+  @font-face { font-family: 'Mono'; font-weight: 500; src: url('../packages/cli/node_modules/@expo-google-fonts/jetbrains-mono/500Medium/JetBrainsMono_500Medium.ttf'); }
+  html, body { margin: 0; background: #070708; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+// creditia 宣传片：一切画面都由 render(t) 决定，同一个 t 永远画出同一帧（逐帧截图合成视频）
+const W = 1920, H = 1080, DURATION = 52;
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+
+// ───────── 小工具 ─────────
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const eo3 = (k) => 1 - Math.pow(1 - k, 3);
+const eio3 = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+const eo5 = (k) => 1 - Math.pow(1 - k, 5);
+const eoExpo = (k) => (k >= 1 ? 1 : 1 - Math.pow(2, -10 * k));
+const eioExpo = (k) => (k <= 0 ? 0 : k >= 1 ? 1 : k < 0.5 ? Math.pow(2, 20 * k - 10) / 2 : (2 - Math.pow(2, -20 * k + 10)) / 2);
+const eoBack = (k) => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); };
+function rng(seed) { return () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function hex(c) { return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]; }
+function mixc(a, b, k) { const A = hex(a), B = hex(b); return `rgb(${A.map((v, i) => Math.round(lerp(v, B[i], k))).join(',')})`; }
+function rgba(c, a) { const [r, gg, b] = hex(c); return `rgba(${r},${gg},${b},${a})`; }
+const sm = (k) => k * k * (3 - 2 * k);
+
+const BG = '#070708', INK = '#F1EADC', SOFT = '#A39B8B', DIM = '#5E594F';
+
+// ───────── 演员表（lumen 样例项目，只算 AI 与未确认的行）─────────
+const AG = [
+  { key: 'claude-code', name: 'Claude Code', models: ['Claude Opus 5.5', 'Claude Fable 5.1'], color: '#D97757', pct: 59.3 },
+  { key: 'codex', name: 'Codex', models: ['GPT-5.6 Sol'], color: '#10A37F', pct: 27.6 },
+  { key: 'cursor', name: 'Cursor', models: ['Composer 2'], color: '#3B82F6', pct: 6.7 },
+  { key: 'kimi', name: 'Kimi', models: ['Kimi K3'], color: '#2F6BFF', pct: 3.1 },
+  { key: 'grok', name: 'Grok', models: ['Grok 5 Code'], color: '#9A9AA2', pct: 1.3 },
+  { key: 'un', name: '', models: [], color: '#6E685D', pct: 2.0 },
+];
+AG[3].color = '#7C8CFF'; // Kimi 的蓝在 Cursor 旁边分不开，暗底上提亮一档
+const UN = 5;
+
+// ───────── 素材 ─────────
+const logoSrc = { 'claude-code': 'claude-code', codex: 'codex', cursor: 'cursor', kimi: 'kimi', grok: 'grok' };
+const LOGO = {};   // key → 256px 白色剪影 canvas
+const PIECES = []; // { img, thumb, wash }
+const PIECE_FILES = ['p01','p02','p04','p15','p05','p03','p13','p10','p07','p16','p11','p17','p09','p12','p21','p24','p18','p14','p20','p19','p06','p22','p08','p23'];
+function loadImg(src) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error(src)); i.src = src; }); }
+function tinted(src, color, size) {
+  const c = document.createElement('canvas'); c.width = c.height = size; const x = c.getContext('2d');
+  x.drawImage(src, 0, 0, size, size); x.globalCompositeOperation = 'source-in'; x.fillStyle = color; x.fillRect(0, 0, size, size); return c;
+}
+function drawLogo(key, cx, cy, size, color, alpha = 1) {
+  const L = LOGO[key]; if (!L) return;
+  let t = L.cache[color]; if (!t) t = L.cache[color] = tinted(L.img, color, 256);
+  g.save(); g.globalAlpha *= alpha; g.drawImage(t, cx - size / 2, cy - size / 2, size, size); g.restore();
+}
+const GRAIN = [];
+
+// ───────── 代码：一份真实感的语料，按行切成笔画 ─────────
+const CORPUS = `use std::collections::HashMap;
+use crate::evidence::{Evidence, Source};
+
+/// Match every surviving line to the tool that wrote it.
+pub fn attribute(repo: &Repo, logs: &[Session]) -> Credits {
+    let mut owners: HashMap<LineId, Owner> = HashMap::new();
+    for session in logs {
+        for edit in session.edits() {
+            let hash = line_hash(&edit.text);
+            if let Some(id) = repo.find(&edit.path, hash) {
+                owners.insert(id, Owner::agent(session.tool, edit.model));
+            }
+        }
+    }
+    for commit in repo.commits() {
+        if let Some(trailer) = commit.trailer("Assisted-by") {
+            declare(&mut owners, &commit, trailer);
+        }
+    }
+    infer_runs(&mut owners, repo.hunks());
+    Credits::tally(owners, repo.surviving())
+}
+
+fn line_hash(text: &str) -> u64 {
+    let norm = text.trim_end().replace('\\t', "    ");
+    xxh3_64(norm.as_bytes())
+}
+
+impl Credits {
+    pub fn share(&self, tool: Tool) -> f64 {
+        let ai = self.total - self.human;
+        if ai == 0 { return 0.0; }
+        self.lines[&tool] as f64 / ai as f64
+    }
+}
+
+export function roll(model: Model, theme: Theme): Svg {
+  const rows = model.agents.map((a) => ({
+    tool: a.name,
+    models: a.models.join(' · '),
+    share: pct(a.lines / model.total),
+  }));
+  const h = 220 + rows.length * theme.rowHeight;
+  return svg(1080, h, [
+    title(model.project, theme),
+    ...rows.map((r, i) => credit(r, i, theme)),
+    footer(model.range, theme),
+  ]);
+}
+
+async function scan(dir: string): Promise<Session[]> {
+  const files = await glob('**/*.jsonl', { cwd: dir });
+  const out: Session[] = [];
+  for (const f of files) {
+    for await (const ev of readLines(join(dir, f))) {
+      if (ev.type === 'tool_use' && WRITE.has(ev.name)) {
+        out.push(toEdit(ev, f));
+      }
+    }
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+
+pub struct Owner {
+    pub tool: Tool,
+    pub model: Option<Model>,
+    pub evidence: Evidence,
+}
+
+#[test]
+fn shares_ignore_people() {
+    let c = fixture("lumen").attribute();
+    assert_eq!(c.share(Tool::Claude), 0.593);
+    assert_eq!(c.share(Tool::Codex), 0.276);
+}
+`.split('\n');
+
+const CW = 1.9;         // 地图单位里的字符宽
+const LH = 4.5;         // 行距
+const COLW = 96, GAPX = 20, COLS = 15, ROWS = 176;
+const MAPX = (W - (COLS * COLW + (COLS - 1) * GAPX)) / 2;
+const MAPY = (H - ROWS * LH) / 2;
+
+const LINES = [];   // { x, y, text, segs:[[x0,x1]], agent, col, row, file, wt }
+const SEGS = [];    // 平铺的笔画：{ l, x0, x1 }
+(function build() {
+  const r = rng(7);
+  const weights = [0.593, 0.276, 0.067, 0.031, 0.013, 0.02];
+  const pick = () => { let u = r(), i = 0; for (; i < weights.length - 1; i++) { if (u < weights[i]) break; u -= weights[i]; } return i; };
+  let fileId = 0;
+  for (let c = 0; c < COLS; c++) {
+    let row = 0;
+    while (row < ROWS - 6) {
+      const len = Math.min(ROWS - row, 22 + Math.floor(r() * 70));
+      let start = Math.floor(r() * CORPUS.length);
+      if (c === 0 && row === 0) start = 0;
+      let agent = pick(), runLeft = 3 + Math.floor(r() * 26);
+      for (let i = 0; i < len; i++) {
+        const text = CORPUS[(start + i) % CORPUS.length].slice(0, 50);
+        if (--runLeft <= 0) { agent = pick(); runLeft = 3 + Math.floor(r() * 26); }
+        const x = MAPX + c * (COLW + GAPX), y = MAPY + (row + i) * LH;
+        const segs = [];
+        const re = /\S+/g; let m, cur = null;
+        while ((m = re.exec(text))) {
+          const a = x + m.index * CW, b = x + (m.index + m[0].length) * CW;
+          if (cur && r() < 0.55) cur[1] = b; else { cur = [a, b]; segs.push(cur); }
+        }
+        const L = { x, y, text, segs, agent, col: c, row: row + i, file: fileId, wt: 0 };
+        LINES.push(L);
+        for (const s of segs) SEGS.push({ l: L, x0: s[0], x1: s[1], rx: r(), ry: r(), rd: r() });
+      }
+      row += len + 3; fileId++;
+    }
+  }
+})();
+
+// 第 7 栏里挑三行做「这一行是谁写的」：Claude、Codex、Cursor
+const BLAME_COL = 7;
+const BLAME = (() => {
+  const col = LINES.filter((l) => l.col === BLAME_COL && l.segs.length >= 2 && l.text.trim().length > 26);
+  const want = [{ a: 0, row: 52 }, { a: 1, row: 63 }, { a: 2, row: 74 }];
+  return want.map(({ a, row }) => {
+    let best = col[0], bd = 1e9;
+    for (const l of col) { const d = Math.abs(l.row - row); if (d < bd) { bd = d; best = l; } }
+    // 把它和上下几行一起交给这个工具，看起来是一整段
+    for (const l of LINES) if (l.col === BLAME_COL && Math.abs(l.row - best.row) <= 2 && l.segs.length) l.agent = a;
+    return { line: best, a };
+  });
+})();
+const BLAME_FILE = ['engine.rs', 'scan.ts', 'roll.ts'];
+
+// ───────── 写入时间：第一屏逐字打出第一个文件，其余行由远及近陆续写上 ─────────
+const TYPE_LINES = 7, TYPE_START = 0.9;
+const TYPE_EVENTS = []; // 每个字符的时间，配乐用
+(function times() {
+  const r = rng(11);
+  let t = TYPE_START;
+  const first = LINES.filter((l) => l.col === 0 && l.row < TYPE_LINES);
+  for (const l of first) {
+    l.chars = [];
+    for (let i = 0; i < l.text.length; i++) {
+      const sp = lerp(0.05, 0.0035, eo3(clamp((t - TYPE_START) / 1.7))); // 越打越快
+      if (l.text[i] !== ' ' || i > 0 && l.text[i - 1] !== ' ') { t += sp * (0.6 + r() * 0.8); }
+      l.chars.push(t);
+      if (l.text[i] !== ' ') TYPE_EVENTS.push(+t.toFixed(4));
+    }
+    l.wt = l.chars[0] ?? t; l.done = t;
+    t += 0.03;
+  }
+  const TYPE_END = t;
+  for (const l of LINES) {
+    if (l.chars) continue;
+    const dx = (l.x - MAPX) / 1720, dy = (l.y - MAPY) / 800;
+    const d = Math.sqrt(dx * dx * 1.0 + dy * dy * 0.45);
+    l.wt = TYPE_END - 0.5 + d * 4.6 + r() * 0.7;
+    l.done = l.wt + 0.18;
+  }
+})();
+const LINE_EVENTS = LINES.filter((l) => !l.chars && l.wt < 4.2 && l.segs.length).map((l) => +l.wt.toFixed(4));
+
+// ───────── 时间表（秒）───────── 配乐 score.py 用同一份
+const T = {
+  zoomOut: [3.6, 7.6], scan: [8.6, 11.6], hit: 12.0, legend: 12.15, dive: [14.0, 15.2],
+  blame: [15.5, 17.0, 18.5], back: [19.75, 20.6], fly: 20.6, tally: 22.4, montage: 24.0, fast: 32.0, wall: 34.0,
+  credits: [36.6, 39.0, 41.2], logo: 43.9, end: 52.0,
+};
+
+// ───────── 镜头 ─────────
+function cam(t) {
+  const center = [W / 2, H / 2];
+  const s0 = 10, startC = [MAPX - (470 - W / 2) / s0, MAPY - (440 - H / 2) / s0];
+  let s = s0, c = startC.slice();
+  if (t >= T.zoomOut[0]) {
+    const k = eio3(prog(t, ...T.zoomOut));
+    s = Math.exp(lerp(Math.log(s0), 0, k));
+    const u = (1 / s - 1 / s0) / (1 - 1 / s0);
+    c = [lerp(startC[0], center[0], u), lerp(startC[1], center[1], u)];
+  }
+  if (t >= T.zoomOut[1]) { s = 1 + 0.035 * eio3(prog(t, 7.6, 12.0)); c = center.slice(); }
+  if (t >= T.hit) {
+    const kick = Math.exp(-(t - T.hit) * 7) * 0.02;
+    s = 1.035 - 0.105 * eo3(prog(t, T.hit, T.hit + 1.2)) + kick; // 让出底部给图例
+    c = [W / 2, H / 2 + 62 * eo3(prog(t, T.hit, T.hit + 1.2))];
+  }
+  if (t >= T.dive[0]) {
+    // 依次对准三行：栏放在左侧，右边留给说明卡
+    const sT = 8.6, colL = MAPX + BLAME_COL * (COLW + GAPX);
+    const at = (i) => [colL + (W / 2 - 150) / sT, BLAME[i].line.y + 1];
+    let tgt = at(0);
+    for (let i = 1; i < 3; i++) { const k = eio3(prog(t, T.blame[i] - 0.55, T.blame[i] - 0.05)); const p = at(i); tgt = [lerp(tgt[0], p[0], k), lerp(tgt[1], p[1], k)]; }
+    const s1 = 0.93, c1 = [W / 2, H / 2 + 62];
+    const k = eio3(prog(t, ...T.dive));
+    const ss = Math.exp(lerp(Math.log(s1), Math.log(sT), k));
+    const u = (1 / ss - 1 / s1) / (1 / sT - 1 / s1);
+    s = ss; c = [lerp(c1[0], tgt[0], u), lerp(c1[1], tgt[1], u)];
+    s *= 1 + 0.012 * (t - T.dive[1]) * (t > T.dive[1]); // 慢慢推近
+  }
+  if (t >= T.back[0]) {
+    const k = eio3(prog(t, ...T.back));
+    const from = cam._last ?? { s, c };
+    s = Math.exp(lerp(Math.log(from.s), 0, k));
+    const u = (1 / s - 1 / from.s) / (1 - 1 / from.s);
+    c = [lerp(from.c[0], W / 2, u), lerp(from.c[1], H / 2, u)];
+  } else cam._last = { s, c };
+  return { s, c };
+}
+// 回拉起点是推近结束那一刻的镜头：预先算出来，免得逐帧依赖上一帧
+cam._last = null;
+const BACK_FROM = (() => { const v = cam(T.back[0] - 1e-4); return { s: v.s, c: v.c }; })();
+
+function toScreen(v, x, y) { return [(x - v.c[0]) * v.s + W / 2, (y - v.c[1]) * v.s + H / 2]; }
+
+// ───────── 场景：代码地图 ─────────
+function agentColor(a) { return AG[a].color; }
+
+function drawMap(t, v) {
+  const scanX = T.scan[0] <= t ? lerp(MAPX - 40, MAPX + 1720 + 40, eio3(prog(t, ...T.scan))) : -1e9;
+  const textA = clamp((v.s - 2.6) / 1.6);       // 推近时露出文字
+  const blameOn = t >= T.dive[0] ? clamp(prog(t, T.blame[0] - 0.25, T.blame[0] + 0.1)) * (1 - prog(t, T.back[0], T.back[0] + 0.3)) : 0;
+  const curBlame = t < T.blame[1] - 0.05 ? 0 : t < T.blame[2] - 0.05 ? 1 : 2;
+  const hit = Math.exp(-Math.max(0, t - T.hit) * 3) * (t >= T.hit);
+  const vx0 = v.c[0] - W / 2 / v.s - 4, vx1 = v.c[0] + W / 2 / v.s + 4, vy0 = v.c[1] - H / 2 / v.s - 6, vy1 = v.c[1] + H / 2 / v.s + 6;
+  const sh = Math.max(1.6, 2 * v.s * (1 - textA * 0.55));
+
+  // 笔画
+  for (const L of LINES) {
+    if (L.y < vy0 || L.y > vy1 || L.x > vx1 || L.x + COLW < vx0) continue;
+    if (t < L.wt || !L.segs.length) continue;
+    const age = t - L.wt;
+    const grow = L.chars ? 1 : eo3(clamp(age / 0.16));
+    let col, alpha;
+    const pass = scanX - L.segs[0][0];
+    if (pass > 0) {
+      const f = Math.exp(-pass / 60);
+      if (L.agent === UN) { col = mixc(INK, '#ffffff', f); alpha = 0.26 + f * 0.5; }
+      else { col = mixc(agentColor(L.agent), '#ffffff', f * 0.85); alpha = 0.92; }
+      alpha = Math.min(1, alpha + hit * 0.3);
+    } else {
+      const flash = Math.exp(-age * 5);
+      col = INK; alpha = 0.2 + flash * 0.6;
+    }
+    if (blameOn > 0) {
+      const isT = L.col === BLAME_COL && Math.abs(L.row - BLAME[curBlame].line.row) <= 0;
+      alpha *= isT ? 1 : lerp(1, L.col === BLAME_COL ? 0.32 : 0.12, blameOn);
+    }
+    alpha *= 1 - textA * 0.82;
+    if (alpha < 0.01) continue;
+    g.fillStyle = col; g.globalAlpha = alpha;
+    const [sx, sy] = toScreen(v, 0, L.y + 1 - sh / v.s / 2 + 0.5);
+    for (const [a, b] of L.segs) {
+      let bb = b;
+      if (L.chars) { // 逐字打出的行：笔画跟着字符长
+        const n = L.chars.filter((c) => c <= t).length; bb = Math.min(b, L.x + n * CW);
+        if (bb <= a) continue;
+      } else bb = a + (b - a) * grow;
+      const x0 = (a - v.c[0]) * v.s + W / 2, x1 = (bb - v.c[0]) * v.s + W / 2;
+      g.fillRect(x0, sy, Math.max(0.6, x1 - x0), sh);
+    }
+  }
+  g.globalAlpha = 1;
+
+  // 文字（推近时）
+  if (textA > 0.01) {
+    const fs = v.s * 3.15;
+    g.font = `400 ${fs}px Mono`; g.textBaseline = 'middle';
+    for (const L of LINES) {
+      if (L.y < vy0 || L.y > vy1 || L.x > vx1 || L.x + COLW < vx0) continue;
+      if (t < L.wt) continue;
+      let txt = L.text;
+      if (L.chars) txt = txt.slice(0, L.chars.filter((c) => c <= t).length);
+      else if (t < L.done) txt = txt.slice(0, Math.ceil(txt.length * eo3(prog(t, L.wt, L.done))));
+      if (!txt.trim()) continue;
+      const [sx, sy] = toScreen(v, L.x, L.y + 1.2);
+      let col = INK, a = L.chars ? 0.92 : 0.5 + 0.4 * Math.exp(-(t - L.wt) * 3);
+      if (scanX > L.segs[0]?.[0]) { col = L.agent === UN ? SOFT : mixc(agentColor(L.agent), '#ffffff', 0.38); a = L.agent === UN ? 0.6 : 0.95; }
+      if (blameOn > 0) {
+        const isT = L.col === BLAME_COL && L.row === BLAME[curBlame].line.row;
+        if (isT) { col = mixc(agentColor(L.agent), '#ffffff', 0.62); a = 1; }
+        else a *= lerp(1, L.col === BLAME_COL ? 0.3 : 0.1, blameOn);
+      }
+      g.globalAlpha = a * textA; g.fillStyle = col;
+      g.fillText(txt, sx, sy);
+    }
+    g.globalAlpha = 1;
+  }
+
+  // 光标
+  if (t < T.zoomOut[0] + 0.6) {
+    const typing = LINES.filter((l) => l.chars);
+    let L = typing[0], n = 0;
+    for (const l of typing) if (t >= l.wt - 0.03) { L = l; n = l.chars.filter((c) => c <= t).length; }
+    const blink = t < TYPE_START ? (Math.floor(t * 2.2) % 2 === 0 ? 1 : 0) : (t > typing[typing.length - 1].done ? (Math.floor(t * 2.2) % 2 ? 0 : 1) : 1);
+    const [sx, sy] = toScreen(v, L.x + n * CW + 0.2, L.y + 1.2);
+    g.globalAlpha = blink * (1 - prog(t, T.zoomOut[0], T.zoomOut[0] + 0.5)) * (t < TYPE_START ? prog(t, 0.15, 0.5) : 1);
+    g.fillStyle = INK; g.fillRect(sx, sy - v.s * 2, Math.max(2, v.s * 0.32), v.s * 4);
+    g.globalAlpha = 1;
+  }
+
+  // 扫描光
+  if (t >= T.scan[0] && t <= T.scan[1] + 0.2) {
+    const [bx] = toScreen(v, scanX, 0);
+    const [, y0] = toScreen(v, 0, MAPY - 8), [, y1] = toScreen(v, 0, MAPY + ROWS * LH + 8);
+    const fade = prog(t, T.scan[0], T.scan[0] + 0.2) * (1 - prog(t, T.scan[1] - 0.05, T.scan[1] + 0.2));
+    const gr = g.createLinearGradient(bx - 260, 0, bx, 0);
+    gr.addColorStop(0, rgba(INK, 0)); gr.addColorStop(1, rgba(INK, 0.13));
+    g.globalAlpha = fade; g.fillStyle = gr; g.fillRect(bx - 260, y0, 260, y1 - y0);
+    g.fillStyle = '#fff'; g.globalAlpha = 0.9 * fade; g.fillRect(bx - 1, y0, 2, y1 - y0);
+    g.globalAlpha = 0.35 * fade; g.fillRect(bx - 4, y0, 8, y1 - y0);
+    g.globalAlpha = 1;
+  }
+
+  // 说明卡
+  if (blameOn > 0) {
+    for (let i = 0; i < 3; i++) {
+      const tin = T.blame[i], tout = i < 2 ? T.blame[i + 1] - 0.12 : T.back[0];
+      const kin = eo5(prog(t, tin, tin + 0.45)), kout = prog(t, tout - 0.12, tout + 0.12);
+      const a = kin * (1 - kout) * blameOn; if (a <= 0.01) continue;
+      const B = BLAME[i], L = B.line, A = AG[B.a];
+      const [lx, ly] = toScreen(v, L.x, L.y + 1.2);
+      // 行底色与左侧色条
+      g.globalAlpha = a * 0.16; g.fillStyle = A.color; g.fillRect(lx - v.s * 3, ly - v.s * 2.1, (COLW + 3) * v.s, v.s * 4.2);
+      g.globalAlpha = a; g.fillRect(lx - v.s * 3, ly - v.s * 2.1, 4, v.s * 4.2);
+      // 卡片
+      const cx = lx + COLW * v.s + 70 - 30 * (1 - kin), cy = ly;
+      const cw = 560, ch = 150;
+      g.save();
+      g.globalAlpha = a;
+      g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 40;
+      roundRect(cx, cy - ch / 2, cw, ch, 18); g.fillStyle = 'rgba(16,15,14,0.92)'; g.fill();
+      g.shadowBlur = 0; g.lineWidth = 1; g.strokeStyle = rgba(INK, 0.12); g.stroke();
+      // 引线
+      g.strokeStyle = rgba(A.color, 0.7); g.beginPath(); g.moveTo(lx + COLW * v.s - 6, ly); g.lineTo(cx, ly); g.stroke();
+      // logo 圆
+      g.beginPath(); g.arc(cx + 74, cy, 42, 0, Math.PI * 2); g.fillStyle = A.color; g.fill();
+      drawLogo(A.key, cx + 74, cy, 46, '#ffffff');
+      g.fillStyle = INK; g.font = '600 38px Sans'; g.textBaseline = 'alphabetic'; g.fillText(A.name, cx + 140, cy - 6);
+      g.fillStyle = SOFT; g.font = '400 27px Sans'; g.fillText(A.models[0], cx + 140, cy + 36);
+      g.fillStyle = rgba(INK, 0.38); g.font = '400 20px Mono'; g.textAlign = 'right';
+      g.fillText(`${BLAME_FILE[i]}:${L.row + 1}`, cx + cw - 26, cy - 44);
+      g.textAlign = 'left';
+      g.restore();
+    }
+  }
+}
+
+function roundRect(x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+
+// 图例（扫描之后）
+function drawLegend(t, alphaAll) {
+  if (alphaAll <= 0) return;
+  const y = 978, x0 = MAPX, x1 = MAPX + 1720;
+  const gk = eo3(prog(t, T.legend, T.legend + 0.8));
+  let bx = x0;
+  for (const A of AG) {
+    const w = (A.pct / 100) * (x1 - x0);
+    const vis = clamp(((x0 + (x1 - x0) * gk) - bx) / w);
+    g.globalAlpha = alphaAll * (A.key === 'un' ? 0.5 : 1); g.fillStyle = A.color;
+    g.fillRect(bx, y - 44, Math.max(0, w * vis - 3), 4);
+    bx += w;
+  }
+  const items = AG.slice(0, 5);
+  let x = x0;
+  items.forEach((A, i) => {
+    const k = eo3(prog(t, T.legend + 0.25 + i * 0.12, T.legend + 0.75 + i * 0.12));
+    g.globalAlpha = alphaAll * k;
+    drawLogo(A.key, x + 13, y + 1 + 8 * (1 - k), 26, A.color);
+    g.fillStyle = INK; g.font = '500 25px Sans'; g.textBaseline = 'middle';
+    g.fillText(A.name, x + 38, y + 2 + 8 * (1 - k));
+    const nw = g.measureText(A.name).width;
+    g.fillStyle = SOFT; g.font = '400 25px Mono';
+    g.fillText(A.pct.toFixed(1) + '%', x + 50 + nw, y + 2 + 8 * (1 - k));
+    x += 50 + nw + g.measureText(A.pct.toFixed(1) + '%').width + 56;
+  });
+  g.globalAlpha = 1;
+}
+
+// ───────── 场景：笔画汇成一条 ─────────
+const BAR = { x: 160, y: 470, w: 1600, h: 64 };
+const SEG_TARGET = (() => {
+  const r = rng(23), starts = []; let acc = 0;
+  for (const A of AG) { starts.push(acc); acc += A.pct / 100; }
+  return SEGS.map((s) => {
+    const a = s.l.agent, w = AG[a].pct / 100 * BAR.w;
+    const tw = Math.min(s.x1 - s.x0, 26);
+    return { x: BAR.x + starts[a] * BAR.w + r() * Math.max(1, w - tw), y: BAR.y + r() * (BAR.h - 3), w: tw };
+  });
+})();
+const BAR_X = (() => { const out = []; let acc = 0; for (const A of AG) { out.push(BAR.x + acc * BAR.w); acc += A.pct / 100; } out.push(BAR.x + BAR.w); return out; })();
+
+function drawFly(t) {
+  const v = { s: 1, c: [W / 2, H / 2] };
+  const solid = eo3(prog(t, T.fly + 1.75, T.fly + 2.25));
+  for (let i = 0; i < SEGS.length; i++) {
+    const S = SEGS[i], L = S.l, tg = SEG_TARGET[i];
+    const d = T.fly + ((S.x0 - MAPX) / 1720) * 0.75 + S.rd * 0.35;
+    const k = eio3(prog(t, d, d + 0.95));
+    const [sx, sy] = toScreen(v, S.x0, L.y + 0.5);
+    const sw = (S.x1 - S.x0);
+    const x = lerp(sx, tg.x, k), y = lerp(sy, tg.y, k) - Math.sin(k * Math.PI) * (80 + S.ry * 160) * (L.y < BAR.y ? -0.4 : 1);
+    const w = lerp(sw, tg.w, k);
+    const col = L.agent === UN ? INK : AG[L.agent].color;
+    g.globalAlpha = (L.agent === UN ? 0.3 : 0.92) * (1 - solid * 0.9);
+    g.fillStyle = col; g.fillRect(x, y, Math.max(0.6, w), 2);
+  }
+  g.globalAlpha = 1;
+  if (solid > 0) {
+    AG.forEach((A, i) => {
+      g.globalAlpha = solid * (i === UN ? 0.45 : 1); g.fillStyle = A.color;
+      const x = BAR_X[i], w = BAR_X[i + 1] - x;
+      g.fillRect(x, BAR.y, Math.max(0, w - 3), BAR.h);
+    });
+    g.globalAlpha = 1;
+  }
+  drawTally(t);
+}
+
+function drawTally(t) {
+  const k0 = prog(t, T.tally, T.tally + 1.1), cnt = eo3(k0);
+  const out = 1 - prog(t, T.montage - 0.25, T.montage);
+  // 两个大的：在各自色块下方
+  [0, 1].forEach((i) => {
+    const A = AG[i], x = BAR_X[i], kk = eo5(prog(t, T.tally + i * 0.15, T.tally + 0.7 + i * 0.15));
+    g.globalAlpha = kk * out;
+    const y = BAR.y + BAR.h + 70 + 20 * (1 - kk);
+    drawLogo(A.key, x + 19, y - 8, 36, A.color);
+    g.fillStyle = INK; g.font = '600 32px Sans'; g.textBaseline = 'middle'; g.fillText(A.name, x + 52, y - 6);
+    g.fillStyle = SOFT; g.font = '400 24px Sans'; g.fillText(A.models.join('  ·  '), x, y + 40);
+    g.fillStyle = INK; g.font = '400 150px Serif'; g.textBaseline = 'alphabetic';
+    g.fillText((A.pct * cnt).toFixed(1), x - 6, BAR.y - 40 + 14 * (1 - kk));
+    const nw = g.measureText((A.pct * cnt).toFixed(1)).width;
+    g.font = '400 70px Serif'; g.fillStyle = SOFT; g.fillText('%', x + nw + 4, BAR.y - 40 + 14 * (1 - kk));
+  });
+  // 小的：右侧列表
+  [2, 3, 4, 5].forEach((i, j) => {
+    const A = AG[i], kk = eo5(prog(t, T.tally + 0.3 + j * 0.1, T.tally + 0.9 + j * 0.1));
+    const x = BAR_X[2], y = BAR.y + BAR.h + 58 + j * 46 + 14 * (1 - kk);
+    g.globalAlpha = kk * out;
+    if (i === UN) { g.strokeStyle = SOFT; g.setLineDash([3, 3]); g.strokeRect(x + 6, y - 11, 22, 22); g.setLineDash([]); }
+    else drawLogo(A.key, x + 17, y, 26, A.color);
+    g.fillStyle = i === UN ? SOFT : INK; g.font = '500 24px Sans'; g.textBaseline = 'middle';
+    g.fillText(i === UN ? '?' : A.name, x + 44, y + 1);
+    g.fillStyle = SOFT; g.font = '400 24px Mono'; g.textAlign = 'right';
+    g.fillText((A.pct * cnt).toFixed(1) + '%', BAR_X[6], y + 1); g.textAlign = 'left';
+  });
+  g.globalAlpha = 1;
+}
+
+// ───────── 场景：二十多种样子，卡点切换 ─────────
+const CUTS = (() => {
+  const c = [];
+  for (let i = 0; i < 16; i++) c.push({ t: T.montage + i * 0.5, p: i });
+  for (let i = 0; i < 7; i++) c.push({ t: T.fast + i * 0.25, p: 16 + i });
+  return c;
+})();
+function drawPiece(P, cx, cy, maxW, maxH, alpha = 1, rot = 0, useThumb = false) {
+  const im = useThumb ? P.thumb : P.img;
+  const k = Math.min(maxW / P.img.width, maxH / P.img.height);
+  const w = P.img.width * k, h = P.img.height * k;
+  g.save(); g.translate(cx, cy); g.rotate(rot); g.globalAlpha = alpha;
+  g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = 60; g.shadowOffsetY = 24;
+  g.drawImage(im, -w / 2, -h / 2, w, h);
+  g.restore();
+}
+function drawMontage(t) {
+  let idx = 0; for (let i = 0; i < CUTS.length; i++) if (t >= CUTS[i].t) idx = i;
+  const C = CUTS[idx], P = PIECES[C.p];
+  const next = CUTS[idx + 1]?.t ?? T.wall, dur = next - C.t, k = prog(t, C.t, next);
+  // 背后的色晕
+  g.globalAlpha = 0.55; g.drawImage(P.wash, -80, -80, W + 160, H + 160); g.globalAlpha = 1;
+  g.fillStyle = 'rgba(7,7,8,0.55)'; g.fillRect(0, 0, W, H);
+  const sc = lerp(1.07, 1.0, eo3(clamp(k * 1.6))) - 0.02 * k;
+  const dir = idx % 2 ? 1 : -1;
+  const isBadge = PIECE_FILES[C.p] === 'p23';
+  drawPiece(P, W / 2 + dir * 30 * (1 - eo3(k)), H / 2, (isBadge ? 1500 : 1480) * sc, 860 * sc, 1, dir * 0.004 * (1 - k));
+  // 切换瞬间一点闪白
+  const fl = Math.exp(-(t - C.t) * 22) * 0.14;
+  if (fl > 0.003) { g.fillStyle = `rgba(255,255,255,${fl})`; g.fillRect(0, 0, W, H); }
+}
+// 墙：所有作品铺成一面，镜头从最后一张拉远
+const WALL = (() => {
+  const cols = 6, cw = 460, chh = 330, gx = 40, gy = 44, out = [];
+  const order = [0, 5, 2, 7, 4, 1, 6, 9, 8, 11, 10, 3, 13, 12, 15, 14, 17, 16, 19, 18, 21, 20, 23, 22];
+  order.forEach((p, i) => { const c = i % cols, r = Math.floor(i / cols); out.push({ p, x: (c - (cols - 1) / 2) * (cw + gx) + (r % 2 ? 60 : -60), y: (r - 1.5) * (chh + gy), w: cw, h: chh }); });
+  return out;
+})();
+function drawWall(t) {
+  const k = eio3(prog(t, T.wall, T.wall + 2.0));
+  const last = WALL.find((c) => c.p === 22) ?? WALL[0];
+  const s = Math.exp(lerp(Math.log(2.7), Math.log(0.66), k)) * (1 - 0.03 * prog(t, T.wall + 2, T.credits[0]));
+  const cx = lerp(last.x, 0, eio3(prog(t, T.wall, T.wall + 2.0))), cy = lerp(last.y, 0, eio3(prog(t, T.wall, T.wall + 2.0)));
+  const rot = lerp(0, -0.12, k);
+  g.save(); g.translate(W / 2, H / 2); g.rotate(rot); g.scale(s, s); g.translate(-cx, -cy - 20 * prog(t, T.wall, T.credits[0]));
+  WALL.forEach((c, i) => {
+    const a = 1;
+    const P = PIECES[c.p];
+    const kk = Math.min(c.w / P.img.width, c.h / P.img.height), w = P.img.width * kk, h = P.img.height * kk;
+    g.globalAlpha = a; g.drawImage(s > 1.3 ? P.img : P.thumb, c.x - w / 2, c.y - h / 2, w, h);
+  });
+  g.restore(); g.globalAlpha = 1;
+}
+
+// ───────── 场景：片尾字幕 ─────────
+function credit(t, t0, t1, fn) {
+  const a = eo3(prog(t, t0, t0 + 0.6)) * (1 - eio3(prog(t, t1 - 0.45, t1)));
+  if (a <= 0) return;
+  const dy = 16 * (1 - eo3(prog(t, t0, t0 + 1.2))) - 6 * prog(t, t0, t1);
+  g.save(); g.globalAlpha = a; g.translate(0, dy); fn(prog(t, t0, t1)); g.restore();
+}
+function spaced(text, x, y, sp) {
+  // 字距：逐字画，居中
+  let w = 0; for (const ch of text) w += g.measureText(ch).width + sp; w -= sp;
+  let cx = x - w / 2; for (const ch of text) { g.fillText(ch, cx, y); cx += g.measureText(ch).width + sp; }
+}
+function drawCredits(t) {
+  g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+  const cardBig = (A, k) => {
+    drawLogo(A.key, W / 2, 330, 64, A.color);
+    g.fillStyle = A.color; g.font = '500 24px Sans'; spaced(A.name.toUpperCase(), W / 2, 432, lerp(14, 11, k));
+    g.fillStyle = INK; g.font = '400 128px Serif'; spaced(A.models[0], W / 2, 590, lerp(3, 0, k));
+    if (A.models[1]) { g.globalAlpha *= 0.62; g.font = '400 76px SerifI'; spaced(A.models[1], W / 2, 700, lerp(2, 0, k)); }
+  };
+  credit(t, T.credits[0], T.credits[1] - 0.05, (k) => cardBig(AG[0], k));
+  credit(t, T.credits[1], T.credits[2] - 0.05, (k) => cardBig(AG[1], k));
+  credit(t, T.credits[2], T.logo - 0.1, (k) => {
+    [2, 3, 4].forEach((i, j) => {
+      const A = AG[i], x = W / 2 + (j - 1) * 520;
+      drawLogo(A.key, x, 400, 52, A.color);
+      g.fillStyle = A.color; g.font = '500 22px Sans'; spaced(A.name.toUpperCase(), x, 488, lerp(12, 9, k));
+      g.fillStyle = INK; g.font = '400 82px Serif'; spaced(A.models[0], x, 600, 0);
+    });
+  });
+}
+
+// ───────── 场景：标志 ─────────
+const MARK_CLIP = new Path2D('M18.947 19.193A10 10 0 1 1 18.947 4.807L16.724 7.108A6.8 6.8 0 1 0 16.724 16.892Z');
+const SPARK = new Path2D('M19.6 9.3C20.086 11.514 20.086 11.514 22.3 12C20.086 12.486 20.086 12.486 19.6 14.7C19.114 12.486 19.114 12.486 16.9 12C19.114 11.514 19.114 11.514 19.6 9.3Z');
+function drawLogoScene(t) {
+  const t0 = T.logo;
+  const slide = eio3(prog(t, t0 + 1.7, t0 + 2.5));
+  const S = 13; // 24 单位 → 312px
+  const push = 1 + 0.035 * sm(prog(t, t0 + 1.0, T.end));
+  g.save(); g.translate(W / 2, H / 2); g.scale(push, push); g.translate(-W / 2, -H / 2);
+  const mx = W / 2 - lerp(0, 330, slide), my = H / 2 - 30;
+  g.save(); g.translate(mx - 12 * S, my - 12 * S); g.scale(S, S);
+  g.save(); g.clip(MARK_CLIP);
+  const colors = [AG[0].color, AG[1].color, AG[2].color, AG[3].color, AG[4].color, INK];
+  const toInk = eio3(prog(t, t0 + 1.05, t0 + 1.8));
+  for (let i = 0; i < 6; i++) {
+    const k = eoExpo(prog(t, t0 + i * 0.1, t0 + i * 0.1 + 0.7));
+    const dir = i % 2 ? 1 : -1;
+    g.fillStyle = mixc(colors[i], INK, toInk);
+    g.fillRect(dir * 26 * (1 - k), 2 + i * 3.6364, 24, 1.818);
+  }
+  g.restore();
+  // 星芒
+  const sk = eoBack(prog(t, t0 + 0.95, t0 + 1.45));
+  if (sk > 0) {
+    g.save(); g.translate(19.6, 12); g.scale(sk, sk); g.rotate((1 - prog(t, t0 + 0.95, t0 + 1.6)) * 1.2); g.translate(-19.6, -12);
+    g.fillStyle = INK; g.fill(SPARK); g.restore();
+  }
+  g.restore();
+  // 星芒闪光
+  const gl = Math.exp(-Math.max(0, t - (t0 + 1.05)) * 3.2) * (t > t0 + 1.0);
+  if (gl > 0.01) {
+    const gx = mx - 12 * S + 19.6 * S, gy = my;
+    const rg = g.createRadialGradient(gx, gy, 0, gx, gy, 260);
+    rg.addColorStop(0, `rgba(255,248,235,${0.55 * gl})`); rg.addColorStop(1, 'rgba(255,248,235,0)');
+    g.fillStyle = rg; g.fillRect(gx - 260, gy - 260, 520, 520);
+    g.globalAlpha = gl * 0.8; g.fillStyle = '#fff8ee';
+    g.fillRect(gx - 520 * gl, gy - 1, 1040 * gl, 2); g.fillRect(gx - 1, gy - 140 * gl, 2, 280 * gl);
+    g.globalAlpha = 1;
+  }
+  // 字标
+  const wk = prog(t, t0 + 1.95, t0 + 2.9);
+  if (wk > 0) {
+    const x = mx + 12 * S - 48 + 60, y = my + 54;
+    g.save();
+    g.font = '400 200px Serif'; g.textBaseline = 'alphabetic';
+    const tw = g.measureText('creditia').width;
+    g.beginPath(); g.rect(x - 10, y - 220, (tw + 40) * eo3(wk), 300); g.clip();
+    g.fillStyle = INK; g.globalAlpha = eo3(wk);
+    g.fillText('creditia', x + 20 * (1 - eo3(wk)), y);
+    g.restore();
+  }
+  const uk = eo3(prog(t, t0 + 2.8, t0 + 3.6));
+  if (uk > 0) {
+    g.globalAlpha = uk; g.fillStyle = SOFT; g.font = '400 30px Mono'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    g.fillText('github.com/WroughtMind/creditia', W / 2, my + 300 + 10 * (1 - uk));
+    g.textAlign = 'left'; g.globalAlpha = 1;
+  }
+  g.restore();
+}
+
+// ───────── 画面质感：颗粒、暗角 ─────────
+function finish(t) {
+  const vg = g.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 1.05);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.6)');
+  g.fillStyle = vg; g.fillRect(0, 0, W, H);
+  const n = GRAIN[Math.floor(t * 24) % GRAIN.length];
+  if (n) {
+    g.globalAlpha = 0.07; g.globalCompositeOperation = 'overlay';
+    const ox = Math.floor((t * 977) % 256), oy = Math.floor((t * 613) % 256);
+    for (let y = -oy; y < H; y += 256) for (let x = -ox; x < W; x += 256) g.drawImage(n, x, y);
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+  }
+}
+
+// ───────── 总调度 ─────────
+function render(t) {
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.fillStyle = BG; g.fillRect(0, 0, W, H);
+  // 冲击时的轻微晃动
+  const shakeT = [T.hit, T.wall].map((h) => (t >= h ? Math.exp(-(t - h) * 9) : 0)).reduce((a, b) => a + b, 0);
+  if (shakeT > 0.01) g.translate(Math.sin(t * 91) * 7 * shakeT, Math.cos(t * 77) * 5 * shakeT);
+
+  if (t < T.back[1]) {
+    let v = cam(t);
+    if (t >= T.back[0]) {
+      const k = eio3(prog(t, ...T.back));
+      const s = Math.exp(lerp(Math.log(BACK_FROM.s), 0, k));
+      const u = (1 / s - 1 / BACK_FROM.s) / (1 - 1 / BACK_FROM.s);
+      v = { s, c: [lerp(BACK_FROM.c[0], W / 2, u), lerp(BACK_FROM.c[1], H / 2, u)] };
+    }
+    drawMap(t, v);
+    const la = prog(t, T.legend, T.legend + 0.2) * (1 - prog(t, T.dive[0] - 0.2, T.dive[0] + 0.2));
+    drawLegend(t, la);
+  } else if (t < T.montage) {
+    drawFly(t);
+  } else if (t < T.wall) {
+    drawMontage(t);
+  } else if (t < T.credits[0]) {
+    drawWall(t);
+    g.fillStyle = `rgba(7,7,8,${eio3(prog(t, T.credits[0] - 0.9, T.credits[0]))})`; g.fillRect(-50, -50, W + 100, H + 100);
+  } else if (t < T.logo) {
+    drawCredits(t);
+  } else {
+    drawLogoScene(t);
+  }
+  // 冲击闪光
+  const fl = (t >= T.hit ? Math.exp(-(t - T.hit) * 6) * 0.22 : 0) + (t >= T.wall ? Math.exp(-(t - T.wall) * 8) * 0.18 : 0) + (t >= T.montage ? Math.exp(-(t - T.montage) * 8) * 0.2 : 0);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  if (fl > 0.003) { g.fillStyle = `rgba(255,250,240,${fl})`; g.fillRect(0, 0, W, H); }
+  finish(t);
+  // 首尾淡入淡出
+  const fade = Math.max(1 - prog(t, 0, 0.4), prog(t, T.end - 1.6, T.end - 0.1));
+  if (fade > 0) { g.fillStyle = `rgba(0,0,0,${fade})`; g.fillRect(0, 0, W, H); }
+}
+
+// ───────── 准备 ─────────
+async function setup() {
+  await Promise.all(['400 20px Serif', '400 20px SerifI', '400 20px Sans', '500 20px Sans', '600 20px Sans', '400 20px Mono', '500 20px Mono'].map((f) => document.fonts.load(f)));
+  for (const [k, f] of Object.entries(logoSrc)) LOGO[k] = { img: await loadImg(`../.github/readme/logo/${f}.svg`), cache: {} };
+  for (const f of PIECE_FILES) {
+    const img = await loadImg(`.build/pieces/${f}.png`);
+    const thumb = document.createElement('canvas'); const tk = 760 / Math.max(img.width, img.height);
+    thumb.width = Math.round(img.width * tk); thumb.height = Math.round(img.height * tk); thumb.getContext('2d').drawImage(img, 0, 0, thumb.width, thumb.height);
+    const wash = document.createElement('canvas'); wash.width = 32; wash.height = 18; const wx = wash.getContext('2d');
+    wx.imageSmoothingQuality = 'high'; wx.drawImage(img, 0, 0, 32, 18);
+    PIECES.push({ img, thumb, wash });
+  }
+  const r = rng(99);
+  for (let i = 0; i < 6; i++) {
+    const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'), d = x.createImageData(256, 256);
+    for (let j = 0; j < d.data.length; j += 4) { const v = Math.floor(r() * 255); d.data[j] = d.data[j + 1] = d.data[j + 2] = v; d.data[j + 3] = 255; }
+    x.putImageData(d, 0, 0); GRAIN.push(c);
+  }
+  window.render = render;
+  window.EVENTS = { type: TYPE_EVENTS, lines: LINE_EVENTS, T, cuts: CUTS.map((c) => c.t), duration: DURATION };
+  window.READY = true;
+}
+setup().catch((e) => { window.ERROR = String(e); });
+</script>
+</body>
+</html>
