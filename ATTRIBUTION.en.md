@@ -68,7 +68,7 @@ A repository often lives in several places at once: your main directory, several
 - **Manual links**: `creditia link <path>` links a path on another computer or a directory that no longer exists (it checks that a directory that still exists is the same repository); `creditia paths` lists them all. `paths` in the config works the same way.
 - **Path mapping**: for an absolute path in a log, the longest suffix found in the repo's history becomes the in-repo relative path, so different computers, different user names and Windows backslashes all match.
 - **Several computers**: `creditia evidence export` / `import` merges evidence stores (hashes and metadata only); a different root commit is refused.
-- **Gemini CLI / Qwen Code** name their directories with the SHA-256 of the project path, with no plain path: every registered path above is hashed and tried in turn.
+- **Gemini CLI / Qwen Code** (older versions) name their directories with the SHA-256 of the project path, with no plain path: every registered path above is hashed and tried in turn. Newer Gemini CLI names the directory after the project and writes the project path to `.project_root`, which is read directly.
 
 ## 5. Models and providers (including relays)
 

@@ -1,4 +1,7 @@
 //! Gemini CLI 与 Qwen Code（Gemini CLI 的分支，格式相同）：`<home>/tmp/<项目哈希>/chats/session-*.json`。
+//! 新版 Gemini CLI 改成追加写的 `session-*.jsonl`：首行是元数据（sessionId、startTime…），之后每行一条消息（同一 id 后写的覆盖先写的），
+//! 夹着 `$set`（改元数据）、`$patch`（只改内容和工具结果）、`$rewindTo`（回退）几种记录；子代理的会话在 `chats/<父会话>/` 下。
+//! 回退掉的消息照样当证据：写进文件的内容若被一起撤回，提交里本来就没有它们。
 //! 目录名是项目根路径的 SHA-256，没有明文 cwd：用本项目已知的全部路径（主仓库、worktree、作品库里登记过的旧路径）
 //! 逐个算哈希去对；新版本若在目录里写了 `.project_root`，直接读。只认 status 为 success 的写文件 / 替换调用。
 
@@ -57,11 +60,7 @@ pub fn scan_src(src: Src, store: &mut Store, pm: &PathMap, roots: &[String], st:
     let mut n = 0;
     for p in projects(src).into_iter().filter(|p| belongs(p, pm, &hashes)) {
         let root = p.root.clone().or_else(|| hashes.get(&p.dir.file_name().unwrap_or_default().to_string_lossy().to_string()).cloned()).unwrap_or_default();
-        for f in std::fs::read_dir(p.dir.join("chats")).into_iter().flatten().flatten() {
-            let path = f.path();
-            if path.extension().map(|x| x != "json").unwrap_or(true) {
-                continue;
-            }
+        for path in chat_files(&p.dir) {
             let gk = format!("{}:{}", src.harness(), path.display());
             let fp = fingerprint(&path);
             if store.groups.get(&gk).map(|g| g.fp == fp).unwrap_or(false) {
@@ -69,7 +68,7 @@ pub fn scan_src(src: Src, store: &mut Store, pm: &PathMap, roots: &[String], st:
                 continue;
             }
             let mut g = FileGroup { fp, ..Default::default() };
-            let v: Value = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+            let v = load(&path);
             parse(src, &v, &root, pm, &mut g);
             n += g.sessions.len();
             store.groups.insert(gk, g);
@@ -78,6 +77,68 @@ pub fn scan_src(src: Src, store: &mut Store, pm: &PathMap, roots: &[String], st:
     if n > 0 {
         st.notes.push(creditia_core::tr!("{}: 项目相关会话 {n} 个（按项目路径哈希识别）", "{}: {n} sessions for this project (by project path hash)", src.harness()));
     }
+}
+
+/// chats/ 下的会话文件（含子代理的一层子目录）；同名的 .json 已迁成 .jsonl 时只读 .jsonl
+fn chat_files(dir: &Path) -> Vec<PathBuf> {
+    let mut out = vec![];
+    let mut dirs = vec![dir.join("chats")];
+    dirs.extend(std::fs::read_dir(dir.join("chats")).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()));
+    for d in dirs {
+        for f in std::fs::read_dir(&d).into_iter().flatten().flatten().map(|e| e.path()) {
+            match f.extension().and_then(|x| x.to_str()) {
+                Some("jsonl") => out.push(f),
+                Some("json") if !f.with_extension("jsonl").is_file() => out.push(f),
+                _ => {}
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// 读一个会话文件，统一成老的整份 JSON 的样子（messages 数组）
+fn load(path: &Path) -> Value {
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    if path.extension().is_some_and(|x| x == "json") {
+        return serde_json::from_str(&text).unwrap_or_default();
+    }
+    let mut meta = serde_json::Map::new();
+    let mut order: Vec<String> = vec![];
+    let mut msgs: HashMap<String, Value> = HashMap::new();
+    let put = |m: &Value, order: &mut Vec<String>, msgs: &mut HashMap<String, Value>| {
+        if let Some(id) = m["id"].as_str() {
+            if !msgs.contains_key(id) {
+                order.push(id.to_string());
+            }
+            msgs.insert(id.to_string(), m.clone());
+        }
+    };
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let Ok(r) = serde_json::from_str::<Value>(line) else { continue };
+        if r.get("$patch").is_some() || r.get("$rewindTo").is_some() {
+            continue;
+        }
+        if let Some(set) = r["$set"].as_object() {
+            for (k, v) in set.iter().filter(|(k, _)| *k != "messages") {
+                meta.insert(k.clone(), v.clone());
+            }
+            for m in set.get("messages").and_then(|m| m.as_array()).into_iter().flatten() {
+                put(m, &mut order, &mut msgs);
+            }
+        } else if r["sessionId"].is_string() && r["projectHash"].is_string() {
+            for (k, v) in r.as_object().into_iter().flatten().filter(|(k, _)| *k != "messages") {
+                meta.insert(k.clone(), v.clone());
+            }
+            for m in r["messages"].as_array().into_iter().flatten() {
+                put(m, &mut order, &mut msgs);
+            }
+        } else if r["id"].is_string() {
+            put(&r, &mut order, &mut msgs);
+        }
+    }
+    meta.insert("messages".into(), Value::Array(order.iter().filter_map(|id| msgs.remove(id)).collect()));
+    Value::Object(meta)
 }
 
 fn parse(src: Src, v: &Value, root: &str, pm: &PathMap, g: &mut FileGroup) {
@@ -130,7 +191,7 @@ pub fn discover() -> Vec<Activity> {
     for src in [Src::Gemini, Src::Qwen] {
         for p in projects(src) {
             let Some(root) = p.root else { continue };
-            let files: Vec<PathBuf> = std::fs::read_dir(p.dir.join("chats")).into_iter().flatten().flatten().map(|e| e.path()).collect();
+            let files = chat_files(&p.dir);
             let last = files.iter().filter_map(|f| std::fs::metadata(f).ok()?.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).max().unwrap_or(0);
             out.push(Activity { src, cwd: root, remote: None, sessions: files.len() as u64, last });
         }
@@ -141,17 +202,17 @@ pub fn discover() -> Vec<Activity> {
 pub fn doctor(src: Src) -> Health {
     let base = source_dir(src).join("tmp");
     let ps = projects(src);
-    let files: Vec<PathBuf> = ps.iter().flat_map(|p| std::fs::read_dir(p.dir.join("chats")).into_iter().flatten().flatten().map(|e| e.path())).collect();
+    let files: Vec<PathBuf> = ps.iter().flat_map(|p| chat_files(&p.dir)).collect();
     let mt: Vec<i64> = files.iter().filter_map(|f| std::fs::metadata(f).ok()?.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).collect();
     Health {
         source: src.harness().into(),
         path: base.display().to_string(),
         readable: base.is_dir(),
-        format: creditia_core::tr!("tmp/<项目哈希>/chats/session-*.json", "tmp/<project hash>/chats/session-*.json"),
+        format: creditia_core::tr!("tmp/<项目>/chats/session-*.json(l)", "tmp/<project>/chats/session-*.json(l)"),
         records: files.len() as u64,
         earliest: mt.iter().min().copied().map(date_cn),
         latest: mt.iter().max().copied().map(date_cn),
-        note: creditia_core::tr!("{} 个项目目录（按项目路径的 SHA-256 对应）", "{} project folders (matched by SHA-256 of the project path)", ps.len()),
+        note: creditia_core::tr!("{} 个项目目录（按 .project_root 或项目路径的 SHA-256 对应）", "{} project folders (matched by .project_root or the SHA-256 of the project path)", ps.len()),
         ..Default::default()
     }
 }
@@ -163,5 +224,39 @@ mod tests {
     fn sha_of_path() {
         assert_eq!(sha("/tmp/demo").len(), 64);
         assert_eq!(sha(""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    }
+}
+
+#[cfg(test)]
+mod jsonl_tests {
+    use super::*;
+
+    #[test]
+    fn jsonl_records_merge_into_one_conversation() {
+        let dir = std::env::temp_dir().join(format!("creditia-gemini-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("chats/parent1")).unwrap();
+        let lines = [
+            r#"{"sessionId":"s1","projectHash":"h","startTime":"2026-09-22T10:00:00Z","lastUpdated":"2026-09-22T10:00:00Z"}"#,
+            r#"{"id":"u1","type":"user","timestamp":"2026-09-22T10:00:01Z","content":"go"}"#,
+            r#"{"id":"g1","type":"gemini","model":"gemini-3-pro","timestamp":"2026-09-22T10:00:02Z","toolCalls":[{"id":"t1","name":"write_file","status":"executing","args":{"file_path":"/r/a.py","content":"x = 1"}}]}"#,
+            // 同一条消息再写一遍：状态变成 success，以后写的为准
+            r#"{"id":"g1","type":"gemini","model":"gemini-3-pro","timestamp":"2026-09-22T10:00:02Z","toolCalls":[{"id":"t1","name":"write_file","status":"success","args":{"file_path":"/r/a.py","content":"x = 1"}}]}"#,
+            r#"{"$patch":{"id":"g1","content":"done"}}"#,
+            r#"{"$set":{"lastUpdated":"2026-09-22T10:05:00Z"}}"#,
+        ];
+        std::fs::write(dir.join("chats/session-1.jsonl"), lines.join("\n") + "\n").unwrap();
+        // 迁移前留下的同名 .json 不再读；子代理的会话在子目录里
+        std::fs::write(dir.join("chats/session-1.json"), "{}").unwrap();
+        std::fs::write(dir.join("chats/parent1/sub.jsonl"), lines[0].to_string() + "\n").unwrap();
+        let files = chat_files(&dir);
+        assert_eq!(files.len(), 2, "{files:?}");
+        let v = load(&dir.join("chats/session-1.jsonl"));
+        assert_eq!(v["sessionId"], "s1");
+        assert_eq!(v["lastUpdated"], "2026-09-22T10:05:00Z");
+        let msgs = v["messages"].as_array().unwrap();
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs[1]["toolCalls"][0]["status"], "success");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
