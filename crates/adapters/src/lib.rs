@@ -20,6 +20,7 @@ pub mod grok;
 pub mod kimi;
 pub mod opencode;
 pub mod others;
+pub mod qwen;
 pub mod trae;
 pub mod zed;
 
@@ -49,7 +50,7 @@ pub fn source_dir(src: Src) -> PathBuf {
         Src::Grok => env("CREDITIA_GROK_DIR").unwrap_or_else(|| home().join(".grok")),
         Src::Kimi => env("CREDITIA_KIMI_DIR").unwrap_or_else(|| home().join(".kimi-code")),
         Src::Gemini => env("CREDITIA_GEMINI_DIR").or_else(|| env("GEMINI_CLI_HOME").map(|p| p.join(".gemini"))).unwrap_or_else(|| home().join(".gemini")),
-        Src::Qwen => env("CREDITIA_QWEN_DIR").unwrap_or_else(|| home().join(".qwen")),
+        Src::Qwen => env("CREDITIA_QWEN_DIR").or_else(|| env("QWEN_RUNTIME_DIR")).unwrap_or_else(|| home().join(".qwen")),
         Src::OpenCode => env("CREDITIA_OPENCODE_DIR").unwrap_or_else(|| xdg_data().join("opencode")),
         // VS Code 扩展：真实位置有多个（Code、Cursor、Windsurf……），见 cline::roots
         Src::Cline | Src::Roo | Src::Kilo => env("CREDITIA_VSCODE_STORAGE").unwrap_or_else(vscode_storage),

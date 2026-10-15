@@ -1142,3 +1142,60 @@ fn antigravity_cli_transcript() {
     assert!(v.to_string().contains("\"antigravity\""), "{v}");
     let _ = fs::remove_dir_all(&env.root);
 }
+
+/// Qwen Code 新版：projects/<目录>/chats/<会话>.jsonl，每条记录带 cwd；toolCallResult 为 success 的调用才算
+#[test]
+fn qwen_code_projects_jsonl() {
+    let env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base: i64 = 1_796_100_000;
+    let d = |t: i64| format!("@{t} +0800");
+    let lines = |tag: &str, n: usize| -> Vec<String> { (0..n).map(|i| format!("{tag}_entry_{i} = parse_{tag}(\"{i}\", {})", i * 17)).collect() };
+    let (wrote, edited, failed) = (lines("qw_write", 4), lines("qw_edit", 2), lines("qw_failed", 2));
+
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join("README.md"), "# qwen demo\n").unwrap();
+    commit(&repo, "init", "me@example.com", &d(base - 86400));
+    fs::write(repo.join("src/parse.py"), [wrote.clone(), edited.clone()].concat().join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/other.py"), failed.join("\n") + "\n").unwrap();
+    commit(&repo, "qwen work", "me@example.com", &d(base + 600));
+
+    let chats = env.root.join("qwen/projects").join(rs.replace('/', "-")).join("chats");
+    fs::create_dir_all(&chats).unwrap();
+    let rec = |t: &str, off: i64, extra: serde_json::Value| {
+        let mut v = serde_json::json!({ "uuid": format!("u{off}"), "parentUuid": null, "sessionId": "qs1", "type": t, "cwd": rs, "version": "0.9.0", "gitBranch": "main" });
+        v["timestamp"] = serde_json::json!((base + off) * 1000);
+        v.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        v
+    };
+    let call = |id: &str, name: &str, args: serde_json::Value| serde_json::json!({ "functionCall": { "id": id, "name": name, "args": args } });
+    let result = |off: i64, id: &str, status: &str| rec("tool_result", off, serde_json::json!({
+        "message": { "role": "user", "parts": [{ "functionResponse": { "id": id, "name": "x", "response": { "output": "ok" } } }] },
+        "toolCallResult": { "callId": id, "status": status } }));
+    let recs = [
+        rec("user", 0, serde_json::json!({ "message": { "role": "user", "parts": [{ "text": "write parse.py" }] } })),
+        rec("assistant", 10, serde_json::json!({ "model": "qwen3-coder-plus", "usageMetadata": { "totalTokenCount": 900 }, "message": { "role": "model", "parts": [
+            call("a", "write_file", serde_json::json!({ "file_path": format!("{rs}/src/parse.py"), "content": wrote.join("\n") })),
+            call("b", "write_file", serde_json::json!({ "file_path": "src/other.py", "content": failed.join("\n") })) ] } })),
+        result(11, "a", "success"),
+        result(12, "b", "error"),
+        rec("assistant", 20, serde_json::json!({ "model": "qwen3-coder-plus", "message": { "role": "model", "parts": [
+            call("c", "edit", serde_json::json!({ "file_path": "src/parse.py", "old_string": wrote[3], "new_string": std::iter::once(&wrote[3]).chain(&edited).cloned().collect::<Vec<_>>().join("\n") })) ] } })),
+        result(21, "c", "success"),
+    ];
+    fs::write(chats.join("qs1.jsonl"), recs.iter().map(|r| r.to_string()).collect::<Vec<_>>().join("\n") + "\n").unwrap();
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+    assert_eq!(verified("a:qwen/qwen3-coder-plus"), (wrote.len() + edited.len()) as u64, "{}", credits["breakdown"]);
+    let s = credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with("a:qwen/")).count();
+    assert_eq!(s, 1, "{}", credits["sessions"]);
+    let (_, v) = run(&env, &["doctor"]);
+    assert!(v["sources"].as_array().unwrap().iter().any(|h| h["source"] == "qwen" && h["records"] == 1), "{v}");
+    let _ = fs::remove_dir_all(&env.root);
+}
