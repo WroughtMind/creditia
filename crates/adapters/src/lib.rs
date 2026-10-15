@@ -1,5 +1,5 @@
 //! 各数据源 adapter：git、Codex、Claude Code、Cursor、Grok、Kimi、Gemini CLI、Qwen Code、OpenCode、Cline / Roo / Kilo、
-//! Aider、GitHub Copilot（VS Code 和命令行）、Amp、TRAE CLI、Crush、Goose、Continue。
+//! Aider、GitHub Copilot（VS Code 和命令行）、Amp、TRAE CLI、Crush、Goose、Continue、Zed。
 //! 只读打开，输出统一的行级证据和会话元数据。只认「成功写进文件」的编辑；路径映射回仓库内相对路径。
 
 pub mod aider;
@@ -19,6 +19,7 @@ pub mod kimi;
 pub mod opencode;
 pub mod others;
 pub mod trae;
+pub mod zed;
 
 use creditia_core::hash::{ext_of, line_key, normalize, short_hash, short_key};
 use creditia_core::model::{Ev, PathMap, Src};
@@ -58,6 +59,7 @@ pub fn source_dir(src: Src) -> PathBuf {
         Src::Crush => crush::global_dir(),
         Src::Goose => goose::data_dir(),
         Src::Continue => cont::global_dir(),
+        Src::Zed => zed::data_dir(),
         // Aider 的记录在每个仓库根目录里（.aider.chat.history.md），没有统一位置
         Src::Aider => home(),
     }

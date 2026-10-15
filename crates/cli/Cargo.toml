@@ -17,4 +17,5 @@ serde_json.workspace = true
 
 [dev-dependencies]
 rusqlite.workspace = true
+zstd.workspace = true
 sha2 = "0.10"
