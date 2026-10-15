@@ -45,9 +45,11 @@ fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
     let mut models: HashMap<String, usize> = HashMap::new();
     let mut seen_msg: HashSet<String> = HashSet::new();
     let mut providers: HashMap<String, usize> = HashMap::new();
-    // 每次编辑调用先挂起，等到工具结果：报错的（比如 old_string 没找到）丢掉，其余记为证据
-    let mut pending: Vec<(String, Vec<creditia_core::model::Ev>)> = vec![];
+    // 每次编辑调用先挂起，等到工具结果：报错的（比如 old_string 没找到）丢掉，其余记为证据。
+    // 工具结果里有 structuredPatch 时只取其中新增的行（覆盖写入整个文件时，没变的行不算这次写的）
+    let mut pending: Vec<(String, String, String, String, i64)> = vec![];
     let mut failed: HashSet<String> = HashSet::new();
+    let mut patched: HashMap<String, String> = HashMap::new();
     for line in text.lines() {
         let Ok(o) = serde_json::from_str::<Value>(line) else { continue };
         if let Some(cwd) = o["cwd"].as_str() {
@@ -64,10 +66,21 @@ fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
         let m = &o["message"];
         if o["type"] == "user" {
             for b in m["content"].as_array().into_iter().flatten() {
-                if b["type"] == "tool_result" && b["is_error"] == true {
-                    if let Some(id) = b["tool_use_id"].as_str() {
-                        failed.insert(id.to_string());
+                if b["type"] != "tool_result" {
+                    continue;
+                }
+                let Some(id) = b["tool_use_id"].as_str() else { continue };
+                if b["is_error"] == true {
+                    failed.insert(id.to_string());
+                    continue;
+                }
+                let r = &o["toolUseResult"];
+                if r["type"] == "create" {
+                    if let Some(c) = r["content"].as_str() {
+                        patched.insert(id.to_string(), c.to_string());
                     }
+                } else if r["structuredPatch"].is_array() {
+                    patched.insert(id.to_string(), crate::added_from_patch(&r["structuredPatch"]));
                 }
             }
         }
@@ -104,29 +117,20 @@ fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
             }
             let inp = &b["input"];
             let path = inp["file_path"].as_str().unwrap_or("");
-            let mut evs = vec![];
-            match b["name"].as_str() {
-                Some("Write") => {
-                    crate::push_text(&mut evs, pm, path, inp["content"].as_str().unwrap_or(""), Src::Claude, model, &sid, ts);
-                }
-                Some("Edit") => {
-                    crate::push_text(&mut evs, pm, path, inp["new_string"].as_str().unwrap_or(""), Src::Claude, model, &sid, ts);
-                }
-                Some("MultiEdit") => {
-                    for ed in inp["edits"].as_array().into_iter().flatten() {
-                        crate::push_text(&mut evs, pm, path, ed["new_string"].as_str().unwrap_or(""), Src::Claude, model, &sid, ts);
-                    }
-                }
-                _ => {}
-            }
-            if !evs.is_empty() {
-                pending.push((b["id"].as_str().unwrap_or("").to_string(), evs));
-            }
+            // 没有工具结果的旧日志：Write 取全文，Edit 取新文本里比旧文本多出来的行
+            let text = match b["name"].as_str() {
+                Some("Write") => inp["content"].as_str().unwrap_or("").to_string(),
+                Some("Edit") => crate::added_lines(inp["old_string"].as_str().unwrap_or(""), inp["new_string"].as_str().unwrap_or("")),
+                Some("MultiEdit") => inp["edits"].as_array().into_iter().flatten().map(|ed| crate::added_lines(ed["old_string"].as_str().unwrap_or(""), ed["new_string"].as_str().unwrap_or(""))).collect(),
+                _ => continue,
+            };
+            pending.push((b["id"].as_str().unwrap_or("").to_string(), path.to_string(), text, model.to_string(), ts));
         }
     }
-    for (id, evs) in pending {
+    for (id, path, text, model, ts) in pending {
         if !failed.contains(&id) {
-            g.evs.extend(evs);
+            let text = patched.get(&id).unwrap_or(&text);
+            crate::push_text(&mut g.evs, pm, &path, text, Src::Claude, &model, &sid, ts);
         }
     }
     if !in_project {

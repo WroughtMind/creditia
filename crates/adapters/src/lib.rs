@@ -86,13 +86,48 @@ pub fn new_text(name: &str, args: &serde_json::Value) -> Option<String> {
         return get(&["content", "file_text", "contents", "text"]);
     }
     if n.contains("edit") || n.contains("replace") || n.contains("patch") {
+        // 编辑的新文本里通常带着几行没改的上下文：减掉旧文本里已有的行
+        let old_of = |e: &serde_json::Value| ["old_string", "oldString", "old_str"].iter().find_map(|k| e[*k].as_str()).unwrap_or("").to_string();
         if let Some(edits) = args["edits"].as_array() {
-            let all: Vec<String> = edits.iter().filter_map(|e| e["new_string"].as_str().or(e["newString"].as_str()).map(String::from)).collect();
-            if !all.is_empty() { return Some(all.join("\n")); }
+            let all: Vec<String> = edits.iter().filter_map(|e| e["new_string"].as_str().or(e["newString"].as_str()).map(|t| added_lines(&old_of(e), t))).collect();
+            if !all.is_empty() { return Some(all.concat()); }
         }
-        return get(&["new_string", "newString", "new_str", "replacement", "content"]);
+        return get(&["new_string", "newString", "new_str", "replacement", "content"]).map(|t| added_lines(&old_of(args), &t));
     }
     None
+}
+
+/// new 里比 old 多出来的行（按行计数相减，顺序不变）：编辑的上下文行、原样保留的行都不算新写的
+pub fn added_lines(old: &str, new: &str) -> String {
+    let mut have: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for l in old.lines() {
+        *have.entry(l.trim_end()).or_default() += 1;
+    }
+    let mut out = String::new();
+    for l in new.lines() {
+        match have.get_mut(l.trim_end()) {
+            Some(n) if *n > 0 => *n -= 1,
+            _ => {
+                out.push_str(l);
+                out.push('\n');
+            }
+        }
+    }
+    out
+}
+
+/// Claude Code 等工具结果里的 structuredPatch（统一 diff 的 hunk 列表）中新增的行
+pub fn added_from_patch(patch: &serde_json::Value) -> String {
+    let mut out = String::new();
+    for h in patch.as_array().into_iter().flatten() {
+        for l in h["lines"].as_array().into_iter().flatten().filter_map(|l| l.as_str()) {
+            if let Some(a) = l.strip_prefix('+') {
+                out.push_str(a);
+                out.push('\n');
+            }
+        }
+    }
+    out
 }
 
 /// 文件路径参数（各家字段名不同）
@@ -208,13 +243,24 @@ mod tests {
     fn new_text_by_tool_kind() {
         assert_eq!(new_text("Write", &json!({ "file_path": "a", "content": "x = 1" })).as_deref(), Some("x = 1"));
         assert_eq!(new_text("create_file", &json!({ "file_text": "y" })).as_deref(), Some("y"));
-        assert_eq!(new_text("Edit", &json!({ "old_string": "a", "new_string": "b" })).as_deref(), Some("b"));
-        assert_eq!(new_text("edit", &json!({ "oldString": "a", "newString": "c" })).as_deref(), Some("c"));
-        // MultiEdit：每段的新文本连起来
-        assert_eq!(new_text("MultiEdit", &json!({ "edits": [{ "new_string": "one" }, { "newString": "two" }] })).as_deref(), Some("one\ntwo"));
+        assert_eq!(new_text("Edit", &json!({ "old_string": "a", "new_string": "b" })).as_deref(), Some("b\n"));
+        assert_eq!(new_text("edit", &json!({ "oldString": "a", "newString": "c" })).as_deref(), Some("c\n"));
+        // 新文本里带着的上下文行（旧文本里就有）不算新写的
+        assert_eq!(new_text("Edit", &json!({ "old_string": "ctx\nold\nctx2", "new_string": "ctx\nnew\nctx2" })).as_deref(), Some("new\n"));
+        // MultiEdit：每段新增的行连起来
+        assert_eq!(new_text("MultiEdit", &json!({ "edits": [{ "new_string": "one" }, { "old_string": "k", "newString": "k\ntwo" }] })).as_deref(), Some("one\ntwo\n"));
         // 读文件、跑命令这类不算写入
         assert_eq!(new_text("Read", &json!({ "file_path": "a", "content": "x" })), None);
         assert_eq!(new_text("Bash", &json!({ "command": "ls" })), None);
+    }
+
+    #[test]
+    fn added_lines_and_patch() {
+        // 按次数相减：旧文本里有一行 x，新文本里两行 x，多出来的那一行算新写的
+        assert_eq!(added_lines("x\ny", "x\nx\ny\nz"), "x\nz\n");
+        let patch = json!([{ "oldStart": 1, "oldLines": 3, "newStart": 1, "newLines": 3, "lines": [" keep", "-gone", "+fresh", " keep2"] }, { "lines": ["+tail"] }]);
+        assert_eq!(added_from_patch(&patch), "fresh\ntail\n");
+        assert_eq!(added_from_patch(&json!([])), "");
     }
 
     #[test]

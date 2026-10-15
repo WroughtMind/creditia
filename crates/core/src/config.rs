@@ -63,7 +63,7 @@ pub struct Config {
     /// 分支前缀 → harness（如 `codex/`）
     #[serde(default)]
     pub branch_prefixes: HashMap<String, String>,
-    /// 归因口径：strict 只认逐行证据和明确声明；standard（默认）再加两种推断：同一提交内的延伸、分支前缀；loose 再加同时间窗口的会话。推断全部单独记账
+    /// 归因口径：strict 只认逐行证据和明确声明；standard（默认）再加两种推断：同一改动块内的延伸、分支前缀；loose 再加同时间窗口的会话。推断全部单独记账
     #[serde(default = "standard")]
     pub level: String,
     /// 本项目的其他路径（别的电脑、已删除的临时目录、搬家前的位置）：日志里的这些路径也算本项目

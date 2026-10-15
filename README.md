@@ -57,7 +57,7 @@ creditia blame src/core/analyze.ts:12         # 这一行是哪个工具、哪�
 
 - **日志里对得上**　工具日志里有这一行的写入：Claude Code 的 Write / Edit、Codex 的 FileChange、Cursor 的逐行哈希……
 - **提交里写明了**　提交邮箱、`Co-authored-by`、creditia 的提交盖章
-- **推断**　同一提交里其余的行，跟着有证据的那个工具走；`codex/` 这类工具自动建的分支。单独记，`--level strict` 关掉
+- **推断**　同一段改动里大半有某个工具的逐行证据，其余的行跟着它走；`codex/` 这类工具自动建的分支。单独记，`--level strict` 关掉
 - **未确认**　以上都对不上的行。不算给任何工具
 
 creditia 只回答「哪些 AI 工具和模型写了多少」：作品里不出现任何名字，百分比只在 AI 和「未确认」的行之间算。完整规则和已知的边界在 [ATTRIBUTION.md](ATTRIBUTION.md)。

@@ -4,7 +4,7 @@ use crate::detect_config;
 use creditia_adapters as ad;
 use creditia_core::config::Config;
 use creditia_core::engine::{self, Engine};
-use creditia_core::model::{area, vendor, Attr, BlameLine, Commit, CommitAttr, FileGroup, Index, Level, PathMap, PrMeta, Session, Store, STORE_VERSION, UNATTR};
+use creditia_core::model::{area, vendor, Attr, BlameLine, Commit, CommitAttr, FileGroup, Index, Level, PathMap, PrMeta, Session, Src, Store, STORE_VERSION, UNATTR};
 use creditia_core::util::{date_cn, iso_week, now_iso};
 use creditia_store::{cache_dir, load_json, save_json, Library, Project};
 use serde_json::{json, Value};
@@ -42,11 +42,16 @@ pub struct Report {
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 struct CommitCache {
+    /// 提交缓存的格式版本：读法变了（比如开始记改动块）就整份重读
+    #[serde(default)]
+    version: u32,
     head: Option<String>,
     commits: Vec<Commit>,
     #[serde(default)]
     stamps: HashMap<String, (String, Option<String>)>,
 }
+
+const COMMIT_CACHE_VERSION: u32 = 2;
 
 /// 读配置：指定了就用指定的；仓库里有就用仓库的；都没有就现场探测（不落盘）。空着的字段自动补
 pub fn load_config(repo: &Path, override_path: Option<&Path>) -> Config {
@@ -185,6 +190,9 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         return Err("仓库没有提交".into());
     }
     let mut cc: CommitCache = load_json(&cache.join("commits.json"));
+    if cc.version != COMMIT_CACHE_VERSION {
+        cc = CommitCache { version: COMMIT_CACHE_VERSION, ..Default::default() };
+    }
     let base = cc.head.clone().filter(|h| ad::git::git_ok(repo, &["merge-base", "--is-ancestor", h, &head]));
     let (new_commits, new_stamps) = if let Some(b) = base {
         if b == head { (vec![], HashMap::new()) } else { ad::git::read_commits(repo, &head, Some(&format!("{b}..{head}"))) }
@@ -239,14 +247,25 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     lib.save_evidence(&proj.id, &store)?;
     let (db_evs, db_sessions) = lib.load_evidence(&proj.id)?;
     // 合并：证据库里有、当前日志里没有的（已清理）补进来
+    // 日志还在的会话以这次解析为准（读法可能改进过，比如不再把编辑的上下文行记成证据），只补日志已经没了的会话；
+    // Cursor 的行哈希表会单行清理，仍按行补
     let mut have: HashSet<(String, u32, String, String)> = HashSet::new();
+    let mut live: HashSet<(String, String)> = HashSet::new();
     for g in store.groups.values() {
         for e in &g.evs {
             have.insert((e.rel.clone(), e.key, e.src.harness().into(), e.session.clone()));
         }
+        for s in &g.sessions {
+            if s.has_content && s.src != Src::Cursor {
+                live.insert((s.src.harness().into(), s.id.clone()));
+            }
+        }
     }
     let mut extra = FileGroup::default();
     for e in db_evs {
+        if live.contains(&(e.src.harness().to_string(), e.session.clone())) {
+            continue;
+        }
         if !have.contains(&(e.rel.clone(), e.key, e.src.harness().into(), e.session.clone())) {
             extra.evs.push(e);
         }
@@ -268,7 +287,10 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     // ---- 归因
     let mut eng = Engine::new(&cfg, &idx, &sessions, &units, cc.stamps.clone());
     let mut attrs: HashMap<String, CommitAttr> = HashMap::new();
-    for c in &cc.commits {
+    // 按时间先后归因：一条证据只认领一次，先提交的先用
+    let mut order: Vec<&Commit> = cc.commits.iter().collect();
+    order.sort_by_key(|c| (c.commit_ts, c.author_ts));
+    for c in order {
         attrs.insert(c.hash.clone(), eng.attribute(c));
     }
 
@@ -300,6 +322,28 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let unattr = eng.reg.unattributed();
     let surv = engine::survival(&blame, &per_commit, unattr);
     drop(per_commit);
+
+    // 准确率基准用：逐行归因写到 CREDITIA_DUMP_LINES 指定的文件（含行内容哈希之外的一切，不含代码原文）
+    if let Some(p) = std::env::var_os("CREDITIA_DUMP_LINES") {
+        let lv = |l: Level| serde_json::to_value(l).unwrap_or_default();
+        let hist: Vec<Value> = cc
+            .commits
+            .iter()
+            .map(|c| {
+                let a = &attrs[&c.hash];
+                let files: Vec<Value> = c.files.iter().zip(&a.lines).filter(|(f, _)| !f.binary).map(|(f, fl)| json!({ "rel": f.rel, "who": fl.iter().map(|x| &eng.reg.list[x.who].id).collect::<Vec<_>>(), "lv": fl.iter().map(|x| lv(x.level)).collect::<Vec<_>>() })).collect();
+                json!({ "commit": c.hash, "files": files })
+            })
+            .collect();
+        let mut i = 0;
+        let mut sv = vec![];
+        for (path, lines) in &blame {
+            let s = &surv[i..i + lines.len()];
+            i += lines.len();
+            sv.push(json!({ "path": path, "who": s.iter().map(|x| &eng.reg.list[x.who].id).collect::<Vec<_>>(), "lv": s.iter().map(|x| lv(x.level)).collect::<Vec<_>>() }));
+        }
+        let _ = std::fs::write(p, json!({ "history": hist, "survival": sv }).to_string());
+    }
 
     // ---- 逐行溯源
     let mut blame_out = None;
