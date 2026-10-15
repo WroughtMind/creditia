@@ -47,7 +47,8 @@ fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
     let mut providers: HashMap<String, usize> = HashMap::new();
     // 每次编辑调用先挂起，等到工具结果：报错的（比如 old_string 没找到）丢掉，其余记为证据。
     // 工具结果里有 structuredPatch 时只取其中新增的行（覆盖写入整个文件时，没变的行不算这次写的）
-    let mut pending: Vec<(String, String, String, String, i64)> = vec![];
+    // 最后一项：shell 命令的工作目录（Bash 调用；命令原文作为它提到的文件的候选证据）
+    let mut pending: Vec<(String, String, String, String, i64, Option<String>)> = vec![];
     let mut failed: HashSet<String> = HashSet::new();
     let mut patched: HashMap<String, String> = HashMap::new();
     for line in text.lines() {
@@ -116,6 +117,13 @@ fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
                 continue;
             }
             let inp = &b["input"];
+            if b["name"] == "Bash" {
+                if let Some(cmd) = inp["command"].as_str() {
+                    let cwd = o["cwd"].as_str().unwrap_or("").to_string();
+                    pending.push((b["id"].as_str().unwrap_or("").to_string(), String::new(), cmd.to_string(), model.to_string(), ts, Some(cwd)));
+                }
+                continue;
+            }
             let path = inp["file_path"].as_str().unwrap_or("");
             // 没有工具结果的旧日志：Write 取全文，Edit 取新文本里比旧文本多出来的行
             let text = match b["name"].as_str() {
@@ -124,14 +132,21 @@ fn parse(text: &str, pm: &PathMap, g: &mut FileGroup) {
                 Some("MultiEdit") => inp["edits"].as_array().into_iter().flatten().map(|ed| crate::added_lines(ed["old_string"].as_str().unwrap_or(""), ed["new_string"].as_str().unwrap_or(""))).collect(),
                 _ => continue,
             };
-            pending.push((b["id"].as_str().unwrap_or("").to_string(), path.to_string(), text, model.to_string(), ts));
+            pending.push((b["id"].as_str().unwrap_or("").to_string(), path.to_string(), text, model.to_string(), ts, None));
         }
     }
-    for (id, path, text, model, ts) in pending {
-        if !failed.contains(&id) {
-            let text = patched.get(&id).unwrap_or(&text);
-            crate::push_text(&mut g.evs, pm, &path, text, Src::Claude, &model, &sid, ts);
+    for (id, path, text, model, ts, shell) in pending {
+        if failed.contains(&id) {
+            continue;
         }
+        if let Some(cwd) = shell {
+            for rel in crate::shell_targets(&text, &cwd, pm) {
+                crate::push_rel(&mut g.evs, &rel, &text, Src::Claude, &model, &sid, ts);
+            }
+            continue;
+        }
+        let text = patched.get(&id).unwrap_or(&text);
+        crate::push_text(&mut g.evs, pm, &path, text, Src::Claude, &model, &sid, ts);
     }
     if !in_project {
         g.evs.clear();

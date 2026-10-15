@@ -86,6 +86,8 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         if let Some(f) = file {
             let data = read_maybe_zst(f);
             let mut cur_model = t.model.clone();
+            let mut shells: Vec<(String, String, String, String, i64)> = vec![];
+            let mut failed: std::collections::HashSet<String> = std::collections::HashSet::new();
             for line in data.lines() {
                 if line.contains("\"task_started\"") {
                     prompts += 1;
@@ -96,7 +98,8 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
                     }
                 }
                 let is_ctx = line.contains("\"turn_context\"");
-                if !line.contains("\"FileChange\"") && !is_ctx {
+                let is_call = line.contains("\"function_call") || line.contains("\"local_shell_call");
+                if !line.contains("\"FileChange\"") && !is_ctx && !is_call {
                     continue;
                 }
                 let Ok(o) = serde_json::from_str::<Value>(line) else { continue };
@@ -104,6 +107,23 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
                 if o["type"] == "turn_context" {
                     if let Some(m) = p["model"].as_str() {
                         cur_model = m.to_string();
+                    }
+                    continue;
+                }
+                // shell 调用：命令原文（heredoc、脚本里的新文本）作为它提到的文件的候选证据；退出码非 0 的不算
+                if is_call {
+                    let ts = o["timestamp"].as_str().and_then(parse_iso).unwrap_or(t.start);
+                    match p["type"].as_str() {
+                        Some("function_call") | Some("local_shell_call") => {
+                            if let Some((cmd, wd)) = shell_call(p, &t.cwd) {
+                                let id = p["call_id"].as_str().unwrap_or("").to_string();
+                                shells.push((id, cmd, wd, cur_model.clone(), ts));
+                            }
+                        }
+                        Some("function_call_output") if call_failed(&p["output"]) => {
+                            failed.insert(p["call_id"].as_str().unwrap_or("").to_string());
+                        }
+                        _ => {}
                     }
                     continue;
                 }
@@ -131,6 +151,13 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
                             }
                             _ => {}
                         }
+                    }
+                }
+            }
+            for (id, cmd, wd, model, ts) in shells {
+                if !failed.contains(&id) {
+                    for rel in crate::shell_targets(&cmd, &wd, pm) {
+                        crate::push_rel(&mut g.evs, &rel, &cmd, Src::Codex, &model, &t.id, ts);
                     }
                 }
             }
@@ -175,4 +202,71 @@ pub fn doctor() -> Health {
         Err(e) => h.note = e,
     }
     h
+}
+
+/// Codex 的 shell 调用：`shell` / `exec_command` 的参数（JSON 字符串），或 `local_shell_call` 的 action。返回（命令原文，工作目录）
+fn shell_call(p: &Value, cwd: &str) -> Option<(String, String)> {
+    let args: Value = match p["type"].as_str() {
+        Some("local_shell_call") => p["action"].clone(),
+        _ => {
+            let name = p["name"].as_str().unwrap_or("");
+            if !(name == "shell" || name == "exec_command" || name == "container.exec" || name == "local_shell") {
+                return None;
+            }
+            serde_json::from_str(p["arguments"].as_str()?).ok()?
+        }
+    };
+    let cmd = match (&args["command"], &args["cmd"]) {
+        (Value::Array(a), _) => {
+            let parts: Vec<&str> = a.iter().filter_map(|x| x.as_str()).collect();
+            // ["bash", "-lc", "<脚本>"]：取脚本本身
+            if parts.len() >= 3 && (parts[1] == "-lc" || parts[1] == "-c") { parts[2..].join(" ") } else { parts.join(" ") }
+        }
+        (Value::String(c), _) | (_, Value::String(c)) => c.clone(),
+        _ => return None,
+    };
+    let wd = args["workdir"].as_str().or(args["working_directory"].as_str()).unwrap_or(cwd).to_string();
+    Some((cmd, wd))
+}
+
+/// shell 调用的结果是否失败：JSON 里的 exit_code，或文本里的「exit code N」「exited with code N」
+fn call_failed(out: &Value) -> bool {
+    let text = match out {
+        Value::String(s) => s.clone(),
+        v => v.to_string(),
+    };
+    if let Ok(v) = serde_json::from_str::<Value>(&text) {
+        if let Some(c) = v["metadata"]["exit_code"].as_i64() {
+            return c != 0;
+        }
+    }
+    let lower = text.to_lowercase();
+    for key in ["exit code: ", "exit code ", "exited with code "] {
+        if let Some(i) = lower.find(key) {
+            let n: String = lower[i + key.len()..].chars().take_while(|c| c.is_ascii_digit()).collect();
+            if let Ok(c) = n.parse::<i64>() {
+                return c != 0;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn shell_calls_and_exit_codes() {
+        let p = json!({ "type": "function_call", "name": "shell", "arguments": json!({ "command": ["bash", "-lc", "cat > a.rs <<'EOF'\nx\nEOF"], "workdir": "/r" }).to_string(), "call_id": "c1" });
+        assert_eq!(shell_call(&p, "/cwd"), Some(("cat > a.rs <<'EOF'\nx\nEOF".to_string(), "/r".to_string())));
+        let p = json!({ "type": "function_call", "name": "exec_command", "arguments": json!({ "cmd": "echo hi > b.ts" }).to_string() });
+        assert_eq!(shell_call(&p, "/cwd"), Some(("echo hi > b.ts".to_string(), "/cwd".to_string())));
+        assert_eq!(shell_call(&json!({ "type": "function_call", "name": "apply_patch", "arguments": "{}" }), "/cwd"), None);
+        assert!(!call_failed(&json!(json!({ "output": "", "metadata": { "exit_code": 0 } }).to_string())));
+        assert!(call_failed(&json!(json!({ "output": "", "metadata": { "exit_code": 2 } }).to_string())));
+        assert!(call_failed(&json!("Process exited with code 1\nOutput: nope")));
+        assert!(!call_failed(&json!("Exit code: 0\nWall time: 1s")));
+    }
 }

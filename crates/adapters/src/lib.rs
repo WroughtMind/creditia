@@ -97,6 +97,47 @@ pub fn new_text(name: &str, args: &serde_json::Value) -> Option<String> {
     None
 }
 
+/// shell 命令里提到的仓库内文件（相对路径按命令的工作目录和命令里 `cd` 过的目录解析）。
+/// 命令原文（heredoc、printf、python 脚本里的新文本）作为这些文件的候选证据：只有真出现在提交新增行里的才算数
+pub fn shell_targets(cmd: &str, cwd: &str, pm: &PathMap) -> Vec<String> {
+    use std::sync::OnceLock;
+    static CD: OnceLock<regex::Regex> = OnceLock::new();
+    let cd = CD.get_or_init(|| regex::Regex::new(r#"(?:^|[;&|(]\s*)cd\s+["']?([^\s;&|)"']+)"#).unwrap());
+    let join = |base: &str, p: &str| if p.starts_with('/') { p.to_string() } else { format!("{}/{}", base.trim_end_matches('/'), p) };
+    let mut dirs = vec![cwd.to_string()];
+    for c in cd.captures_iter(cmd) {
+        dirs.push(join(cwd, &c[1]));
+    }
+    let mut out: Vec<String> = vec![];
+    for tok in cmd.split(|c: char| c.is_whitespace() || ";&|<>()=,`'\"{}[]".contains(c)) {
+        let tok = tok.trim_end_matches(':');
+        if tok.len() < 3 || tok.starts_with('-') || tok.starts_with('$') || !(tok.contains('/') || tok.contains('.')) {
+            continue;
+        }
+        let cands: Vec<String> = if tok.starts_with('/') { vec![tok.to_string()] } else { dirs.iter().map(|d| join(d, tok)).collect() };
+        for abs in cands {
+            if let Some(rel) = pm.to_rel(&abs) {
+                if !out.contains(&rel) {
+                    out.push(rel);
+                }
+                break;
+            }
+        }
+    }
+    out
+}
+
+/// 把一段文本记成某个仓库内相对路径的证据（push_text 的相对路径版）
+pub fn push_rel(out: &mut Vec<Ev>, rel: &str, text: &str, src: Src, model: &str, session: &str, ts: i64) {
+    let ext = ext_of(rel);
+    for line in text.lines() {
+        let n = normalize(line, &ext);
+        if n.chars().count() >= 4 {
+            out.push(Ev { rel: rel.to_string(), key: line_key(rel, &n), src, model: model.to_string(), session: session.to_string(), ts, tab: false });
+        }
+    }
+}
+
 /// new 里比 old 多出来的行（按行计数相减，顺序不变）：编辑的上下文行、原样保留的行都不算新写的
 pub fn added_lines(old: &str, new: &str) -> String {
     let mut have: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
@@ -252,6 +293,17 @@ mod tests {
         // 读文件、跑命令这类不算写入
         assert_eq!(new_text("Read", &json!({ "file_path": "a", "content": "x" })), None);
         assert_eq!(new_text("Bash", &json!({ "command": "ls" })), None);
+    }
+
+    #[test]
+    fn shell_targets_resolve_repo_files() {
+        let pm = PathMap { known: ["src/a.rs".to_string(), "web/b.ts".to_string(), "README.md".to_string()].into_iter().collect(), markers: vec!["/demo/".into()], excludes: vec![] };
+        // 相对路径按工作目录解析；绝对路径直接认；`cd` 过的目录也算
+        assert_eq!(shell_targets("cat > src/a.rs <<'EOF'\nfn x() {}\nEOF", "/home/me/demo", &pm), vec!["src/a.rs"]);
+        assert_eq!(shell_targets("tee /home/me/demo/web/b.ts < x", "/tmp", &pm), vec!["web/b.ts"]);
+        assert_eq!(shell_targets("cd web && printf 'a' > b.ts", "/home/me/demo", &pm), vec!["web/b.ts"]);
+        // 仓库外的文件、选项、变量不算
+        assert!(shell_targets("ls -la /etc/hosts $HOME/x.rs --out=foo.rs", "/home/me/demo", &pm).is_empty());
     }
 
     #[test]
