@@ -68,6 +68,7 @@ fn setup() -> Env {
     vars.insert("CREDITIA_GOOSE_DIR".into(), root.join("goose").display().to_string());
     vars.insert("CREDITIA_CONTINUE_DIR".into(), root.join("continue").display().to_string());
     vars.insert("CREDITIA_ZED_DIR".into(), root.join("zed").display().to_string());
+    vars.insert("CREDITIA_AMAZONQ_DIR".into(), root.join("amazon-q").display().to_string());
     Env { root, repo, vars }
 }
 
@@ -260,8 +261,8 @@ fn end_to_end() {
 
     // doctor 能跑
     let (_, v) = run(&env, &["doctor"]);
-    // 11 个老数据源 + Aider、Amp、TRAE CLI、Crush、Goose、Continue、Zed、Copilot（VS Code、命令行）；没装的 Windsurf、TRAE IDE 不列
-    assert_eq!(v["sources"].as_array().unwrap().len(), 20);
+    // 11 个老数据源 + Aider、Amp、TRAE CLI、Crush、Goose、Continue、Zed、Amazon Q、Copilot（VS Code、命令行）；没装的 Windsurf、TRAE IDE 不列
+    assert_eq!(v["sources"].as_array().unwrap().len(), 21);
 
     // hook：安装后提交信息自动带 trailer（用盖章文件触发）
     let (ok, _) = run(&env, &["hook", "install", "--repo", &repo.display().to_string()]);
@@ -943,5 +944,60 @@ fn zed_threads() {
     assert_eq!(s, 1, "{}", credits["sessions"]);
     let (_, v) = run(&env, &["discover"]);
     assert!(v.to_string().contains("\"zed\""), "{v}");
+    let _ = fs::remove_dir_all(&env.root);
+}
+
+/// Amazon Q CLI：data.sqlite3 的 conversations 表（按目录存对话 JSON），fs_write 成功的才算；结果是 Error 的不算
+#[test]
+fn amazon_q_conversations() {
+    let env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base: i64 = 1_795_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    let lines = |tag: &str, n: usize| -> Vec<String> { (0..n).map(|i| format!("{tag}_setting_{i} = load_{tag}(\"{i}\", {})", i * 23)).collect() };
+    let (created, appended, failed) = (lines("q_create", 4), lines("q_append", 2), lines("q_failed", 2));
+
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join("README.md"), "# q demo\n").unwrap();
+    commit(&repo, "init", "me@example.com", &d(base - 86400));
+    fs::write(repo.join("src/conf.py"), [created.clone(), appended.clone()].concat().join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/other.py"), failed.join("\n") + "\n").unwrap();
+    commit(&repo, "q work", "me@example.com", &d(base + 600));
+
+    let dir = env.root.join("amazon-q");
+    fs::create_dir_all(&dir).unwrap();
+    let c = rusqlite::Connection::open(dir.join("data.sqlite3")).unwrap();
+    c.execute_batch("CREATE TABLE conversations (key TEXT PRIMARY KEY, value TEXT);").unwrap();
+    let tool = |id: &str, args: serde_json::Value| serde_json::json!({ "id": id, "name": "fs_write", "orig_name": "fs_write", "args": args, "orig_args": args });
+    let conv = serde_json::json!({
+        "conversation_id": "qc1", "model": "claude-sonnet-4",
+        "history": [
+            { "user": { "additional_context": "", "env_context": { "env_state": { "current_working_directory": rs } }, "content": { "Prompt": { "prompt": "write conf.py" } }, "timestamp": null },
+              "assistant": { "ToolUse": { "message_id": "m1", "content": "", "tool_uses": [
+                  tool("a", serde_json::json!({ "command": "create", "path": format!("{rs}/src/conf.py"), "file_text": created.join("\n"), "summary": "s" })),
+                  tool("b", serde_json::json!({ "command": "create", "path": "src/other.py", "file_text": failed.join("\n") })) ] } },
+              "request_metadata": { "message_id": "m1", "request_start_timestamp_ms": (base + 20) * 1000, "stream_end_timestamp_ms": (base + 25) * 1000, "model_id": "claude-sonnet-4.5" } },
+            { "user": { "additional_context": "", "env_context": {}, "content": { "ToolUseResults": { "tool_use_results": [{ "tool_use_id": "a", "content": [], "status": "Success" }, { "tool_use_id": "b", "content": [], "status": "Error" }] } }, "timestamp": null },
+              "assistant": { "ToolUse": { "message_id": "m2", "content": "", "tool_uses": [tool("c", serde_json::json!({ "command": "append", "path": "src/conf.py", "new_str": appended.join("\n") }))] } },
+              "request_metadata": { "message_id": "m2", "request_start_timestamp_ms": (base + 40) * 1000, "stream_end_timestamp_ms": (base + 45) * 1000, "model_id": "claude-sonnet-4.5" } },
+            { "user": { "additional_context": "", "env_context": {}, "content": { "ToolUseResults": { "tool_use_results": [{ "tool_use_id": "c", "content": [], "status": "Success" }] } }, "timestamp": null },
+              "assistant": { "Response": { "message_id": "m3", "content": "done" } },
+              "request_metadata": { "message_id": "m3", "request_start_timestamp_ms": (base + 60) * 1000, "stream_end_timestamp_ms": (base + 61) * 1000, "model_id": "claude-sonnet-4.5" } }
+        ]
+    });
+    c.execute("INSERT INTO conversations VALUES (?1, ?2)", rusqlite::params![rs, conv.to_string()]).unwrap();
+    c.execute("INSERT INTO conversations VALUES ('/elsewhere', '{\"conversation_id\":\"x\",\"history\":[]}')", []).unwrap();
+    drop(c);
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+    assert_eq!(verified("a:amazon-q/claude-sonnet-4-5"), (created.len() + appended.len()) as u64, "{}", credits["breakdown"]);
+    let s = credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with("a:amazon-q/")).count();
+    assert_eq!(s, 1, "{}", credits["sessions"]);
     let _ = fs::remove_dir_all(&env.root);
 }

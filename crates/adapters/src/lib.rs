@@ -1,8 +1,9 @@
 //! 各数据源 adapter：git、Codex、Claude Code、Cursor、Grok、Kimi、Gemini CLI、Qwen Code、OpenCode、Cline / Roo / Kilo、
-//! Aider、GitHub Copilot（VS Code 和命令行）、Amp、TRAE CLI、Crush、Goose、Continue、Zed。
+//! Aider、GitHub Copilot（VS Code 和命令行）、Amp、TRAE CLI、Crush、Goose、Continue、Zed、Amazon Q 命令行。
 //! 只读打开，输出统一的行级证据和会话元数据。只认「成功写进文件」的编辑；路径映射回仓库内相对路径。
 
 pub mod aider;
+pub mod amazonq;
 pub mod amp;
 pub mod claude;
 pub mod cline;
@@ -60,6 +61,7 @@ pub fn source_dir(src: Src) -> PathBuf {
         Src::Goose => goose::data_dir(),
         Src::Continue => cont::global_dir(),
         Src::Zed => zed::data_dir(),
+        Src::AmazonQ => amazonq::data_dir(),
         // Aider 的记录在每个仓库根目录里（.aider.chat.history.md），没有统一位置
         Src::Aider => home(),
     }
