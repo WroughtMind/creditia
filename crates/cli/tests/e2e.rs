@@ -69,6 +69,7 @@ fn setup() -> Env {
     vars.insert("CREDITIA_CONTINUE_DIR".into(), root.join("continue").display().to_string());
     vars.insert("CREDITIA_ZED_DIR".into(), root.join("zed").display().to_string());
     vars.insert("CREDITIA_AMAZONQ_DIR".into(), root.join("amazon-q").display().to_string());
+    vars.insert("CREDITIA_ANTIGRAVITY_DIR".into(), root.join("agy").display().to_string());
     Env { root, repo, vars }
 }
 
@@ -262,7 +263,7 @@ fn end_to_end() {
     // doctor 能跑
     let (_, v) = run(&env, &["doctor"]);
     // 11 个老数据源 + Aider、Amp、TRAE CLI、Crush、Goose、Continue、Zed、Amazon Q、Copilot（VS Code、命令行）；没装的 Windsurf、TRAE IDE 不列
-    assert_eq!(v["sources"].as_array().unwrap().len(), 21);
+    assert_eq!(v["sources"].as_array().unwrap().len(), 22);
 
     // hook：安装后提交信息自动带 trailer（用盖章文件触发）
     let (ok, _) = run(&env, &["hook", "install", "--repo", &repo.display().to_string()]);
@@ -1080,5 +1081,64 @@ fn opencode_sqlite_and_kilo_cli() {
     assert_eq!(sessions("kilo"), 1, "{}", credits["sessions"]);
     let (_, v) = run(&env, &["doctor"]);
     assert!(v["sources"].as_array().unwrap().iter().any(|h| h["source"] == "kilo-cli" && h["records"] == 1), "{v}");
+    let _ = fs::remove_dir_all(&env.root);
+}
+
+/// Antigravity CLI（agy）：brain/<对话>/…/transcript_full.jsonl；工具调用和结果按先后对上，结果不是 DONE 的不算；
+/// 工作目录取 cache/conversation_metadata.json，模型取 USER_INPUT 里的模型设置变更
+#[test]
+fn antigravity_cli_transcript() {
+    let env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base: i64 = 1_796_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    // base 是 2026-11-30T00:53:20Z，下面的偏移都在一小时内
+    let iso = |t: i64| { let s = t - base + 3200; format!("2026-11-30T00:{:02}:{:02}Z", s / 60, s % 60) };
+    let lines = |tag: &str, n: usize| -> Vec<String> { (0..n).map(|i| format!("{tag}_value_{i} = compute_{tag}({i}, {})", i * 31)).collect() };
+    let (wrote, replaced, failed) = (lines("agy_write", 4), lines("agy_replace", 2), lines("agy_failed", 2));
+
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join("README.md"), "# agy demo\n").unwrap();
+    commit(&repo, "init", "me@example.com", &d(base - 86400));
+    fs::write(repo.join("src/calc.py"), [wrote.clone(), replaced.clone()].concat().join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/other.py"), failed.join("\n") + "\n").unwrap();
+    commit(&repo, "agy work", "me@example.com", &d(base + 600));
+
+    let root = env.root.join("agy");
+    let id = "7d1e0c3a-5b6f-4a2e-9c1d-0e2f3a4b5c6d";
+    let logs = root.join("brain").join(id).join(".system_generated/logs");
+    fs::create_dir_all(&logs).unwrap();
+    fs::create_dir_all(root.join("cache")).unwrap();
+    fs::write(root.join("cache/conversation_metadata.json"), serde_json::json!({ "conversations": {
+        id: { "summary": { "ID": id, "Title": "calc", "WorkspaceURIs": [format!("file://{rs}")], "Internal": false }, "is_internal": false }
+    } }).to_string()).unwrap();
+    let grown = std::iter::once(&wrote[3]).chain(&replaced).cloned().collect::<Vec<_>>().join("\n");
+    let steps = [
+        serde_json::json!({ "step_index": 0, "source": "USER_EXPLICIT", "type": "USER_INPUT", "status": "DONE", "created_at": iso(base),
+            "content": "<USER_REQUEST>\nwrite calc.py\n</USER_REQUEST>\n<USER_SETTINGS_CHANGE>\nThe user changed setting `Model Selection` from None to Claude Sonnet 4.5 (Thinking). No need to comment on this change.\n</USER_SETTINGS_CHANGE>" }),
+        serde_json::json!({ "step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "status": "DONE", "created_at": iso(base + 10), "tool_calls": [
+            { "name": "write_to_file", "args": { "TargetFile": format!("{rs}/src/calc.py"), "CodeContent": wrote.join("\n"), "Overwrite": false, "EmptyFile": false } },
+            { "name": "write_to_file", "args": { "TargetFile": format!("{rs}/src/other.py"), "CodeContent": failed.join("\n") } } ] }),
+        serde_json::json!({ "step_index": 2, "source": "MODEL", "type": "CODE_ACTION", "status": "DONE", "created_at": iso(base + 11), "content": "Created file" }),
+        serde_json::json!({ "step_index": 3, "source": "MODEL", "type": "CODE_ACTION", "status": "ERROR", "created_at": iso(base + 12), "content": "denied" }),
+        serde_json::json!({ "step_index": 4, "source": "MODEL", "type": "PLANNER_RESPONSE", "status": "DONE", "created_at": iso(base + 20), "tool_calls": [
+            { "name": "replace_file_content", "args": { "TargetFile": "src/calc.py", "TargetContent": wrote[3], "ReplacementContent": grown, "StartLine": 4, "EndLine": 4 } } ] }),
+        serde_json::json!({ "step_index": 5, "source": "MODEL", "type": "CODE_ACTION", "status": "DONE", "created_at": iso(base + 21), "content": "Edited file" }),
+        serde_json::json!({ "step_index": 6, "source": "MODEL", "type": "PLANNER_RESPONSE", "status": "DONE", "created_at": iso(base + 30), "content": "done" }),
+    ];
+    fs::write(logs.join("transcript_full.jsonl"), steps.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n") + "\n").unwrap();
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+    assert_eq!(verified("a:antigravity/claude-sonnet-4-5"), (wrote.len() + replaced.len()) as u64, "{}", credits["breakdown"]);
+    let s = credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with("a:antigravity/")).count();
+    assert_eq!(s, 1, "{}", credits["sessions"]);
+    let (_, v) = run(&env, &["discover"]);
+    assert!(v.to_string().contains("\"antigravity\""), "{v}");
     let _ = fs::remove_dir_all(&env.root);
 }

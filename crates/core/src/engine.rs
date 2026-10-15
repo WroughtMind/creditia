@@ -345,6 +345,7 @@ fn assisted_by(v: &str) -> Option<(String, Option<String>)> {
         "qwen" | "qwen-code" => "qwen",
         "roo" | "roo-code" => "roo",
         "kilo" | "kilo-code" => "kilo",
+        "agy" | "antigravity" | "antigravity-cli" | "google-antigravity" => "antigravity",
         k => k,
     };
     // 没写模型、又不是认识的工具名：多半是人

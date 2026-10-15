@@ -121,6 +121,7 @@ jobs:
 | | Amp · TRAE 命令行 | Amp 本地的 `threads/*.json`（完成的编辑）；TRAE CLI 的会话 rollout | ✓ | ✓ |
 | | Goose | `~/.local/share/goose/sessions/sessions.db`：成功的 write / edit / text_editor（配上同 id 的工具结果）和 shell 命令；模型取每次调用的用量记录 | ✓ | ✓ |
 | | Amazon Q 命令行 | `amazon-q/data.sqlite3` 的 conversations 表：结果为 Success 的 fs_write 与命令；每个目录只存最近一次对话 | ✓ | ✓ |
+| | Antigravity 命令行 | `agy` 的 `~/.gemini/antigravity-cli/brain/*/…/transcript_full.jsonl`：结果为 DONE 的 write_to_file / replace_file_content 与命令（闭源，按第三方观察读） | ✓ | ✓ |
 | | Zed | agent 面板的 `threads/threads.db`：edit_file / write_file 成功的结果里带着改前改后的完整内容，两者之差；terminal 命令 | ✓ | ✓ |
 | | Continue | `~/.continue/sessions/*.json`（编辑器扩展和 `cn` 命令行共用）：状态为 done 的编辑与命令；被拒绝的 diff 不算 | ✓ | ✓ |
 | | Crush | 项目里的 `.crush/crush.db`：`files` 表逐版存的文件内容，相邻两版多出来的行；提交里的 `Assisted-by: Crush:模型` | ✓ | ✓ |
