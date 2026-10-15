@@ -103,6 +103,44 @@ export function commitsComment(m: Model, shas: string[]): string {
   return sharesLine(m, [...by].sort((a, b) => b[1] - a[1]).map(([id, v]): [string, number] => [id, v / total]).filter(([, x]) => x >= 0.005));
 }
 
+/** 一个提交上的盖章：提交盖章 hook 写的 Creditia-Lines（各工具写了几行 / 新增总行数），或者只有 Creditia-Harness / Model；added 是这个提交新增的行数 */
+export interface Stamped { lines?: string; harness?: string; model?: string; added: number }
+
+/** 一组提交的盖章汇总：Creditia-Lines 按行数记；只有 Harness 的提交整个算那个工具；没盖章的只计入总数 */
+export function stampedShares(cs: Stamped[]): { by: [string, number][]; total: number } {
+  const by = new Map<string, number>();
+  let total = 0;
+  for (const c of cs) {
+    const m = /^(.*)\/\s*(\d+)\s*$/.exec(c.lines ?? '');
+    if (m) {
+      for (const part of m[1].split(',')) {
+        const x = /^\s*(\S+)\s+(\d+)\s*$/.exec(part);
+        if (x) by.set(x[1], (by.get(x[1]) ?? 0) + Number(x[2]));
+      }
+      total += Math.max(Number(m[2]), c.added);
+    } else if (c.harness) {
+      const k = c.model ? `${c.harness.toLowerCase()}/${c.model}` : c.harness.toLowerCase();
+      by.set(k, (by.get(k) ?? 0) + c.added);
+      total += c.added;
+    } else total += c.added;
+  }
+  return { by: [...by].sort((a, b) => b[1] - a[1]), total };
+}
+
+/** 没有 credits.json 时的 PR 评论 / Release 说明：按提交盖章记下的行数。没有 AI 写的行返回空串 */
+export function stampedComment(cs: Stamped[], lang: 'zh' | 'en'): string {
+  const { by, total } = stampedShares(cs);
+  if (!by.length || !total) return '';
+  const name = (k: string) => {
+    const [tool, model] = k.split('/');
+    return `${nameOf(tool, lang)}${model ? ` (${modelName(model)})` : ''}`;
+  };
+  const parts = by.filter(([, n]) => n / total >= 0.005).map(([k, n]) => `${name(k)} ${Math.round((n / total) * 100)}%`);
+  if (!parts.length) return '';
+  const note = lang === 'zh' ? `按提交盖章：新增 ${fmt(total)} 行里各工具写的` : `from commit stamps: shares of ${fmt(total)} lines added`;
+  return `**creditia** · ${parts.join(' · ')}\n<sub>${note}</sub>\n`;
+}
+
 /** 把一段署名放进已有的文字（Release 说明、PR 评论）：有标记就换掉标记之间的，没有就接在后面 */
 export const RELEASE_START = '<!-- creditia:release -->', RELEASE_END = '<!-- /creditia:release -->';
 export function mergeMarked(existing: string, block: string, start = RELEASE_START, end = RELEASE_END): string {

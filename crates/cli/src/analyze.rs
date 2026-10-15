@@ -174,6 +174,98 @@ pub fn collect(repo: &Path, lib: &mut Library, config: Option<&Path>) -> Result<
     Ok((n, st.warnings, proj.id))
 }
 
+/// 证据：日志（增量扫描）+ 证据库（日志被清理后仍在）
+fn evidence(repo: &Path, cfg: &Config, lib: &mut Library, project: &str, head: &str) -> Result<(Store, ad::Stats), String> {
+    let cache = cache_dir(project);
+    let roots = known_roots(repo, cfg, Some(lib), project);
+    let pm = path_map(repo, head, cfg, &roots);
+    let mut store: Store = load_json(&cache.join("store.json"));
+    if store.version != STORE_VERSION {
+        store = Store { version: STORE_VERSION, ..Default::default() };
+    }
+    let mut st = ad::Stats::default();
+    creditia_core::progress::tick("logs", 0, 0);
+    scan_all(&mut store, &pm, &roots, &mut st);
+    save_json(&cache.join("store.json"), &store)?;
+    lib.save_evidence(project, &store)?;
+    let (db_evs, db_sessions) = lib.load_evidence(project)?;
+    // 合并：证据库里有、当前日志里没有的（已清理）补进来
+    // 日志还在的会话以这次解析为准（读法可能改进过，比如不再把编辑的上下文行记成证据），只补日志已经没了的会话；
+    // Cursor 的行哈希表会单行清理，仍按行补
+    let mut have: HashSet<(String, u32, String, String)> = HashSet::new();
+    let mut live: HashSet<(String, String)> = HashSet::new();
+    for g in store.groups.values() {
+        for e in &g.evs {
+            have.insert((e.rel.clone(), e.key, e.src.harness().into(), e.session.clone()));
+        }
+        for s in &g.sessions {
+            if s.has_content && s.src != Src::Cursor {
+                live.insert((s.src.harness().into(), s.id.clone()));
+            }
+        }
+    }
+    let mut extra = FileGroup::default();
+    for e in db_evs {
+        if live.contains(&(e.src.harness().to_string(), e.session.clone())) {
+            continue;
+        }
+        if !have.contains(&(e.rel.clone(), e.key, e.src.harness().into(), e.session.clone())) {
+            extra.evs.push(e);
+        }
+    }
+    let have_s: HashSet<(String, String)> = store.groups.values().flat_map(|g| g.sessions.iter().map(|s| (s.src.harness().to_string(), s.id.clone()))).collect();
+    for s in db_sessions {
+        if !have_s.contains(&(s.src.harness().to_string(), s.id.clone())) {
+            extra.sessions.push(s);
+        }
+    }
+    let restored = extra.evs.len();
+    if restored > 0 {
+        st.notes.push(creditia_core::tr!("证据库补回 {restored} 条已不在日志里的证据", "restored {restored} pieces of evidence from the library that are no longer in the logs"));
+        store.groups.insert("library".into(), extra);
+    }
+    Ok((store, st))
+}
+
+/// 暂存区里各工具写了几行（提交盖章 hook 用）：返回 (贡献者 id, 行数) 和暂存区新增的总行数
+pub fn staged(repo: &Path) -> Result<(Vec<(String, usize)>, usize), String> {
+    let cfg = load_config(repo, None);
+    let mut lib = Library::open()?;
+    let proj = project_of(repo, &cfg, Some(&lib));
+    lib.upsert_project(&proj)?;
+    let head = ad::git::git(repo, &["rev-parse", "HEAD"]).trim().to_string();
+    // 这次提交的作者和时间：和 git 自己用的一样（认 GIT_AUTHOR_DATE、--date）
+    let ident = ad::git::git(repo, &["var", "GIT_AUTHOR_IDENT"]);
+    let email = ident.split_once('<').and_then(|(_, r)| r.split_once('>')).map(|(e, _)| e.trim().to_lowercase()).unwrap_or_default();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+    let ts = ident.rsplit_once('>').and_then(|(_, r)| r.split_whitespace().next()?.parse().ok()).unwrap_or(now);
+    let c = ad::git::staged_commit(repo, &email, ts);
+    let total: usize = c.files.iter().filter(|f| !f.binary).map(|f| f.keys.len()).sum();
+    if total == 0 {
+        return Ok((vec![], 0));
+    }
+    let (store, _) = evidence(repo, &cfg, &mut lib, &proj.id, &head)?;
+    let idx = Index::build(&store);
+    let sessions: Vec<Session> = store.groups.values().flat_map(|g| g.sessions.clone()).collect();
+    let mut eng = Engine::new(&cfg, &idx, &sessions, &[], HashMap::new());
+    let a = eng.attribute(&c);
+    let mut by: BTreeMap<String, usize> = BTreeMap::new();
+    for (f, lines) in c.files.iter().zip(&a.lines) {
+        if f.binary {
+            continue;
+        }
+        for x in lines {
+            let w = &eng.reg.list[x.who];
+            if w.kind == "agent" {
+                *by.entry(w.id.trim_start_matches("a:").to_string()).or_default() += 1;
+            }
+        }
+    }
+    let mut v: Vec<(String, usize)> = by.into_iter().collect();
+    v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    Ok((v, total))
+}
+
 pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let t0 = Instant::now();
     let mut cfg = load_config(repo, opts.config.as_deref());
@@ -249,54 +341,8 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let (tags, ver_of) = ad::git::versions(repo, &parents, &cfg.ignore_tags);
 
     // ---- 证据：日志（增量）+ 证据库（日志被清理后仍在）
-    let roots = known_roots(repo, &cfg, Some(&lib), &proj.id);
-    let pm = path_map(repo, &head, &cfg, &roots);
-    let mut store: Store = load_json(&cache.join("store.json"));
-    if store.version != STORE_VERSION {
-        store = Store { version: STORE_VERSION, ..Default::default() };
-    }
-    let mut st = ad::Stats::default();
-    creditia_core::progress::tick("logs", 0, 0);
-    scan_all(&mut store, &pm, &roots, &mut st);
-    save_json(&cache.join("store.json"), &store)?;
+    let (store, mut st) = evidence(repo, &cfg, &mut lib, &proj.id, &head)?;
     warnings.extend(st.warnings.clone());
-    lib.save_evidence(&proj.id, &store)?;
-    let (db_evs, db_sessions) = lib.load_evidence(&proj.id)?;
-    // 合并：证据库里有、当前日志里没有的（已清理）补进来
-    // 日志还在的会话以这次解析为准（读法可能改进过，比如不再把编辑的上下文行记成证据），只补日志已经没了的会话；
-    // Cursor 的行哈希表会单行清理，仍按行补
-    let mut have: HashSet<(String, u32, String, String)> = HashSet::new();
-    let mut live: HashSet<(String, String)> = HashSet::new();
-    for g in store.groups.values() {
-        for e in &g.evs {
-            have.insert((e.rel.clone(), e.key, e.src.harness().into(), e.session.clone()));
-        }
-        for s in &g.sessions {
-            if s.has_content && s.src != Src::Cursor {
-                live.insert((s.src.harness().into(), s.id.clone()));
-            }
-        }
-    }
-    let mut extra = FileGroup::default();
-    for e in db_evs {
-        if live.contains(&(e.src.harness().to_string(), e.session.clone())) {
-            continue;
-        }
-        if !have.contains(&(e.rel.clone(), e.key, e.src.harness().into(), e.session.clone())) {
-            extra.evs.push(e);
-        }
-    }
-    let have_s: HashSet<(String, String)> = store.groups.values().flat_map(|g| g.sessions.iter().map(|s| (s.src.harness().to_string(), s.id.clone()))).collect();
-    for s in db_sessions {
-        if !have_s.contains(&(s.src.harness().to_string(), s.id.clone())) {
-            extra.sessions.push(s);
-        }
-    }
-    let restored = extra.evs.len();
-    if restored > 0 {
-        st.notes.push(creditia_core::tr!("证据库补回 {restored} 条已不在日志里的证据", "restored {restored} pieces of evidence from the library that are no longer in the logs"));
-        store.groups.insert("library".into(), extra);
-    }
     let idx = Index::build(&store);
     let sessions: Vec<Session> = store.groups.values().flat_map(|g| g.sessions.clone()).collect();
 

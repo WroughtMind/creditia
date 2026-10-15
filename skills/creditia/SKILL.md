@@ -22,8 +22,8 @@ description: 分析一个仓库的代码是哪些 AI 工具和模型写的：读
 3. **多处路径**：项目如果在别的目录、别的电脑上也做过（worktree、临时克隆、旧路径），`creditia paths --json` 看已登记的，`creditia link <路径> --json` 补上。
 4. **分析**：`creditia analyze --github --json`。汇报各工具占比、未确认比例、逐行证据覆盖。未确认超过 20% 时说明原因（日志被清理、工具不在支持范围、提交里没有声明），问用户要不要换口径或接受现状。
 5. **问两项接入**（`init` / `analyze` 的返回里有 `ask` 时必须做，不能替用户决定，也不能跳过）：`ask` 里列的是这个项目还没决定的项。逐项用一两句话讲清楚它会改什么，问用户要不要：
-   - `hook`（提交盖章）：在仓库的 git `prepare-commit-msg` hook 里加一行。之后在 agent 里提交时，提交信息末尾自动加 `Creditia-Harness` / `Creditia-Model`，本机日志清理后也认得出。只影响这个仓库。要：`creditia hook install --json`；不要：`creditia hook uninstall --json`
-   - `release`（跟着发版）：写 `.github/workflows/creditia.yml`，需要用户自己提交。发 Release 时把这一版的署名写进说明，PR 上评论这个 PR 的署名；读的是仓库里的 `credits.json`（`creditia publish` 写出）。要：`creditia release install --json`；不要：`creditia release uninstall --json`
+   - `hook`（提交盖章）：在仓库的 git `prepare-commit-msg` hook 里加一行。之后在 agent 里提交时，提交信息末尾自动加 `Creditia-Harness` / `Creditia-Model`；提交里有 AI 写的行时再加 `Creditia-Lines`（各工具写了几行，不含代码）。本机日志清理后也认得出，PR 评论和 Release 说明也读它。只影响这个仓库。要：`creditia hook install --json`；不要：`creditia hook uninstall --json`
+   - `release`（跟着发版）：写 `.github/workflows/creditia.yml`，需要用户自己提交。发 Release 时把这一版的署名写进说明，PR 上评论这个 PR 的署名；读的是提交盖章记下的行数，仓库里有 `credits.json` 时优先用它，所以最好和提交盖章一起开。要：`creditia release install --json`；不要：`creditia release uninstall --json`
 
    两种回答都要执行对应命令：答案会记进 `.creditia/config.json`，以后不再问。随时可以改，`creditia integrations --json` 看现状；App 里每个项目也有这两个开关。
 6. **选样子**：`creditia export --list --json` 看全部作品、版式、风格。推荐几种给用户，用户选。

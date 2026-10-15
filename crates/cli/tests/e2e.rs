@@ -38,6 +38,8 @@ fn commit(repo: &Path, msg: &str, email: &str, date: &str) -> String {
         .arg(repo)
         .args(["-c", "user.name=X", "-c", &format!("user.email={email}"), "-c", "commit.gpgsign=false", "commit", "-q", "-m", msg, "--date", date])
         .env("GIT_COMMITTER_DATE", date)
+        // 装了盖章 hook 的仓库：提交时不去扫这台电脑上真实的 agent 日志
+        .env("CREDITIA_HOOK_TIMEOUT", "0")
         .env("GIT_AUTHOR_EMAIL", email)
         .env("GIT_COMMITTER_EMAIL", email)
         .output()
@@ -275,6 +277,34 @@ fn end_to_end() {
     let msg = git(repo, &["log", "-1", "--format=%B"]);
     assert!(msg.contains("Creditia-Harness: grok"), "{msg}");
     assert!(msg.contains("Creditia-Model: grok-test"), "{msg}");
+    // hook 那一行先试数据目录里的固定入口，它指向这个核心
+    let hook = fs::read_to_string(repo.join(".git/hooks/prepare-commit-msg")).unwrap();
+    let shim = env.root.join("lib/bin/creditia-core");
+    assert!(hook.contains(&shim.display().to_string()), "{hook}");
+    assert_eq!(fs::canonicalize(&shim).unwrap(), fs::canonicalize(env!("CARGO_BIN_EXE_creditia-core")).unwrap());
+    // 旧版写死路径的 hook：查一次接入状态就换成新的一行
+    fs::write(repo.join(".git/hooks/prepare-commit-msg"), "#!/bin/sh\necho keep\n\"/old/place/creditia-core\" hook-trailers \"$1\" >/dev/null 2>&1 || true # creditia-stamp\n").unwrap();
+    let (ok, _) = run(&env, &["integrations", "--repo", &repo.display().to_string()]);
+    assert!(ok);
+    let hook = fs::read_to_string(repo.join(".git/hooks/prepare-commit-msg")).unwrap();
+    assert!(hook.contains("echo keep") && !hook.contains("/old/place") && hook.contains(&shim.display().to_string()), "{hook}");
+
+    // 盖章 hook 记下这次提交里各工具写了几行：Codex 写的 30 行删掉再加回来，暂存区里 30 行都有证据
+    fs::remove_file(repo.join("src/agent.rs")).unwrap();
+    commit(repo, "drop agent", "me@example.com", &d(base_ts + 8100));
+    fs::write(repo.join("src/agent.rs"), codex_lines().join("\n") + "\n").unwrap();
+    fs::write(repo.join("src/plain.rs"), "pub fn typed_by_hand_here() -> u8 { 1 }\n").unwrap();
+    git(repo, &["add", "-A"]);
+    let msgf = env.root.join("COMMIT_MSG");
+    fs::write(&msgf, "restore agent\n").unwrap();
+    let mut at = Env { root: env.root.clone(), repo: env.repo.clone(), vars: env.vars.clone() };
+    at.vars.insert("GIT_AUTHOR_DATE".into(), d(base_ts + 8200));
+    let (ok, v) = run(&at, &["hook-trailers", &msgf.display().to_string(), "--repo", &repo.display().to_string()]);
+    assert!(ok, "{v}");
+    let msg = fs::read_to_string(&msgf).unwrap();
+    assert!(msg.contains("Creditia-Lines: codex/gpt-test 30 / 31"), "{msg}");
+    assert!(!msg.contains("Creditia-Harness"), "{msg}");
+    commit(repo, "restore agent", "me@example.com", &d(base_ts + 8200));
 
     // discover 能找到这个项目
     let (ok, v) = run(&env, &["discover"]);
