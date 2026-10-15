@@ -4,7 +4,7 @@ use crate::detect_config;
 use creditia_adapters as ad;
 use creditia_core::config::Config;
 use creditia_core::engine::{self, Engine};
-use creditia_core::model::{area, vendor, Attr, BlameLine, Commit, CommitAttr, FileGroup, Index, Level, PathMap, PrMeta, Session, Src, Store, STORE_VERSION, UNATTR};
+use creditia_core::model::{area, vendor, BlameFile, Commit, CommitAttr, FileGroup, Index, Level, PathMap, PrMeta, Session, Src, Store, STORE_VERSION, UNATTR};
 use creditia_core::util::{date_cn, iso_week, now_iso};
 use creditia_store::{cache_dir, load_json, save_json, Library, Project};
 use serde_json::{json, Value};
@@ -299,10 +299,15 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     }
 
     // ---- 存活代码
-    // blame.json 是没有原行号的旧缓存
-    let _ = std::fs::remove_file(cache.join("blame.json"));
-    let mut bc: HashMap<String, Vec<BlameLine>> = load_json(&cache.join("blame2.json"));
-    let mut blame = ad::git::blame_head(repo, &head, &mut bc);
+    // blame.json、blame2.json 是旧格式的缓存
+    for old in ["blame.json", "blame2.json"] {
+        let _ = std::fs::remove_file(cache.join(old));
+    }
+    let mut bc: HashMap<String, BlameFile> = load_json(&cache.join("blame3.json"));
+    let blame_path = cache.join("blame3.json");
+    let mut blame = ad::git::blame_head(repo, &head, &mut bc, &mut |c| {
+        let _ = save_json(&blame_path, c);
+    });
     if !gen.is_empty() {
         blame.retain(|(p, _)| !gen_hit(p));
     }
@@ -310,27 +315,8 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         st.notes.push(creditia_core::tr!(".gitattributes 标为生成物、第三方的文件改动 {skipped_generated} 处不计入", "{skipped_generated} changes to files marked generated or vendored in .gitattributes are not counted"));
     }
     let commit_by_hash: HashMap<&str, &Commit> = cc.commits.iter().map(|c| (c.hash.as_str(), c)).collect();
-    let per_commit: engine::CommitAttrs = attrs
-        .iter()
-        .map(|(h, a)| {
-            let c = commit_by_hash[h.as_str()];
-            let (mut m, mut by_line) = (HashMap::new(), HashMap::new());
-            for (f, fl) in c.files.iter().zip(&a.lines) {
-                for (i, (&k, &at)) in f.keys.iter().zip(fl).enumerate() {
-                    if k != 0 {
-                        m.insert((f.rel.clone(), k), at);
-                    }
-                    if let Some(&n) = f.at.get(i).filter(|&&n| n > 0) {
-                        by_line.insert((f.rel.clone(), n), at);
-                    }
-                }
-            }
-            (h.clone(), engine::CommitLines { by_key: m, by_line, main: a.main.map(|w| Attr { who: w, level: Level::Declared }) })
-        })
-        .collect();
     let unattr = eng.reg.unattributed();
-    let surv = engine::survival(&blame, &per_commit, unattr);
-    drop(per_commit);
+    let surv = engine::survival(&blame, &commit_by_hash, &attrs, unattr);
 
     // 准确率基准用：逐行归因写到 CREDITIA_DUMP_LINES 指定的文件（含行内容哈希之外的一切，不含代码原文）
     if let Some(p) = std::env::var_os("CREDITIA_DUMP_LINES") {
@@ -363,12 +349,12 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
                 if let Some(b) = lines.get(ln.saturating_sub(1)) {
                     let a = surv[i + ln - 1];
                     let w = &eng.reg.list[a.who];
-                    let c = commit_by_hash.get(b.commit.as_str());
-                    let ev = idx.map.get(&(b.rel.clone(), b.key)).and_then(|v| {
+                    let c = commit_by_hash.get(b.commit);
+                    let ev = idx.map.get(&(b.rel.to_string(), b.key)).and_then(|v| {
                         let ts = c.map(|c| c.author_ts).unwrap_or(0);
                         v.iter().filter(|e| e.ts <= ts + 3600).max_by_key(|e| e.ts)
                     });
-                    let unit = units.iter().find(|u| u.commits.contains(&b.commit));
+                    let unit = units.iter().find(|u| u.commits.iter().any(|x| x == b.commit));
                     blame_out = Some(json!({
                         "file": fpath, "line": ln, "contributor": w.id, "harness": w.harness, "model": w.model, "name": w.name,
                         "evidence": a.level, "commit": &b.commit[..10.min(b.commit.len())], "date": c.map(|c| date_cn(c.author_ts)),
@@ -463,7 +449,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
             let mut g: BTreeMap<String, usize> = BTreeMap::new();
             // 按行顺序的分段：[[贡献方 id, 连续行数], …]，代码地图用（只有归属，没有代码；id 带模型）
             let mut runs: Vec<(&str, usize)> = vec![];
-            for _ in lines {
+            for _ in lines.iter() {
                 *g.entry(reg.group(surv[i].who)).or_default() += 1;
                 let id = reg.list[surv[i].who].id.as_str();
                 match runs.last_mut() {
@@ -637,7 +623,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         lib.save_snapshot(&proj.id, &head, &generated_at, &credits.to_string())?;
     }
     save_json(&cache.join("commits.json"), &cc)?;
-    save_json(&cache.join("blame2.json"), &bc)?;
+    save_json(&cache.join("blame3.json"), &bc)?;
 
     // 终端里的一行 tier
     let mut groups: BTreeMap<String, usize> = BTreeMap::new();

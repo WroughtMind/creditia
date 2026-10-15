@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::hash::short_key;
-use crate::model::{Attr, BlameLine, Commit, CommitAttr, Index, Level, Registry, Session, Src, Unit};
+use crate::model::{Attr, BlameFile, Commit, CommitAttr, Index, Level, Registry, Session, Src, Unit};
 use std::collections::{HashMap, HashSet};
 
 const WINDOW_BEFORE: i64 = 14 * 86400;
@@ -341,24 +341,33 @@ pub fn person_id(email: &str) -> String {
     format!("h:{:010x}", h & 0xff_ffff_ffff)
 }
 
-/// 一个提交里每一行的归因：按 (路径, 行号) 和 (路径, 行哈希) 各存一份，和这个提交整体的归因（都对不上时用）
-pub struct CommitLines {
-    pub by_line: HashMap<(String, u32), Attr>,
-    pub by_key: HashMap<(String, u32), Attr>,
-    pub main: Option<Attr>,
-}
-pub type CommitAttrs = HashMap<String, CommitLines>;
-
-/// 存活代码归因：blame 行 → 引入它的提交里同一行（按原行号；旧缓存没有行号时按同路径同哈希）
-pub fn survival(blame: &[(String, Vec<BlameLine>)], per_commit: &CommitAttrs, unattr: usize) -> Vec<Attr> {
+/// 存活代码归因：blame 行 → 引入它的提交里同一行（按原行号；旧缓存没有行号时按同路径同哈希），
+/// 都对不上时用那个提交的主要贡献者。直接在提交里查，不另建逐行的大表（大仓库上省内存）
+pub fn survival(blame: &[(String, BlameFile)], commits: &HashMap<&str, &Commit>, attrs: &HashMap<String, CommitAttr>, unattr: usize) -> Vec<Attr> {
     let mut out = vec![];
+    let none = Attr { who: unattr, level: Level::Unattributed };
     for (_, lines) in blame {
-        for b in lines {
-            let a = per_commit.get(&b.commit).and_then(|c| {
-                let line = (b.orig > 0).then(|| c.by_line.get(&(b.rel.clone(), b.orig))).flatten();
-                line.or_else(|| (b.key != 0).then(|| c.by_key.get(&(b.rel.clone(), b.key))).flatten()).copied().or(c.main)
+        // 同一个文件的 blame 行大多来自少数几个提交：记住上一次找到的文件
+        let mut last: Option<(&str, usize)> = None;
+        for b in lines.iter() {
+            let (Some(c), Some(a)) = (commits.get(b.commit), attrs.get(b.commit)) else {
+                out.push(none);
+                continue;
+            };
+            let fi = match last {
+                Some((h, fi)) if h == b.commit && c.files.get(fi).is_some_and(|f| f.rel == b.rel) => Some(fi),
+                _ => c.files.iter().position(|f| f.rel == b.rel),
+            };
+            if let Some(fi) = fi {
+                last = Some((c.hash.as_str(), fi));
+            }
+            let line = fi.and_then(|fi| {
+                let f = &c.files[fi];
+                let i = if b.orig > 0 && !f.at.is_empty() { f.at.binary_search(&b.orig).ok() } else { None };
+                let i = i.or_else(|| (b.key != 0).then(|| f.keys.iter().position(|&k| k == b.key)).flatten());
+                i.and_then(|i| a.lines.get(fi)?.get(i).copied())
             });
-            out.push(a.unwrap_or(Attr { who: unattr, level: Level::Unattributed }));
+            out.push(line.or(a.main.map(|w| Attr { who: w, level: Level::Declared })).unwrap_or(none));
         }
     }
     out

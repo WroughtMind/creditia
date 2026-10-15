@@ -245,7 +245,14 @@ pub fn save_json<T: serde::Serialize>(p: &Path, v: &T) -> Result<(), String> {
     if let Some(d) = p.parent() {
         std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
     }
-    std::fs::write(p, serde_json::to_vec(v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+    // 先写临时文件再改名：中途被取消也不会留下写了一半的缓存；边序列化边写，不在内存里攒整份
+    let tmp = p.with_extension(format!("tmp{}", std::process::id()));
+    let f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+    let mut w = std::io::BufWriter::new(f);
+    serde_json::to_writer(&mut w, v).map_err(|e| e.to_string())?;
+    std::io::Write::flush(&mut w).map_err(|e| e.to_string())?;
+    drop(w);
+    std::fs::rename(&tmp, p).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

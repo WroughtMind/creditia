@@ -192,14 +192,56 @@ pub struct PrMeta {
 }
 
 /// HEAD 上存活的一行：来自哪个提交、该提交里的哪一行
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct BlameLine {
-    pub commit: String,
-    pub rel: String,
+#[derive(Clone, Copy, Debug)]
+pub struct BlameLine<'a> {
+    pub commit: &'a str,
+    pub rel: &'a str,
     pub key: u32,
-    /// 这一行在引入它的提交里是第几行（blame 的原行号）；0 是旧缓存
-    #[serde(default)]
+    /// 这一行在引入它的提交里是第几行（blame 的原行号）
     pub orig: u32,
+}
+
+/// 一个文件的 blame。提交和路径各存一次，每行只存下标：大仓库有几百万行，逐行存字符串太占内存
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
+pub struct BlameFile {
+    pub commits: Vec<String>,
+    pub rels: Vec<String>,
+    /// 每一行：[提交下标, 路径下标, 行哈希, 原行号]
+    pub lines: Vec<[u32; 4]>,
+}
+
+impl BlameFile {
+    pub fn len(&self) -> usize {
+        self.lines.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.lines.is_empty()
+    }
+    pub fn get(&self, i: usize) -> Option<BlameLine<'_>> {
+        let l = self.lines.get(i)?;
+        Some(BlameLine { commit: &self.commits[l[0] as usize], rel: &self.rels[l[1] as usize], key: l[2], orig: l[3] })
+    }
+    pub fn iter(&self) -> impl Iterator<Item = BlameLine<'_>> {
+        (0..self.lines.len()).filter_map(|i| self.get(i))
+    }
+    /// 追加一行（提交、路径去重）
+    pub fn push(&mut self, commit: &str, rel: &str, key: u32, orig: u32) {
+        let ci = match self.commits.iter().rposition(|c| c == commit) {
+            Some(i) => i,
+            None => {
+                self.commits.push(commit.to_string());
+                self.commits.len() - 1
+            }
+        };
+        let ri = match self.rels.iter().rposition(|r| r == rel) {
+            Some(i) => i,
+            None => {
+                self.rels.push(rel.to_string());
+                self.rels.len() - 1
+            }
+        };
+        self.lines.push([ci as u32, ri as u32, key, orig]);
+    }
 }
 
 // ───────────────────────── 归因 ─────────────────────────

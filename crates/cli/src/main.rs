@@ -507,6 +507,11 @@ use creditia_core::tr;
     let n_proj = lib.as_ref().and_then(|l| l.projects().ok()).map(|p| p.len()).unwrap_or(0);
     let mut lines = vec![];
     for h in &hs {
+        // 没装的工具：只说没找到，不列格式说明和打开失败的原文
+        if !h.readable && !h.unsupported && !std::path::Path::new(&h.path).exists() {
+            lines.push(format!("{:<15} {}", h.source, tr!("未找到", "not found")));
+            continue;
+        }
         lines.push(format!(
             "{:<15} {}  {}{}{}",
             h.source,

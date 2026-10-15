@@ -166,7 +166,7 @@ pub fn doctor(src: Src) -> Health {
     let rs = roots(src);
     Health {
         source: src.harness().into(),
-        path: rs.first().map(|p| p.display().to_string()).unwrap_or_else(|| creditia_core::tr!("（未安装）", "(not installed)")),
+        path: rs.first().map(|p| p.display().to_string()).unwrap_or_default(),
         readable: !rs.is_empty(),
         format: creditia_core::tr!("globalStorage/<扩展>/tasks/<任务>/ui_messages.json", "globalStorage/<extension>/tasks/<task>/ui_messages.json"),
         records: ts.len() as u64,

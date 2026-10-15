@@ -1,7 +1,7 @@
 //! git adapter：提交、逐行新增内容（只取哈希）、PR 划分、版本、存活代码、盖章 trailer
 
 use creditia_core::hash::{ext_of, line_key, normalize};
-use creditia_core::model::{excluded, BlameLine, Commit, FileAdd, PrMeta, Unit};
+use creditia_core::model::{excluded, BlameFile, Commit, FileAdd, PrMeta, Unit};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -291,7 +291,9 @@ pub fn versions(repo: &Path, parents: &HashMap<String, Vec<String>>, ignore: &[S
 }
 
 /// 存活代码：HEAD 上每一行来自哪个提交。只 blame 文本文件；按 blob 缓存
-pub fn blame_head(repo: &Path, rev: &str, cache: &mut HashMap<String, Vec<BlameLine>>) -> Vec<(String, Vec<BlameLine>)> {
+/// HEAD 上每个文本文件的 blame（按 blob 缓存）。几个线程从同一个队列里取文件；
+/// 跑的过程中每隔一分钟调一次 `save`，第一次分析大仓库时中途取消，下次接着跑
+pub fn blame_head(repo: &Path, rev: &str, cache: &mut HashMap<String, BlameFile>, save: &mut dyn FnMut(&HashMap<String, BlameFile>)) -> Vec<(String, BlameFile)> {
     let text: HashSet<String> = git(repo, &["grep", "-I", "-l", "-e", "", rev]).lines().filter_map(|l| l.split_once(':').map(|(_, p)| p)).map(String::from).collect();
     let tree = git(repo, &["ls-tree", "-r", rev]);
     let files: Vec<(String, String)> = tree
@@ -303,28 +305,38 @@ pub fn blame_head(repo: &Path, rev: &str, cache: &mut HashMap<String, Vec<BlameL
         })
         .collect();
     let todo: Vec<(String, String)> = files.iter().filter(|(b, _)| !cache.contains_key(b)).cloned().collect();
-    let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(10);
-    let chunks: Vec<Vec<(String, String)>> = todo.chunks(todo.len().div_ceil(n).max(1)).map(|c| c.to_vec()).collect();
-    let rev_s = rev.to_string();
-    let results: Vec<Vec<(String, Vec<BlameLine>)>> = std::thread::scope(|s| {
-        let hs: Vec<_> = chunks
-            .into_iter()
-            .map(|chunk| {
-                let rev_s = rev_s.clone();
-                s.spawn(move || chunk.into_iter().map(|(blob, path)| (blob, blame_file(repo, &rev_s, &path))).collect::<Vec<_>>())
-            })
-            .collect();
-        hs.into_iter().map(|h| h.join().unwrap()).collect()
-    });
-    for r in results.into_iter().flatten() {
-        cache.insert(r.0, r.1);
+    if !todo.is_empty() {
+        let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(10);
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let (tx, rx) = std::sync::mpsc::channel::<(String, BlameFile)>();
+        std::thread::scope(|s| {
+            for _ in 0..n {
+                let (tx, next, todo) = (tx.clone(), &next, &todo);
+                s.spawn(move || loop {
+                    let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let Some((blob, path)) = todo.get(i) else { break };
+                    if tx.send((blob.clone(), blame_file(repo, rev, path))).is_err() {
+                        break;
+                    }
+                });
+            }
+            drop(tx);
+            let mut saved = std::time::Instant::now();
+            for (blob, bf) in rx {
+                cache.insert(blob, bf);
+                if saved.elapsed().as_secs() >= 60 {
+                    save(cache);
+                    saved = std::time::Instant::now();
+                }
+            }
+        });
     }
     files.into_iter().map(|(b, p)| (p, cache.get(&b).cloned().unwrap_or_default())).collect()
 }
 
-fn blame_file(repo: &Path, rev: &str, path: &str) -> Vec<BlameLine> {
+fn blame_file(repo: &Path, rev: &str, path: &str) -> BlameFile {
     let out = git(repo, &["blame", "--porcelain", rev, "--", path]);
-    let mut res = vec![];
+    let mut res = BlameFile::default();
     let (mut commit, mut file, mut orig) = (String::new(), String::new(), 0u32);
     let mut files: HashMap<String, String> = HashMap::new();
     for l in out.lines() {
@@ -332,7 +344,7 @@ fn blame_file(repo: &Path, rev: &str, path: &str) -> Vec<BlameLine> {
             let rel = files.get(&commit).cloned().unwrap_or_else(|| file.clone());
             let n = normalize(code, &ext_of(&rel));
             let key = if n.chars().count() < 4 { 0 } else { line_key(&rel, &n) };
-            res.push(BlameLine { commit: commit.clone(), rel, key, orig });
+            res.push(&commit, &rel, key, orig);
         } else if let Some(f) = l.strip_prefix("filename ") {
             file = f.to_string();
             files.insert(commit.clone(), file.clone());
