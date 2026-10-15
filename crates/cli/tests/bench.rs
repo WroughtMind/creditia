@@ -287,6 +287,53 @@ impl Sim {
         self.agent_set(who, path, v, false);
     }
 
+    /// agent 用 shell 命令改文件：命令原文里带着新内容（heredoc 或 python 脚本）。`read_only` 时命令只读文件、不改
+    fn agent_shell(&mut self, who: &'static str, path: &str, new: Vec<String>, how: &str) {
+        self.t += 120;
+        let old = self.texts(path);
+        let cmd = match how {
+            "heredoc" => format!("mkdir -p $(dirname {path}) && cat > {path} <<'EOF'\n{}\nEOF", new.join("\n")),
+            "python" => {
+                // 只把改动的部分写进脚本：旧的那几行换成新的那几行
+                let added: Vec<&str> = new.iter().filter(|l| !old.contains(l)).map(|s| s.as_str()).collect();
+                format!("python3 - <<'PY'\np = '{path}'\ns = open(p).read()\ns = s.replace(\"__ANCHOR__\", \"\"\"\n{}\n\"\"\")\nopen(p, 'w').write(s)\nPY", added.join("\n"))
+            }
+            _ => format!("cat {path} | head -50 && grep -n fn {path}"),
+        };
+        if how != "read" {
+            let prev = self.files.get(path).cloned().unwrap_or_default();
+            let mut next = vec![];
+            for (c, i, j) in diff(&old, &new) {
+                match c {
+                    ' ' => next.push(prev[i].clone()),
+                    '+' => next.push(L { text: new[j].clone(), who }),
+                    _ => {}
+                }
+            }
+            self.files.insert(path.to_string(), next);
+            self.write_disk(path);
+        }
+        let (h, model) = who.split_once('/').unwrap();
+        let cwd = self.repo.display().to_string();
+        match h {
+            "claude-code" => {
+                self.claude_n += 1;
+                let id = format!("toolu_{}", self.claude_n);
+                self.claude.push(json!({ "type": "assistant", "cwd": cwd, "sessionId": "s1", "timestamp": iso(self.t), "message": { "id": format!("msg_{}", self.claude_n), "model": model, "usage": { "input_tokens": 10, "output_tokens": 10 }, "content": [{ "type": "tool_use", "id": id, "name": "Bash", "input": { "command": cmd, "description": "write file" } }] } }));
+                self.claude.push(json!({ "type": "user", "cwd": cwd, "sessionId": "s1", "timestamp": iso(self.t + 1), "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": id, "content": "", "is_error": false }] }, "toolUseResult": { "stdout": "", "stderr": "", "interrupted": false } }));
+            }
+            "codex" => {
+                self.claude_n += 1;
+                let id = format!("call_{}", self.claude_n);
+                self.codex.push(json!({ "timestamp": iso(self.t - 1), "type": "turn_context", "payload": { "model": model, "cwd": cwd } }));
+                let args = json!({ "command": ["bash", "-lc", cmd], "workdir": cwd }).to_string();
+                self.codex.push(json!({ "timestamp": iso(self.t), "type": "response_item", "payload": { "type": "function_call", "name": "shell", "arguments": args, "call_id": id } }));
+                self.codex.push(json!({ "timestamp": iso(self.t + 1), "type": "response_item", "payload": { "type": "function_call_output", "call_id": id, "output": json!({ "output": "", "metadata": { "exit_code": 0, "duration_seconds": 0.1 } }).to_string() } }));
+            }
+            _ => unreachable!(),
+        }
+    }
+
     fn agent_new(&mut self, who: &'static str, path: &str, n: usize) {
         let v = self.gen(path, n);
         self.agent_set(who, path, v, true);
@@ -623,10 +670,31 @@ fn accuracy_bench() {
 
     s.scene("18 agent 用 shell 写文件");
     s.agent_edit(GPT, "web/b.ts", 10, 0, 8);
-    s.lost = true;
-    s.agent_new(GPT, "web/gen.ts", 40);
+    {
+        let v = s.gen("web/gen.ts", 40);
+        s.agent_shell(GPT, "web/gen.ts", v, "heredoc");
+        let v = s.gen("src/sh.rs", 30);
+        s.agent_shell(OPUS, "src/sh.rs", v, "heredoc");
+        // python 脚本原地插入 6 行
+        let mut v = s.texts("src/sh.rs");
+        let add = s.gen("src/sh.rs", 6);
+        v.splice(12..12, add);
+        s.agent_shell(OPUS, "src/sh.rs", v, "python");
+    }
+    s.commit("shell-written files");
+
+    s.scene("18b 生成脚本的输出");
+    s.agent_edit(GPT, "web/b.ts", 30, 0, 8);
+    s.lost = true; // 内容是程序生成的，日志里只有一条命令
+    s.agent_new(GPT, "web/generated.ts", 40);
     s.lost = false;
-    s.commit("codex edit + shell-written file");
+    s.commit("codex edit + generator output");
+
+    s.scene("18c agent 只读了人写的文件");
+    s.human_edit("src/readme_me.rs", 0, 40);
+    s.agent_shell(OPUS, "src/readme_me.rs", vec![], "read");
+    s.agent_shell(GPT, "src/readme_me.rs", vec![], "read");
+    s.commit("hand file the agents only read");
 
     s.scene("19 人在 agent 代码中间插几行");
     s.agent_new(OPUS, "src/mid.rs", 40);
