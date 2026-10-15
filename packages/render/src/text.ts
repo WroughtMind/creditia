@@ -1,6 +1,6 @@
 // 文本产物：CREDITS.md 区块、版本说明、PR 评论、终端名片、嵌入代码。都读同一个模型。
 import type { Model } from './data.ts';
-import { fmt, pct, compact, nameOf } from './data.ts';
+import { fmt, pct, compact, nameOf, modelName } from './data.ts';
 import { handFacts, peopleNames } from './pieces/common.ts';
 
 export const MARK_START = '<!-- creditia:start -->';
@@ -74,13 +74,42 @@ export function releaseNotes(m: Model, tag: string): string {
 export function prComment(m: Model, id: string): string {
   const u = m.units.find((x: any) => x.id === id);
   if (!u) return '';
+  return sharesLine(m, (u.shares ?? []).map((s: any) => [s.contributor, s.share] as [string, number]));
+}
+
+/** 只写 AI 和「未确认」：份额 → 一行 `**creditia** · 工具 (模型) 71% · …` */
+function sharesLine(m: Model, shares: [string, number][]): string {
   const contribs = m.raw.contributors ?? [];
-  const parts = (u.shares ?? []).filter((s: any) => s.contributor === 'unattributed' || contribs.find((x: any) => x.id === s.contributor)?.harness).map((s: any) => {
-    const c = contribs.find((x: any) => x.id === s.contributor);
-    const name = c?.harness ? `${nameOf(c.harness, m.lang)}${c.model ? ` (${c.model})` : ''}` : nameOf('unattributed', m.lang);
-    return `${name} ${Math.round(s.share * 100)}%`;
+  const parts = shares.filter(([id]) => id === 'unattributed' || contribs.find((x: any) => x.id === id)?.harness).map(([id, share]) => {
+    const c = contribs.find((x: any) => x.id === id);
+    const name = c?.harness ? `${nameOf(c.harness, m.lang)}${c.model ? ` (${modelName(c.model)})` : ''}` : nameOf('unattributed', m.lang);
+    return `${name} ${Math.round(share * 100)}%`;
   });
-  return `**creditia** · ${parts.join(' · ')}\n`;
+  return parts.length ? `**creditia** · ${parts.join(' · ')}\n` : '';
+}
+
+/** 一组提交（PR 分支上的）的署名：含这些提交的单元按行数加权。档案里还没有这些提交时返回空串 */
+export function commitsComment(m: Model, shas: string[]): string {
+  const want = shas.map((s) => s.trim().toLowerCase()).filter((s) => s.length >= 7);
+  const hit = (c: string) => want.some((s) => c.startsWith(s) || s.startsWith(c));
+  const by = new Map<string, number>();
+  let total = 0;
+  for (const u of m.units as any[]) {
+    if (!(u.commits ?? []).some((c: string) => hit(String(c).toLowerCase()))) continue;
+    const lines = Number(u.lines) > 0 ? Number(u.lines) : 1;
+    for (const s of u.shares ?? []) { by.set(s.contributor, (by.get(s.contributor) ?? 0) + s.share * lines); total += s.share * lines; }
+  }
+  if (!total) return '';
+  return sharesLine(m, [...by].sort((a, b) => b[1] - a[1]).map(([id, v]): [string, number] => [id, v / total]).filter(([, x]) => x >= 0.005));
+}
+
+/** 把一段署名放进已有的文字（Release 说明、PR 评论）：有标记就换掉标记之间的，没有就接在后面 */
+export const RELEASE_START = '<!-- creditia:release -->', RELEASE_END = '<!-- /creditia:release -->';
+export function mergeMarked(existing: string, block: string, start = RELEASE_START, end = RELEASE_END): string {
+  const wrapped = `${start}\n${block.trim()}\n${end}`;
+  const a = existing.indexOf(start), b = existing.indexOf(end);
+  if (a >= 0 && b > a) return existing.slice(0, a) + wrapped + existing.slice(b + end.length);
+  return existing.trim() ? `${existing.trimEnd()}\n\n${wrapped}\n` : `${wrapped}\n`;
 }
 
 /** 嵌入代码 */

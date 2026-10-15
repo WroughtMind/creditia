@@ -48,12 +48,15 @@ creditia doc                                  # write CREDITS.md (only its marke
 creditia export --piece roll --out roll.png   # end credits
 creditia export --list                        # every piece, layout, style and format
 creditia hook install                         # stamp future commits, so they count even after logs are gone
+creditia release install                      # release credits: credits in release notes and PR comments
 creditia blame src/core/analyze.ts:12         # which tool and model wrote this line
 ```
 
 One project in several places (worktrees, scratch clones, another machine): `creditia paths` lists the registered paths, `creditia link <path>` adds one.
 
 Pieces list one row per tool by default. When one tool wrote nearly everything and switched models along the way, they switch to one row per model on their own. Pick with `--group tool` / `--group model`, or flip it in the App's top bar and go back to automatic any time. Multi-model bars also come in "split" and "grouped" layouts, and the donut has a "nested" one.
+
+Commit stamps and release credits both change your repository, so they are your call, per project: `init` / `analyze` ask once in a terminal (the answer goes into `.creditia/config.json` and isn't asked again), and the App shows both switches at the top of each project's wall, ready to flip back any time. `creditia integrations` shows where they stand.
 
 ## Every line has a source
 
@@ -81,7 +84,7 @@ See them all side by side on the [website's style wall](https://wroughtmind.gith
 
 **Your agent** — install [skills/creditia](skills/creditia/SKILL.md) into your agent and ask it which AIs wrote this repo. It analyzes and renders step by step, and asks you before publishing or committing anything.
 
-**GitHub Action** — CI can't see anyone's agent logs, so analysis runs locally: `creditia publish` writes the record to `credits.json` at the repo root; commit it. On every push the Action redraws the credits page from it, and can also write a badge (`badge:`) and CREDITS.md (`doc:`).
+**GitHub Action** — CI can't see anyone's agent logs, so analysis runs locally: `creditia publish` writes the record to `credits.json` at the repo root; commit it. On every push the Action redraws the credits page from it, and can also write a badge (`badge:`) and CREDITS.md (`doc:`). It can put each release's credits into its release notes (`release-notes: true`) and comment a PR's credits on it, updated on every push (`pr-comment: true`); `creditia release install` writes that workflow for you.
 
 ```yaml
 # .github/workflows/credits.yml

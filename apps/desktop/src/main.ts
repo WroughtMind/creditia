@@ -13,6 +13,10 @@ import { LOGO_SVG } from './logo.ts';
 const native = (window as any).__TAURI__?.core?.invoke as ((cmd: string, args?: any) => Promise<any>) | undefined;
 /** 官网上的演示：页面先放好样例档案（window.__CREDITIA_DEMO__），导出的文件交给外层页面摆到「桌面」上 */
 const demo = (window as any).__CREDITIA_DEMO__ as { projects: any[]; credits: Record<string, any>; doctor: any[] } | undefined;
+const devPlugs: Plugs = {
+  hook: { installed: false, decided: null, path: '.git/hooks/prepare-commit-msg' },
+  release: { installed: false, decided: null, path: '.github/workflows/creditia.yml', github: true, published: true },
+};
 async function api(cmd: string, args: any = {}): Promise<any> {
   if (native) return native(cmd, args);
   const get = (u: string) => fetch(u).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
@@ -29,6 +33,13 @@ async function api(cmd: string, args: any = {}): Promise<any> {
       return `~/Downloads/${args.name}`;
     }
     case 'set_display': return null;
+    // 浏览器里（开发、官网演示）没有仓库可写：开关只在内存里拨
+    case 'integrations': return structuredClone(devPlugs);
+    case 'set_integration': {
+      const k = args.which as 'hook' | 'release';
+      devPlugs[k] = { ...devPlugs[k], installed: args.on, decided: args.on };
+      return { installed: args.on, summary: args.on ? L(`已写入 ${devPlugs[k].path}`, `Wrote ${devPlugs[k].path}`) : L('已关闭', 'Turned off') };
+    }
     default: throw new Error(L('这一步要在 App 里运行', 'Only available in the desktop app'));
   }
 }
@@ -77,6 +88,7 @@ const ERRORS: Record<string, [string, string]> = {
   io: ['读写文件失败', 'Could not read or write the file'],
   store: ['读不到作品库', 'Cannot read the library'],
   not_allowed: ['只能打开这次导出的文件', 'Only files exported in this session can be shown'],
+  switch_failed: ['没能改这一项', "Couldn't change this"],
 };
 function errText(e: any): string {
   const t = e?.code && ERRORS[e.code], d = e?.detail ? String(e.detail) : '';
@@ -120,7 +132,7 @@ async function openProject(p: any) {
   const seq = ++state.openSeq;
   state.current = p; store.set('project', p.id);
   state.raw = null; state.model = null; state.arts.clear(); state.variants = {};
-  $('#group').hidden = true;
+  $('#group').hidden = true; plugs = null; renderPlugs();
   ++state.token; // 让正在画的旧项目停下
   $('#board').innerHTML = '';
   $('#pname').textContent = p.name; $('#pmeta').textContent = L('读取中…', 'Loading…');
@@ -140,6 +152,7 @@ async function openProject(p: any) {
   $('#empty').hidden = true; emptyView = null;
   setGroup(groupPref());
   rebuildModel();
+  loadPlugs(p);
   await paint();
 }
 
@@ -178,6 +191,51 @@ function rebuildModel() {
   $('#pname').textContent = m.project || state.current?.name;
   $('#pmeta').textContent = `${fmt(m.commits)} ${L('次提交', 'commits')} · ${fmt(m.linesAdded)} ${L('行', 'lines')}`;
   renderGroup();
+  renderPlugs();
+}
+
+// ───────────────────────── 接入：提交盖章、跟着发版 ─────────────────────────
+// 两项都会改用户的仓库，所以每个项目由用户自己决定。没决定过时这一条醒目地摆在作品墙最上面问；
+// 决定过之后照样留在那里，随时能拨回去。开关交给核心的 hook / release install|uninstall，决定记进项目配置
+type Plug = { installed: boolean; decided: boolean | null; path: string; github?: boolean; published?: boolean };
+type Plugs = { hook: Plug; release: Plug };
+let plugs: Plugs | null = null, plugBusy = '';
+async function loadPlugs(p: any) {
+  try { const r = await api('integrations', { projectId: p.id }); if (p === state.current) plugs = r; }
+  catch { if (p === state.current) plugs = null; }
+  renderPlugs();
+}
+function renderPlugs() {
+  const el = $('#plug');
+  if (!plugs || !state.raw) { el.hidden = true; return; }
+  const ask = (['hook', 'release'] as const).filter((k) => plugs![k].decided == null);
+  el.hidden = false;
+  el.classList.toggle('ask', ask.length > 0);
+  const rel = plugs.release;
+  const item = (k: 'hook' | 'release', title: string, desc: string, note = '') => {
+    const on = plugs![k].installed;
+    return `<div class="sw${on ? ' on' : ''}${plugBusy === k ? ' busy' : ''}${plugs![k].decided == null ? ' new' : ''}">
+      <span class="t"><b>${esc(title)}</b><small>${esc(desc)}</small>${note ? `<small class="note">${esc(note)}</small>` : ''}</span>
+      <button role="switch" aria-checked="${on}" aria-label="${esc(title)}" data-k="${k}" ${plugBusy ? 'disabled' : ''}><i></i></button></div>`;
+  };
+  el.innerHTML = (ask.length ? `<p class="q"><b>${L('这个项目要接入下面两项吗？', 'Add these to this project?')}</b>${L('都只改这一个仓库，随时能关。', 'Each changes only this repository and can be turned off any time.')}</p>` : '')
+    + `<div class="row">${item('hook', L('提交盖章', 'Commit stamps'), L('在 agent 里提交时，提交信息自动带上工具和模型。日志清理后也认得出', 'Commits made in an agent carry the tool and model, so they stay recognizable after logs are cleaned up'))}`
+    + item('release', L('跟着发版', 'Release credits'), L('发 Release 时把署名写进说明，PR 上评论署名。写一个 GitHub workflow，要你提交', 'Credits go into release notes and PR comments. Writes a GitHub workflow for you to commit'),
+      rel.installed && !rel.published ? L('仓库根目录还没有 credits.json：在项目里运行 creditia publish', 'No credits.json at the repo root yet: run creditia publish in the project') : rel.github === false && !rel.installed ? L('这个仓库没有 GitHub 远程', 'This repository has no GitHub remote') : '')
+    + `</div>` + (ask.length ? `<button class="later" data-act="later">${L(ask.length > 1 ? '都先不用' : '先不用', ask.length > 1 ? 'Not now, neither' : 'Not now')}</button>` : '');
+  el.querySelectorAll<HTMLElement>('button[data-k]').forEach((b) => (b.onclick = () => setPlug(b.dataset.k as 'hook' | 'release', !plugs![b.dataset.k as 'hook' | 'release'].installed)));
+  const later = el.querySelector<HTMLElement>('.later');
+  if (later) later.onclick = async () => { for (const k of ask) await setPlug(k, false, true); };
+}
+async function setPlug(k: 'hook' | 'release', on: boolean, quiet = false) {
+  const p = state.current; if (!p || plugBusy) return;
+  plugBusy = k; renderPlugs();
+  try {
+    const r = await api('set_integration', { projectId: p.id, which: k, on, lang: state.lang });
+    if (!quiet && r?.summary) toast(String(r.summary), 7000);
+  } catch (e: any) { toast(errText(e), 8000); }
+  finally { plugBusy = ''; }
+  await loadPlugs(p);
 }
 
 // ───────────────────────── 分组：按工具 / 按模型 ─────────────────────────

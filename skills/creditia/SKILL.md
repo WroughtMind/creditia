@@ -21,17 +21,21 @@ description: 分析一个仓库的代码是哪些 AI 工具和模型写的：读
 2. **初始化**（还没有 `.creditia/config.json` 时）：`creditia init --json`。把识别出的「你的提交身份」（邮箱）念给用户确认——它只用来区分「用户自己的提交」和「别人的提交」。
 3. **多处路径**：项目如果在别的目录、别的电脑上也做过（worktree、临时克隆、旧路径），`creditia paths --json` 看已登记的，`creditia link <路径> --json` 补上。
 4. **分析**：`creditia analyze --github --json`。汇报各工具占比、未确认比例、逐行证据覆盖。未确认超过 20% 时说明原因（日志被清理、工具不在支持范围、提交里没有声明），问用户要不要换口径或接受现状。
-5. **选样子**：`creditia export --list --json` 看全部作品、版式、风格。推荐几种给用户，用户选。
-6. **预览**：导出 PNG 给用户看，例如 `creditia export --piece tier --style ink --format png --out /tmp/tier.png --json`。
-7. **产出**（用户确认后）：
+5. **问两项接入**（`init` / `analyze` 的返回里有 `ask` 时必须做，不能替用户决定，也不能跳过）：`ask` 里列的是这个项目还没决定的项。逐项用一两句话讲清楚它会改什么，问用户要不要：
+   - `hook`（提交盖章）：在仓库的 git `prepare-commit-msg` hook 里加一行。之后在 agent 里提交时，提交信息末尾自动加 `Creditia-Harness` / `Creditia-Model`，本机日志清理后也认得出。只影响这个仓库。要：`creditia hook install --json`；不要：`creditia hook uninstall --json`
+   - `release`（跟着发版）：写 `.github/workflows/creditia.yml`，需要用户自己提交。发 Release 时把这一版的署名写进说明，PR 上评论这个 PR 的署名；读的是仓库里的 `credits.json`（`creditia publish` 写出）。要：`creditia release install --json`；不要：`creditia release uninstall --json`
+
+   两种回答都要执行对应命令：答案会记进 `.creditia/config.json`，以后不再问。随时可以改，`creditia integrations --json` 看现状；App 里每个项目也有这两个开关。
+6. **选样子**：`creditia export --list --json` 看全部作品、版式、风格。推荐几种给用户，用户选。
+7. **预览**：导出 PNG 给用户看，例如 `creditia export --piece tier --style ink --format png --out /tmp/tier.png --json`。
+8. **产出**（用户确认后）：
    - 档案：`creditia doc --json`
    - 徽章：`creditia export --piece badge --format svg --out assets/credits-badge.svg`
    - 分享图：`creditia export --piece share --style glass --format png --size og --out assets/credits.png`
    - 片尾字幕：`creditia export --piece roll --variant slate --format png --out credits.png`（版式见 `--list`；`--format gif` 出动画，`--list` 里标了哪些作品会动）
    - 全部作品一页：`creditia board --style minimal --out credits.html`
    - 放到 GitHub：`creditia publish --json`（写仓库根目录的 credits.json，返回将公开的字段，先念给用户确认），再按 README「放到 GitHub 上」加 workflow
-8. **接入**：改官网 / README 时先给用户看 diff，确认后再写。
-9. **可选**：`creditia hook install`，之后每次提交自动盖章。
+9. **接入**：改官网 / README 时先给用户看 diff，确认后再写。
 
 ## 给自己盖章
 
@@ -62,4 +66,7 @@ creditia blame src/foo.ts:42 --json
 creditia paths --json
 creditia link /path/on/another/machine --json
 creditia doctor --json
+creditia integrations --json
+creditia hook install|uninstall|status --json
+creditia release install|uninstall|status --json
 ```

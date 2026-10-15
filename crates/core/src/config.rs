@@ -38,6 +38,38 @@ pub struct Display {
     pub sign: String,
 }
 
+/// 用户对两项接入的决定。None 是还没问过
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Integrations {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hook: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release: Option<bool>,
+}
+impl Integrations {
+    pub fn is_empty(&self) -> bool {
+        self.hook.is_none() && self.release.is_none()
+    }
+    /// 读项目里记下的决定。配置文件不完整也能读（只认 integrations 这一段）
+    pub fn of(repo: &Path) -> Integrations {
+        let v: serde_json::Value = std::fs::read_to_string(repo.join(".creditia/config.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        serde_json::from_value(v["integrations"].clone()).unwrap_or_default()
+    }
+    /// 记下一项决定（which 是 hook / release），配置里别的字段原样保留
+    pub fn record(repo: &Path, which: &str, on: bool) -> Result<(), String> {
+        let p = repo.join(".creditia/config.json");
+        let mut v: serde_json::Value = std::fs::read_to_string(&p).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
+        if !v["integrations"].is_object() {
+            v["integrations"] = serde_json::json!({});
+        }
+        v["integrations"][which] = serde_json::json!(on);
+        if let Some(d) = p.parent() {
+            std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&p, serde_json::to_string_pretty(&v).map_err(|e| e.to_string())? + "\n").map_err(|e| e.to_string())
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
@@ -79,6 +111,9 @@ pub struct Config {
     pub privacy: Privacy,
     #[serde(default)]
     pub display: Display,
+    /// 这个项目要不要接入提交盖章 hook、跟着发版的 workflow：用户回答过才有值，没回答过的会在 init / analyze 时问
+    #[serde(default, skip_serializing_if = "Integrations::is_empty")]
+    pub integrations: Integrations,
     /// schema 版本，升级时迁移
     #[serde(default = "one")]
     pub version: u32,
@@ -112,6 +147,7 @@ impl Default for Config {
             ignore_tags: default_ignore_tags(),
             privacy: Privacy::default(),
             display: Display::default(),
+            integrations: Integrations::default(),
             version: 1,
         }
     }
@@ -211,6 +247,21 @@ mod tests {
         assert!(Config::load(&dir.join("missing.json")).unwrap_err().contains("读取"));
         std::fs::write(dir.join("bad.json"), "{ not json").unwrap();
         assert!(Config::load(&dir.join("bad.json")).unwrap_err().contains("解析"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn integrations_are_recorded_without_touching_the_rest() {
+        let dir = std::env::temp_dir().join(format!("creditia-config-int-{}", std::process::id()));
+        assert_eq!(Integrations::of(&dir), Integrations::default());
+        let c = Config { name: "demo".into(), level: "strict".into(), ..Config::default() };
+        c.save(&dir.join(".creditia/config.json")).unwrap();
+        assert!(!std::fs::read_to_string(dir.join(".creditia/config.json")).unwrap().contains("integrations"), "没决定过就不写");
+        Integrations::record(&dir, "hook", true).unwrap();
+        Integrations::record(&dir, "release", false).unwrap();
+        assert_eq!(Integrations::of(&dir), Integrations { hook: Some(true), release: Some(false) });
+        let back = Config::load(&dir.join(".creditia/config.json")).unwrap();
+        assert_eq!((back.level.as_str(), back.integrations.hook), ("strict", Some(true)));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

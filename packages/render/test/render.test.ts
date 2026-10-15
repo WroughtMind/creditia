@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { buildModel, STYLES, PIECES, art, frames, raster } from '../src/index.ts';
 import { makeExporter, sized } from '../src/export.ts';
-import { creditsBlock, fetchSegs } from '../src/text.ts';
+import { creditsBlock, fetchSegs, commitsComment, mergeMarked } from '../src/text.ts';
 import { hanzi, modelName, resolveGroup } from '../src/data.ts';
 import * as C from '../src/classic/data.ts';
 import { creditsOf } from '../src/pieces/roll.ts';
@@ -167,4 +167,21 @@ test('旧档案：按天、按文件的 key 是工具名时，按模型分组也
   for (const d of old.days ?? []) d.by = Object.fromEntries(Object.entries(d.by).map(([k, v]) => [k.startsWith('a:') ? k.slice(2).split('/')[0] : k, v]));
   const mm = buildModel(old);
   for (const id of ['calendar', 'mosaic', 'codemap']) assert.ok(art(id, mm, STYLES[0], {}), id);
+});
+
+test('PR 评论按分支上的提交汇总；Release 说明只换掉上次放的那段', () => {
+  const units = [
+    { commits: ['aaaaaaa1111111111'], lines: 300, shares: [{ contributor: 'a:claude-code/claude-opus-5-5', share: 1 }] },
+    { commits: ['bbbbbbb2222222222'], lines: 100, shares: [{ contributor: 'a:codex/gpt-5.6-sol', share: 0.998 }, { contributor: 'unattributed', share: 0.002 }] },
+    { commits: ['ccccccc3333333333'], lines: 999, shares: [{ contributor: 'a:kimi/kimi-k3', share: 1 }] },
+  ];
+  const mm = { ...m, units, lang: 'en' as const };
+  const s = commitsComment(mm, ['aaaaaaa1111111111', 'bbbbbbb']);
+  assert.equal(s, '**creditia** · Claude Code (Claude Opus 5.5) 75% · Codex (GPT-5.6 Sol) 25%\n');
+  assert.equal(commitsComment(mm, ['0000000deadbeef']), '');
+  const once = mergeMarked('My notes', '### Credits\n\nA 60%');
+  assert.ok(once.startsWith('My notes\n\n<!-- creditia:release -->'), once);
+  const twice = mergeMarked(once, '### Credits\n\nB 40%');
+  assert.equal(twice.split("<!-- creditia:release -->").length, 2);
+  assert.ok(twice.includes('B 40%') && !twice.includes('A 60%') && twice.startsWith('My notes'), twice);
 });
