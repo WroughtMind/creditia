@@ -20,6 +20,8 @@ export interface Agent {
   survival: number;
   /** 有逐行证据的比例 */
   verified: number;
+  /** 按证据等级的行数：逐行证据、明确声明、推断（旧档案没有时都是 0） */
+  proof?: { verified: number; declared: number; inferred: number };
   models: ModelLine[];
   providers: string[];
   sessions: number;
@@ -170,6 +172,8 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
     const a = agentsBy.get(gr.key) ?? { key: gr.key, name: nameOf(gr.key, lang), kind: gr.kind === 'unknown' ? 'unknown' : gr.kind, lines: 0, pct: 0, surviving: 0, survival: 0, verified: 0, models: [], providers: [], sessions: 0, tokens: 0, first: '', last: '', rank: 0 } as Agent;
     a.lines += lines; a.surviving += surv;
     verifiedBy.set(gr.key, (verifiedBy.get(gr.key) ?? 0) + ver);
+    const pf = (a.proof ??= { verified: 0, declared: 0, inferred: 0 });
+    pf.verified += ver; pf.declared += n(b.byEvidence?.declared?.linesAdded); pf.inferred += n(b.byEvidence?.inferred?.linesAdded);
     agentsBy.set(gr.key, a);
     const model = byId.get(b.contributor)?.model;
     if (gr.kind === 'agent' && model) {
@@ -212,7 +216,8 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
   const rows: Agent[] = [...shown];
   const restLines = rest.reduce((s, x) => s + x.lines, 0);
   if (pctOf(restLines) >= 0.1) {
-    rows.push({ key: 'other', name: nameOf('other', lang), kind: 'other', lines: restLines, pct: pctOf(restLines), surviving: rest.reduce((s, x) => s + x.surviving, 0), survival: 0, verified: 0, models: [], providers: [], sessions: rest.reduce((s, x) => s + x.sessions, 0), tokens: 0, first: '', last: '', rank: rows.length });
+    const sum = (k: 'verified' | 'declared' | 'inferred') => rest.reduce((s, x) => s + (x.proof?.[k] ?? 0), 0);
+    rows.push({ key: 'other', name: nameOf('other', lang), kind: 'other', lines: restLines, pct: pctOf(restLines), surviving: rest.reduce((s, x) => s + x.surviving, 0), survival: 0, verified: 0, proof: { verified: sum('verified'), declared: sum('declared'), inferred: sum('inferred') }, models: [], providers: [], sessions: rest.reduce((s, x) => s + x.sessions, 0), tokens: 0, first: '', last: '', rank: rows.length });
   }
   if (unknown && unknown.pct >= 0.05) { unknown.name = nameOf('unattributed', lang); unknown.rank = 99; rows.push(unknown); }
 

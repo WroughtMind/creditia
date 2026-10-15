@@ -1,4 +1,4 @@
-// 统计图：环形、华夫饼、周河流图、会话泳道、作息打卡、版本、留存、文件马赛克、日历。
+// 统计图：环形、华夫饼、周河流图、会话泳道、作息打卡、版本、留存、文件马赛克、日历、出处、板块。
 // 颜色、条形、标记都走风格钩子，所以每张图在每个风格里都是那个风格的样子。
 import { Scene, rect, line, path, circle, el, g, r, ease, arc, mix } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
@@ -318,3 +318,97 @@ export function calendar(m: Model, st: Style, o: PieceOpts): Scene | null {
 }
 
 void line; void el; void g; void mix;
+
+// ───────────────────────── 出处：每一行凭什么算它的 ─────────────────────────
+
+/** 三种证据各用同一个颜色的三种浓度：逐行证据最实，推断最淡 */
+const PROOF: { k: 'verified' | 'declared' | 'inferred'; o: number; zh: string; en: string }[] = [
+  { k: 'verified', o: 1, zh: '逐行证据', en: 'Line evidence' },
+  { k: 'declared', o: 0.55, zh: '明确声明', en: 'Declared' },
+  { k: 'inferred', o: 0.25, zh: '推断', en: 'Inferred' },
+];
+
+export function evidence(m: Model, st: Style, o: PieceOpts): Scene | null {
+  const list = m.rows.filter((a) => a.lines > 0 && (a.key === 'unattributed' || (a.proof && a.proof.verified + a.proof.declared + a.proof.inferred > 0)));
+  if (!list.some((a) => a.key !== 'unattributed')) return null;
+  const t = o.t ?? 1;
+  const rowH = 74;
+  const head = 150;
+  const { s, p } = frame(m, st, 1200, head + list.length * rowH + 40, T(m, '出处', 'EVIDENCE'), T(m, '每一行凭什么算它的', 'What each line rests on'), false);
+  // 头条：全部 AI 行里有逐行证据的比例
+  st.num(s, `${Math.round(m.verifiedShare * 100 * ease(t))}%`, p.x, p.y + 64, 64, 'start');
+  s.text(T(m, '的行有逐行证据：日志里记着这一行，提交里也有这一行', 'of the lines have line evidence: a log wrote the line, and a commit has it'), p.x, p.y + 104, { font: st.f.body, size: 17, fill: st.c.soft, maxW: p.w });
+  const max = Math.max(...list.map((a) => a.lines));
+  const x0 = p.x + 230, w = p.w - 330;
+  list.forEach((a, i) => {
+    const y = p.y + head + i * rowH;
+    const k = ease(t, i, list.length);
+    st.mark(s, a.key, p.x + 14, y + 22, 24);
+    s.text(a.name, p.x + 36, y + 30, { font: st.f.body, size: 17, fill: st.c.ink, maxW: 170 });
+    const full = (a.lines / max) * w * k;
+    if (a.key === 'unattributed') {
+      s.add(rect(x0, y + 10, Math.max(2, full), 26, { fill: st.hatch(s), rx: Math.min(st.radius, 6) }));
+      s.text(T(m, '没有证据', 'no evidence'), p.x + p.w, y + 30, { font: st.f.body, size: 15, fill: st.c.faint, anchor: 'end' });
+      s.hit(p.x, y, p.w, rowH - 6, tip(m, a));
+      return;
+    }
+    const pf = a.proof!;
+    const tot = pf.verified + pf.declared + pf.inferred || 1;
+    let x = x0;
+    PROOF.forEach((q, j) => {
+      const ww = (pf[q.k] / tot) * full;
+      if (ww <= 0) return;
+      if (j === 0) st.bar(s, x, y + 10, Math.max(2, ww), 26, colorOf(st, a), i);
+      else s.add(rect(x, y + 10, ww, 26, { fill: colorOf(st, a), opacity: q.o, rx: Math.min(st.radius, 6) }));
+      x += ww;
+    });
+    st.num(s, `${Math.round((pf.verified / tot) * 100)}%`, p.x + p.w, y + 32, 22, 'end');
+    s.hit(p.x, y, p.w, rowH - 6, { ...tip(m, a), d: PROOF.filter((q) => pf[q.k] > 0).map((q) => T(m, `${q.zh} ${fmt(pf[q.k])} 行`, `${q.en}: ${fmt(pf[q.k])} lines`)) });
+  });
+  // 图例：浓淡说明
+  let lx = x0;
+  const ly = p.y + head + list.length * rowH + 20;
+  for (const q of [...PROOF.map((q) => ({ t: T(m, q.zh, q.en), o: q.o, h: false })), ...(list.some((a) => a.key === 'unattributed') ? [{ t: T(m, '未确认', 'Unattributed'), o: 1, h: true }] : [])]) {
+    s.add(rect(lx, ly - 11, 14, 14, { fill: q.h ? st.hatch(s) : st.c.ink, opacity: q.o, rx: Math.min(3, st.radius) }));
+    lx += s.text(q.t, lx + 22, ly + 1, { font: st.f.body, size: 15, fill: st.c.soft }) + 46;
+  }
+  return s;
+}
+
+// ───────────────────────── 板块：哪一块是谁写的 ─────────────────────────
+
+const AREAS: [string, string, string][] = [
+  ['core', '核心', 'Core'], ['frontend', '界面', 'Interface'], ['tests', '测试', 'Tests'], ['docs', '文档', 'Docs'], ['build', '构建与发布', 'Build & release'], ['assets', '素材', 'Assets'],
+];
+
+export function areas(m: Model, st: Style, o: PieceOpts): Scene | null {
+  // 只写 AI：人写的行不进图，每块的占比按其余的行算
+  const rows = AREAS.map(([k, z, e]) => {
+    const by = Object.entries(m.areas[k] ?? {}).filter(([key, v]) => key !== 'human' && v > 0);
+    return { k, name: T(m, z, e), by, tot: by.reduce((s, [, v]) => s + v, 0) };
+  }).filter((r) => r.tot > 0);
+  if (rows.length < 2) return null;
+  const t = o.t ?? 1;
+  const rowH = 86;
+  const { s, p } = frame(m, st, 1200, rows.length * rowH, T(m, '板块', 'AREAS'), T(m, '哪一块是谁写的', 'Who wrote which part'));
+  const x0 = p.x + 200, w = p.w - 200;
+  rows.forEach((r, i) => {
+    const y = p.y + i * rowH;
+    const k = ease(t, i, rows.length);
+    s.text(r.name, p.x, y + 30, { font: st.f.body, size: 19, fill: st.c.ink, maxW: 180 });
+    s.text(T(m, `${fmt(r.tot)} 行`, `${fmt(r.tot)} lines`), p.x, y + 54, { font: st.f.body, size: 14, fill: st.c.faint });
+    let x = x0;
+    for (const key of orderKeys(m, r.by.map(([key]) => key))) {
+      const v = r.by.find(([kk]) => kk === key)![1];
+      const ww = (v / r.tot) * w * k;
+      if (ww < 0.5) continue;
+      s.add(rect(x, y + 12, Math.max(1, ww - 2), 38, { fill: fillKey(s, st, m, key), rx: Math.min(st.radius, 6) }));
+      // 百分比写在色块下面：色块的颜色由风格定，字压在上面不一定看得清
+      if (ww > 52 && k >= 1) s.text(`${Math.round((v / r.tot) * 100)}%`, x + 2, y + 70, { font: st.f.body, size: 13, fill: st.c.soft });
+      const tk = tipKey(m, key);
+      s.hit(x, y + 8, ww, 46, { ...tk, d: [T(m, `${r.name}里 ${fmt(v)} 行，占 ${Math.round((v / r.tot) * 100)}%`, `${fmt(v)} lines in ${r.name}, ${Math.round((v / r.tot) * 100)}%`), ...(tk.d ?? []).slice(1)] });
+      x += ww;
+    }
+  });
+  return s;
+}
