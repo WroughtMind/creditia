@@ -1,5 +1,6 @@
 // 给 App、官网、命令行看的目录：主题、作品、版式的中英文名字，主题圆点。不碰文件系统，也不碰 satori。
 import { THEMES, type Theme } from './themes.ts';
+import { PIECES, VARIANT_NAMES } from '../registry.ts';
 
 export const THEME_INFO: Record<string, { zh: string; en: string; note: string; noteEn: string }> = {
   'minimal-light': { zh: '极简', en: 'Minimal', note: '白底黑字，什么场合都不出错', noteEn: 'Plain and safe anywhere' },
@@ -59,8 +60,9 @@ export const PIECE_INFO: Record<string, { zh: string; en: string; q: string; qEn
   versions: { zh: '版本柱状图', en: 'Versions', q: '每个版本谁写的', qEn: 'Who wrote each release' },
   settle: { zh: '沉淀', en: 'Survival', q: '写下的代码留下多少', qEn: 'How much of it stayed' },
 };
-export const pieceName = (id: string, lang: 'zh' | 'en') => PIECE_INFO[id]?.[lang] ?? id;
-export const pieceQ = (id: string, lang: 'zh' | 'en') => (lang === 'zh' ? PIECE_INFO[id]?.q : PIECE_INFO[id]?.qEn) ?? '';
+// 借新风格画的作品（河流、留存、出处……）沿用新风格的名字
+export const pieceName = (id: string, lang: 'zh' | 'en') => PIECE_INFO[id]?.[lang] ?? (lang === 'zh' ? PIECES[id]?.name : PIECES[id]?.en) ?? id;
+export const pieceQ = (id: string, lang: 'zh' | 'en') => (lang === 'zh' ? PIECE_INFO[id]?.q ?? PIECES[id]?.q : PIECE_INFO[id]?.qEn ?? PIECES[id]?.qEn) ?? '';
 
 export const VARIANT_INFO: Record<string, [string, string]> = {
   // 片尾字幕
@@ -71,5 +73,8 @@ export const VARIANT_INFO: Record<string, [string, string]> = {
   // 小票
   slip: ['收银条', 'Slip'], thermal: ['热敏纸', 'Thermal'], folio: ['账页', 'Folio'], stub: ['票根', 'Stub'], ticket: ['电影票', 'Ticket'],
   ledger: ['账本', 'Ledger'],
+  // 原来没有版式的作品，原版自己的画法
+  original: ['原版', 'Original'],
 };
-export const variantName = (v: string, lang: 'zh' | 'en') => VARIANT_INFO[v]?.[lang === 'zh' ? 0 : 1] ?? v;
+// 追加的新风格版式沿用新风格的名字
+export const variantName = (v: string, lang: 'zh' | 'en') => (VARIANT_INFO[v] ?? VARIANT_NAMES[v])?.[lang === 'zh' ? 0 : 1] ?? v;

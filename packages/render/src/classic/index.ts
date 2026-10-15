@@ -9,7 +9,7 @@ import { buildModel, type Model, type Options, DEFAULTS } from './data.ts';
 import { THEMES, themeById, type Theme } from './themes.ts';
 import type { Out } from './ui.ts';
 import { fontsFor } from './fonts.ts';
-import { classicArt } from './art.ts';
+import { classicArt, classicFrames } from './art.ts';
 import type { Raster } from '../export.ts';
 
 
@@ -69,6 +69,11 @@ export const raster: Raster = {
 export function art(form: string, m: Model, theme: Theme, ctx: Ctx = { lang: 'zh' }) {
   return classicArt(form, m, theme, ctx, satori as any, fonts(theme));
 }
+/** 动画帧（GIF） */
+export function frames(form: string, m: Model, theme: Theme, ctx: Ctx = { lang: 'zh' }, n = 24) {
+  return classicFrames(form, m, theme, ctx, satori as any, fonts(theme), n);
+}
+export { animatedClassic } from './art.ts';
 
 export { buildModel, THEMES, themeById, DEFAULTS, F };
 export type { Model, Options, Theme };

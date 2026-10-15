@@ -174,7 +174,7 @@ function vertical(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   type Col = { kind: 'head' | 'name'; text: string; sub?: string; cr?: Credit; head: string; w: number; h: number };
   const cols: Col[] = [];
   for (const sc of secs.filter((x) => x.head !== T(m, '模型', 'Models'))) {
-    const head = sc.head.replace(/ · /g, '・');
+    const head = zh(m) ? sc.head.replace(/ · /g, '・') : sc.head;
     cols.push({ kind: 'head', text: head, head: sc.head, w: 58, h: measureV(head, st, HS, st.f.label) });
     for (const cr of sc.credits) cols.push({ kind: 'name', text: cr.name, sub: cr.sub, cr, head: sc.head, w: cr.sub ? 104 : 70, h: Math.max(measureV(cr.name, st, NS), cr.sub ? measureV(cr.sub, st, SS, st.f.body) + 12 : 0) });
   }

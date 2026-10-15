@@ -26,7 +26,7 @@ export function sfx(s: Scene, text: string, x: number, y: number, size: number, 
   s.text(text, x, y, { font: { family: 'Dela Gothic One, Noto Sans SC', weight: 400 }, size, fill: color, stroke: W, strokeW: size * 0.12, rotate: rot, anchor: 'middle' });
 }
 export const manga: Style = defineStyle({
-  id: 'manga', name: '漫画', en: 'Manga', note: '少年漫画的张力：网点、集中线、「ゴゴゴ」与替身面板', noteEn: 'Shōnen manga tension: screentone, speed lines, “ゴゴゴ” and stand panels', dark: false,
+  id: 'manga', name: '漫画', en: 'Manga', note: '少年漫画的张力：网点、集中线、「ゴゴゴ」与替身面板', noteEn: 'Shōnen manga tension: screentone, speed lines, menacing rumble and stand panels', dark: false,
   c: { bg: W, paper: W, ink: K, soft: '#444444', faint: '#9A9A9A', line: 'rgba(0,0,0,0.85)', accent: MAG, accent2: PUR },
   series: [K, MAG, PUR, '#2B6CB0', '#D9481C', '#3A8A3A'],
   f: {
@@ -42,12 +42,13 @@ export const manga: Style = defineStyle({
     s.add(path(`M${r(b.x)} ${r(b.y)}H${r(b.x + b.w * 0.62)}L${r(b.x + b.w * 0.38)} ${r(b.y + b.h * 0.3)}H${r(b.x)}Z`, { fill: screentone(s, 'a', K, 6, 1.1), opacity: 0.55 }));
     speedLines(s, b.x + b.w * 0.82, b.y + b.h * 0.14, Math.min(b.w, b.h) * 0.12, Math.max(b.w, b.h) * 1.1, 120, hash(m.project), K);
     s.add(circle(b.x + b.w * 0.82, b.y + b.h * 0.14, Math.min(b.w, b.h) * 0.14, { fill: W, filter: blur(s, 10) }));
-    // 拟声字
+    // 拟声字：英文里用感叹号（英文版漫画的写法），不出现假名
     const big = Math.min(b.w, b.h) * 0.075;
-    sfx(s, 'ゴ', b.x + b.w * 0.9, b.y + b.h * 0.36, big, 12);
-    sfx(s, 'ゴ', b.x + b.w * 0.94, b.y + b.h * 0.47, big * 0.82, 14);
-    sfx(s, 'ゴ', b.x + b.w * 0.07, b.y + b.h * 0.86, big * 0.9, -10);
-    sfx(s, 'ゴ', b.x + b.w * 0.12, b.y + b.h * 0.94, big * 0.7, -8);
+    const go = m.lang === 'en' ? '!' : 'ゴ';
+    sfx(s, go, b.x + b.w * 0.9, b.y + b.h * 0.36, big, 12);
+    sfx(s, go, b.x + b.w * 0.94, b.y + b.h * 0.47, big * 0.82, 14);
+    sfx(s, go, b.x + b.w * 0.07, b.y + b.h * 0.86, big * 0.9, -10);
+    sfx(s, go, b.x + b.w * 0.12, b.y + b.h * 0.94, big * 0.7, -8);
   },
   plate(s, b) {
     // 粗黑框分镜
@@ -66,7 +67,7 @@ export const manga: Style = defineStyle({
   },
   track(s, x, y, w, h) { s.add(rect(x, y + h / 2 - 1, w, 2, { fill: K, opacity: 0.15 })); },
   mark(s, key, cx, cy, size) {
-    if (key === 'unattributed') { s.text('？', cx, cy + size * 0.3, { font: manga.f.display, size: size * 0.8, fill: PUR, anchor: 'middle', stroke: W, strokeW: 3 }); return; }
+    if (key === 'unattributed') { s.text('?', cx, cy + size * 0.3, { font: manga.f.display, size: size * 0.8, fill: PUR, anchor: 'middle', stroke: W, strokeW: 3 }); return; }
     s.add(path(`M${r(cx - size * 0.52)} ${r(cy - size * 0.42)}L${r(cx + size * 0.52)} ${r(cy - size * 0.52)}L${r(cx + size * 0.46)} ${r(cy + size * 0.5)}L${r(cx - size * 0.5)} ${r(cy + size * 0.44)}Z`, { fill: W, stroke: K, strokeWidth: 2.4 }));
     s.add(logo(key, cx, cy, size * 0.58, K));
   },
@@ -89,9 +90,9 @@ export const terminal: Style = defineStyle({
   ground(s, b, m) {
     s.bg = TBG;
     s.add(rect(b.x, b.y, b.w, b.h, { fill: TBG }));
-    // 代码雨：竖列片假名与数字，越往下越淡
+    // 代码雨：竖列片假名与数字，越往下越淡（英文里换成十六进制，不出现假名）
     const rnd = rng(hash(m.project) + 77);
-    const glyphs = 'アイウエオカキクケコサシスセソタチツテト0123456789ナニヌネノハヒフヘホマミムメモ';
+    const glyphs = m.lang === 'en' ? '0123456789ABCDEF<>{}=/;:' : 'アイウエオカキクケコサシスセソタチツテト0123456789ナニヌネノハヒフヘホマミムメモ';
     const cols: string[] = [];
     for (let x = b.x + 10; x < b.x + b.w; x += 22) {
       if (rnd() < 0.45) continue;

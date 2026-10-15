@@ -31,6 +31,18 @@ export const FONTS: FontFace[] = [
   ...F('Chakra Petch', 'chakra-petch', [[400, '400Regular'], [600, '600SemiBold'], [700, '700Bold']]),
   ...F('Share Tech Mono', 'share-tech-mono', [[400, '400Regular']]),
   ...F('Bangers', 'bangers', [[400, '400Regular']]),
+  // ── 原版主题（画新作品时用原版自己的字体） ──
+  ...F('Instrument Serif', 'instrument-serif', [[400, '400Regular']]),
+  ...F('Newsreader', 'newsreader', [[400, '400Regular'], [500, '500Medium']]),
+  ...F('Cinzel Decorative', 'cinzel-decorative', [[700, '700Bold']]),
+  ...F('Playfair Display', 'playfair-display', [[500, '500Medium'], [700, '700Bold'], [900, '900Black']]),
+  ...F('Libre Baskerville', 'libre-baskerville', [[400, '400Regular'], [700, '700Bold']]),
+  ...F('Poiret One', 'poiret-one', [[400, '400Regular']]),
+  ...F('Limelight', 'limelight', [[400, '400Regular']]),
+  ...F('VT323', 'vt323', [[400, '400Regular']]),
+  ...F('Press Start 2P', 'press-start-2p', [[400, '400Regular']]),
+  ...F('Monoton', 'monoton', [[400, '400Regular']]),
+  ...F('Archivo Black', 'archivo-black', [[400, '400Regular']]),
   // ── 中日文字体 ──
   ...F('Ma Shan Zheng', 'ma-shan-zheng', [[400, '400Regular']], true),
   ...F('Zhi Mang Xing', 'zhi-mang-xing', [[400, '400Regular']], true),
@@ -42,6 +54,7 @@ export const FONTS: FontFace[] = [
   ...F('Zen Maru Gothic', 'zen-maru-gothic', [[500, '500Medium'], [700, '700Bold']], true),
   ...F('Zen Antique', 'zen-antique', [[400, '400Regular']], true),
   ...F('DotGothic16', 'dotgothic16', [[400, '400Regular']], true),
+  ...F('ZCOOL QingKe HuangYou', 'zcool-qingke-huangyou', [[400, '400Regular']], true),
 ];
 
 /** 某个 family 的全部字重 */
