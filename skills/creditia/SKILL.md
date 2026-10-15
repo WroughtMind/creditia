@@ -1,11 +1,11 @@
 ---
 name: creditia
-description: 分析一个仓库的代码是哪些 AI 工具和模型写的：读本机 agent 日志与 git 历史（不调用大模型），生成 CREDITS.md、credits.json，导出署名榜、片尾字幕、徽章、统计图等（PNG / SVG / PDF / GIF / 可交互 HTML）。公开任何内容前必须让用户确认。
+description: 分析一个仓库的代码是哪些 AI 工具和模型写的：读本机 agent 日志与 git 历史（不调用大模型），生成 CREDITS.md、credits.json，导出署名榜、片尾字幕、徽章、统计图等（PNG / SVG / PDF / GIF / 可交互 HTML）。公开任何内容前必须让用户确认。 Find out which AI tools and models wrote a repo's code from local agent logs and git history (no model calls), then write CREDITS.md / credits.json and export credits, end credits, badges and charts. Always confirm with the user before publishing anything.
 ---
 
 # creditia
 
-用户说「给 X 做个 credits」「加个徽章」「更新署名」「这个项目哪些是 AI 写的」时用这个 skill。
+用户说「给 X 做个 credits」「加个徽章」「更新署名」「这个项目哪些是 AI 写的」时用这个 skill；英文里是 "make credits for X"、"add a credits badge"、"update the credits"、"which AI wrote this repo"。
 
 ## 原则
 
