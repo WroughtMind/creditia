@@ -54,7 +54,7 @@ const CLASSIC_BOARD: Tile[] = [
 ];
 const V2_BOARD: Tile[] = [
   { id: 'share', span: 2 }, { id: 'tier' }, { id: 'roll' }, { id: 'receipt' }, { id: 'donut' },
-  { id: 'stream', span: 2 }, { id: 'waffle' }, { id: 'survival' }, { id: 'versions' }, { id: 'lanes', span: 2 }, { id: 'clock', span: 2 },
+  { id: 'stream', span: 2 }, { id: 'waffle' }, { id: 'survival' }, { id: 'evidence' }, { id: 'versions' }, { id: 'areas' }, { id: 'lanes', span: 2 }, { id: 'clock', span: 2 },
   { id: 'mosaic' }, { id: 'codemap', span: 2 }, { id: 'calendar', span: 2 }, { id: 'badge', variant: 'emblem' }, { id: 'badge', variant: 'stack' }, { id: 'badge', variant: 'flat' }, { id: 'byline', span: 2 },
 ];
 
