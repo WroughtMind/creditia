@@ -66,7 +66,7 @@ creditia answers one question — which AI tools and models wrote how much. No n
 
 <img src=".github/readme/styles-en.png" alt="The same credits in different styles: cinema end credits, ukiyo-e share card, woodblock vertical text, manga stat panels, cyber HUD, neon donut, broadsheet version bars, grimoire ticket, terminal fetch, baroque podium">
 
-One record, twenty pieces (leaderboard, share card, end credits, receipt, badge, timeline ribbon, activity clock…) × twenty-six styles, out as PNG, SVG, PDF, GIF or HTML. Each style is a full visual language, not a palette swap, and some pieces get their own layouts in some styles: vertical woodblock print, manga stat panels, a cyber HUD, a dozen ways to roll end credits.
+One record, more than twenty pieces (leaderboard, share card, end credits, code map, receipt, badge, timeline ribbon, activity clock…) × twenty-six styles, out as PNG, SVG, PDF, GIF or HTML. Each style is a full visual language, not a palette swap, and some pieces get their own layouts in some styles: vertical woodblock print, manga stat panels, a cyber HUD, a dozen ways to roll end credits.
 
 > Minimal · Minimal Dark · Glass · Film · Cinema · Editorial · Broadsheet · Playbill · Gala · Mono · Poster · Terminal · CRT · Neon · Arcade<br>
 > Ink Wash · Ukiyo-e · Woodblock Book · Baroque · Grimoire · Manuscript · Symmetry · Cut-Paper Titles · Summer Meadow · Manga · Cyber

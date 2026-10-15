@@ -96,7 +96,7 @@
       }
     },
     "timeline": { "type": "array", "items": { "type": "object", "required": ["week", "byContributor"], "properties": { "week": { "type": "string", "pattern": "^\\d{4}-W\\d{2}$" }, "byContributor": { "type": "object", "additionalProperties": { "type": "integer" } } } } },
-    "days": { "type": "array", "items": { "type": "object", "required": ["date", "by"], "properties": { "date": { "$ref": "#/$defs/date" }, "by": { "type": "object", "additionalProperties": { "type": "integer" } } } } },
+    "days": { "type": "array", "items": { "type": "object", "required": ["date", "by"], "properties": { "date": { "$ref": "#/$defs/date" }, "by": { "type": "object", "additionalProperties": { "type": "integer" } }, "runs": { "type": "array", "description": "按行顺序的连续分段 [贡献方 id, 行数]", "items": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "integer" }], "minItems": 2, "maxItems": 2 } } } } },
     "clock": { "type": "array", "minItems": 7, "maxItems": 7, "items": { "type": "array", "minItems": 24, "maxItems": 24, "items": { "type": "integer" } }, "description": "星期（周一起）× 小时的提交数" },
     "files": { "type": "array", "items": { "type": "object", "required": ["lines", "by"], "properties": { "path": { "type": "string" }, "lines": { "type": "integer" }, "by": { "type": "object", "additionalProperties": { "type": "integer" } } } } },
     "sessions": { "type": "array", "items": { "type": "object", "required": ["contributor", "start", "end"], "properties": { "contributor": { "type": "string" }, "start": { "type": "integer" }, "end": { "type": "integer" }, "tokens": { "type": "integer" }, "review": { "type": "boolean" }, "prompts": { "type": "integer", "description": "这个会话里人发出的指令数" } } } },

@@ -8,6 +8,7 @@ import { tier, TIER_VARIANTS } from './pieces/tier.ts';
 import { roll, ROLL_VARIANTS } from './pieces/roll.ts';
 import { donut, waffle, stream, lanes, clock, versions, survival, mosaic, calendar } from './pieces/charts.ts';
 import { receipt, RECEIPT_VARIANTS, share, badge, BADGE_VARIANTS, byline, hand } from './pieces/cards.ts';
+import { codemap } from './pieces/map.ts';
 
 export interface PieceDef {
   name: string;
@@ -38,6 +39,7 @@ export const PIECES: Record<string, PieceDef> = {
   survival: { name: '留存', en: 'Retention', q: '写的代码现在还剩多少', qEn: 'How much of the written code is still here', animated: true, render: survival },
   mosaic: { name: '文件马赛克', en: 'File Mosaic', q: '现在的代码由谁构成', qEn: 'Who the current code is made of', animated: true, render: mosaic },
   calendar: { name: '日历', en: 'Calendar', q: '哪天谁在写', qEn: 'Who wrote on which day', animated: true, render: calendar },
+  codemap: { name: '代码地图', en: 'Code Map', q: '现在的每一行是谁写的', qEn: 'Who wrote every line in the code now', animated: true, render: codemap },
 };
 
 /** 版式的中文名 */

@@ -79,7 +79,8 @@ export interface Model {
   weeks: { week: string; by: Record<string, number> }[];
   days: { date: string; by: Record<string, number> }[];
   clock: number[][];
-  files: { path: string; lines: number; by: Record<string, number> }[];
+  /** runs：按行顺序的连续分段 [分组 key, 行数]（人的行合并成 human）；旧档案没有 */
+  files: { path: string; lines: number; by: Record<string, number>; runs?: [string, number][] }[];
   /** 板块 → 分组 key → 行数（核心、界面、测试、文档……） */
   areas: Record<string, Record<string, number>>;
   timeline: { key: string; start: number; end: number; tokens: number; review: boolean; prompts: number }[];
@@ -242,7 +243,14 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
   };
   const weeks = (c.timeline ?? []).map((w: any) => ({ week: w.week, by: regroup(w.byContributor) }));
   const days = (c.days ?? []).map((d: any) => ({ date: d.date, by: regroup(d.by) }));
-  const files = (c.files ?? []).map((f: any) => ({ path: f.path ?? '', lines: n(f.lines), by: regroup(f.by) }));
+  const runKey = (id: string) => {
+    const gr = id.includes(':') || byId.has(id) ? groupOf(id) : { key: id, kind: id.startsWith('h:') ? 'human' : 'agent' };
+    return gr.kind === 'human' || id.startsWith('h:') ? 'human' : gr.key;
+  };
+  const files = (c.files ?? []).map((f: any) => ({
+    path: f.path ?? '', lines: n(f.lines), by: regroup(f.by),
+    runs: Array.isArray(f.runs) ? f.runs.filter((x: any) => Array.isArray(x)).map(([k, v]: [string, number]) => [runKey(String(k)), n(v)] as [string, number]) : undefined,
+  }));
 
   const areas: Record<string, Record<string, number>> = {};
   for (const b of c.breakdown ?? []) {

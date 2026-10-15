@@ -1461,7 +1461,26 @@
     "cursor": 51,
     "h:lin": 44,
     "unattributed": 34
-   }
+   },
+   "runs": [
+    ["cursor", 17],
+    ["codex", 32],
+    ["cursor", 20],
+    ["claude-code", 74],
+    ["h:lin", 24],
+    ["unattributed", 14],
+    ["codex", 70],
+    ["cursor", 8],
+    ["unattributed", 20],
+    ["h:lin", 10],
+    ["claude-code", 224],
+    ["codex", 25],
+    ["h:lin", 7],
+    ["claude-code", 23],
+    ["cursor", 6],
+    ["codex", 65],
+    ["h:lin", 3]
+   ]
   },
   {
    "path": "crates/adapters/src/codex.rs",
@@ -1472,7 +1491,23 @@
     "cursor": 51,
     "h:lin": 44,
     "unattributed": 34
-   }
+   },
+   "runs": [
+    ["claude-code", 117],
+    ["codex", 91],
+    ["cursor", 34],
+    ["unattributed", 7],
+    ["claude-code", 14],
+    ["h:lin", 21],
+    ["claude-code", 162],
+    ["unattributed", 27],
+    ["codex", 33],
+    ["cursor", 1],
+    ["h:lin", 23],
+    ["claude-code", 27],
+    ["cursor", 16],
+    ["codex", 68]
+   ]
   },
   {
    "path": "packages/render/src/forms.ts",
@@ -1483,7 +1518,23 @@
     "cursor": 45,
     "h:lin": 39,
     "unattributed": 30
-   }
+   },
+   "runs": [
+    ["cursor", 23],
+    ["h:lin", 12],
+    ["codex", 77],
+    ["unattributed", 14],
+    ["codex", 38],
+    ["cursor", 15],
+    ["claude-code", 73],
+    ["cursor", 7],
+    ["h:lin", 22],
+    ["codex", 55],
+    ["claude-code", 86],
+    ["h:lin", 5],
+    ["unattributed", 16],
+    ["claude-code", 124]
+   ]
   },
   {
    "path": "apps/desktop/src/main.ts",
@@ -1494,7 +1545,19 @@
     "cursor": 45,
     "h:lin": 39,
     "unattributed": 30
-   }
+   },
+   "runs": [
+    ["claude-code", 110],
+    ["cursor", 17],
+    ["unattributed", 5],
+    ["h:lin", 39],
+    ["claude-code", 83],
+    ["unattributed", 13],
+    ["codex", 170],
+    ["claude-code", 91],
+    ["unattributed", 12],
+    ["cursor", 28]
+   ]
   },
   {
    "path": "README.md",
@@ -1505,7 +1568,43 @@
     "cursor": 119,
     "h:lin": 104,
     "unattributed": 76
-   }
+   },
+   "runs": [
+    ["h:lin", 14],
+    ["unattributed", 25],
+    ["h:lin", 5],
+    ["claude-code", 89],
+    ["h:lin", 19],
+    ["unattributed", 5],
+    ["claude-code", 42],
+    ["cursor", 25],
+    ["claude-code", 105],
+    ["cursor", 30],
+    ["codex", 118],
+    ["claude-code", 112],
+    ["h:lin", 7],
+    ["codex", 119],
+    ["cursor", 25],
+    ["codex", 57],
+    ["h:lin", 30],
+    ["codex", 46],
+    ["unattributed", 7],
+    ["claude-code", 85],
+    ["unattributed", 3],
+    ["cursor", 27],
+    ["unattributed", 7],
+    ["claude-code", 33],
+    ["h:lin", 22],
+    ["cursor", 4],
+    ["unattributed", 26],
+    ["codex", 63],
+    ["claude-code", 171],
+    ["codex", 44],
+    ["h:lin", 7],
+    ["cursor", 8],
+    ["unattributed", 3],
+    ["claude-code", 108]
+   ]
   },
   {
    "path": "crates/cli/src/main.rs",
@@ -1516,7 +1615,24 @@
     "cursor": 55,
     "h:lin": 48,
     "unattributed": 36
-   }
+   },
+   "runs": [
+    ["codex", 58],
+    ["cursor", 3],
+    ["h:lin", 8],
+    ["cursor", 20],
+    ["h:lin", 34],
+    ["claude-code", 88],
+    ["cursor", 8],
+    ["claude-code", 105],
+    ["unattributed", 28],
+    ["codex", 149],
+    ["claude-code", 81],
+    ["h:lin", 6],
+    ["cursor", 24],
+    ["unattributed", 8],
+    ["claude-code", 71]
+   ]
   },
   {
    "path": "packages/render/src/themes.ts",
@@ -1527,7 +1643,35 @@
     "cursor": 82,
     "h:lin": 71,
     "unattributed": 53
-   }
+   },
+   "runs": [
+    ["codex", 46],
+    ["unattributed", 26],
+    ["cursor", 5],
+    ["claude-code", 76],
+    ["codex", 37],
+    ["claude-code", 21],
+    ["codex", 118],
+    ["claude-code", 61],
+    ["h:lin", 3],
+    ["cursor", 7],
+    ["unattributed", 27],
+    ["h:lin", 4],
+    ["claude-code", 93],
+    ["cursor", 21],
+    ["claude-code", 46],
+    ["cursor", 23],
+    ["h:lin", 30],
+    ["cursor", 12],
+    ["h:lin", 8],
+    ["codex", 86],
+    ["cursor", 14],
+    ["h:lin", 12],
+    ["claude-code", 49],
+    ["codex", 20],
+    ["claude-code", 167],
+    ["h:lin", 14]
+   ]
   },
   {
    "path": "crates/adapters/src/git.rs",
@@ -1538,7 +1682,42 @@
     "cursor": 133,
     "h:lin": 116,
     "unattributed": 85
-   }
+   },
+   "runs": [
+    ["h:lin", 4],
+    ["cursor", 16],
+    ["claude-code", 101],
+    ["cursor", 9],
+    ["claude-code", 114],
+    ["h:lin", 12],
+    ["claude-code", 158],
+    ["h:lin", 36],
+    ["claude-code", 36],
+    ["unattributed", 10],
+    ["codex", 9],
+    ["claude-code", 96],
+    ["unattributed", 57],
+    ["cursor", 34],
+    ["codex", 101],
+    ["unattributed", 2],
+    ["codex", 56],
+    ["unattributed", 13],
+    ["claude-code", 153],
+    ["codex", 26],
+    ["unattributed", 3],
+    ["h:lin", 62],
+    ["cursor", 10],
+    ["claude-code", 42],
+    ["codex", 113],
+    ["cursor", 6],
+    ["codex", 99],
+    ["cursor", 34],
+    ["claude-code", 48],
+    ["cursor", 24],
+    ["h:lin", 2],
+    ["claude-code", 83],
+    ["codex", 94]
+   ]
   },
   {
    "path": "apps/desktop/src/style.css",
@@ -1549,7 +1728,27 @@
     "cursor": 72,
     "h:lin": 63,
     "unattributed": 48
-   }
+   },
+   "runs": [
+    ["cursor", 6],
+    ["h:lin", 14],
+    ["claude-code", 86],
+    ["codex", 110],
+    ["h:lin", 21],
+    ["unattributed", 48],
+    ["cursor", 30],
+    ["claude-code", 90],
+    ["h:lin", 1],
+    ["claude-code", 30],
+    ["h:lin", 21],
+    ["cursor", 7],
+    ["claude-code", 63],
+    ["codex", 33],
+    ["claude-code", 186],
+    ["h:lin", 6],
+    ["codex", 130],
+    ["cursor", 29]
+   ]
   },
   {
    "path": "packages/cli/src/cli.ts",
@@ -1560,7 +1759,41 @@
     "cursor": 129,
     "h:lin": 113,
     "unattributed": 82
-   }
+   },
+   "runs": [
+    ["h:lin", 26],
+    ["codex", 46],
+    ["cursor", 6],
+    ["codex", 24],
+    ["claude-code", 204],
+    ["cursor", 19],
+    ["h:lin", 44],
+    ["cursor", 18],
+    ["claude-code", 70],
+    ["codex", 47],
+    ["claude-code", 125],
+    ["codex", 94],
+    ["cursor", 34],
+    ["codex", 65],
+    ["claude-code", 195],
+    ["unattributed", 17],
+    ["claude-code", 84],
+    ["h:lin", 22],
+    ["codex", 31],
+    ["unattributed", 55],
+    ["cursor", 17],
+    ["codex", 50],
+    ["cursor", 21],
+    ["unattributed", 3],
+    ["codex", 45],
+    ["h:lin", 21],
+    ["codex", 29],
+    ["unattributed", 7],
+    ["cursor", 1],
+    ["claude-code", 132],
+    ["cursor", 13],
+    ["codex", 55]
+   ]
   }
  ],
  "sessions": [
