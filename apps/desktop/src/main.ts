@@ -3,6 +3,7 @@
 import { buildModel, type Model } from '../../../packages/render/src/classic/data.ts';
 import { nameOf, resolveGroup } from '../../../packages/render/src/data.ts';
 import { MODEL_VARIANTS } from '../../../packages/render/src/registry.ts';
+import { mergeCredits } from '../../../packages/render/src/merge.ts';
 import { creditsBlock, mergeCreditsMd } from '../../../packages/render/src/classic/text.ts';
 import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts';
 import { INTERACT_CSS, mountHits } from '../../../packages/render/src/interact.ts';
@@ -112,7 +113,7 @@ async function boot() {
   applyLang(); renderDots(); renderDock(); wireTop();
   try { state.projects = await api('projects'); } catch (e: any) { return empty(() => [L('读不到作品库', 'Cannot read the library'), errText(e)]); }
   if (!state.projects.length) return empty(() => [L('还没有分析过的项目', 'No analyzed projects yet'), '', 'creditia analyze', native ? { label: L('添加项目…', 'Add a project…'), run: addProject } : undefined]);
-  const last = state.projects.find((p) => p.id === store.get('project')) ?? state.projects[0];
+  const last = (store.get('project') === ALL_ID && state.projects.length > 1 ? allProject() : null) ?? state.projects.find((p) => p.id === store.get('project')) ?? state.projects[0];
   await openProject(last);
   addEventListener('resize', () => layout());
 }
@@ -139,7 +140,7 @@ async function openProject(p: any) {
   $('#pname').textContent = p.name; $('#pmeta').textContent = L('读取中…', 'Loading…');
   let raw: any;
   const st = readStamp(p); // 先记下版本再读档案：读的过程中又变了，下次比对还能发现
-  try { raw = await api('credits', { projectId: p.id }); }
+  try { raw = await creditsOf(p); }
   catch (e: any) {
     if (seq !== state.openSeq) return;
     $('#pmeta').textContent = '';
@@ -153,7 +154,7 @@ async function openProject(p: any) {
   $('#empty').hidden = true; emptyView = null;
   setGroup(groupPref());
   rebuildModel();
-  loadPlugs(p);
+  if (!p.all) loadPlugs(p);
   await paint();
   void refreshIfChanged(); // 打开时就看一眼有没有新提交
 }
@@ -163,7 +164,22 @@ async function openProject(p: any) {
 // 变了就读新档案，墙上的作品原地换掉（不清空、不跳回顶部），换过的版式也留着。
 // 档案没变、但仓库里有了新提交，就在后台跟上（keepUp）。
 let stampOf = '', refreshing = false;
-const readStamp = (p: any): Promise<string> => (native ? api('stamp', { projectId: p.id }).then(String, () => '') : Promise.resolve(''));
+const readStamp = (p: any): Promise<string> => (!native ? Promise.resolve('')
+  : p.all ? Promise.all(state.projects.map((x) => api('stamp', { projectId: x.id }).then(String, () => ''))).then((a) => a.join('|'))
+  : api('stamp', { projectId: p.id }).then(String, () => ''));
+
+// ───────────────────────── 全部项目 ─────────────────────────
+// 作品库里不止一个项目时，项目菜单最上面有「全部项目」：各项目的档案并成一份（行数相加，文件和 PR 带上项目名），
+// 整面墙照常画，按工具 / 按模型也照常切。读不到档案的项目跳过
+const ALL_ID = '__all__';
+const allProject = () => ({ id: ALL_ID, all: true, name: L('全部项目', 'All projects'), path: '', exists: true });
+async function creditsOf(p: any): Promise<any> {
+  if (!p.all) return api('credits', { projectId: p.id });
+  const got = await Promise.all(state.projects.map((x) => api('credits', { projectId: x.id }).then((raw: any) => ({ name: x.name, raw }), () => null)));
+  const parts = got.filter((x): x is { name: string; raw: any } => !!x);
+  if (!parts.length) throw { code: 'no_credits' };
+  return mergeCredits(parts, state.lang);
+}
 async function refreshIfChanged() {
   const p = state.current;
   if (!native || !p || !state.raw || refreshing || analyzing || document.hidden) return;
@@ -171,7 +187,7 @@ async function refreshIfChanged() {
   try {
     const st = await readStamp(p);
     if (!st || st === stampOf || p !== state.current) { await keepUp(p); return; }
-    const raw = await api('credits', { projectId: p.id });
+    const raw = await creditsOf(p);
     if (p !== state.current) return;
     stampOf = st;
     await swapRaw(raw);
@@ -184,7 +200,7 @@ async function refreshIfChanged() {
 const autoFresh = () => store.get('autofresh') !== 'off';
 let triedHead = '';
 async function keepUp(p: any) {
-  if (!autoFresh() || p.exists === false || !state.raw?.head) return;
+  if (!autoFresh() || p.all || p.exists === false || !state.raw?.head) return;
   const h: string = await api('head', { projectId: p.id }).catch(() => '');
   if (!h || h === state.raw.head || h === triedHead || p !== state.current) return;
   triedHead = h;
@@ -201,6 +217,8 @@ addEventListener('focus', refreshIfChanged);
 document.addEventListener('visibilitychange', refreshIfChanged);
 setInterval(refreshIfChanged, 30000);
 function rebuildModel() {
+  // 全部项目的名字跟着界面语言
+  if (state.current?.all && state.raw?.project) state.raw.project.name = L('全部项目', 'All projects');
   state.model = buildModel(state.raw, { director: false, lang: state.lang, group: groupPref() });
   const m = state.model;
   $('#pname').textContent = m.project || state.current?.name;
@@ -704,7 +722,9 @@ function toggleMenu() {
     <div class="foot"><button id="auto" role="switch" aria-checked="${autoFresh()}" title="${L('有新提交时在后台增量分析，作品跟着更新', 'Analyze new commits in the background so pieces stay current')}">${autoFresh() ? '●' : '○'} ${L('自动跟上新提交', 'Keep up with new commits')}</button></div>`;
   const draw = () => {
     const q = ($('#q') as HTMLInputElement).value.trim().toLowerCase();
-    $('#plist').innerHTML = state.projects.filter((p) => !q || `${p.name} ${p.path}`.toLowerCase().includes(q)).map((p) => `
+    const all = state.projects.length > 1 && (!q || L('全部项目', 'All projects').toLowerCase().includes(q) || 'all'.includes(q))
+      ? `<div class="item all ${state.current?.all ? 'on' : ''}" data-id="${ALL_ID}" role="option" aria-selected="${!!state.current?.all}"><b>${L('全部项目', 'All projects')}</b><span class="r"></span><span>${L(`${state.projects.length} 个项目合在一起`, `${state.projects.length} projects together`)}</span><span class="r"></span></div>` : '';
+    $('#plist').innerHTML = all + state.projects.filter((p) => !q || `${p.name} ${p.path}`.toLowerCase().includes(q)).map((p) => `
       <div class="item ${p.id === state.current?.id ? 'on' : ''} ${p.exists === false ? 'gone' : ''}" data-id="${esc(p.id)}" role="option" aria-selected="${p.id === state.current?.id}">
         <b>${esc(p.name)}${p.exists === false ? `<em class="tag">${L('目录不在了', 'folder missing')}</em>` : ''}</b><span class="r">${p.lastAnalyzed ? new Date(p.lastAnalyzed * 1000).toLocaleDateString(state.lang === 'zh' ? 'zh-CN' : 'en-US') : L('未分析', 'not analyzed')}</span>
         <span title="${esc(p.path)}">${esc(p.path)}</span><span class="r">${p.evidence ? `${fmt(p.evidence)} ${L('条证据', 'evidence')}` : ''}</span>
@@ -728,11 +748,12 @@ function toggleMenu() {
   $('#plist').onclick = (e) => {
     const it = (e.target as HTMLElement).closest('.item') as HTMLElement | null; if (!it?.dataset.id) return;
     menu.hidden = true; pill.setAttribute('aria-expanded', 'false');
+    if (it.dataset.id === ALL_ID) { if (!state.current?.all) openProject(allProject()); return; }
     const p = state.projects.find((x) => x.id === it.dataset.id);
     if (p && p !== state.current) openProject(p);
   };
   const re = $('#re') as HTMLButtonElement;
-  if (!state.current || state.current.exists === false || analyzing) { re.disabled = true; re.title = state.current?.exists === false ? L('项目目录已经不在了', 'The project folder is gone') : ''; }
+  if (!state.current || state.current.all || state.current.exists === false || analyzing) { re.disabled = true; re.title = state.current?.exists === false ? L('项目目录已经不在了', 'The project folder is gone') : ''; }
   ($('#add') as HTMLButtonElement).disabled = analyzing;
   $('#add').onclick = () => { closeMenu(); addProject(); };
   re.onclick = () => { closeMenu(); if (state.current) reanalyze(state.current); };

@@ -84,6 +84,8 @@ creditia 只回答「哪些 AI 工具和模型写了多少」：作品里不出�
 
 **交给 agent**　把 [skills/creditia](skills/creditia/SKILL.md) 装进你的 agent，跟它说「看看这个仓库是哪些 AI 写的」。它会按步骤分析、出图，公开或提交任何东西之前先问你。
 
+**跨项目汇总**　作品库里有几个项目时，App 项目菜单最上面多一项「全部项目」：各项目的档案并成一份，整面墙照常画。命令行是 `creditia summary`（印一张名片，`--out all.json` 写成一份档案），任何命令加 `--all-projects` 也一样，比如 `creditia export --all-projects --piece tier`。行数相加；版本是各项目自己的，不合并；文件和 PR 前面带上项目名。
+
 **公开前的隐私检查**　`creditia publish` 写出 credits.json 之前，先列出会公开的每一类（PR / 提交标题、文件路径、人名、工作时间、仓库地址）和几个样例，并找出看起来不该公开的东西（像密钥的字符串、邮箱、本机路径、内网地址、带账号密码的地址）。在终端里逐类问你；有可疑内容的那一类默认不公开。`--check` 只检查不写，`--hide titles,paths` 之类直接隐藏；在脚本里遇到可疑内容时不写，要 `--yes` 确认。隐藏只改公开的这一份，本机档案不动。
 
 **GitHub Action**　CI 里看不到任何 agent 的日志，所以分析在本机做：`creditia publish` 把档案写到仓库根目录的 `credits.json`，提交上去；之后每次推送，Action 用它重画署名页，也可以顺带生成徽章（`badge:`）和 CREDITS.md（`doc:`）。发 Release 时把这一版的署名写进说明（`release-notes: true`）、在 PR 上评论这个 PR 的署名并随推送更新（`pr-comment: true`）：`creditia release install` 直接写好这份 workflow。这两项不需要 credits.json：打开提交盖章后，每次提交都会带上一行 `Creditia-Lines`（各工具写了几行，在本机提交时算好，不含代码），CI 读它就够了。
