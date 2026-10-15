@@ -367,7 +367,7 @@ async function doExport(fmtId: string, id: string, k: string) {
   const m = state.model!;
   const i = Number(k.split('#')[1]);
   const variant = curVariant(id, k, tiles()[i]);
-  const base = `${m.project || 'credits'}-${id}${variant ? '-' + variant : ''}-${state.style.id}`;
+  const base = `${m.project || 'credits'}-${id}${variant && variant !== 'original' ? '-' + variant : ''}-${state.style.id}`;
   try {
     if (fmtId === 'md') {
       const text = mergeCreditsMd(null, creditsBlock(m));

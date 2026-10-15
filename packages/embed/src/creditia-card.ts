@@ -1,8 +1,11 @@
 // <creditia-card src="/.creditia/credits.json" piece="tier" theme="ink" variant="vertical" lang="zh" named sign="Lin">
 // 读同一份 credits.json，在页面里画出和导出图一模一样的作品（同一套 SVG 场景），悬停能看细节。
+// theme 可以是新风格，也可以是原版主题（minimal-light、film、playbill……：按原版的颜色、字体、框线画）。
 // 字体按风格从 Google Fonts 取；不依赖任何框架。
 import { buildModel } from '../../render/src/data.ts';
 import { styleById } from '../../render/src/styles/index.ts';
+import { themeById } from '../../render/src/classic/themes.ts';
+import { bridgeStyle } from '../../render/src/classic/bridge.ts';
 import { art } from '../../render/src/registry.ts';
 import { INTERACT_CSS, mountHits } from '../../render/src/interact.ts';
 import { FONTS, familiesIn } from '../../render/src/fonts.ts';
@@ -38,7 +41,9 @@ class CreditiaCard extends HTMLElement {
   }
   private async paint() {
     if (!this.raw) return;
-    const st = styleById(this.getAttribute('theme') ?? 'minimal') ?? styleById('minimal')!;
+    const id = this.getAttribute('theme') ?? 'minimal';
+    const classic = themeById(id);
+    const st = styleById(id) ?? (classic ? bridgeStyle(classic) : styleById('minimal')!);
     const m = buildModel(this.raw, { lang: (this.getAttribute('lang') as 'zh' | 'en') ?? 'zh', named: this.hasAttribute('named'), sign: this.getAttribute('sign') ?? '' });
     const a = art(this.getAttribute('piece') ?? this.getAttribute('form') ?? 'tier', m, st, { variant: this.getAttribute('variant') ?? undefined });
     if (!a) return;

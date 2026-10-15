@@ -47,6 +47,6 @@ runs:
       run: |
         set -e
         if [ ! -f "$CREDITS" ]; then echo "::error::没有 $CREDITS。先在本机运行 creditia analyze && creditia publish，把 credits.json 提交进仓库。"; exit 1; fi
-        if [ -n "$BADGE" ]; then $CT export --credits "$CREDITS" --piece badge --variant flat --style "$STYLE" --lang "$LANG_CT" --format svg --out "$BADGE"; fi
+        if [ -n "$BADGE" ]; then $CT export --credits "$CREDITS" --piece badge --style "$STYLE" --lang "$LANG_CT" --format svg --out "$BADGE"; fi
         if [ -n "$DOC" ]; then $CT doc --credits "$CREDITS" --lang "$LANG_CT" --out "$DOC"; fi
         if [ -n "$SITE" ]; then $CT site --credits "$CREDITS" --style "$STYLE" --lang "$LANG_CT" --out "$SITE"; fi
