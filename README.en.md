@@ -119,6 +119,8 @@ jobs:
 | <img src=".github/readme/logo/copilot.svg" width="18"> | GitHub Copilot | Successful edits in VS Code `chatSessions` and agent transcripts; Copilot CLI `~/.copilot/session-state` | ✓ | ✓ |
 | <img src=".github/readme/logo/aider.svg" width="18"> | Aider | The repo's `.aider.chat.history.md`: only files confirmed by "Applied edit", timed by its commit | ✓ | ✓ |
 | | Amp · TRAE CLI | Completed edits in Amp's local `threads/*.json`; TRAE CLI session rollouts | ✓ | ✓ |
+| | Goose | `~/.local/share/goose/sessions/sessions.db`: successful write / edit / text_editor calls (paired with their tool results) and shell commands; model from the per-call usage ledger | ✓ | ✓ |
+| | Continue | `~/.continue/sessions/*.json` (shared by the editor extensions and the `cn` CLI): edits and commands with status done; rejected diffs don't count | ✓ | ✓ |
 | | Crush | The project's `.crush/crush.db`: lines added between consecutive file versions in the `files` table; `Assisted-by: Crush:<model>` in commits | ✓ | ✓ |
 | <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> | Copilot cloud · Devin · Jules · Cursor cloud · bots | Commit email, `Co-authored-by`, `Assisted-by`, author name | declared | — |
 | | Any tool | `creditia stamp` / commit-hook stamp (`Creditia-Harness` trailer) | declared | ✓ |

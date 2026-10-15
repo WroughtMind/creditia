@@ -10,11 +10,11 @@ To be clear up front: the default level (standard) **makes two kinds of inferenc
 
 | Source | What it holds | Evidence level |
 |---|---|---|
-| Agent logs | Every edit that was **successfully** written to a file (Write, Edit, FileChange, write_file, replace, patch…), with its session, model, time and provider. Readable for Claude Code, Codex, Cursor, Gemini CLI, Qwen Code, OpenCode, Cline, Roo Code, Kilo Code, Grok, Kimi, GitHub Copilot (VS Code and CLI), Aider, Amp and TRAE CLI. Edits that errored, were rejected or were never applied do not count | Line-level evidence (verified) |
-| Agent shell commands | The text of commands that ran successfully (heredocs, `printf`, new text inside a python script), as candidate evidence for the repo files the command names (Claude Code's Bash, Codex, Amp and TRAE CLI shells) | Line-level evidence |
+| Agent logs | Every edit that was **successfully** written to a file (Write, Edit, FileChange, write_file, replace, patch…), with its session, model, time and provider. Readable for Claude Code, Codex, Cursor, Gemini CLI, Qwen Code, OpenCode, Cline, Roo Code, Kilo Code, Grok, Kimi, GitHub Copilot (VS Code and CLI), Aider, Amp, TRAE CLI, Crush, Goose and Continue. Edits that errored, were rejected or were never applied do not count | Line-level evidence (verified) |
+| Agent shell commands | The text of commands that ran successfully (heredocs, `printf`, new text inside a python script), as candidate evidence for the repo files the command names (Claude Code's Bash, Codex, Amp, TRAE CLI, Goose and Continue shells) | Line-level evidence |
 | Cursor's line store | Cursor's own per-line hashes. creditia reproduces its normalization and hashing byte for byte | Line-level evidence |
 | Commit trailers | `Creditia-Harness` / `Creditia-Model` (written by `creditia stamp` or the hook) | Declared |
-| Commit metadata | An agent's commit email (Cursor cloud, Copilot, Devin, Jules…), `Co-authored-by`, bot accounts, the author name aider rewrites | Declared |
+| Commit metadata | An agent's commit email (Cursor cloud, Copilot, Devin, Jules…), `Co-authored-by`, `Assisted-by: tool:model` (Crush writes it by default, and it's the Linux kernel's format for AI credit; values naming a person or an email don't count), bot accounts, the author name aider rewrites | Declared |
 | Other people's commits | Not your commit identity → credited to that person | Declared |
 | Branch prefix | Branches a tool creates by itself: `codex/`, `cursor/`, `copilot/`… | Inferred |
 | Time window | A session of some tool happened to be running at commit time | Inferred (loose level only) |
@@ -48,7 +48,7 @@ Because the last step requires that "the line's content appears in a real commit
 | Step | strict | standard (default) | loose |
 |---|:-:|:-:|:-:|
 | Stamp trailer | ✓ | ✓ | ✓ |
-| Agent commit email, Co-authored-by, bot, aider author name | ✓ | ✓ | ✓ |
+| Agent commit email, Co-authored-by, Assisted-by, bot, aider author name | ✓ | ✓ | ✓ |
 | Other people's commits → that person | ✓ | ✓ | ✓ |
 | Most of the same change block has line-level evidence from one agent → the rest of the block follows it (inferred) | | ✓ | ✓ |
 | A session was running at commit time (inferred) | | | ✓ |
@@ -107,7 +107,7 @@ Pieces answer one question only: which AI tools and models wrote how much. Peopl
 - When an agent writes a file through a shell command, content written in the command itself (`cat > file <<EOF`, `printf`, new text inside a python script) counts as line-level evidence: a line of the command text counts only if it really appears among that file's added lines in a commit, so commands that only read files (`cat`, `grep`) can't cause false matches. Content produced by a program (scaffolding, codegen scripts, `curl > file`) is recorded as unattributed: a model didn't write it, and like generated files it isn't credited to AI.
 - Once a tool cleans up its own logs, the evidence store still has them as long as `analyze` / `collect` ran once before; if they were never collected, only the commit metadata is left.
 - For a relay that passes official responses through, the provider can't be determined and isn't recorded.
-- Some tools' local records don't reveal edits: Windsurf's Cascade records are encrypted; TRAE IDE's format isn't public; Amp since March 2026 keeps threads on its servers. They can only be credited through commit metadata or stamps, and `creditia doctor` marks them "not supported". TRAE CLI is read from its published rollout format and hasn't been checked against many real logs yet.
+- Some tools' local records don't reveal edits: Windsurf's Cascade records are encrypted; TRAE IDE's format isn't public; Amp since March 2026 keeps threads on its servers. They can only be credited through commit metadata or stamps, and `creditia doctor` marks them "not supported". TRAE CLI is read from its published rollout format and hasn't been checked against many real logs yet. Crush is read from its source code (file contents stored version by version in the `files` table; the intermediate version Crush stores after you edit a file by hand between two agent edits doesn't count) and Goose from its source code (`sessions.db`, only calls whose tool result succeeded); neither has been checked against real logs yet. Continue is also read from its source code (only tool calls whose status is done); its records carry no per-message time, so evidence is dated to the session's creation, and models are the titles the user gave them in their config.
 - Copilot's agent records in VS Code don't always carry a model name: it's used when the same session's chatSessions or debug log has it, otherwise only the tool is recorded.
 - Aider's history file has no time per edit: entries with a "Commit" line use that commit's time; the rest use the time zone of the repo's last commit.
 - Tools change their log formats: `creditia doctor` lists how much each source yielded and its earliest and latest day; formats it can't read raise a warning instead of being silently miscounted.

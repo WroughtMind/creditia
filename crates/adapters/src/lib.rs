@@ -1,5 +1,5 @@
 //! 各数据源 adapter：git、Codex、Claude Code、Cursor、Grok、Kimi、Gemini CLI、Qwen Code、OpenCode、Cline / Roo / Kilo、
-//! Aider、GitHub Copilot（VS Code 和命令行）、Amp、TRAE CLI、Crush。
+//! Aider、GitHub Copilot（VS Code 和命令行）、Amp、TRAE CLI、Crush、Goose、Continue。
 //! 只读打开，输出统一的行级证据和会话元数据。只认「成功写进文件」的编辑；路径映射回仓库内相对路径。
 
 pub mod aider;
@@ -7,11 +7,13 @@ pub mod amp;
 pub mod claude;
 pub mod cline;
 pub mod codex;
+pub mod cont;
 pub mod copilot;
 pub mod crush;
 pub mod cursor;
 pub mod gemini;
 pub mod git;
+pub mod goose;
 pub mod grok;
 pub mod kimi;
 pub mod opencode;
@@ -54,6 +56,8 @@ pub fn source_dir(src: Src) -> PathBuf {
         Src::Trae => env("CREDITIA_TRAE_DIR").or_else(|| env("TRAECLI_HOME")).or_else(|| env("TRAE_HOME").map(|p| p.join("cli"))).unwrap_or_else(|| home().join(".trae/cli")),
         // Crush：projects.json 所在的全局目录；每个项目的库在项目里（.crush/crush.db）
         Src::Crush => crush::global_dir(),
+        Src::Goose => goose::data_dir(),
+        Src::Continue => cont::global_dir(),
         // Aider 的记录在每个仓库根目录里（.aider.chat.history.md），没有统一位置
         Src::Aider => home(),
     }
