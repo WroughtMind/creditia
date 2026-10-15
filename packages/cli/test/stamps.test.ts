@@ -52,3 +52,20 @@ test('CI 里没有 credits.json：PR 评论读这些提交的盖章，Release �
     void readFileSync;
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('动态徽章：shields endpoint 的格式，没有档案时汇总全部提交的盖章', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'creditia-badge-'));
+  try {
+    git(dir, 'init', '-q', '-b', 'main');
+    writeFileSync(path.join(dir, 'a.txt'), Array.from({ length: 4 }, (_, i) => `l${i}`).join('\n') + '\n');
+    git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', 'a\n\nCreditia-Lines: claude-code/claude-opus-5-5 3 / 4');
+    const r = spawnSync(process.execPath, [bin, 'badge-json', '--repo', dir, '--lang', 'en'], { encoding: 'utf8', env: { ...process.env, CREDITIA_CORE: '/nonexistent' } });
+    assert.equal(r.status, 0, r.stderr);
+    const v = JSON.parse(r.stdout);
+    assert.equal(v.schemaVersion, 1);
+    assert.equal(v.label, 'written with');
+    assert.equal(v.message, 'Claude Code (Claude Opus 5.5) 75%');
+    assert.match(v.color, /^[0-9A-Fa-f]{6}$/);
+    assert.equal(v.namedLogo, 'claude');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
