@@ -112,7 +112,7 @@ jobs:
 | <img src=".github/readme/logo/claude-code.svg" width="18"> | Claude Code | `~/.claude/projects/*/*.jsonl` 的 Write / Edit / MultiEdit；渠道含 Bedrock、Vertex、中转站 | ✓ | ✓ |
 | <img src=".github/readme/logo/codex.svg" width="18"> | Codex | `~/.codex` 线程库 + rollout 的 FileChange；渠道看 `model_provider` | ✓ | ✓ |
 | <img src=".github/readme/logo/cursor.svg" width="18"> | Cursor | `ai-code-tracking.db` 逐行哈希，与 Cursor 自己的算法逐字节一致 | ✓ | ✓ |
-| <img src=".github/readme/logo/gemini.svg" width="18"> <img src=".github/readme/logo/qwen.svg" width="18"> | Gemini CLI · Qwen Code | `~/.gemini/tmp/<项目>/chats`（`.json` 与新版 `.jsonl`）里成功的 write / replace | ✓ | ✓ |
+| <img src=".github/readme/logo/gemini.svg" width="18"> <img src=".github/readme/logo/qwen.svg" width="18"> | Gemini CLI · Qwen Code | `~/.gemini/tmp/<项目>/chats`（`.json` 与新版 `.jsonl`）里成功的 write / replace；新版 Qwen Code 的 `~/.qwen/projects/*/chats/*.jsonl` | ✓ | ✓ |
 | <img src=".github/readme/logo/opencode.svg" width="18"> | OpenCode | `opencode.db`（新版的 SQLite，v1、v2 两代表结构都读）和老版的 `storage/*.json` 里 completed 的 edit / write / patch；渠道看 `providerID` | ✓ | ✓ |
 | <img src=".github/readme/logo/cline.svg" width="18"> <img src=".github/readme/logo/roo.svg" width="18"> <img src=".github/readme/logo/kilo.svg" width="18"> | Cline · Roo Code · Kilo Code | 各 VS Code 系编辑器里的 `tasks/*/ui_messages.json`；Kilo 命令行的 `kilo.db`（OpenCode 的分支） | ✓ | ✓ |
 | <img src=".github/readme/logo/grok.svg" width="18"> <img src=".github/readme/logo/kimi.svg" width="18"> | Grok · Kimi | 会话目录里的写文件调用 | ✓ | ✓ |

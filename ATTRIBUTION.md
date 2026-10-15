@@ -68,7 +68,7 @@
 - **手动关联**：`creditia link <路径>` 关联别的电脑上的路径或已经不存在的目录（会检查：目录还在的话必须是同一个仓库）；`creditia paths` 列出全部。配置里的 `paths` 也一样。
 - **路径映射**：日志里的绝对路径取「能在仓库历史里找到的最长后缀」作为仓库内相对路径，所以不同电脑、不同用户名、Windows 反斜杠都能对上。
 - **多台电脑**：`creditia evidence export` / `import` 合并证据库（只含哈希与元数据），根提交不一致会拒绝。
-- **Gemini CLI / Qwen Code** 旧版的目录名是项目路径的 SHA-256，没有明文路径：用上面登记过的全部路径逐个算哈希去对；新版 Gemini CLI 的目录是项目名，里面的 `.project_root` 写着项目路径，直接读。
+- **Gemini CLI / Qwen Code** 旧版的目录名是项目路径的 SHA-256，没有明文路径：用上面登记过的全部路径逐个算哈希去对；新版 Gemini CLI 的目录是项目名，里面的 `.project_root` 写着项目路径，直接读。新版 Qwen Code 改存 `projects/<目录>/chats/<会话>.jsonl`，每条记录都带 cwd，直接对。
 
 ## 5. 模型与渠道（含中转站）
 
@@ -107,7 +107,7 @@
 - agent 用 shell 命令写文件时，内容写在命令里的（`cat > file <<EOF`、`printf`、python 脚本里的新文本）按逐行证据算：命令原文的每一行只有真出现在那个文件的提交新增行里才算数，只读文件的命令（`cat`、`grep`）不会带来误认。内容是程序生成的（脚手架、代码生成脚本、`curl > file`）记「未确认」：那不是模型写的，和生成物一样不署给 AI。
 - 日志被工具自动清理后，只要之前跑过一次 `analyze` / `collect`，证据库里还留着；从没采集过的就只剩提交元数据。
 - 透传官方响应的中转站，渠道无法确定，不写。
-- 有些工具的本地记录读不出编辑：Windsurf 的 Cascade 记录是加密的；TRAE IDE 的格式没有公开；2026 年 3 月以后的 Amp 把线程存在服务器上。它们只能靠提交元数据或盖章，`creditia doctor` 会标「不支持」。TRAE 命令行按它公开的 rollout 格式读，还没在大量真实日志上验证过；OpenCode 新版的 SQLite（`opencode.db`）和 Kilo 命令行的 `kilo.db` 按源码读，也还没用真实日志核对过；Crush 按它的源码读（`files` 表逐版存的文件内容，用户在两次编辑之间手改后存的中间版本不算），也还没用真实日志核对过；Goose 按它的源码读 `sessions.db`（只认工具结果成功的调用），同样还没用真实日志核对过。Continue 也按源码读（只认状态为 done 的工具调用）；它的记录没有逐条时间，证据时间取会话的创建时间，模型是用户在配置里给模型起的标题。Zed 也按源码读（`threads.db` 里 0.3.0 格式的线程，编辑结果带改前改后的完整内容，报错的不算）；线程里同样没有逐条时间，模型按线程记。Amazon Q 命令行也按源码读（`data.sqlite3` 的 conversations 表），它每个目录只存最近一次对话，之前的只有分析过才留在证据库里。Antigravity 命令行（`agy`，Google 用来接替 Gemini CLI）闭源，格式没有公开，只能按第三方工具对真实日志的观察来读（`brain/<对话>/.system_generated/logs/transcript_full.jsonl`），还没用真实日志核对过；它的工具调用没有 id，按先后和结果对上，结果不是 DONE 的不算；日志里不记模型 id，模型取对话里「Model Selection」设置变更写的界面名字，没换过模型的对话不知道模型。Antigravity 编辑器的对话存成 `.pb`，读不了。
+- 有些工具的本地记录读不出编辑：Windsurf 的 Cascade 记录是加密的；TRAE IDE 的格式没有公开；2026 年 3 月以后的 Amp 把线程存在服务器上。它们只能靠提交元数据或盖章，`creditia doctor` 会标「不支持」。TRAE 命令行按它公开的 rollout 格式读，还没在大量真实日志上验证过；OpenCode 新版的 SQLite（`opencode.db`）和 Kilo 命令行的 `kilo.db` 按源码读，也还没用真实日志核对过；Crush 按它的源码读（`files` 表逐版存的文件内容，用户在两次编辑之间手改后存的中间版本不算），也还没用真实日志核对过；Goose 按它的源码读 `sessions.db`（只认工具结果成功的调用），同样还没用真实日志核对过。Continue 也按源码读（只认状态为 done 的工具调用）；它的记录没有逐条时间，证据时间取会话的创建时间，模型是用户在配置里给模型起的标题。Zed 也按源码读（`threads.db` 里 0.3.0 格式的线程，编辑结果带改前改后的完整内容，报错的不算）；线程里同样没有逐条时间，模型按线程记。Amazon Q 命令行也按源码读（`data.sqlite3` 的 conversations 表），它每个目录只存最近一次对话，之前的只有分析过才留在证据库里。Antigravity 命令行（`agy`，Google 用来接替 Gemini CLI）闭源，格式没有公开，只能按第三方工具对真实日志的观察来读（`brain/<对话>/.system_generated/logs/transcript_full.jsonl`），还没用真实日志核对过；它的工具调用没有 id，按先后和结果对上，结果不是 DONE 的不算；日志里不记模型 id，模型取对话里「Model Selection」设置变更写的界面名字，没换过模型的对话不知道模型。Antigravity 编辑器的对话存成 `.pb`，读不了。新版 Qwen Code 的 `projects/*/chats/*.jsonl` 按源码读，也还没用真实日志核对过。
 - Copilot 在 VS Code 里的 agent 记录不一定带模型名：同一会话的 chatSessions 或调试日志里有就用，都没有就只记工具。
 - Aider 的历史文件没有逐次编辑的时间：有「Commit」行的用那次提交的时间，没有的按仓库最后一次提交的时区估。
 - 各工具的日志格式会变：`creditia doctor` 会列出每个数据源读到了多少、最早最晚是哪天；读不懂的格式会报警告，不会默默算错。

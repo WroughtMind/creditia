@@ -124,6 +124,7 @@ fn scan_all(store: &mut Store, pm: &PathMap, roots: &[String], st: &mut ad::Stat
     ad::grok::scan(store, pm, st);
     ad::kimi::scan(store, pm, st);
     ad::gemini::scan(store, pm, roots, st);
+    ad::qwen::scan(store, pm, st);
     ad::opencode::scan(store, pm, st);
     ad::cline::scan(store, pm, st);
     ad::aider::scan(store, pm, roots, st);

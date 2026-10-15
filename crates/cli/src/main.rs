@@ -175,6 +175,7 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
     acts.extend(ad::grok::discover());
     acts.extend(ad::kimi::discover());
     acts.extend(ad::gemini::discover());
+    acts.extend(ad::qwen::discover());
     acts.extend(ad::opencode::discover());
     acts.extend(ad::cline::discover());
     acts.extend(ad::copilot::discover());
@@ -502,7 +503,7 @@ fn cmd_doctor(_a: &Args) -> R<(Value, Vec<String>)> {
 use creditia_core::tr;
     let mut hs = vec![
         ad::codex::doctor(), ad::claude::doctor(), ad::cursor::doctor(), ad::grok::doctor(), ad::kimi::doctor(),
-        ad::gemini::doctor(Src::Gemini), ad::gemini::doctor(Src::Qwen),
+        ad::gemini::doctor(Src::Gemini), ad::qwen::doctor(),
         ad::cline::doctor(Src::Cline), ad::cline::doctor(Src::Roo), ad::cline::doctor(Src::Kilo),
         ad::aider::doctor(), ad::amp::doctor(), ad::trae::doctor(), ad::crush::doctor(), ad::goose::doctor(), ad::cont::doctor(), ad::zed::doctor(), ad::amazonq::doctor(), ad::antigravity::doctor(),
     ];
