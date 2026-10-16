@@ -4,11 +4,11 @@ import * as C from '../../../packages/render/src/classic/data.ts';
 import { themeById } from '../../../packages/render/src/classic/themes.ts';
 import { ORDERED_THEMES, themeDot, themeName, themeNote, pieceName as cPiece, pieceQ as cQ, variantName as cVariant } from '../../../packages/render/src/classic/catalog.ts';
 import { variantsOf, defaultVariant, animatedClassic } from '../../../packages/render/src/classic/art.ts';
-import { prepare, render as classicRender, frames as classicFrames } from '../../../packages/render/src/classic/browser.ts';
+import { prepare, frames as classicFrames } from '../../../packages/render/src/classic/browser.ts';
 import { isBridged, bridgeStyle } from '../../../packages/render/src/classic/bridge.ts';
 import { STYLES } from '../../../packages/render/src/styles/index.ts';
 import * as V from '../../../packages/render/src/data.ts';
-import { PIECES, art as v2Art, frames as v2Frames, variantName as v2Variant } from '../../../packages/render/src/registry.ts';
+import { PIECES, frames as v2Frames, variantName as v2Variant } from '../../../packages/render/src/registry.ts';
 import type { Style } from '../../../packages/render/src/style.ts';
 import type { Art } from '../../../packages/render/src/export.ts';
 import { fontFiles, registerFonts, ready } from './fonts.ts';
@@ -68,14 +68,42 @@ const V2_BOARD: Tile[] = [
   { id: 'mosaic' }, { id: 'codemap', span: 2 }, { id: 'calendar', span: 2 }, { id: 'badge', variant: 'emblem' }, { id: 'badge', variant: 'stack' }, { id: 'badge', variant: 'flat' }, { id: 'byline', span: 2 },
 ];
 
+/** 同一份档案只传给排版线程一次；每张作品只传形式、版式和显示偏好。 */
+let renderer: Worker | null = null, renderSeq = 0, sentRaw: any;
+const previews = new WeakMap<Art, Blob>();
+export const previewOf = (art: Art) => previews.get(art);
+const rendering = new Map<number, { resolve: (a: Art | null) => void; reject: (e: Error) => void }>();
+function renderAway(raw: any, style: string, lang: Lang, id: string, variant: string | undefined, classic: boolean, grouping = group): Promise<Art | null> {
+  if (!renderer) {
+    renderer = new Worker(new URL('./render-worker.ts', import.meta.url), { type: 'module' });
+    renderer.onmessage = ({ data }) => {
+      const job = rendering.get(data.seq); if (!job) return;
+      rendering.delete(data.seq);
+      if (data.error) job.reject(new Error(data.error)); else { if (data.art) previews.set(data.art, data.preview); job.resolve(data.art); }
+    };
+    renderer.onerror = (event) => {
+      for (const job of rendering.values()) job.reject(new Error(event.message || 'Artwork renderer failed'));
+      rendering.clear(); renderer?.terminate(); renderer = null; sentRaw = undefined;
+    };
+  }
+  const seq = ++renderSeq;
+  const message: any = { seq, style, lang, id, variant, group: grouping, classic, previewWidth: Math.ceil(520 * devicePixelRatio) };
+  if (sentRaw !== raw) { message.raw = raw; sentRaw = raw; }
+  return new Promise((resolve, reject) => {
+    rendering.set(seq, { resolve, reject });
+    try { renderer!.postMessage(message); } catch (e) { rendering.delete(seq); sentRaw = undefined; reject(e); }
+  });
+}
+
 const classicKits: Kit[] = ORDERED_THEMES.map((t) => ({
   id: t.id, style: bridgeStyle(t), dot: themeDot(t),
   name: (lang) => themeName(t, lang), note: (lang) => themeNote(t, lang),
   board: CLASSIC_BOARD,
   // 原版没有的作品、追加的新风格版式按这个主题的颜色、字体、框线用新风格的画法画，先等字体
   render: async (raw, lang, id, variant) => {
+    const grouping = group;
     if (isBridged(id, variant)) await ready(bridgeStyle(t));
-    return classicRender(id, classicModel(raw, lang), t, { lang, variant });
+    return renderAway(raw, t.id, lang, id, variant, true, grouping);
   },
   frames: async (raw, lang, id, variant) => {
     if (isBridged(id, variant)) await ready(bridgeStyle(t));
@@ -93,7 +121,7 @@ const v2Kits: Kit[] = STYLES.filter((s) => !SKIP.has(s.id)).map((s) => ({
   id: s.id, style: s, dot: s.dot(),
   name: (lang) => (lang === 'zh' ? s.name : s.en), note: (lang) => (lang === 'zh' ? s.note : s.noteEn),
   board: V2_BOARD,
-  render: async (raw, lang, id, variant) => { await ready(s); return v2Art(id, v2Model(raw, lang), s, { variant }); },
+  render: async (raw, lang, id, variant) => { const grouping = group; await ready(s); return renderAway(raw, s.id, lang, id, variant, false, grouping); },
   frames: (raw, lang, id, variant) => v2Frames(id, v2Model(raw, lang), s, { variant }, 24),
   variants: (id) => PIECES[id]?.variants ?? [],
   current: (id, variant) => variant ?? s.prefer[id] ?? PIECES[id]?.variants?.[0],

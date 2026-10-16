@@ -142,7 +142,7 @@ body::after { /* 底下渐隐，浮在下面的风格栏和导出坞不和作品
 body.dragging .tile.placed { transition: none; }
 .tile .art, #focus .big .art { position: relative; } /* 悬停热区按作品本身摆，不然会盖住整层、挡住点空白处关闭 */
 .tile .art { border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 16px 44px rgba(0,0,0,.10); cursor: grab; background: transparent; }
-.tile .art svg { display: block; width: 100%; height: auto; }
+.tile .art svg, .tile .art > img { display: block; width: 100%; height: auto; }
 .tile::after { /* 悬停的虚线框 */
   content: ""; position: absolute; inset: -9px; border-radius: 14px; border: 1.25px dashed var(--dash); opacity: 0; transform: scale(.985); transition: opacity .18s, transform .18s; pointer-events: none;
 }
@@ -280,8 +280,9 @@ body.dragging #dock .sizes { display: flex; gap: 2px; padding: 3px; border-radiu
 #roam.panning, #roam.panning * { cursor: grabbing !important; }
 #roam .plane { position: absolute; left: 0; top: 0; will-change: transform; }
 #roam .rt { animation: rin .5s cubic-bezier(.2,.7,.2,1) both; }
-@keyframes rin { from { opacity: 0; filter: blur(6px); } }
-#roam .rt .art { cursor: inherit; }
+@keyframes rin { from { opacity: 0; } }
+#roam .rt .art { cursor: inherit; contain: layout paint; }
+#roam.panning .ct-hits { pointer-events: none; }
 #roam.panning .rt .bar, #roam.panning .rt::after { opacity: 0 !important; }
 #roam .rt .name .vn { margin-left: 8px; color: var(--faint); opacity: .8; }
 #roam .rt .name { max-width: calc(100% - 90px); }
