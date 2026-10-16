@@ -231,7 +231,10 @@ document.addEventListener('visibilitychange', refreshIfChanged);
 setInterval(refreshIfChanged, 30000);
 function rebuildModel() {
   // 全部项目的名字跟着界面语言
-  if (state.current?.all && state.raw?.project) state.raw.project.name = L('全部项目', 'All projects');
+  const name = L('全部项目', 'All projects');
+  if (state.current?.all && state.raw?.project && state.raw.project.name !== name) {
+    state.raw = { ...state.raw, project: { ...state.raw.project, name } };
+  }
   state.model = buildModel(state.raw, { director: false, lang: state.lang, group: groupPref() });
   const m = state.model;
   $('#pname').textContent = m.project || state.current?.name;
@@ -815,8 +818,9 @@ function resizeRoam(oldWidth: number, oldViewportWidth: number, oldViewportHeigh
   const centerX = (roam.x + oldViewportWidth / 2) / (oldWidth + RGAP);
   const centerY = roam.y + oldViewportHeight / 2;
   const centerColumn = roam.cols.get(Math.floor(centerX));
-  const anchor = centerColumn?.items.find((t) => t.y <= centerY && t.y + t.h >= centerY);
-  const fraction = anchor ? (centerY - anchor.y) / anchor.h : 0;
+  const anchor = centerColumn?.items.find((t) => t.y <= centerY && t.y + t.h + RGAP + CAP >= centerY);
+  const fraction = anchor ? Math.min(1, (centerY - anchor.y) / anchor.h) : 0;
+  const gap = anchor ? Math.max(0, centerY - anchor.y - anchor.h) : 0; // 图间距固定，不能随列宽缩放
   const cw = rcw(), P = pitch();
   if (cw !== oldWidth) for (const [X, col] of roam.cols) {
     for (const t of col.items) { t.w = Math.min(cw, t.a.w < 500 ? t.a.w * 1.15 : cw); t.h = t.w / t.a.w * t.a.h; }
@@ -831,7 +835,7 @@ function resizeRoam(oldWidth: number, oldViewportWidth: number, oldViewportHeigh
     }
   }
   roam.x = centerX * P - innerWidth / 2;
-  roam.y = (anchor ? anchor.y + fraction * anchor.h : centerY * cw / oldWidth) - innerHeight / 2;
+  roam.y = (anchor ? anchor.y + fraction * anchor.h + gap : centerY * cw / oldWidth) - innerHeight / 2;
   place();
 }
 

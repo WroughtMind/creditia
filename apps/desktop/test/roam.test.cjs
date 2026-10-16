@@ -99,7 +99,7 @@ function renderClient() {
   const workers = [];
   class Worker {
     constructor() { this.messages = []; workers.push(this); }
-    postMessage(message) { this.messages.push(message); }
+    postMessage(message) { this.messages.push(structuredClone(message)); }
     terminate() { this.terminated = true; }
   }
   const kits = fs.readFileSync(require.resolve('../src/kits.ts'), 'utf8');
@@ -114,12 +114,35 @@ test('worker jobs share the raw snapshot and match out-of-order replies by reque
   const first = ctx.renderAway(raw,'minimal-light','zh','share',undefined,true);
   const second = ctx.renderAway(raw,'minimal-light','zh','tier',undefined,true);
   const worker = workers[0], [a,b] = worker.messages;
-  assert.equal(a.raw, raw);
+  assert.deepEqual(a.raw, raw);
   assert.equal('raw' in b, false);
   worker.onmessage({data:{seq:b.seq,art:{title:'tier'}}});
   worker.onmessage({data:{seq:a.seq,art:{title:'share'}}});
   assert.equal((await first).title,'share');
   assert.equal((await second).title,'tier');
+});
+
+test('changing the aggregate language sends its updated project name to the worker', () => {
+  const {ctx, workers} = renderClient();
+  const original = { project: {name:'全部项目'}, contributors: [] };
+  ctx.state = {current: {all:true}, raw: original, lang:'zh'};
+  ctx.L = (zh,en) => ctx.state.lang === 'zh' ? zh : en;
+  ctx.groupPref = () => 'auto';
+  ctx.buildModel = raw => ({project:raw.project.name, commits:0, linesAdded:0});
+  ctx.$ = () => ({}); ctx.fmt = String; ctx.renderGroup = ctx.renderPlugs = () => {};
+  const rebuild = main.slice(main.indexOf('function rebuildModel()'), main.indexOf('// ───────────────────────── 接入'));
+  vm.runInContext(ts.transpile(rebuild, {target:ts.ScriptTarget.ES2022}) + '\nglobalThis.rebuildModel = rebuildModel;', ctx);
+  ctx.rebuildModel();
+  ctx.renderAway(ctx.state.raw,'minimal-light','zh','share',undefined,true);
+  ctx.state.lang = 'en'; ctx.rebuildModel();
+  ctx.renderAway(ctx.state.raw,'minimal-light','en','share',undefined,true);
+  const [first,second] = workers[0].messages;
+  assert.equal(first.raw.project.name,'全部项目');
+  assert.equal(second.raw?.project.name,'All projects');
+  assert.equal(original.project.name,'全部项目');
+  const snapshot = ctx.state.raw;
+  ctx.rebuildModel();
+  assert.equal(ctx.state.raw,snapshot);
 });
 
 test('a worker failure rejects pending artwork instead of leaving it waiting', async () => {
@@ -146,6 +169,21 @@ test('fullscreen resizing reflows existing artwork without discarding it', async
     assert.equal(items[i].w,520);
     if(i) assert.ok(items[i].y >= items[i-1].y+items[i-1].h+86);
   }
+});
+
+test('resizing keeps a distant gap at the viewport center without jumping artwork', async () => {
+  const {ctx} = scene(() => false);
+  for (let i=0;i<3;i++) await ctx.grow(0,-700,45000);
+  const anchor = ctx.roam.cols.get(0).items.find(t => t.r === 99);
+  assert.ok(anchor);
+  ctx.roam.x = (380+56)/2 - 1000/2;
+  ctx.roam.y = anchor.y + anchor.h + 43 - 700/2;
+  ctx.innerWidth = 2000; ctx.innerHeight = 1000;
+  ctx.resizeRoam(380,1000,700);
+  assert.ok(Math.abs(ctx.roam.y + 500 - (anchor.y + anchor.h + 43)) < 1e-6);
+  ctx.innerWidth = 1000; ctx.innerHeight = 700;
+  ctx.resizeRoam(520,2000,1000);
+  assert.ok(Math.abs(ctx.roam.y + 350 - (anchor.y + anchor.h + 43)) < 1e-6);
 });
 
 
