@@ -9,7 +9,8 @@
     "tauri": "tauri",
     "fonts": "node tools/fonts.mjs",
     "icon": "node tools/icon.mjs && tauri icon tools/icon.png && rm -rf src-tauri/icons/android src-tauri/icons/ios",
-    "core": "node tools/core.mjs"
+    "core": "node tools/core.mjs",
+    "test": "node --test test/*.test.cjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.1",

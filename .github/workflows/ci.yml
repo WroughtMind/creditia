@@ -49,6 +49,8 @@ jobs:
         working-directory: packages/render
       - run: npm ci
         working-directory: apps/desktop
+      - run: npm test
+        working-directory: apps/desktop
       - name: 字体子集
         run: npm run fonts
         working-directory: apps/desktop
