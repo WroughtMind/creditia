@@ -683,7 +683,7 @@ function openFocus(id: string, k: string) {
 // 每轮一圈就换下一种版式，所以走得越远，看到的是同一件作品的别的画法，而不是原样复制。
 // 拖动（或滚轮、触控板）移动画布；点一下放大，悬停点「导出」。只把视口附近的作品放进页面。
 type RItem = { r: number; y: number; h: number; w: number; id: string; k: string; v?: string; a: Art };
-type RCol = { items: RItem[]; busy: boolean };
+type RCol = { items: RItem[]; busy: boolean; next: number; prev: number };
 const roam = { x: 0, y: 0, cols: new Map<number, RCol>(), els: new Map<string, HTMLElement>(), gen: 0, vx: 0, vy: 0, raf: 0, ready: false };
 const CAP = 30, RGAP = 56, STEP = 5;
 const view = () => (store.get('view') === 'roam' ? 'roam' : 'wall');
@@ -714,33 +714,35 @@ async function rItem(X: number, r: number): Promise<RItem | null> {
 /** 让第 X 栏盖住 [top, bottom]；一栏同时只长一处，长完再看一遍 */
 async function grow(X: number, top: number, bottom: number) {
   let col = roam.cols.get(X);
-  if (!col) { col = { items: [], busy: false }; roam.cols.set(X, col); }
+  if (!col) { col = { items: [], busy: false, next: 0, prev: -1 }; roam.cols.set(X, col); }
   if (col.busy) return;
   col.busy = true;
   const gen = roam.gen;
+  const before = col.items.length;
   try {
     let guard = 0;
     while (gen === roam.gen && guard++ < 40) {
       const it = col.items;
       if (!it.length) {
-        const f = await rItem(X, 0); if (gen !== roam.gen) return;
-        if (!f) break;
+        const f = await rItem(X, col.next++); if (gen !== roam.gen) return;
+        if (!f) continue;
         f.y = colOff(X); it.push(f); continue;
       }
       const last = it[it.length - 1], first = it[0];
       if (last.y + last.h < bottom) {
-        const f = await rItem(X, last.r + 1); if (gen !== roam.gen) return;
-        if (!f) { last.r++; continue; } // 画不出来的跳过
+        const f = await rItem(X, col.next++); if (gen !== roam.gen) return;
+        if (!f) continue; // 跳过空作品，已显示作品的行号保持不变
         f.y = last.y + last.h + RGAP + CAP; it.push(f);
       } else if (first.y - CAP > top) {
-        const f = await rItem(X, first.r - 1); if (gen !== roam.gen) return;
-        if (!f) { first.r--; continue; }
+        const f = await rItem(X, col.prev--); if (gen !== roam.gen) return;
+        if (!f) continue;
         f.y = first.y - CAP - RGAP - f.h; it.unshift(f);
       } else break;
       place();
     }
   } finally { col.busy = false; }
-  if (gen === roam.gen) place();
+  // 没有新增作品时不自动重试，否则空数据会形成永不让出界面线程的 Promise 循环。
+  if (gen === roam.gen && col.items.length > before) place();
 }
 /** 只把视口附近的作品放进页面，远的拿掉；缺的让那一栏去长 */
 function place() {
