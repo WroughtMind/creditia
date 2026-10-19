@@ -137,7 +137,9 @@ export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
   const W = 1200;
   const { s, c } = canvas(m, st, W, 550, 40, true);
   const x0 = c.x + 56, x1 = c.x + c.w - 56;
-  st.label(s, T(m, '署名', 'CREDITS'), x0, c.y + 70, { size: 14 });
+  // 顶上的小标签和底下一行贴着四角：底板角上有装饰（巴洛克的卷草）时往里让开
+  const kx = Math.max(0, (c.corner ?? 0) + 14 - 56);
+  st.label(s, T(m, '署名', 'CREDITS'), x0 + kx, c.y + 70, { size: 14 });
   st.title(s, m.project || 'Untitled', x0, c.y + 170, 96, 'start', { maxW: x1 - x0 });
   // 工具数、模型数不随分组方式变
   const ag = [...new Set(m.agents.filter((a) => a.kind === 'agent').map((a) => a.tool))];
@@ -170,9 +172,9 @@ export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.hit(lx, ly - 30, w, 44, tip(m, a));
     lx += w + 40;
   }
-  s.text(summary(m), x0, c.y + c.h - 50, { font: st.f.body, size: 17, fill: st.c.soft });
+  s.text(summary(m), x0 + kx, c.y + c.h - 50, { font: st.f.body, size: 17, fill: st.c.soft });
   const hf = handFacts(m)[0];
-  if (hf) s.text(hf.text, x1, c.y + c.h - 50, { font: st.f.body, size: 17, fill: st.c.soft, anchor: 'end' });
+  if (hf) s.text(hf.text, x1 - kx, c.y + c.h - 50, { font: st.f.body, size: 17, fill: st.c.soft, anchor: 'end' });
   return s;
 }
 
