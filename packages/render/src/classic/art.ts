@@ -5,7 +5,7 @@ import type { Model } from './data.ts';
 import type { Theme } from './themes.ts';
 import type { Art } from '../export.ts';
 import { pieceName } from './catalog.ts';
-import { FIT_KEY } from './ui.ts';
+import { FIT_KEY, BODY_KEY, CONTENT_KEY } from './ui.ts';
 import { enTree, enSvg } from './i18n.ts';
 import { BRIDGED, BRIDGED_LAYOUTS, isBridged, bridgeArt, bridgeFrames } from './bridge.ts';
 import { reveal, rise, RISING } from './motion.ts';
@@ -21,14 +21,16 @@ const tidy = (svg: string, w: number, h: number) => svg.replace(/satori_/g, `s${
   // 阴影滤镜的区域是元素的好几倍，栅格化时很吃内存；画布外本来看不见，收到画布以内
   .replace(/<filter id="([^"]+)" x="[^"]*" y="[^"]*" width="[^"]*" height="[^"]*"/g, `<filter id="$1" filterUnits="userSpaceOnUse" x="0" y="0" width="${w}" height="${h}"`);
 
-/** 找到要放大的节点 */
-function findFit(n: any): any {
+/** 按 key 找节点 */
+function findKey(n: any, key: string): any {
   if (!n || typeof n !== 'object') return null;
-  if (n.key === FIT_KEY) return n;
+  if (n.key === key) return n;
   const kids = n.props?.children;
-  for (const k of Array.isArray(kids) ? kids : [kids]) { const f = findFit(k); if (f) return f; }
+  for (const k of Array.isArray(kids) ? kids : [kids]) { const f = findKey(k, key); if (f) return f; }
   return null;
 }
+/** 找到要放大的节点 */
+const findFit = (n: any) => findKey(n, FIT_KEY);
 
 function findSpread(n: any): any {
   if (!n || typeof n !== 'object') return null;
@@ -52,9 +54,59 @@ async function equalize(tree: any, w: number, h: number, satori: Satori, fonts: 
   for (const n of nodes) n.props.style = { ...n.props.style, width: Math.ceil(max.get(n.eqGroup)!) + 2 };
 }
 
+/** 标了 oneLine 的文字：折行就收字号，收到底还折行就按字数均分成两行（见 ui.oneLine） */
+async function oneLines(out: { tree: any; w: number; h: number }, satori: Satori, fonts: any[]) {
+  const nodes: any[] = [];
+  const walk = (n: any) => { if (!n || typeof n !== 'object') return; if (n.oneLine) nodes.push(n); const k = n.props?.children; for (const c of Array.isArray(k) ? k : [k]) walk(c); };
+  walk(out.tree);
+  if (!nodes.length) return;
+  const base = new Map(nodes.map((n) => [n, Number(n.props.style.fontSize ?? 16)]));
+  let todo = nodes;
+  // 离画布左右边至少留 24：贴边的一行也算放不下
+  const edge = 24;
+  for (let pass = 0; pass < 6 && todo.length; pass++) {
+    const at = new Map<string, Seen>();
+    await satori(out.tree, { width: out.w, height: out.h, fonts, onNodeDetected: (x) => { if (typeof x.key === 'string' && x.key.startsWith('creditia-line:')) at.set(x.key, x); } });
+    todo = todo.filter((n) => { const x = at.get(n.key); return !!x && (x.height > Number(n.props.style.fontSize) * 1.8 || x.left < edge || x.left + x.width > out.w - edge); });
+    for (const n of todo) {
+      const fs = Number(n.props.style.fontSize), min = base.get(n)! * 0.78;
+      if (fs > min + 0.01) n.props.style = { ...n.props.style, fontSize: Math.max(min, Math.round(fs * 0.93 * 100) / 100) };
+      else {
+        // 字号到底了：拆成两行，断在最接近一半的空格或标点后面
+        const text = String(n.props.children);
+        const cut = [...text.matchAll(/[\s、，,]/g)].map((x) => x.index! + 1).sort((a, b) => Math.abs(a - text.length / 2) - Math.abs(b - text.length / 2))[0] ?? Math.ceil(text.length / 2);
+        n.props = { ...n.props, style: { ...n.props.style, flexDirection: 'column', alignItems: 'center', lineHeight: 1.25 },
+          children: [text.slice(0, cut).trim(), text.slice(cut).trim()].map((l) => ({ type: 'div', props: { style: { display: 'flex', whiteSpace: 'nowrap' }, children: l } })) };
+        n.oneLine = false;
+      }
+    }
+    todo = todo.filter((n) => n.oneLine);
+  }
+}
+
+/** 高度随内容的作品：正文比正文区高出多少，画布就加高多少（表头、框线、底部刻度都按实际排版算进去） */
+async function grow(out: { tree: any; w: number; h: number }, satori: Satori, fonts: any[]) {
+  const node = findKey(out.tree, CONTENT_KEY);
+  if (!node) return;
+  // 先在足够高的画布上排一遍：正文区撑开，正文是它本来的高度；正文区以下（图例、留白、框线）贴着底边
+  node.props.style = { ...node.props.style, flexShrink: 0 };
+  const tall = out.h + 4000, root = out.tree.props.style;
+  out.tree.props.style = { ...root, height: tall };
+  let body: Seen | undefined, content: Seen | undefined;
+  await satori(out.tree, { width: out.w, height: tall, fonts, onNodeDetected: (x) => { if (x.key === BODY_KEY) body = x; else if (x.key === CONTENT_KEY) content = x; } });
+  out.tree.props.style = root;
+  if (!body || !content) return;
+  const need = Math.ceil(content.top + content.height + (tall - (body.top + body.height)));
+  if (need <= out.h) return;
+  out.h = need;
+  out.tree.props.style = { ...root, height: need };
+}
+
 /** seen：最后出图那一遍里每个节点的位置（悬停细节用） */
-async function fitted(out: { tree: any; w: number; h: number; fit?: { padX: number; padY: number } }, satori: Satori, fonts: any[], seen?: Seen[]): Promise<string> {
+async function fitted(out: { tree: any; w: number; h: number; fit?: { padX: number; padY: number }; grow?: boolean }, satori: Satori, fonts: any[], seen?: Seen[]): Promise<string> {
   await equalize(out.tree, out.w, out.h, satori, fonts);
+  await oneLines(out, satori, fonts);
+  if (out.grow) await grow(out, satori, fonts);
   const node = out.fit ? findFit(out.tree) : null;
   let box: { width: number; height: number } | null = null;
   const pass: Seen[] = [];
