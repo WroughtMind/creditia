@@ -21,6 +21,23 @@ const isAi = (k: string) => !!BRANDS[k.split('/')[0]] && !BOTS.has(k);
 const hair = (t: Theme) => (t.family === 'editorial' ? 'rgba(18,17,16,0.28)' : t.family === 'mono' ? 'rgba(0,0,0,0.18)' : t.line);
 const hexA = (hex: string, a: string) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + a : hex);
 /** satori 不支持 dotted 边框；点线引导用 repeating-linear-gradient 画 */
+/** 单色风格「只有黑白灰」：小票、App 致谢页里写死的纸色、票边红、系统蓝，在单色下一律按亮度换成灰 */
+const greyOf = (r: number, g: number, b: number) => Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+const greyCss = (v: string) => v
+  .replace(/#([0-9a-fA-F]{6})([0-9a-fA-F]{2})?\b/g, (_, c: string, a = '') => { const y = greyOf(parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)).toString(16).padStart(2, '0'); return `#${y}${y}${y}${a}`; })
+  .replace(/rgba?\((\d+),\s*(\d+),\s*(\d+)/g, (_, r: string, g: string, b: string) => { const y = greyOf(+r, +g, +b); return `rgba(${y},${y},${y}`; });
+function greyNode(n: any): void {
+  if (!n || typeof n !== 'object') return;
+  if (Array.isArray(n)) { n.forEach(greyNode); return; }
+  const st = n.props?.style;
+  if (st) for (const k of Object.keys(st)) if (typeof st[k] === 'string') st[k] = greyCss(st[k]);
+  greyNode(n.props?.children);
+}
+function monoGrey(t: Theme, out: Out): Out {
+  if (t.family === 'mono') greyNode(out.tree);
+  return out;
+}
+
 const dotline = (t: Theme, color?: string) => ({ height: 2, alignSelf: 'center' as const, backgroundImage: `repeating-linear-gradient(90deg, ${color ?? t.faint} 0px, ${color ?? t.faint} 2px, transparent 2px, transparent 7px)` });
 
 /** 人：不和 agent 同级。单独一行小字写名字和占比，不放条形 */
@@ -914,7 +931,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
 
 // ═════════════════════════ 精力小票 ═════════════════════════
 
-export const RECEIPT_VARIANTS = ['slip', 'thermal', 'folio', 'stub', 'ticket', 'ledger', 'scroll'];
+export const RECEIPT_VARIANTS = ['slip', 'thermal', 'folio', 'stub', 'ticket', 'ledger', 'scroll', 'themed'];
 export const RECEIPT_DEFAULT: Record<string, string> = {
   terminal: 'thermal', mono: 'thermal', editorial: 'folio', film: 'stub',
   cinema: 'ticket', playbill: 'ticket', gala: 'folio', broadsheet: 'ledger', crt: 'scroll', arcade: 'scroll', neon: 'slip', poster: 'ledger',
@@ -922,6 +939,9 @@ export const RECEIPT_DEFAULT: Record<string, string> = {
 
 /** 精力小票：只回答"花了多少精力"。四种版式：清单 / 热敏纸 / 财务单 / 电影票 */
 export function receipt(m: Model, t: Theme, variant?: string): Out {
+  return monoGrey(t, receiptOf(m, t, variant));
+}
+function receiptOf(m: Model, t: Theme, variant?: string): Out {
   const v = variant ?? RECEIPT_DEFAULT[t.family] ?? 'slip';
   const W = 1080, H = 1350;
   const items: [string, string, string?][] = [];
@@ -1091,6 +1111,35 @@ export function receipt(m: Model, t: Theme, variant?: string): Out {
           txt({ fontFamily: t.labelFont, fontSize: 11, color: hexA(fg, '77'), letterSpacing: 2, marginTop: 4 }, '由 creditia 开具')))) };
   }
 
+  if (v === 'themed') {
+    // 随风格：票面就是这个风格自己的底板，框线、底纹、字体、强调色都跟主题走（磷光屏的扫描线和磷光字、街机的像素框和像素字）
+    const range = `${m.range.from.replaceAll('-', '.')} — ${m.range.to.replaceAll('-', '.')}`;
+    const row = (k: string, val: string) => box({ alignItems: 'baseline', padding: '11px 0' },
+      txt({ fontFamily: t.sans, fontSize: 21, color: t.soft }, k),
+      box({ flex: 1, margin: '0 12px', ...dotline(t) }),
+      txt({ fontFamily: t.num, fontSize: 27, color: t.ink, whiteSpace: 'pre' }, val));
+    const barcode = Array.from({ length: 46 }, (_, i) => { const hh = (m.project.charCodeAt(i % Math.max(m.project.length, 1)) * 37 + i * 11) % 9; return box({ width: 1 + (hh % 3), height: 54, backgroundColor: t.ink, marginRight: 2 }); });
+    const ais = m.rows.filter((r) => r.kind === 'agent' && isAi(r.key));
+    return { w: W, h: H, tree: box({ width: W, height: H, alignItems: 'center', justifyContent: 'center', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
+      plate(t, { width: 620, height: 1230, boxShadow: t.shadow === 'none' ? undefined : t.shadow, borderRadius: Math.min(t.radius, 12) }, [
+        col({ alignItems: 'center', gap: 10, padding: '18px 0 0' },
+          label(t, 'ENERGY RECEIPT 精力小票', 13),
+          txt({ fontFamily: t.display, fontSize: t.display === t.sans ? 46 : 54, fontWeight: t.displayWeight, color: t.ink, textAlign: 'center', marginTop: 6 }, m.project),
+          txt({ fontFamily: t.num, fontSize: 17, color: t.faint }, range)),
+        box({ marginTop: 26, justifyContent: 'center' }, ornament(t, 14)),
+        col({ marginTop: 14 }, ...items.map(([k, val]) => row(k, val))),
+        box({ flexGrow: 1 }),
+        box({ borderTop: `2px solid ${t.accent}`, marginTop: 12, paddingTop: 14, justifyContent: 'space-between', alignItems: 'baseline' },
+          label(t, '合计 TOTAL', 15, { color: t.accent }),
+          txt({ fontFamily: t.num, fontSize: 34, color: t.accent }, m.linesAdded ? `+${fmt(m.linesAdded)}` : `${fmt(m.commits)}`)),
+        ais.length ? box({ justifyContent: 'center', marginTop: 30, gap: 14 }, ...ais.map((r) => mark(r.key, t, 22, t.soft))) : null,
+        col({ alignItems: 'center', gap: 8, marginTop: 30, paddingBottom: 10 },
+          box({ alignItems: 'flex-end' }, ...barcode),
+          txt({ fontFamily: t.num, fontSize: 14, color: t.soft, letterSpacing: 4 }, `NO.${String(m.commits % 100000).padStart(5, '0')}`),
+          label(t, '由 creditia 开具', 11, { color: t.faint, marginTop: 4 })),
+      ])) };
+  }
+
   // slip：干净的纸质清单
   const rule = box({ height: 0, borderTop: `1.5px dashed ${t.line}`, margin: '8px 0' });
   const paper = col({ width: 620, padding: '64px 56px 56px', ...surface(t, { borderRadius: Math.min(t.radius, 10) }), gap: 0 },
@@ -1151,8 +1200,34 @@ export function term(cmd: string, lines: Seg[][], t: Theme, m?: Model): Out {
 
 // ═════════════════════════ App 内致谢页 ═════════════════════════
 
+export const APP_VARIANTS = ['ios', 'themed'];
+
+/** App 内致谢页。ios：iOS 设置页样式（固定的平台媒介）；themed：同样的信息排在这个风格自己的底板、字体和强调色里 */
+export function appPage(m: Model, t: Theme, variant?: string): Out {
+  return monoGrey(t, variant === 'themed' ? appThemed(m, t) : appIos(m, t));
+}
+
+function appThemed(m: Model, t: Theme): Out {
+  const s = 2, W = 390 * s;
+  const rows = m.rows.filter((r) => r.key !== 'human');
+  const pm = plateMetrics(t);
+  const rowH = 50 * s, chrome = 2 * (pm.pad + pm.border);
+  const H = Math.ceil(54 * s + 44 * s + 52 * s + chrome + rows.length * rowH + 44 * s + 40 * s);
+  const cellRow = (r: Contributor, border: boolean) => box({ alignItems: 'center', gap: 12 * s, height: rowH, flexShrink: 0, borderBottom: border ? `${s}px solid ${hair(t)}` : 'none' },
+    mark(r.key, t, 22 * s),
+    txt({ fontFamily: t.sans, fontSize: 16 * s, color: r.key === 'unattributed' ? t.soft : t.ink, flexShrink: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }, r.name),
+    txt({ marginLeft: 'auto', paddingLeft: 10 * s, fontFamily: t.num, fontSize: 17 * s, color: t.soft, flexShrink: 0 }, pct(r.pct)));
+  return { w: W, h: H, tree: col({ width: W, height: H, ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans, padding: `${54 * s}px ${16 * s}px 0` },
+    box({ height: 44 * s, alignItems: 'center', position: 'relative', flexShrink: 0 },
+      txt({ fontFamily: t.labelFont, fontSize: 15 * s, color: t.accent, letterSpacing: Math.round(15 * s * t.labelTrack * 0.5) }, '‹ 关于'),
+      txt({ position: 'absolute', left: 0, right: 0, justifyContent: 'center', fontFamily: t.display, fontSize: 19 * s, fontWeight: t.displayWeight, color: t.ink }, '致谢')),
+    box({ height: 52 * s, alignItems: 'flex-end', padding: `0 ${4 * s}px ${10 * s}px`, flexShrink: 0 }, label(t, m.project, 13 * s)),
+    plate(t, { borderRadius: Math.min(t.radius, 12) * s, flexShrink: 0 }, [col({}, ...rows.map((r, i) => cellRow(r, i < rows.length - 1)))]),
+    txt({ fontFamily: t.num, fontSize: 13 * s, color: t.soft, margin: `${12 * s}px ${4 * s}px` }, `${fmt(m.commits)} 次提交 · ${fmt(m.linesAdded)} 行`)) };
+}
+
 /** App 内致谢页（iOS 设置页样式） */
-export function appPage(m: Model, t: Theme): Out {
+function appIos(m: Model, t: Theme): Out {
   const s = 2, W = 390 * s;
   const rows = m.rows.filter((r) => r.key !== 'human');
   const H = (54 + 44 + 20 + (m.director ? 92 : 0) + 30 + rows.length * 50 + (m.humans.length ? 40 : 0) + 40 + 40) * s;

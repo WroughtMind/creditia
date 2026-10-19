@@ -6,6 +6,8 @@ import { Scene, el, g, rect, circle, line, path, r, rng, hash, mix, measure } fr
 
 const TYPE = '#24221F', RED = '#C2382B', SHEET = '#F3EDE1';
 const TW = { family: 'Courier Prime, Noto Serif SC', weight: 400 };
+const MS_GLYPH = ['=', '#', '*', '+', '~', ':'];
+
 export const manuscript: Style = defineStyle({
   id: 'manuscript', name: '手稿', en: 'Manuscript', note: '打字机打出的书稿，编辑用红铅笔批注，咖啡渍还在', noteEn: 'A typewritten manuscript with an editor\'s red-pencil notes and a coffee ring', dark: false,
   c: { bg: '#E7DFCF', paper: SHEET, ink: TYPE, soft: '#5E5850', faint: '#A39B8D', line: 'rgba(36,34,31,0.2)', accent: RED, accent2: RED },
@@ -39,12 +41,13 @@ export const manuscript: Style = defineStyle({
     return w;
   },
   num(s, text, x, y, size, anchor = 'end', o = {}) { return s.text(text, x, y, { font: manuscript.f.num, size: size * 0.8, fill: o.fill ?? TYPE, anchor, extra: { filter: roughen(s, 'ms-n', 0.6, 0.9, 4) } }); },
-  bar(s, x, y, w, h, color) {
+  bar(s, x, y, w, h, color, i) {
     if (h > w * 1.5) { s.add(rect(x, y, w, h, { fill: color, filter: roughen(s, 'ms-bv', 0.8, 0.6, 6) })); return; }
-    // 打字机的等号串
-    const size = 16, cw = measure('=', TW, size);
+    // 打字机的字符串：每一档灰配一个字符，图例和条里按颜色对得上
+    const k = manuscript.series.indexOf(color), ch = color === RED ? 'x' : MS_GLYPH[(k < 0 ? i ?? 0 : k) % MS_GLYPH.length];
+    const size = 16, cw = measure(ch, TW, size);
     const n = Math.max(1, Math.floor(w / cw));
-    s.text('='.repeat(n), x, y + h / 2 + 5, { font: TW, size, fill: TYPE, extra: { filter: roughen(s, 'ms-b', 0.6, 0.9, 6) } });
+    s.text(ch.repeat(n), x, y + h / 2 + 5, { font: TW, size, fill: color, extra: { filter: roughen(s, 'ms-b', 0.6, 0.9, 6) } });
   },
   track(s, x, y, w, h) { s.text('.'.repeat(Math.floor(w / measure('.', TW, 16))), x, y + h / 2 + 5, { font: TW, size: 16, fill: TYPE, opacity: 0.25 }); },
   mark(s, key, cx, cy, size) {

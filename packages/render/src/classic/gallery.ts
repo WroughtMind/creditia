@@ -36,7 +36,7 @@ for (const [id, f] of Object.entries(FORMS)) {
 
 // 版式变体：片尾字幕五种版式都用 Film Credits；小票各回自己的风格
 // 每种版式在哪个主题下最像自己
-const HOME: Record<string, string> = { slip: 'minimal-light', thermal: 'terminal', folio: 'editorial', stub: 'film', ticket: 'cinema', ledger: 'broadsheet', scroll: 'crt' };
+const HOME: Record<string, string> = { slip: 'minimal-light', thermal: 'terminal', folio: 'editorial', stub: 'film', ticket: 'cinema', ledger: 'broadsheet', scroll: 'crt', themed: 'arcade' };
 const ROLL_HOME: Record<string, string> = { cast: 'cinema', scroll: 'crt', cards: 'arcade', end: 'gala', block: 'poster', program: 'playbill' };
 const variants: [string, string, string][] = [
   ...ROLL_VARIANTS.map((v): [string, string, string] => ['roll', ROLL_HOME[v] ?? 'film', v]),
@@ -65,7 +65,7 @@ const groups: [string, string[]][] = [
 ];
 const width: Record<string, number> = { tier: 360, app: 300, receipt: 420, roll: 420, byline: 720, share: 720, ribbon: 620, mosaic: 620, settle: 620 };
 const text = (f: string) => `<pre>${esc(readFileSync(path.join(outDir, f), 'utf8'))}</pre>`;
-const VNAME: Record<string, string> = { classic: '居中堆叠', columns: '双栏', billing: '海报演职员表', title: '标题卡', crawl: '爬行定格', slip: '纸质清单', thermal: '热敏纸', folio: '财务单', stub: '电影票', cast: '卡司表', scroll: '双栏滚屏 / 长卷纸', cards: '卡串', end: '终卡', block: 'billing block', program: '节目单', ticket: '电影票', ledger: '账簿', };
+const VNAME: Record<string, string> = { classic: '居中堆叠', columns: '双栏', billing: '海报演职员表', title: '标题卡', crawl: '爬行定格', slip: '纸质清单', thermal: '热敏纸', folio: '财务单', stub: '电影票', cast: '卡司表', scroll: '双栏滚屏 / 长卷纸', cards: '卡串', end: '终卡', block: 'billing block', program: '节目单', ticket: '电影票', ledger: '账簿', themed: '随风格', };
 const section = (id: string) => {
   if (id === 'badge') return `<section><h3>徽章<span>README 顶部；浅色/深色底各看一遍</span></h3><div class="badges">${THEMES.map((t) => `<img data-t="${t.id}" src="badge-${t.id}.svg">`).join('')}</div><div class="badges dark">${THEMES.map((t) => `<img data-t="${t.id}" src="badge-${t.id}.svg">`).join('')}</div></section>`;
   if (id === 'roll-variants') return `<section><h3>片尾字幕 · 版式<span>classic / columns / billing / title / crawl</span></h3><div class="imgs">${ROLL_VARIANTS.map((v) => `<a data-t="${ROLL_HOME[v] ?? 'film'}" href="roll-${ROLL_HOME[v] ?? 'film'}-${v}.png" target="_blank"><figure><img loading="lazy" src="roll-${ROLL_HOME[v] ?? 'film'}-${v}.png" style="width:340px"><figcaption>${v} · ${VNAME[v]}</figcaption></figure></a>`).join('')}</div></section>`;

@@ -73,6 +73,10 @@ export const VARIANT_INFO: Record<string, [string, string]> = {
   // 小票
   slip: ['收银条', 'Slip'], thermal: ['热敏纸', 'Thermal'], folio: ['账页', 'Folio'], stub: ['票根', 'Stub'], ticket: ['电影票', 'Ticket'],
   ledger: ['账本', 'Ledger'],
+  // 小票、App 致谢页：按这个风格自己的底板画
+  themed: ['随风格', 'In theme'],
+  // App 致谢页
+  ios: ['iOS 设置页', 'iOS Settings'],
   // 原来没有版式的作品，原版自己的画法
   original: ['原版', 'Original'],
 };
