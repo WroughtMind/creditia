@@ -10,7 +10,7 @@ export function screentone(s: Scene, name: string, color = K, size = 7, dot = 1.
   return s.url(`mg-tone-${name}`, (id) => el('pattern', { id, width: size, height: size, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, circle(size / 2, size / 2, dot, { fill: color })));
 }
 /** 集中线：从中心向外的黑色细三角 */
-export function speedLines(s: Scene, cx: number, cy: number, R0: number, R1: number, n: number, seed: number, color = K) {
+export function speedLines(s: Scene, cx: number, cy: number, R0: number, R1: number, n: number, seed: number, color = K, at: Record<string, string> = {}) {
   const rnd = rng(seed);
   const parts: string[] = [];
   for (let i = 0; i < n; i++) {
@@ -19,7 +19,7 @@ export function speedLines(s: Scene, cx: number, cy: number, R0: number, R1: num
     const r0 = R0 * (0.85 + rnd() * 0.5);
     parts.push(path(`M${r(cx + Math.cos(a - w) * R1)} ${r(cy + Math.sin(a - w) * R1)}L${r(cx + Math.cos(a) * r0)} ${r(cy + Math.sin(a) * r0)}L${r(cx + Math.cos(a + w) * R1)} ${r(cy + Math.sin(a + w) * R1)}Z`, { fill: color }));
   }
-  s.add(g({}, ...parts));
+  s.add(g(at, ...parts));
 }
 /** 拟声字：描边、倾斜、错落 */
 export function sfx(s: Scene, text: string, x: number, y: number, size: number, rot: number, color = PUR) {
@@ -49,6 +49,23 @@ export const manga: Style = defineStyle({
     sfx(s, go, b.x + b.w * 0.94, b.y + b.h * 0.47, big * 0.82, 14);
     sfx(s, go, b.x + b.w * 0.07, b.y + b.h * 0.86, big * 0.9, -10);
     sfx(s, go, b.x + b.w * 0.12, b.y + b.h * 0.94, big * 0.7, -8);
+  },
+  strip(s, b, m) {
+    // 窄条是一格横向分镜：粗黑框，集中线和网点只在上下两条边带里，中间一整条白底给文字
+    s.bg = W;
+    s.add(rect(b.x, b.y, b.w, b.h, { fill: W }));
+    const band = 22;
+    const clip = s.def('mg-strip-bands', (id) => el('clipPath', { id }, rect(b.x, b.y, b.w, band), rect(b.x, b.y + b.h - band, b.w, band)));
+    speedLines(s, b.x + b.w * 0.78, b.y + b.h / 2, b.h * 0.6, b.w * 0.9, 150, hash(m.project), K, { clipPath: `url(#${clip})` });
+    s.add(path(`M${r(b.x)} ${r(b.y)}H${r(b.x + b.w * 0.36)}L${r(b.x + b.w * 0.33)} ${r(b.y + band)}H${r(b.x)}Z`, { fill: W }),
+      path(`M${r(b.x)} ${r(b.y)}H${r(b.x + b.w * 0.36)}L${r(b.x + b.w * 0.33)} ${r(b.y + band)}H${r(b.x)}Z`, { fill: screentone(s, 'a', K, 6, 1.1), opacity: 0.55 }));
+    // 边带和文字带之间的分镜线
+    s.add(rect(b.x, b.y + band - 2, b.w, 3, { fill: K }), rect(b.x, b.y + b.h - band - 1, b.w, 3, { fill: K }));
+    s.add(rect(b.x + 2, b.y + 2, b.w - 4, b.h - 4, { fill: 'none', stroke: K, strokeWidth: 4 }));
+    // 拟声字落在右端的边带上（英文版用感叹号）
+    const go = m.lang === 'en' ? '!' : 'ゴ';
+    sfx(s, go, b.x + b.w - 40, b.y + band - 2, 26, 12);
+    sfx(s, go, b.x + b.w - 70, b.y + b.h - 4, 20, -8);
   },
   plate(s, b) {
     // 粗黑框分镜

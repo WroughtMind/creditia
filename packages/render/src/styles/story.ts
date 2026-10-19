@@ -201,6 +201,19 @@ export const cutout: Style = defineStyle({
     }
     grain(s, b, { opacity: 0.12, seed: 101, color: '#3A1A08' });
   },
+  strip(s, b, m, aside) {
+    // 窄条：黑纸条贴着上边、米白纸条贴着下边，右端一张米白小纸片托住统计；中间的文字带只留橙色
+    s.bg = ORANGE;
+    s.add(rect(b.x, b.y, b.w, b.h, { fill: ORANGE }));
+    const seed = hash(m.project), rnd = rng(seed);
+    const w1 = b.w * (0.4 + rnd() * 0.2);
+    s.add(path(cut(b.x + b.w - w1 - 40, b.y - 8, w1, 22, seed, 0.03), { fill: CHAR, transform: `rotate(-1.2 ${r(b.x + b.w - w1 / 2)} ${r(b.y)})` }));
+    const w2 = b.w * (0.3 + rnd() * 0.15);
+    s.add(path(cut(b.x + 60, b.y + b.h - 12, w2, 18, seed + 1, 0.04), { fill: PAPER, opacity: 0.9, transform: `rotate(0.8 ${r(b.x + 60 + w2 / 2)} ${r(b.y + b.h)})` }));
+    const tw = aside.w + 44, tx = aside.x - 22, ty = aside.y - 12;
+    s.add(path(cut(tx, ty, tw, aside.h + 24, seed + 2, 0.03), { fill: PAPER, transform: `rotate(-1.5 ${r(tx + tw / 2)} ${r(ty + aside.h / 2 + 12)})` }));
+    grain(s, b, { opacity: 0.12, seed: 101, color: '#3A1A08' });
+  },
   plate(s, b) {
     s.add(path(cut(b.x + 30, b.y + 30, b.w - 60, b.h - 60, 7, 0.012), { fill: PAPER }));
     return { x: b.x + 30, y: b.y + 30, w: b.w - 60, h: b.h - 60 };

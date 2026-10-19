@@ -19,7 +19,7 @@ export const FONTS: FontFace[] = [
   ...F('Pinyon Script', 'pinyon-script', [[400, '400Regular']]),
   ...F('Pirata One', 'pirata-one', [[400, '400Regular']]),
   ...F('UnifrakturMaguntia', 'unifrakturmaguntia', [[400, '400Regular']]),
-  ...F('IM Fell English', 'im-fell-english', [[400, '400Regular'], [400, '400Regular_Italic', true]]),
+  ...F('IM FELL English', 'im-fell-english', [[400, '400Regular'], [400, '400Regular_Italic', true]]),
   // ── 文学、打字机 ──
   ...F('Courier Prime', 'courier-prime', [[400, '400Regular'], [700, '700Bold'], [400, '400Regular_Italic', true]]),
   // ── 几何、海报 ──

@@ -177,8 +177,8 @@ export const grimoire: Style = defineStyle({
   c: { bg: PARCH, paper: '#E0CFA8', ink: BROWN, soft: '#5E4630', faint: '#9C8462', line: 'rgba(46,31,18,0.3)', accent: BLOOD, accent2: BLOOD },
   series: [BROWN, BLOOD, '#4C5A4A', '#6B4A2E', '#3E4A5C', '#8A6A3A'],
   f: {
-    display: { family: 'Pirata One, UnifrakturMaguntia, Noto Serif SC', weight: 400 }, body: { family: 'IM Fell English, Noto Serif SC', weight: 400 },
-    num: { family: 'IM Fell English, Noto Serif SC', weight: 400 }, label: { family: 'IM Fell English, Noto Serif SC', weight: 400 }, mono: { family: 'IM Fell English, Noto Serif SC' },
+    display: { family: 'Pirata One, UnifrakturMaguntia, Noto Serif SC', weight: 400 }, body: { family: 'IM FELL English, Noto Serif SC', weight: 400 },
+    num: { family: 'IM FELL English, Noto Serif SC', weight: 400 }, label: { family: 'IM FELL English, Noto Serif SC', weight: 400 }, mono: { family: 'IM FELL English, Noto Serif SC' },
     script: { family: 'UnifrakturMaguntia, Noto Serif SC' },
   },
   labelTrack: 0.22, prefer: { tier: 'rows', roll: 'classic' },

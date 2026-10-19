@@ -34,6 +34,9 @@ export interface Style {
   dot(): string;
   /** 整张作品的底：纸、天空、电路板…… */
   ground(s: Scene, b: Box, m: Model): void;
+  /** 窄幅（署名行 1200×120）的底，可选：大画幅的构图挪到窄条上会压住文字，这里装饰只放在上下边和两头，中间留整条文字带。
+   *  aside 是右端统计那一块，风格可以给它垫一块底 */
+  strip?(s: Scene, b: Box, m: Model, aside: Box): void;
   /** 卡片面（可选）：玻璃、羊皮纸、面板。返回内容区 */
   plate(s: Scene, b: Box): Box;
   title(s: Scene, text: string, x: number, y: number, size: number, anchor?: 'start' | 'middle' | 'end', o?: { maxW?: number; fill?: string }): number;

@@ -1,7 +1,7 @@
 // SVG 场景：所有作品都是手写 SVG。一张作品 = 一个 Scene：画面（字符串）+ 可交互区域（hits）。
 // 文字用 <text>，字宽按 metrics.json 估算；导出时由 resvg 转成路径，所以任何环境下看到的都一样。
 import METRICS from './metrics.json' with { type: 'json' };
-import { familiesIn } from './fonts.ts';
+import { familiesIn, FONTS } from './fonts.ts';
 
 type Metric = { w: Record<string, number>; cjk: number | null; cap: number; asc: number; desc: number };
 const M = METRICS as Record<string, Metric>;
@@ -95,6 +95,23 @@ export function wrap(s: string, f: FontSpec, size: number, maxW: number, track =
   return lines;
 }
 
+/** 中西文混排：resvg 给一个文字块挑同一个字体，第一个字体（拉丁字体）缺中文时整块都落到中文字体上，
+ *  西文就不再是这个风格的字，宽度也和度量对不上。拆成几段：每段从量好的位置另起一块（tspan 带 x），
+ *  中文段只写中文字体，西文段用原字体。返回 null 表示不用拆 */
+const CJK_FAMILIES = new Set(FONTS.filter((f) => f.cjk).map((f) => f.family));
+function scriptRuns(str: string, f: FontSpec, size: number, track: number, x0: number): string | null {
+  const fams = familiesIn(f.family);
+  if (fams.length < 2 || CJK_FAMILIES.has(fams[0]) || !CJK.test(str) || ![...str].some((ch) => !isCjk(ch) && ch.trim())) return null;
+  const cjk = fams.filter((x) => CJK_FAMILIES.has(x)).join(', ') || 'Noto Sans SC';
+  const runs = str.match(new RegExp(`${CJK.source}+|(?:(?!${CJK.source}).)+`, 'gu')) ?? [str];
+  let x = x0;
+  return runs.map((run) => {
+    const at = r(x);
+    x += measure(run, f, size, track) + track * size;
+    return el('tspan', { x: at, fontFamily: CJK.test(run) ? cjk : null }, esc(run));
+  }).join('');
+}
+
 // ───────────────────────── 场景 ─────────────────────────
 
 /** 悬停提示：k 是贡献方 key，同 key 的区域一起高亮 */
@@ -162,14 +179,17 @@ export class Scene {
     let yy = y;
     if (o.base === 'middle') yy = y + capOf(o.font, size) / 2;
     else if (o.base === 'top') yy = y + capOf(o.font, size);
+    // 混排拆段时各段的位置是量出来的，统一从左边排起
+    const x0 = o.anchor === 'middle' ? x - w / 2 : o.anchor === 'end' ? x - w : x;
+    const runs = scriptRuns(str, o.font, size, track, x0);
     // letter-spacing 会在末字后面也加一份间距；居中、右对齐时补偿回来
     const dx = track && o.anchor === 'middle' ? (track * size) / 2 : track && o.anchor === 'end' ? track * size : 0;
     this.out.push(el('text', {
-      x: x + dx, y: yy, fontFamily: o.font.family, fontSize: size, fontWeight: o.font.weight ?? 400, fontStyle: o.font.italic ? 'italic' : null,
-      fill: o.fill ?? '#000', textAnchor: o.anchor && o.anchor !== 'start' ? o.anchor : null, letterSpacing: track ? r(track * size) : null,
+      x: runs ? r(x0) : x + dx, y: yy, fontFamily: o.font.family, fontSize: size, fontWeight: o.font.weight ?? 400, fontStyle: o.font.italic ? 'italic' : null,
+      fill: o.fill ?? '#000', textAnchor: !runs && o.anchor && o.anchor !== 'start' ? o.anchor : null, letterSpacing: track ? r(track * size) : null,
       opacity: o.opacity, stroke: o.stroke, strokeWidth: o.strokeW, paintOrder: o.stroke ? 'stroke' : null, strokeLinejoin: o.stroke ? 'round' : null,
       transform: o.rotate ? `rotate(${o.rotate} ${r(x)} ${r(y)})` : null, ...(o.extra ?? {}),
-    }, esc(str)));
+    }, runs ?? esc(str)));
     return w;
   }
   /** 竖排：汉字直立，连续的拉丁字母、数字转 90°。(x, y) 是第一个字的顶部中心。返回总高度 */

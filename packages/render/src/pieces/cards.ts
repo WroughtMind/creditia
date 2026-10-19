@@ -275,55 +275,76 @@ function splitBadge(m: Model, st: Style): Scene | null {
 export const BYLINE_VARIANTS = ['line', 'models'];
 
 export function byline(m: Model, st: Style, o: PieceOpts): Scene | null {
-  if (o.variant === 'models') return bylineModels(m, st);
-  const lead = m.rows.filter((a) => a.kind === 'agent');
+  const models = o.variant === 'models';
+  const lead = (models ? m.tools : m.rows).filter((a) => a.kind === 'agent');
   if (!lead.length) return null;
   const W = 1200, H = 120;
   const s = new Scene(W, H);
-  st.ground(s, { x: 0, y: 0, w: W, h: H }, m);
+  // 先排固定信息：右边的统计、句尾「写成」，再把剩下的宽度分给名字
+  const sum = summary(m), sumW = measure(sum, st.f.label, 14) * 1.04;
+  // 窄幅有自己的底（装饰让开中间的文字带）；没有就用大画幅的底
+  if (st.strip) st.strip(s, { x: 0, y: 0, w: W, h: H }, m, { x: W - 48 - sumW, y: 58, w: sumW, h: 18 });
+  else st.ground(s, { x: 0, y: 0, w: W, h: H }, m);
+  const tail = T(m, '写成', '');
+  const nameY = models ? 66 : 72;
   let x = 48;
-  x += st.title(s, m.project, x, 74, 34) + 26;
+  x += st.title(s, m.project, x, 74, 34, 'start', { maxW: 300 }) + 26;
   s.add(line(x, 44, x, 80, { stroke: st.c.ink, strokeOpacity: 0.3 }));
   x += 26;
-  x += s.text(T(m, '用', 'with'), x, 72, { font: st.f.body, size: 20, fill: st.c.soft }) + 16;
-  for (const a of lead.slice(0, 4)) {
-    st.mark(s, a.key, x + 12, 64, 22);
-    const w = s.text(a.name, x + 30, 72, { font: st.f.body, size: 20, fill: st.c.ink });
-    s.hit(x - 4, 44, w + 40, 40, tip(m, a));
-    x += w + 54;
-    if (x > W - 300) break;
+  x += s.text(T(m, '用', 'with'), x, nameY, { font: st.f.body, size: 20, fill: st.c.soft }) + 16;
+  const end = W - 48 - sumW - 36;
+  const subOf = (a: Agent) => { const segs = segsOf(m, st, a).filter((q) => !q.unknown); return segs.length > 1 ? segs.slice(0, 3).map((q) => q.name).join(' · ') : modelLine(a); };
+  const more = (k: number) => T(m, `等 ${k} 个`, `+${k} more`);
+  const plan = bylinePlan(lead, models ? 3 : 4, st, x, end, tail, more, models ? subOf : null);
+  for (const it of plan.items) {
+    const a = it.a;
+    st.mark(s, a.key, it.x + 12, nameY - 8, 22);
+    s.text(it.name, it.x + 30, nameY, { font: st.f.body, size: plan.size, fill: st.c.ink });
+    if (it.sub) s.text(it.sub, it.x + 30, 90, { font: st.f.body, size: 13, fill: st.c.soft, maxW: it.subW, overflow: 'clip' });
+    s.hit(it.x - 4, models ? 38 : 44, it.w + 34, models ? 60 : 40, tip(m, a));
   }
-  s.text(T(m, '写成', ''), x - 10, 72, { font: st.f.body, size: 20, fill: st.c.soft });
-  s.text(summary(m), W - 48, 72, { font: st.f.label, size: 14, fill: st.c.faint, anchor: 'end' });
+  let tx = plan.end;
+  if (plan.more) tx += s.text(more(plan.more), tx, nameY, { font: st.f.body, size: plan.size, fill: st.c.soft }) + 10;
+  if (tail) s.text(tail, tx, nameY, { font: st.f.body, size: plan.size, fill: st.c.soft });
+  s.text(sum, W - 48, 72, { font: st.f.label, size: 14, fill: st.c.faint, anchor: 'end' });
   return s;
 }
 
-/** 带模型的署名行：每个工具后面用小字写它的模型，按工具分不丢模型 */
-function bylineModels(m: Model, st: Style): Scene | null {
-  const lead = m.tools.filter((a) => a.kind === 'agent');
-  if (!lead.length) return null;
-  const W = 1200, H = 120;
-  const s = new Scene(W, H);
-  st.ground(s, { x: 0, y: 0, w: W, h: H }, m);
-  let x = 48;
-  x += st.title(s, m.project, x, 74, 34) + 26;
-  s.add(line(x, 44, x, 80, { stroke: st.c.ink, strokeOpacity: 0.3 }));
-  x += 26;
-  x += s.text(T(m, '用', 'with'), x, 66, { font: st.f.body, size: 20, fill: st.c.soft }) + 16;
-  for (const a of lead.slice(0, 3)) {
-    st.mark(s, a.key, x + 12, 58, 22);
-    const w = s.text(a.name, x + 30, 66, { font: st.f.body, size: 20, fill: st.c.ink });
-    const segs = segsOf(m, st, a).filter((q) => !q.unknown);
-    const sub = segs.length > 1 ? segs.slice(0, 3).map((q) => q.name).join(' · ') : modelLine(a);
-    const sw = sub ? s.text(sub, x + 30, 90, { font: st.f.body, size: 13, fill: st.c.soft, maxW: 260, overflow: 'clip' }) : 0;
-    s.hit(x - 4, 38, Math.max(w, sw) + 40, 60, tip(m, a));
-    x += Math.max(w, Math.min(sw, 260)) + 54;
-    if (x > W - 300) break;
-  }
-  s.text(T(m, '写成', ''), x - 10, 66, { font: st.f.body, size: 20, fill: st.c.soft });
-  s.text(summary(m), W - 48, 72, { font: st.f.label, size: 14, fill: st.c.faint, anchor: 'end' });
-  return s;
+/** 署名行里名字怎么排：字号从 20 往下试到 16；还放不下先去掉名字后面的说明（「（未记录模型）」「· 工具」），
+ *  再从后往前收进「等 N 个」，最后才截断。名字之间 34；句尾跟在最后一个名字后面（带模型时模型小字可以伸到句尾下面） */
+function bylinePlan(lead: Agent[], cap: number, st: Style, x0: number, end: number, tail: string, more: (k: number) => string, subOf: ((a: Agent) => string) | null) {
+  const GAP = 34, LOGO = 30;
+  const short = (n: string) => n.replace(/\s*(（[^）]+）|\([^)]+\)|·\s.+)$/, '') || n;
+  const tryAt = (size: number, n: number, bare: boolean, clipTo = Infinity) => {
+    const moreW = n < lead.length ? measure(more(lead.length - n), st.f.body, size) + 10 : 0;
+    const tailW = tail ? measure(tail, st.f.body, size) + 14 : 0;
+    let x = x0, stop = x0, reach = x0;
+    const items = lead.slice(0, n).map((a, k) => {
+      let name = bare ? short(a.name) : a.name, nw = measure(name, st.f.body, size) * 1.03;
+      if (nw > clipTo) { name = clipName(name, st, size, clipTo); nw = measure(name, st.f.body, size); }
+      const sub = subOf?.(a) ?? '';
+      const last = k === n - 1;
+      // 模型小字：最后一项可以伸到句尾下面，一直到统计前面；其余的不超过下一项
+      const subMax = last ? Math.max(nw, end - x - LOGO) : Math.max(nw, 300);
+      const subW = sub ? Math.min(subMax, measure(sub, st.f.body, 13)) : 0;
+      const w = last ? nw : Math.max(nw, subW);
+      const it = { a, name, sub, subW: Math.max(subW, nw), x, w };
+      stop = x + LOGO + nw + 14;
+      reach = Math.max(stop + moreW + tailW, x + LOGO + subW);
+      x += LOGO + w + GAP;
+      return it;
+    });
+    return { size, items, end: stop, more: lead.length - n, fits: reach <= end };
+  };
+  const N = Math.min(cap, lead.length);
+  for (const bare of [false, true])
+    for (const size of [20, 18, 16]) { const p = tryAt(size, N, bare); if (p.fits) return p; }
+  for (let n = N - 1; n >= 1; n--)
+    for (const size of [20, 18, 16]) { const p = tryAt(size, n, true); if (p.fits) return p; }
+  // 只剩一个名字还放不下：截断它
+  return tryAt(16, 1, true, Math.max(80, end - x0 - LOGO - 60));
 }
+const clipName = (s: string, st: Style, size: number, maxW: number) => { const c = [...s]; while (c.length > 1 && measure(c.join('') + '…', st.f.body, size) > maxW) c.pop(); return c.join('').trimEnd() + '…'; };
 
 // ───────────────────────── 人的部分 ─────────────────────────
 
