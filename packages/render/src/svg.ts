@@ -107,7 +107,8 @@ function scriptRuns(str: string, f: FontSpec, size: number, track: number, x0: n
   let x = x0;
   return runs.map((run) => {
     const at = r(x);
-    x += measure(run, f, size, track) + track * size;
+    // SVG 默认把连续空白并成一个，量宽也按并过的算，否则下一段会往右多空出一截
+    x += measure(run.replace(/\s+/g, ' '), f, size, track) + track * size;
     return el('tspan', { x: at, fontFamily: CJK.test(run) ? cjk : null }, esc(run));
   }).join('');
 }

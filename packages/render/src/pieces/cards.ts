@@ -135,7 +135,7 @@ function ticket(m: Model, st: Style, _o: PieceOpts): Scene {
 export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
   const t = o.t ?? 1;
   const W = 1200;
-  const { s, c } = canvas(m, st, W, 550, 40);
+  const { s, c } = canvas(m, st, W, 550, 40, true);
   const x0 = c.x + 56, x1 = c.x + c.w - 56;
   st.label(s, T(m, '署名', 'CREDITS'), x0, c.y + 70, { size: 14 });
   st.title(s, m.project || 'Untitled', x0, c.y + 170, 96, 'start', { maxW: x1 - x0 });

@@ -54,12 +54,13 @@ export const range = (m: Model) => (m.range.from ? `${m.range.from.replaceAll('-
 export const summary = (m: Model) => T(m, `${fmt(m.commits)} 次提交 · ${fmt(m.linesAdded)} 行${m.spanDays ? ` · ${m.spanDays} 天` : ''}`, `${fmt(m.commits)} commits · ${fmt(m.linesAdded)} lines${m.spanDays ? ` · ${m.spanDays} days` : ''}`);
 export { fmt, compact, nameOf };
 
-/** 画布：底图铺满，卡片面避开风格的保留边距。innerH 是内容区高度 */
-export function canvas(m: Model, st: Style, W: number, innerH: number, M = 34): { s: Scene; c: Box; H: number } {
+/** 画布：底图铺满，卡片面避开风格的保留边距。innerH 是内容区高度。
+ *  fixed：画幅是定死的（分享图 1200×630 这类平台尺寸），底板不加高，内容区照旧收进框线里 */
+export function canvas(m: Model, st: Style, W: number, innerH: number, M = 34, fixed = false): { s: Scene; c: Box; H: number } {
   const R = st.reserve;
   // 底板自己有框线和留白：先在草稿上量出它往里收多少，底板加高这么多，内容区才真有 innerH 那么高
-  const probe = st.plate(new Scene(W, innerH + 2000), { x: M, y: M + R.top, w: W - M * 2, h: innerH + 1000 });
-  const inset = Math.max(0, probe.y - (M + R.top)) + Math.max(0, M + R.top + innerH + 1000 - (probe.y + probe.h));
+  const probe = fixed ? null : st.plate(new Scene(W, innerH + 2000), { x: M, y: M + R.top, w: W - M * 2, h: innerH + 1000 });
+  const inset = !probe ? 0 : Math.max(0, probe.y - (M + R.top)) + Math.max(0, M + R.top + innerH + 1000 - (probe.y + probe.h));
   const H = innerH + inset + M * 2 + R.top + R.bottom;
   const s = new Scene(W, H);
   st.ground(s, { x: 0, y: 0, w: W, h: H }, m);
