@@ -1464,7 +1464,8 @@ export function versions(m: Model, t: Theme): Out | null {
         ...stack.map((k, j) => (by[v][k] ? box({ height: `${(by[v][k] / totals[i]) * 100}%`, minHeight: 2, ...fill({ key: k }, t, j, 3) }) : null)))),
     txt({ marginTop: 22, fontFamily: t.num === t.sans ? MONO_FONT : t.num, fontSize: 22, color: t.ink }, v === 'unreleased' ? '未发布' : v),
     txt({ marginTop: 6, fontSize: 14, color: t.soft }, v === 'unreleased' ? `${compact(totals[i])} 行` : `${tags.find((x) => x.tag === v)?.date.replaceAll('-', '.')} · ${compact(totals[i])} 行`)));
-  return frame(m, t, 1200, 740, '各版本新增代码', box({ justifyContent: 'center', gap: 64, flex: 1, alignItems: 'flex-end' }, ...bars));
+  // 版本说明和图例之间留出一截（表头高的体裁里两行几乎贴在一起）；放不下时和泳道一样出图前量一遍再加高
+  return { ...frame(m, t, 1200, 740, '各版本新增代码', box({ justifyContent: 'center', gap: 64, flex: 1, alignItems: 'flex-end', paddingBottom: 30 }, ...bars)), grow: true };
 }
 
 /** 沉淀：写下的代码至今还剩多少 */

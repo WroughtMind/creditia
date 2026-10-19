@@ -89,12 +89,15 @@ async function grow(out: { tree: any; w: number; h: number }, satori: Satori, fo
   const node = findKey(out.tree, CONTENT_KEY);
   if (!node) return;
   // 先在足够高的画布上排一遍：正文区撑开，正文是它本来的高度；正文区以下（图例、留白、框线）贴着底边
-  node.props.style = { ...node.props.style, flexShrink: 0 };
+  // 正文自己是 flex: 1 时（版本柱状图）量的时候不让它撑满，量完还原，出图时照旧铺满加高后的正文区
+  const own = { ...node.props.style, flexShrink: 0 };
+  node.props.style = { ...own, flexGrow: 0, flexBasis: 'auto' };
   const tall = out.h + 4000, root = out.tree.props.style;
   out.tree.props.style = { ...root, height: tall };
   let body: Seen | undefined, content: Seen | undefined;
   await satori(out.tree, { width: out.w, height: tall, fonts, onNodeDetected: (x) => { if (x.key === BODY_KEY) body = x; else if (x.key === CONTENT_KEY) content = x; } });
   out.tree.props.style = root;
+  node.props.style = own;
   if (!body || !content) return;
   const need = Math.ceil(content.top + content.height + (tall - (body.top + body.height)));
   if (need <= out.h) return;
