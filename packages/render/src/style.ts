@@ -5,7 +5,7 @@ import { LOGOS } from './logos.ts';
 import type { Model } from './data.ts';
 import { SHADES } from './data.ts';
 
-export interface Box { x: number; y: number; w: number; h: number }
+export interface Box { x: number; y: number; w: number; h: number; /** 底板角上装饰（涡卷）伸进内容区的方块边长：标题、图例这类贴角的文字要让开 */ corner?: number }
 export interface Palette {
   bg: string; paper: string; ink: string; soft: string; faint: string; line: string; accent: string; accent2: string;
 }

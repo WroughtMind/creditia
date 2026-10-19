@@ -1079,7 +1079,8 @@ export function receipt(m: Model, t: Theme, variant?: string): Out {
           txt({ fontFamily: t.labelFont, fontSize: 11, letterSpacing: 3, color: hexA(fg, 'AA') }, 'ENERGY RECEIPT 精力小票')),
         txt({ fontFamily: t.display, fontSize: 46, color: fg, margin: '22px 0 6px', textAlign: 'center' }, m.project),
         txt({ fontFamily: MONO_FONT, fontSize: 15, color: hexA(fg, '88'), textAlign: 'center' }, `${m.range.from.replaceAll('-', '.')} — ${m.range.to.replaceAll('-', '.')}`),
-        txt({ fontFamily: MONO_FONT, fontSize: 17, color: hexA(fg, '66'), whiteSpace: 'pre', marginTop: 18 }, '· '.repeat(30)),
+        // 点线按纸面内容宽度（560 减去左右留白）能放下几组「· 」来排，不越出纸边
+        txt({ fontFamily: MONO_FONT, fontSize: 17, color: hexA(fg, '66'), whiteSpace: 'pre', marginTop: 18, alignSelf: 'center' }, '· '.repeat(Math.floor((560 - 56 * 2) / measure('· ', { family: MONO_FONT, weight: 400 }, 17))).trimEnd()),
         col({ flexGrow: 1, marginTop: 6 }, ...items.map(([k, val]) => row(k, val))),
         box({ borderTop: `2px solid ${hexA(fg, '66')}`, paddingTop: 12, justifyContent: 'space-between' },
           txt({ fontFamily: MONO_FONT, fontSize: 20, color: fg, fontWeight: 700 }, '合计 TOTAL'),

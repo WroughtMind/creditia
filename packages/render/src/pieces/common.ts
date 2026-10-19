@@ -57,12 +57,18 @@ export { fmt, compact, nameOf };
 /** 画布：底图铺满，卡片面避开风格的保留边距。innerH 是内容区高度 */
 export function canvas(m: Model, st: Style, W: number, innerH: number, M = 34): { s: Scene; c: Box; H: number } {
   const R = st.reserve;
-  const H = innerH + M * 2 + R.top + R.bottom;
+  // 底板自己有框线和留白：先在草稿上量出它往里收多少，底板加高这么多，内容区才真有 innerH 那么高
+  const probe = st.plate(new Scene(W, innerH + 2000), { x: M, y: M + R.top, w: W - M * 2, h: innerH + 1000 });
+  const inset = Math.max(0, probe.y - (M + R.top)) + Math.max(0, M + R.top + innerH + 1000 - (probe.y + probe.h));
+  const H = innerH + inset + M * 2 + R.top + R.bottom;
   const s = new Scene(W, H);
   st.ground(s, { x: 0, y: 0, w: W, h: H }, m);
-  const c = st.plate(s, { x: M, y: M + R.top, w: W - M * 2, h: innerH });
+  const c = st.plate(s, { x: M, y: M + R.top, w: W - M * 2, h: innerH + inset });
   return { s, c, H };
 }
+
+/** 底板角上装饰往内容区里伸多深（没有就是 0）：在草稿上画一次底板量出来 */
+export const plateCorner = (st: Style, W: number, M = 34) => st.plate(new Scene(W, 2000), { x: M, y: M, w: W - M * 2, h: 1000 }).corner ?? 0;
 
 /** 竖排文字的高度（与 Scene.vtext 同一算法） */
 export function measureV(str: string, st: Style, size: number, font = st.f.display): number {
