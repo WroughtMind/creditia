@@ -4,22 +4,26 @@ import { Scene, rect, line, path, circle, el, g, r, ease, arc, mix } from '../sv
 import type { Model, Agent } from '../data.ts';
 import { fmt, pct, compact } from '../data.ts';
 import type { Style, Box } from '../style.ts';
-import { T, colorOf, tip, canvas, handTip, keyRank, legendRows, type PieceOpts } from './common.ts';
+import { T, colorOf, tip, canvas, plateCorner, handTip, keyRank, legendRows, type PieceOpts } from './common.ts';
 import { segsOf, segTip } from './tier.ts';
 
 /** 图的外框：标签 + 标题 + 图例，返回绘图区 */
 function frame(m: Model, st: Style, W: number, plotH: number, kicker: string, title: string, legend = true): { s: Scene; p: Box } {
   const legendH = legend ? 50 : 0;
-  const { s, c } = canvas(m, st, W, 170 + plotH + legendH + 50, 34);
+  // 没有图例时绘图区和下面的刻度一直排到底：底板角上有装饰就留出它的高度，刻度不压在角花上
+  const corner = legend ? 0 : plateCorner(st, W);
+  const { s, c } = canvas(m, st, W, Math.max(170 + plotH + legendH + 50, 160 + plotH + 36 + corner), 34);
   const x0 = c.x + 50, x1 = c.x + c.w - 50;
-  st.label(s, kicker, x0, c.y + 58, { size: 13 });
-  st.title(s, title, x0, c.y + 116, 40, 'start', { maxW: x1 - x0 });
-  st.label(s, m.project, x1, c.y + 58, { anchor: 'end', size: 13, fill: st.c.faint });
+  // 底板角上有装饰时，贴角的表头和图例往里让，绘图区不动
+  const hx0 = Math.max(x0, c.x + (c.corner ?? 0) + 14), hx1 = Math.min(x1, c.x + c.w - (c.corner ?? 0) - 14);
+  st.label(s, kicker, hx0, c.y + 58, { size: 13 });
+  st.title(s, title, hx0, c.y + 116, 40, 'start', { maxW: x1 - hx0 });
+  st.label(s, m.project, hx1, c.y + 58, { anchor: 'end', size: 13, fill: st.c.faint });
   if (legend) {
-    let x = x0;
+    let x = hx0;
     const y = c.y + 170 + plotH + 40;
     for (const a of legendRows(m)) {
-      if (x > x1 - 120) break;
+      if (x > hx1 - 120) break;
       if (a.key === 'unattributed') s.add(rect(x, y - 11, 14, 14, { fill: st.hatch(s), rx: 3 }));
       else s.add(rect(x, y - 11, 14, 14, { fill: colorOf(st, a), rx: Math.min(3, st.radius) }));
       const w = s.text(a.name, x + 22, y + 1, { font: st.f.body, size: 15, fill: st.c.soft });
@@ -240,7 +244,8 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
 // ───────────────────────── 会话泳道 ─────────────────────────
 
 export function lanes(m: Model, st: Style, o: PieceOpts): Scene | null {
-  const ss = m.timeline.filter((x) => x.start && x.end);
+  // 结束早于开始的会话（自动 review 的记录里有）按开始那一刻画一下，时间轴不被它撑出绘图区
+  const ss = m.timeline.filter((x) => x.start && x.end).map((x) => (x.end < x.start ? { ...x, end: x.start } : x));
   if (ss.length < 3) return null;
   const t = o.t ?? 1;
   const keys = orderKeys(m, ss.map((x) => x.key));

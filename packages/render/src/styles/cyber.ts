@@ -34,10 +34,13 @@ export const cyber: Style = defineStyle({
     s.text(`SYS//CREDITIA  ${String(hash(m.project) % 10000).padStart(4, '0')}-${String(m.commits).padStart(4, '0')}`, b.x + pad + 34, b.y + pad + 16, { font: cyber.f.label, size: 11, fill: C, track: 0.2, opacity: 0.85 });
     // 条形码
     const rnd = rng(hash(m.project) + 3);
-    let bx = b.x + b.w - pad - 34 - 110;
-    const by = b.y + b.h - pad - 30;
+    // 窄条（署名行）：条形码挪到上边、警示条左边，右下留给统计
+    const narrow = b.h < 200 && b.w > b.h * 4;
+    let bx = narrow ? b.x + b.w - pad - 120 - 24 - 110 : b.x + b.w - pad - 34 - 110;
+    const by = narrow ? b.y + pad + 3 : b.y + b.h - pad - 30;
+    const bxEnd = bx + 110;
     const bars: string[] = [];
-    while (bx < b.x + b.w - pad - 34) { const w = 1 + Math.floor(rnd() * 3); bars.push(rect(bx, by, w, 18, { fill: INK, opacity: 0.55 })); bx += w + 1 + Math.floor(rnd() * 3); }
+    while (bx < bxEnd) { const w = 1 + Math.floor(rnd() * 3); bars.push(rect(bx, by, w, narrow ? 14 : 18, { fill: INK, opacity: 0.55 })); bx += w + 1 + Math.floor(rnd() * 3); }
     s.add(...bars);
     s.add(rect(b.x, b.y, b.w, b.h, { fill: scan }));
     grain(s, b, { opacity: 0.06, seed: 41, color: '#FFFFFF' });

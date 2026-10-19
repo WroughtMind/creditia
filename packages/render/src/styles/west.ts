@@ -116,7 +116,8 @@ export const baroque: Style = defineStyle({
     scroll(s, b.x + b.w - p + 4, b.y + p - 4 + sz, sz, -1, -1);
     scroll(s, b.x + p - 4, b.y + b.h - p + 4 - sz, sz, 1, 1);
     scroll(s, b.x + b.w - p + 4, b.y + b.h - p + 4 - sz, sz, -1, 1);
-    return { x: b.x + 30, y: b.y + 30, w: b.w - 60, h: b.h - 60 };
+    // 涡卷从框角往里伸 sz：内容区的四角各有这么大一块要让开
+    return { x: b.x + 30, y: b.y + 30, w: b.w - 60, h: b.h - 60, corner: Math.round(sz - 30 + p) };
   },
   title(s, text, x, y, size, anchor = 'start', o = {}) {
     return s.text(text, x, y, { font: baroque.f.display, size: size * 1.08, fill: o.fill ?? goldFill(s), anchor, maxW: o.maxW, track: 0.02 });
@@ -177,8 +178,8 @@ export const grimoire: Style = defineStyle({
   c: { bg: PARCH, paper: '#E0CFA8', ink: BROWN, soft: '#5E4630', faint: '#9C8462', line: 'rgba(46,31,18,0.3)', accent: BLOOD, accent2: BLOOD },
   series: [BROWN, BLOOD, '#4C5A4A', '#6B4A2E', '#3E4A5C', '#8A6A3A'],
   f: {
-    display: { family: 'Pirata One, UnifrakturMaguntia, Noto Serif SC', weight: 400 }, body: { family: 'IM Fell English, Noto Serif SC', weight: 400 },
-    num: { family: 'IM Fell English, Noto Serif SC', weight: 400 }, label: { family: 'IM Fell English, Noto Serif SC', weight: 400 }, mono: { family: 'IM Fell English, Noto Serif SC' },
+    display: { family: 'Pirata One, UnifrakturMaguntia, Noto Serif SC', weight: 400 }, body: { family: 'IM FELL English, Noto Serif SC', weight: 400 },
+    num: { family: 'IM FELL English, Noto Serif SC', weight: 400 }, label: { family: 'IM FELL English, Noto Serif SC', weight: 400 }, mono: { family: 'IM FELL English, Noto Serif SC' },
     script: { family: 'UnifrakturMaguntia, Noto Serif SC' },
   },
   labelTrack: 0.22, prefer: { tier: 'rows', roll: 'classic' },
