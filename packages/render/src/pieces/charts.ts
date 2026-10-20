@@ -513,7 +513,8 @@ export function areas(m: Model, st: Style, o: PieceOpts): Scene | null {
       const v = r.by.find(([kk]) => kk === key)![1];
       const ww = (v / r.tot) * w * k;
       if (ww < 0.5) continue;
-      s.add(rect(x, y + 12, Math.max(1, ww - 2), 38, { fill: fillKey(s, st, m, key), rx: Math.min(st.radius, 6) }));
+      if (st.block && key !== 'unattributed') st.block(s, x, y + 12, Math.max(1, ww - 2), 38, fillKey(s, st, m, key));
+      else s.add(rect(x, y + 12, Math.max(1, ww - 2), 38, { fill: fillKey(s, st, m, key), rx: Math.min(st.radius, 6) }));
       // 百分比写在色块下面：色块的颜色由风格定，字压在上面不一定看得清
       if (ww > 52 && k >= 1) s.text(`${Math.round((v / r.tot) * 100)}%`, x + 2, y + 70, { font: st.f.body, size: 13, fill: st.c.soft });
       const tk = tipKey(m, key);

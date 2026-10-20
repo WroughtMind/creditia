@@ -62,9 +62,15 @@ export const label = (t: Theme, s: string, size = 13, style: Record<string, any>
 export const stripes = (t: Theme, w: number) =>
   `repeating-linear-gradient(45deg, ${t.stripeA} 0px, ${t.stripeA} ${w}px, ${t.stripeB} ${w}px, ${t.stripeB} ${w * 2}px)`;
 
+/** 霓虹的图形是灯管：亮边、暗芯，和主卡片的描边字、描边徽章是同一种材质。文字不发光。
+ *  光晕（glow）只给条数少的关键图形：resvg 每个光晕单独模糊一次，马赛克这种上百块的图会慢十几倍 */
+export const neonTube = (color: string, glow = false) => ({ backgroundColor: hexAlpha(color, '30'), border: `1.5px solid ${color}`, boxShadow: glow ? `0 0 9px ${hexAlpha(color, '99')}` : undefined });
+const hexAlpha = (hex: string, a: string) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + a : hex);
+
 /** 贡献方的填充：按家族给色；未确认用斜纹 */
-export function fill(c: Contributor | { key: string }, t: Theme, rank = 0, stripeW = 3): Record<string, any> {
+export function fill(c: Contributor | { key: string }, t: Theme, rank = 0, stripeW = 3, glow = false): Record<string, any> {
   if (c.key === 'unattributed') return { backgroundImage: stripes(t, stripeW) };
+  if (t.family === 'neon') return neonTube(famColor(c.key, t, rank), glow);
   return { backgroundColor: famColor(c.key, t, rank) };
 }
 
@@ -125,7 +131,7 @@ export function plate(t: Theme, style: Record<string, any>, kids: any[], inner: 
 
 export function bar(t: Theme, c: Contributor, rank: number, height = t.barH, minW = 3): Node {
   return box({ height, borderRadius: t.barRadius, backgroundColor: t.track, width: '100%' },
-    box({ width: `${Math.max(c.pct, 0)}%`, minWidth: minW, height: '100%', borderRadius: t.barRadius, ...fill(c, t, rank, Math.max(2, height / 2)) }));
+    box({ width: `${Math.max(c.pct, 0)}%`, minWidth: minW, height: '100%', borderRadius: t.barRadius, ...fill(c, t, rank, Math.max(2, height / 2), true) }));
 }
 
 /** 背景：Glass 风格在底色上叠几团柔光，颜色取前两名贡献方 */

@@ -37,6 +37,8 @@ export interface Style {
   /** 窄幅（署名行 1200×120）的底，可选：大画幅的构图挪到窄条上会压住文字，这里装饰只放在上下边和两头，中间留整条文字带。
    *  aside 是右端统计那一块，风格可以给它垫一块底 */
   strip?(s: Scene, b: Box, m: Model, aside: Box): void;
+  /** 可选：板块这类大色块的画法（不写就是实色圆角矩形）。原版霓虹用它把色块画成灯管 */
+  block?(s: Scene, x: number, y: number, w: number, h: number, color: string): void;
   /** 卡片面（可选）：玻璃、羊皮纸、面板。返回内容区 */
   plate(s: Scene, b: Box): Box;
   title(s: Scene, text: string, x: number, y: number, size: number, anchor?: 'start' | 'middle' | 'end', o?: { maxW?: number; fill?: string }): number;

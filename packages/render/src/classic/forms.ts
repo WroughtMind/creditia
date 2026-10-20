@@ -7,7 +7,7 @@ import type { Theme } from './themes.ts';
 import type { Model, Contributor } from './data.ts';
 import { fmt, pct, compact, nameOf } from './data.ts';
 import { BRANDS, BOTS, colorOf, famColor, logoSvg } from './brand.ts';
-import { h, box, col, txt, label, mark, bar, fill, backdrop, surface, svgImage, stripes, blocks, plate, plateMetrics, ornament, fit, spread, eq, oneLine, MONO_FONT, BODY_KEY, CONTENT_KEY, nameFit, nameFitH, nameFitNode, type Node, type Out } from './ui.ts';
+import { h, box, col, txt, label, mark, bar, fill, neonTube, backdrop, surface, svgImage, stripes, blocks, plate, plateMetrics, ornament, fit, spread, eq, oneLine, MONO_FONT, BODY_KEY, CONTENT_KEY, nameFit, nameFitH, nameFitNode, type Node, type Out } from './ui.ts';
 import { measure } from '../svg.ts';
 
 const keysOf = (m: Model) => m.rows.map((r) => r.key);
@@ -37,6 +37,9 @@ function monoGrey(t: Theme, out: Out): Out {
   if (t.family === 'mono') greyNode(out.tree);
   return out;
 }
+
+/** 霓虹的光晕滤镜（画在 svgImage 里的图形用）：按整张小图的坐标定区域，细线、圆弧的包围盒再扁也不会被裁掉 */
+const NEON_GLOW = (w: number, hh: number, blur: number) => `<defs><filter id="ng" filterUnits="userSpaceOnUse" x="-20" y="-20" width="${w + 40}" height="${hh + 40}"><feGaussianBlur stdDeviation="${blur}"/></filter></defs>`;
 
 const dotline = (t: Theme, color?: string) => ({ height: 2, alignSelf: 'center' as const, backgroundImage: `repeating-linear-gradient(90deg, ${color ?? t.faint} 0px, ${color ?? t.faint} 2px, transparent 2px, transparent 7px)` });
 
@@ -1402,8 +1405,11 @@ function allot(p: number[], N: number) {
 /** 环形图 */
 export function donut(m: Model, t: Theme): Out {
   const W = 1200, H = 630, R = 210;
-  const w = t.family === 'film' ? 18 : t.family === 'editorial' || t.family === 'mono' ? 58 : t.barH >= 8 ? 52 : 34;
-  const r0 = R - w / 2, C = 2 * Math.PI * r0;
+  const neon = t.family === 'neon';
+  // 霓虹的圆环是一根细灯管，后面垫一层模糊的光
+  const w = neon ? 12 : t.family === 'film' ? 18 : t.family === 'editorial' || t.family === 'mono' ? 58 : t.barH >= 8 ? 52 : 34;
+  // 霓虹的光晕往外散，圆环往里收一点，别让光被小图的边裁成方的
+  const r0 = R - w / 2 - (neon ? 18 : 0), C = 2 * Math.PI * r0;
   let acc = 0;
   const pat = `<defs><pattern id="u" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="${t.stripeB}"/><rect width="4" height="8" fill="${t.stripeA}"/></pattern></defs>`;
   const famGap: Record<string, number> = { film: 12, editorial: 6, mono: 8, terminal: 6, glass: 8, minimal: 4 };
@@ -1417,7 +1423,7 @@ export function donut(m: Model, t: Theme): Out {
     return s;
   }).join('');
   const ring = box({ position: 'relative', width: 2 * R, height: 2 * R, alignItems: 'center', justifyContent: 'center' },
-    svgImage(`<svg xmlns="http://www.w3.org/2000/svg" width="${2 * R}" height="${2 * R}">${pat}<circle cx="${R}" cy="${R}" r="${r0}" fill="none" stroke="${t.track}" stroke-width="${w}"/>${arcs}</svg>`, 2 * R, 2 * R, { position: 'absolute', left: 0, top: 0 }),
+    svgImage(`<svg xmlns="http://www.w3.org/2000/svg" width="${2 * R}" height="${2 * R}">${pat}${neon ? NEON_GLOW(2 * R, 2 * R, 8) : ''}<circle cx="${R}" cy="${R}" r="${r0}" fill="none" stroke="${t.track}" stroke-width="${w}"/>${neon ? `<g filter="url(#ng)" opacity="0.95">${arcs}</g>` : ''}${arcs}</svg>`, 2 * R, 2 * R, { position: 'absolute', left: 0, top: 0 }),
     col({ alignItems: 'center', gap: 6 },
       txt({ fontFamily: t.num, fontSize: t.family === 'film' ? 56 : 48, color: t.ink, letterSpacing: -1 }, compact(m.linesAdded)),
       label(t, '行', 13)));
@@ -1454,17 +1460,23 @@ export function area(m: Model, t: Theme): Out | null {
     return `C${cx},${q[1]} ${cx},${p[1]} ${p[0]},${p[1]}`;
   }).join(' ');
   let base = weeks.map(() => 0);
-  const paths: string[] = [];
+  const paths: string[] = [], edges: string[] = [];
   for (const k of order) {
     const top = base.map((b, i) => b + (series[i][k] ?? 0));
     const up = top.map((v, i) => [x(i), y(v)] as [number, number]);
     const down = base.map((v, i) => [x(i), y(v)] as [number, number]).reverse();
     const d = `${smooth(up)} L${down[0][0]},${down[0][1]} ${smooth(down).slice(1)} Z`;
-    paths.push(`<path d="${d}" fill="${k === 'unattributed' ? 'url(#u)' : famColor(k, t, rankOf(m, k))}"/>`);
+    const fc = k === 'unattributed' ? 'url(#u)' : famColor(k, t, rankOf(m, k));
+    // 霓虹：面积压暗，只有每一层的上沿是亮的灯管
+    if (t.family === 'neon' && k !== 'unattributed') {
+      paths.push(`<path d="${d}" fill="${fc}" fill-opacity="0.2"/>`);
+      edges.push(`<path d="${smooth(up)}" fill="none" stroke="${fc}" stroke-width="2.5" stroke-linecap="round"/>`);
+    } else paths.push(`<path d="${d}" fill="${fc}"/>`);
     base = top;
   }
   const grid = [0.25, 0.5, 0.75].map((f) => `<line x1="0" x2="${CW}" y1="${CH * f}" y2="${CH * f}" stroke="${t.family === 'editorial' ? 'rgba(18,17,16,0.25)' : t.line}" stroke-width="1"/>`).join('');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CW}" height="${CH}">${pat}${grid}${paths.join('')}</svg>`;
+  const lit = edges.length ? `${NEON_GLOW(CW, CH, 6)}<g filter="url(#ng)">${edges.join('')}</g>${edges.join('')}` : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CW}" height="${CH}">${pat}${grid}${paths.join('')}${lit}</svg>`;
   const from = m.range.from ? Date.parse(m.range.from) : 0;
   const lbl = (i: number) => txt({ fontSize: 14, color: t.soft, letterSpacing: 1 }, weekLabel(weeks[i].week, i === 0 ? from : 0));
   return frame(m, t, 1200, 700, '每周新增代码', col({ gap: 14 }, svgImage(svg, CW, CH), box({ justifyContent: 'space-between', width: CW }, lbl(0), lbl(Math.floor(weeks.length / 2)), lbl(weeks.length - 1))));
@@ -1489,7 +1501,7 @@ export function lanes(m: Model, t: Theme): Out | null {
       txt({ fontSize: term ? 15 : 17, fontFamily: term ? MONO_FONT : t.sans }, m.rows.find((r) => r.key === k)?.name ?? nameOf(k))),
     box({ position: 'relative', width: LW, height: 20 },
       ...ss.filter((s) => g(s.contributor) === k).map((s) =>
-        box({ position: 'absolute', left: X(s.start), top: 0, width: Math.max(X(s.end) - X(s.start), 2), height: 20, borderRadius: term ? 0 : t.barRadius ? 3 : 0, backgroundColor: famColor(k, t, rankOf(m, k)), opacity: 0.9 })))));
+        ((w) => box({ position: 'absolute', left: X(s.start), top: 0, width: w, height: 20, borderRadius: term ? 0 : t.barRadius ? 3 : 0, ...(t.family === 'neon' && w >= 6 ? neonTube(famColor(k, t, rankOf(m, k))) : { backgroundColor: famColor(k, t, rankOf(m, k)), opacity: 0.9 }) }))(Math.max(X(s.end) - X(s.start), 2))))));
   const ticks: Node[] = [];
   for (let d = from; d <= t1 - 4 * 86400; d += 86400) {
     const cn = new Date((d + 8 * 3600) * 1000);
@@ -1542,7 +1554,8 @@ export function versions(m: Model, t: Theme): Out | null {
   const max = Math.max(...totals), BH = 340;
   const bars = order.map((v, i) => col({ alignItems: 'center', width: 200 },
     box({ height: BH, alignItems: 'flex-end' },
-      col({ width: 96, height: (totals[i] / max) * BH, borderRadius: t.family === 'glass' ? 10 : t.barRadius ? 8 : 0, overflow: 'hidden', flexDirection: 'column-reverse', gap: 2 },
+      // 霓虹：每根柱子整体一圈光晕（光晕按柱子算，不按每一段，出图不慢）
+      col({ width: 96, height: (totals[i] / max) * BH, borderRadius: t.family === 'glass' ? 10 : t.barRadius ? 8 : 0, overflow: 'hidden', flexDirection: 'column-reverse', gap: 2, boxShadow: t.family === 'neon' ? `0 0 16px ${famColor(stack.find((k) => by[v][k]) ?? '', t, 0)}88` : undefined },
         ...stack.map((k, j) => (by[v][k] ? box({ height: `${(by[v][k] / totals[i]) * 100}%`, minHeight: 2, ...fill({ key: k }, t, j, 3) }) : null)))),
     txt({ marginTop: 22, fontFamily: t.num === t.sans ? MONO_FONT : t.num, fontSize: 22, color: t.ink }, v === 'unreleased' ? '未发布' : v),
     txt({ marginTop: 6, fontSize: 14, color: t.soft }, v === 'unreleased' ? `${compact(totals[i])} 行` : `${tags.find((x) => x.tag === v)?.date.replaceAll('-', '.')} · ${compact(totals[i])} 行`)));
@@ -1576,7 +1589,7 @@ export function settle(m: Model, t: Theme): Out | null {
       label(t, k, 14),
       txt({ fontFamily: t.num, fontSize: 30, color: t.ink }, v)),
     box({ height: Math.max(t.barH * 3, 14), borderRadius: t.family === 'glass' ? 99 : t.barRadius, backgroundColor: t.track },
-      box({ width: `${p}%`, height: '100%', borderRadius: t.family === 'glass' ? 99 : t.barRadius, backgroundColor: solid ? t.ink : t.faint })));
+      box({ width: `${p}%`, height: '100%', borderRadius: t.family === 'glass' ? 99 : t.barRadius, ...(t.family === 'neon' ? neonTube(solid ? t.accent : t.soft, true) : { backgroundColor: solid ? t.ink : t.faint }) })));
   return { w: W, h: H, tree: col({ width: W, height: H, padding: '72px 96px', justifyContent: 'space-between', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
     box({ alignItems: 'baseline', justifyContent: 'space-between' },
       txt({ fontFamily: t.display, fontSize: t.display === t.sans ? 30 : 38, fontWeight: t.displayWeight }, m.project),
