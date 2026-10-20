@@ -13,7 +13,7 @@ const WORDS: Record<string, string> = {
   'THANK YOU · 请保留小票': 'THANK YOU · PLEASE KEEP', 'Creditia — 作品署名': 'Creditia — credits', 'Creditia — 命令行': 'Creditia — terminal',
   'Creditia · 精力小票': 'Creditia · receipt', '工作记录 · 精力清单': 'Work log', '一格 = 1%': '1 square = 1%',
   各版本新增代码: 'Lines added per release', 每周新增代码: 'Lines added per week', '# 写下的代码留下多少': '# how much written code stayed',
-  '> 统计': '> stats', '由 creditia 开具': 'issued by creditia', 留到了今天: 'still here today',
+  '> 统计': '> stats', '由 creditia 开具': 'issued by creditia', 明细: 'Items', 留到了今天: 'still here today',
   有提交的天数: 'Days with commits', 发给AI的消息: 'Messages to AI', 'AI 写的': 'Written by AI', 提交了的: 'Committed', 现在还在: 'Still here',
 };
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

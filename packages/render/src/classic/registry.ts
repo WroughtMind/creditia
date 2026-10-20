@@ -21,7 +21,7 @@ export const FORMS: Record<string, { name: string; q: string; size: string; vari
   profile: { name: '个人履历卡', q: '我和 AI 一起做了什么', size: '1200×自适应', render: (m, t, c) => (c.projects?.length ? F.profile(c.person ?? m.director, c.projects, t) : null) },
   fetch: { name: '终端名片', q: 'creditia fetch', size: '1200×自适应', render: (m, t) => F.term('creditia fetch', fetchSegs(m), t, m) },
   blame: { name: '逐行溯源', q: 'creditia blame', size: '1200×自适应', render: (m, t, c) => (c.blame ? F.term(`creditia blame ${c.blame.file.split('/').pop()}:${c.blame.line}`, blameSegs(c.blame), t, m) : null) },
-  app: { name: 'App 内致谢页', q: '原生 App 的 credits', size: '780×自适应', render: (m, t) => F.appPage(m, t) },
+  app: { name: 'App 内致谢页', q: '原生 App 的 credits', size: '780×自适应', variants: F.APP_VARIANTS, def: () => 'themed', render: (m, t, c) => F.appPage(m, t, c.variant) },
   waffle: { name: '华夫饼图', q: '一格 1%', size: '1200×680', render: (m, t) => F.waffle(m, t) },
   donut: { name: '环形图', q: '占比', size: '1200×630', render: (m, t) => F.donut(m, t) },
   area: { name: '堆叠面积图', q: '每周新增代码', size: '1200×700', render: (m, t) => F.area(m, t) },
