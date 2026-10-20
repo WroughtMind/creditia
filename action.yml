@@ -2,44 +2,66 @@
 # CI 里没有任何人的 agent 日志，所以分析要在本机做；这里只负责把结果做成能看的东西。
 # PR 评论和 Release 说明在没有 credits.json 时读提交上的盖章（本机提交盖章 hook 在提交时记下各工具写了几行），不用手动 publish。
 name: creditia
-description: 把 credits.json 做成徽章、CREDITS.md 和一个随提交更新的署名页
+description: 把 credits.json 做成徽章、CREDITS.md 和随提交更新的署名页 · Turn credits.json into a badge, CREDITS.md and a credits page
 author: WroughtMind
 branding:
   icon: award
   color: gray-dark
 inputs:
   credits:
-    description: 档案路径（creditia publish 写出的 credits.json）
+    description: |-
+      档案路径（creditia publish 写出的 credits.json）
+      Path to the credits file (the credits.json that creditia publish writes)
     default: credits.json
   style:
-    description: 风格（creditia export --list 查看）
+    description: |-
+      风格（creditia export --list 查看）
+      Style (see creditia export --list)
     default: minimal
   badge:
-    description: 徽章写到哪里（留空不生成），例如 assets/credits-badge.svg
+    description: |-
+      徽章写到哪里（留空不生成），例如 assets/credits-badge.svg
+      Where to write the badge (empty: none), e.g. assets/credits-badge.svg
     default: ''
   badge-json:
-    description: 动态徽章的数据写到哪里（留空不生成），例如 badge.json。README 里用 https://img.shields.io/endpoint?url=<这个文件的地址>；没有 credits.json 时读提交盖章。site 目录里总会带一份 badge.json
+    description: |-
+      动态徽章的数据写到哪里（留空不生成），例如 badge.json。README 里用 https://img.shields.io/endpoint?url=<这个文件的地址>；没有 credits.json 时读提交盖章。site 目录里总会带一份 badge.json
+      Where to write the dynamic badge data (empty: none), e.g. badge.json. Use https://img.shields.io/endpoint?url=<this file's URL> in the README; without credits.json it reads commit stamps. The site directory always includes a badge.json
     default: ''
   doc:
-    description: CREDITS.md 写到哪里（留空不生成）
+    description: |-
+      CREDITS.md 写到哪里（留空不生成）
+      Where to write CREDITS.md (empty: none)
     default: ''
   site:
-    description: 署名小网站写到哪个目录（留空不生成），配合 actions/upload-pages-artifact 发布到 GitHub Pages
+    description: |-
+      署名小网站写到哪个目录（留空不生成），配合 actions/upload-pages-artifact 发布到 GitHub Pages
+      Directory for the small credits site (empty: none); publish it to GitHub Pages with actions/upload-pages-artifact
     default: ''
   lang:
-    description: zh 或 en
+    description: |-
+      zh 或 en
+      zh or en
     default: zh
   group:
-    description: 按工具（tool）还是按模型（model）分行；auto 在一个工具占九成以上、下面有几个模型时按模型
+    description: |-
+      按工具（tool）还是按模型（model）分行；auto 在一个工具占九成以上、下面有几个模型时按模型
+      One row per tool or per model; auto uses models when one tool has over 90% and several models under it
     default: auto
   release-notes:
-    description: 发 Release 时（release published）把这一版的署名写进 Release 说明；再发一次只换掉上次写的那段
+    description: |-
+      发 Release 时（release published）把这一版的署名写进 Release 说明；再发一次只换掉上次写的那段
+      On release published, put this version's credits into the release notes; running again replaces only the part it wrote
     default: 'false'
   pr-comment:
-    description: PR 上评论这个 PR 的署名（按 PR 分支上的提交：先从 credits.json 里找，没有就读提交盖章），之后每次推送更新同一条评论
+    description: |-
+      PR 上评论这个 PR 的署名（按 PR 分支上的提交：先从 credits.json 里找，没有就读提交盖章），之后每次推送更新同一条评论
+      Comment the PR's credits on the PR (from its commits: credits.json first, then commit stamps), updating the same comment on every push
     default: 'false'
   token:
-    description: 写 Release 说明、发 PR 评论用的 token（需要 contents 和 pull-requests 的写权限）
+    description: |-
+      写 Release 说明、发 PR 评论用的 token（需要 contents 和 pull-requests 的写权限）
+      Token for release notes and PR comments (needs write access to contents and pull-requests)
     default: ${{ github.token }}
 runs:
   using: composite
@@ -47,10 +69,10 @@ runs:
     - uses: actions/setup-node@v4
       with:
         node-version: 24
-    - name: 安装渲染依赖
+    - name: 安装渲染依赖 · Install render dependencies
       shell: bash
       run: cd "$GITHUB_ACTION_PATH/packages/render" && npm ci --omit=dev --no-audit --no-fund
-    - name: 生成
+    - name: 生成 · Generate
       shell: bash
       env:
         CT: node ${{ github.action_path }}/packages/cli/bin/creditia.mjs
@@ -64,16 +86,17 @@ runs:
         SITE: ${{ inputs.site }}
       run: |
         set -e
+        say() { if [ "$LANG_CT" = en ]; then echo "$2"; else echo "$1"; fi; }
         if [ -n "$BADGE_JSON" ]; then $CT badge-json --credits "$CREDITS" --lang "$LANG_CT" --group "$GROUP" --out "$BADGE_JSON"; fi
         if [ ! -f "$CREDITS" ]; then
           # 只写 PR 评论、Release 说明时不需要 credits.json（读提交盖章）
           if [ -z "$BADGE$DOC$SITE" ]; then exit 0; fi
-          echo "::error::没有 $CREDITS。先在本机运行 creditia analyze && creditia publish，把 credits.json 提交进仓库。"; exit 1
+          say "::error::没有 $CREDITS。先在本机运行 creditia analyze && creditia publish，把 credits.json 提交进仓库。" "::error::no $CREDITS. Run creditia analyze && creditia publish locally first, then commit credits.json."; exit 1
         fi
         if [ -n "$BADGE" ]; then $CT export --credits "$CREDITS" --piece badge --style "$STYLE" --lang "$LANG_CT" --group "$GROUP" --format svg --out "$BADGE"; fi
         if [ -n "$DOC" ]; then $CT doc --credits "$CREDITS" --lang "$LANG_CT" --out "$DOC"; fi
         if [ -n "$SITE" ]; then $CT site --credits "$CREDITS" --style "$STYLE" --lang "$LANG_CT" --group "$GROUP" --out "$SITE"; fi
-    - name: 跟着发版
+    - name: 跟着发版 · Release credits
       if: inputs.release-notes == 'true' || inputs.pr-comment == 'true'
       shell: bash
       env:
