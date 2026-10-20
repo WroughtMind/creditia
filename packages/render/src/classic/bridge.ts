@@ -91,8 +91,26 @@ export function bridgeStyle(t: Theme): Style {
       return { x: b.x + k, y: b.y + k, w: b.w - k * 2, h: b.h - k * 2 };
     },
     bar(s: Scene, x: number, y: number, w: number, h: number, color: string) {
-      s.add(rect(x, y, w, h, { fill: color, rx: Math.min(t.barRadius, h / 2, w / 2) }));
+      const rx = Math.min(t.barRadius, h / 2, w / 2);
+      if (t.family === 'neon' && w > 0 && h > 0) {
+        // 霓虹：和原版作品一样是灯管——后面一层模糊的光，前面亮边暗芯；太细的条直接是一根亮线。
+        // 光晕的组里垫一个不画的大框，滤镜区域按它算，细条的包围盒再扁也不会把光裁掉
+        const glow = s.url('neon-glow', (id) => el('filter', { id, x: '-10%', y: '-10%', width: '120%', height: '120%' }, el('feGaussianBlur', { stdDeviation: 5 })));
+        s.add(el('g', { filter: glow, opacity: 0.85 }, rect(x - 16, y - 16, w + 32, h + 32, { fill: 'none' }), rect(x, y, w, h, { fill: color, rx })));
+        if (w >= 8 && h >= 8) s.add(rect(x + 0.75, y + 0.75, w - 1.5, h - 1.5, { fill: color, fillOpacity: 0.22, stroke: color, strokeWidth: 1.5, rx }));
+        else s.add(rect(x, y, w, h, { fill: color, rx }));
+        return;
+      }
+      s.add(rect(x, y, w, h, { fill: color, rx }));
     },
+    // 霓虹的大色块（板块）：亮边暗芯的灯管，不加光晕（一张图几十块，光晕会让出图慢很多）；别的原版主题不写，照旧画实色
+    ...(t.family === 'neon' ? {
+      block(s: Scene, x: number, y: number, w: number, h: number, color: string) {
+        const rx = Math.min(t.barRadius, 6, h / 2, w / 2);
+        if (w < 6) { s.add(rect(x, y, w, h, { fill: color, rx })); return; }
+        s.add(rect(x + 0.75, y + 0.75, w - 1.5, h - 1.5, { fill: color, fillOpacity: 0.22, stroke: color, strokeWidth: 1.5, rx }));
+      },
+    } : {}),
     track(s: Scene, x: number, y: number, w: number, h: number) {
       s.add(rect(x, y, w, h, { ...fillOf(t.track), rx: Math.min(t.barRadius, h / 2) }));
     },
