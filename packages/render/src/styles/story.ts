@@ -45,6 +45,11 @@ export const manuscript: Style = defineStyle({
     if (h > w * 1.5) { s.add(rect(x, y, w, h, { fill: color, filter: roughen(s, 'ms-bv', 0.8, 0.6, 6) })); return; }
     // 打字机的字符串：每一档灰配一个字符，图例和条里按颜色对得上
     const k = manuscript.series.indexOf(color), ch = color === RED ? 'x' : MS_GLYPH[(k < 0 ? i ?? 0 : k) % MS_GLYPH.length];
+    // 图例里的小方块：只放得下一个字符，就把它打大、打粗，填满方块
+    if (w <= h * 1.5) {
+      s.text(ch, x + w / 2, y + h * 0.5 + h * 0.42, { font: manuscript.f.num, size: h * 1.5, fill: color, anchor: 'middle', extra: { filter: roughen(s, 'ms-b', 0.6, 0.9, 6) } });
+      return;
+    }
     const size = 16, cw = measure(ch, TW, size);
     const n = Math.max(1, Math.floor(w / cw));
     s.text(ch.repeat(n), x, y + h / 2 + 5, { font: TW, size, fill: color, extra: { filter: roughen(s, 'ms-b', 0.6, 0.9, 6) } });

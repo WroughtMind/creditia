@@ -934,7 +934,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
 export const RECEIPT_VARIANTS = ['slip', 'thermal', 'folio', 'stub', 'ticket', 'ledger', 'scroll', 'themed'];
 export const RECEIPT_DEFAULT: Record<string, string> = {
   terminal: 'thermal', mono: 'thermal', editorial: 'folio', film: 'stub',
-  cinema: 'ticket', playbill: 'ticket', gala: 'folio', broadsheet: 'ledger', crt: 'scroll', arcade: 'scroll', neon: 'slip', poster: 'ledger',
+  cinema: 'ticket', playbill: 'ticket', gala: 'folio', broadsheet: 'ledger', crt: 'themed', arcade: 'themed', neon: 'slip', poster: 'ledger',
 };
 
 /** 精力小票：只回答"花了多少精力"。四种版式：清单 / 热敏纸 / 财务单 / 电影票 */
@@ -1114,26 +1114,33 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
   if (v === 'themed') {
     // 随风格：票面就是这个风格自己的底板，框线、底纹、字体、强调色都跟主题走（磷光屏的扫描线和磷光字、街机的像素框和像素字）
     const range = `${m.range.from.replaceAll('-', '.')} — ${m.range.to.replaceAll('-', '.')}`;
-    const row = (k: string, val: string) => box({ alignItems: 'baseline', padding: '11px 0' },
+    const row = (k: string, val: string) => box({ alignItems: 'baseline', padding: '8px 0' },
       txt({ fontFamily: t.sans, fontSize: 21, color: t.soft }, k),
       box({ flex: 1, margin: '0 12px', ...dotline(t) }),
       txt({ fontFamily: t.num, fontSize: 27, color: t.ink, whiteSpace: 'pre' }, val));
-    const barcode = Array.from({ length: 46 }, (_, i) => { const hh = (m.project.charCodeAt(i % Math.max(m.project.length, 1)) * 37 + i * 11) % 9; return box({ width: 1 + (hh % 3), height: 54, backgroundColor: t.ink, marginRight: 2 }); });
-    const ais = m.rows.filter((r) => r.kind === 'agent' && isAi(r.key));
+    const barcode = Array.from({ length: 46 }, (_, i) => { const hh = (m.project.charCodeAt(i % Math.max(m.project.length, 1)) * 37 + i * 11) % 9; return box({ width: 1 + (hh % 3), height: 46, backgroundColor: t.ink, marginRight: 2 }); });
+    // 中段是明细：每家 AI 一行，标志、名字、这一家的占比条，最多列 8 家
+    const lines = m.rows.filter((r) => r.key !== 'human').slice(0, 8);
+    const line = (r: Contributor, i: number) => box({ alignItems: 'center', gap: 14, padding: '7px 0' },
+      mark(r.key, t, 24),
+      col({ flex: 1, minWidth: 0, gap: 7 },
+        txt({ fontFamily: t.sans, fontSize: 19, color: r.key === 'unattributed' ? t.soft : t.ink, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }, r.name),
+        bar(t, r, i, Math.min(t.barH, 6), 2)),
+      txt({ fontFamily: t.num, fontSize: 21, color: t.soft, flexShrink: 0, paddingLeft: 6 }, pct(r.pct)));
     return { w: W, h: H, tree: box({ width: W, height: H, alignItems: 'center', justifyContent: 'center', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
-      plate(t, { width: 620, height: 1230, boxShadow: t.shadow === 'none' ? undefined : t.shadow, borderRadius: Math.min(t.radius, 12) }, [
+      plate(t, { width: 620, minHeight: 1230, boxShadow: t.shadow === 'none' ? undefined : t.shadow, borderRadius: Math.min(t.radius, 12) }, [
         col({ alignItems: 'center', gap: 10, padding: '18px 0 0' },
           label(t, 'ENERGY RECEIPT 精力小票', 13),
           txt({ fontFamily: t.display, fontSize: t.display === t.sans ? 46 : 54, fontWeight: t.displayWeight, color: t.ink, textAlign: 'center', marginTop: 6 }, m.project),
           txt({ fontFamily: t.num, fontSize: 17, color: t.faint }, range)),
-        box({ marginTop: 26, justifyContent: 'center' }, ornament(t, 14)),
-        col({ marginTop: 14 }, ...items.map(([k, val]) => row(k, val))),
-        box({ flexGrow: 1 }),
+        box({ marginTop: 20, justifyContent: 'center' }, ornament(t, 14)),
+        col({ marginTop: 10 }, ...items.map(([k, val]) => row(k, val))),
+        lines.length ? col({ marginTop: 22, paddingTop: 14, borderTop: `2px dashed ${t.line}` }, label(t, '明细', 12, { marginBottom: 6 }), ...lines.map(line)) : null,
+        box({ flexGrow: 1, minHeight: 18 }),
         box({ borderTop: `2px solid ${t.accent}`, marginTop: 12, paddingTop: 14, justifyContent: 'space-between', alignItems: 'baseline' },
           label(t, '合计 TOTAL', 15, { color: t.accent }),
           txt({ fontFamily: t.num, fontSize: 34, color: t.accent }, m.linesAdded ? `+${fmt(m.linesAdded)}` : `${fmt(m.commits)}`)),
-        ais.length ? box({ justifyContent: 'center', marginTop: 30, gap: 14 }, ...ais.map((r) => mark(r.key, t, 22, t.soft))) : null,
-        col({ alignItems: 'center', gap: 8, marginTop: 30, paddingBottom: 10 },
+        col({ alignItems: 'center', gap: 8, marginTop: 24, paddingBottom: 6 },
           box({ alignItems: 'flex-end' }, ...barcode),
           txt({ fontFamily: t.num, fontSize: 14, color: t.soft, letterSpacing: 4 }, `NO.${String(m.commits % 100000).padStart(5, '0')}`),
           label(t, '由 creditia 开具', 11, { color: t.faint, marginTop: 4 })),
@@ -1202,9 +1209,9 @@ export function term(cmd: string, lines: Seg[][], t: Theme, m?: Model): Out {
 
 export const APP_VARIANTS = ['ios', 'themed'];
 
-/** App 内致谢页。ios：iOS 设置页样式（固定的平台媒介）；themed：同样的信息排在这个风格自己的底板、字体和强调色里 */
+/** App 内致谢页。themed（默认）：排在这个风格自己的底板、字体和强调色里；ios：iOS 设置页样式（固定的平台媒介） */
 export function appPage(m: Model, t: Theme, variant?: string): Out {
-  return monoGrey(t, variant === 'themed' ? appThemed(m, t) : appIos(m, t));
+  return monoGrey(t, variant === 'ios' ? appIos(m, t) : appThemed(m, t));
 }
 
 function appThemed(m: Model, t: Theme): Out {
