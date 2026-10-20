@@ -1,6 +1,6 @@
 // 统计图：环形、华夫饼、周河流图、会话泳道、作息打卡、版本、留存、文件马赛克、日历、出处、板块。
 // 颜色、条形、标记都走风格钩子，所以每张图在每个风格里都是那个风格的样子。
-import { Scene, rect, line, path, circle, el, g, r, ease, arc, mix } from '../svg.ts';
+import { Scene, rect, line, path, circle, el, g, r, ease, arc, mix, alpha } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
 import { fmt, pct, compact } from '../data.ts';
 import type { Style, Box } from '../style.ts';
@@ -51,14 +51,17 @@ export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
   const { s, p } = frame(m, st, 1000, 640, T(m, '占比', 'SHARE'), m.group === 'model' ? T(m, '各模型写了多少', 'Who wrote the code') : T(m, '各工具写了多少', 'Who wrote the code'));
   const cx = p.x + p.w * 0.36, cy = p.y + p.h / 2, R1 = 270, R0 = 170;
   let a0 = -Math.PI / 2;
+  const cellSegs: { a0: number; a1: number; fill: string }[] = [];
   m.rows.forEach((a, i) => {
     const sweep = (a.pct / 100) * Math.PI * 2 * ease(t, i, m.rows.length, 0.8);
     const gap = Math.min(0.012, sweep / 4);
-    if (sweep > 0) s.add(path(arc(cx, cy, R1, R0, a0 + gap, a0 + sweep - gap), { fill: a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a) }));
+    if (st.grid && st.cells) cellSegs.push({ a0, a1: a0 + sweep, fill: a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a) });
+    else if (sweep > 0) s.add(path(arc(cx, cy, R1, R0, a0 + gap, a0 + sweep - gap), { fill: a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a) }));
     const mid = a0 + sweep / 2;
     s.hit(cx + Math.cos(mid) * (R0 + R1) / 2 - 30, cy + Math.sin(mid) * (R0 + R1) / 2 - 30, 60, 60, tip(m, a));
     a0 += sweep;
   });
+  if (cellSegs.length) gridRing(s, st, cx, cy, R0, R1, cellSegs);
   st.num(s, fmt(m.linesAdded), cx, cy + 6, 46, 'middle');
   s.text(T(m, '行', 'lines'), cx, cy + 44, { font: st.f.body, size: 18, fill: st.c.soft, anchor: 'middle' });
   // 右侧名单
@@ -73,19 +76,42 @@ export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
   return s;
 }
 
+/** 字符格风格（原版终端）：环落到格子上——格子中心在环里的，按角度归到那一段；同一行里挨着的同色格子合成一段画 */
+function gridRing(s: Scene, st: Style, cx: number, cy: number, R0: number, R1: number, segs: { a0: number; a1: number; fill: string }[]) {
+  const G = st.grid!;
+  for (let ky = Math.floor((cy - R1) / G); ky * G <= cy + R1; ky++) {
+    let x0 = 0, n = 0, cur = '';
+    const flush = () => { if (n) st.cells!(s, x0, ky * G, n * G, G, cur); n = 0; };
+    for (let kx = Math.floor((cx - R1) / G); kx * G <= cx + R1; kx++) {
+      const dx = (kx + 0.5) * G - cx, dy = (ky + 0.5) * G - cy, d = Math.hypot(dx, dy);
+      let a = Math.atan2(dy, dx);
+      if (a < -Math.PI / 2) a += Math.PI * 2;
+      const f = d >= R0 && d <= R1 ? segs.find((q) => a >= q.a0 && a < q.a1)?.fill ?? '' : '';
+      if (n && f === cur) { n++; continue; }
+      flush();
+      if (f) { x0 = kx * G; n = 1; cur = f; }
+    }
+    flush();
+  }
+}
+
 /** 内外环：内环是工具，外环是各工具下的模型，和内环对齐 */
 function nested(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (!m.tools.length) return null;
   const t = o.t ?? 1;
   const { s, p } = frame(m, st, 1000, 640, T(m, '占比', 'SHARE'), T(m, '工具和模型', 'Tools and models'), false);
   const cx = p.x + p.w * 0.31, cy = p.y + p.h / 2;
-  const [Ri0, Ri1, Ro0, Ro1] = [140, 200, 208, 262];
+  // 字符格风格：两环之间至少空出一格，不然格子连成一圈分不出内外
+  const grid = !!(st.grid && st.cells);
+  const [Ri0, Ri1, Ro0, Ro1] = grid ? [140, 194, 214, 262] : [140, 200, 208, 262];
+  const inner: { a0: number; a1: number; fill: string }[] = [], outer: typeof inner = [];
   let a0 = -Math.PI / 2;
   m.tools.forEach((a, i) => {
     const sweep = (a.pct / 100) * Math.PI * 2 * ease(t, i, m.tools.length, 0.8);
     const gap = Math.min(0.012, sweep / 4);
     const unk = a.key === 'unattributed';
-    if (sweep > 0) s.add(path(arc(cx, cy, Ri1, Ri0, a0 + gap, a0 + sweep - gap), { fill: unk ? st.hatch(s) : colorOf(st, a) }));
+    if (grid) inner.push({ a0, a1: a0 + sweep, fill: unk ? st.hatch(s) : colorOf(st, a) });
+    else if (sweep > 0) s.add(path(arc(cx, cy, Ri1, Ri0, a0 + gap, a0 + sweep - gap), { fill: unk ? st.hatch(s) : colorOf(st, a) }));
     const mid = a0 + sweep / 2;
     s.hit(cx + Math.cos(mid) * (Ri0 + Ri1) / 2 - 26, cy + Math.sin(mid) * (Ri0 + Ri1) / 2 - 26, 52, 52, tip(m, a));
     // 外环：这一段按模型再切
@@ -93,13 +119,15 @@ function nested(m: Model, st: Style, o: PieceOpts): Scene | null {
     for (const q of segsOf(m, st, a)) {
       const sw = sweep * (q.lines / Math.max(1, a.lines));
       const gg = Math.min(0.01, sw / 4);
-      if (sw > 0) s.add(path(arc(cx, cy, Ro1, Ro0, b0 + gg, b0 + sw - gg), { fill: unk ? st.hatch(s) : q.color }));
+      if (grid) outer.push({ a0: b0, a1: b0 + sw, fill: unk ? st.hatch(s) : q.color });
+      else if (sw > 0) s.add(path(arc(cx, cy, Ro1, Ro0, b0 + gg, b0 + sw - gg), { fill: unk ? st.hatch(s) : q.color }));
       const qm = b0 + sw / 2;
       if (sw > 0.04) s.hit(cx + Math.cos(qm) * (Ro0 + Ro1) / 2 - 22, cy + Math.sin(qm) * (Ro0 + Ro1) / 2 - 22, 44, 44, segTip(m, a, q));
       b0 += sw;
     }
     a0 += sweep;
   });
+  if (grid) { gridRing(s, st, cx, cy, Ri0, Ri1, inner); gridRing(s, st, cx, cy, Ro0, Ro1, outer); }
   st.num(s, fmt(m.linesAdded), cx, cy + 6, 40, 'middle');
   s.text(T(m, '行', 'lines'), cx, cy + 40, { font: st.f.body, size: 17, fill: st.c.soft, anchor: 'middle' });
   // 右侧：工具一行，下面缩进写它的模型
@@ -224,7 +252,23 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
     const cxm = (px + x) / 2;
     return `C${r(cxm)} ${r(py)} ${r(cxm)} ${r(y)} ${r(x)} ${r(y)}`;
   }).join('');
-  for (const k of keys) {
+  // 字符格风格（原版终端）：每一列按两周之间插值的数堆起来，落到格子上，一格一个方块字；算法和平滑的河流一样，只是笔触不同
+  const G = st.grid;
+  if (G && st.cells) {
+    const r0 = Math.ceil(p.y / G), nr = Math.floor((p.y + p.h) / G) - r0;
+    for (let c = Math.ceil((p.x - G / 2) / G); (c + 0.5) * G <= p.x + p.w; c++) {
+      const u = Math.min(n - 1, Math.max(0, (((c + 0.5) * G - p.x) / p.w) * (n - 1))), i = Math.min(n - 2, Math.floor(u)), f = u - i;
+      const e = ease(t, u, n, 0.5);
+      let cum = 0;
+      const b = keys.map((k) => (cum += (m.weeks[i].by[k] ?? 0) * (1 - f) + (m.weeks[i + 1].by[k] ?? 0) * f, Math.round((cum / max) * nr * e)));
+      const top = r0 + Math.floor((nr - b[b.length - 1]) / 2);
+      keys.forEach((k, j) => {
+        const a = j ? b[j - 1] : 0;
+        if (b[j] > a) st.cells!(s, c * G, (top + a) * G, G, (b[j] - a) * G, fillKey(s, st, m, k));
+      });
+    }
+  }
+  for (const k of G && st.cells ? [] : keys) {
     const top = acc.map((y, i) => [X(i), y] as [number, number]);
     const bot = acc.map((y, i) => [X(i), y + (((m.weeks[i].by[k] ?? 0) / max) * p.h) * ease(t, i, n, 0.5)] as [number, number]);
     bot.forEach(([, y], i) => (acc[i] = y));
@@ -340,7 +384,9 @@ export function survival(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.text(a.name, p.x + 36, y + 30, { font: st.f.body, size: 17, fill: st.c.ink, maxW: 170 });
     const x0 = p.x + 230, w = p.w - 330;
     const wa = (a.lines / max) * w * k, ws = (a.surviving / max) * w * k;
-    s.add(rect(x0, y + 10, wa, 26, { fill: colorOf(st, a), opacity: 0.25, rx: Math.min(st.radius, 6) }));
+    // 字符格风格：写过、已经不在的那一截是一排点（原版的 ···）
+    if (st.cells) st.track(s, x0, y + 10, wa, 26);
+    else s.add(rect(x0, y + 10, wa, 26, { fill: colorOf(st, a), opacity: 0.25, rx: Math.min(st.radius, 6) }));
     st.bar(s, x0, y + 10, Math.max(2, ws), 26, colorOf(st, a), i);
     st.num(s, `${Math.round(a.survival * 100)}%`, p.x + p.w, y + 32, 22, 'end');
     s.hit(p.x, y, p.w, rowH - 6, { ...tip(m, a), d: [T(m, `写了 ${fmt(a.lines)} 行，现在还在 ${fmt(a.surviving)} 行`, `${fmt(a.lines)} written, ${fmt(a.surviving)} remain`), ...tip(m, a).d.slice(1)] });
@@ -458,7 +504,8 @@ export function evidence(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.text(a.name, p.x + 36, y + 30, { font: st.f.body, size: 17, fill: st.c.ink, maxW: 170 });
     const full = (a.lines / max) * w * k;
     if (a.key === 'unattributed') {
-      s.add(rect(x0, y + 10, Math.max(2, full), 26, { fill: st.hatch(s), rx: Math.min(st.radius, 6) }));
+      if (st.cells) st.bar(s, x0, y + 10, Math.max(2, full), 26, st.hatch(s), i);
+      else s.add(rect(x0, y + 10, Math.max(2, full), 26, { fill: st.hatch(s), rx: Math.min(st.radius, 6) }));
       s.text(T(m, '没有证据', 'no evidence'), p.x + p.w, y + 30, { font: st.f.body, size: 15, fill: st.c.faint, anchor: 'end' });
       s.hit(p.x, y, p.w, rowH - 6, tip(m, a));
       return;
@@ -470,6 +517,8 @@ export function evidence(m: Model, st: Style, o: PieceOpts): Scene | null {
       const ww = (pf[q.k] / tot) * full;
       if (ww <= 0) return;
       if (j === 0) st.bar(s, x, y + 10, Math.max(2, ww), 26, colorOf(st, a), i);
+      // 字符格风格：浅的两层也是方块字，按浓淡调透明
+      else if (st.cells) st.bar(s, x, y + 10, ww, 26, alpha(colorOf(st, a), q.o), i);
       else s.add(rect(x, y + 10, ww, 26, { fill: colorOf(st, a), opacity: q.o, rx: Math.min(st.radius, 6) }));
       x += ww;
     });
@@ -513,7 +562,7 @@ export function areas(m: Model, st: Style, o: PieceOpts): Scene | null {
       const v = r.by.find(([kk]) => kk === key)![1];
       const ww = (v / r.tot) * w * k;
       if (ww < 0.5) continue;
-      if (st.block && key !== 'unattributed') st.block(s, x, y + 12, Math.max(1, ww - 2), 38, fillKey(s, st, m, key));
+      if (st.block && (key !== 'unattributed' || st.cells)) st.block(s, x, y + 12, Math.max(1, ww - 2), 38, fillKey(s, st, m, key));
       else s.add(rect(x, y + 12, Math.max(1, ww - 2), 38, { fill: fillKey(s, st, m, key), rx: Math.min(st.radius, 6) }));
       // 百分比写在色块下面：色块的颜色由风格定，字压在上面不一定看得清
       if (ww > 52 && k >= 1) s.text(`${Math.round((v / r.tot) * 100)}%`, x + 2, y + 70, { font: st.f.body, size: 13, fill: st.c.soft });

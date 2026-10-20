@@ -35,6 +35,35 @@ export function bridgeStyle(t: Theme): Style {
   const paper = solid(t.surface, t.bg);
   const frame = t.frame ?? 'none';
   const numWeight = t.num === t.display ? t.displayWeight : t.num.startsWith('Inter') ? 600 : 400;
+  // 终端：图形落在等宽字符的格子上，一格一个方块字（原版的 ■■■···）。格子全图同一套，叠着的几段、上下几行都对得齐。
+  // 方块字用图案铺，一根条一个元素，出图不慢
+  const term = t.family === 'terminal';
+  const G = 12, Q = 9, off = (G - Q) / 2;
+  const glyphs = (s: Scene, cols: boolean, color: string) => {
+    const h8 = /^(#[0-9a-f]{6})([0-9a-f]{2})$/i.exec(color);
+    const p = h8 ? { c: h8[1], o: parseInt(h8[2], 16) / 255 } : paint(color.startsWith('url(') ? t.faint : color);
+    return s.url(`glyph-${cols ? 'x' : 'b'}${p.c.replace(/[^0-9a-z]/gi, '')}${p.o < 1 ? Math.round(p.o * 100) : ''}`, (id) => el('pattern', { id, width: G, height: G, patternUnits: 'userSpaceOnUse' },
+      rect(off, cols ? 0 : off, Q, cols ? G : Q, { fill: p.c, fillOpacity: p.o < 1 ? p.o : undefined })));
+  };
+  // 落到格子上：中心在这一段里的格子都算；一格都没有时也给最近的一格（和原版字符条一样，有就至少一个字）
+  const span = (a: number, len: number): [number, number] => {
+    let k0 = Math.ceil((a - G / 2) / G), k1 = Math.ceil((a + len - G / 2) / G) - 1;
+    if (k1 < k0) k0 = k1 = Math.round((a + len / 2 - G / 2) / G);
+    return [k0 * G, (k1 - k0 + 1) * G];
+  };
+  const cells = (s: Scene, x: number, y: number, w: number, h: number, color: string) => {
+    if (w <= 0 || h <= 0) return;
+    const [x0, ww] = span(x, w), [y0, hh] = span(y, h);
+    s.add(rect(x0, y0, ww, hh, { fill: glyphs(s, false, color) }));
+  };
+  // 条：矮的是一行方块字（高过一个字的居中成一行），高的切成格子；图例色块那么小的本身就是一个字
+  const termBar = (s: Scene, x: number, y: number, w: number, h: number, color: string) => {
+    if (w <= 0 || h <= 0) return;
+    if (w <= 2 * G && Math.abs(w - h) < 2) { const q = Math.min(w, Q); s.add(rect(x + (w - q) / 2, y + (h - q) / 2, q, q, fillOf(color))); return; }
+    if (h >= 3 * G) { cells(s, x, y, w, h, color); return; }
+    const [x0, ww] = span(x, w), hh = Math.min(h, Q);
+    s.add(rect(x0, y + (h - hh) / 2, ww, hh, { fill: glyphs(s, true, color) }));
+  };
   const st: Style = defineStyle({
     id: t.id, name: themeName(t, 'zh'), en: themeName(t, 'en'),
     note: THEME_INFO[t.id]?.note ?? '', noteEn: THEME_INFO[t.id]?.noteEn ?? '', dark: t.dark,
@@ -91,6 +120,7 @@ export function bridgeStyle(t: Theme): Style {
       return { x: b.x + k, y: b.y + k, w: b.w - k * 2, h: b.h - k * 2 };
     },
     bar(s: Scene, x: number, y: number, w: number, h: number, color: string) {
+      if (term) { termBar(s, x, y, w, h, color); return; }
       const rx = Math.min(t.barRadius, h / 2, w / 2);
       if (t.family === 'neon' && w > 0 && h > 0) {
         // 霓虹：和原版作品一样是灯管——后面一层模糊的光，前面亮边暗芯；太细的条直接是一根亮线。
@@ -111,7 +141,14 @@ export function bridgeStyle(t: Theme): Style {
         s.add(rect(x + 0.75, y + 0.75, w - 1.5, h - 1.5, { fill: color, fillOpacity: 0.22, stroke: color, strokeWidth: 1.5, rx }));
       },
     } : {}),
+    ...(term ? { grid: G, cells, block: termBar } : {}),
     track(s: Scene, x: number, y: number, w: number, h: number) {
+      // 终端：没走到的地方是一排点（原版的 ···），点在每一格正中，条画上来正好盖住
+      if (term) {
+        const [x0, ww] = span(x, w);
+        s.add(line(x0 + G / 2 - 1, y + h / 2, x0 + ww - G / 2 + 1, y + h / 2, { ...strokeOf(t.faint), strokeWidth: 2, strokeDasharray: `2 ${G - 2}` }));
+        return;
+      }
       s.add(rect(x, y, w, h, { ...fillOf(t.track), rx: Math.min(t.barRadius, h / 2) }));
     },
     mark(s: Scene, key: string, cx: number, cy: number, size: number, color?: string) {

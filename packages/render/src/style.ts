@@ -39,6 +39,10 @@ export interface Style {
   strip?(s: Scene, b: Box, m: Model, aside: Box): void;
   /** 可选：板块这类大色块的画法（不写就是实色圆角矩形）。原版霓虹用它把色块画成灯管 */
   block?(s: Scene, x: number, y: number, w: number, h: number, color: string): void;
+  /** 可选：字符格的格距。和 cells 一起写：河流这类平滑图形按全图同一套格子画，一格一个方块字（原版终端） */
+  grid?: number;
+  /** 可选：把这块区域画成落在字符格上的方块字（■）；opacity 用来画浅一层的底 */
+  cells?(s: Scene, x: number, y: number, w: number, h: number, color: string, opacity?: number): void;
   /** 卡片面（可选）：玻璃、羊皮纸、面板。返回内容区 */
   plate(s: Scene, b: Box): Box;
   title(s: Scene, text: string, x: number, y: number, size: number, anchor?: 'start' | 'middle' | 'end', o?: { maxW?: number; fill?: string }): number;
