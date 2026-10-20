@@ -186,6 +186,23 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
   const v = o.variant ?? 'flat';
   const lead = m.rows.filter((a) => a.kind === 'agent').slice(0, 3);
   if (!lead.length) return null;
+  if (v === 'emblem' && st.grid) {
+    // 字符格风格（原版终端）：圆章换成一个方框，框顶嵌一行字，像终端里的面板标题
+    const S = 260;
+    const s = new Scene(S, S);
+    s.bg = st.c.bg;
+    s.add(rect(4, 4, S - 8, S - 8, { fill: st.c.paper }));
+    const head = T(m, ` ${m.project} · AI 参与编写 `, ` ${m.project} · written with AI `);
+    const hw = Math.min(measure(head, st.f.mono, 14), S - 56);
+    s.add(path(`M${r(S / 2 - hw / 2 - 4)} 18H18V${S - 18}H${S - 18}V18H${r(S / 2 + hw / 2 + 4)}`, { fill: 'none', stroke: st.c.ink, strokeOpacity: 0.55, strokeWidth: 1.5 }));
+    s.text(head, S / 2, 23, { font: st.f.mono, size: 14, fill: st.c.ink, anchor: 'middle', maxW: S - 56 });
+    st.mark(s, lead[0].key, S / 2, S / 2 - 6, 48);
+    st.num(s, pct(lead[0].pct), S / 2, S / 2 + 48, 18, 'middle');
+    st.track(s, 48, S / 2 + 70, S - 96, 9);
+    st.bar(s, 48, S / 2 + 70, ((S - 96) * lead[0].pct) / 100, 9, colorOf(st, lead[0]), 0);
+    s.hit(18, 18, S - 36, S - 36, tip(m, lead[0]));
+    return s;
+  }
   if (v === 'emblem') {
     const S = 260;
     const s = new Scene(S, S);
@@ -212,7 +229,9 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     let x = 18;
     m.rows.forEach((a, i) => {
       const w = ((W - 36) * a.pct) / 100;
-      if (a.key === 'unattributed') s.add(rect(x, 42, w, 14, { fill: st.hatch(s) }));
+      // 字符格风格：条是一排方块字
+      if (st.cells) st.bar(s, x, 42, w, 14, a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a), i);
+      else if (a.key === 'unattributed') s.add(rect(x, 42, w, 14, { fill: st.hatch(s) }));
       else s.add(rect(x, 42, Math.max(0, w - 1.5), 14, { fill: colorOf(st, a) }));
       s.hit(x, 36, w, 26, tip(m, a));
       x += w;
@@ -257,14 +276,15 @@ function splitBadge(m: Model, st: Style): Scene | null {
     let sx = x;
     for (const q of segsOf(m, st, a)) {
       const qw = (w * q.lines) / Math.max(1, a.lines);
-      if (a.key === 'unattributed') s.add(rect(sx, 40, qw, 14, { fill: st.hatch(s) }));
+      if (st.cells) st.bar(s, sx, 40, qw, 14, a.key === 'unattributed' ? st.hatch(s) : q.color, 0);
+      else if (a.key === 'unattributed') s.add(rect(sx, 40, qw, 14, { fill: st.hatch(s) }));
       else s.add(rect(sx, 40, Math.max(0, qw - 0.75), 14, { fill: q.color }));
       s.hit(sx, 34, qw, 26, segTip(m, a, q));
       sx += qw;
     }
     // 工具之间留一道缝，比模型之间宽
     x += w;
-    if (w > 3) s.add(rect(x - 2, 40, 2, 14, { fill: st.c.paper }));
+    if (w > 3 && !st.cells) s.add(rect(x - 2, 40, 2, 14, { fill: st.c.paper }));
   }
   const segs = segsOf(m, st, top).filter((q) => !q.unknown).slice(0, 2);
   const sub = segs.length > 1 ? segs.map((q) => `${q.name} ${Math.round(q.pct)}%`).join(' · ') : modelLine(top);

@@ -41,6 +41,34 @@ function monoGrey(t: Theme, out: Out): Out {
 /** 霓虹的光晕滤镜（画在 svgImage 里的图形用）：按整张小图的坐标定区域，细线、圆弧的包围盒再扁也不会被裁掉 */
 const NEON_GLOW = (w: number, hh: number, blur: number) => `<defs><filter id="ng" filterUnits="userSpaceOnUse" x="-20" y="-20" width="${w + 40}" height="${hh + 40}"><feGaussianBlur stdDeviation="${blur}"/></filter></defs>`;
 
+/** 终端：方块字的格子（和新作品那边同一套格距）。每种颜色一个图案，一段格子一个矩形，出图不慢；未确认的斜纹换成暗色方块 */
+const TG = 12, TQ = 9;
+function glyphSvg(t: Theme, runs: { x: number; y: number; w: number; h: number; c: string }[]): string {
+  const ids = new Map<string, string>();
+  const id = (c: string) => { const k = c.startsWith('url(') ? t.faint : c; if (!ids.has(k)) ids.set(k, `tg${ids.size}`); return ids.get(k)!; };
+  const rects = runs.filter((q) => q.w > 0 && q.h > 0).map((q) => `<rect x="${q.x}" y="${q.y}" width="${q.w}" height="${q.h}" fill="url(#${id(q.c)})"/>`).join('');
+  const off = (TG - TQ) / 2;
+  return `<defs>${[...ids].map(([c, i]) => `<pattern id="${i}" width="${TG}" height="${TG}" patternUnits="userSpaceOnUse"><rect x="${off}" y="${off}" width="${TQ}" height="${TQ}" fill="${c}"/></pattern>`).join('')}</defs>${rects}`;
+}
+/** 终端：环落到格子上，格子中心在环里的按角度（从 12 点顺时针，0~1）归到那一段 */
+function glyphRing(cx: number, cy: number, R0: number, R1: number, segs: { a0: number; a1: number; c: string }[]) {
+  const runs: { x: number; y: number; w: number; h: number; c: string }[] = [];
+  for (let ky = Math.floor((cy - R1) / TG); ky * TG <= cy + R1; ky++) {
+    let x0 = 0, n = 0, cur = '';
+    const flush = () => { if (n) runs.push({ x: x0, y: ky * TG, w: n * TG, h: TG, c: cur }); n = 0; };
+    for (let kx = Math.floor((cx - R1) / TG); kx * TG <= cx + R1; kx++) {
+      const dx = (kx + 0.5) * TG - cx, dy = (ky + 0.5) * TG - cy, d = Math.hypot(dx, dy);
+      const a = (Math.atan2(dy, dx) / (2 * Math.PI) + 1.25) % 1;
+      const f = d >= R0 && d <= R1 ? segs.find((q) => a >= q.a0 && a < q.a1)?.c ?? '' : '';
+      if (n && f === cur) { n++; continue; }
+      flush();
+      if (f) { x0 = kx * TG; n = 1; cur = f; }
+    }
+    flush();
+  }
+  return runs;
+}
+
 const dotline = (t: Theme, color?: string) => ({ height: 2, alignSelf: 'center' as const, backgroundImage: `repeating-linear-gradient(90deg, ${color ?? t.faint} 0px, ${color ?? t.faint} 2px, transparent 2px, transparent 7px)` });
 
 /** 人：不和 agent 同级。单独一行小字写名字和占比，不放条形 */
@@ -1432,7 +1460,11 @@ export function donut(m: Model, t: Theme): Out {
     acc += len;
     return s;
   }).join('');
+  // 终端：圆环落到字符格上，一格一个方块字
+  let a1 = 0;
+  const term = t.family === 'terminal' ? glyphSvg(t, glyphRing(R, R, r0 - w / 2, r0 + w / 2, m.rows.map((r, i) => ({ a0: a1, a1: (a1 += r.pct / 100), c: r.key === 'unattributed' ? 'url(#u)' : famColor(r.key, t, i) })))) : '';
   const ring = box({ position: 'relative', width: 2 * R, height: 2 * R, alignItems: 'center', justifyContent: 'center' },
+    term ? svgImage(`<svg xmlns="http://www.w3.org/2000/svg" width="${2 * R}" height="${2 * R}">${term}</svg>`, 2 * R, 2 * R, { position: 'absolute', left: 0, top: 0 }) :
     svgImage(`<svg xmlns="http://www.w3.org/2000/svg" width="${2 * R}" height="${2 * R}">${pat}${neon ? NEON_GLOW(2 * R, 2 * R, 8) : ''}<circle cx="${R}" cy="${R}" r="${r0}" fill="none" stroke="${t.track}" stroke-width="${w}"/>${neon ? `<g filter="url(#ng)" opacity="0.95">${arcs}</g>` : ''}${arcs}</svg>`, 2 * R, 2 * R, { position: 'absolute', left: 0, top: 0 }),
     col({ alignItems: 'center', gap: 6 },
       txt({ fontFamily: t.num, fontSize: t.family === 'film' ? 56 : 48, color: t.ink, letterSpacing: -1 }, compact(m.linesAdded)),
@@ -1483,6 +1515,22 @@ export function area(m: Model, t: Theme): Out | null {
       edges.push(`<path d="${smooth(up)}" fill="none" stroke="${fc}" stroke-width="2.5" stroke-linecap="round"/>`);
     } else paths.push(`<path d="${d}" fill="${fc}"/>`);
     base = top;
+  }
+  // 终端：每一列按两周之间插值的数堆起来，落到字符格上（和新作品的河流同一套格子）
+  if (t.family === 'terminal') {
+    paths.length = 0; edges.length = 0;
+    const nr = Math.floor(CH / TG), runs: { x: number; y: number; w: number; h: number; c: string }[] = [];
+    for (let c = 0; (c + 1) * TG <= CW; c++) {
+      const u = (((c + 0.5) * TG) / CW) * (weeks.length - 1), i = Math.min(weeks.length - 2, Math.floor(u)), f = u - i;
+      let cum = 0, prev = 0;
+      for (const k of order) {
+        cum += (series[i][k] ?? 0) * (1 - f) + (series[i + 1][k] ?? 0) * f;
+        const b = Math.round((cum / max) * nr * 0.96);
+        if (b > prev) runs.push({ x: c * TG, y: CH - b * TG, w: TG, h: (b - prev) * TG, c: k === 'unattributed' ? 'url(#u)' : famColor(k, t, rankOf(m, k)) });
+        prev = b;
+      }
+    }
+    paths.push(glyphSvg(t, runs));
   }
   const grid = [0.25, 0.5, 0.75].map((f) => `<line x1="0" x2="${CW}" y1="${CH * f}" y2="${CH * f}" stroke="${t.family === 'editorial' ? 'rgba(18,17,16,0.25)' : t.line}" stroke-width="1"/>`).join('');
   const lit = edges.length ? `${NEON_GLOW(CW, CH, 6)}<g filter="url(#ng)">${edges.join('')}</g>${edges.join('')}` : '';
@@ -1562,8 +1610,20 @@ export function versions(m: Model, t: Theme): Out | null {
   const stack = m.rows.map((r) => r.key);
   const totals = order.map((v) => Object.values(by[v]).reduce((a, b) => a + b, 0));
   const max = Math.max(...totals), BH = 340;
+  // 终端：柱子是一摞方块字，每段的行数按累计取整分（总行数和柱高对得上）
+  const termBar = (v: string, i: number) => {
+    const nr = Math.max(1, Math.round((totals[i] / max) * (BH / TG))), runs: { x: number; y: number; w: number; h: number; c: string }[] = [];
+    let cum = 0, prev = 0;
+    stack.forEach((k, j) => {
+      cum += by[v][k] ?? 0;
+      const b = Math.round((cum / totals[i]) * nr);
+      if (b > prev) runs.push({ x: 0, y: (nr - b) * TG, w: 96, h: (b - prev) * TG, c: k === 'unattributed' ? 'url(#u)' : famColor(k, t, j) });
+      prev = b;
+    });
+    return svgImage(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="${nr * TG}">${glyphSvg(t, runs)}</svg>`, 96, nr * TG);
+  };
   const bars = order.map((v, i) => col({ alignItems: 'center', width: 200 },
-    box({ height: BH, alignItems: 'flex-end' },
+    t.family === 'terminal' ? box({ height: BH, alignItems: 'flex-end' }, termBar(v, i)) : box({ height: BH, alignItems: 'flex-end' },
       // 霓虹：每根柱子整体一圈光晕（光晕按柱子算，不按每一段，出图不慢）
       col({ width: 96, height: (totals[i] / max) * BH, borderRadius: t.family === 'glass' ? 10 : t.barRadius ? 8 : 0, overflow: 'hidden', flexDirection: 'column-reverse', gap: 2, boxShadow: t.family === 'neon' ? `0 0 16px ${famColor(stack.find((k) => by[v][k]) ?? '', t, 0)}88` : undefined },
         ...stack.map((k, j) => (by[v][k] ? box({ height: `${(by[v][k] / totals[i]) * 100}%`, minHeight: 2, ...fill({ key: k }, t, j, 3) }) : null)))),
