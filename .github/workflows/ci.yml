@@ -1,4 +1,4 @@
-# CI：Rust 核心与渲染在 Linux 上测；App 在 macOS 上实际编译、打包成 .app（未签名），作为产物上传
+# CI：Rust 核心与渲染在 Linux 上测；App 在 macOS 上实际编译、打包成 .app（未签名），作为产物上传，再跑 App 自己的 clippy 和单测
 name: ci
 on:
   pull_request:
@@ -35,6 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
@@ -60,6 +61,12 @@ jobs:
       - name: 编译并打包 App
         run: npx tauri build --bundles app
         working-directory: apps/desktop
+      # 放在打包之后：要用上一步 vite 编出来的 dist（App 把它编进二进制）
+      - name: App 的 Rust：clippy 与单测
+        run: |
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+        working-directory: apps/desktop/src-tauri
       - name: 打成 zip
         run: ditto -c -k --keepParent apps/desktop/src-tauri/target/release/bundle/macos/creditia.app creditia-macos.zip
       - uses: actions/upload-artifact@v4
