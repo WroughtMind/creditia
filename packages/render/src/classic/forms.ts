@@ -1262,6 +1262,16 @@ function appIos(m: Model, t: Theme): Out {
 
 // ═════════════════════════ 统计图 ═════════════════════════
 
+/** 统计图的整页：玻璃风格放在一张和主卡片同一种材质的磨砂玻璃卡上（半透明白、白描边、大圆角、柔和投影），
+ *  背景的柔光从卡片后面透出来。外边距加卡片内边距等于原来的留白，图的宽度不变。别的风格照旧铺在背景上 */
+const GLASS_OUT = 28;
+function page(m: Model, t: Theme, W: number, H: number, pad: [number, number, number, number], style: Record<string, any>, ...kids: any[]): Node {
+  const px = (p: number[]) => p.map((v) => `${v}px`).join(' ');
+  if (t.family !== 'glass') return col({ width: W, height: H, padding: px(pad), ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans, ...style }, ...kids);
+  return col({ width: W, height: H, padding: GLASS_OUT, ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
+    col({ flex: 1, ...surface(t), padding: px(pad.map((v) => Math.max(v - GLASS_OUT, 20))), ...style }, ...kids));
+}
+
 /** 统计图通用框：标题、图例按家族换排版 */
 /** 图表正文区：标上 key，高度随内容的作品出图前据此加高画布（见 Out.grow） */
 const bodyIn = (style: Record<string, any>, body: Node): Node => { const n = col(style, body); n.key = BODY_KEY; if (body && typeof body === 'object' && body.key == null) body.key = CONTENT_KEY; return n; };
@@ -1339,7 +1349,7 @@ function frame(m: Model, t: Theme, W: number, H: number, caption: string, body: 
       bodyIn({ flex: 1, padding: '0 46px' }, body),
       leg ? box({ padding: '0 46px 30px' }, leg) : null,
     ]) };
-  return { w: W, h: H, tree: col({ width: W, height: H, padding: '64px 80px 56px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
+  return { w: W, h: H, tree: page(m, t, W, H, [64, 80, 56, 80], {},
     head,
     bodyIn({ flex: 1 }, body),
     leg ? box({ marginTop: 36 }, leg) : null) };
@@ -1387,7 +1397,7 @@ export function waffle(m: Model, t: Theme): Out {
         box({ width: 12, height: 12, borderRadius: t.barRadius ? 3 : 0, ...fill(r, t, i + 1, 2) }),
         txt({ fontSize: 18, color: r.key === 'unattributed' ? t.soft : t.ink }, r.name),
         txt({ marginLeft: 'auto', fontSize: 17, color: t.soft, fontFamily: t.num === t.sans ? t.sans : t.num }, `${cells[i + 1]} 格`)))));
-  return { w: W, h: H, tree: col({ width: W, height: H, padding: '64px 80px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
+  return { w: W, h: H, tree: page(m, t, W, H, [64, 80, 64, 80], {},
     box({ alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 40 },
       txt({ fontFamily: t.display, fontSize: t.display === t.sans ? 30 : 38, fontWeight: t.displayWeight }, m.project),
       label(t, '一格 = 1%', 13)),
@@ -1433,7 +1443,7 @@ export function donut(m: Model, t: Theme): Out {
       mark(r.key, t, 20),
       txt({ fontSize: 19, color: r.key === 'unattributed' ? t.soft : t.ink }, r.name),
       txt({ marginLeft: 'auto', fontSize: 18, color: t.soft, fontFamily: t.num === t.sans ? t.sans : t.num }, pct(r.pct)))));
-  return { w: W, h: H, tree: box({ width: W, height: H, padding: '0 96px', gap: 104, alignItems: 'center', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans }, ring, legend) };
+  return { w: W, h: H, tree: page(m, t, W, H, [0, 96, 0, 96], { flexDirection: 'row', gap: 104, alignItems: 'center' }, ring, legend) };
 }
 
 /** 堆叠面积：每周新增代码 */
@@ -1590,7 +1600,7 @@ export function settle(m: Model, t: Theme): Out | null {
       txt({ fontFamily: t.num, fontSize: 30, color: t.ink }, v)),
     box({ height: Math.max(t.barH * 3, 14), borderRadius: t.family === 'glass' ? 99 : t.barRadius, backgroundColor: t.track },
       box({ width: `${p}%`, height: '100%', borderRadius: t.family === 'glass' ? 99 : t.barRadius, ...(t.family === 'neon' ? neonTube(solid ? t.accent : t.soft, true) : { backgroundColor: solid ? t.ink : t.faint }) })));
-  return { w: W, h: H, tree: col({ width: W, height: H, padding: '72px 96px', justifyContent: 'space-between', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
+  return { w: W, h: H, tree: page(m, t, W, H, [72, 96, 72, 96], { justifyContent: 'space-between' },
     box({ alignItems: 'baseline', justifyContent: 'space-between' },
       txt({ fontFamily: t.display, fontSize: t.display === t.sans ? 30 : 38, fontWeight: t.displayWeight }, m.project),
       box({ alignItems: 'baseline', gap: 8 }, txt({ fontFamily: t.num, fontSize: 64, letterSpacing: -1 }, `${Math.round(keep)}%`), txt({ fontSize: 17, color: t.soft }, '留到了今天'))),
