@@ -292,6 +292,12 @@ async fn analyze(app: tauri::AppHandle, project_id: String, lang: Option<String>
     tauri::async_runtime::spawn_blocking(move || run_analysis(&p.path, lang.as_deref(), Some(app))).await.map_err(|e| Fail::with("core_failed", e))?
 }
 
+/// 本机用过 AI 工具的项目（核心的 discover）：第一次打开时挑项目用。要扫各工具的记录，放到后台线程
+#[tauri::command]
+async fn discover() -> Res<Value> {
+    tauri::async_runtime::spawn_blocking(|| run_core(&["discover"])).await.map_err(|e| Fail::with("core_failed", e))?
+}
+
 /// 选一个文件夹（只选，不分析；分析交给 add_project，界面这期间能显示进度）
 #[tauri::command]
 async fn pick_folder(app: tauri::AppHandle) -> Res<Option<String>> {
@@ -775,7 +781,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            projects, credits, stamp, head, config_of, set_display, analyze, cancel_analyze, pick_folder, add_project, integrations, set_integration, embed_snippet,
+            projects, credits, stamp, head, config_of, set_display, analyze, cancel_analyze, discover, pick_folder, add_project, integrations, set_integration, embed_snippet,
             library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor, collect_info, set_collect, collect_now, set_collect_agent
         ])
         .run(tauri::generate_context!())

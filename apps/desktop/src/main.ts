@@ -1,5 +1,5 @@
 // creditia App：一面展墙。顶部切换项目，左下角圆点切换风格，所有作品直接摆出来；
-// 悬停看细节、换版式、选格式导出；拖到右下角的导出坞也能导出。
+// 悬停看细节、换版式、选格式导出；拖起作品时下面浮出导出坞，松手就导出。
 import { buildModel, type Model } from '../../../packages/render/src/classic/data.ts';
 import { nameOf, resolveGroup } from '../../../packages/render/src/data.ts';
 import { MODEL_VARIANTS } from '../../../packages/render/src/registry.ts';
@@ -20,11 +20,20 @@ const devPlugs: Plugs = {
   hook: { installed: false, decided: null, path: '.git/hooks/prepare-commit-msg' },
   release: { installed: false, decided: null, path: '.github/workflows/creditia.yml', github: true, published: true },
 };
+/** 开发时加 ?fresh：作品库是空的，从第一次打开走起 */
+const devFresh = { on: !demo && new URLSearchParams(location.search).has('fresh'), added: false };
 async function api(cmd: string, args: any = {}): Promise<any> {
   if (native) return native(cmd, args);
   const get = (u: string) => fetch(u).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
   switch (cmd) {
-    case 'projects': return demo ? demo.projects : get('/__dev/projects');
+    case 'projects': return demo ? demo.projects : devFresh.on && !devFresh.added ? [] : get('/__dev/projects');
+    case 'discover': if (demo) throw new Error('demo'); await new Promise((r) => setTimeout(r, 900)); return { projects: [
+      { name: 'lumen', path: '/Users/me/code/lumen', tools: { 'claude-code': 42, codex: 12 }, lastActive: '2026-10-20', exists: true, inLibrary: false },
+      { name: 'atlas', path: '/Users/me/code/atlas', tools: { cursor: 30 }, lastActive: '2026-10-12', exists: true, inLibrary: false },
+      { name: 'dotfiles', path: '/Users/me/dotfiles', tools: { 'claude-code': 4 }, lastActive: '2026-09-02', exists: true, inLibrary: false },
+      { name: 'scratch', path: '/Users/me/tmp/scratch', tools: { codex: 3 }, lastActive: '2026-08-30', exists: true, inLibrary: false },
+    ] };
+    case 'add_project': if (demo) throw new Error('demo'); await new Promise((r) => setTimeout(r, 2500)); devFresh.added = true; return { id: (await get('/__dev/projects'))[0]?.id, result: {} };
     case 'credits': if (demo) { const c = demo.credits[args.projectId]; if (!c) throw new Error('not found'); return c; } return get(`/__dev/credits?id=${encodeURIComponent(args.projectId)}`);
     case 'config_of': return {};
     case 'doctor': return demo ? demo.doctor : get('/__dev/doctor');
@@ -123,7 +132,7 @@ async function boot() {
   const stageEl = $('#stage');
   stageEl.addEventListener('scroll', () => document.body.classList.toggle('scrolled', stageEl.scrollTop > 8), { passive: true });
   try { state.projects = await api('projects'); } catch (e: any) { return empty(() => [L('读不到作品库', 'Cannot read the library'), errText(e)]); }
-  if (!state.projects.length) return empty(() => [L('还没有分析过的项目', 'No analyzed projects yet'), '', 'creditia analyze', native ? { label: L('添加项目…', 'Add a project…'), run: addProject } : undefined]);
+  if (!state.projects.length) return welcome();
   const last = (store.get('project') === ALL_ID && state.projects.length > 1 ? allProject() : null) ?? state.projects.find((p) => p.id === store.get('project')) ?? state.projects[0];
   await openProject(last);
   let resizeFrame = 0, columnWidth = rcw(), viewportWidth = innerWidth, viewportHeight = innerHeight;
@@ -146,9 +155,9 @@ function empty(view: EmptyView, keepName = false) {
   $('#board').innerHTML = ''; document.body.classList.remove('busy');
   const el = $('#empty'); el.hidden = false;
   applyView();
-  el.innerHTML = `<div><b>${esc(title)}</b>${esc(detail)}${act ? `<br><button class="go glass">${esc(act.label)}</button>` : ''}${cmd ? `<br><span>${act ? L('或者在项目目录里运行', 'or run in your project') : L('在项目目录里运行', 'Run in your project')}</span><br><code>${esc(cmd)}</code>` : ''}</div>`;
+  el.innerHTML = `<div><b>${esc(title)}</b>${esc(detail)}${act ? `<br><button class="go">${esc(act.label)}</button>` : cmd ? `<br><code>${esc(cmd)}</code>` : ''}</div>`;
   if (act) (el.querySelector('.go') as HTMLElement).onclick = act.run;
-  if (!keepName) { $('#pname').textContent = 'creditia'; $('#pmeta').textContent = ''; }
+  if (!keepName) $('#pname').textContent = 'creditia';
 }
 
 async function openProject(p: any) {
@@ -158,16 +167,15 @@ async function openProject(p: any) {
   $('#group').hidden = true; plugs = null; renderPlugs();
   ++state.token; // 让正在画的旧项目停下
   $('#board').innerHTML = ''; slotWall(); // 档案还在读，先把墙的样子摆出来
-  $('#pname').textContent = p.name; $('#pmeta').textContent = L('读取中…', 'Loading…');
+  $('#pname').textContent = p.name;
   let raw: any;
   const st = readStamp(p); // 先记下版本再读档案：读的过程中又变了，下次比对还能发现
   try { raw = await creditsOf(p); }
   catch (e: any) {
     if (seq !== state.openSeq) return;
-    $('#pmeta').textContent = '';
     if (e?.code && e.code !== 'no_credits') return empty(() => [L('读不到这个项目的档案', 'Cannot read this project'), errText(e)], true);
     const can = native && p.exists !== false;
-    return empty(() => [L('这个项目还没有档案', 'No credits for this project yet'), '', `cd ${p.path} && creditia analyze`, can ? { label: L('现在分析', 'Analyze now'), run: () => reanalyze(p) } : undefined], true);
+    return empty(() => [L('这个项目还没分析过', 'Not analyzed yet'), '', `cd ${p.path} && creditia analyze`, can ? { label: L('现在分析', 'Analyze now'), run: () => reanalyze(p) } : undefined], true);
   }
   if (seq !== state.openSeq) return; // 已经切到别的项目
   stampOf = await st;
@@ -246,14 +254,13 @@ function rebuildModel() {
   state.model = buildModel(state.raw, { director: false, lang: state.lang, group: groupPref() });
   const m = state.model;
   $('#pname').textContent = m.project || state.current?.name;
-  $('#pmeta').textContent = `${fmt(m.commits)} ${L('次提交', 'commits')} · ${fmt(m.linesAdded)} ${L('行', 'lines')}`;
   renderGroup();
   renderPlugs();
 }
 
 // ───────────────────────── 接入：提交盖章、跟着发版 ─────────────────────────
-// 两项都会改用户的仓库，所以每个项目由用户自己决定。没决定过时这一条醒目地摆在作品墙最上面问；
-// 决定过之后照样留在那里，随时能拨回去。开关交给核心的 hook / release install|uninstall，决定记进项目配置
+// 两项都会改用户的仓库，所以每个项目由用户自己决定。没决定过时，第一张作品出来后在墙顶上用一行问一次；
+// 决定过之后开关收进项目菜单。开关交给核心的 hook / release install|uninstall，决定记进项目配置
 type Plug = { installed: boolean; decided: boolean | null; path: string; github?: boolean; published?: boolean };
 type Plugs = { hook: Plug; release: Plug };
 let plugs: Plugs | null = null, plugBusy = '';
@@ -262,29 +269,32 @@ async function loadPlugs(p: any) {
   catch { if (p === state.current) plugs = null; }
   renderPlugs();
 }
+const PLUG_TEXT = {
+  hook: () => [L('提交盖章', 'Commit stamps'), L('提交信息里记下工具、模型和行数，日志清理后也认得出', 'Commits record the tool, model and lines, so credit survives log cleanup')],
+  release: () => [L('跟着发版', 'Release credits'), L('发版说明和 PR 评论里写上署名：加一个 GitHub workflow，要你提交', 'Credits in release notes and PR comments: adds a GitHub workflow for you to commit')],
+};
+/** 一项开关：名字，悬停看它会改什么；有要提醒的写在下面 */
+function plugSwitch(k: 'hook' | 'release') {
+  const on = plugs![k].installed, [title, desc] = PLUG_TEXT[k](), rel = plugs!.release;
+  const note = k === 'release' && rel.installed && !rel.published && !plugs!.hook.installed ? L('要先开提交盖章', 'Needs commit stamps')
+    : k === 'release' && rel.github === false && !rel.installed ? L('没有 GitHub 远程', 'No GitHub remote') : '';
+  return `<div class="sw${on ? ' on' : ''}${plugBusy === k ? ' busy' : ''}" title="${esc(desc)}"><span class="t">${esc(title)}${note ? `<small>${esc(note)}</small>` : ''}</span>
+    <button role="switch" aria-checked="${on}" aria-label="${esc(title)}" data-k="${k}" ${plugBusy ? 'disabled' : ''}><i></i></button></div>`;
+}
+function wirePlugs(root: HTMLElement) {
+  root.querySelectorAll<HTMLElement>('button[data-k]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); setPlug(b.dataset.k as 'hook' | 'release', !plugs![b.dataset.k as 'hook' | 'release'].installed); }));
+}
 function renderPlugs() {
   const el = $('#plug');
-  if (!plugs || !state.raw) { el.hidden = true; return; }
-  const ask = (['hook', 'release'] as const).filter((k) => plugs![k].decided == null);
+  const m = document.querySelector<HTMLElement>('#mplugs');
+  if (m) { m.hidden = !plugs; if (plugs) { m.innerHTML = `<span class="lab">${L('这个项目', 'This project')}</span>${plugSwitch('hook')}${plugSwitch('release')}`; wirePlugs(m); } }
+  const ask = plugs ? (['hook', 'release'] as const).filter((k) => plugs![k].decided == null) : [];
+  // 第一张作品出来之前不问：空墙上只剩这一条，像是要先答完才能看
+  if (!ask.length || !state.raw || !document.querySelector('#board .tile:not(.slot)')) { el.hidden = true; return; }
   el.hidden = false;
-  el.classList.toggle('ask', ask.length > 0);
-  el.classList.toggle('done', ask.length === 0);
-  const rel = plugs.release;
-  const item = (k: 'hook' | 'release', title: string, desc: string, note = '') => {
-    const on = plugs![k].installed;
-    // 决定过之后收成一行：说明放进悬停提示，只有提醒（note）还摆出来
-    return `<div class="sw${on ? ' on' : ''}${plugBusy === k ? ' busy' : ''}${plugs![k].decided == null ? ' new' : ''}"${ask.length ? '' : ` title="${esc(desc)}"`}>
-      <span class="t"><b>${esc(title)}</b><small>${esc(desc)}</small>${note ? `<small class="note">${esc(note)}</small>` : ''}</span>
-      <button role="switch" aria-checked="${on}" aria-label="${esc(title)}" data-k="${k}" ${plugBusy ? 'disabled' : ''}><i></i></button></div>`;
-  };
-  el.innerHTML = (ask.length ? `<p class="q"><b>${L('这个项目要接入下面两项吗？', 'Add these to this project?')}</b>${L('都只改这一个仓库，随时能关。', 'Each changes only this repository and can be turned off any time.')}</p>` : '')
-    + `<div class="row">${ask.length ? '' : `<span class="lab">${L('接入', 'Integrations')}</span>`}${item('hook', L('提交盖章', 'Commit stamps'), L('提交信息自动带上工具、模型和各工具写的行数。日志清理后也认得出，PR 评论读它', 'Commits carry the tool, model and lines per tool, so they stay recognizable after logs are cleaned up; PR comments read them'))}`
-    + item('release', L('跟着发版', 'Release credits'), L('发 Release 时把署名写进说明，PR 上评论署名。写一个 GitHub workflow，要你提交', 'Credits go into release notes and PR comments. Writes a GitHub workflow for you to commit'),
-      rel.installed && !rel.published && !plugs.hook.installed ? L('它读提交盖章记下的行数：把左边的提交盖章也打开', 'It reads the line counts from commit stamps: turn those on too') : rel.github === false && !rel.installed ? L('这个仓库没有 GitHub 远程', 'This repository has no GitHub remote') : '')
-    + `</div>` + (ask.length ? `<button class="later" data-act="later">${L(ask.length > 1 ? '都先不用' : '先不用', ask.length > 1 ? 'Not now, neither' : 'Not now')}</button>` : '');
-  el.querySelectorAll<HTMLElement>('button[data-k]').forEach((b) => (b.onclick = () => setPlug(b.dataset.k as 'hook' | 'release', !plugs![b.dataset.k as 'hook' | 'release'].installed)));
-  const later = el.querySelector<HTMLElement>('.later');
-  if (later) later.onclick = async () => { for (const k of ask) await setPlug(k, false, true); };
+  el.innerHTML = `<span class="q">${L('给这个仓库接上？', 'Add to this repo?')}</span>${plugSwitch('hook')}${plugSwitch('release')}<button class="later" data-act="later">${L('先不用', 'Not now')}</button>`;
+  wirePlugs(el);
+  (el.querySelector('.later') as HTMLElement).onclick = async () => { for (const k of ask) await setPlug(k, false, true); };
 }
 async function setPlug(k: 'hook' | 'release', on: boolean, quiet = false) {
   const p = state.current; if (!p || plugBusy) return;
@@ -298,25 +308,23 @@ async function setPlug(k: 'hook' | 'release', on: boolean, quiet = false) {
 }
 
 // ───────────────────────── 分组：按工具 / 按模型 ─────────────────────────
-// 默认「自动」：一个工具占了绝大部分、下面又有几个模型时自动按模型分。点一下就钉住这个项目的选择，
-// 「↺ 自动」随时切回去。档案里一个模型都没记下就不显示。
+// 默认「自动」：一个工具占了绝大部分、下面又有几个模型时自动按模型分；自动选中的那一项带个小点。
+// 点「按工具」「按模型」就钉住这个项目的选择。档案里一个模型都没记下就不显示。
 type GroupPref = 'auto' | 'tool' | 'model';
 const groupPref = (): GroupPref => { const g = state.current ? store.get('group.' + state.current.id) : null; return g === 'tool' || g === 'model' ? g : 'auto'; };
 function renderGroup() {
   const el = $('#group');
   if (!state.raw || !hasModels(state.raw)) { el.hidden = true; return; }
   const pref = groupPref(), now = groupOf(state.raw);
-  const auto = pref === 'auto';
   el.hidden = false;
-  el.setAttribute('aria-label', L('分组方式', 'Group by'));
-  el.innerHTML = (['tool', 'model'] as const).map((g) => `<button data-g="${g}" class="${g === now ? 'on' : ''}" aria-pressed="${g === now}">${g === 'tool' ? L('按工具', 'By tool') : L('按模型', 'By model')}</button>`).join('')
-    + (auto ? `<span class="auto" title="${L('按档案自动选的，点左边可以改', 'Picked automatically from the credits — click to change')}">${L('自动', 'Auto')}</span>`
-            : `<button data-g="auto" class="back" title="${L('交给 creditia 自动选', 'Let creditia pick')}">↺ ${L('自动', 'Auto')}</button>`);
+  el.setAttribute('aria-label', L('分组', 'Group by'));
+  const name = { auto: L('自动', 'Auto'), tool: L('按工具', 'By tool'), model: L('按模型', 'By model') };
+  el.innerHTML = (['auto', 'tool', 'model'] as const).map((g) => `<button data-g="${g}" class="${g === pref ? 'on' : ''}${g === now ? ' now' : ''}" aria-pressed="${g === pref}">${name[g]}</button>`).join('');
   el.querySelectorAll<HTMLElement>('button').forEach((b) => (b.onclick = () => pickGroup(b.dataset.g as GroupPref)));
 }
 async function pickGroup(g: GroupPref) {
   const p = state.current; if (!p || !state.raw) return;
-  if (g === groupPref() && g !== 'auto') return;
+  if (g === groupPref()) return;
   try { if (g === 'auto') localStorage.removeItem('creditia.group.' + p.id); else store.set('group.' + p.id, g); } catch { /* 没有存储也能用 */ }
   setGroup(g);
   rebuildModel();
@@ -332,12 +340,12 @@ const cache = new Map<string, Promise<Art | null>>();
 const cacheLen = new Map<string, number>();
 let cacheRaw: any = null, cacheTotal = 0;
 const CACHE_MAX = 32e6; // SVG 字符数
-function drawArt(id: string, variant?: string): Promise<Art | null> {
+function drawArt(id: string, variant?: string, kit = state.style): Promise<Art | null> {
   if (cacheRaw !== state.raw) { cache.clear(); cacheLen.clear(); cacheTotal = 0; cacheRaw = state.raw; }
-  const key = `${state.style.id}|${state.lang}|${groupPref()}|${id}|${variant ?? ''}`;
+  const key = `${kit.id}|${state.lang}|${groupPref()}|${id}|${variant ?? ''}`;
   let hit = cache.get(key);
   if (hit) { cache.delete(key); cache.set(key, hit); return hit; } // 挪到最近用过
-  hit = state.style.render(state.raw, state.lang, id, variant);
+  hit = kit.render(state.raw, state.lang, id, variant);
   cache.set(key, hit);
   hit.then((a) => {
     if (cache.get(key) !== hit) return;
@@ -421,6 +429,7 @@ async function paint() {
     tile.classList.add('placed');
     g.replaceWith(tile);
     layout();
+    if (board.querySelectorAll('.tile:not(.slot)').length === 1) renderPlugs(); // 第一张出来了，再问接入
   }
   store.set('dims', JSON.stringify(dims));
   for (const tile of fresh) {
@@ -446,12 +455,12 @@ async function warmRoam(token: number) {
   }
 }
 function tileHtml(id: string, vs: string[], cur?: string) {
-  return `<div class="name">${esc(state.style.pieceName(id, state.lang))}<span class="how">${L('点击放大 · 拖动导出', 'Click to enlarge · drag to export')}</span></div>
-      <div class="bar glass">${vs.length > 1 ? `<button data-act="prev" title="${L('上一种版式', 'Previous layout')}">‹</button><span class="vname">${esc(state.style.variantName(cur ?? '', state.lang))}</span><button data-act="next" title="${L('下一种版式', 'Next layout')}">›</button>` : ''}<button data-act="export" title="${L('导出', 'Export')}">${L('导出', 'Export')} ↓</button></div>
+  return `<div class="name">${esc(state.style.pieceName(id, state.lang))}</div>
+      <div class="bar glass">${vs.length > 1 ? `<button data-act="prev" title="${L('上一种版式', 'Previous layout')}">‹</button><span class="vname">${esc(state.style.variantName(cur ?? '', state.lang))}</span><button data-act="next" title="${L('下一种版式', 'Next layout')}">›</button>` : ''}<button data-act="export">${L('导出', 'Export')}</button></div>
       <div class="art"></div>`;
 }
 
-/** 瀑布流：一栏宽度跟着窗口变，横向作品跨两栏，小件不放大。
+/** 瀑布流：一栏宽度跟着窗口变，横向的统计图跨两栏，小件不缩。
  *  跨栏的作品会在矮的那栏下面留洞，所以每次往后看几张，挑放下去最高、留洞最少的那张先放 */
 function layout() {
   const board = $('#board');
@@ -474,6 +483,9 @@ function layout() {
     const set = Number(t.dataset.span);
     const small = Number(t.dataset.w) < 500; // 徽章这种小件，跨栏也只是居中，有洞时放一栏
     if (set && !(small && set > 1)) return at(t, Math.min(cols, set));
+    // 横着的统计图放进一栏只剩三分之一大，图例看不清：至少跨两栏
+    const w = Number(t.dataset.w), h = Number(t.dataset.h);
+    if (cols >= 2 && w >= 1000 && w / h > 0.95) return at(t, 2);
     // 很扁的图表在窄栏里字太小，三栏以上时让它跨两栏；跨了会留大洞就还是放一栏
     const wide = small ? set > 1 : cols >= 3 && Number(t.dataset.w) / Number(t.dataset.h) > 1.7;
     const two = wide ? at(t, 2) : null;
@@ -509,7 +521,7 @@ function wireTile(tile: HTMLElement, id: string, k: string, vs: string[]) {
       const name = tile.querySelector('.vname'); if (name) name.textContent = state.style.variantName(v, state.lang);
       return repaintTile(id, k);
     }
-    if (act === 'export') toggleFormats(tile, id, k);
+    if (act === 'export') toggleFormats(tile, id, (f) => doExport(f, id, k));
   });
   const artEl = tile.querySelector('.art') as HTMLElement;
   artEl.addEventListener('pointerdown', (e) => startDrag(e, tile, id, k));
@@ -549,32 +561,44 @@ async function repaintTile(id: string, k: string) {
 }
 
 // ───────────────────────── 导出 ─────────────────────────
-const closeFormats = () => document.querySelectorAll('.tile .fmts').forEach((x) => { x.parentElement!.classList.remove('menuopen'); x.remove(); });
-function toggleFormats(tile: HTMLElement, id: string, k: string) {
-  const open = tile.querySelector('.fmts');
+// 墙上、漫游、放大视图用同一个导出菜单：格式一列，下面一排尺寸；记住上次用的格式和尺寸
+const closeFormats = () => document.querySelectorAll('.fmts').forEach((x) => { x.parentElement!.classList.remove('menuopen'); x.remove(); });
+function toggleFormats(host: HTMLElement, id: string, run: (fmt: string) => void, kit = state.style) {
+  const open = host.querySelector(':scope > .fmts');
   closeFormats();
   if (open) return;
   const box = document.createElement('div');
   box.className = 'fmts glass';
-  box.innerHTML = exportsFor(id).map((f) => `<button data-f="${f.id}">${f.name}<span>${esc(fmtNote(f.id))}</span></button>`).join('');
-  box.onclick = (e) => { const b = (e.target as HTMLElement).closest('button'); if (!b) return; e.stopPropagation(); box.remove(); tile.classList.remove('menuopen'); doExport(b.dataset.f!, id, k); };
-  tile.appendChild(box); tile.classList.add('menuopen');
-  setTimeout(() => document.addEventListener('click', function off() { box.remove(); tile.classList.remove('menuopen'); document.removeEventListener('click', off); }), 0);
+  const last = store.get('fmt');
+  box.innerHTML = exportsFor(id, kit).map((f) => `<button data-f="${f.id}" class="${f.id === last ? 'last' : ''}">${f.name}</button>`).join('')
+    + `<div class="szs" role="group" aria-label="${L('尺寸', 'Size')}">${sizeButtons()}</div>`;
+  box.onclick = (e) => {
+    e.stopPropagation();
+    const b = (e.target as HTMLElement).closest('button'); if (!b) return;
+    if (b.dataset.s) { setSize(b.dataset.s); return; }
+    closeFormats(); store.set('fmt', b.dataset.f!); run(b.dataset.f!);
+  };
+  host.appendChild(box); host.classList.add('menuopen');
+  setTimeout(() => document.addEventListener('click', function off() { box.remove(); host.classList.remove('menuopen'); document.removeEventListener('click', off); }), 0);
 }
 /** 嵌入组件还没跟上原版，先不给；GIF 只给会动的作品 */
 const EXPORTS = FORMATS.filter((f) => f.id !== 'embed');
-const exportsFor = (id: string) => EXPORTS.filter((f) => f.id !== 'gif' || state.style.animated(id));
-const fmtNote = (f: string) => ({
-  png: L('社交、聊天', 'social, chat'), svg: L('README、网页', 'README, web'), pdf: L('打印、作品集', 'print, portfolio'), gif: L('会动', 'animated'),
-  html: L('可交互、离线', 'interactive, offline'), md: 'CREDITS.md', embed: L('网页组件', 'web component'),
-} as Record<string, string>)[f] ?? '';
+const exportsFor = (id: string, kit = state.style) => EXPORTS.filter((f) => f.id !== 'gif' || kit.animated(id));
+const SIZE_NAME: Record<string, [string, string]> = { native: ['原尺寸', 'Native'], og: ['链接图', 'Link'], square: ['方图', 'Square'], portrait: ['竖图', 'Portrait'], story: ['竖屏', 'Story'] };
+const sizeButtons = () => SIZES.filter((s) => s.id !== 'a4').map((s) => `<button data-s="${s.id}" class="${s.id === state.size ? 'on' : ''}" title="${s.w ? `${s.w}×${s.h}` : ''}">${esc(SIZE_NAME[s.id] ? L(...SIZE_NAME[s.id]) : s.id)}</button>`).join('');
+function setSize(id: string) {
+  state.size = id; store.set('size', id);
+  document.querySelectorAll<HTMLElement>('[data-s]').forEach((b) => { if (b.closest('.szs, #sizes, #defsize')) b.classList.toggle('on', b.dataset.s === id); });
+}
 
-async function doExport(fmtId: string, id: string, k: string) {
-  const a = state.arts.get(k)!;
+/** 默认导出墙上这一张；放大视图里试别的风格时，把那一套和画好的图传进来 */
+async function doExport(fmtId: string, id: string, k: string, o: { kit?: Kit; art?: Art; variant?: string } = {}) {
+  const kit = o.kit ?? state.style;
+  const a = o.art ?? state.arts.get(k)!;
   const m = state.model!;
   const i = Number(k.split('#')[1]);
-  const variant = curVariant(id, k, tiles()[i]);
-  const base = `${m.project || 'credits'}-${id}${variant && variant !== 'original' ? '-' + variant : ''}-${state.style.id}`;
+  const variant = o.kit ? o.variant : curVariant(id, k, tiles()[i]);
+  const base = `${m.project || 'credits'}-${id}${variant && variant !== 'original' ? '-' + variant : ''}-${kit.id}`;
   try {
     if (fmtId === 'md') {
       const text = mergeCreditsMd(null, creditsBlock(m));
@@ -583,7 +607,6 @@ async function doExport(fmtId: string, id: string, k: string) {
     }
     toast(fmtId === 'gif' ? L('正在逐帧生成 GIF…', 'Rendering GIF frames…') : L('正在导出…', 'Exporting…'), 60000, { spin: true });
     await new Promise((r) => setTimeout(r, 30));
-    const kit = state.style;
     const out = await exportArt(fmtId as Format, kit.style, a, state.size, kit.frames ? () => kit.frames!(state.raw, state.lang, id, variant) : undefined);
     const sz = state.size !== 'native' && fmtId !== 'html' ? `-${state.size}` : '';
     await saveBytes(`${base}${sz}.${out.ext}`, out.bytes, out.mime);
@@ -598,11 +621,10 @@ async function saveBytes(name: string, bytes: Uint8Array, mime: string) {
 
 function renderDock() {
   const dock = $('#targets');
-  dock.innerHTML = EXPORTS.filter((f) => f.id !== 'gif').map((f) => `<button data-f="${f.id}">${f.name}<span>${esc(fmtNote(f.id))}</span></button>`).join('');
-  dock.onclick = () => toast(L('把作品拖到这里，或悬停作品点「导出」', 'Drag a piece here, or hover it and click Export'));
-  $('#hint').textContent = L('拖动作品到这里导出', 'Drag a piece here to export');
+  dock.innerHTML = EXPORTS.filter((f) => f.id !== 'gif').map((f) => `<button data-f="${f.id}">${f.name}</button>`).join('');
+  $('#hint').textContent = L('松手导出', 'Drop to export');
   const sizes = $('#sizes');
-  sizes.innerHTML = SIZES.filter((s) => s.id !== 'a4').map((s) => `<button data-s="${s.id}" class="${s.id === state.size ? 'on' : ''}">${s.w ? `${s.w}×${s.h}` : L('原尺寸', 'Native')}</button>`).join('');
+  sizes.innerHTML = sizeButtons();
 }
 
 // ───────────────────────── 拖动 ─────────────────────────
@@ -639,14 +661,13 @@ function startDrag(e: PointerEvent, tile: HTMLElement, id: string, k: string) {
       ghost.innerHTML = a.svg;
       ghost.hidden = false;
       ghost.animate([{ scale: String(r0.width / w) }, { scale: '1' }], { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' });
-      $('#hint').textContent = L('松手导出 · 选好尺寸', 'Drop to export · pick a size');
       document.querySelector('.ct-tip')?.classList.remove('on');
     }
     if (!dragging) return;
     ghost.style.translate = `${ev.clientX - ghost.offsetWidth * fx}px ${ev.clientY - ghost.offsetHeight * fy}px`; // 用单独的 translate，缩放才不会连位置一起缩
     const tb = nearest($('#targets'), ev.clientX, ev.clientY);
     const sz = tb ? null : nearest($('#sizes'), ev.clientX, ev.clientY);
-    if (sz && sz.dataset.s !== state.size) { state.size = sz.dataset.s!; store.set('size', state.size); document.querySelectorAll('#sizes button').forEach((b) => b.classList.toggle('on', b === sz)); }
+    if (sz && sz.dataset.s !== state.size) setSize(sz.dataset.s!);
     if (tb !== over) { over?.classList.remove('over'); over = tb; over?.classList.add('over'); }
     // 进了导出坞就缩小让出按钮；整块坞都算，划过按钮之间的缝不会忽大忽小
     ghost.classList.toggle('small', inside($('#dock'), ev.clientX, ev.clientY, 16));
@@ -657,7 +678,6 @@ function startDrag(e: PointerEvent, tile: HTMLElement, id: string, k: string) {
     if (ev.type === 'pointercancel') { over?.classList.remove('over'); over = null; }
     document.body.classList.remove('dragging');
     ghost.hidden = true; ghost.innerHTML = ''; ghost.classList.remove('small');
-    $('#hint').textContent = L('拖动作品到这里导出', 'Drag a piece here to export');
     if (over) { const f = over.dataset.f!; over.classList.remove('over'); doExport(f, id, k); }
   };
   addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
@@ -674,44 +694,89 @@ function closeTop() {
   if (!$('#menu').hidden) return closeMenu();
   closeFormats();
 }
-const closeBtn = () => `<button class="closer glass" data-act="close" aria-label="${L('关闭', 'Close')}"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>${L('关闭', 'Close')}<kbd>Esc</kbd></button>`;
+const closeBtn = () => `<button class="closer glass" data-act="close" aria-label="${L('关闭', 'Close')}" title="${L('关闭', 'Close')} (Esc)"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>`;
 
 function openFocus(id: string, k: string) {
   const el = $('#focus');
-  const vs = state.style.variants(id);
   const i = Number(k.split('#')[1]);
   const before = curVariant(id, k, tiles()[i]);
-  let seq = 0, open = true;
-  // 快速连点几个版式：按钮立刻跟上，图只认最后一次（先点的画得慢，回来也不会盖掉后点的）
-  const draw = async () => {
-    const my = ++seq;
-    const variant = curVariant(id, k, tiles()[i]);
-    el.querySelectorAll<HTMLElement>('.strip button[data-v]').forEach((b) => b.classList.toggle('on', b.dataset.v === variant));
-    const a = await drawArt(id, variant);
-    if (!a || my !== seq || !open) return;
-    state.arts.set(k, a);
-    // 一个工具里有几个模型：分层画工具和模型的版式加个小点
+  // 放大视图里可以只给这一件换风格试试：kit 是正在看的那一套，墙上的风格不动
+  let kit = state.style, art: Art | null = null, seq = 0, open = true;
+  const tried: Record<string, string> = {};
+  const variantNow = () => kit === state.style ? curVariant(id, k, tiles()[i]) : tried[kit.id] ?? kit.current(id);
+  const setVariant = (v: string) => { if (kit === state.style) state.variants[k] = v; else tried[kit.id] = v; };
+  const keyList = () => {
+    const wall = [...document.querySelectorAll<HTMLElement>('#board .tile:not(.slot)')].map((t) => t.dataset.k!);
+    return wall.length ? wall : tiles().map(keyOf); // 墙在漫游里没画，就按作品顺序走
+  };
+  const step = (d: number) => {
+    const all = keyList(), next = all[all.indexOf(k) + d];
+    if (!next) return;
+    close(false); openFocus(next.split('#')[0], next);
+    document.querySelector(`.tile[data-k="${next}"]`)?.scrollIntoView({ block: 'nearest' });
+  };
+  const chrome = () => {
+    const vs = kit.variants(id), v = variantNow(), all = keyList(), at = all.indexOf(k);
     const multiModel = !!state.raw && resolveGroup(state.raw, 'auto') === 'model';
     el.innerHTML = `${closeBtn()}
+      <div class="fhead"><b>${esc(kit.pieceName(id, state.lang))}</b><span>${esc(kit.pieceQ(id, state.lang))}</span></div>
+      <button class="nav prev glass" data-act="prev" ${at <= 0 ? 'disabled' : ''} title="${L('上一件', 'Previous')} (↑)" aria-label="${L('上一件', 'Previous')}"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M8.5 3 4.5 7l4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="nav next glass" data-act="next" ${at < 0 || at >= all.length - 1 ? 'disabled' : ''} title="${L('下一件', 'Next')} (↓)" aria-label="${L('下一件', 'Next')}"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M5.5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <div class="big"><div class="art"></div></div>
       <div class="strip glass">
-        <b style="padding:0 8px">${esc(state.style.pieceName(id, state.lang))}</b><span style="color:var(--soft)">${esc(state.style.pieceQ(id, state.lang))}</span><span class="keys" title="${L('上一件 / 下一件作品', 'Previous / next piece')}"><kbd>↑</kbd><kbd>↓</kbd></span>
-        ${vs.length > 1 ? `<span class="sep"></span><span class="lab">${L('版式', 'Layout')}</span><span class="keys" title="${L('上一种 / 下一种版式', 'Previous / next layout')}"><kbd>←</kbd><kbd>→</kbd></span>${vs.map((v) => { const mm = multiModel && MODEL_VARIANTS[id]?.includes(v); return `<button data-v="${v}" class="${v === variant ? 'on' : ''}${mm ? ' mm' : ''}"${mm ? ` title="${L('工具和它的各个模型分层画出来', 'Draws each tool with its models underneath')}"` : ''}>${esc(state.style.variantName(v, state.lang))}</button>`; }).join('')}` : ''}
-        <span class="sep"></span><span class="lab">${L('导出', 'Export')}</span>${exportsFor(id).map((f) => `<button data-f="${f.id}">${f.name}</button>`).join('')}
+        ${vs.length > 1 ? `<div class="vs" title="${L('版式', 'Layout')} (← →)">${vs.map((x) => { const mm = multiModel && MODEL_VARIANTS[id]?.includes(x); return `<button data-v="${x}" class="${x === v ? 'on' : ''}${mm ? ' mm' : ''}"${mm ? ` title="${L('工具和它的各个模型分层画出来', 'Each tool with its models underneath')}"` : ''}>${esc(kit.variantName(x, state.lang))}</button>`; }).join('')}</div><span class="sep"></span>` : ''}
+        <div class="pop"><button class="kit" data-act="kits"><svg viewBox="0 0 24 24">${kit.dot}</svg>${esc(kit.name(state.lang))}</button></div>
+        ${kit !== state.style ? `<button class="apply" data-act="apply">${L('整面墙都用它', 'Use for the wall')}</button>` : ''}
+        <span class="sep"></span>
+        <div class="pop"><button class="xp" data-act="export">${L('导出', 'Export')}</button></div>
       </div>`;
-    const artEl = el.querySelector('.art') as HTMLElement;
+    if (art) { (el.querySelector('.big .art') as HTMLElement).innerHTML = art.svg; place(art); } // 换风格时旧图先留着，新的画好再换
+  };
+  const place = (a: Art) => { (el.querySelector('.big') as HTMLElement).style.width = `${Math.max(320, Math.min(a.w, 1100, ((innerHeight - 240) * a.w) / a.h))}px`; };
+  // 快速连点几个版式：按钮立刻跟上，图只认最后一次（先点的画得慢，回来也不会盖掉后点的）
+  const draw = async () => {
+    const my = ++seq, v = variantNow(), k0 = kit;
+    el.querySelectorAll<HTMLElement>('.strip button[data-v]').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
+    el.querySelector('.vs .on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // 版式多时这一排会横着滚
+    el.querySelector('.big')?.classList.add('loading');
+    const a = await drawArt(id, v, k0);
+    if (!a || my !== seq || !open) return;
+    art = a;
+    if (k0 === state.style) state.arts.set(k, a);
+    const big = el.querySelector('.big') as HTMLElement, artEl = el.querySelector('.big .art') as HTMLElement;
+    big.classList.remove('loading');
     artEl.innerHTML = a.svg;
-    (el.querySelector('.big') as HTMLElement).style.width = `${Math.max(320, Math.min(a.w, 1100, ((innerHeight - 240) * a.w) / a.h))}px`;
+    place(a);
     mountHits(artEl, a.hits, a.w, a.h);
   };
-  draw();
+  const pickKit = (host: HTMLElement) => {
+    const open = host.querySelector(':scope > .kits'); closeFormats(); el.querySelector('.kits')?.remove();
+    if (open) return;
+    const box = document.createElement('div');
+    box.className = 'kits glass';
+    box.innerHTML = KITS.map((t, j) => `${j === CLASSIC_COUNT ? '<i class="divider"></i>' : ''}<button data-s="${t.id}" class="${t === kit ? 'on' : ''}" ${t.board.some((b) => b.id === id) ? '' : 'disabled'} title="${esc(t.note(state.lang))}"><svg viewBox="0 0 24 24">${t.dot}</svg>${esc(t.name(state.lang))}</button>`).join('');
+    host.appendChild(box);
+  };
+  chrome(); draw();
   el.hidden = false;
   el.onclick = (e) => {
     const b = (e.target as HTMLElement).closest('button') as HTMLElement | null;
-    if (!b) { if (e.target === el) close(); return; }
-    if (b.dataset.act === 'close') return close();
-    if (b.dataset.v) { state.variants[k] = b.dataset.v; draw(); return; }
-    if (b.dataset.f) doExport(b.dataset.f, id, k);
+    if (!b) { el.querySelector('.kits')?.remove(); closeFormats(); if (e.target === el) close(); return; }
+    e.stopPropagation();
+    const act = b.dataset.act;
+    if (act === 'close') return close();
+    if (act === 'prev' || act === 'next') return step(act === 'next' ? 1 : -1);
+    if (b.closest('.kits') && b.dataset.s) { kit = kitById(b.dataset.s)!; chrome(); draw(); return; }
+    if (act === 'kits') return pickKit(el.querySelector('.strip') as HTMLElement);
+    if (act === 'apply') {
+      const v = variantNow(), t = kit;
+      close(false);
+      state.style = t; store.set('theme', t.id); state.variants = {}; renderDots();
+      if (v && v !== t.current(id)) state.variants[k] = v;
+      return void paint();
+    }
+    if (act === 'export') { el.querySelector('.kits')?.remove(); return toggleFormats(b.parentElement!, id, (f) => { if (art) doExport(f, id, k, kit === state.style ? {} : { kit, art, variant: variantNow() }); }, kit); }
+    if (b.dataset.v) { setVariant(b.dataset.v); draw(); }
   };
   // 只有换过版式才把墙上那一张换掉，别的作品不动；键盘焦点回到墙上这一张
   const close = (refocus = true) => {
@@ -723,20 +788,14 @@ function openFocus(id: string, k: string) {
   closeFocus = close;
   focusKeys = (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return false;
+    const vs = kit.variants(id);
     if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && vs.length > 1) {
-      const j = vs.indexOf(curVariant(id, k, tiles()[i]) ?? '');
-      state.variants[k] = vs[(j + (e.key === 'ArrowRight' ? 1 : vs.length - 1)) % vs.length];
+      const j = vs.indexOf(variantNow() ?? '');
+      setVariant(vs[(j + (e.key === 'ArrowRight' ? 1 : vs.length - 1)) % vs.length]);
       draw();
       return true;
     }
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      // 墙在漫游里没画，就按作品顺序走
-      const wall = [...document.querySelectorAll<HTMLElement>('#board .tile:not(.slot)')].map((t) => t.dataset.k!);
-      const all = wall.length ? wall : tiles().map(keyOf);
-      const next = all[all.indexOf(k) + (e.key === 'ArrowDown' ? 1 : -1)];
-      if (next) { close(false); openFocus(next.split('#')[0], next); document.querySelector(`.tile[data-k="${next}"]`)?.scrollIntoView({ block: 'nearest' }); }
-      return true;
-    }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { step(e.key === 'ArrowDown' ? 1 : -1); return true; }
     return false;
   };
 }
@@ -851,7 +910,7 @@ function placeNow() {
       el.className = 'tile rt';
       el.style.left = `${X * P + (cw - t.w) / 2}px`; el.style.top = `${t.y}px`; el.style.width = `${t.w}px`;
       el.innerHTML = `<div class="name">${esc(state.style.pieceName(t.id, state.lang))}${t.v && state.style.variants(t.id).length > 1 ? `<span class="vn">${esc(state.style.variantName(t.v, state.lang))}</span>` : ''}</div>
-        <div class="bar glass"><button data-act="export" title="${L('导出', 'Export')}">${L('导出', 'Export')} ↓</button></div><div class="art"></div>`;
+        <div class="bar glass"><button data-act="export">${L('导出', 'Export')}</button></div><div class="art"></div>`;
       const artEl = el.querySelector('.art') as HTMLElement;
       mountPreview(artEl, t.a, t.p);
       mountRoamHits(artEl, t.a);
@@ -968,7 +1027,7 @@ function wireRoam() {
     const b = (e.target as HTMLElement).closest('button[data-act="export"]'); if (!b) return;
     e.stopPropagation();
     const tile = b.closest('.rt') as HTMLElement, t = (tile as any)._item as RItem;
-    adopt(t); toggleFormats(tile, t.id, t.k);
+    adopt(t); toggleFormats(tile, t.id, (f) => doExport(f, t.id, t.k));
   });
   $('#home').onclick = () => glide(...home());
   $('#view').onclick = (e) => {
@@ -988,7 +1047,8 @@ function wireRoam() {
 function applyView() {
   const on = view() === 'roam' && !!state.model && $('#empty').hidden;
   document.querySelectorAll<HTMLElement>('#view button').forEach((b) => b.classList.toggle('on', b.dataset.v === view()));
-  $('#view').hidden = !state.model;
+  // 没有作品（空作品库、第一次打开）：只留语言和设置，风格条也收起来
+  document.body.classList.toggle('bare', !$('#empty').hidden || !$('#welcome').hidden);
   const was = document.body.classList.contains('roam');
   document.body.classList.toggle('roam', on);
   $('#roam').hidden = !on; $('#home').hidden = !on;
@@ -1012,7 +1072,11 @@ function renderDots() {
   };
   nav.onmouseleave = () => (tipEl.hidden = true);
   nav.onclick = async (e) => {
-    const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
+    const narrow = matchMedia('(max-width: 860px)').matches;
+    const b = (e.target as HTMLElement).closest('button') as HTMLElement | null;
+    if (narrow && (!b || b.classList.contains('on'))) { nav.classList.toggle('open'); tipEl.hidden = true; return; }
+    if (!b) return;
+    nav.classList.remove('open');
     const t = kitById(b.dataset.s!) as Kit;
     if (t.id === state.style.id) return;
     state.style = t; store.set('theme', t.id);
@@ -1029,15 +1093,15 @@ function applyLang() {
   document.documentElement.lang = state.lang === 'zh' ? 'zh-CN' : 'en';
   const lang = $('#lang'), gear = $('#gear');
   lang.textContent = state.lang === 'zh' ? '中' : 'EN';
-  lang.title = L('界面语言：中文（点一下换成 English）', 'Language: English (click for 中文)');
+  lang.title = L('切换到英文', 'Switch to Chinese');
   lang.setAttribute('aria-label', lang.title);
   gear.title = L('设置', 'Settings'); gear.setAttribute('aria-label', gear.title);
   $('#project').setAttribute('aria-label', L('切换项目', 'Switch project'));
   $('#dots').setAttribute('aria-label', L('风格', 'Styles'));
   $('#dock').setAttribute('aria-label', L('导出', 'Export'));
   const [w, r] = document.querySelectorAll<HTMLElement>('#view button');
-  w.textContent = L('墙', 'Wall'); r.textContent = L('漫游', 'Roam');
-  w.title = L('整理好的一面墙', 'Everything on one tidy wall'); r.title = L('没有尽头的画布：拖动、滚动随便走，越远看到越多版式', 'An endless canvas: drag or scroll anywhere; the farther you go, the more layouts you see');
+  w.title = L('墙', 'Wall'); r.title = L('漫游：拖着随便走，越远版式越多', 'Roam: drag anywhere; farther out, more layouts');
+  w.setAttribute('aria-label', w.title); r.setAttribute('aria-label', r.title);
   $('#view').setAttribute('aria-label', L('视图', 'View'));
   $('#home').innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="2.2"/><path d="M7 1v2.2M7 10.8V13M1 7h2.2M10.8 7H13"/></svg>${L('回到起点', 'Back to start')}`;
 }
@@ -1067,24 +1131,35 @@ function toggleMenu() {
   pill.setAttribute('aria-expanded', 'true');
   menu.hidden = false;
   menu.innerHTML = `<input id="q" placeholder="${L('搜索项目', 'Search projects')}" autocomplete="off"><div class="list" id="plist" role="listbox" aria-label="${L('项目', 'Projects')}"></div>
-    <div class="foot"><button id="add">${L('＋ 添加项目', '+ Add project')}</button><button id="re">↻ ${L('重新分析', 'Re-analyze')}</button></div>
-    <div class="foot"><button id="auto" role="switch" aria-checked="${autoFresh()}" title="${L('有新提交时在后台增量分析，作品跟着更新', 'Analyze new commits in the background so pieces stay current')}">${autoFresh() ? '●' : '○'} ${L('自动跟上新提交', 'Keep up with new commits')}</button></div>`;
+    <div class="foot"><button id="add">${L('添加文件夹…', 'Add folder…')}</button><button id="re">${L('重新分析', 'Re-analyze')}</button></div>
+    <div class="mplugs" id="mplugs" hidden></div>`;
+  const day = (t: number) => new Date(t * 1000).toLocaleDateString(state.lang === 'zh' ? 'zh-CN' : 'en-US');
   const draw = () => {
     const q = ($('#q') as HTMLInputElement).value.trim().toLowerCase();
-    const all = state.projects.length > 1 && (!q || L('全部项目', 'All projects').toLowerCase().includes(q) || 'all'.includes(q))
-      ? `<div class="item all ${state.current?.all ? 'on' : ''}" data-id="${ALL_ID}" role="option" aria-selected="${!!state.current?.all}"><b>${L('全部项目', 'All projects')}</b><span class="r"></span><span>${L(`${state.projects.length} 个项目合在一起`, `${state.projects.length} projects together`)}</span><span class="r"></span></div>` : '';
-    $('#plist').innerHTML = all + state.projects.filter((p) => !q || `${p.name} ${p.path}`.toLowerCase().includes(q)).map((p) => `
+    const hit = (s: string) => !q || s.toLowerCase().includes(q);
+    const all = state.projects.length > 1 && (hit(L('全部项目', 'All projects')) || 'all'.includes(q))
+      ? `<div class="item all ${state.current?.all ? 'on' : ''}" data-id="${ALL_ID}" role="option" aria-selected="${!!state.current?.all}"><b>${L('全部项目', 'All projects')}</b><span class="r">${L(`${state.projects.length} 个`, `${state.projects.length}`)}</span></div>` : '';
+    const mine = state.projects.filter((p) => hit(`${p.name} ${p.path}`)).map((p) => `
       <div class="item ${p.id === state.current?.id ? 'on' : ''} ${p.exists === false ? 'gone' : ''}" data-id="${esc(p.id)}" role="option" aria-selected="${p.id === state.current?.id}">
-        <b>${esc(p.name)}${p.exists === false ? `<em class="tag">${L('目录不在了', 'folder missing')}</em>` : ''}</b><span class="r">${p.lastAnalyzed ? new Date(p.lastAnalyzed * 1000).toLocaleDateString(state.lang === 'zh' ? 'zh-CN' : 'en-US') : L('未分析', 'not analyzed')}</span>
-        <span title="${esc(p.path)}">${esc(p.path)}</span><span class="r">${p.evidence ? `${fmt(p.evidence)} ${L('条证据', 'evidence')}` : ''}</span>
-        ${p.paths?.length > 1 ? `<span class="paths">${L('还在', 'also at')} ${esc(p.paths.slice(1, 3).join(L('、', ', ')))}${p.paths.length > 3 ? ' …' : ''}</span>` : ''}
-      </div>`).join('') || `<div class="item"><span>${L('没有匹配的项目', 'No match')}</span></div>`;
+        <b>${esc(p.name)}</b><span class="r">${p.exists === false ? L('目录不在了', 'folder missing') : p.lastAnalyzed ? day(p.lastAnalyzed) : ''}</span>
+        <span class="path" title="${esc(p.path)}">${esc(short(p.path))}</span>
+      </div>`).join('');
+    // 本机用过 AI 工具、还没加进来的项目：点一下就分析
+    const more = (found ?? []).filter((d) => hit(`${d.name} ${d.path}`)).map((d) => `
+      <div class="item new" data-path="${esc(d.path)}" role="option" aria-selected="false">
+        <b>${esc(d.name)}</b><span class="r">${esc(toolsOf(d))}</span>
+        <span class="path" title="${esc(d.path)}">${esc(short(d.path))}</span>
+      </div>`).join('');
+    $('#plist').innerHTML = all + mine + (more ? `<div class="sec">${L('本机还有', 'Also on this machine')}</div>${more}` : '')
+      || `<div class="item"><span>${L('没有匹配的项目', 'No match')}</span></div>`;
   };
   // ↑ ↓ 选，回车打开（没选就开第一个）
   let kb = -1;
-  const items = () => [...$('#plist').querySelectorAll<HTMLElement>('.item[data-id]')];
+  const items = () => [...$('#plist').querySelectorAll<HTMLElement>('.item[data-id], .item[data-path]')];
   const mark = () => items().forEach((x, j) => { x.classList.toggle('kb', j === kb); if (j === kb) x.scrollIntoView({ block: 'nearest' }); });
   draw();
+  if (!demo && found === null) void discover().then(() => { if (!menu.hidden) draw(); });
+  renderPlugs();
   const q = $('#q') as HTMLInputElement;
   q.oninput = () => { kb = -1; draw(); };
   q.onkeydown = (e) => {
@@ -1095,8 +1170,10 @@ function toggleMenu() {
   };
   q.focus();
   $('#plist').onclick = (e) => {
-    const it = (e.target as HTMLElement).closest('.item') as HTMLElement | null; if (!it?.dataset.id) return;
-    menu.hidden = true; pill.setAttribute('aria-expanded', 'false');
+    const it = (e.target as HTMLElement).closest('.item') as HTMLElement | null; if (!it) return;
+    if (it.dataset.path) { closeMenu(); return void addProjects([it.dataset.path]); }
+    if (!it.dataset.id) return;
+    closeMenu();
     if (it.dataset.id === ALL_ID) { if (!state.current?.all) openProject(allProject()); return; }
     const p = state.projects.find((x) => x.id === it.dataset.id);
     if (p && p !== state.current) openProject(p);
@@ -1106,13 +1183,18 @@ function toggleMenu() {
   ($('#add') as HTMLButtonElement).disabled = analyzing;
   $('#add').onclick = () => { closeMenu(); addProject(); };
   re.onclick = () => { closeMenu(); if (state.current) reanalyze(state.current); };
-  $('#auto').onclick = () => {
-    store.set('autofresh', autoFresh() ? 'off' : 'on');
-    const b = $('#auto'); b.setAttribute('aria-checked', String(autoFresh())); b.textContent = `${autoFresh() ? '●' : '○'} ${L('自动跟上新提交', 'Keep up with new commits')}`;
-    if (autoFresh()) refreshIfChanged();
-  };
-  setTimeout(() => document.addEventListener('click', function off(e) { if (!menu.contains(e.target as Node) && !pill.contains(e.target as Node)) { menu.hidden = true; pill.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', off); } }), 0);
+  setTimeout(() => document.addEventListener('click', function off(e) { if (!menu.contains(e.target as Node) && !pill.contains(e.target as Node)) { closeMenu(); document.removeEventListener('click', off); } }), 0);
 }
+
+// ───────────────────────── 本机的项目 ─────────────────────────
+// 核心的 discover 扫各工具的记录，列出用过 AI 工具的仓库。第一次打开和「添加」时用，一次会话扫一遍
+type Found = { name: string; path: string; tools: Record<string, number>; lastActive: string; exists: boolean; inLibrary: boolean };
+let found: Found[] | null = null, finding: Promise<Found[]> | null = null;
+function discover(): Promise<Found[]> {
+  finding ??= api('discover').then((r: any) => (found = ((r?.projects ?? []) as Found[]).filter((d) => d.exists && !d.inLibrary && !state.projects.some((p) => p.path === d.path))), () => (found = []));
+  return finding;
+}
+const toolsOf = (d: Found) => Object.entries(d.tools).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([t]) => nameOf(t, state.lang)).join(' · ');
 
 // ───────────────────────── 分析：进度、取消 ─────────────────────────
 let analyzing = false;
@@ -1153,15 +1235,70 @@ async function reanalyze(p: any, auto = false) {
 async function addProject() {
   let dir: string | null;
   try { dir = await api('pick_folder'); } catch (e) { return toast(errText(e), 5000); }
-  if (!dir) return;
-  const name = dir.split(/[\\/]/).filter(Boolean).pop() ?? dir;
-  try {
-    const r = await withProgress(name, () => api('add_project', { path: dir, lang: state.lang }));
-    state.projects = await api('projects');
-    const p = state.projects.find((x) => x.id === r?.id);
-    if (p) await openProject(p);
-    done(L(`已添加 ${name}`, `Added ${name}`), r?.result?.warnings);
-  } catch (e) { toast(errText(e), 6000); }
+  if (dir) await addProjects([dir]);
+}
+/** 一个接一个分析、加进作品库。第一个分析完就打开它，其余的在后台接着跑（提示条里看进度、能取消） */
+async function addProjects(paths: string[], each?: (path: string, st: 'run' | 'done' | 'fail') => void) {
+  let opened = false, ok = 0;
+  const notes: string[] = [];
+  for (const [i, path] of paths.entries()) {
+    const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+    each?.(path, 'run');
+    try {
+      const r = await withProgress(paths.length > 1 ? L(`${name}（${i + 1}/${paths.length}）`, `${name} (${i + 1}/${paths.length})`) : name, () => api('add_project', { path, lang: state.lang }));
+      state.projects = await api('projects'); ok++;
+      if (found) found = found.filter((d) => d.path !== path);
+      notes.push(...(r?.result?.warnings ?? []));
+      each?.(path, 'done');
+      const p = state.projects.find((x) => x.id === r?.id);
+      if (p && !opened) { opened = true; $('#welcome').hidden = true; void openProject(p); }
+    } catch (e: any) {
+      each?.(path, 'fail');
+      if (e?.code === 'cancelled') { toast(errText(e)); return; }
+      toast(L(`${name}：${errText(e)}`, `${name}: ${errText(e)}`), 6000);
+    }
+  }
+  if (ok) done(ok > 1 ? L(`已添加 ${ok} 个项目`, `Added ${ok} projects`) : L('已添加', 'Added'), notes);
+}
+
+// ───────────────────────── 第一次打开 ─────────────────────────
+// 作品库是空的：列出本机用过 AI 工具的仓库，勾几个就开始分析；没找到就选文件夹
+function welcome() {
+  const el = $('#welcome');
+  el.hidden = false; $('#empty').hidden = true; $('#board').innerHTML = '';
+  applyView();
+  const picked = new Set<string>();
+  let list: Found[] | null = null;
+  const status = new Map<string, string>();
+  const draw = () => {
+    if (el.hidden) return;
+    const running = [...status.values()].includes('run');
+    el.innerHTML = `<div class="box">
+      <span class="logo">${LOGO_SVG}</span>
+      <h1>${L('选几个项目开始', 'Pick projects to start')}</h1>
+      <div class="found">${list === null ? `<p class="wait"><i class="spin"></i>${L('正在找本机用过 AI 工具的仓库…', 'Looking for repos where you used AI tools…')}</p>`
+        : list.length ? list.map((d) => `<label class="row ${status.get(d.path) ?? ''}" data-path="${esc(d.path)}">
+            <input type="checkbox" ${picked.has(d.path) ? 'checked' : ''} ${running || status.has(d.path) ? 'disabled' : ''}>
+            <b>${esc(d.name)}</b><span class="path" title="${esc(d.path)}">${esc(short(d.path))}</span><span class="tools">${esc(toolsOf(d))}</span>
+            <i class="st"></i></label>`).join('')
+        : `<p class="wait">${L('没找到用过 AI 工具的 git 仓库', 'No git repos with AI tool activity found')}</p>`}</div>
+      <div class="acts"><button class="pick" ${running ? 'disabled' : ''}>${L('选文件夹…', 'Choose folder…')}</button>${list?.length ? `<button class="go" ${!picked.size || running ? 'disabled' : ''}>${running ? L('分析中…', 'Analyzing…') : picked.size > 1 ? L(`分析这 ${picked.size} 个`, `Analyze ${picked.size}`) : L('开始分析', 'Analyze')}</button>` : ''}</div>
+    </div>`;
+  };
+  el.onchange = (e) => {
+    const box = e.target as HTMLInputElement, path = box.closest<HTMLElement>('.row')?.dataset.path;
+    if (!path) return;
+    if (box.checked) picked.add(path); else picked.delete(path);
+    draw();
+  };
+  el.onclick = async (e) => {
+    const b = (e.target as HTMLElement).closest('button'); if (!b || b.disabled) return;
+    if (b.classList.contains('pick')) return addProject();
+    const paths = list!.map((d) => d.path).filter((p) => picked.has(p));
+    await addProjects(paths, (path, st) => { status.set(path, st); draw(); });
+  };
+  draw();
+  void discover().then((r) => { list = r; r.slice(0, 3).forEach((d) => picked.add(d.path)); draw(); });
 }
 
 /** 分析跑完：核心有提醒（某个数据源读不了之类）就在提示里给个「查看」 */
@@ -1181,25 +1318,22 @@ function showWarnings(list: string[]) {
 }
 
 function closeSheet() { const el = $('#sheet'); el.hidden = true; el.innerHTML = ''; }
-const SIZE_USE: Record<string, [string, string]> = { og: ['链接预览', 'Link preview'], square: ['方图', 'Square'], portrait: ['竖图', 'Portrait'], story: ['竖屏', 'Story'] };
 async function settings() {
   const el = $('#sheet');
   el.hidden = false;
   const info = native ? await api('app_info').catch(() => null) : null;
   const coll = await api('collect_info').catch(() => null);
-  const sizes = SIZES.filter((s) => s.id !== 'a4').map((s) => `<button data-s="${s.id}" class="${s.id === state.size ? 'on' : ''}" title="${esc(SIZE_USE[s.id] ? L(...SIZE_USE[s.id]) : '')}">${s.w ? `${s.w}×${s.h}` : L('原尺寸', 'Native')}</button>`).join('');
   el.innerHTML = `<div class="panel glass">
     <div class="head"><h2>${L('设置', 'Settings')}</h2>${closeBtn()}</div>
     <h3>${L('导出', 'Export')}</h3>
     ${info ? `<div class="row kv" id="xrow"></div>` : ''}
-    <div class="row kv"><span class="k">${L('默认尺寸', 'Default size')}</span><div class="seg" id="defsize">${sizes}</div></div>
-    ${info || coll ? `<h3>${L('作品库', 'Library')}</h3>` : ''}
+    <div class="row kv"><span class="k">${L('默认尺寸', 'Default size')}</span><div class="seg" id="defsize">${sizeButtons()}</div></div>
+    <h3>${L('作品库', 'Library')}</h3>
     ${info ? `<div class="row kv"><span class="k">${L('位置', 'Location')}</span><span class="v path" title="${esc(info.library)}">${esc(short(info.library))}</span><button class="mini" data-x="open-library">${L('打开', 'Open')}</button></div>` : ''}
-    ${coll ? `<div class="row kv" id="crow"></div>${coll.agent?.supported ? '<div class="row kv" id="arow"></div>' : ''}<p class="hint">${L('各工具的日志会被清理（有的只留 30 天）。App 开着时，每小时把作品库里各项目的新记录收进作品库：只采集，不分析，不改仓库。', 'Tools clean up their logs, some after 30 days. While the app is open, it collects new records for every project in the library once an hour. It only collects: no analysis, no changes to repositories.')}${coll.agent?.supported ? L('「App 关着时」在 ~/Library/LaunchAgents 装一个系统后台任务，登录后照样每小时收一次；关掉就删掉。', ' “When closed” installs a background task in ~/Library/LaunchAgents that keeps collecting hourly after you log in; turning it off removes it.') : ''}</p>` : ''}
+    <div class="row kv"><span class="k" title="${L('仓库有新提交时，在后台把它分析进来', 'Analyze new commits in the background')}">${L('跟上新提交', 'New commits')}</span><span class="v grow"></span><button class="switch" role="switch" aria-checked="${autoFresh()}" aria-label="${L('跟上新提交', 'Keep up with new commits')}" data-x="fresh"><i></i></button></div>
+    ${coll ? `<div class="row kv" id="crow"></div>${coll.agent?.supported ? '<div class="row kv" id="arow"></div>' : ''}` : ''}
     <h3>${L('数据源', 'Data sources')}</h3><div id="doc"><p>${L('检查中…', 'Checking…')}</p></div>
-    <h3>${L('关于', 'About')}</h3>
-    ${info ? `<p class="ver">creditia ${esc(info.version)}</p>` : ''}
-    <p>${L('分析在本机完成：读各工具的日志和 git 历史，只保存行的哈希和时间、模型这类信息，不保存代码和 prompt，也不调用任何模型。', 'Analysis runs on this machine: it reads tool logs and git history, keeps only line hashes and metadata such as time and model, never code or prompts, and calls no models.')}</p>
+    <p class="about">${info ? `creditia ${esc(info.version)} · ` : ''}${L('全在本机分析，不存代码和 prompt，不调用模型', 'Runs on this machine. No code or prompts kept, no models called')}</p>
   </div>`;
   const xrow = (x: any) => {
     const r = el.querySelector('#xrow'); if (!r) return;
@@ -1217,11 +1351,11 @@ async function settings() {
     const last = c.last?.at ? L(`上次 ${ago(c.last.at)} · 新增 ${fmt(c.last.newEvidence ?? 0)} 条`, `Last ${ago(c.last.at)} · ${fmt(c.last.newEvidence ?? 0)} new`)
       + (c.last.failed ? L(` · ${c.last.failed} 个项目没收成`, ` · ${c.last.failed} failed`) : '') + (c.last.by === 'agent' ? L(' · 后台任务', ' · background task') : '') : L('还没采集过', 'Not run yet');
     const st = c.running ? L('正在采集…', 'Collecting…') : !c.on && !c.agent?.on ? L('已关闭', 'Off') : last;
-    r.innerHTML = `<span class="k">${L('定时采集', 'Auto collect')}</span><span class="v grow" title="${esc(last)}">${esc(st)}</span>`
-      + `<button class="mini" data-x="collect" ${c.running ? 'disabled' : ''}>${L('现在采集', 'Collect now')}</button>`
+    r.innerHTML = `<span class="k" title="${L('各工具会清理日志：每小时把新记录收进作品库，只收不分析', 'Tools clean up their logs: new records are kept hourly, collected but not analyzed')}">${L('定时采集', 'Auto collect')}</span><span class="v grow" title="${esc(last)}">${esc(st)}</span>`
+      + `<button class="mini" data-x="collect" ${c.running ? 'disabled' : ''}>${L('现在', 'Now')}</button>`
       + `<button class="switch" role="switch" aria-checked="${!!c.on}" aria-label="${esc(L('定时采集', 'Auto collect'))}" data-x="collect-on"><i></i></button>`;
     const a = el.querySelector('#arow');
-    if (a) a.innerHTML = `<span class="k">${L('App 关着时', 'When closed')}</span><span class="v grow">${c.agent.on ? L('也在收：登录后每小时一次', 'Still collecting, hourly after login') : L('不收', 'Not collecting')}</span>`
+    if (a) a.innerHTML = `<span class="k" title="${L('在 ~/Library/LaunchAgents 装一个后台任务；关掉就删掉', 'Installs a task in ~/Library/LaunchAgents; turning it off removes it')}">${L('App 关着时', 'When closed')}</span><span class="v grow">${c.agent.on ? L('也在收', 'Still collecting') : L('不收', 'Not collecting')}</span>`
       + `<button class="switch" role="switch" aria-checked="${!!c.agent.on}" aria-label="${esc(L('App 关着时也收', 'Collect when the app is closed'))}" data-x="agent-on"><i></i></button>`;
     // 一轮正在跑（定时的那轮）：跑完换成结果
     if (c.running) setTimeout(() => { if (el.querySelector('#crow')) api('collect_info').then(crow).catch(() => null); }, 2000);
@@ -1231,17 +1365,18 @@ async function settings() {
     const t = e.target as HTMLElement;
     if (e.target === el || t.closest('[data-act="close"]')) return closeSheet();
     const sz = t.closest('#defsize button') as HTMLElement | null;
-    if (sz) {
-      state.size = sz.dataset.s!; store.set('size', state.size);
-      el.querySelectorAll('#defsize button').forEach((b) => b.classList.toggle('on', b === sz));
-      return renderDock();
-    }
+    if (sz) return setSize(sz.dataset.s!);
     const x = (t.closest('[data-x]') as HTMLElement | null)?.dataset.x;
     try {
       if (x === 'choose') { if (await api('choose_export_dir')) xrow(await api('app_info')); }
       else if (x === 'reset') { await api('reset_export_dir'); xrow(await api('app_info')); }
       else if (x === 'open-exports') await api('open_folder', { which: 'exports' });
       else if (x === 'open-library') await api('open_folder', { which: 'library' });
+      else if (x === 'fresh') {
+        store.set('autofresh', autoFresh() ? 'off' : 'on');
+        el.querySelector('[data-x="fresh"]')!.setAttribute('aria-checked', String(autoFresh()));
+        if (autoFresh()) refreshIfChanged();
+      }
       else if (x === 'collect-on') crow(await api('set_collect', { on: !cnow?.on }));
       else if (x === 'agent-on') crow(await api('set_collect_agent', { on: !cnow?.agent?.on }));
       else if (x === 'collect') {
