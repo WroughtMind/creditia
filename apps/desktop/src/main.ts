@@ -15,6 +15,7 @@ import { LOGO_SVG } from './logo.ts';
 const native = (window as any).__TAURI__?.core?.invoke as ((cmd: string, args?: any) => Promise<any>) | undefined;
 /** 官网上的演示：页面先放好样例档案（window.__CREDITIA_DEMO__），导出的文件交给外层页面摆到「桌面」上 */
 const demo = (window as any).__CREDITIA_DEMO__ as { projects: any[]; credits: Record<string, any>; doctor: any[] } | undefined;
+const devCollect = { on: true, running: false, every: 3600, last: { at: Math.floor(Date.now() / 1000) - 1260, projects: 3, failed: 0, newEvidence: 128 } as any };
 const devPlugs: Plugs = {
   hook: { installed: false, decided: null, path: '.git/hooks/prepare-commit-msg' },
   release: { installed: false, decided: null, path: '.github/workflows/creditia.yml', github: true, published: true },
@@ -37,6 +38,10 @@ async function api(cmd: string, args: any = {}): Promise<any> {
     case 'set_display': return null;
     // 浏览器里（开发、官网演示）没有仓库可写：开关只在内存里拨
     case 'integrations': return structuredClone(devPlugs);
+    // 后台采集：开发时给一份样子；官网演示里没有，设置里不出这一行
+    case 'collect_info': if (demo) throw new Error('demo'); return structuredClone(devCollect);
+    case 'set_collect': devCollect.on = args.on; return structuredClone(devCollect);
+    case 'collect_now': await new Promise((r) => setTimeout(r, 1200)); devCollect.last = { at: Math.floor(Date.now() / 1000), projects: 3, failed: 0, newEvidence: 0 }; return devCollect.last;
     case 'set_integration': {
       const k = args.which as 'hook' | 'release';
       devPlugs[k] = { ...devPlugs[k], installed: args.on, decided: args.on };
@@ -1136,13 +1141,16 @@ async function settings() {
   const el = $('#sheet');
   el.hidden = false;
   const info = native ? await api('app_info').catch(() => null) : null;
+  const coll = await api('collect_info').catch(() => null);
   const sizes = SIZES.filter((s) => s.id !== 'a4').map((s) => `<button data-s="${s.id}" class="${s.id === state.size ? 'on' : ''}" title="${esc(SIZE_USE[s.id] ? L(...SIZE_USE[s.id]) : '')}">${s.w ? `${s.w}×${s.h}` : L('原尺寸', 'Native')}</button>`).join('');
   el.innerHTML = `<div class="panel glass">
     <div class="head"><h2>${L('设置', 'Settings')}</h2>${closeBtn()}</div>
     <h3>${L('导出', 'Export')}</h3>
     ${info ? `<div class="row kv" id="xrow"></div>` : ''}
     <div class="row kv"><span class="k">${L('默认尺寸', 'Default size')}</span><div class="seg" id="defsize">${sizes}</div></div>
-    ${info ? `<h3>${L('作品库', 'Library')}</h3><div class="row kv"><span class="k">${L('位置', 'Location')}</span><span class="v path" title="${esc(info.library)}">${esc(short(info.library))}</span><button class="mini" data-x="open-library">${L('打开', 'Open')}</button></div>` : ''}
+    ${info || coll ? `<h3>${L('作品库', 'Library')}</h3>` : ''}
+    ${info ? `<div class="row kv"><span class="k">${L('位置', 'Location')}</span><span class="v path" title="${esc(info.library)}">${esc(short(info.library))}</span><button class="mini" data-x="open-library">${L('打开', 'Open')}</button></div>` : ''}
+    ${coll ? `<div class="row kv" id="crow"></div><p class="hint">${L('各工具的日志会被清理（有的只留 30 天）。App 开着时，每小时把作品库里各项目的新记录收进作品库：只采集，不分析，不改仓库。', 'Tools clean up their logs, some after 30 days. While the app is open, it collects new records for every project in the library once an hour. It only collects: no analysis, no changes to repositories.')}</p>` : ''}
     <h3>${L('数据源', 'Data sources')}</h3><div id="doc"><p>${L('检查中…', 'Checking…')}</p></div>
     <h3>${L('关于', 'About')}</h3>
     ${info ? `<p class="ver">creditia ${esc(info.version)}</p>` : ''}
@@ -1153,6 +1161,24 @@ async function settings() {
     r.innerHTML = `<span class="k">${L('保存到', 'Save to')}</span><span class="v path" title="${esc(x.exportDir)}">${esc(short(x.exportDir))}</span><button class="mini" data-x="choose">${L('更改…', 'Change…')}</button>${x.exportDefault ? '' : `<button class="mini" data-x="reset">${L('恢复默认', 'Reset')}</button>`}<button class="mini" data-x="open-exports">${L('打开', 'Open')}</button>`;
   };
   if (info) xrow(info);
+  const ago = (t: number) => {
+    const m = Math.floor((Date.now() / 1000 - t) / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
+    return m < 1 ? L('刚刚', 'just now') : m < 60 ? L(`${m} 分钟前`, `${m} min ago`) : h < 24 ? L(`${h} 小时前`, `${h} h ago`) : L(`${d} 天前`, `${d} d ago`);
+  };
+  let cnow = coll;
+  const crow = (c: any) => {
+    const r = el.querySelector('#crow'); if (!r || !c) return;
+    cnow = c;
+    const last = c.last?.at ? L(`上次 ${ago(c.last.at)} · 新增 ${fmt(c.last.newEvidence ?? 0)} 条`, `Last ${ago(c.last.at)} · ${fmt(c.last.newEvidence ?? 0)} new`)
+      + (c.last.failed ? L(` · ${c.last.failed} 个项目没收成`, ` · ${c.last.failed} failed`) : '') : L('还没采集过', 'Not run yet');
+    const st = c.running ? L('正在采集…', 'Collecting…') : !c.on ? L('已关闭', 'Off') : last;
+    r.innerHTML = `<span class="k">${L('定时采集', 'Auto collect')}</span><span class="v grow" title="${esc(last)}">${esc(st)}</span>`
+      + `<button class="mini" data-x="collect" ${c.running ? 'disabled' : ''}>${L('现在采集', 'Collect now')}</button>`
+      + `<button class="switch" role="switch" aria-checked="${!!c.on}" aria-label="${esc(L('定时采集', 'Auto collect'))}" data-x="collect-on"><i></i></button>`;
+    // 一轮正在跑（定时的那轮）：跑完换成结果
+    if (c.running) setTimeout(() => { if (el.querySelector('#crow')) api('collect_info').then(crow).catch(() => null); }, 2000);
+  };
+  crow(coll);
   el.onclick = async (e) => {
     const t = e.target as HTMLElement;
     if (e.target === el || t.closest('[data-act="close"]')) return closeSheet();
@@ -1168,6 +1194,12 @@ async function settings() {
       else if (x === 'reset') { await api('reset_export_dir'); xrow(await api('app_info')); }
       else if (x === 'open-exports') await api('open_folder', { which: 'exports' });
       else if (x === 'open-library') await api('open_folder', { which: 'library' });
+      else if (x === 'collect-on') crow(await api('set_collect', { on: !cnow?.on }));
+      else if (x === 'collect') {
+        crow({ ...cnow, running: true });
+        try { await api('collect_now'); } catch (err: any) { if (err?.code !== 'busy') throw err; }
+        finally { crow(await api('collect_info').catch(() => cnow)); }
+      }
     } catch (err) { toast(errText(err), 5000); }
   };
   /** doctor 的数据源名：一个工具有两处记录时分开写 */

@@ -365,12 +365,17 @@ fn app_settings_path() -> PathBuf {
 fn app_settings() -> Value {
     std::fs::read_to_string(app_settings_path()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}))
 }
-fn write_app_settings(v: &Value) -> Res<()> {
+/// 读改写一次设置：后台采集也会写，两边不互相盖掉
+fn edit_app_settings(f: impl FnOnce(&mut Value)) -> Res<()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut v = app_settings();
+    f(&mut v);
     let p = app_settings_path();
     if let Some(d) = p.parent() {
         std::fs::create_dir_all(d).map_err(|e| Fail::with("io", e))?;
     }
-    std::fs::write(p, serde_json::to_string_pretty(v).unwrap()).map_err(|e| Fail::with("io", e))
+    std::fs::write(p, serde_json::to_string_pretty(&v).unwrap()).map_err(|e| Fail::with("io", e))
 }
 fn default_export_dir() -> Res<PathBuf> {
     Ok(home().ok_or(Fail::new("no_home"))?.join("Downloads"))
@@ -400,20 +405,103 @@ async fn choose_export_dir(app: tauri::AppHandle) -> Res<Option<String>> {
     use tauri_plugin_dialog::DialogExt;
     let Some(dir) = app.dialog().file().set_directory(export_dir()?).blocking_pick_folder() else { return Ok(None) };
     let dir = dir.into_path().map_err(|e| Fail::with("io", e))?;
-    let mut v = app_settings();
-    v["exportDir"] = json!(dir.display().to_string());
-    write_app_settings(&v)?;
+    edit_app_settings(|v| v["exportDir"] = json!(dir.display().to_string()))?;
     Ok(Some(dir.display().to_string()))
 }
 
 #[tauri::command]
 fn reset_export_dir() -> Res<String> {
-    let mut v = app_settings();
-    if let Some(o) = v.as_object_mut() {
-        o.remove("exportDir");
-    }
-    write_app_settings(&v)?;
+    edit_app_settings(|v| {
+        if let Some(o) = v.as_object_mut() {
+            o.remove("exportDir");
+        }
+    })?;
     Ok(default_export_dir()?.display().to_string())
+}
+
+// ───────────────────────── 定时采集证据 ─────────────────────────
+// 各工具的日志会被清理（有的只留几十天）。App 开着时每小时把作品库里每个项目的新证据收进作品库：
+// 只采集，不分析，不改仓库。设置在 app.json 的 collect 里：on（默认开）、last（上一轮的结果）
+
+const COLLECT_EVERY: i64 = 3600;
+/// 同一时间只跑一轮（定时的和「现在采集」不叠在一起）
+static COLLECTING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn now() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+}
+
+fn collect_on() -> bool {
+    app_settings()["collect"]["on"].as_bool().unwrap_or(true)
+}
+
+/// 跑一轮：一个项目一个核心进程，有分析在跑就等它跑完再接着收。定时的一轮在关着时不跑，中途被关掉就停下
+fn collect_round(timed: bool) -> Res<Value> {
+    use std::sync::atomic::Ordering;
+    if timed && !collect_on() {
+        return Err(Fail::new("off"));
+    }
+    if COLLECTING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+        return Err(Fail::new("busy"));
+    }
+    struct Done;
+    impl Drop for Done {
+        fn drop(&mut self) {
+            COLLECTING.store(false, Ordering::SeqCst);
+        }
+    }
+    let _done = Done;
+    let repos: Vec<String> = Library::open()?.projects()?.into_iter().map(|p| p.path).filter(|p| PathBuf::from(p).is_dir()).collect();
+    let (mut ok, mut failed, mut new) = (0, 0, 0);
+    for repo in repos {
+        while RUNNING.lock().unwrap().is_some() {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+        if timed && !collect_on() {
+            break;
+        }
+        match run_core(&["collect", "--repo", repo.as_str()]) {
+            Ok(v) => {
+                ok += 1;
+                new += v["collected"].as_array().map(|a| a.iter().filter_map(|c| c["newEvidence"].as_u64()).sum::<u64>()).unwrap_or(0);
+            }
+            Err(_) => failed += 1,
+        }
+    }
+    let last = json!({ "at": now(), "projects": ok, "failed": failed, "newEvidence": new });
+    edit_app_settings(|v| v["collect"]["last"] = last.clone())?;
+    Ok(last)
+}
+
+/// 后台线程：每分钟看一眼，离上一轮满一小时就收一轮。按 app.json 里记的时间算，重开 App、电脑睡醒都接得上
+fn collect_loop(app: tauri::AppHandle) {
+    use tauri::Emitter;
+    std::thread::sleep(std::time::Duration::from_secs(30)); // 先让开启动
+    loop {
+        let last = app_settings()["collect"]["last"]["at"].as_i64().unwrap_or(0);
+        if collect_on() && now() - last >= COLLECT_EVERY {
+            if let Ok(v) = collect_round(true) {
+                let _ = app.emit("collect-done", v);
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_secs(60));
+    }
+}
+
+#[tauri::command]
+fn collect_info() -> Value {
+    json!({ "on": collect_on(), "last": app_settings()["collect"]["last"], "running": COLLECTING.load(std::sync::atomic::Ordering::SeqCst), "every": COLLECT_EVERY })
+}
+
+#[tauri::command]
+fn set_collect(on: bool) -> Res<Value> {
+    edit_app_settings(|v| v["collect"]["on"] = json!(on))?;
+    Ok(collect_info())
+}
+
+#[tauri::command]
+async fn collect_now() -> Res<Value> {
+    tauri::async_runtime::spawn_blocking(|| collect_round(false)).await.map_err(|e| Fail::with("core_failed", e))?
 }
 
 /// 打开导出目录或作品库目录（只认这两个名字）
@@ -526,9 +614,14 @@ fn doctor_local() -> Value {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let h = app.handle().clone();
+            std::thread::spawn(move || collect_loop(h));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             projects, credits, stamp, head, config_of, set_display, analyze, cancel_analyze, pick_folder, add_project, integrations, set_integration, embed_snippet,
-            library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor
+            library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor, collect_info, set_collect, collect_now
         ])
         .run(tauri::generate_context!())
         .expect("启动 creditia App 失败");
@@ -538,6 +631,9 @@ fn main() {
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
+
+    /// 测试都改 CREDITIA_CORE / CREDITIA_HOME 这类进程级的环境变量：一个跑完再跑下一个
+    static ENV: Mutex<()> = Mutex::new(());
 
     /// 假的核心：打印一段 JSON 或报错，按参数决定睡多久
     fn fake_core(dir: &std::path::Path, body: &str) -> PathBuf {
@@ -558,6 +654,7 @@ mod tests {
 
     #[test]
     fn analysis_runs_reports_and_cancels() {
+        let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
         let dir = std::env::temp_dir().join(format!("creditia-app-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
 
@@ -584,6 +681,52 @@ mod tests {
         // 找不到核心
         std::env::set_var("CREDITIA_CORE", dir.join("nope"));
         assert_eq!(run_analysis("/tmp", None, None).unwrap_err().code, "core_missing");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn collect_rounds_cover_the_library() {
+        let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = std::env::temp_dir().join(format!("creditia-app-collect-{}", std::process::id()));
+        let repo = dir.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::env::set_var("CREDITIA_HOME", dir.join("lib"));
+        let lib = Library::open().unwrap();
+        let proj = |id: &str, path: &std::path::Path| creditia_store::Project { id: id.into(), name: id.into(), path: path.display().to_string(), root_commit: id.into(), remotes: vec![], last_head: None, last_analyzed: None };
+        lib.upsert_project(&proj("a", &repo)).unwrap();
+        lib.upsert_project(&proj("gone", &dir.join("deleted"))).unwrap();
+        drop(lib);
+
+        // 默认开着；目录已经不在的项目跳过；有警告（退出码 2）也算收到了
+        assert!(collect_info()["on"].as_bool().unwrap());
+        std::env::set_var("CREDITIA_CORE", fake_core(&dir, r#"echo '{"collected":[{"newEvidence":3}]}'; exit 2"#));
+        let r = collect_round(false).unwrap();
+        assert_eq!((r["projects"].as_u64(), r["failed"].as_u64(), r["newEvidence"].as_u64()), (Some(1), Some(0), Some(3)));
+        assert_eq!(collect_info()["last"]["newEvidence"], 3);
+
+        // 核心出错记成失败，上一轮的结果被这一轮换掉
+        std::env::set_var("CREDITIA_CORE", fake_core(&dir, r#"echo '{"error":"x"}'; exit 1"#));
+        assert_eq!(collect_round(false).unwrap()["failed"], 1);
+        assert_eq!(collect_info()["last"]["newEvidence"], 0);
+
+        // 一轮没跑完不能再开一轮
+        std::env::set_var("CREDITIA_CORE", fake_core(&dir, r#"sleep 1; echo '{"collected":[]}'"#));
+        let t = std::thread::spawn(|| collect_round(false));
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert!(collect_info()["running"].as_bool().unwrap());
+        assert_eq!(collect_round(false).unwrap_err().code, "busy");
+        t.join().unwrap().unwrap();
+        assert!(!collect_info()["running"].as_bool().unwrap());
+
+        // 关掉以后定时的一轮不收，手动的照收；设置里别的键不受影响
+        edit_app_settings(|v| v["exportDir"] = json!("/x")).unwrap();
+        assert!(!set_collect(false).unwrap()["on"].as_bool().unwrap());
+        assert_eq!(collect_round(true).unwrap_err().code, "off");
+        assert_eq!(collect_info()["last"]["projects"], 1, "没跑的那轮不覆盖上一轮");
+        assert_eq!(collect_round(false).unwrap()["projects"], 1);
+        assert_eq!(app_settings()["exportDir"], "/x");
+
+        std::env::remove_var("CREDITIA_HOME");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
