@@ -49,7 +49,7 @@ Grok            █░░░░░░░░░░░░░░░░░░░░�
 creditia doc                                  # 写 CREDITS.md（只改标记区间）
 creditia export --piece roll --out roll.png   # 片尾字幕
 creditia export --list                        # 全部卡片、版式、风格、格式
-creditia hook install                         # 以后每次提交自动盖章：脱离本地日志环境也能归因
+creditia hook install                         # 以后每次提交自动盖章：写入 Git 提交，无需依赖本地日志
 creditia release install                      # 跟着发版：Release 说明、PR 评论里写上署名
 creditia blame src/core/analyze.ts:12         # 这一行是哪个工具、哪个模型写的
 ```

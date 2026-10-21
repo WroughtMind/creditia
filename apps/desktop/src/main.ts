@@ -283,7 +283,7 @@ async function loadPlugs(p: any) {
 }
 /** 名字说清楚它做什么，下面一行说会改到哪里 */
 const PLUG_TEXT = {
-  hook: () => [L('在提交里记录 AI', 'Note AI in commits'), L('在每次提交中记录工具与行数，脱离本地日志环境也能归因', 'Each commit message notes which AI wrote how many lines for portable attribution')],
+  hook: () => [L('在提交里记录 AI', 'Note AI in commits'), L('在每次提交中记录工具与行数，写入 Git 提交，无需依赖本地日志', 'Notes tools and line counts in commit messages, recorded in Git commits without relying on local logs')],
   release: () => [L('发版与 PR 自动署名', 'Credits on releases'), L('在 GitHub 发版说明和 PR 评论中附带署名卡，需添加工作流配置', 'Adds credits to GitHub release notes and PR comments via a workflow file you commit')],
 };
 function plugRow(k: 'hook' | 'release') {

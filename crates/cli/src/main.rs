@@ -859,8 +859,8 @@ fn ask_integrations(repo: &Path, todo: &[Value]) {
     for k in todo.iter().filter_map(Value::as_str) {
         let q = if k == "hook" {
             tr!(
-                "\n· 提交盖章：在 git 的 prepare-commit-msg hook 里加一行。在 agent 里提交时，提交信息末尾自动加上 Creditia-Harness / Creditia-Model；包含 AI 生成行时再加一行 Creditia-Lines（各工具行数，不含代码）。脱离本地日志环境也能归因，PR 评论和 Release 说明也读它。只影响这个仓库。\n  装吗？[y/N] ",
-                "\n· Commit stamps: adds one line to git's prepare-commit-msg hook. Commits made inside an agent get Creditia-Harness / Creditia-Model trailers, and commits containing AI-generated lines get a Creditia-Lines trailer (lines per tool, no code). Attributable even without local logs, and PR comments and release notes read them. Only this repository.\n  Install? [y/N] "
+                "\n· 提交盖章：在 git 的 prepare-commit-msg hook 里加一行。在 agent 里提交时，提交信息末尾自动加上 Creditia-Harness / Creditia-Model；有 AI 代码时再加一行 Creditia-Lines（各工具行数，不含代码）。写入 Git 提交，无需依赖本地日志，PR 评论和 Release 说明也读它。只影响这个仓库。\n  装吗？[y/N] ",
+                "\n· Commit stamps: adds one line to git's prepare-commit-msg hook. Commits made inside an agent get Creditia-Harness / Creditia-Model trailers, and commits with AI code get a Creditia-Lines trailer (lines per tool, no code). Recorded in Git commits without relying on local logs; PR comments and release notes read them too. Only this repository.\n  Install? [y/N] "
             )
         } else {
             tr!(
