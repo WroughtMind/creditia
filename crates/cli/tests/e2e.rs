@@ -1287,3 +1287,37 @@ fn integrations_switches() {
 
     let _ = fs::remove_dir_all(&env.root);
 }
+
+#[test]
+fn collect_all_keeps_going_past_a_broken_project() {
+    let env = setup();
+    fs::write(env.repo.join("a.txt"), "a\n").unwrap();
+    commit(&env.repo, "a", "me@example.com", "2026-07-01T10:00:00+08:00");
+    let other = env.root.join("projects/other");
+    fs::create_dir_all(&other).unwrap();
+    git(&other, &["init", "-q", "-b", "main"]);
+    fs::write(other.join("b.txt"), "b\n").unwrap();
+    commit(&other, "b", "me@example.com", "2026-07-01T11:00:00+08:00");
+    let (ok, v) = run(&env, &["collect", "--repo", env.repo.to_str().unwrap()]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["collect", "--repo", other.to_str().unwrap()]);
+    assert!(ok, "{v}");
+
+    // other 的缓存目录换成一个文件：它写不进去，另一个照收
+    let broken = env.root.join("lib/cache").join(v["collected"][0]["project"].as_str().unwrap());
+    fs::remove_dir_all(&broken).unwrap();
+    fs::write(&broken, "").unwrap();
+    let (ok, v) = run(&env, &["collect", "--all"]);
+    assert!(ok, "{v}");
+    let c = v["collected"].as_array().unwrap();
+    assert_eq!(c.len(), 2, "{v}");
+    assert_eq!(c.iter().filter(|x| x["error"].is_string()).count(), 1, "{v}");
+    assert_eq!(c.iter().filter(|x| x["newEvidence"].is_u64()).count(), 1, "{v}");
+    assert_eq!(v["warnings"].as_array().map(Vec::len), Some(1), "{v}");
+
+    // 只收一个项目时出错照旧报错
+    let (ok, _) = run(&env, &["collect", "--repo", other.to_str().unwrap()]);
+    assert!(!ok);
+
+    let _ = fs::remove_dir_all(&env.root);
+}
