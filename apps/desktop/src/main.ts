@@ -462,7 +462,7 @@ function tileHtml(id: string, vs: string[], cur?: string) {
       <div class="art"></div>`;
 }
 
-/** 瀑布流：一栏宽度跟着窗口变，横向的统计图跨两栏，小件不缩。
+/** 瀑布流：一栏宽度跟着窗口变，横向作品跨两栏，小件不放大。
  *  跨栏的作品会在矮的那栏下面留洞，所以每次往后看几张，挑放下去最高、留洞最少的那张先放 */
 function layout() {
   const board = $('#board');
@@ -485,9 +485,6 @@ function layout() {
     const set = Number(t.dataset.span);
     const small = Number(t.dataset.w) < 500; // 徽章这种小件，跨栏也只是居中，有洞时放一栏
     if (set && !(small && set > 1)) return at(t, Math.min(cols, set));
-    // 横着的统计图放进一栏只剩三分之一大，图例看不清：至少跨两栏
-    const w = Number(t.dataset.w), h = Number(t.dataset.h);
-    if (cols >= 2 && w >= 1000 && w / h > 0.95) return at(t, 2);
     // 很扁的图表在窄栏里字太小，三栏以上时让它跨两栏；跨了会留大洞就还是放一栏
     const wide = small ? set > 1 : cols >= 3 && Number(t.dataset.w) / Number(t.dataset.h) > 1.7;
     const two = wide ? at(t, 2) : null;

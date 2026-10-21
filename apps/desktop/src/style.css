@@ -139,8 +139,8 @@ body.dragging .tile.placed { transition: none; }
 .tile .bar button { border: 0; background: transparent; height: 26px; min-width: 26px; padding: 0 10px; border-radius: 99px; cursor: pointer; font-size: 12px; color: var(--ink); display: inline-flex; align-items: center; gap: 4px; }
 .tile .bar button:hover { background: var(--glass2); }
 .tile .bar .vname { color: var(--soft); font-size: 11px; padding: 0 2px; }
-.tile .name { position: absolute; top: -27px; left: 0; max-width: 56%; overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 500; color: var(--soft); transition: color .18s; pointer-events: none; white-space: nowrap; }
-.tile:hover .name, .tile.hover .name { color: var(--ink); }
+.tile .name { position: absolute; top: -26px; left: 0; max-width: 56%; overflow: hidden; text-overflow: ellipsis; font-size: 11px; letter-spacing: .01em; color: var(--faint); transition: color .18s; pointer-events: none; white-space: nowrap; }
+.tile:hover .name, .tile.hover .name { color: var(--soft); }
 /* 导出菜单：格式一列，下面一排尺寸 */
 .fmts { position: absolute; top: 12px; right: -6px; z-index: 4; border-radius: 14px; padding: 5px; display: grid; gap: 1px; width: 196px; animation: drop2 .14s ease-out; }
 @keyframes drop2 { from { opacity: 0; transform: translateY(-4px); } }
