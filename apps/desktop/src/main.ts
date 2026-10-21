@@ -28,7 +28,7 @@ async function api(cmd: string, args: any = {}): Promise<any> {
   switch (cmd) {
     case 'projects': return demo ? demo.projects : devFresh.on && !devFresh.added ? [] : get('/__dev/projects');
     case 'discover': if (demo) throw new Error('demo'); await new Promise((r) => setTimeout(r, 900)); return { projects: [
-      { name: 'lumen', path: '/Users/me/code/lumen', tools: { 'claude-code': 42, codex: 12 }, lastActive: '2026-10-20', exists: true, inLibrary: false },
+      { name: 'lumen', path: '/Users/me/code/lumen', tools: { 'claude-code': 42, codex: 12 }, lastActive: '2026-10-20', exists: true, inLibrary: !devFresh.on },
       { name: 'atlas', path: '/Users/me/code/atlas', tools: { cursor: 30 }, lastActive: '2026-10-12', exists: true, inLibrary: false },
       { name: 'dotfiles', path: '/Users/me/dotfiles', tools: { 'claude-code': 4 }, lastActive: '2026-09-02', exists: true, inLibrary: false },
       { name: 'scratch', path: '/Users/me/tmp/scratch', tools: { codex: 3 }, lastActive: '2026-08-30', exists: true, inLibrary: false },
@@ -259,8 +259,7 @@ function rebuildModel() {
 }
 
 // ───────────────────────── 接入：提交盖章、跟着发版 ─────────────────────────
-// 两项都会改用户的仓库，所以每个项目由用户自己决定。没决定过时，第一张作品出来后在墙顶上用一行问一次；
-// 决定过之后开关收进项目菜单。开关交给核心的 hook / release install|uninstall，决定记进项目配置
+// 两项都会改用户的仓库，只在项目菜单里摆两个开关，不在墙上问。开关交给核心的 hook / release install|uninstall
 type Plug = { installed: boolean; decided: boolean | null; path: string; github?: boolean; published?: boolean };
 type Plugs = { hook: Plug; release: Plug };
 let plugs: Plugs | null = null, plugBusy = '';
@@ -269,32 +268,23 @@ async function loadPlugs(p: any) {
   catch { if (p === state.current) plugs = null; }
   renderPlugs();
 }
+/** 名字说清楚它做什么，下面一行说会改到哪里 */
 const PLUG_TEXT = {
-  hook: () => [L('提交盖章', 'Commit stamps'), L('提交信息里记下工具、模型和行数，日志清理后也认得出', 'Commits record the tool, model and lines, so credit survives log cleanup')],
-  release: () => [L('跟着发版', 'Release credits'), L('发版说明和 PR 评论里写上署名：加一个 GitHub workflow，要你提交', 'Credits in release notes and PR comments: adds a GitHub workflow for you to commit')],
+  hook: () => [L('在提交里记下 AI', 'Note AI in commits'), L('每次提交，信息末尾记下哪个 AI 写了几行；工具日志清掉后也算得出来', 'Each commit message notes which AI wrote how many lines, so credits survive tool log cleanup')],
+  release: () => [L('发版时附上署名', 'Credits on releases'), L('GitHub 发版说明和 PR 评论里写上署名；会加一个 workflow 文件，要你提交', 'Adds credits to GitHub release notes and PR comments via a workflow file you commit')],
 };
-/** 一项开关：名字，悬停看它会改什么；有要提醒的写在下面 */
-function plugSwitch(k: 'hook' | 'release') {
+function plugRow(k: 'hook' | 'release') {
   const on = plugs![k].installed, [title, desc] = PLUG_TEXT[k](), rel = plugs!.release;
-  const note = k === 'release' && rel.installed && !rel.published && !plugs!.hook.installed ? L('要先开提交盖章', 'Needs commit stamps')
-    : k === 'release' && rel.github === false && !rel.installed ? L('没有 GitHub 远程', 'No GitHub remote') : '';
-  return `<div class="sw${on ? ' on' : ''}${plugBusy === k ? ' busy' : ''}" title="${esc(desc)}"><span class="t">${esc(title)}${note ? `<small>${esc(note)}</small>` : ''}</span>
+  const note = k === 'release' && rel.installed && !rel.published && !plugs!.hook.installed ? L('要先打开上面一项，才有行数可写', 'Turn on the option above first, so there are line counts to write')
+    : k === 'release' && rel.github === false && !rel.installed ? L('这个仓库不在 GitHub 上', "This repo isn't on GitHub") : '';
+  return `<div class="sw${on ? ' on' : ''}${plugBusy === k ? ' busy' : ''}"><span class="t"><b>${esc(title)}</b><small${note ? ' class="note"' : ''}>${esc(note || desc)}</small></span>
     <button role="switch" aria-checked="${on}" aria-label="${esc(title)}" data-k="${k}" ${plugBusy ? 'disabled' : ''}><i></i></button></div>`;
 }
-function wirePlugs(root: HTMLElement) {
-  root.querySelectorAll<HTMLElement>('button[data-k]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); setPlug(b.dataset.k as 'hook' | 'release', !plugs![b.dataset.k as 'hook' | 'release'].installed); }));
-}
 function renderPlugs() {
-  const el = $('#plug');
-  const m = document.querySelector<HTMLElement>('#mplugs');
-  if (m) { m.hidden = !plugs; if (plugs) { m.innerHTML = `<span class="lab">${L('这个项目', 'This project')}</span>${plugSwitch('hook')}${plugSwitch('release')}`; wirePlugs(m); } }
-  const ask = plugs ? (['hook', 'release'] as const).filter((k) => plugs![k].decided == null) : [];
-  // 第一张作品出来之前不问：空墙上只剩这一条，像是要先答完才能看
-  if (!ask.length || !state.raw || !document.querySelector('#board .tile:not(.slot)')) { el.hidden = true; return; }
-  el.hidden = false;
-  el.innerHTML = `<span class="q">${L('给这个仓库接上？', 'Add to this repo?')}</span>${plugSwitch('hook')}${plugSwitch('release')}<button class="later" data-act="later">${L('先不用', 'Not now')}</button>`;
-  wirePlugs(el);
-  (el.querySelector('.later') as HTMLElement).onclick = async () => { for (const k of ask) await setPlug(k, false, true); };
+  const m = document.querySelector<HTMLElement>('#mplugs'); if (!m) return;
+  m.hidden = !plugs; if (!plugs) return;
+  m.innerHTML = plugRow('hook') + plugRow('release');
+  m.querySelectorAll<HTMLElement>('button[data-k]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); const k = b.dataset.k as 'hook' | 'release'; setPlug(k, !plugs![k].installed); }));
 }
 async function setPlug(k: 'hook' | 'release', on: boolean, quiet = false) {
   const p = state.current; if (!p || plugBusy) return;
@@ -429,7 +419,6 @@ async function paint() {
     tile.classList.add('placed');
     g.replaceWith(tile);
     layout();
-    if (board.querySelectorAll('.tile:not(.slot)').length === 1) renderPlugs(); // 第一张出来了，再问接入
   }
   store.set('dims', JSON.stringify(dims));
   for (const tile of fresh) {

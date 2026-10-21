@@ -74,7 +74,7 @@ body::after { /* 底下渐隐，浮在下面的风格栏不和作品打架 */
 .round { width: 30px; height: 30px; border-radius: 99px; border: 0; display: grid; place-items: center; cursor: pointer; font-size: 12px; font-weight: 600; background: transparent; color: var(--soft); }
 .round:hover { background: var(--glass2); color: var(--ink); }
 body.bare #tools > :not(#gear):not(#lang), body.bare #tools > .sep { display: none; } /* 还没有作品：只留语言和设置 */
-body.bare #dots, body.bare #plug { display: none; }
+body.bare #dots { display: none; }
 
 /* ── 项目下拉 ── */
 .menu { position: fixed; z-index: 30; top: 54px; left: 76px; width: min(440px, calc(100vw - 92px)); border-radius: 18px; padding: 8px; animation: menuin .18s ease-out; }
@@ -97,21 +97,18 @@ body.bare #dots, body.bare #plug { display: none; }
 .menu .foot button:disabled { opacity: .4; cursor: default; background: transparent; color: var(--soft); }
 .menu .item.gone b, .menu .item.gone span { opacity: .55; }
 /* 这个项目的接入开关 */
-.menu .mplugs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; padding: 8px 4px 2px; border-top: 1px solid var(--edge); margin-top: 4px; }
-.menu .mplugs .lab { font-size: 11px; color: var(--faint); padding: 0 8px; margin-right: auto; }
+.menu .mplugs { display: grid; gap: 1px; padding: 6px 0 0; border-top: 1px solid var(--edge); margin-top: 4px; }
 
 /* ── 展墙 ── */
 #stage { position: absolute; inset: 0; overflow: auto; padding: 84px 0 140px; scrollbar-width: none; }
 #stage::-webkit-scrollbar { display: none; }
-/* 接入：没决定过时，墙顶上一行问一次；开关样式和项目菜单里的共用 */
-#plug { display: flex; align-items: center; gap: 4px; width: fit-content; max-width: calc(100vw - 32px); margin: 0 auto 34px; padding: 5px 6px 5px 18px; border-radius: 99px; flex-wrap: wrap; animation: drop2 .3s ease-out; }
-#plug .q { font-size: 12.5px; font-weight: 600; margin-right: 6px; white-space: nowrap; }
-#plug .later { border: 0; background: none; color: var(--soft); font-size: 12px; cursor: pointer; padding: 6px 12px; border-radius: 99px; }
-#plug .later:hover { color: var(--ink); background: var(--glass2); }
-.sw { display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 12px; border-radius: 99px; cursor: default; }
+/* 项目菜单里的两个开关：名字一行，说明一行 */
+.sw { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 12px; border-radius: 12px; }
 .sw:hover { background: var(--glass2); }
-.sw .t { font-size: 12.5px; white-space: nowrap; display: flex; align-items: baseline; gap: 8px; }
-.sw .t small { font-size: 11px; color: var(--soft); }
+.sw .t { display: grid; gap: 2px; min-width: 0; }
+.sw .t b { font-size: 13px; font-weight: 500; }
+.sw .t small { font-size: 11.5px; line-height: 1.45; color: var(--soft); }
+.sw .t small.note { color: var(--ink); }
 .sw button, #sheet .switch { flex: none; width: 32px; height: 20px; border: 0; border-radius: 99px; padding: 0; cursor: pointer; position: relative; background: color-mix(in srgb, var(--ink) 18%, transparent); transition: background .2s; }
 .sw button i, #sheet .switch i { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 99px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s, background .2s; }
 .sw.on button, #sheet .switch[aria-checked="true"] { background: var(--ink); }
