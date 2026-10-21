@@ -15,4 +15,4 @@
 lobehub 的图标和 aider.svg 靠 evenodd 挖空，生成时会把 `rule: 'evenodd'` 带进 logos.ts。
 还没有标志的工具画首字母。
 
-creditia 自己的标志在 `../creditia/logo.svg`：由片尾字幕的横行组成的 C，开口处一颗四角星。
+creditia 自己的标志在 `../creditia/`：`logo-star.svg` 是五瓣星号 *（默认，App 图标、官网、README 用它），每瓣一个工具色（Claude Code、Codex、Cursor、Kimi、Grok）；排版里 * 就是「出处在这儿」。`logo-star-mono.svg` 是它的黑白版。两个都由 `npm run mark`（`src/mark.ts`）生成，作品落款处每个项目自己的 *（瓣长是份额）也出自那里。早先的几个也留着：`logo-orb.svg` 彩色横纹的圆、星从右上亮出来；`logo-ring.svg` 六道胶囊围成一圈、星在正中；`logo-color.svg` / `logo.svg` 是最早的 C 字标志（彩色 / 黑白）。这些都能在 App 设置里换。

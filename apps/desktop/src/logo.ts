@@ -1,2 +1,23 @@
-// creditia 标志：由片尾字幕的横行组成的 C，开口处一颗四角星（AI）。单色，跟随 currentColor。
-export const LOGO_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="ct-logo-clip"><path d="M18.947 19.193A10 10 0 1 1 18.947 4.807L16.724 7.108A6.8 6.8 0 1 0 16.724 16.892Z"/></clipPath></defs><g clip-path="url(#ct-logo-clip)" fill="currentColor"><rect x="0" y="2.000" width="24" height="1.818"/><rect x="0" y="5.636" width="24" height="1.818"/><rect x="0" y="9.273" width="24" height="1.818"/><rect x="0" y="12.909" width="24" height="1.818"/><rect x="0" y="16.545" width="24" height="1.818"/><rect x="0" y="20.182" width="24" height="1.818"/></g><path d="M19.6 9.3C20.086000000000002 11.514 20.086000000000002 11.514 22.3 12C20.086000000000002 12.486 20.086000000000002 12.486 19.6 14.7C19.114 12.486 19.114 12.486 16.900000000000002 12C19.114 11.514 19.114 11.514 19.6 9.3Z" fill="currentColor"/></svg>`;
+// creditia 标志，设置里可以换，程序坞图标跟着换（src-tauri 的 set_logo）。颜色都是工具颜色（Claude Code、Codex、Cursor、Kimi、Grok、未确认）。
+// star：五瓣星号 *，每瓣一个工具色（默认，也是安装包图标；形在 packages/render/src/mark.ts）；star-mono 是它的黑白版
+// orb：彩色横纹的圆，星从右上亮出来
+// ring：六道胶囊围成一圈，星在正中
+// color / mono：最早的标志，横纹组成的 C，开口处一颗星；黑白版整个跟随 currentColor
+import star from '../../../packages/render/assets/creditia/logo-star.svg?raw';
+import starMono from '../../../packages/render/assets/creditia/logo-star-mono.svg?raw';
+import orb from '../../../packages/render/assets/creditia/logo-orb.svg?raw';
+import ring from '../../../packages/render/assets/creditia/logo-ring.svg?raw';
+import color from '../../../packages/render/assets/creditia/logo-color.svg?raw';
+import mono from '../../../packages/render/assets/creditia/logo.svg?raw';
+
+const inline = (svg: string) => svg.trim().replaceAll('#0E0E0E', 'currentColor').replace('<svg ', '<svg aria-hidden="true" ');
+export const DEFAULT_LOGO = 'star';
+export const LOGOS: Record<string, { svg: string; name: [string, string] }> = {
+  star: { svg: inline(star), name: ['星号', 'Asterisk'] },
+  'star-mono': { svg: inline(starMono), name: ['星号 · 黑白', 'Asterisk, mono'] },
+  orb: { svg: inline(orb), name: ['条纹圆', 'Orb'] },
+  ring: { svg: inline(ring), name: ['光环', 'Ring'] },
+  color: { svg: inline(color), name: ['C 字', 'C mark'] },
+  mono: { svg: inline(mono), name: ['C 字 · 黑白', 'C mark, mono'] },
+};
+export const logoSvg = (id: string | null) => (LOGOS[id ?? ''] ?? LOGOS[DEFAULT_LOGO]).svg;

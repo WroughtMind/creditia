@@ -4,6 +4,7 @@ import { fmt, compact, tipOf, nameOf } from '../data.ts';
 import type { Style } from '../style.ts';
 import { Scene, measure } from '../svg.ts';
 import type { Box } from '../style.ts';
+import { markPaths, sharePetals } from '../mark.ts';
 
 export interface PieceOpts {
   variant?: string;
@@ -90,3 +91,14 @@ export function keyRank(m: Model, k: string): number {
 }
 /** 图例的顺序：同上 */
 export const legendRows = (m: Model) => [...m.rows].sort((a, b) => keyRank(m, a.key) - keyRank(m, b.key));
+
+/** 这个项目自己的 *：瓣长是各工具的份额，颜色用这个风格给各工具的颜色 */
+export function markOf(m: Model, st: Style, x: number, y: number, size: number): string {
+  const petals = sharePetals(m.tools.filter((a) => a.kind === 'agent').map((a) => ({ tool: a.key, lines: a.lines, color: colorOf(st, a) })), st.c.faint);
+  return `<g transform="translate(${+x.toFixed(2)} ${+y.toFixed(2)}) scale(${+(size / 24).toFixed(4)})">${markPaths({ petals })}</g>`;
+}
+/** 落款：右下角的 creditia，前面挂上这个项目的 * */
+export function sign(s: Scene, st: Style, m: Model, x1: number, y: number) {
+  const w = s.text('creditia', x1, y, { font: st.f.label, size: 13, fill: st.c.faint, anchor: 'end', track: 0.12 });
+  s.add(markOf(m, st, x1 - w - 21, y - 13, 16));
+}

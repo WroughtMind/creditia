@@ -90,7 +90,13 @@ header:not(.solid) .get svg { fill: var(--hero); }
 section, #screen { scroll-margin-top: 64px; }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 15px; text-decoration: none; }
-.brand svg { width: 19px; height: 19px; }
+.brand svg { width: 20px; height: 20px; transition: rotate .6s cubic-bezier(.34,1.5,.5,1); }
+.brand:hover svg { rotate: 72deg; } /* 转一瓣 */
+.brand svg path, .ast path { transform-box: view-box; transform-origin: 12px 12px; }
+/* 标题后面的 *：creditia 的标志，也就是排版里「出处在这儿」的那个星号 */
+.title h1 .ast { display: inline-block; width: .4em; height: .4em; margin-left: .08em; vertical-align: .9em; }
+.title h1 .ast svg { display: block; width: 100%; height: 100%; }
+.title h1 .ast svg { transition: rotate .6s cubic-bezier(.34,1.5,.5,1); } .title h1 .ast:hover svg { rotate: 72deg; }
 .grow { flex: 1; }
 .ctl { display: flex; gap: 2px; }
 .ctl button, .ctl a { height: 32px; min-width: 32px; padding: 0 9px; border-radius: 99px; border: 0; background: transparent; opacity: .72; font: 500 12.5px/1 Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
@@ -1053,6 +1059,10 @@ function intro() {
   rise(chars, { blur: true, step: lang() === 'zh' ? 55 : 90, delay: 100, dur: 1100 });
   const after = 100 + chars.length * (lang() === 'zh' ? 55 : 90) + 200;
   rise([document.querySelector('.title p'), document.querySelector('.acts')], { y: 30, delay: after, step: 120, dur: 1000 });
+  // 标志和标题后的 *：一瓣瓣从中心长出来
+  const bloom = (sel, delay) => document.querySelectorAll(sel).forEach((p, k) => p.animate(
+    [{ transform: 'scale(0) rotate(-40deg)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 800, delay: delay + k * 70, easing: SPRING, fill: 'backwards' }));
+  bloom('.brand svg path', 150); bloom('.title .ast path', after - 200);
   document.querySelectorAll('#agents span').forEach((s, k) => s.animate(
     [{ transform: 'scale(.4)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 700, delay: after + 260 + k * 35, easing: SPRING, fill: 'backwards' }));
   rise([document.querySelector('.fcap'), $('flegend')], { y: 14, delay: 500, step: 200, dur: 900 });
@@ -1833,6 +1843,9 @@ const io = new IntersectionObserver((es) => {
 // ───────── 语言、主题、复制 ─────────
 function applyLang() {
   document.querySelectorAll('[data-i]').forEach((el) => (el.innerHTML = t(el.dataset.i)));
+  // 像脚注一样：点标题后面的 *，跳到「出处」
+  const h1 = document.querySelector('.title h1'), ast = document.createElement('a');
+  ast.className = 'ast'; ast.href = '#lines'; ast.setAttribute('aria-label', t('nav.lines')); ast.innerHTML = document.querySelector('.brand svg').outerHTML; h1.append(ast);
   // 有英文版的文档：链接跟着语言换
   document.querySelectorAll('[data-en-href]').forEach((a) => { a.dataset.zhHref ??= a.getAttribute('href'); a.setAttribute('href', lang() === 'en' ? a.dataset.enHref : a.dataset.zhHref); });
   $('lang').textContent = lang() === 'en' ? '中' : 'EN';

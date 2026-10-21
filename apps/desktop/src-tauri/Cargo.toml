@@ -22,6 +22,12 @@ creditia-store = { path = "../../../crates/store" }
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# 设置里换标志：程序坞图标用 AppKit 换
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSImage", "NSResponder"] }
+
 [profile.release]
 strip = true
 lto = "thin"

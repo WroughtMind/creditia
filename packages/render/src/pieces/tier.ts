@@ -5,7 +5,7 @@ import { pct, fmt, hanzi } from '../data.ts';
 import type { Style } from '../style.ts';
 import { chamfer } from '../style.ts';
 import { measureV } from './common.ts';
-import { T, zh, colorOf, fillOf, tip, modelLine, handLine, handTip, peopleNames, summary, range, canvas, type PieceOpts } from './common.ts';
+import { T, zh, colorOf, sign, fillOf, tip, modelLine, handLine, handTip, peopleNames, summary, range, canvas, type PieceOpts } from './common.ts';
 import { inkSeal } from '../styles/east.ts';
 
 export const TIER_VARIANTS = ['rows', 'center', 'podium', 'vertical', 'hud', 'stats', 'split', 'grouped'];
@@ -66,7 +66,7 @@ function rows(m: Model, st: Style, o: PieceOpts): Scene {
   }
   y += 40;
   s.text(summary(m), x0, y, { font: st.f.body, size: 14, fill: st.c.soft });
-  s.text('creditia', x1, y, { font: st.f.label, size: 13, fill: st.c.faint, anchor: 'end', track: 0.12 });
+  sign(s, st, m, x1, y);
   return s;
 }
 
@@ -372,7 +372,7 @@ function split(m: Model, st: Style, o: PieceOpts): Scene {
   });
   y += 40;
   s.text(summary(m), x0, y, { font: st.f.body, size: 14, fill: st.c.soft });
-  s.text('creditia', x1, y, { font: st.f.label, size: 13, fill: st.c.faint, anchor: 'end', track: 0.12 });
+  sign(s, st, m, x1, y);
   return s;
 }
 
@@ -425,6 +425,6 @@ function grouped(m: Model, st: Style, o: PieceOpts): Scene {
   });
   y += 30;
   s.text(summary(m), x0, y, { font: st.f.body, size: 14, fill: st.c.soft });
-  s.text('creditia', x1, y, { font: st.f.label, size: 13, fill: st.c.faint, anchor: 'end', track: 0.12 });
+  sign(s, st, m, x1, y);
   return s;
 }

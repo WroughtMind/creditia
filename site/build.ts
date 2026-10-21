@@ -245,7 +245,7 @@ for (const t of ['dark', 'light']) cpSync(path.join(import.meta.dirname, `app-${
 // 宣传片（promo/ 生成，成片放在 site/ 下）：放在站上，README 的封面图链到这里直接播放
 for (const f of ['promo.mp4', 'promo.jpg']) if (existsSync(path.join(import.meta.dirname, f))) cpSync(path.join(import.meta.dirname, f), path.join(OUT, f));
 
-const logo = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo.svg'), 'utf8').replace(/#0E0E0E/g, 'currentColor').replace('<svg ', '<svg aria-hidden="true" ');
+const logo = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo-star.svg'), 'utf8').trim().replace('<svg ', '<svg aria-hidden="true" ');
 
 let html = readFileSync(path.join(import.meta.dirname, 'index.html'), 'utf8');
 html = html
@@ -265,8 +265,9 @@ writeFileSync(path.join(OUT, 'en.html'), html
   .replace('assets/og-zh.png', 'assets/og-en.png')
   .replace(/(<meta property="og:url" content=")[^"]*/, '$1https://wroughtmind.github.io/creditia/en.html')
   .replace(/(<link rel="canonical" href=")[^"]*/, '$1https://wroughtmind.github.io/creditia/en.html'));
-writeFileSync(path.join(OUT, 'assets/favicon.svg'), logo.replace(/currentColor/g, '#111'));
+writeFileSync(path.join(OUT, 'assets/favicon.svg'), logo);
 cpSync(path.join(ROOT, 'packages/render/assets/creditia/logo.svg'), path.join(OUT, 'assets/logo.svg'));
+for (const f of ['logo-star.svg', 'logo-star-mono.svg', 'logo-color.svg', 'logo-orb.svg', 'logo-ring.svg']) cpSync(path.join(ROOT, 'packages/render/assets/creditia', f), path.join(OUT, 'assets', f));
 writeFileSync(path.join(OUT, '.nojekyll'), '');
 console.log(`→ ${OUT}/index.html`);
 
