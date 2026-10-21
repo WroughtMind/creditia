@@ -248,6 +248,13 @@ body.dragging #dock .sizes { display: flex; gap: 2px; padding: 3px; border-radiu
 #sheet .row.kv .seg button { padding: 5px 10px; }
 #sheet .mini { border: 0; background: var(--glass); box-shadow: inset 0 0 0 1px var(--edge); padding: 4px 10px; border-radius: 99px; cursor: pointer; font-size: 12px; color: var(--ink); }
 #sheet .mini:hover { background: var(--ink); color: var(--bg); }
+#sheet .mini:disabled { opacity: .5; cursor: progress; background: var(--glass); color: var(--ink); }
+#sheet .row .v.grow { flex: 1; min-width: 0; }
+#sheet p.hint { margin-top: 10px; font-size: 12px; }
+#sheet .switch { flex: none; width: 34px; height: 20px; border: 0; border-radius: 99px; padding: 0; cursor: pointer; position: relative; background: color-mix(in srgb, var(--ink) 18%, transparent); transition: background .2s; }
+#sheet .switch i { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 99px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s, background .2s; }
+#sheet .switch[aria-checked="true"] { background: var(--ink); }
+#sheet .switch[aria-checked="true"] i { transform: translateX(14px); background: var(--bg); }
 #sheet .ver { color: var(--ink); font-weight: 500; }
 #sheet .warn { margin: 8px 0 4px; padding-left: 18px; color: var(--ink); font-size: 12.5px; user-select: text; }
 #sheet .warn li { margin: 4px 0; }
