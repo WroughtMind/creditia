@@ -746,6 +746,9 @@ function openFocus(id: string, k: string) {
     box.className = 'kits glass';
     box.innerHTML = KITS.map((t, j) => `${j === CLASSIC_COUNT ? '<i class="divider"></i>' : ''}<button data-s="${t.id}" class="${t === kit ? 'on' : ''}" ${t.board.some((b) => b.id === id) ? '' : 'disabled'}><svg viewBox="0 0 24 24">${t.dot}</svg>${esc(t.name(state.lang))}</button>`).join('');
     host.appendChild(box);
+    // 从风格按钮正上方弹出，左边和按钮对齐；碰到窗口边就往里收
+    const r = box.getBoundingClientRect(), over = Math.max(0, r.right - (innerWidth - 16)) - Math.max(0, 16 - r.left);
+    if (over) box.style.left = `${-over}px`;
   };
   chrome(); draw();
   el.hidden = false;
@@ -757,7 +760,7 @@ function openFocus(id: string, k: string) {
     if (act === 'close') return close();
     if (act === 'prev' || act === 'next') return step(act === 'next' ? 1 : -1);
     if (b.closest('.kits') && b.dataset.s) { kit = kitById(b.dataset.s)!; chrome(); draw(); return; }
-    if (act === 'kits') return pickKit(el.querySelector('.strip') as HTMLElement);
+    if (act === 'kits') return pickKit(b.parentElement!);
     if (act === 'apply') {
       const v = variantNow(), t = kit;
       close(false);

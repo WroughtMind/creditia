@@ -227,7 +227,7 @@ body.mac #focus .fhead { left: 94px; }
 #focus .pop { position: relative; flex: none; }
 #focus .pop .fmts { top: auto; bottom: calc(100% + 12px); right: -6px; }
 /* 只换这一件的风格：所有风格连名字摆出来 */
-#focus .kits { position: absolute; bottom: calc(100% + 12px); left: 50%; translate: -50% 0; max-width: calc(100vw - 32px); z-index: 5; width: 440px; max-height: 60vh; overflow: auto; border-radius: 16px; padding: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; animation: drop2 .14s ease-out; }
+#focus .kits { position: absolute; bottom: calc(100% + 12px); left: -6px; transform-origin: bottom left; max-width: calc(100vw - 32px); z-index: 5; width: 440px; max-height: 60vh; overflow: auto; border-radius: 16px; padding: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; animation: drop2 .14s ease-out; }
 #focus .kits button { justify-content: flex-start; padding: 6px 10px; border-radius: 10px; color: var(--ink); }
 #focus .kits button svg { width: 18px; height: 18px; border-radius: 99px; flex: none; }
 #focus .kits button.on { background: var(--glass2); box-shadow: inset 0 0 0 1px var(--edge); }
