@@ -241,7 +241,7 @@ for f in glob.glob(sys.argv[1] + '/**/*.png', recursive=True):
 meta.thumbExt = webp.status === 0 ? 'webp' : 'png';
 console.log(`✓ wall thumbs: ${meta.thumbExt}`);
 // 手机上「App」那张卡放截图
-for (const t of ['dark', 'light']) cpSync(path.join(import.meta.dirname, `app-${t}.webp`), path.join(OUT, `assets/app-${t}.webp`));
+for (const t of ['dark', 'light']) for (const l of ['', '-en']) cpSync(path.join(import.meta.dirname, `app-${t}${l}.webp`), path.join(OUT, `assets/app-${t}${l}.webp`));
 // 宣传片（promo/ 生成，成片放在 site/ 下）：放在站上，README 的封面图链到这里直接播放
 for (const f of ['promo.mp4', 'promo.jpg']) if (existsSync(path.join(import.meta.dirname, f))) cpSync(path.join(import.meta.dirname, f), path.join(OUT, f));
 
