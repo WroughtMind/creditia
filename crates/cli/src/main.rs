@@ -75,8 +75,8 @@ const USAGE_ZH: &str = "用法：creditia-core <命令> [选项]
   integrations [--repo P]          上面两项的现状
   hook-trailers <msgfile>          （hook 调用）追加 Creditia-* trailer
   evidence  export [--out F] | import <文件>   多台电脑之间合并证据库
-  projects                         作品库里的项目
-  all-credits                      作品库里每个项目最新的档案（跨项目汇总用）
+  projects                         本地已记录的项目
+  all-credits                      本地每个项目最新的档案（跨项目汇总用）
   paths     [--repo P]             本项目登记过的全部路径（主仓库、worktree、临时克隆、旧路径）
   link      <路径> [--repo P]      把一个路径关联到本项目（别的电脑上的路径、已删除的临时目录）
   unlink    <路径> [--repo P]      取消关联
@@ -578,7 +578,7 @@ use creditia_core::tr;
     }
     lines.push(format!("{:<15} {}", "git", if git_ok { tr!("可用", "available") } else { tr!("未找到", "not found") }));
     lines.push(format!("{:<15} {}", "gh", if gh_ok { tr!("已登录", "signed in") } else { tr!("未登录或未安装（PR 元数据会缺少分支名）", "not signed in or not installed (PR metadata will lack branch names)") }));
-    lines.push(format!("{:<15} {lib_path}  {}", tr!("作品库", "library"), if creditia_core::i18n::en() { format!("{n_proj} project{}", if n_proj == 1 { "" } else { "s" }) } else { format!("{n_proj} 个项目") }));
+    lines.push(format!("{:<15} {lib_path}  {}", tr!("本地项目库", "library"), if creditia_core::i18n::en() { format!("{n_proj} project{}", if n_proj == 1 { "" } else { "s" }) } else { format!("{n_proj} 个项目") }));
     // 没装的工具不算问题；装了却读不了才警告
     let warnings: Vec<String> = hs.iter().filter(|h| !h.readable && !h.unsupported && std::path::Path::new(&h.path).exists()).map(|h| tr!("{} 不可读：{}", "{} unreadable: {}", h.source, h.path)).collect();
     Ok((json!({ "sources": hs, "git": git_ok, "gh": gh_ok, "library": { "path": lib_path, "projects": n_proj }, "summary": lines.join("\n") }), warnings))
@@ -859,8 +859,8 @@ fn ask_integrations(repo: &Path, todo: &[Value]) {
     for k in todo.iter().filter_map(Value::as_str) {
         let q = if k == "hook" {
             tr!(
-                "\n· 提交盖章：在 git 的 prepare-commit-msg hook 里加一行。在 agent 里提交时，提交信息末尾自动加上 Creditia-Harness / Creditia-Model；提交里有 AI 写的行时再加一行 Creditia-Lines（各工具写了几行，不含代码）。日志清理了也认得出，PR 评论和 Release 说明也读它。只影响这个仓库。\n  装吗？[y/N] ",
-                "\n· Commit stamps: adds one line to git's prepare-commit-msg hook. Commits made inside an agent get Creditia-Harness / Creditia-Model trailers, and commits containing AI-written lines get a Creditia-Lines trailer (lines per tool, no code). They stay recognizable after logs are cleaned up, and PR comments and release notes read them. Only this repository.\n  Install? [y/N] "
+                "\n· 提交盖章：在 git 的 prepare-commit-msg hook 里加一行。在 agent 里提交时，提交信息末尾自动加上 Creditia-Harness / Creditia-Model；有 AI 代码时再加一行 Creditia-Lines（各工具行数，不含代码）。写入 Git 提交，无需依赖本地日志，PR 评论和 Release 说明也读它。只影响这个仓库。\n  装吗？[y/N] ",
+                "\n· Commit stamps: adds one line to git's prepare-commit-msg hook. Commits made inside an agent get Creditia-Harness / Creditia-Model trailers, and commits with AI code get a Creditia-Lines trailer (lines per tool, no code). Recorded in Git commits without relying on local logs; PR comments and release notes read them too. Only this repository.\n  Install? [y/N] "
             )
         } else {
             tr!(
@@ -1064,7 +1064,7 @@ fn cmd_projects(_a: &Args) -> R<(Value, Vec<String>)> {
         .map(|p| json!({ "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "lastHead": p.last_head, "lastAnalyzed": p.last_analyzed.map(creditia_core::util::date_cn), "evidence": lib.evidence_count(&p.id) }))
         .collect();
     let summary = ps.iter().map(|p| format!("{:<28} {}  {}", p.name, p.last_analyzed.map(creditia_core::util::date_cn).unwrap_or_else(|| tr!("未分析", "not analyzed")), p.path)).collect::<Vec<_>>().join("\n");
-    Ok((json!({ "projects": list, "summary": if summary.is_empty() { tr!("作品库为空；先 creditia-core analyze", "the library is empty; run creditia-core analyze first") } else { summary } }), vec![]))
+    Ok((json!({ "projects": list, "summary": if summary.is_empty() { tr!("本地项目记录为空；先 creditia-core analyze", "the library is empty; run creditia-core analyze first") } else { summary } }), vec![]))
 }
 
 /// 作品库里每个项目最新的档案（仓库里的 .creditia/credits.json，读不到用作品库里的快照）：跨项目汇总用

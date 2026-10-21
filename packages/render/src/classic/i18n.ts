@@ -4,17 +4,17 @@
 const WORDS: Record<string, string> = {
   主笔: 'Lead', 协作: 'With', 审阅: 'Review', 参与: 'With', 主导: 'Lead',
   署名: 'Credits', 致谢: 'Credits', '‹ 关于': '‹ About', 合计: 'Total', '合计 TOTAL': 'TOTAL', 'Total 合计': 'Total',
-  工期: 'Span', 动工: 'Active', 会话: 'Sessions', 提交: 'Commits', 写下: 'Written', 留下: 'Kept', 至今仍在: 'Still here',
+  工期: 'Span', 活跃: 'Active', 动工: 'Active', 会话: 'Sessions', 提交: 'Commits', 新增: 'Added', 写下: 'Written', 留存: 'Retained', 留下: 'Kept', 至今仍在: 'Still here',
   剧终: 'The End', 全剧: 'Full run', 未发布: 'Unreleased', 今晚演出: 'Tonight', 次提交: 'commits', 行: 'lines', 代码: 'Code',
-  其他: 'Others', 未确认: 'Unattributed',
+  其他: 'Others', 未确认: 'Unattributed', 开发者: 'Developer', 人: 'People',
   联合出品: 'in association with', 模型: 'Models',
   'cast 演职员': 'cast', 'colophon 版权页': 'colophon', 'credits 署名': 'credits', 'ENERGY RECEIPT 精力小票': 'ENERGY RECEIPT',
   'ledger 账簿': 'ledger', 'OPEN 24H · 署名': 'OPEN 24H · CREDITS', 'PLAYBILL 节目单': 'PLAYBILL', 'programme 节目单': 'programme',
-  'THANK YOU · 请保留小票': 'THANK YOU · PLEASE KEEP', 'Creditia — 作品署名': 'Creditia — credits', 'Creditia — 命令行': 'Creditia — terminal',
+  'THANK YOU · 请保留小票': 'THANK YOU · PLEASE KEEP', 'Creditia · 贡献署名': 'Creditia · credits', 'Creditia — 命令行': 'Creditia — terminal',
   'Creditia · 精力小票': 'Creditia · receipt', '工作记录 · 精力清单': 'Work log', '一格 = 1%': '1 square = 1%',
-  各版本新增代码: 'Lines added per release', 每周新增代码: 'Lines added per week', '# 写下的代码留下多少': '# how much written code stayed',
-  '> 统计': '> stats', '由 creditia 开具': 'issued by creditia', 明细: 'Items', 留到了今天: 'still here today',
-  有提交的天数: 'Days with commits', 发给AI的消息: 'Messages to AI', 'AI 写的': 'Written by AI', 提交了的: 'Committed', 现在还在: 'Still here',
+  各版本新增代码: 'Lines added per release', 每周新增代码: 'Lines added per week', '# 新增与留存对比': '# retention comparison', '# 写下的代码留下多少': '# how much written code stayed',
+  '> 统计': '> stats', '由 creditia 开具': 'issued by creditia', 明细: 'Items', 留存率: 'retention rate', 留到了今天: 'still here today',
+  活跃天数: 'Active days', 有提交的天数: 'Days with commits', 提示词: 'Prompts', 发给AI的消息: 'Messages to AI', 'AI 写的': 'Written by AI', 提交了的: 'Committed', 现在还在: 'Still here',
 };
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEK: Record<string, string> = { 日: 'Sun', 一: 'Mon', 二: 'Tue', 三: 'Wed', 四: 'Thu', 五: 'Fri', 六: 'Sat' };

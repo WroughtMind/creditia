@@ -35,7 +35,7 @@ export function creditsOf(m: Model): Section[] {
     if (!tot) continue;
     const who = Object.entries(by).filter(([k, v]) => k !== 'unattributed' && v / tot >= 0.08).sort((a, b) => b[1] - a[1]);
     if (!who.length) continue;
-    out.push({ head: T(m, AREA[ar][0], AREA[ar][1]), credits: who.map(([k]) => (k === 'human' ? { name: peopleNames(m, 2) || T(m, '人', 'People'), key: 'human' } : { name: byKey.get(k)?.name ?? nameOf(k, m.lang), key: k })) });
+    out.push({ head: T(m, AREA[ar][0], AREA[ar][1]), credits: who.map(([k]) => (k === 'human' ? { name: peopleNames(m, 2) || T(m, '开发者', 'Developer'), key: 'human' } : { name: byKey.get(k)?.name ?? nameOf(k, m.lang), key: k })) });
   }
   // 相邻板块名单相同就合并成一行职务（核心 · 界面 · 测试）
   for (let i = out.length - 1; i > 0; i--) {
@@ -53,15 +53,15 @@ export function creditsOf(m: Model): Section[] {
   if (minor.length) out.push({ head: T(m, '参与', 'With'), credits: minor.map((a) => ({ name: a.name, sub: a.models[0]?.name, key: a.key })) });
   // 审阅
   const rev: Credit[] = m.reviewers.map((x) => ({ name: x.name, sub: x.reviews ? T(m, `自动 review ${x.reviews} 次`, `${x.reviews} automated reviews`) : x.model, key: x.key }));
-  if (m.showHand && m.hand.reviews) rev.push({ name: peopleNames(m, 2) || T(m, '人', 'People'), sub: T(m, `review ${m.hand.reviews} 次`, `${m.hand.reviews} reviews`), key: 'human' });
+  if (m.showHand && m.hand.reviews) rev.push({ name: peopleNames(m, 2) || T(m, '开发者', 'Developer'), sub: T(m, `审阅 ${m.hand.reviews} 次`, `${m.hand.reviews} reviews`), key: 'human' });
   if (rev.length) out.push({ head: 'Review', credits: rev });
   // 人的部分
   const hf = handFacts(m);
-  if (hf.length) out.push({ head: T(m, '人', 'People'), credits: hf.map((f) => ({ name: f.text, key: 'human' })), key: 'human' });
+  if (hf.length) out.push({ head: T(m, '开发者', 'Developers'), credits: hf.map((f) => ({ name: f.text, key: 'human' })), key: 'human' });
   // 模型
   const models = [...new Set(agents.flatMap((a) => a.models.map((x) => x.name)))];
   if (models.length) out.push({ head: T(m, '模型', 'Models'), credits: models.map((x) => ({ name: x })) });
-  if (m.unknown && m.unknown.pct >= 0.05) out.push({ head: T(m, '未确认', 'Unattributed'), credits: [{ name: T(m, `${pct(m.unknown.pct)} 的代码确定不了是谁写的`, `${pct(m.unknown.pct)} of the code has no clear author`), key: 'unattributed' }] });
+  if (m.unknown && m.unknown.pct >= 0.05) out.push({ head: T(m, '未确认', 'Unattributed'), credits: [{ name: T(m, `${pct(m.unknown.pct)} 无归因记录`, `${pct(m.unknown.pct)} unattributed`), key: 'unattributed' }] });
   return out;
 }
 const closing = (m: Model) => T(m, `${m.sessions ? `${fmt(m.sessions)} 个会话` : ''}${m.tokens ? ` · ${compact(m.tokens)} token` : ''} · ${fmt(m.commits)} 次提交`, `${m.sessions ? `${fmt(m.sessions)} sessions` : ''}${m.tokens ? ` · ${compact(m.tokens)} tokens` : ''} · ${fmt(m.commits)} commits`).replace(/^ · /, '');

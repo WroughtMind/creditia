@@ -150,7 +150,7 @@ export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, sator
     return { w, h, svg, hits: [], bg: 'transparent', title };
   }
   const f = FORMS[id];
-  if (!f) throw new Error(`未知作品：${id}`);
+  if (!f) throw new Error(`未知卡片：${id}`);
   const out = f.render(m, t, ctx);
   if (!out) return null;
   if (ctx.lang === 'en') enTree(out.tree);

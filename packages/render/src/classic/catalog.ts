@@ -1,4 +1,4 @@
-// 给 App、官网、命令行看的目录：主题、作品、版式的中英文名字，主题圆点。不碰文件系统，也不碰 satori。
+// 给 App、官网、命令行看的目录：主题、卡片、版式的中英文名字，主题圆点。不碰文件系统，也不碰 satori。
 import { THEMES, type Theme } from './themes.ts';
 import { PIECES, VARIANT_NAMES } from '../registry.ts';
 
@@ -42,25 +42,25 @@ export const THEME_ORDER = ['minimal-light', 'minimal-dark', 'glass', 'film', 'c
 export const ORDERED_THEMES: Theme[] = THEME_ORDER.map((id) => THEMES.find((t) => t.id === id)!).filter(Boolean);
 
 export const PIECE_INFO: Record<string, { zh: string; en: string; q: string; qEn: string }> = {
-  tier: { zh: '署名榜', en: 'Credits', q: '谁写的、各占多少', qEn: 'Who wrote it, and how much' },
+  tier: { zh: '署名榜', en: 'Credits', q: '工具与模型占比', qEn: 'Contribution shares' },
   share: { zh: '分享图', en: 'Share card', q: '链接预览、社交媒体', qEn: 'Link previews and social posts' },
   byline: { zh: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footers and about pages' },
   badge: { zh: '徽章', en: 'Badge', q: 'README 顶部', qEn: 'Top of a README' },
-  roll: { zh: '片尾字幕', en: 'End credits', q: '谁担任了什么角色', qEn: 'Who played which part' },
-  receipt: { zh: '小票', en: 'Receipt', q: '花了多少精力', qEn: 'What it took' },
-  ribbon: { zh: '时间织带', en: 'Ribbon', q: '怎么一步步做出来的', qEn: 'How it was built, step by step' },
-  mosaic: { zh: '代码马赛克', en: 'Mosaic', q: '现在的代码由谁构成', qEn: 'Who the code is made of now' },
-  fetch: { zh: '终端名片', en: 'creditia fetch', q: '终端里的一张名片', qEn: 'A card for the terminal' },
+  roll: { zh: '片尾字幕', en: 'End credits', q: '分工与角色表', qEn: 'Contributors and roles' },
+  receipt: { zh: '小票', en: 'Receipt', q: '工期、会话与 Token', qEn: 'Development input summary' },
+  ribbon: { zh: '时间织带', en: 'Ribbon', q: '时间线', qEn: 'Development timeline' },
+  mosaic: { zh: '代码马赛克', en: 'Mosaic', q: '各文件代码归属', qEn: 'Current code composition' },
+  fetch: { zh: '终端名片', en: 'creditia fetch', q: '终端名片', qEn: 'A card for the terminal' },
   app: { zh: 'App 致谢页', en: 'In-app credits', q: '原生 App 的致谢页', qEn: 'A native app credits screen' },
-  waffle: { zh: '华夫饼图', en: 'Waffle', q: '一格 1%', qEn: 'One square, one percent' },
-  donut: { zh: '环形图', en: 'Donut', q: '占比', qEn: 'Shares' },
-  area: { zh: '堆叠面积图', en: 'Weekly area', q: '每周新增的代码', qEn: 'Lines added each week' },
-  lanes: { zh: '泳道图', en: 'Lanes', q: '各工具的会话', qEn: 'Sessions per tool' },
-  clock: { zh: '作息图', en: 'Clock', q: '星期 × 小时', qEn: 'Weekday × hour' },
-  versions: { zh: '版本柱状图', en: 'Versions', q: '每个版本谁写的', qEn: 'Who wrote each release' },
-  settle: { zh: '沉淀', en: 'Survival', q: '写下的代码留下多少', qEn: 'How much of it stayed' },
+  waffle: { zh: '华夫饼图', en: 'Waffle', q: '百格占比', qEn: 'One square, one percent' },
+  donut: { zh: '环形图', en: 'Donut', q: '代码占比', qEn: 'Shares' },
+  area: { zh: '堆叠面积图', en: 'Weekly area', q: '每周新增', qEn: 'Lines added each week' },
+  lanes: { zh: '泳道图', en: 'Lanes', q: '会话时间线', qEn: 'Session timeline by tool' },
+  clock: { zh: '作息图', en: 'Clock', q: '活跃时段', qEn: 'Weekday × hour' },
+  versions: { zh: '版本柱状图', en: 'Versions', q: '各版本贡献', qEn: 'Code contributions per release' },
+  settle: { zh: '沉淀', en: 'Survival', q: '新增与留存对比', qEn: 'Code retention comparison' },
 };
-// 借新风格画的作品（河流、留存、出处……）沿用新风格的名字
+// 借新风格画的卡片（河流、留存、出处……）沿用新风格的名字
 export const pieceName = (id: string, lang: 'zh' | 'en') => PIECE_INFO[id]?.[lang] ?? (lang === 'zh' ? PIECES[id]?.name : PIECES[id]?.en) ?? id;
 export const pieceQ = (id: string, lang: 'zh' | 'en') => (lang === 'zh' ? PIECE_INFO[id]?.q ?? PIECES[id]?.q : PIECE_INFO[id]?.qEn ?? PIECES[id]?.qEn) ?? '';
 
@@ -77,7 +77,7 @@ export const VARIANT_INFO: Record<string, [string, string]> = {
   themed: ['随风格', 'In theme'],
   // App 致谢页
   ios: ['iOS 设置页', 'iOS Settings'],
-  // 原来没有版式的作品，原版自己的画法
+  // 原来没有版式的卡片，原版自己的画法
   original: ['原版', 'Original'],
 };
 // 追加的新风格版式沿用新风格的名字

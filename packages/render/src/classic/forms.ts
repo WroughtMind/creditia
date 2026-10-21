@@ -72,27 +72,27 @@ function glyphRing(cx: number, cy: number, R0: number, R1: number, segs: { a0: n
 
 const dotline = (t: Theme, color?: string) => ({ height: 2, alignSelf: 'center' as const, backgroundImage: `repeating-linear-gradient(90deg, ${color ?? t.faint} 0px, ${color ?? t.faint} 2px, transparent 2px, transparent 7px)` });
 
-/** 人：不和 agent 同级。单独一行小字写名字和占比，不放条形 */
+/** 开发者：不和 agent 同级。单独一行小字写名字和占比，不放条形 */
 function humanLine(m: Model, t: Theme, s = 1): Node | null {
   if (!m.humans.length) return null;
   const text = m.humans.slice(0, 4).map((x) => `${x.name} ${pct(x.pct)}`).join('　') + (m.humans.length > 4 ? ` 等 ${m.humans.length} 人` : '');
   switch (t.family) {
     case 'film':
-      return box({ justifyContent: 'center', marginTop: 16 * s }, txt({ fontFamily: t.display, fontSize: 15 * s, color: t.soft }, `— 人 · ${text} —`));
+      return box({ justifyContent: 'center', marginTop: 16 * s }, txt({ fontFamily: t.display, fontSize: 15 * s, color: t.soft }, `— 开发者 · ${text} —`));
     case 'terminal':
-      return txt({ fontFamily: MONO_FONT, fontSize: 11 * s, color: t.faint, marginTop: 10 * s }, `# 人写的部分：${text}`);
+      return txt({ fontFamily: MONO_FONT, fontSize: 11 * s, color: t.faint, marginTop: 10 * s }, `# 开发者手写代码：${text}`);
     case 'editorial':
       return box({ marginTop: 14 * s, alignItems: 'flex-start', gap: 10 * s },
-        label(t, '人', 10 * s, { marginTop: 2 * s }), txt({ fontSize: 13 * s, color: t.soft }, text));
+        label(t, '开发者', 10 * s, { marginTop: 2 * s }), txt({ fontSize: 13 * s, color: t.soft }, text));
     case 'mono':
       return box({ marginTop: 12 * s, alignItems: 'center', gap: 8 * s },
         box({ width: 8 * s, height: 8 * s, backgroundColor: t.ink }),
-        txt({ fontSize: 10.5 * s, letterSpacing: 1 * s, textTransform: 'uppercase', color: t.soft }, `人 · ${text}`));
+        txt({ fontSize: 10.5 * s, letterSpacing: 1 * s, textTransform: 'uppercase', color: t.soft }, `开发者 · ${text}`));
     case 'glass':
-      return txt({ fontSize: 12 * s, color: '#5E6472', marginTop: 12 * s }, `人 · ${text}`);
+      return txt({ fontSize: 12 * s, color: '#5E6472', marginTop: 12 * s }, `开发者 · ${text}`);
     default:
       return box({ marginTop: 12 * s, alignItems: 'flex-start', gap: 10 * s },
-        label(t, '人', 10 * s, { marginTop: 2 * s }), txt({ fontSize: 12.5 * s, color: t.soft }, text));
+        label(t, '开发者', 10 * s, { marginTop: 2 * s }), txt({ fontSize: 12.5 * s, color: t.soft }, text));
   }
 }
 
@@ -315,13 +315,13 @@ export function share(m: Model, t: Theme): Out {
         box({ alignItems: 'baseline', justifyContent: 'space-between' },
           box({ alignItems: 'center', gap: 10 },
             box({ width: 9, height: 9, backgroundColor: t.accent }),
-            label(t, 'Creditia — 作品署名', 12)),
+            label(t, 'Creditia · 贡献署名', 12)),
           label(t, range ? `${range}  ·  vol. 1` : 'vol. 1', 12)),
         box({ height: 3, backgroundColor: t.ink, marginTop: 10 }),
         txt({ fontFamily: t.display, fontSize: 112, fontWeight: t.displayWeight, lineHeight: 1, marginTop: 18 }, m.project),
         box({ marginTop: 14, borderTop: `2px solid ${t.ink}`, paddingTop: 8, flex: 1, gap: 60 },
           colOf(ranked.slice(0, half)), colOf(ranked.slice(half))),
-        m.humans.length ? box({ marginTop: 10, alignItems: 'baseline', gap: 8 }, label(t, '人', 10), txt({ fontSize: 13, color: t.soft }, m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　'))) : null,
+        m.humans.length ? box({ marginTop: 10, alignItems: 'baseline', gap: 8 }, label(t, '开发者', 10), txt({ fontSize: 13, color: t.soft }, m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　'))) : null,
         box({ borderTop: `3px solid ${t.ink}`, paddingTop: 10, alignItems: 'baseline', justifyContent: 'space-between' },
           txt({ fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase' }, [m.commits && `${fmt(m.commits)} 次提交`, m.units && `${fmt(m.units)} 项`, m.linesAdded && `+${fmt(m.linesAdded)} 行`].filter(Boolean).join('  ·  ')),
           m.director ? txt({ fontFamily: t.display, fontSize: 16 }, m.director) : null)) };
@@ -341,7 +341,7 @@ export function share(m: Model, t: Theme): Out {
             txt({ color: '#FFFFFF', fontSize: 13, letterSpacing: 1.2 }, [range, m.commits && `${fmt(m.commits)} commits`].filter(Boolean).join('  ·  ')),
             m.director ? txt({ color: '#FFFFFF', fontSize: 15 }, m.director) : null)),
         col({ flex: 1, padding: '46px 44px 30px' },
-          box({ flex: 1 }, col({ width: '100%' }, ...ranked.map(row), m.humans.length ? txt({ marginTop: 10, fontSize: 12, color: '#6B6B6B', letterSpacing: 0.6 }, `人 · ${m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　')}`) : null)),
+          box({ flex: 1 }, col({ width: '100%' }, ...ranked.map(row), m.humans.length ? txt({ marginTop: 10, fontSize: 12, color: '#6B6B6B', letterSpacing: 0.6 }, `开发者 · ${m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　')}`) : null)),
           box({ alignItems: 'center', justifyContent: 'space-between', paddingTop: 14 },
             label(t, 'with creditia', 10, { color: '#6B6B6B' }),
             txt({ fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', color: '#6B6B6B' }, m.linesAdded ? `+${fmt(m.linesAdded)} 行` : '')))) };
@@ -712,12 +712,12 @@ ${top.length ? `<svg x="10" y="4" width="12" height="12" viewBox="0 0 24 24" fil
 
 interface RollPerson { key?: string | null; name: string; model?: string }
 
-/** 角色块：主导 / 主笔 / 协作 / 参与（人单独一层）/ 审阅 */
+/** 角色块：署名 / 主笔 / 协作 / 参与（人单独一层）/ 审阅 */
 function rollBlocks(m: Model): { role: string; people: RollPerson[] }[] {
   const authors = m.rows.filter((r) => r.kind === 'agent' && isAi(r.key));
   const lead = authors[0], rest = authors.slice(1);
   return [
-    m.director ? { role: '主导', people: [{ name: m.director }] } : null,
+    m.director ? { role: '署名', people: [{ name: m.director }] } : null,
     lead ? { role: '主笔', people: [{ key: lead.key, name: lead.name, model: lead.models[0] }] } : null,
     rest.length ? { role: '协作', people: rest.map((r) => ({ key: r.key, name: r.name, model: r.models[0] })) } : null,
     m.humans.length ? { role: '参与', people: m.humans.map((r) => ({ name: r.name })) } : null,
@@ -978,13 +978,13 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
   const W = 1080, H = 1350;
   const items: [string, string, string?][] = [];
   if (m.spanDays) items.push(['工期', `${m.spanDays} 天`, `${m.range.from.replaceAll('-', '.')} — ${m.range.to.replaceAll('-', '.')}`]);
-  if (m.activeDays) items.push(['动工', `${m.activeDays} 天`]);
+  if (m.activeDays) items.push(['活跃', `${m.activeDays} 天`]);
   if (m.sessions) items.push(['会话', fmt(m.sessions)]);
   if (m.tokens) items.push(['Token', compact(m.tokens)]);
   if (m.commits) items.push(['提交', fmt(m.commits)]);
-  if (m.linesAdded) items.push(['写下', `${fmt(m.linesAdded)} 行`]);
-  if (m.linesSurviving) items.push(['留下', `${fmt(m.linesSurviving)} 行`]);
-  if (m.director) items.push(['主导', m.director]);
+  if (m.linesAdded) items.push(['新增', `${fmt(m.linesAdded)} 行`]);
+  if (m.linesSurviving) items.push(['留存', `${fmt(m.linesSurviving)} 行`]);
+  if (m.director) items.push(['署名', m.director]);
 
   if (v === 'thermal') {
     const paper = '#FCFBF6', ink = '#1A1713';
@@ -1079,7 +1079,7 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
             txt({ fontFamily: t.display, fontSize: 30, color: red, letterSpacing: 2 }, 'ADMIT ONE'),
             txt({ fontFamily: t.num, fontSize: 46, color: pInk }, compact(m.linesAdded || m.commits)),
             txt({ fontSize: 14, color: dim('88') }, m.linesAdded ? '行' : '次提交')),
-          m.director ? txt({ fontSize: 14, color: dim('88') }, `主导 ${m.director}`) : null),
+          m.director ? txt({ fontSize: 14, color: dim('88') }, `署名 ${m.director}`) : null),
         box({ borderTop: `2px dashed ${dim('55')}` }),
         box({ padding: '24px 52px 40px', gap: 60 },
           col({ flex: 1 }, ...items.slice(0, mid).map(([k, val]) => row(k, val))),
@@ -1280,12 +1280,12 @@ function appIos(m: Model, t: Theme): Out {
     box({ height: 44 * s, alignItems: 'center', position: 'relative' },
       txt({ fontSize: 17 * s, color: ios.blue }, '‹ 关于'),
       txt({ position: 'absolute', left: 0, right: 0, justifyContent: 'center', fontSize: 17 * s, fontWeight: 600 }, '致谢')),
-    m.director ? head('主导') : null,
+    m.director ? head('署名') : null,
     m.director ? box({ backgroundColor: ios.cell, borderRadius: 10 * s, padding: `${13 * s}px ${16 * s}px` }, txt({ fontSize: 17 * s }, m.director)) : null,
     head(m.project),
     col({ backgroundColor: ios.cell, borderRadius: 10 * s, paddingLeft: 16 * s },
       ...rows.map((r, i) => cellRow(r, i < rows.length - 1))),
-    m.humans.length ? box({ margin: `${8 * s}px ${16 * s}px 0`, fontSize: 13 * s, color: t.soft }, `人 · ${m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　')}`) : null,
+    m.humans.length ? box({ margin: `${8 * s}px ${16 * s}px 0`, fontSize: 13 * s, color: t.soft }, `开发者 · ${m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　')}`) : null,
     txt({ fontSize: 13 * s, color: t.soft, margin: `${8 * s}px ${16 * s}px` }, `${fmt(m.commits)} 次提交 · ${fmt(m.linesAdded)} 行`)) };
 }
 
@@ -1634,7 +1634,7 @@ export function versions(m: Model, t: Theme): Out | null {
   return { ...frame(m, t, 1200, 740, '各版本新增代码', box({ justifyContent: 'center', gap: 64, flex: 1, alignItems: 'flex-end', paddingBottom: 30 }, ...bars)), grow: true };
 }
 
-/** 沉淀：写下的代码至今还剩多少 */
+/** 沉淀：新增与留存对比 */
 export function settle(m: Model, t: Theme): Out | null {
   if (!m.linesAdded || !m.linesSurviving) return null;
   const keep = (m.linesSurviving / m.linesAdded) * 100;
@@ -1650,10 +1650,10 @@ export function settle(m: Model, t: Theme): Out | null {
       box({ alignItems: 'baseline', gap: 14 },
         txt({ fontFamily: MONO_FONT, fontSize: 18, color: t.accent }, '❯'),
         txt({ fontFamily: MONO_FONT, fontSize: 18 }, 'creditia survive'),
-        txt({ fontFamily: MONO_FONT, fontSize: 15, color: t.faint }, '# 写下的代码留下多少')),
+        txt({ fontFamily: MONO_FONT, fontSize: 15, color: t.faint }, '# 新增与留存对比')),
       col({ flex: 1, justifyContent: 'center', gap: 36 },
-        row('写下', bar(100, t.ink), fmt(m.linesAdded)),
-        row('至今仍在', bar(keep, t.accent), `${fmt(m.linesSurviving)}  ·  ${Math.round(keep)}%`))) };
+        row('新增', bar(100, t.ink), fmt(m.linesAdded)),
+        row('留存', bar(keep, t.accent), `${fmt(m.linesSurviving)}  ·  ${Math.round(keep)}%`))) };
   }
   const step = (k: string, v: string, p: number, solid: boolean) => col({ gap: 16 },
     box({ justifyContent: 'space-between', alignItems: 'baseline' },
@@ -1664,10 +1664,10 @@ export function settle(m: Model, t: Theme): Out | null {
   return { w: W, h: H, tree: page(m, t, W, H, [72, 96, 72, 96], { justifyContent: 'space-between' },
     box({ alignItems: 'baseline', justifyContent: 'space-between' },
       txt({ fontFamily: t.display, fontSize: t.display === t.sans ? 30 : 38, fontWeight: t.displayWeight }, m.project),
-      box({ alignItems: 'baseline', gap: 8 }, txt({ fontFamily: t.num, fontSize: 64, letterSpacing: -1 }, `${Math.round(keep)}%`), txt({ fontSize: 17, color: t.soft }, '留到了今天'))),
+      box({ alignItems: 'baseline', gap: 8 }, txt({ fontFamily: t.num, fontSize: 64, letterSpacing: -1 }, `${Math.round(keep)}%`), txt({ fontSize: 17, color: t.soft }, '留存率'))),
     col({ gap: 40 },
-      step('写下', `${fmt(m.linesAdded)} 行`, 100, false),
-      step('至今仍在', `${fmt(m.linesSurviving)} 行`, keep, true))) };
+      step('新增', `${fmt(m.linesAdded)} 行`, 100, false),
+      step('留存', `${fmt(m.linesSurviving)} 行`, keep, true))) };
 }
 
 /** 时间织带：每天一格。胶片 / 终端 / 常规三种画法 */
@@ -1891,11 +1891,11 @@ function tierHead(kind: TierHead, m: Model, t: Theme, s: number, on: boolean): N
         on ? box({ width: '58%', height: 1, backgroundColor: t.accent, opacity: 0.55 }) : null,
         on ? txt({ fontFamily: t.display, fontSize: 46 * s, color: t.ink, textAlign: 'center', lineHeight: 1.08, letterSpacing: 3 * s }, m.project) : null,
         on ? box({ width: '58%', height: 1, backgroundColor: t.accent, opacity: 0.55 }) : null,
-        dir ? label(t, `最佳作品 · ${dir}`, 11 * s, { color: t.soft }) : null);
+        dir ? label(t, `署名 · ${dir}`, 11 * s, { color: t.soft }) : null);
     case 'board':
       return col({ height: (on ? 96 : 32) * s, gap: 6 * s, justifyContent: 'center' },
         on ? txt({ fontFamily: t.sans, fontSize: 22 * s, color: t.ink }, `> creditia tier ${m.project}`) : null,
-        dir ? txt({ fontFamily: t.sans, fontSize: 18 * s, color: t.soft }, `> 主导：${dir}`) : null,
+        dir ? txt({ fontFamily: t.sans, fontSize: 18 * s, color: t.soft }, `> 署名：${dir}`) : null,
         txt({ fontFamily: t.sans, fontSize: 18 * s, color: t.faint, whiteSpace: 'pre' }, '─'.repeat(48)));
     case 'scoreboard':
       return col({ height: (on ? 140 : 32) * s, alignItems: 'center', justifyContent: 'center', gap: 12 * s },

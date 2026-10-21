@@ -22,18 +22,18 @@ description: 分析一个仓库的代码是哪些 AI 工具和模型写的：读
 3. **多处路径**：项目如果在别的目录、别的电脑上也做过（worktree、临时克隆、旧路径），`creditia paths --json` 看已登记的，`creditia link <路径> --json` 补上。
 4. **分析**：`creditia analyze --github --json`。汇报各工具占比、未确认比例、逐行证据覆盖。未确认超过 20% 时说明原因（日志被清理、工具不在支持范围、提交里没有声明），问用户要不要换口径或接受现状。
 5. **问两项接入**（`init` / `analyze` 的返回里有 `ask` 时必须做，不能替用户决定，也不能跳过）：`ask` 里列的是这个项目还没决定的项。逐项用一两句话讲清楚它会改什么，问用户要不要：
-   - `hook`（提交盖章）：在仓库的 git `prepare-commit-msg` hook 里加一行。之后在 agent 里提交时，提交信息末尾自动加 `Creditia-Harness` / `Creditia-Model`；提交里有 AI 写的行时再加 `Creditia-Lines`（各工具写了几行，不含代码）。本机日志清理后也认得出，PR 评论和 Release 说明也读它。只影响这个仓库。要：`creditia hook install --json`；不要：`creditia hook uninstall --json`
+   - `hook`（提交盖章）：在仓库的 git `prepare-commit-msg` hook 里加一行。之后在 agent 里提交时，提交信息末尾自动加 `Creditia-Harness` / `Creditia-Model`；有 AI 代码时再加 `Creditia-Lines`（各工具行数，不含代码）。写入 Git 提交，无需依赖本地日志，PR 评论和 Release 说明也读它。只影响这个仓库。要：`creditia hook install --json`；不要：`creditia hook uninstall --json`
    - `release`（跟着发版）：写 `.github/workflows/creditia.yml`，需要用户自己提交。发 Release 时把这一版的署名写进说明，PR 上评论这个 PR 的署名；读的是提交盖章记下的行数，仓库里有 `credits.json` 时优先用它，所以最好和提交盖章一起开。要：`creditia release install --json`；不要：`creditia release uninstall --json`
 
    两种回答都要执行对应命令：答案会记进 `.creditia/config.json`，以后不再问。随时可以改，`creditia integrations --json` 看现状；App 里每个项目也有这两个开关。
-6. **选样子**：`creditia export --list --json` 看全部作品、版式、风格。推荐几种给用户，用户选。
+6. **选样子**：`creditia export --list --json` 看全部卡片、版式、风格。推荐几种给用户，用户选。
 7. **预览**：导出 PNG 给用户看，例如 `creditia export --piece tier --style ink --format png --out /tmp/tier.png --json`。
 8. **产出**（用户确认后）：
    - 档案：`creditia doc --json`
    - 徽章：`creditia export --piece badge --format svg --out assets/credits-badge.svg`
    - 分享图：`creditia export --piece share --style glass --format png --size og --out assets/credits.png`
-   - 片尾字幕：`creditia export --piece roll --variant slate --format png --out credits.png`（版式见 `--list`；`--format gif` 出动画，`--list` 里标了哪些作品会动）
-   - 全部作品一页：`creditia board --style minimal --out credits.html`
+   - 片尾字幕：`creditia export --piece roll --variant slate --format png --out credits.png`（版式见 `--list`；`--format gif` 出动画，`--list` 里标了哪些卡片会动）
+   - 全部卡片一页：`creditia board --style minimal --out credits.html`
    - 放到 GitHub：先 `creditia publish --check --json`（只检查不写）：把 `categories` 里将公开的每一类（标题、文件路径、人名、工作时间、仓库地址，带样例）和 `risks` 里看起来不该公开的内容念给用户，逐类问要不要公开。再按回答执行 `creditia publish --hide <不公开的类别，逗号分隔> --json`；`risks` 用户看过、确认没问题时才加 `--yes`。之后按 README「放到 GitHub 上」加 workflow
 9. **接入**：改官网 / README 时先给用户看 diff，确认后再写。
 

@@ -31,9 +31,9 @@ export function handFacts(m: Model): { v: string; k: string; text: string }[] {
   if (!m.showHand) return [];
   const h = m.hand;
   const out: { v: string; k: string; text: string }[] = [];
-  if (h.prompts) out.push({ v: fmt(h.prompts), k: T(m, '条消息发给 AI', 'messages to AI'), text: T(m, `发了 ${fmt(h.prompts)} 条消息`, `${fmt(h.prompts)} messages sent`) });
-  if (h.reviews) out.push({ v: fmt(h.reviews), k: T(m, '次 review', 'reviews'), text: T(m, `review ${fmt(h.reviews)} 次`, `${fmt(h.reviews)} reviews`) });
-  if (h.handLines) out.push({ v: fmt(h.handLines), k: T(m, '行是人写的', 'lines by people'), text: T(m, `人写了 ${fmt(h.handLines)} 行`, `${fmt(h.handLines)} lines by people`) });
+  if (h.prompts) out.push({ v: fmt(h.prompts), k: T(m, '条提示词', 'prompts'), text: T(m, `${fmt(h.prompts)} 条提示词`, `${fmt(h.prompts)} prompts`) });
+  if (h.reviews) out.push({ v: fmt(h.reviews), k: T(m, '次审阅', 'reviews'), text: T(m, `审阅 ${fmt(h.reviews)} 次`, `${fmt(h.reviews)} reviews`) });
+  if (h.handLines) out.push({ v: fmt(h.handLines), k: T(m, '行手写代码', 'lines written manually'), text: T(m, `手写 ${fmt(h.handLines)} 行`, `${fmt(h.handLines)} manual lines`) });
   return out;
 }
 export function handLine(m: Model): string {
@@ -45,9 +45,9 @@ export function peopleNames(m: Model, n = 4): string {
   const names = m.people.slice(0, n).map((p) => p.name);
   return names.join(zh(m) ? '、' : ', ') + (m.people.length > n ? T(m, ` 等 ${m.people.length} 人`, ` +${m.people.length - n}`) : '');
 }
-export const handTip = (m: Model) => ({ k: 'human', t: T(m, '人', 'People'), d: [
+export const handTip = (m: Model) => ({ k: 'human', t: T(m, '开发者', 'Developers'), d: [
   ...handFacts(m).map((f) => f.text),
-  ...(m.hand.written && m.hand.committed ? [T(m, `AI 写了 ${fmt(m.hand.written)} 行，提交了 ${fmt(m.hand.committed)} 行，现在还在 ${fmt(m.hand.surviving)} 行`, `${fmt(m.hand.written)} written by AI → ${fmt(m.hand.committed)} committed → ${fmt(m.hand.surviving)} still here`)] : []),
+  ...(m.hand.written && m.hand.committed ? [T(m, `新增 ${fmt(m.hand.written)} 行，提交 ${fmt(m.hand.committed)} 行，留存 ${fmt(m.hand.surviving)} 行`, `${fmt(m.hand.written)} added → ${fmt(m.hand.committed)} committed → ${fmt(m.hand.surviving)} retained`)] : []),
   ...(peopleNames(m) ? [peopleNames(m)] : []),
 ] });
 

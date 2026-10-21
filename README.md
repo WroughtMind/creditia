@@ -48,8 +48,8 @@ Grok            █░░░░░░░░░░░░░░░░░░░░�
 ```bash
 creditia doc                                  # 写 CREDITS.md（只改标记区间）
 creditia export --piece roll --out roll.png   # 片尾字幕
-creditia export --list                        # 全部作品、版式、风格、格式
-creditia hook install                         # 以后每次提交自动盖章：日志被清理了也认得出
+creditia export --list                        # 全部卡片、版式、风格、格式
+creditia hook install                         # 以后每次提交自动盖章：写入 Git 提交，无需依赖本地日志
 creditia release install                      # 跟着发版：Release 说明、PR 评论里写上署名
 creditia blame src/core/analyze.ts:12         # 这一行是哪个工具、哪个模型写的
 ```
@@ -86,7 +86,7 @@ creditia 只回答「哪些 AI 工具和模型写了多少」：作品里不出�
 
 **交给 agent**　把 [skills/creditia](skills/creditia/SKILL.md) 装进你的 agent，跟它说「看看这个仓库是哪些 AI 写的」。它会按步骤分析、出图，公开或提交任何东西之前先问你。
 
-**跨项目汇总**　作品库里有几个项目时，App 项目菜单最上面多一项「全部项目」：各项目的档案并成一份，整面墙照常画。命令行是 `creditia summary`（印一张名片，`--out all.json` 写成一份档案），任何命令加 `--all-projects` 也一样，比如 `creditia export --all-projects --piece tier`。行数相加；版本是各项目自己的，不合并；文件和 PR 前面带上项目名。
+**跨项目汇总**　本地项目库里有几个项目时，App 项目菜单最上面多一项「全部项目」：各项目的档案并成一份，整面墙照常画。命令行是 `creditia summary`（印一张名片，`--out all.json` 写成一份档案），任何命令加 `--all-projects` 也一样，比如 `creditia export --all-projects --piece tier`。行数相加；版本是各项目自己的，不合并；文件和 PR 前面带上项目名。
 
 **公开前的隐私检查**　`creditia publish` 写出 credits.json 之前，先列出会公开的每一类（PR / 提交标题、文件路径、人名、工作时间、仓库地址）和几个样例，并找出看起来不该公开的东西（像密钥的字符串、邮箱、本机路径、内网地址、带账号密码的地址）。在终端里逐类问你；有可疑内容的那一类默认不公开。`--check` 只检查不写，`--hide titles,paths` 之类直接隐藏；在脚本里遇到可疑内容时不写，要 `--yes` 确认。隐藏只改公开的这一份，本机档案不动。
 
@@ -170,11 +170,11 @@ GitHub Action 直接用 `WroughtMind/creditia@main`，不用装。
 crates/
   core/       归因引擎、行哈希、模型目录（名称归一、厂商、渠道）、配置
   adapters/   git 与各家 agent 日志的读取
-  store/      作品库：项目、路径、证据库、快照（SQLite）
+  store/      本地项目库：项目、路径、证据库、快照（SQLite）
   cli/        二进制 creditia-core
 packages/
   schema/     credits.json v0 的 JSON Schema 与类型
-  render/     作品渲染：credits.json → SVG 场景（风格 × 作品）→ PNG / SVG / PDF / GIF / HTML
+  render/     卡片渲染：credits.json → SVG 场景（风格 × 卡片）→ PNG / SVG / PDF / GIF / HTML
   cli/        npm 包 creditia：档案、导出、终端名片
   embed/      <creditia-card> 网页组件
 apps/desktop/ Tauri 2 App（展墙与导出）

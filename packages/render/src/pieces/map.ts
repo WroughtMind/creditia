@@ -42,7 +42,7 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
   const { s, c } = canvas(m, st, W, 160 + plotH + 110, 34);
   const x0 = c.x + 50, x1 = c.x + c.w - 50, py = c.y + 150, pw = x1 - x0, cw = (pw - (cols - 1) * GAP) / cols;
   st.label(s, T(m, '代码地图', 'CODE MAP'), x0, c.y + 58, { size: 13 });
-  st.title(s, T(m, '每一行，是谁写的', 'Who wrote every line'), x0, c.y + 116, 40, 'start', { maxW: pw * 0.66 });
+  st.title(s, T(m, '代码归属地图', 'Code ownership map'), x0, c.y + 116, 40, 'start', { maxW: pw * 0.66 });
   st.label(s, m.project, x1, c.y + 58, { anchor: 'end', size: 13, fill: st.c.faint });
   s.text(T(m, `${fmt(total)} 行 · ${fmt(files.length)} 个文件`, `${fmt(total)} lines · ${fmt(files.length)} files`), x1, c.y + 112, { font: st.f.mono, size: 15, fill: st.c.soft, anchor: 'end' });
 

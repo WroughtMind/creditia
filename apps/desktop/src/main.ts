@@ -105,7 +105,7 @@ function toast(msg: string, ms = 2600, o: { acts?: Act[]; spin?: boolean; mark?:
 }
 /** 原生端的错误只带代码和细节，文案在这里按语言写 */
 const ERRORS: Record<string, [string, string]> = {
-  not_in_library: ['这个项目不在作品库里', 'This project is not in the library'],
+  not_in_library: ['未找到该项目记录', 'This project is not in the library'],
   no_credits: ['这个项目还没分析过', 'Not analyzed yet'],
   dir_missing: ['项目目录已经不在了', 'The project folder is gone'],
   core_missing: ['找不到分析核心 creditia-core', 'Cannot find the analysis core (creditia-core)'],
@@ -114,7 +114,7 @@ const ERRORS: Record<string, [string, string]> = {
   cancelled: ['分析已取消', 'Analysis cancelled'],
   no_home: ['找不到用户目录', 'Cannot find your home folder'],
   io: ['读写文件失败', 'Could not read or write the file'],
-  store: ['读不到作品库', 'Cannot read the library'],
+  store: ['读取项目数据库失败', 'Cannot read the library'],
   not_allowed: ['只能打开这次导出的文件', 'Only files exported in this session can be shown'],
   switch_failed: ['没能改这一项', "Couldn't change this"],
   agent_failed: ['没能装上后台任务', "Couldn't set up the background task"],
@@ -143,7 +143,7 @@ async function boot() {
   // 滚动之后顶栏垫一层渐隐的玻璃，作品不再直接透到项目名和按钮后面
   const stageEl = $('#stage');
   stageEl.addEventListener('scroll', () => document.body.classList.toggle('scrolled', stageEl.scrollTop > 8), { passive: true });
-  try { state.projects = await api('projects'); } catch (e: any) { return empty(() => [L('读不到作品库', 'Cannot read the library'), errText(e)]); }
+  try { state.projects = await api('projects'); } catch (e: any) { return empty(() => [L('无法读取本地项目记录', 'Cannot read local projects'), errText(e)]); }
   if (!state.projects.length) return welcome();
   const last = (store.get('project') === ALL_ID && state.projects.length > 1 ? allProject() : null) ?? state.projects.find((p) => p.id === store.get('project')) ?? state.projects[0];
   await openProject(last);
@@ -283,8 +283,8 @@ async function loadPlugs(p: any) {
 }
 /** 名字说清楚它做什么，下面一行说会改到哪里 */
 const PLUG_TEXT = {
-  hook: () => [L('在提交里记下 AI', 'Note AI in commits'), L('每次提交，信息末尾记下哪个 AI 写了几行；工具日志清掉后也算得出来', 'Each commit message notes which AI wrote how many lines, so credits survive tool log cleanup')],
-  release: () => [L('发版时附上署名', 'Credits on releases'), L('GitHub 发版说明和 PR 评论里写上署名；会加一个 workflow 文件，要你提交', 'Adds credits to GitHub release notes and PR comments via a workflow file you commit')],
+  hook: () => [L('在提交里记录 AI', 'Note AI in commits'), L('在每次提交中记录工具与行数，写入 Git 提交，无需依赖本地日志', 'Notes tools and line counts in commit messages, recorded in Git commits without relying on local logs')],
+  release: () => [L('发版与 PR 自动署名', 'Credits on releases'), L('在 GitHub 发版说明和 PR 评论中附带署名卡，需添加工作流配置', 'Adds credits to GitHub release notes and PR comments via a workflow file you commit')],
 };
 function plugRow(k: 'hook' | 'release') {
   const on = plugs![k].installed, [title, desc] = PLUG_TEXT[k](), rel = plugs!.release;
@@ -720,13 +720,13 @@ function openFocus(id: string, k: string) {
     const multiModel = !!state.raw && resolveGroup(state.raw, 'auto') === 'model';
     el.innerHTML = `${closeBtn()}
       <div class="fhead"><b>${esc(kit.pieceName(id, state.lang))}</b></div>
-      <button class="nav prev glass" data-act="prev" ${at <= 0 ? 'disabled' : ''} title="${L('上一件', 'Previous')} (↑)" aria-label="${L('上一件', 'Previous')}"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M8.5 3 4.5 7l4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      <button class="nav next glass" data-act="next" ${at < 0 || at >= all.length - 1 ? 'disabled' : ''} title="${L('下一件', 'Next')} (↓)" aria-label="${L('下一件', 'Next')}"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M5.5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="nav prev glass" data-act="prev" ${at <= 0 ? 'disabled' : ''} title="${L('上一张', 'Previous')} (↑)" aria-label="${L('上一张', 'Previous')}"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M8.5 3 4.5 7l4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="nav next glass" data-act="next" ${at < 0 || at >= all.length - 1 ? 'disabled' : ''} title="${L('下一张', 'Next')} (↓)" aria-label="${L('下一张', 'Next')}"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M5.5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <div class="big"><div class="art"></div></div>
       <div class="strip glass">
         ${vs.length > 1 ? `<div class="vs" title="${L('版式', 'Layout')} (← →)">${vs.map((x) => { const mm = multiModel && MODEL_VARIANTS[id]?.includes(x); return `<button data-v="${x}" class="${x === v ? 'on' : ''}${mm ? ' mm' : ''}">${esc(kit.variantName(x, state.lang))}</button>`; }).join('')}</div><span class="sep"></span>` : ''}
         <div class="pop"><button class="kit" data-act="kits"><svg viewBox="0 0 24 24">${kit.dot}</svg>${esc(kit.name(state.lang))}</button></div>
-        ${kit !== state.style ? `<button class="apply" data-act="apply">${L('整面墙都用它', 'Use for the wall')}</button>` : ''}
+        ${kit !== state.style ? `<button class="apply" data-act="apply">${L('设为全局风格', 'Use for all cards')}</button>` : ''}
         <span class="sep"></span>
         <div class="pop"><button class="xp" data-act="export">${L('导出', 'Export')}</button></div>
       </div>`;
@@ -1307,14 +1307,14 @@ function welcome() {
     const running = [...status.values()].includes('run');
     el.innerHTML = `<div class="box">
       <span class="logo${first && logoNow().startsWith('star') ? ' bloom' : ''}">${logoSvg(store.get('logo'))}</span>
-      <h1>${L('选几个项目开始', 'Pick projects to start')}</h1>
-      <div class="found">${list === null ? `<p class="wait">${SPIN()}${L('正在找本机用过 AI 工具的仓库…', 'Looking for repos where you used AI tools…')}</p>`
+      <h1>${L('选择要分析的项目', 'Select projects to start')}</h1>
+      <div class="found">${list === null ? `<p class="wait">${SPIN()}${L('正在扫描本地包含 AI 工具记录的 Git 仓库…', 'Looking for repos where you used AI tools…')}</p>`
         : list.length ? list.map((d) => `<label class="row ${status.get(d.path) ?? ''}" data-path="${esc(d.path)}">
             <input type="checkbox" ${picked.has(d.path) ? 'checked' : ''} ${running || status.has(d.path) ? 'disabled' : ''}>
             <b>${esc(d.name)}</b><span class="path" title="${esc(d.path)}">${esc(short(d.path))}</span><span class="tools">${esc(toolsOf(d))}</span>
             <i class="st">${status.get(d.path) === 'run' ? SPIN() : ''}</i></label>`).join('')
-        : `<p class="wait">${L('没找到用过 AI 工具的 git 仓库', 'No git repos with AI tool activity found')}</p>`}</div>
-      <div class="acts"><button class="pick" ${running ? 'disabled' : ''}>${L('选文件夹…', 'Choose folder…')}</button>${list?.length ? `<button class="go" ${!picked.size || running ? 'disabled' : ''}>${running ? L('分析中…', 'Analyzing…') : picked.size > 1 ? L(`分析这 ${picked.size} 个`, `Analyze ${picked.size}`) : L('开始分析', 'Analyze')}</button>` : ''}</div>
+        : `<p class="wait">${L('未发现包含 AI 工具记录的 Git 仓库', 'No git repos with AI tool activity found')}</p>`}</div>
+      <div class="acts"><button class="pick" ${running ? 'disabled' : ''}>${L('选择文件夹…', 'Choose folder…')}</button>${list?.length ? `<button class="go" ${!picked.size || running ? 'disabled' : ''}>${running ? L('分析中…', 'Analyzing…') : picked.size > 1 ? L(`分析这 ${picked.size} 个`, `Analyze ${picked.size}`) : L('开始分析', 'Analyze')}</button>` : ''}</div>
     </div>`;
     first = false;
   };
@@ -1362,7 +1362,7 @@ async function settings() {
     <h3>${L('导出', 'Export')}</h3>
     ${info ? `<div class="row kv" id="xrow"></div>` : ''}
     <div class="row kv"><span class="k">${L('默认尺寸', 'Default size')}</span><div class="seg" id="defsize">${sizeButtons()}</div></div>
-    <h3>${L('作品库', 'Library')}</h3>
+    <h3>${L('本地项目库', 'Library')}</h3>
     ${info ? `<div class="row kv"><span class="k">${L('位置', 'Location')}</span><span class="v path" title="${esc(info.library)}">${esc(short(info.library))}</span><button class="mini" data-x="open-library">${L('打开', 'Open')}</button></div>` : ''}
     <div class="row kv"><span class="k">${L('有新提交时自动更新', 'Update on new commits')}</span><span class="v grow"></span><button class="switch" role="switch" aria-checked="${autoFresh()}" aria-label="${L('有新提交时自动更新', 'Update on new commits')}" data-x="fresh"><i></i></button></div>
     ${coll ? `<div class="row kv" id="crow"></div>` : ''}
@@ -1380,11 +1380,11 @@ async function settings() {
   };
   const crow = (c: any) => {
     const r = el.querySelector('#crow'); if (!r || !c) return;
-    // 工具会清理自己的日志，所以定时把新记录存进作品库。三档：不备份 / App 开着时 / 一直（macOS 的后台任务）
+    // 定时把新记录同步至本地项目库。三档：不备份 / App 开着时 / 一直（macOS 的后台任务）
     const mode = c.agent?.on ? 'always' : c.on ? 'open' : 'off';
     const modes: [string, string][] = [['off', L('关', 'Off')], ['open', L('App 开着时', 'While open')], ...(c.agent?.supported ? [['always', L('一直', 'Always')]] as [string, string][] : [])];
     const st = c.running ? L('正在备份…', 'Backing up…') : mode !== 'off' && c.last?.at ? L(`上次 ${ago(c.last.at)}`, `Last ${ago(c.last.at)}`) : '';
-    r.innerHTML = `<span class="k" title="${L('AI 工具会定期清理自己的记录，备份下来，署名才不会丢', 'AI tools clean up their own logs; a backup keeps the credits')}">${L('备份 AI 工具记录', 'Back up AI tool logs')}</span><span class="v grow">${esc(st)}</span>`
+    r.innerHTML = `<span class="k" title="${L('将本地编程工具记录同步至本地存档，防止历史记录遗失', 'Sync local tool logs to the local project archive')}">${L('备份 AI 工具记录', 'Back up AI tool logs')}</span><span class="v grow">${esc(st)}</span>`
       + `<div class="seg" role="radiogroup">${modes.map(([m, n]) => `<button data-x="collect-mode" data-m="${m}" role="radio" aria-checked="${m === mode}" class="${m === mode ? 'on' : ''}">${esc(n)}</button>`).join('')}</div>`;
     // 一轮正在跑（定时的那轮）：跑完换成结果
     if (c.running) setTimeout(() => { if (el.querySelector('#crow')) api('collect_info').then(crow).catch(() => null); }, 2000);

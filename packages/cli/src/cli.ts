@@ -65,19 +65,19 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   hook      install|uninstall|status   提交盖章：提交时自动加 Creditia-* trailer（工具、模型、各工具行数）
   release   install|uninstall|status   跟着发版：写 .github/workflows/creditia.yml（Release 说明、PR 评论）
   integrations                      上面两项的现状（init / analyze 在终端里会问一次要不要装）
-  projects                          作品库里的项目
+  projects                          本地已记录的项目
 
-档案与展示
+档案与导出
   doc            [--out CREDITS.md]                     生成或更新 CREDITS.md（只改标记区间）
   release-notes  <tag|unreleased> [--into 说明.md]      该版本的 credits 段落；--into 时放进已有说明，输出整篇
   pr-comment     <N> | --commits a,b,c                  该 PR（或这几个提交）的一句话归因
   badge-json     [--out badge.json]                     shields.io 动态徽章的数据（没有档案时读提交盖章）
-  summary        [--out all.json]                       跨项目汇总：作品库里全部项目并成一份；其他命令加 --all-projects 也一样
+  summary        [--out all.json]                       跨项目汇总：本地已记录的全部项目并成一份；其他命令加 --all-projects 也一样
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
                  [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group auto|tool|model] [--out FILE]
-  export         --list                                 全部作品、版式、风格、格式
-  board          [--style S] [--out credits.html]       全部作品放进一个可交互的 HTML 页面
-  site           [--out 目录] [--style S]               一个小网站：首页是全部作品，每种风格一页（给 GitHub Pages）
+  export         --list                                 全部卡片、版式、风格、格式
+  board          [--style S] [--out credits.html]       全部卡片放进一个可交互的 HTML 页面
+  site           [--out 目录] [--style S]               一个小网站：首页展示全部卡片，每种风格一页（给 GitHub Pages）
   publish        [--out credits.json] [--check] [--hide titles,paths,people,hours,repos] [--yes]
                  把档案放到仓库根目录，准备公开。先做隐私检查：列出将公开的内容，在终端里逐类问；
                  --check 只检查不写；看起来像密钥、邮箱、本机路径的内容要 --yes 才写
@@ -214,7 +214,7 @@ function allProjects(): any {
   let v: any = null;
   try { v = JSON.parse(r.out); } catch { /* 下面报错 */ }
   const parts = (v?.projects ?? []).map((p: any) => ({ name: p.name, raw: p.credits }));
-  if (!parts.length) die(L('作品库里还没有分析过的项目；先在项目里 creditia analyze', 'no analyzed projects in the library yet; run creditia analyze in a project first'));
+  if (!parts.length) die(L('本地项目库中暂无已分析的项目；请先在项目目录运行 creditia analyze', 'no analyzed projects in the library yet; run creditia analyze in a project first'));
   return mergeCredits(parts, LANG());
 }
 /** 现成的档案，没有就是 null（不现场分析）：CI 里写 PR 评论、Release 说明用，没有档案时改读提交盖章 */
@@ -381,11 +381,11 @@ function listAll() {
   const formats = FORMATS.filter((f) => f.id !== 'embed').map((f) => ({ ...f, note: lang === 'en' ? FORMAT_EN[f.id] ?? f.note : f.note }));
   if (json) return console.log(JSON.stringify({ pieces, v2pieces, styles, formats: [...formats.map((f) => f.id), 'json'], sizes: SIZES.map((s) => s.id) }));
   const nameOf = (s: (typeof styles)[number]) => (lang === 'en' ? s.en : s.name);
-  console.log(L('作品（原版主题）', 'Pieces (classic themes)'));
+  console.log(L('卡片（原版主题）', 'Cards (classic themes)'));
   for (const p of pieces) console.log(`  ${p.id.padEnd(10)} ${p.name.padEnd(lang === 'en' ? 16 : 8)} ${p.question}${p.animated ? L(' · 会动', ' · animated') : ''}${p.variants.length ? `\n${''.padEnd(13)}${L('版式：', 'layouts: ')}${p.variants.map((v) => L(`${v}（${variantName(v, 'zh')}）`, `${v} (${variantName(v, 'en')})`)).join(' ')}` : ''}`);
   console.log(L('\n原版主题', '\nClassic themes'));
   for (const s of styles.filter((x) => x.renderer === 'classic')) console.log(`  ${s.id.padEnd(14)} ${nameOf(s).padEnd(lang === 'en' ? 14 : 6)} ${s.note}`);
-  console.log(L('\n新风格（作品：', '\nNewer styles (pieces: ') + v2pieces.map((p) => p.id).join(' ') + L('；gif 只在会动的作品上）', '; gif only for animated pieces)'));
+  console.log(L('\n新风格（卡片：', '\nNewer styles (cards: ') + v2pieces.map((p) => p.id).join(' ') + L('；gif 仅支持带动画的卡片）', '; gif only for animated cards)'));
   for (const s of styles.filter((x) => x.renderer === 'v2')) console.log(`  ${s.id.padEnd(14)} ${nameOf(s).padEnd(lang === 'en' ? 14 : 6)} ${s.note}`);
   console.log(`\n${L('格式', 'formats')}  ${formats.map((f) => L(`${f.id}（${f.note}）`, `${f.id} (${f.note})`)).join('  ')}`);
   console.log(`${L('尺寸', 'sizes')}  ${SIZES.map((s) => s.id).join(' ')} ${L('或 1200x630 这样的宽x高', 'or a width x height like 1200x630')}`);
@@ -401,7 +401,7 @@ async function exportCmd() {
   const { m, raw } = modelOf(repo, on.has('refresh'));
   if (format === 'json') return write(flags.out, JSON.stringify(raw, null, 2) + '\n');
   if (format === 'md') return write(flags.out, creditsBlock(textModel(raw)) + '\n');
-  if (!piecesOf(look).includes(piece)) die(L(`这个风格没有作品 ${piece}；creditia export --list 查看`, `this style has no piece ${piece}; see creditia export --list`));
+  if (!piecesOf(look).includes(piece)) die(L(`该风格不支持卡片 ${piece}；可通过 creditia export --list 查看`, `this style has no card ${piece}; see creditia export --list`));
   const a0 = await artOf(piece, raw, look, flags.variant);
   if (!a0) die(L(`${piece} 需要的数据不够（例如没有 tag、没有会话记录），没有出图`, `not enough data for ${piece} (for example no tags or no sessions); nothing rendered`));
   const fit = (a: Art): Art => {
