@@ -1,4 +1,4 @@
-// 应用图标：黑色圆角方块 + 彩色标志（工具颜色的横行组成的 C，白色四角星），带一点玻璃高光。产物 tools/icon.png，再交给 tauri icon。
+// 应用图标：黑色圆角方块 + 标志（工具颜色的横纹，白色四角星），带一点玻璃高光。产物 tools/icon.png，再交给 tauri icon。
 import { writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -17,12 +17,12 @@ const tile = (logo) => `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" hei
 <rect x="${M + 2}" y="${M + 2}" width="${S - 2 * M - 4}" height="${S - 2 * M - 4}" rx="${R - 2}" fill="none" stroke="#FFFFFF" stroke-opacity=".16" stroke-width="4"/>
 <g transform="translate(232 232) scale(23.33)">${logo}</g>
 </svg>`;
-// 安装包图标用彩色版；设置里能换成的其他标志，另出一张 512 的给程序坞（src-tauri/icons/dock/）
-writeFileSync(path.join(HERE, 'icon.png'), new Resvg(tile(mark('logo-color.svg'))).render().asPng());
+// 安装包图标用默认的条纹圆；设置里能换成的其他标志，另出一张 512 的给程序坞（src-tauri/icons/dock/）
+writeFileSync(path.join(HERE, 'icon.png'), new Resvg(tile(mark('logo-orb.svg'))).render().asPng());
 console.log('→ tools/icon.png');
 const DOCK = path.resolve(HERE, '../src-tauri/icons/dock');
 mkdirSync(DOCK, { recursive: true });
-for (const [id, file] of [['mono', 'logo.svg']]) {
+for (const [id, file] of [['ring', 'logo-ring.svg'], ['color', 'logo-color.svg'], ['mono', 'logo.svg']]) {
   writeFileSync(path.join(DOCK, `${id}.png`), new Resvg(tile(mark(file)), { fitTo: { mode: 'width', value: 512 } }).render().asPng());
   console.log(`→ src-tauri/icons/dock/${id}.png`);
 }

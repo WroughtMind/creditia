@@ -771,11 +771,15 @@ fn doctor_local() -> Value {
 }
 
 // ───────────────────────── 标志：设置里选，程序坞图标跟着换 ─────────────────────────
-// 安装包里的图标是彩色版；选了别的，App 开着时程序坞显示选的那个（关着时 macOS 仍显示安装包里的）
+// 安装包里的图标是默认的条纹圆（orb）；选了别的，App 开着时程序坞显示选的那个（关着时 macOS 仍显示安装包里的）
+
+const DEFAULT_LOGO: &str = "orb";
 
 fn icon_png(id: &str) -> Option<&'static [u8]> {
     match id {
-        "color" => Some(include_bytes!("../icons/icon.png")),
+        "orb" => Some(include_bytes!("../icons/icon.png")),
+        "ring" => Some(include_bytes!("../icons/dock/ring.png")),
+        "color" => Some(include_bytes!("../icons/dock/color.png")),
         "mono" => Some(include_bytes!("../icons/dock/mono.png")),
         _ => None,
     }
@@ -810,7 +814,7 @@ fn set_logo(app: tauri::AppHandle, id: String) -> Res<Value> {
 
 #[tauri::command]
 fn logo() -> Value {
-    json!(app_settings()["logo"].as_str().unwrap_or("color"))
+    json!(app_settings()["logo"].as_str().unwrap_or(DEFAULT_LOGO))
 }
 
 fn main() {
@@ -820,7 +824,7 @@ fn main() {
             #[cfg(target_os = "macos")]
             agent_refresh();
             if let Some(id) = app_settings()["logo"].as_str() {
-                if id != "color" {
+                if id != DEFAULT_LOGO {
                     apply_icon(app.handle(), id);
                 }
             }

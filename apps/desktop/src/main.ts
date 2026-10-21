@@ -9,7 +9,7 @@ import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts
 import { INTERACT_CSS, mountHits } from '../../../packages/render/src/interact.ts';
 import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, groupOf, hasModels, type Kit } from './kits.ts';
 import { exportArt, type Format } from './engine.ts';
-import { LOGOS, logoSvg } from './logo.ts';
+import { LOGOS, DEFAULT_LOGO, logoSvg } from './logo.ts';
 
 // ───────────────────────── 桥：Tauri 或浏览器调试 ─────────────────────────
 const native = (window as any).__TAURI__?.core?.invoke as ((cmd: string, args?: any) => Promise<any>) | undefined;
@@ -51,7 +51,7 @@ async function api(cmd: string, args: any = {}): Promise<any> {
     case 'collect_info': if (demo) throw new Error('demo'); return structuredClone(devCollect);
     case 'set_collect': devCollect.on = args.on; return structuredClone(devCollect);
     case 'set_collect_agent': devCollect.agent.on = args.on; return structuredClone(devCollect);
-    case 'logo': return store.get('logo') ?? 'color';
+    case 'logo': return store.get('logo') ?? DEFAULT_LOGO;
     case 'set_logo': return { logo: args.id };
     case 'collect_now': await new Promise((r) => setTimeout(r, 1200)); devCollect.last = { at: Math.floor(Date.now() / 1000), projects: 3, failed: 0, newEvidence: 0 }; return devCollect.last;
     case 'set_integration': {
@@ -1325,7 +1325,7 @@ function showWarnings(list: string[]) {
 }
 
 function closeSheet() { const el = $('#sheet'); el.hidden = true; el.innerHTML = ''; }
-const logoNow = () => (store.get('logo') && LOGOS[store.get('logo')!] ? store.get('logo')! : 'color');
+const logoNow = () => (store.get('logo') && LOGOS[store.get('logo')!] ? store.get('logo')! : DEFAULT_LOGO);
 async function settings() {
   const el = $('#sheet');
   el.hidden = false;
