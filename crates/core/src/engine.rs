@@ -285,7 +285,7 @@ impl<'a> Engine<'a> {
             let name = if c.name.is_empty() { c.email.clone() } else { c.name.clone() };
             let name = self.cfg.display_name(&name);
             // id 用邮箱的短哈希：档案可能被公开，不能带出邮箱
-            return Some((Attr { who: self.reg.human(&person_id(&c.email), &name), level: Level::Declared }, crate::tr!("其他人的提交", "someone else's commit")));
+            return Some((Attr { who: self.reg.human(&person_id(&c.email), &name), level: Level::Declared }, crate::tr!("其他协作者提交", "someone else's commit")));
         }
         None
     }

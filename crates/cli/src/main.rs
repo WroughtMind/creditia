@@ -578,7 +578,7 @@ use creditia_core::tr;
     }
     lines.push(format!("{:<15} {}", "git", if git_ok { tr!("可用", "available") } else { tr!("未找到", "not found") }));
     lines.push(format!("{:<15} {}", "gh", if gh_ok { tr!("已登录", "signed in") } else { tr!("未登录或未安装（PR 元数据会缺少分支名）", "not signed in or not installed (PR metadata will lack branch names)") }));
-    lines.push(format!("{:<15} {lib_path}  {}", tr!("作品库", "library"), if creditia_core::i18n::en() { format!("{n_proj} project{}", if n_proj == 1 { "" } else { "s" }) } else { format!("{n_proj} 个项目") }));
+    lines.push(format!("{:<15} {lib_path}  {}", tr!("本地项目库", "library"), if creditia_core::i18n::en() { format!("{n_proj} project{}", if n_proj == 1 { "" } else { "s" }) } else { format!("{n_proj} 个项目") }));
     // 没装的工具不算问题；装了却读不了才警告
     let warnings: Vec<String> = hs.iter().filter(|h| !h.readable && !h.unsupported && std::path::Path::new(&h.path).exists()).map(|h| tr!("{} 不可读：{}", "{} unreadable: {}", h.source, h.path)).collect();
     Ok((json!({ "sources": hs, "git": git_ok, "gh": gh_ok, "library": { "path": lib_path, "projects": n_proj }, "summary": lines.join("\n") }), warnings))
@@ -859,8 +859,8 @@ fn ask_integrations(repo: &Path, todo: &[Value]) {
     for k in todo.iter().filter_map(Value::as_str) {
         let q = if k == "hook" {
             tr!(
-                "\n· 提交盖章：在 git 的 prepare-commit-msg hook 里加一行。在 agent 里提交时，提交信息末尾自动加上 Creditia-Harness / Creditia-Model；提交里有 AI 写的行时再加一行 Creditia-Lines（各工具写了几行，不含代码）。日志清理了也认得出，PR 评论和 Release 说明也读它。只影响这个仓库。\n  装吗？[y/N] ",
-                "\n· Commit stamps: adds one line to git's prepare-commit-msg hook. Commits made inside an agent get Creditia-Harness / Creditia-Model trailers, and commits containing AI-written lines get a Creditia-Lines trailer (lines per tool, no code). They stay recognizable after logs are cleaned up, and PR comments and release notes read them. Only this repository.\n  Install? [y/N] "
+                "\n· 提交盖章：在 git 的 prepare-commit-msg hook 里加一行。在 agent 里提交时，提交信息末尾自动加上 Creditia-Harness / Creditia-Model；包含 AI 生成行时再加一行 Creditia-Lines（各工具行数，不含代码）。脱离本地日志环境也能归因，PR 评论和 Release 说明也读它。只影响这个仓库。\n  装吗？[y/N] ",
+                "\n· Commit stamps: adds one line to git's prepare-commit-msg hook. Commits made inside an agent get Creditia-Harness / Creditia-Model trailers, and commits containing AI-generated lines get a Creditia-Lines trailer (lines per tool, no code). Attributable even without local logs, and PR comments and release notes read them. Only this repository.\n  Install? [y/N] "
             )
         } else {
             tr!(
