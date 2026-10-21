@@ -516,12 +516,25 @@ fn cmd_collect(a: &Args) -> R<(Value, Vec<String>)> {
     let mut out = vec![];
     let mut warnings = vec![];
     let cfgp = a.flags.get("config").map(PathBuf::from);
+    let all = a.on("all");
     for repo in repos {
-        let (n, w, pid) = analyze::collect(&repo, &mut lib, cfgp.as_deref())?;
-        warnings.extend(w);
-        out.push(json!({ "repo": repo, "project": pid, "newEvidence": n }));
+        match analyze::collect(&repo, &mut lib, cfgp.as_deref()) {
+            Ok((n, w, pid)) => {
+                warnings.extend(w);
+                out.push(json!({ "repo": repo, "project": pid, "newEvidence": n }));
+            }
+            // --all 多半是后台定时跑的：一个项目收不成记下来，接着收别的
+            Err(e) if all => {
+                warnings.push(tr!("{}：{e}", "{}: {e}", repo.display()));
+                out.push(json!({ "repo": repo, "error": e }));
+            }
+            Err(e) => return Err(e),
+        }
     }
-    let summary = out.iter().map(|o| tr!("{}：新增证据 {} 条", "{}: {} new pieces of evidence", o["repo"].as_str().unwrap_or(""), o["newEvidence"])).collect::<Vec<_>>().join("\n");
+    let summary = out.iter().map(|o| match o["error"].as_str() {
+        Some(e) => tr!("{}：没收成（{e}）", "{}: failed ({e})", o["repo"].as_str().unwrap_or("")),
+        None => tr!("{}：新增证据 {} 条", "{}: {} new pieces of evidence", o["repo"].as_str().unwrap_or(""), o["newEvidence"]),
+    }).collect::<Vec<_>>().join("\n");
     Ok((json!({ "collected": out, "summary": summary }), warnings))
 }
 

@@ -478,7 +478,7 @@ fn collect_loop(app: tauri::AppHandle) {
     use tauri::Emitter;
     std::thread::sleep(std::time::Duration::from_secs(30)); // 先让开启动
     loop {
-        let last = app_settings()["collect"]["last"]["at"].as_i64().unwrap_or(0);
+        let last = last_collect()["at"].as_i64().unwrap_or(0);
         if collect_on() && now() - last >= COLLECT_EVERY {
             if let Ok(v) = collect_round(true) {
                 let _ = app.emit("collect-done", v);
@@ -488,9 +488,23 @@ fn collect_loop(app: tauri::AppHandle) {
     }
 }
 
+/// 最近一轮：App 自己收的和后台任务收的，取晚的那个。后台的带 by: agent
+fn last_collect() -> Value {
+    let app = app_settings()["collect"]["last"].clone();
+    let agent = agent_last();
+    match (app["at"].as_i64(), agent["at"].as_i64()) {
+        (Some(a), Some(b)) if b <= a => app,
+        (_, Some(_)) => agent,
+        _ => app,
+    }
+}
+
 #[tauri::command]
 fn collect_info() -> Value {
-    json!({ "on": collect_on(), "last": app_settings()["collect"]["last"], "running": COLLECTING.load(std::sync::atomic::Ordering::SeqCst), "every": COLLECT_EVERY })
+    json!({
+        "on": collect_on(), "last": last_collect(), "running": COLLECTING.load(std::sync::atomic::Ordering::SeqCst), "every": COLLECT_EVERY,
+        "agent": { "supported": cfg!(target_os = "macos"), "on": agent_installed() },
+    })
 }
 
 #[tauri::command]
@@ -502,6 +516,145 @@ fn set_collect(on: bool) -> Res<Value> {
 #[tauri::command]
 async fn collect_now() -> Res<Value> {
     tauri::async_runtime::spawn_blocking(|| collect_round(false)).await.map_err(|e| Fail::with("core_failed", e))?
+}
+
+// ───────────────────────── App 关着时也收：macOS 的 launchd 后台任务 ─────────────────────────
+// 装在 ~/Library/LaunchAgents，登录后每小时跑一次 App 里带的核心 `collect --all`，结果写进作品库目录的 collect-agent.json。
+// App 被删掉、核心不在了，任务就什么也不做
+
+const AGENT_LABEL: &str = "dev.creditia.collect";
+/// $0 是核心，$1 是作品库目录。先写临时文件再改名，App 读到的总是完整的一份
+const AGENT_SCRIPT: &str = r#"[ -x "$0" ] || exit 0; mkdir -p "$1" || exit 0; "$0" collect --all --json > "$1/collect-agent.json.tmp" 2>/dev/null; mv -f "$1/collect-agent.json.tmp" "$1/collect-agent.json""#;
+
+fn agent_out() -> PathBuf {
+    creditia_store::data_dir().join("collect-agent.json")
+}
+
+/// 后台任务上一轮的结果：时间取文件的修改时间，数字从核心的输出里数
+fn agent_last() -> Value {
+    let p = agent_out();
+    let Some(at) = std::fs::metadata(&p).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()) else { return Value::Null };
+    let v: Value = std::fs::read_to_string(&p).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let c = v["collected"].as_array().cloned().unwrap_or_default();
+    let failed = c.iter().filter(|x| x["error"].is_string()).count();
+    let new: u64 = c.iter().filter_map(|x| x["newEvidence"].as_u64()).sum();
+    json!({ "at": at.as_secs() as i64, "projects": c.len() - failed, "failed": failed, "newEvidence": new, "by": "agent" })
+}
+
+fn xml(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+}
+
+/// launchd 任务的 plist。launchd 的 PATH 很短，补上 Homebrew 的位置，核心才找得到 git
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn agent_plist(core: &std::path::Path, lib: &std::path::Path, creditia_home: Option<&str>) -> String {
+    let home = creditia_home.map(|h| format!("\n    <key>CREDITIA_HOME</key><string>{}</string>", xml(h))).unwrap_or_default();
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- creditia App 装的：App 关着时也每小时把各项目的新记录收进作品库。在 App 的设置里关掉就会删掉 -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>{AGENT_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>{}</string>
+    <string>{}</string>
+    <string>{}</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>{home}
+  </dict>
+  <key>StartInterval</key><integer>{COLLECT_EVERY}</integer>
+  <key>RunAtLoad</key><true/>
+  <key>ProcessType</key><string>Background</string>
+  <key>LowPriorityIO</key><true/>
+  <key>Nice</key><integer>10</integer>
+</dict>
+</plist>
+"#,
+        xml(AGENT_SCRIPT),
+        xml(&core.display().to_string()),
+        xml(&lib.display().to_string()),
+    )
+}
+
+fn agent_plist_path() -> Option<PathBuf> {
+    Some(home()?.join("Library/LaunchAgents").join(format!("{AGENT_LABEL}.plist")))
+}
+
+fn agent_installed() -> bool {
+    cfg!(target_os = "macos") && agent_plist_path().is_some_and(|p| p.exists())
+}
+
+/// 现在这份 App 该装的 plist：核心要是绝对路径（开发时从 PATH 找到的不算）
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn agent_wanted() -> Res<String> {
+    let core = core_bin();
+    if !core.is_absolute() || !core.exists() {
+        return Err(Fail::with("core_missing", core.display()));
+    }
+    Ok(agent_plist(&core, &creditia_store::data_dir(), std::env::var("CREDITIA_HOME").ok().filter(|h| !h.is_empty()).as_deref()))
+}
+
+#[cfg(target_os = "macos")]
+fn launchctl(args: &[&str]) -> Res<()> {
+    let o = Command::new("/bin/launchctl").args(args).output().map_err(|e| Fail::with("agent_failed", e))?;
+    if o.status.success() { Ok(()) } else { Err(Fail::with("agent_failed", String::from_utf8_lossy(&o.stderr).trim())) }
+}
+
+#[cfg(target_os = "macos")]
+fn agent_install() -> Res<()> {
+    let body = agent_wanted()?;
+    let p = agent_plist_path().ok_or(Fail::new("no_home"))?;
+    std::fs::create_dir_all(p.parent().unwrap()).map_err(|e| Fail::with("io", e))?;
+    // SAFETY: 只读当前用户的 uid
+    let domain = format!("gui/{}", unsafe { libc::getuid() });
+    let _ = launchctl(&["bootout", &domain, &p.display().to_string()]); // 装过旧的就先卸，没装过会报错，不管
+    std::fs::write(&p, body).map_err(|e| Fail::with("io", e))?;
+    launchctl(&["bootstrap", &domain, &p.display().to_string()])
+}
+
+#[cfg(target_os = "macos")]
+fn agent_uninstall() -> Res<()> {
+    let Some(p) = agent_plist_path() else { return Ok(()) };
+    if p.exists() {
+        // SAFETY: 只读当前用户的 uid
+        let _ = launchctl(&["bootout", &format!("gui/{}", unsafe { libc::getuid() }), &p.display().to_string()]);
+        std::fs::remove_file(&p).map_err(|e| Fail::with("io", e))?;
+    }
+    Ok(())
+}
+
+/// App 换了位置或升级后核心路径变了：装着的任务跟着改。开发时不动
+#[cfg(target_os = "macos")]
+fn agent_refresh() {
+    if cfg!(debug_assertions) || !agent_installed() {
+        return;
+    }
+    let cur = agent_plist_path().and_then(|p| std::fs::read_to_string(p).ok());
+    if let Ok(want) = agent_wanted() {
+        if cur.as_deref() != Some(want.as_str()) {
+            let _ = agent_install();
+        }
+    }
+}
+
+#[tauri::command]
+fn set_collect_agent(on: bool) -> Res<Value> {
+    #[cfg(target_os = "macos")]
+    {
+        if on { agent_install()? } else { agent_uninstall()? }
+        Ok(collect_info())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = on;
+        Err(Fail::new("unsupported"))
+    }
 }
 
 /// 打开导出目录或作品库目录（只认这两个名字）
@@ -615,13 +768,15 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            agent_refresh();
             let h = app.handle().clone();
             std::thread::spawn(move || collect_loop(h));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             projects, credits, stamp, head, config_of, set_display, analyze, cancel_analyze, pick_folder, add_project, integrations, set_integration, embed_snippet,
-            library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor, collect_info, set_collect, collect_now
+            library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor, collect_info, set_collect, collect_now, set_collect_agent
         ])
         .run(tauri::generate_context!())
         .expect("启动 creditia App 失败");
@@ -728,5 +883,56 @@ mod tests {
 
         std::env::remove_var("CREDITIA_HOME");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn background_agent_writes_what_the_app_reads() {
+        let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = std::env::temp_dir().join(format!("creditia-app-agent-{}", std::process::id()));
+        let lib = dir.join("lib dir");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("CREDITIA_HOME", &lib);
+        let core = fake_core(&dir, r#"[ "$1 $2 $3" = "collect --all --json" ] || exit 9; echo '{"collected":[{"newEvidence":5},{"newEvidence":2},{"error":"x"}]}'; exit 2"#);
+        let sh = |core: &std::path::Path| Command::new("/bin/sh").arg("-c").arg(AGENT_SCRIPT).arg(core).arg(&lib).status().unwrap();
+
+        // 后台没跑过：用 App 自己那轮
+        edit_app_settings(|v| v["collect"]["last"] = json!({ "at": 1, "projects": 1, "failed": 0, "newEvidence": 0 })).unwrap();
+        assert_eq!(last_collect()["at"], 1);
+
+        // 跑一次：退出码 2 也写下结果，App 按文件时间并进「上次」
+        assert!(sh(&core).success());
+        let l = last_collect();
+        assert_eq!((l["by"].as_str(), l["projects"].as_u64(), l["failed"].as_u64(), l["newEvidence"].as_u64()), (Some("agent"), Some(2), Some(1), Some(7)), "{l}");
+        assert!(!lib.join("collect-agent.json.tmp").exists());
+
+        // App 自己后来又收了一轮：用 App 的
+        edit_app_settings(|v| v["collect"]["last"] = json!({ "at": now() + 60, "projects": 3, "failed": 0, "newEvidence": 1 })).unwrap();
+        assert_eq!(last_collect()["projects"], 3);
+
+        // App 删掉了、核心不在：什么也不做
+        std::fs::remove_file(agent_out()).unwrap();
+        assert!(sh(&dir.join("gone")).success());
+        assert!(!agent_out().exists());
+
+        std::env::remove_var("CREDITIA_HOME");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn agent_plist_escapes_paths() {
+        let p = agent_plist(std::path::Path::new("/Applications/A & \"B\".app/Contents/MacOS/creditia-core"), std::path::Path::new("/Users/me/lib"), Some("/Users/me/lib"));
+        assert!(p.contains("<string>/Applications/A &amp; &quot;B&quot;.app/Contents/MacOS/creditia-core</string>"), "{p}");
+        assert!(p.contains("&gt; &quot;$1/collect-agent.json.tmp&quot;"), "{p}");
+        assert!(p.contains("<key>CREDITIA_HOME</key><string>/Users/me/lib</string>"), "{p}");
+        assert!(!agent_plist(std::path::Path::new("/c"), std::path::Path::new("/l"), None).contains("CREDITIA_HOME"));
+        // macOS 上让系统自己读一遍：格式对，读回来的脚本和写进去的一样
+        if cfg!(target_os = "macos") {
+            let f = std::env::temp_dir().join(format!("creditia-agent-{}.plist", std::process::id()));
+            std::fs::write(&f, &p).unwrap();
+            assert!(Command::new("plutil").arg("-lint").arg(&f).status().unwrap().success());
+            let o = Command::new("plutil").args(["-extract", "ProgramArguments.2", "raw", "-o", "-"]).arg(&f).output().unwrap();
+            assert_eq!(String::from_utf8_lossy(&o.stdout).trim_end(), AGENT_SCRIPT);
+            let _ = std::fs::remove_file(&f);
+        }
     }
 }

@@ -15,7 +15,7 @@ import { LOGO_SVG } from './logo.ts';
 const native = (window as any).__TAURI__?.core?.invoke as ((cmd: string, args?: any) => Promise<any>) | undefined;
 /** 官网上的演示：页面先放好样例档案（window.__CREDITIA_DEMO__），导出的文件交给外层页面摆到「桌面」上 */
 const demo = (window as any).__CREDITIA_DEMO__ as { projects: any[]; credits: Record<string, any>; doctor: any[] } | undefined;
-const devCollect = { on: true, running: false, every: 3600, last: { at: Math.floor(Date.now() / 1000) - 1260, projects: 3, failed: 0, newEvidence: 128 } as any };
+const devCollect = { on: true, running: false, every: 3600, last: { at: Math.floor(Date.now() / 1000) - 1260, projects: 3, failed: 0, newEvidence: 128 } as any, agent: { supported: true, on: false } };
 const devPlugs: Plugs = {
   hook: { installed: false, decided: null, path: '.git/hooks/prepare-commit-msg' },
   release: { installed: false, decided: null, path: '.github/workflows/creditia.yml', github: true, published: true },
@@ -41,6 +41,7 @@ async function api(cmd: string, args: any = {}): Promise<any> {
     // 后台采集：开发时给一份样子；官网演示里没有，设置里不出这一行
     case 'collect_info': if (demo) throw new Error('demo'); return structuredClone(devCollect);
     case 'set_collect': devCollect.on = args.on; return structuredClone(devCollect);
+    case 'set_collect_agent': devCollect.agent.on = args.on; return structuredClone(devCollect);
     case 'collect_now': await new Promise((r) => setTimeout(r, 1200)); devCollect.last = { at: Math.floor(Date.now() / 1000), projects: 3, failed: 0, newEvidence: 0 }; return devCollect.last;
     case 'set_integration': {
       const k = args.which as 'hook' | 'release';
@@ -96,6 +97,8 @@ const ERRORS: Record<string, [string, string]> = {
   store: ['读不到作品库', 'Cannot read the library'],
   not_allowed: ['只能打开这次导出的文件', 'Only files exported in this session can be shown'],
   switch_failed: ['没能改这一项', "Couldn't change this"],
+  agent_failed: ['没能装上后台任务', "Couldn't set up the background task"],
+  unsupported: ['这个系统上还不支持', 'Not supported on this system yet'],
 };
 function errText(e: any): string {
   const t = e?.code && ERRORS[e.code], d = e?.detail ? String(e.detail) : '';
@@ -1150,7 +1153,7 @@ async function settings() {
     <div class="row kv"><span class="k">${L('默认尺寸', 'Default size')}</span><div class="seg" id="defsize">${sizes}</div></div>
     ${info || coll ? `<h3>${L('作品库', 'Library')}</h3>` : ''}
     ${info ? `<div class="row kv"><span class="k">${L('位置', 'Location')}</span><span class="v path" title="${esc(info.library)}">${esc(short(info.library))}</span><button class="mini" data-x="open-library">${L('打开', 'Open')}</button></div>` : ''}
-    ${coll ? `<div class="row kv" id="crow"></div><p class="hint">${L('各工具的日志会被清理（有的只留 30 天）。App 开着时，每小时把作品库里各项目的新记录收进作品库：只采集，不分析，不改仓库。', 'Tools clean up their logs, some after 30 days. While the app is open, it collects new records for every project in the library once an hour. It only collects: no analysis, no changes to repositories.')}</p>` : ''}
+    ${coll ? `<div class="row kv" id="crow"></div>${coll.agent?.supported ? '<div class="row kv" id="arow"></div>' : ''}<p class="hint">${L('各工具的日志会被清理（有的只留 30 天）。App 开着时，每小时把作品库里各项目的新记录收进作品库：只采集，不分析，不改仓库。', 'Tools clean up their logs, some after 30 days. While the app is open, it collects new records for every project in the library once an hour. It only collects: no analysis, no changes to repositories.')}${coll.agent?.supported ? L('「App 关着时」在 ~/Library/LaunchAgents 装一个系统后台任务，登录后照样每小时收一次；关掉就删掉。', ' “When closed” installs a background task in ~/Library/LaunchAgents that keeps collecting hourly after you log in; turning it off removes it.') : ''}</p>` : ''}
     <h3>${L('数据源', 'Data sources')}</h3><div id="doc"><p>${L('检查中…', 'Checking…')}</p></div>
     <h3>${L('关于', 'About')}</h3>
     ${info ? `<p class="ver">creditia ${esc(info.version)}</p>` : ''}
@@ -1170,11 +1173,14 @@ async function settings() {
     const r = el.querySelector('#crow'); if (!r || !c) return;
     cnow = c;
     const last = c.last?.at ? L(`上次 ${ago(c.last.at)} · 新增 ${fmt(c.last.newEvidence ?? 0)} 条`, `Last ${ago(c.last.at)} · ${fmt(c.last.newEvidence ?? 0)} new`)
-      + (c.last.failed ? L(` · ${c.last.failed} 个项目没收成`, ` · ${c.last.failed} failed`) : '') : L('还没采集过', 'Not run yet');
-    const st = c.running ? L('正在采集…', 'Collecting…') : !c.on ? L('已关闭', 'Off') : last;
+      + (c.last.failed ? L(` · ${c.last.failed} 个项目没收成`, ` · ${c.last.failed} failed`) : '') + (c.last.by === 'agent' ? L(' · 后台任务', ' · background task') : '') : L('还没采集过', 'Not run yet');
+    const st = c.running ? L('正在采集…', 'Collecting…') : !c.on && !c.agent?.on ? L('已关闭', 'Off') : last;
     r.innerHTML = `<span class="k">${L('定时采集', 'Auto collect')}</span><span class="v grow" title="${esc(last)}">${esc(st)}</span>`
       + `<button class="mini" data-x="collect" ${c.running ? 'disabled' : ''}>${L('现在采集', 'Collect now')}</button>`
       + `<button class="switch" role="switch" aria-checked="${!!c.on}" aria-label="${esc(L('定时采集', 'Auto collect'))}" data-x="collect-on"><i></i></button>`;
+    const a = el.querySelector('#arow');
+    if (a) a.innerHTML = `<span class="k">${L('App 关着时', 'When closed')}</span><span class="v grow">${c.agent.on ? L('也在收：登录后每小时一次', 'Still collecting, hourly after login') : L('不收', 'Not collecting')}</span>`
+      + `<button class="switch" role="switch" aria-checked="${!!c.agent.on}" aria-label="${esc(L('App 关着时也收', 'Collect when the app is closed'))}" data-x="agent-on"><i></i></button>`;
     // 一轮正在跑（定时的那轮）：跑完换成结果
     if (c.running) setTimeout(() => { if (el.querySelector('#crow')) api('collect_info').then(crow).catch(() => null); }, 2000);
   };
@@ -1195,6 +1201,7 @@ async function settings() {
       else if (x === 'open-exports') await api('open_folder', { which: 'exports' });
       else if (x === 'open-library') await api('open_folder', { which: 'library' });
       else if (x === 'collect-on') crow(await api('set_collect', { on: !cnow?.on }));
+      else if (x === 'agent-on') crow(await api('set_collect_agent', { on: !cnow?.agent?.on }));
       else if (x === 'collect') {
         crow({ ...cnow, running: true });
         try { await api('collect_now'); } catch (err: any) { if (err?.code !== 'busy') throw err; }
