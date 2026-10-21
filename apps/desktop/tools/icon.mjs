@@ -1,11 +1,11 @@
-// 应用图标：黑色圆角方块 + 白色标志（由横行组成的 C 与四角星），带一点玻璃高光。产物 tools/icon.png，再交给 tauri icon。
+// 应用图标：黑色圆角方块 + 彩色标志（工具颜色的横行组成的 C，白色四角星），带一点玻璃高光。产物 tools/icon.png，再交给 tauri icon。
 import { writeFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 const HERE = import.meta.dirname;
 const require = createRequire(path.resolve(HERE, '../../../packages/render/package.json'));
 const { Resvg } = require('@resvg/resvg-js');
-const logo = readFileSync(path.resolve(HERE, '../../../packages/render/assets/creditia/logo.svg'), 'utf8').replace(/^<svg[^>]*>|<\/svg>\s*$/g, '').replaceAll('#0E0E0E', '#F4F4F2');
+const logo = readFileSync(path.resolve(HERE, '../../../packages/render/assets/creditia/logo-color.svg'), 'utf8').replace(/^<svg[^>]*>|<\/svg>\s*$/g, '').replaceAll('#0E0E0E', '#F4F4F2');
 const S = 1024, M = 100, R = 185;
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}">
 <defs>

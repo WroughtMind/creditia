@@ -15,4 +15,4 @@
 lobehub 的图标和 aider.svg 靠 evenodd 挖空，生成时会把 `rule: 'evenodd'` 带进 logos.ts。
 还没有标志的工具画首字母。
 
-creditia 自己的标志在 `../creditia/logo.svg`：由片尾字幕的横行组成的 C，开口处一颗四角星。
+creditia 自己的标志在 `../creditia/logo.svg`：由片尾字幕的横行组成的 C，开口处一颗四角星。彩色版 `../creditia/logo-color.svg` 的六道横纹是工具颜色（Claude Code、Codex、Cursor、Kimi、Grok、未确认），和宣传片结尾一样；App、图标、官网、README 用彩色版。

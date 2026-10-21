@@ -148,7 +148,7 @@ for (const theme of ['dark', 'light'] as const) for (const lang of LANGS) put(`m
 
 // ───────── logo ─────────
 console.log('logos');
-const own = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo.svg'), 'utf8');
+const own = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo-color.svg'), 'utf8');
 put('logo-light.svg', own);
 put('logo-dark.svg', own.replaceAll('#0E0E0E', '#F1EADC'));
 // 工具表里的小 logo：中灰，深浅底都看得清
