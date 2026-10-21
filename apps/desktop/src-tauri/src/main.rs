@@ -770,19 +770,67 @@ fn doctor_local() -> Value {
     json!(out)
 }
 
+// ───────────────────────── 标志：设置里选，程序坞图标跟着换 ─────────────────────────
+// 安装包里的图标是彩色版；选了别的，App 开着时程序坞显示选的那个（关着时 macOS 仍显示安装包里的）
+
+fn icon_png(id: &str) -> Option<&'static [u8]> {
+    match id {
+        "color" => Some(include_bytes!("../icons/icon.png")),
+        "mono" => Some(include_bytes!("../icons/dock/mono.png")),
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn apply_icon(app: &tauri::AppHandle, id: &str) {
+    let Some(png) = icon_png(id) else { return };
+    let _ = app.run_on_main_thread(move || {
+        use objc2::AnyThread;
+        use objc2_app_kit::{NSApplication, NSImage};
+        let Some(mtm) = objc2::MainThreadMarker::new() else { return };
+        let data = objc2_foundation::NSData::with_bytes(png);
+        if let Some(img) = NSImage::initWithData(NSImage::alloc(), &data) {
+            // SAFETY: 在主线程上，传的是刚解码好的 NSImage
+            unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&img)) };
+        }
+    });
+}
+#[cfg(not(target_os = "macos"))]
+fn apply_icon(_app: &tauri::AppHandle, _id: &str) {}
+
+#[tauri::command]
+fn set_logo(app: tauri::AppHandle, id: String) -> Res<Value> {
+    if icon_png(&id).is_none() {
+        return Err(Fail::new("unsupported"));
+    }
+    edit_app_settings(|v| v["logo"] = json!(id))?;
+    apply_icon(&app, &id);
+    Ok(json!({ "logo": id }))
+}
+
+#[tauri::command]
+fn logo() -> Value {
+    json!(app_settings()["logo"].as_str().unwrap_or("color"))
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             agent_refresh();
+            if let Some(id) = app_settings()["logo"].as_str() {
+                if id != "color" {
+                    apply_icon(app.handle(), id);
+                }
+            }
             let h = app.handle().clone();
             std::thread::spawn(move || collect_loop(h));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             projects, credits, stamp, head, config_of, set_display, analyze, cancel_analyze, discover, pick_folder, add_project, integrations, set_integration, embed_snippet,
-            library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor, collect_info, set_collect, collect_now, set_collect_agent
+            library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor, collect_info, set_collect, collect_now, set_collect_agent, logo, set_logo
         ])
         .run(tauri::generate_context!())
         .expect("启动 creditia App 失败");

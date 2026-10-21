@@ -1,3 +1,12 @@
 // creditia 标志：由片尾字幕的横行组成的 C，开口处一颗四角星（AI）。
-// 六道横纹是宣传片结尾那样的工具颜色（Claude Code、Codex、Cursor、Kimi、Grok、未确认），星跟随 currentColor。
-export const LOGO_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="ct-logo-clip"><path d="M18.947 19.193A10 10 0 1 1 18.947 4.807L16.724 7.108A6.8 6.8 0 1 0 16.724 16.892Z"/></clipPath></defs><g clip-path="url(#ct-logo-clip)"><rect x="0" y="2.000" width="24" height="1.818" fill="#D97757"/><rect x="0" y="5.636" width="24" height="1.818" fill="#10A37F"/><rect x="0" y="9.273" width="24" height="1.818" fill="#4C8DF6"/><rect x="0" y="12.909" width="24" height="1.818" fill="#8C7CFF"/><rect x="0" y="16.545" width="24" height="1.818" fill="#B9B4AA"/><rect x="0" y="20.182" width="24" height="1.818" fill="#8A8478"/></g><path d="M19.6 9.3C20.086000000000002 11.514 20.086000000000002 11.514 22.3 12C20.086000000000002 12.486 20.086000000000002 12.486 19.6 14.7C19.114 12.486 19.114 12.486 16.900000000000002 12C19.114 11.514 19.114 11.514 19.6 9.3Z" fill="currentColor"/></svg>`;
+// 彩色版的六道横纹是工具颜色（Claude Code、Codex、Cursor、Kimi、Grok、未确认），和宣传片结尾一样；黑白版整个跟随 currentColor。
+// 设置里可以换，程序坞图标跟着换（src-tauri 的 set_logo）。
+import color from '../../../packages/render/assets/creditia/logo-color.svg?raw';
+import mono from '../../../packages/render/assets/creditia/logo.svg?raw';
+
+const inline = (svg: string) => svg.trim().replaceAll('#0E0E0E', 'currentColor').replace('<svg ', '<svg aria-hidden="true" ');
+export const LOGOS: Record<string, { svg: string; name: [string, string] }> = {
+  color: { svg: inline(color), name: ['彩色', 'Color'] },
+  mono: { svg: inline(mono), name: ['黑白', 'Mono'] },
+};
+export const logoSvg = (id: string | null) => (LOGOS[id ?? ''] ?? LOGOS.color).svg;

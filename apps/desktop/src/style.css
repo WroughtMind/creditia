@@ -334,3 +334,8 @@ body.roam #top::before { opacity: 1; }
 .fmts, #focus .kits, .menu { background: color-mix(in srgb, var(--bg) 92%, transparent); }
 #focus .kits, #focus .fmts { background: var(--bg); } /* 放大视图本身已经有一层模糊，里面的菜单再模糊不起作用，直接用实底 */
 #sheet #crow .v { text-align: right; color: var(--faint); font-size: 12px; }
+/* 设置里选标志：每个都画成程序坞里的样子 */
+#sheet .logos { display: flex; gap: 8px; }
+#sheet .logos button { width: 40px; height: 40px; padding: 8px; border: 0; border-radius: 10px; cursor: pointer; background: linear-gradient(#2A2A2A, #050505); color: #F4F4F2; box-shadow: 0 0 0 1px var(--edge); transition: box-shadow .15s; }
+#sheet .logos button svg { display: block; width: 100%; height: 100%; }
+#sheet .logos button[aria-checked="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--ink); }

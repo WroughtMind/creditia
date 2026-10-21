@@ -9,7 +9,7 @@ import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts
 import { INTERACT_CSS, mountHits } from '../../../packages/render/src/interact.ts';
 import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, groupOf, hasModels, type Kit } from './kits.ts';
 import { exportArt, type Format } from './engine.ts';
-import { LOGO_SVG } from './logo.ts';
+import { LOGOS, logoSvg } from './logo.ts';
 
 // ───────────────────────── 桥：Tauri 或浏览器调试 ─────────────────────────
 const native = (window as any).__TAURI__?.core?.invoke as ((cmd: string, args?: any) => Promise<any>) | undefined;
@@ -51,6 +51,8 @@ async function api(cmd: string, args: any = {}): Promise<any> {
     case 'collect_info': if (demo) throw new Error('demo'); return structuredClone(devCollect);
     case 'set_collect': devCollect.on = args.on; return structuredClone(devCollect);
     case 'set_collect_agent': devCollect.agent.on = args.on; return structuredClone(devCollect);
+    case 'logo': return store.get('logo') ?? 'color';
+    case 'set_logo': return { logo: args.id };
     case 'collect_now': await new Promise((r) => setTimeout(r, 1200)); devCollect.last = { at: Math.floor(Date.now() / 1000), projects: 3, failed: 0, newEvidence: 0 }; return devCollect.last;
     case 'set_integration': {
       const k = args.which as 'hook' | 'release';
@@ -127,6 +129,7 @@ async function boot() {
   bootKits(); state.style.warm();
   const st = document.createElement('style'); st.textContent = INTERACT_CSS; document.head.appendChild(st);
   if (native && OS === 'mac') document.body.classList.add('mac');
+  if (native) void api('logo').then((id) => store.set('logo', String(id))).catch(() => null);
   applyLang(); renderDots(); renderDock(); wireTop(); wireRoam();
   // 滚动之后顶栏垫一层渐隐的玻璃，作品不再直接透到项目名和按钮后面
   const stageEl = $('#stage');
@@ -1279,7 +1282,7 @@ function welcome() {
     if (el.hidden) return;
     const running = [...status.values()].includes('run');
     el.innerHTML = `<div class="box">
-      <span class="logo">${LOGO_SVG}</span>
+      <span class="logo">${logoSvg(store.get('logo'))}</span>
       <h1>${L('选几个项目开始', 'Pick projects to start')}</h1>
       <div class="found">${list === null ? `<p class="wait"><i class="spin"></i>${L('正在找本机用过 AI 工具的仓库…', 'Looking for repos where you used AI tools…')}</p>`
         : list.length ? list.map((d) => `<label class="row ${status.get(d.path) ?? ''}" data-path="${esc(d.path)}">
@@ -1322,6 +1325,7 @@ function showWarnings(list: string[]) {
 }
 
 function closeSheet() { const el = $('#sheet'); el.hidden = true; el.innerHTML = ''; }
+const logoNow = () => (store.get('logo') && LOGOS[store.get('logo')!] ? store.get('logo')! : 'color');
 async function settings() {
   const el = $('#sheet');
   el.hidden = false;
@@ -1329,6 +1333,7 @@ async function settings() {
   const coll = await api('collect_info').catch(() => null);
   el.innerHTML = `<div class="panel glass">
     <div class="head"><h2>${L('设置', 'Settings')}</h2>${closeBtn()}</div>
+    <div class="row kv"><span class="k">${L('标志', 'Logo')}</span><span class="v grow"></span><div class="logos" role="radiogroup" aria-label="${L('标志', 'Logo')}">${Object.entries(LOGOS).map(([id, g]) => `<button data-x="logo" data-id="${id}" role="radio" aria-checked="${id === logoNow()}" title="${esc(L(...g.name))}" aria-label="${esc(L(...g.name))}">${g.svg}</button>`).join('')}</div></div>
     <h3>${L('导出', 'Export')}</h3>
     ${info ? `<div class="row kv" id="xrow"></div>` : ''}
     <div class="row kv"><span class="k">${L('默认尺寸', 'Default size')}</span><div class="seg" id="defsize">${sizeButtons()}</div></div>
@@ -1375,6 +1380,12 @@ async function settings() {
         store.set('autofresh', autoFresh() ? 'off' : 'on');
         el.querySelector('[data-x="fresh"]')!.setAttribute('aria-checked', String(autoFresh()));
         if (autoFresh()) refreshIfChanged();
+      }
+      else if (x === 'logo') {
+        const id = (t.closest('[data-id]') as HTMLElement).dataset.id!;
+        await api('set_logo', { id });
+        store.set('logo', id);
+        el.querySelectorAll('.logos button').forEach((b) => b.setAttribute('aria-checked', String((b as HTMLElement).dataset.id === id)));
       }
       else if (x === 'collect-mode') {
         const m = (t.closest('[data-m]') as HTMLElement).dataset.m!;
