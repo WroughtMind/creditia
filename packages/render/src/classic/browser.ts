@@ -28,6 +28,9 @@ function fontsOf(t: Theme) {
   })).then((xs) => xs.filter(Boolean));
 }
 
+/** 先把这个主题的字体取回来，第一张作品不用再等 */
+export const warm = (t: Theme) => fontsOf(t);
+
 export async function render(id: string, m: Model, t: Theme, ctx: Ctx) {
   await boot;
   return classicArt(id, m, t, ctx, satori as any, await fontsOf(t));
