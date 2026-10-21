@@ -149,10 +149,13 @@ for (const theme of ['dark', 'light'] as const) for (const lang of LANGS) put(`m
 // ───────── logo ─────────
 console.log('logos');
 // 星号 *，打开页面时五瓣从中心依次长出来（五色，深浅底同一张）
-const BLOOM = '<style>path{transform-box:view-box;transform-origin:12px 12px;animation:b .8s cubic-bezier(.34,1.5,.5,1) both}'
-  + [2, 3, 4, 5].map((i) => `path:nth-of-type(${i}){animation-delay:${(i - 1) * 70}ms}`).join('')
-  + '@keyframes b{from{transform:scale(0) rotate(-40deg);opacity:0}}@media (prefers-reduced-motion:reduce){path{animation:none}}</style>';
-const own = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo-star.svg'), 'utf8').replace(/(<svg[^>]*>)/, `$1${BLOOM}`);
+const BLOOM = '<style>g{transform-box:view-box;transform-origin:12px 12px;animation:w .95s cubic-bezier(.2,.9,.25,1.1) both}'
+  + 'path{transform-box:view-box;transform-origin:12px 12px;animation:b .7s ease-out both}'
+  + [2, 3, 4, 5].map((i) => `path:nth-of-type(${i}){animation-delay:${(i - 1) * 65}ms}`).join('')
+  + '@keyframes w{from{transform:rotate(-150deg)}}'
+  + '@keyframes b{0%{transform:rotate(-70deg) scale(0);opacity:0}55%{transform:rotate(6deg) scale(1.24);opacity:1}78%{transform:rotate(-2deg) scale(.95)}100%{transform:none}}'
+  + '@media (prefers-reduced-motion:reduce){g,path{animation:none}}</style>';
+const own = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo-star.svg'), 'utf8').replace(/(<svg[^>]*>)([\s\S]*)<\/svg>/, `$1${BLOOM}<g>$2</g></svg>`);
 put('logo-light.svg', own);
 put('logo-dark.svg', own);
 // 工具表里的小 logo：中灰，深浅底都看得清

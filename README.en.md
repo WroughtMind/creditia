@@ -114,8 +114,8 @@ jobs:
 **App** — one wall: switch projects at the top, styles with the dots at the bottom left, and every piece is laid out at once. Hover a piece to change its layout or export it, hover any part of it for details, or drag it onto the export dock. [Try it on the website](https://wroughtmind.github.io/creditia/#use).
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="site/app-dark.webp">
-  <img src="site/app-light.webp" alt="The creditia app: every piece for the sample project laid out on one wall">
+  <source media="(prefers-color-scheme: dark)" srcset="site/app-dark-en.webp">
+  <img src="site/app-light-en.webp" alt="The creditia app: every piece for the sample project laid out on one wall">
 </picture>
 
 ## Supported tools

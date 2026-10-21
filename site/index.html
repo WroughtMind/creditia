@@ -90,13 +90,10 @@ header:not(.solid) .get svg { fill: var(--hero); }
 section, #screen { scroll-margin-top: 64px; }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 15px; text-decoration: none; }
-.brand svg { width: 20px; height: 20px; transition: rotate .6s cubic-bezier(.34,1.5,.5,1); }
-.brand:hover svg { rotate: 72deg; } /* 转一瓣 */
-.brand svg path, .ast path { transform-box: view-box; transform-origin: 12px 12px; }
+.brand svg { width: 20px; height: 20px; overflow: visible; }
 /* 标题后面的 *：creditia 的标志，也就是排版里「出处在这儿」的那个星号 */
-.title h1 .ast { display: inline-block; width: .4em; height: .4em; margin-left: .08em; vertical-align: .9em; }
-.title h1 .ast svg { display: block; width: 100%; height: 100%; }
-.title h1 .ast svg { transition: rotate .6s cubic-bezier(.34,1.5,.5,1); } .title h1 .ast:hover svg { rotate: 72deg; }
+.title h1 .ast { display: inline-block; width: .4em; height: .4em; margin-left: .08em; position: relative; top: -.62em; } /* 不撑高行 */
+.title h1 .ast svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .grow { flex: 1; }
 .ctl { display: flex; gap: 2px; }
 .ctl button, .ctl a { height: 32px; min-width: 32px; padding: 0 9px; border-radius: 99px; border: 0; background: transparent; opacity: .72; font: 500 12.5px/1 Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
@@ -889,6 +886,7 @@ function liveCommit() {
   const wt = FT.slice(0, 5).map((k) => DATA.share.zh.find((r) => r.key === k)?.pct || 0); let v = Math.random() * wt.reduce((a, b) => a + b, 0), tool = 0;
   for (; tool < 4; tool++) { v -= wt[tool]; if (v <= 0) break; }
   F.live = { i0, i1, y0, y1, tool, old: F.t.slice(i0, i1), t0: performance.now() };
+  heroMark?.kick(tool, 0.8);
   const row = shareRows().find((r) => r.key === FT[tool]), en = EN_(), cap = $('fproj');
   cap.innerHTML = `<b style="font-weight:400;color:${AGC[FT[tool]]}">+${Math.round((len * LINES) / (F.rows * F.cols * 0.82))} ${en ? 'lines' : '行'} · ${row.name}</b> · ${f.name}`;
   if (!RM) cap.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: EASE });
@@ -922,7 +920,7 @@ $('fcv').addEventListener('pointermove', (e) => {
 });
 $('fcv').addEventListener('pointerleave', () => { ftip.hidden = true; if (F.hover >= 0) { F.hover = -1; F.done && fieldDraw(0); } });
 // 图例：只亮这个工具写的行
-const legendFocus = (j) => { F.focus = j; $('flegend').classList.toggle('focus', j >= 0); $('flegend').querySelectorAll('span').forEach((x) => x.classList.toggle('on', +x.dataset.j === j)); if (F.done) fieldDraw(0); };
+const legendFocus = (j) => { F.focus = j; if (heroMark) { heroMark.focus = j < 5 ? j : -1; wake(); } $('flegend').classList.toggle('focus', j >= 0); $('flegend').querySelectorAll('span').forEach((x) => x.classList.toggle('on', +x.dataset.j === j)); if (F.done) fieldDraw(0); };
 $('flegend').addEventListener('pointerover', (e) => { const s2 = e.target.closest('span[data-j]'); if (s2 && F.done) legendFocus(+s2.dataset.j); });
 $('flegend').addEventListener('pointerleave', () => legendFocus(-1));
 // 换主题：颜色重读一遍
@@ -1052,6 +1050,60 @@ document.querySelectorAll('#agents span').forEach((s) => {
   s.onpointermove = (e) => { const r = s.getBoundingClientRect(); s.style.translate = `${(e.clientX - r.left - r.width / 2) * 0.35}px ${(e.clientY - r.top - r.height / 2) * 0.35}px`; };
   s.onpointerleave = () => (s.style.translate = '');
 });
+// ───────── 星号 * 活起来 ─────────
+// 每瓣是一个带阻尼的弹簧：进场时一瓣接一瓣从中心弹出来（带一点过冲和扭转），整颗同时甩过来半圈；
+// 之后一道呼吸的波沿着五瓣转（只有首屏标题后那颗）。鼠标靠近时呼吸更快更深，悬停转一瓣；
+// 首屏代码图里有工具「提交」时它那一瓣跳一下，图例聚焦某个工具时那一瓣伸长、其余收短。
+const MARK = document.querySelector('.brand svg').outerHTML;
+const MARKS = [];
+let heroMark = null, markRaf = 0, markLast = 0, pointer = { x: -1e4, y: -1e4 };
+addEventListener('pointermove', (e) => { pointer = { x: e.clientX, y: e.clientY }; }, { passive: true });
+function liveMark(svg, o = {}) {
+  if (!svg || RM) return null;
+  const ps = [...svg.querySelectorAll('path')];
+  const m = { svg, ps, o, t0: performance.now() + (o.delay ?? 0), th: -150, vth: 0, T: 0, s: ps.map(() => 0), v: ps.map(() => 0), on: ps.map(() => false), near: 0, focus: -1, awake: true };
+  m.kick = (i, k = 1) => { if (m.ps[i]) { m.v[i] += 7 * k; m.vth += 60 * k; m.awake = true; wake(); } };
+  svg.addEventListener('pointerenter', () => { m.T += 72; m.awake = true; wake(); });
+  draw(m);
+  MARKS.push(m); wake();
+  return m;
+}
+function wake() { if (!markRaf) { markLast = performance.now(); markRaf = requestAnimationFrame(markLoop); } }
+function draw(m) {
+  m.ps.forEach((p, i) => { const s = Math.max(0, m.s[i]); p.setAttribute('transform', `rotate(${((1 - s) * -70).toFixed(2)} 12 12) translate(12 12) scale(${s.toFixed(4)}) translate(-12 -12)`); });
+  m.svg.style.transform = `rotate(${m.th.toFixed(2)}deg)`;
+}
+function markLoop(now) {
+  const dt = Math.min(1 / 30, (now - markLast) / 1000); markLast = now;
+  for (let k = MARKS.length - 1; k >= 0; k--) if (!MARKS[k].svg.isConnected) MARKS.splice(k, 1);
+  let busy = false;
+  for (const m of MARKS) {
+    if (now < m.t0) { busy = true; continue; }
+    const r = m.svg.getBoundingClientRect();
+    if (r.bottom < 0 || document.hidden) { busy = busy || m.o.breathe; continue; }
+    const t = (now - m.t0) / 1000, n = m.ps.length;
+    const d = Math.hypot(pointer.x - (r.left + r.width / 2), pointer.y - (r.top + r.height / 2));
+    m.near += (Math.max(0, 1 - d / 320) - m.near) * Math.min(1, dt * 4);
+    const A = m.o.breathe ? 0.05 + 0.1 * m.near : 0, P = 3.4 - 1.6 * m.near;
+    let still = !m.o.breathe;
+    for (let i = 0; i < n; i++) {
+      if (!m.on[i] && t >= i * 0.065) { m.on[i] = true; m.v[i] += 9; }
+      if (!m.on[i]) { still = false; continue; }
+      let target = 1 + A * Math.sin((2 * Math.PI * t) / P - (i * 2 * Math.PI) / n);
+      if (m.focus >= 0) target *= i === m.focus ? 1.24 : 0.7;
+      const a = 210 * (target - m.s[i]) - 13 * m.v[i];
+      m.v[i] += a * dt; m.s[i] += m.v[i] * dt;
+      if (Math.abs(m.v[i]) > 1e-3 || Math.abs(target - m.s[i]) > 1e-3) still = false;
+    }
+    const sway = m.o.breathe ? 5 * Math.sin(t / 1.9) * (0.4 + m.near) : 0;
+    const at = 70 * (m.T + sway - m.th) - 10 * m.vth;
+    m.vth += at * dt; m.th += m.vth * dt;
+    if (Math.abs(m.vth) > 1e-2 || Math.abs(m.T + sway - m.th) > 1e-2) still = false;
+    draw(m);
+    if (!still) busy = true;
+  }
+  markRaf = busy ? requestAnimationFrame(markLoop) : 0;
+}
 function intro() {
   const h1 = document.querySelector('.title h1');
   const chars = split(h1);
@@ -1059,10 +1111,8 @@ function intro() {
   rise(chars, { blur: true, step: lang() === 'zh' ? 55 : 90, delay: 100, dur: 1100 });
   const after = 100 + chars.length * (lang() === 'zh' ? 55 : 90) + 200;
   rise([document.querySelector('.title p'), document.querySelector('.acts')], { y: 30, delay: after, step: 120, dur: 1000 });
-  // 标志和标题后的 *：一瓣瓣从中心长出来
-  const bloom = (sel, delay) => document.querySelectorAll(sel).forEach((p, k) => p.animate(
-    [{ transform: 'scale(0) rotate(-40deg)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 800, delay: delay + k * 70, easing: SPRING, fill: 'backwards' }));
-  bloom('.brand svg path', 150); bloom('.title .ast path', after - 200);
+  liveMark(document.querySelector('.brand svg'), { delay: 150 });
+  heroMark = liveMark(document.querySelector('.title .ast svg'), { delay: after - 250, breathe: true });
   document.querySelectorAll('#agents span').forEach((s, k) => s.animate(
     [{ transform: 'scale(.4)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 700, delay: after + 260 + k * 35, easing: SPRING, fill: 'backwards' }));
   rise([document.querySelector('.fcap'), $('flegend')], { y: 14, delay: 500, step: 200, dur: 900 });
@@ -1845,8 +1895,11 @@ function applyLang() {
   document.querySelectorAll('[data-i]').forEach((el) => (el.innerHTML = t(el.dataset.i)));
   // 像脚注一样：点标题后面的 *，跳到「出处」
   const h1 = document.querySelector('.title h1'), ast = document.createElement('a');
-  ast.className = 'ast'; ast.href = '#lines'; ast.setAttribute('aria-label', t('nav.lines')); ast.innerHTML = document.querySelector('.brand svg').outerHTML; h1.append(ast);
+  ast.className = 'ast'; ast.href = '#lines'; ast.setAttribute('aria-label', t('nav.lines')); ast.innerHTML = MARK; h1.append(ast);
+  if (heroMark) heroMark = liveMark(ast.querySelector('svg'), { delay: 250, breathe: true });
   // 有英文版的文档：链接跟着语言换
+  // App 截图：英文页放英文界面的
+  document.querySelectorAll('.deskshot img').forEach((im) => { im.src = `assets/app-${im.classList.contains('dk') ? 'dark' : 'light'}${lang() === 'en' ? '-en' : ''}.webp`; });
   document.querySelectorAll('[data-en-href]').forEach((a) => { a.dataset.zhHref ??= a.getAttribute('href'); a.setAttribute('href', lang() === 'en' ? a.dataset.enHref : a.dataset.zhHref); });
   $('lang').textContent = lang() === 'en' ? '中' : 'EN';
   document.title = lang() === 'en' ? 'creditia — which AI wrote your code' : 'creditia — 你的代码，是哪些 AI 写的';

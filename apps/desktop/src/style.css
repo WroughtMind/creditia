@@ -347,9 +347,11 @@ body.roam #top::before { opacity: 1; }
 .mk.spin path:nth-child(2) { animation-delay: .25s; } .mk.spin path:nth-child(3) { animation-delay: .5s; }
 .mk.spin path:nth-child(4) { animation-delay: .75s; } .mk.spin path:nth-child(5) { animation-delay: 1s; } .mk.spin path:nth-child(6) { animation-delay: 1.25s; }
 @keyframes petal { 0%, 100% { opacity: .22; scale: .7; } 35% { opacity: 1; scale: 1; } }
-.mk.bloom path, .logo.bloom path { animation: bloom .75s cubic-bezier(.2,.9,.25,1.12) both; } /* 出结果：一瓣瓣从中心长出来 */
+.mk.bloom path, .logo.bloom path { animation: bloom .7s ease-out both; } /* 出结果：一瓣瓣从中心长出来 */
 .mk.bloom path:nth-child(2), .logo.bloom path:nth-child(2) { animation-delay: .07s; } .mk.bloom path:nth-child(3), .logo.bloom path:nth-child(3) { animation-delay: .14s; }
 .mk.bloom path:nth-child(4), .logo.bloom path:nth-child(4) { animation-delay: .21s; } .mk.bloom path:nth-child(5), .logo.bloom path:nth-child(5) { animation-delay: .28s; } .mk.bloom path:nth-child(6), .logo.bloom path:nth-child(6) { animation-delay: .35s; }
 .logo.bloom path { transform-box: view-box; transform-origin: 12px 12px; }
-@keyframes bloom { from { opacity: 0; scale: 0; rotate: -40deg; } }
-@media (prefers-reduced-motion: reduce) { .mk.bloom path, .logo.bloom path { animation: none; } .mk.spin path { animation-duration: 2.5s; scale: 1; } }
+@keyframes bloom { 0% { opacity: 0; scale: 0; rotate: -70deg; } 55% { opacity: 1; scale: 1.24; rotate: 6deg; } 78% { scale: .95; rotate: -2deg; } 100% { scale: 1; rotate: 0deg; } } /* 弹出来，过冲一下再落定 */
+.mk.bloom, .logo.bloom svg { animation: whirl .95s cubic-bezier(.2,.9,.25,1.1) both; } /* 整颗同时甩过来 */
+@keyframes whirl { from { rotate: -150deg; } }
+@media (prefers-reduced-motion: reduce) { .mk.bloom path, .logo.bloom path, .mk.bloom, .logo.bloom svg { animation: none; } .mk.spin path { animation-duration: 2.5s; scale: 1; } }
