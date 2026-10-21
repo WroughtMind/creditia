@@ -773,11 +773,13 @@ fn doctor_local() -> Value {
 // ───────────────────────── 标志：设置里选，程序坞图标跟着换 ─────────────────────────
 // 安装包里的图标是默认的条纹圆（orb）；选了别的，App 开着时程序坞显示选的那个（关着时 macOS 仍显示安装包里的）
 
-const DEFAULT_LOGO: &str = "orb";
+const DEFAULT_LOGO: &str = "star";
 
 fn icon_png(id: &str) -> Option<&'static [u8]> {
     match id {
-        "orb" => Some(include_bytes!("../icons/icon.png")),
+        "star" => Some(include_bytes!("../icons/icon.png")),
+        "star-mono" => Some(include_bytes!("../icons/dock/star-mono.png")),
+        "orb" => Some(include_bytes!("../icons/dock/orb.png")),
         "ring" => Some(include_bytes!("../icons/dock/ring.png")),
         "color" => Some(include_bytes!("../icons/dock/color.png")),
         "mono" => Some(include_bytes!("../icons/dock/mono.png")),

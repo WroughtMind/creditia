@@ -10,6 +10,7 @@ import { INTERACT_CSS, mountHits } from '../../../packages/render/src/interact.t
 import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, groupOf, hasModels, type Kit } from './kits.ts';
 import { exportArt, type Format } from './engine.ts';
 import { LOGOS, DEFAULT_LOGO, logoSvg } from './logo.ts';
+import { markPaths, sharePetals, type Petal } from '../../../packages/render/src/mark.ts';
 
 // ───────────────────────── 桥：Tauri 或浏览器调试 ─────────────────────────
 const native = (window as any).__TAURI__?.core?.invoke as ((cmd: string, args?: any) => Promise<any>) | undefined;
@@ -82,12 +83,20 @@ const L = (zh: string, en: string) => (state.lang === 'zh' ? zh : en);
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 const fmt = (n: number) => n.toLocaleString('en-US');
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+// 星号 *：标志本身，也是每个项目自己的 *（瓣长是各工具的份额）。等待时五瓣轮流亮，出结果时一瓣瓣长出来
+const markEl = (petals?: Petal[] | null, cls = '') => `<svg class="mk${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${markPaths({ petals: petals ?? undefined })}</svg>`;
+const SPIN = () => markEl(null, 'spin');
+/** 还没分析过的项目：五瓣淡淡的短瓣 */
+const GHOST: Petal[] = Array.from({ length: 5 }, () => ({ color: 'currentColor', len: 0.5, opacity: 0.35 }));
+const petalsOf = (m: Model) => sharePetals(m.agents.filter((a) => a.kind === 'agent').map((a) => ({ tool: a.key.split('/')[0], lines: a.lines })));
+/** 每个项目的 * 记在本机，菜单里不用每次都读档案 */
+const markOf = (id: string): Petal[] | null => { try { return JSON.parse(store.get('mark.' + id) ?? 'null'); } catch { return null; } };
 type Act = { label: string; run: () => void };
 let toastTimer = 0, toastMs = 0;
-/** 提示条：可以带按钮（在访达中显示、取消……）和转圈；ms 为 0 就一直留着。鼠标停在上面时不消失 */
-function toast(msg: string, ms = 2600, o: { acts?: Act[]; spin?: boolean } = {}) {
+/** 提示条：可以带按钮（在访达中显示、取消……）、转圈的 *、或者一个项目的 *；ms 为 0 就一直留着。鼠标停在上面时不消失 */
+function toast(msg: string, ms = 2600, o: { acts?: Act[]; spin?: boolean; mark?: Petal[] | null } = {}) {
   const el = $('#toast');
-  el.innerHTML = `${o.spin ? '<i class="spin"></i>' : ''}<span class="msg"></span>${(o.acts ?? []).map((a, i) => `<button data-i="${i}">${esc(a.label)}</button>`).join('')}`;
+  el.innerHTML = `${o.spin ? SPIN() : o.mark ? markEl(o.mark, 'bloom') : ''}<span class="msg"></span>${(o.acts ?? []).map((a, i) => `<button data-i="${i}">${esc(a.label)}</button>`).join('')}`;
   el.querySelector('.msg')!.textContent = msg;
   el.onclick = (e) => { const b = (e.target as HTMLElement).closest('button'); if (!b) return; el.hidden = true; o.acts![Number(b.dataset.i)].run(); };
   el.hidden = false;
@@ -257,6 +266,7 @@ function rebuildModel() {
   state.model = buildModel(state.raw, { director: false, lang: state.lang, group: groupPref() });
   const m = state.model;
   $('#pname').textContent = m.project || state.current?.name;
+  if (state.current?.id) store.set('mark.' + state.current.id, JSON.stringify(petalsOf(m)));
   renderGroup();
   renderPlugs();
 }
@@ -1132,6 +1142,20 @@ function wireTop() {
   };
   $('#gear').onclick = () => settings();
 }
+/** 菜单里还没有 * 的项目：在后台一个个读档案，算出来就换上 */
+let filling = false;
+async function fillMarks(redraw: () => void) {
+  if (filling) return;
+  filling = true;
+  try {
+    for (const p of state.projects) {
+      if (markOf(p.id) || !p.lastAnalyzed || p.exists === false) continue;
+      const raw = await api('credits', { projectId: p.id }).catch(() => null);
+      if (!raw) continue;
+      try { store.set('mark.' + p.id, JSON.stringify(petalsOf(buildModel(raw, { director: false, lang: state.lang, group: 'tool' })))); redraw(); } catch { /* 读不了的档案就留着淡的 * */ }
+    }
+  } finally { filling = false; }
+}
 function closeMenu() { $('#menu').hidden = true; $('#project').setAttribute('aria-expanded', 'false'); }
 function toggleMenu() {
   const menu = $('#menu'), pill = $('#project');
@@ -1146,16 +1170,16 @@ function toggleMenu() {
     const q = ($('#q') as HTMLInputElement).value.trim().toLowerCase();
     const hit = (s: string) => !q || s.toLowerCase().includes(q);
     const all = state.projects.length > 1 && (hit(L('全部项目', 'All projects')) || 'all'.includes(q))
-      ? `<div class="item all ${state.current?.all ? 'on' : ''}" data-id="${ALL_ID}" role="option" aria-selected="${!!state.current?.all}"><b>${L('全部项目', 'All projects')}</b><span class="r">${L(`${state.projects.length} 个`, `${state.projects.length}`)}</span></div>` : '';
+      ? `<div class="item all ${state.current?.all ? 'on' : ''}" data-id="${ALL_ID}" role="option" aria-selected="${!!state.current?.all}">${markEl(markOf(ALL_ID) ?? GHOST)}<b>${L('全部项目', 'All projects')}</b><span class="r">${L(`${state.projects.length} 个`, `${state.projects.length}`)}</span></div>` : '';
     const mine = state.projects.filter((p) => hit(`${p.name} ${p.path}`)).map((p) => `
       <div class="item ${p.id === state.current?.id ? 'on' : ''} ${p.exists === false ? 'gone' : ''}" data-id="${esc(p.id)}" role="option" aria-selected="${p.id === state.current?.id}">
-        <b>${esc(p.name)}</b><span class="r">${p.exists === false ? L('目录不在了', 'folder missing') : p.lastAnalyzed ? day(p.lastAnalyzed) : ''}</span>
+        ${markEl(markOf(p.id) ?? GHOST)}<b>${esc(p.name)}</b><span class="r">${p.exists === false ? L('目录不在了', 'folder missing') : p.lastAnalyzed ? day(p.lastAnalyzed) : ''}</span>
         <span class="path" title="${esc(p.path)}">${esc(short(p.path))}</span>
       </div>`).join('');
     // 本机用过 AI 工具、还没加进来的项目：点一下就分析
     const more = (found ?? []).filter((d) => hit(`${d.name} ${d.path}`)).map((d) => `
       <div class="item new" data-path="${esc(d.path)}" role="option" aria-selected="false">
-        <b>${esc(d.name)}</b><span class="r">${esc(toolsOf(d))}</span>
+        ${markEl(GHOST)}<b>${esc(d.name)}</b><span class="r">${esc(toolsOf(d))}</span>
         <span class="path" title="${esc(d.path)}">${esc(short(d.path))}</span>
       </div>`).join('');
     $('#plist').innerHTML = all + mine + (more ? `<div class="sec">${L('还没添加', 'Not added yet')}</div>${more}` : '')
@@ -1167,6 +1191,7 @@ function toggleMenu() {
   const mark = () => items().forEach((x, j) => { x.classList.toggle('kb', j === kb); if (j === kb) x.scrollIntoView({ block: 'nearest' }); });
   draw();
   if (!demo && found === null) void discover().then(() => { if (!menu.hidden) draw(); });
+  void fillMarks(() => { if (!menu.hidden) draw(); });
   renderPlugs();
   const q = $('#q') as HTMLInputElement;
   q.oninput = () => { kb = -1; draw(); };
@@ -1236,8 +1261,9 @@ async function reanalyze(p: any, auto = false) {
       await swapRaw(raw);
     } else await openProject(fresh);
     const n = Number(v?.newCommits) || 0;
-    if (auto) toast(n ? L(`已跟上 ${n} 个新提交`, `Caught up with ${n} new commit${n > 1 ? 's' : ''}`) : L('已更新', 'Updated'));
-    else done(L('已更新', 'Updated'), v?.warnings);
+    const mk = markOf(p.id);
+    if (auto) toast(n ? L(`已跟上 ${n} 个新提交`, `Caught up with ${n} new commit${n > 1 ? 's' : ''}`) : L('已更新', 'Updated'), 2600, { mark: mk });
+    else done(L('已更新', 'Updated'), v?.warnings, mk);
   } catch (e) { if (!auto || (e as any)?.code !== 'busy') toast(errText(e), 6000); }
 }
 async function addProject() {
@@ -1278,20 +1304,22 @@ function welcome() {
   const picked = new Set<string>();
   let list: Found[] | null = null;
   const status = new Map<string, string>();
+  let first = true; // 标志只在第一次画出来时长一遍
   const draw = () => {
     if (el.hidden) return;
     const running = [...status.values()].includes('run');
     el.innerHTML = `<div class="box">
-      <span class="logo">${logoSvg(store.get('logo'))}</span>
+      <span class="logo${first && logoNow().startsWith('star') ? ' bloom' : ''}">${logoSvg(store.get('logo'))}</span>
       <h1>${L('选几个项目开始', 'Pick projects to start')}</h1>
-      <div class="found">${list === null ? `<p class="wait"><i class="spin"></i>${L('正在找本机用过 AI 工具的仓库…', 'Looking for repos where you used AI tools…')}</p>`
+      <div class="found">${list === null ? `<p class="wait">${SPIN()}${L('正在找本机用过 AI 工具的仓库…', 'Looking for repos where you used AI tools…')}</p>`
         : list.length ? list.map((d) => `<label class="row ${status.get(d.path) ?? ''}" data-path="${esc(d.path)}">
             <input type="checkbox" ${picked.has(d.path) ? 'checked' : ''} ${running || status.has(d.path) ? 'disabled' : ''}>
             <b>${esc(d.name)}</b><span class="path" title="${esc(d.path)}">${esc(short(d.path))}</span><span class="tools">${esc(toolsOf(d))}</span>
-            <i class="st"></i></label>`).join('')
+            <i class="st">${status.get(d.path) === 'run' ? SPIN() : ''}</i></label>`).join('')
         : `<p class="wait">${L('没找到用过 AI 工具的 git 仓库', 'No git repos with AI tool activity found')}</p>`}</div>
       <div class="acts"><button class="pick" ${running ? 'disabled' : ''}>${L('选文件夹…', 'Choose folder…')}</button>${list?.length ? `<button class="go" ${!picked.size || running ? 'disabled' : ''}>${running ? L('分析中…', 'Analyzing…') : picked.size > 1 ? L(`分析这 ${picked.size} 个`, `Analyze ${picked.size}`) : L('开始分析', 'Analyze')}</button>` : ''}</div>
     </div>`;
+    first = false;
   };
   el.onchange = (e) => {
     const box = e.target as HTMLInputElement, path = box.closest<HTMLElement>('.row')?.dataset.path;
@@ -1310,9 +1338,9 @@ function welcome() {
 }
 
 /** 分析跑完：核心有提醒（某个数据源读不了之类）就在提示里给个「查看」 */
-function done(msg: string, warnings?: string[]) {
-  if (!warnings?.length) return toast(msg);
-  toast(L(`${msg} · ${warnings.length} 条提醒`, `${msg} · ${warnings.length} ${warnings.length > 1 ? 'notes' : 'note'}`), 10000, { acts: [{ label: L('查看', 'View'), run: () => showWarnings(warnings) }] });
+function done(msg: string, warnings?: string[], mark?: Petal[] | null) {
+  if (!warnings?.length) return toast(msg, 2600, { mark });
+  toast(L(`${msg} · ${warnings.length} 条提醒`, `${msg} · ${warnings.length} ${warnings.length > 1 ? 'notes' : 'note'}`), 10000, { mark, acts: [{ label: L('查看', 'View'), run: () => showWarnings(warnings) }] });
 }
 function showWarnings(list: string[]) {
   const el = $('#sheet');

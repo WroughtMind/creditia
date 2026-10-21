@@ -187,7 +187,8 @@ export interface Seg { text: string; color?: string; dim?: boolean; bold?: boole
 /** 终端名片（neofetch 式） */
 export function fetchSegs(m: Model): Seg[][] {
   const lines: Seg[][] = [];
-  lines.push([{ text: m.project, bold: true }, { text: `  ${m.range.from} → ${m.range.to}`, dim: true }]);
+  // 标题前挂 creditia 的 *，用写得最多的那个工具的颜色
+  lines.push([{ text: '* ', bold: true, color: m.rows.find((a) => a.kind === 'agent')?.key }, { text: m.project, bold: true }, { text: `  ${m.range.from} → ${m.range.to}`, dim: true }]);
   lines.push([{ text: '─'.repeat(Math.max(24, m.project.length + 26)), dim: true }]);
   for (const a of m.rows) {
     const n = Math.max(a.pct > 0 ? 1 : 0, Math.round(a.pct / 4));

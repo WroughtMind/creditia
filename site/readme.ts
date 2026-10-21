@@ -148,9 +148,13 @@ for (const theme of ['dark', 'light'] as const) for (const lang of LANGS) put(`m
 
 // ───────── logo ─────────
 console.log('logos');
-const own = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo-orb.svg'), 'utf8');
+// 星号 *，打开页面时五瓣从中心依次长出来（五色，深浅底同一张）
+const BLOOM = '<style>path{transform-box:view-box;transform-origin:12px 12px;animation:b .8s cubic-bezier(.34,1.5,.5,1) both}'
+  + [2, 3, 4, 5].map((i) => `path:nth-of-type(${i}){animation-delay:${(i - 1) * 70}ms}`).join('')
+  + '@keyframes b{from{transform:scale(0) rotate(-40deg);opacity:0}}@media (prefers-reduced-motion:reduce){path{animation:none}}</style>';
+const own = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo-star.svg'), 'utf8').replace(/(<svg[^>]*>)/, `$1${BLOOM}`);
 put('logo-light.svg', own);
-put('logo-dark.svg', own.replaceAll('#0E0E0E', '#F1EADC'));
+put('logo-dark.svg', own);
 // 工具表里的小 logo：中灰，深浅底都看得清
 const TOOLS = ['claude-code', 'codex', 'cursor', 'gemini', 'qwen', 'opencode', 'cline', 'roo', 'kilo', 'grok', 'kimi', 'copilot', 'devin', 'jules', 'aider'];
 for (const k of TOOLS) {

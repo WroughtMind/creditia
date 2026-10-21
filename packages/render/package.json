@@ -12,7 +12,8 @@
     "gallery": "node src/gallery.ts fixtures/lumen.json gallery",
     "test": "node --test test/*.test.ts",
     "metrics": "python3 tools/metrics.py",
-    "logos": "node tools/logos.mjs"
+    "logos": "node tools/logos.mjs",
+    "mark": "node tools/mark.ts"
   },
   "dependencies": {
     "@expo-google-fonts/anton": "^0.4.2",

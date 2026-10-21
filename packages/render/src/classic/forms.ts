@@ -9,6 +9,7 @@ import { fmt, pct, compact, nameOf } from './data.ts';
 import { BRANDS, BOTS, colorOf, famColor, logoSvg } from './brand.ts';
 import { h, box, col, txt, label, mark, bar, fill, neonTube, backdrop, surface, svgImage, stripes, blocks, plate, plateMetrics, ornament, fit, spread, eq, oneLine, MONO_FONT, BODY_KEY, CONTENT_KEY, nameFit, nameFitH, nameFitNode, type Node, type Out } from './ui.ts';
 import { measure } from '../svg.ts';
+import { markSvg, sharePetals } from '../mark.ts';
 
 const keysOf = (m: Model) => m.rows.map((r) => r.key);
 /** 主演名单：有 logo 的 AI 工具按名次排 */
@@ -520,7 +521,7 @@ export function byline(m: Model, t: Theme, lang: 'zh' | 'en'): Out {
         box({ justifyContent: 'center', alignItems: 'center', gap: 16, padding: '14px 0' },
           label(t, 'colophon 版权页', 10),
           oneLine(txt({ fontFamily: t.display, fontSize: 24, fontWeight: 700, color: t.ink }, s)),
-          label(t, 'creditia', 10)),
+          signed(t, m, 10)),
         box({ height: 2, backgroundColor: t.ink })) };
     case 'crt':
       return { w: W, h: H, tree: box({ width: W, height: H, alignItems: 'center', justifyContent: 'center', gap: 16, backgroundColor: t.bg, backgroundImage: t.pattern, fontFamily: t.sans },
@@ -1916,7 +1917,7 @@ function tierHead(kind: TierHead, m: Model, t: Theme, s: number, on: boolean): N
           txt({ fontFamily: t.display, fontSize: 52 * s, color: t.ink, lineHeight: 1, textTransform: 'uppercase', letterSpacing: -1 * s }, m.project)) : null,
         on ? box({ height: 5 * s, backgroundColor: t.ink, width: '100%' }) : null,
         box({ justifyContent: 'space-between', alignItems: 'baseline' },
-          label(t, 'credits 署名', 11 * s), label(t, dir ? `lead ${dir}` : 'creditia', 11 * s)));
+          label(t, 'credits 署名', 11 * s), dir ? label(t, `lead ${dir}`, 11 * s) : signed(t, m, 11 * s)));
   }
 }
 
@@ -2007,6 +2008,13 @@ function tierRowN(kind: TierRow, r: Contributor, i: number, m: Model, t: Theme, 
   }
 }
 
+/** 落款：creditia，前面挂上这个项目自己的 *（瓣长是各工具的份额，颜色跟着这个风格） */
+function signed(t: Theme, m: Model, size: number, style: Record<string, any> = {}): Node {
+  const petals = sharePetals(m.agents.filter((a) => a.kind === 'agent').map((a) => ({ tool: a.key.split('/')[0], lines: a.lines, color: colorOf(a.key.split('/')[0], t) })), t.faint);
+  const k = Math.round(size * 1.25);
+  return box({ alignItems: 'center', gap: Math.round(size * 0.5) }, svgImage(markSvg({ petals }), k, k), label(t, 'creditia', size, style));
+}
+
 function tierFoot(t: Theme, s: number, totals: string, m: Model): Node {
   const mark_ = () => ornament(t, 10 * s);
   switch (t.family) {
@@ -2036,7 +2044,7 @@ function tierFoot(t: Theme, s: number, totals: string, m: Model): Node {
         mark_(), txt({ fontFamily: t.sans, fontSize: 12 * s, color: t.soft, letterSpacing: 3 * s }, totals));
     default:
       return box({ height: 64 * s, alignItems: 'flex-end', justifyContent: 'space-between', borderTop: `6px solid ${t.ink}` },
-        label(t, totals, 11 * s), label(t, m.project ? 'creditia' : '', 11 * s));
+        label(t, totals, 11 * s), m.project ? signed(t, m, 11 * s) : label(t, '', 11 * s));
   }
 }
 
