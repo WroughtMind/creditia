@@ -11,6 +11,9 @@ import { creditsBlock, fetchSegs } from '../packages/render/src/text.ts';
 import { deflateSync } from 'node:zlib';
 import type { Art } from '../packages/render/src/export.ts';
 import { LOGOS } from '../packages/render/src/logos.ts';
+import { markSvg, sharePetals, toolColor, MARK_GREY } from '../packages/render/src/mark.ts';
+/** 同一个工具的第 k 个模型：往白里调浅一点，第二个浅 40%，之后每个再浅一些 */
+const mix = (hex: string, k: number) => { const t = Math.min(0.7, 0.4 + 0.12 * (k - 1)), c = (i: number) => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - t) + 255 * t).toString(16).padStart(2, '0'); return `#${c(1)}${c(3)}${c(5)}`; };
 import { LOGO_OF } from '../packages/render/src/style.ts';
 import { TOOL_NAMES } from '../packages/render/src/data.ts';
 import * as C from '../packages/render/src/classic/index.ts';
@@ -85,7 +88,7 @@ async function draw(rel: string, piece: string, style: string, lang: Lang, o: { 
   return { w: a.w, h: a.h, bg: a.bg };
 }
 
-const meta: any = { wall: {}, usage: {}, selfBadge: null };
+const meta: any = { wall: {}, usage: {} };
 
 // 首屏和命令行演示用的数字：样例项目 creditia fetch 的输出（各工具占比、模型）
 meta.fetch = {}; meta.share = {};
@@ -209,15 +212,23 @@ for (const lang of LANGS) {
   { const b = art('badge', vm, styleById('ink')!, { variant: 'flat' })!; write(`usage/${lang}-ink-badge.svg`, exporter.svg(b)); meta.usage.ink = { w: b.w, h: b.h }; }
   { const a = art('share', vm, styleById('ink')!)!; write(`usage/${lang}-ink-share.png`, exporter.png(a, 560 / a.w)); }
   for (const v of ['flat', 'stack']) { const a = art('badge', vm, styleById('ukiyoe')!, { variant: v })!; write(`usage/${lang}-badge-${v}.svg`, exporter.svg(a)); meta.usage[v] = { w: a.w, h: a.h }; }
-  if (own) meta.selfBadge = await draw(`usage/${lang}-self-badge`, 'badge', 'minimal-light', lang, { raw: own });
+  // README 顶上那枚 built with 徽章引用的是这个文件，页面上不再用
+  if (own) await draw(`usage/${lang}-self-badge`, 'badge', 'minimal-light', lang, { raw: own });
 }
-// creditia 自己的署名（首页「creditia 自己的署名」那一节）：各工具占比、模型、提交数、行数
+// creditia 自己的署名（页尾那颗 *）：按模型分，瓣长是份额；同一个工具的几个模型用它的颜色由深到浅
 if (own) {
   meta.self = {};
   for (const lang of LANGS) {
     const m = modelOf(own, lang, 'v');
+    const seen: Record<string, number> = {};
+    const rows = m.rows.map((r: any) => {
+      const tool = String(r.key).split('/')[0], k = (seen[tool] = (seen[tool] ?? -1) + 1);
+      const base = tool === 'unattributed' ? MARK_GREY : toolColor(tool);
+      return { name: r.name, pct: r.pct, color: k ? mix(base, k) : base };
+    });
+    const petals = sharePetals(rows.map((r: any, j: number) => ({ tool: String(j), lines: r.pct, color: r.color })));
     meta.self[lang] = {
-      rows: m.rows.map((r: any) => ({ key: r.key, name: r.name, pct: r.pct, models: r.models.map((x: any) => x.name).join(' · ') })),
+      rows: rows.map((r: any, j: number) => ({ ...r, j })), mark: markSvg({ petals }),
       commits: m.commits, lines: m.linesAdded, from: m.range.from, to: m.range.to,
     };
   }
