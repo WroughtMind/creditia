@@ -1,4 +1,4 @@
-// 作品清单：id → 渲染函数与说明。Node 和浏览器共用。
+// 卡片清单：id → 渲染函数与说明。Node 和浏览器共用。
 import type { Model } from './data.ts';
 import type { Style } from './style.ts';
 import type { Art } from './export.ts';
@@ -23,25 +23,25 @@ export interface PieceDef {
 }
 
 export const PIECES: Record<string, PieceDef> = {
-  tier: { name: '署名榜', en: 'Credits', q: '各工具写了多少', qEn: 'How much each tool wrote', variants: TIER_VARIANTS, animated: true, render: tier },
+  tier: { name: '署名榜', en: 'Credits', q: '工具与模型占比', qEn: 'Contribution shares by tool and model', variants: TIER_VARIANTS, animated: true, render: tier },
   share: { name: '分享图', en: 'Share Card', q: '链接预览、社交媒体', qEn: 'Link previews, social posts', animated: true, render: share },
-  hand: { name: '人', en: 'People', q: '人做了多少：消息、review、人写的代码', qEn: 'What people did: messages, reviews, hand-written code', animated: true, render: hand },
-  receipt: { name: '小票', en: 'Receipt', q: '花了多少时间、会话和 token', qEn: 'Time, sessions and tokens spent', variants: RECEIPT_VARIANTS, render: receipt },
+  hand: { name: '开发者', en: 'Developers', q: '提示词、审阅与手写代码', qEn: 'Prompts, reviews, and hand-written code', animated: true, render: hand },
+  receipt: { name: '小票', en: 'Receipt', q: '工期、会话与 Token', qEn: 'Time, sessions, and tokens spent', variants: RECEIPT_VARIANTS, render: receipt },
   badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', qEn: 'README, profile page', variants: BADGE_VARIANTS, render: badge },
   byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', variants: BYLINE_VARIANTS, render: byline },
-  roll: { name: '片尾字幕', en: 'Credits Roll', q: '谁担任了什么角色', qEn: 'Who played which role', variants: ROLL_VARIANTS, animated: true, render: roll },
-  donut: { name: '环形图', en: 'Donut', q: '占比', qEn: 'Shares', variants: DONUT_VARIANTS, animated: true, render: donut },
-  waffle: { name: '华夫饼图', en: 'Waffle', q: '一格 1%', qEn: 'One square is 1%', variants: WAFFLE_VARIANTS, animated: true, render: waffle },
-  stream: { name: '河流图', en: 'Stream', q: '每周新增代码', qEn: 'New code each week', animated: true, render: stream },
-  lanes: { name: '会话泳道', en: 'Sessions', q: '各工具什么时候在干活', qEn: 'When each tool was at work', animated: true, render: lanes },
-  clock: { name: '作息打卡', en: 'Punch Card', q: '星期 × 小时', qEn: 'Weekday × hour', animated: true, render: clock },
-  versions: { name: '版本柱状图', en: 'Releases', q: '每个版本谁写的', qEn: 'Who wrote each release', animated: true, render: versions },
-  survival: { name: '留存', en: 'Retention', q: '写的代码现在还剩多少', qEn: 'How much of the written code is still here', animated: true, render: survival },
-  mosaic: { name: '文件马赛克', en: 'File Mosaic', q: '现在的代码由谁构成', qEn: 'Who the current code is made of', animated: true, render: mosaic },
-  calendar: { name: '日历', en: 'Calendar', q: '哪天谁在写', qEn: 'Who wrote on which day', animated: true, render: calendar },
-  evidence: { name: '出处', en: 'Evidence', q: '每一行凭什么算它的', qEn: 'What each line rests on', animated: true, render: evidence },
-  areas: { name: '板块', en: 'Areas', q: '哪一块是谁写的', qEn: 'Who wrote which part', animated: true, render: areas },
-  codemap: { name: '代码地图', en: 'Code Map', q: '现在的每一行是谁写的', qEn: 'Who wrote every line in the code now', animated: true, render: codemap },
+  roll: { name: '片尾字幕', en: 'Credits Roll', q: '分工与角色表', qEn: 'Contributors and roles', variants: ROLL_VARIANTS, animated: true, render: roll },
+  donut: { name: '环形图', en: 'Donut', q: '代码占比', qEn: 'Shares', variants: DONUT_VARIANTS, animated: true, render: donut },
+  waffle: { name: '华夫饼图', en: 'Waffle', q: '百格占比', qEn: 'One square is 1%', variants: WAFFLE_VARIANTS, animated: true, render: waffle },
+  stream: { name: '河流图', en: 'Stream', q: '每周新增', qEn: 'New code each week', animated: true, render: stream },
+  lanes: { name: '会话泳道', en: 'Sessions', q: '会话时间线', qEn: 'Session timeline by tool', animated: true, render: lanes },
+  clock: { name: '作息打卡', en: 'Punch Card', q: '活跃时段', qEn: 'Weekday × hour', animated: true, render: clock },
+  versions: { name: '版本柱状图', en: 'Releases', q: '各版本贡献', qEn: 'Code contributions per release', animated: true, render: versions },
+  survival: { name: '留存', en: 'Retention', q: '新增与留存对比', qEn: 'Code retention comparison', animated: true, render: survival },
+  mosaic: { name: '文件马赛克', en: 'File Mosaic', q: '各文件代码归属', qEn: 'Current codebase composition', animated: true, render: mosaic },
+  calendar: { name: '日历', en: 'Calendar', q: '活跃日历', qEn: 'Daily activity calendar', animated: true, render: calendar },
+  evidence: { name: '出处', en: 'Evidence', q: '归因依据', qEn: 'Evidence levels for each line', animated: true, render: evidence },
+  areas: { name: '板块', en: 'Areas', q: '各模块代码归属', qEn: 'Contributions by area and folder', animated: true, render: areas },
+  codemap: { name: '代码地图', en: 'Code Map', q: '代码归属地图', qEn: 'Line-by-line attribution map', animated: true, render: codemap },
 };
 
 /** 版式的中文名 */
@@ -58,10 +58,10 @@ export const MODEL_VARIANTS: Record<string, string[]> = {
 };
 export const variantName = (v: string, lang: 'zh' | 'en') => VARIANT_NAMES[v]?.[lang === 'zh' ? 0 : 1] ?? v;
 
-/** 渲染成可导出的作品 */
+/** 渲染成可导出的卡片 */
 export function art(id: string, m: Model, st: Style, o: PieceOpts = {}): Art | null {
   const p = PIECES[id];
-  if (!p) throw new Error(`未知作品：${id}`);
+  if (!p) throw new Error(`未知卡片：${id}`);
   const s = p.render(m, st, o);
   if (!s) return null;
   return { w: s.w, h: s.h, svg: s.toString(), hits: s.hits, bg: s.bg, title: `${m.project} · ${m.lang === 'en' ? p.en : p.name}`, motion: (s as any).motion };

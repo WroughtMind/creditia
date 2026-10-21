@@ -26,15 +26,17 @@ function fakeModel() {
   });
 }
 
-test('creditsBlock：工具表、版本段落、证据说明，不写人', () => {
+test('creditsBlock：工具表、版本段落，不写人，表头使用留存行', () => {
   const s = creditsBlock(fakeModel());
+  assert.match(s, /\| 工具 \| 模型 \| 占比 \| 新增行 \| 留存行 \|/);
   assert.match(s, /\| Codex \| GPT-5\.6 Sol \| 87\.2% \| \+312,045 \| 97,531 \|/);
   assert.match(s, /未确认 \| — \| 12\.8%/);
   assert.ok(!s.includes('**人**'), '署名只写 AI，不写人这一段');
   assert.match(s, /## v0\.1\.0 · 2025-04-02/);
   assert.match(s, /- #12 修一个并发 bug — Codex/);
-  assert.match(s, /没有逐行日志/);
+  assert.match(s, /<sub>creditia · 2025-09-01<\/sub>/);
   assert.ok(!s.includes('主导'));
+  assert.ok(!s.includes('没有逐行日志'), '不放长篇叠甲声明');
 });
 
 test('mergeCreditsMd 只改标记区间，区间外的手写内容原样保留', () => {

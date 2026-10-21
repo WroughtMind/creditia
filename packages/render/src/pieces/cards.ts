@@ -14,14 +14,14 @@ function effort(m: Model): { k: string; v: string; d?: string }[] {
   const h = m.hand;
   const items: { k: string; v: string; d?: string }[] = [];
   if (m.spanDays) items.push({ k: T(m, '历时', 'Span'), v: T(m, `${m.spanDays} 天`, `${m.spanDays} days`), d: range(m) });
-  if (m.activeDays) items.push({ k: T(m, '有提交的天数', 'Days with commits'), v: T(m, `${m.activeDays} 天`, `${m.activeDays} days`) });
+  if (m.activeDays) items.push({ k: T(m, '活跃天数', 'Active days'), v: T(m, `${m.activeDays} 天`, `${m.activeDays} days`) });
   if (m.sessions) items.push({ k: T(m, '会话', 'Sessions'), v: fmt(m.sessions) });
   if (m.tokens) items.push({ k: 'Token', v: compact(m.tokens) });
-  if (h.prompts) items.push({ k: T(m, '发给 AI 的消息', 'Messages to AI'), v: fmt(h.prompts) });
+  if (h.prompts) items.push({ k: T(m, '提示词', 'Prompts'), v: fmt(h.prompts) });
   items.push({ k: T(m, '提交', 'Commits'), v: fmt(m.commits) });
-  if (h.written) items.push({ k: T(m, 'AI 写的', 'Written by AI'), v: T(m, `${fmt(h.written)} 行`, `${fmt(h.written)} lines`) });
-  items.push({ k: T(m, '提交了的', 'Committed'), v: T(m, `${fmt(m.linesAdded)} 行`, `${fmt(m.linesAdded)} lines`) });
-  if (m.linesSurviving) items.push({ k: T(m, '现在还在', 'Still here'), v: T(m, `${fmt(m.linesSurviving)} 行`, `${fmt(m.linesSurviving)} lines`) });
+  if (h.written) items.push({ k: T(m, '新增', 'Added'), v: T(m, `${fmt(h.written)} 行`, `${fmt(h.written)} lines`) });
+  items.push({ k: T(m, '提交', 'Committed'), v: T(m, `${fmt(m.linesAdded)} 行`, `${fmt(m.linesAdded)} lines`) });
+  if (m.linesSurviving) items.push({ k: T(m, '留存', 'Retained'), v: T(m, `${fmt(m.linesSurviving)} 行`, `${fmt(m.linesSurviving)} lines`) });
   return items;
 }
 
@@ -379,15 +379,15 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
   const nSteps = [h.written, h.committed, h.surviving].filter((v) => v > 0).length;
   const { s, c } = canvas(m, st, W, 300 + nSteps * 130 + 230 + 150 + (m.sign || m.named ? 60 : 0), 40);
   const x0 = c.x + 60, x1 = c.x + c.w - 60, cx = W / 2;
-  st.label(s, T(m, '人', 'PEOPLE'), x0, c.y + 70, { size: 15, fill: st.c.accent2 });
+  st.label(s, T(m, '开发者', 'DEVELOPER'), x0, c.y + 70, { size: 15, fill: st.c.accent2 });
   st.title(s, m.project, x0, c.y + 150, 64, 'start', { maxW: x1 - x0 });
-  s.text(T(m, `AI 写的代码有多少被提交、现在还剩多少，以及人自己做的事。`, 'How much AI-written code was committed and kept, and what people did themselves.'), x0, c.y + 200, { font: st.f.body, size: 20, fill: st.c.soft, maxW: x1 - x0 });
+  s.text(T(m, '新增代码留存变化，以及开发者的提示词与手写代码。', 'Code retention progression, prompts, and manual lines.'), x0, c.y + 200, { font: st.f.body, size: 20, fill: st.c.soft, maxW: x1 - x0 });
   // 取舍漏斗：写下 → 提交 → 留下
   let y = c.y + 270;
   const steps = [
-    { k: T(m, 'AI 写的', 'Written by AI'), v: h.written },
-    { k: T(m, '提交了的', 'Committed'), v: h.committed },
-    { k: T(m, '现在还在', 'Still here'), v: h.surviving },
+    { k: T(m, '新增', 'Added'), v: h.written },
+    { k: T(m, '提交', 'Committed'), v: h.committed },
+    { k: T(m, '留存', 'Retained'), v: h.surviving },
   ].filter((q) => q.v > 0);
   const max = Math.max(...steps.map((q) => q.v), 1);
   steps.forEach((q, i) => {
@@ -416,7 +416,7 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
   }
   // 事实格
   const facts = [
-    [T(m, '发给 AI 的消息', 'Messages to AI'), h.prompts], [T(m, 'review', 'Reviews'), h.reviews], [T(m, '人写的行', 'Lines by people'), h.handLines], [T(m, 'Tab 补全的行', 'Tab-completed lines'), h.tabLines],
+    [T(m, '提示词', 'Prompts'), h.prompts], [T(m, '代码审阅', 'Reviews'), h.reviews], [T(m, '手写行', 'Manual lines'), h.handLines], [T(m, 'Tab 补全行', 'Tab lines'), h.tabLines],
   ].filter(([, v]) => (v as number) > 0) as [string, number][];
   const fw = (x1 - x0) / Math.max(1, facts.length);
   facts.forEach(([k, v], i) => {

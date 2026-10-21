@@ -50,17 +50,15 @@ export const MARK_END = '<!-- creditia:end -->';
 export function creditsBlock(m: Model, maxPerSection = 10): string {
   const raw = m.raw;
   const out: string[] = [];
-  const head = [m.project, m.director && `由 ${m.director} 主导`, `${fmt(m.commits)} 次提交`, `${fmt(m.units)} 项`, `+${fmt(m.linesAdded)} 行`].filter(Boolean).join(' · ');
+  const head = [m.project, m.director, `${fmt(m.commits)} 次提交`, `${fmt(m.units)} 项`, `+${fmt(m.linesAdded)} 行`].filter(Boolean).join(' · ');
   out.push(head, '');
-  out.push('| 贡献方 | 占比 | 新增行 | 至今仍在 |', '|---|---:|---:|---:|');
+  out.push('| 贡献方 | 占比 | 新增行 | 留存行 |', '|---|---:|---:|---:|');
   const surv = new Map<string, number>();
   for (const b of raw.breakdown ?? []) { const k = harnessOf(raw, b.contributor); surv.set(k, (surv.get(k) ?? 0) + (b.linesSurviving ?? 0)); }
   for (const r of m.rows) {
     out.push(`| ${r.name} | ${pct(r.pct)} | +${fmt(r.lines)} | ${r.kind === 'other' ? '—' : fmt(surv.get(r.key) ?? 0)} |`);
   }
   out.push('');
-  const weak = (raw.coverage ?? []).filter((c: any) => c.best !== 'verified');
-  if (weak.length) out.push(`> ${weak[0].from} – ${weak[weak.length - 1].to} 的大部分代码没有逐行日志，按提交信息和分支推断。`, '');
   const units: any[] = raw.units ?? [];
   const groups: [string, string, string, any[]][] = [];
   const unrel = units.filter((u) => !u.version);
@@ -78,7 +76,7 @@ export function creditsBlock(m: Model, maxPerSection = 10): string {
     if (direct) out.push(`- ${direct} 个直接提交`);
     out.push('');
   }
-  out.push(`<sub>由 creditia 生成 · ${String(raw.generatedAt ?? '').slice(0, 10)}</sub>`);
+  out.push(`<sub>creditia · ${String(raw.generatedAt ?? '').slice(0, 10)}</sub>`);
   return out.join('\n');
 }
 

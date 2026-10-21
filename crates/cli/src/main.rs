@@ -75,8 +75,8 @@ const USAGE_ZH: &str = "用法：creditia-core <命令> [选项]
   integrations [--repo P]          上面两项的现状
   hook-trailers <msgfile>          （hook 调用）追加 Creditia-* trailer
   evidence  export [--out F] | import <文件>   多台电脑之间合并证据库
-  projects                         作品库里的项目
-  all-credits                      作品库里每个项目最新的档案（跨项目汇总用）
+  projects                         本地已记录的项目
+  all-credits                      本地每个项目最新的档案（跨项目汇总用）
   paths     [--repo P]             本项目登记过的全部路径（主仓库、worktree、临时克隆、旧路径）
   link      <路径> [--repo P]      把一个路径关联到本项目（别的电脑上的路径、已删除的临时目录）
   unlink    <路径> [--repo P]      取消关联
@@ -1064,7 +1064,7 @@ fn cmd_projects(_a: &Args) -> R<(Value, Vec<String>)> {
         .map(|p| json!({ "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "lastHead": p.last_head, "lastAnalyzed": p.last_analyzed.map(creditia_core::util::date_cn), "evidence": lib.evidence_count(&p.id) }))
         .collect();
     let summary = ps.iter().map(|p| format!("{:<28} {}  {}", p.name, p.last_analyzed.map(creditia_core::util::date_cn).unwrap_or_else(|| tr!("未分析", "not analyzed")), p.path)).collect::<Vec<_>>().join("\n");
-    Ok((json!({ "projects": list, "summary": if summary.is_empty() { tr!("作品库为空；先 creditia-core analyze", "the library is empty; run creditia-core analyze first") } else { summary } }), vec![]))
+    Ok((json!({ "projects": list, "summary": if summary.is_empty() { tr!("本地项目记录为空；先 creditia-core analyze", "the library is empty; run creditia-core analyze first") } else { summary } }), vec![]))
 }
 
 /// 作品库里每个项目最新的档案（仓库里的 .creditia/credits.json，读不到用作品库里的快照）：跨项目汇总用

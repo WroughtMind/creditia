@@ -38,7 +38,7 @@
       "icons/icon.png"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "为人和 AI 一起做出的作品署名",
+    "shortDescription": "软件项目 AI 协作与贡献署名档案",
     "externalBin": [
       "binaries/creditia-core"
     ]
