@@ -17,7 +17,7 @@ function scene(missing) {
   const host = { console, requestAnimationFrame: (cb) => { frames.push(cb); return frames.length; }, innerWidth: 1000, innerHeight: 700,
     store: { get: () => 'roam' }, tiles: () => Array.from({ length: 25 }, (_, i) => ({ id: String(i) })),
     keyOf: (b) => b.id, curVariant: () => undefined,
-    state: { style: { variants: () => [], pieceName: (id) => id } },
+    state: { style: { variants: () => [], pieceName: (id) => id, preview: async () => ({}) } },
     drawArt: async (id) => {
       calls.push(id);
       // The old bug never yields to a timer; stop it deterministically to report failure.
@@ -105,7 +105,7 @@ function renderClient() {
   const kits = fs.readFileSync(require.resolve('../src/kits.ts'), 'utf8');
   const snippet = kits.slice(kits.indexOf('let renderer: Worker'), kits.indexOf('const classicKits: Kit[]')).replaceAll('import.meta.url', "'file:///kits.ts'");
   const ctx = vm.createContext({ Worker, URL, group: 'auto', devicePixelRatio: 2 });
-  vm.runInContext(ts.transpile(snippet.replace('export const previewOf', 'const previewOf'), {target:ts.ScriptTarget.ES2022}) + '\nglobalThis.renderAway = renderAway;', ctx);
+  vm.runInContext(ts.transpile(snippet.replace('export function wakeRenderer', 'function wakeRenderer'), {target:ts.ScriptTarget.ES2022}) + '\nglobalThis.renderAway = renderAway; globalThis.previewAway = previewAway;', ctx);
   return {ctx, workers};
 }
 
@@ -120,6 +120,20 @@ test('worker jobs share the raw snapshot and match out-of-order replies by reque
   worker.onmessage({data:{seq:a.seq,art:{title:'share'}}});
   assert.equal((await first).title,'share');
   assert.equal((await second).title,'tier');
+});
+
+test('wall renders skip the thumbnail; roam asks for it once per artwork', async () => {
+  const {ctx, workers} = renderClient(), art = { svg: '<svg/>', w: 10, h: 10 };
+  void ctx.renderAway({},'minimal-light','zh','share',undefined,true);
+  const worker = workers[0];
+  assert.equal('width' in worker.messages[0], false);
+  const first = ctx.previewAway(art,'minimal-light',true), again = ctx.previewAway(art,'minimal-light',true);
+  assert.equal(first, again);
+  assert.equal(worker.messages.length, 2);
+  const job = worker.messages[1];
+  assert.equal(job.svg, art.svg); assert.equal(job.width, 1040);
+  worker.onmessage({data:{seq:job.seq,preview:'png'}});
+  assert.equal(await first, 'png');
 });
 
 test('changing the aggregate language sends its updated project name to the worker', () => {
@@ -190,13 +204,12 @@ test('resizing keeps a distant gap at the viewport center without jumping artwor
 test('thumbnail object URLs are released after load or removal, only once', () => {
   const {ctx} = scene(() => false);
   const released = []; let seq = 0, image;
-  ctx.previewOf = () => ({});
   ctx.URL = {createObjectURL: () => `blob:${++seq}`, revokeObjectURL: url => released.push(url)};
   const root = {appendChild: img => {image=img;}};
-  ctx.mountPreview(root,{w:100,h:200,title:'sample'});
+  ctx.mountPreview(root,{w:100,h:200,title:'sample'},{});
   image.onload(); ctx.releasePreview(root);
   assert.deepEqual(released,['blob:1']);
-  ctx.mountPreview(root,{w:100,h:200,title:'sample'});
+  ctx.mountPreview(root,{w:100,h:200,title:'sample'},{});
   ctx.releasePreview(root); image.onload();
   assert.deepEqual(released,['blob:1','blob:2']);
 });

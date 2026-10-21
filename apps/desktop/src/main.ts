@@ -7,7 +7,7 @@ import { mergeCredits } from '../../../packages/render/src/merge.ts';
 import { creditsBlock, mergeCreditsMd } from '../../../packages/render/src/classic/text.ts';
 import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts';
 import { INTERACT_CSS, mountHits } from '../../../packages/render/src/interact.ts';
-import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, groupOf, hasModels, previewOf, type Kit } from './kits.ts';
+import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, groupOf, hasModels, type Kit } from './kits.ts';
 import { exportArt, type Format } from './engine.ts';
 import { LOGO_SVG } from './logo.ts';
 
@@ -115,7 +115,7 @@ const keyOf = (b: { id: string; variant?: string }, i: number) => `${b.id}#${i}`
 
 // ───────────────────────── 启动 ─────────────────────────
 async function boot() {
-  bootKits();
+  bootKits(); state.style.warm();
   const st = document.createElement('style'); st.textContent = INTERACT_CSS; document.head.appendChild(st);
   $('#logo').innerHTML = LOGO_SVG;
   applyLang(); renderDots(); renderDock(); wireTop(); wireRoam();
@@ -157,7 +157,7 @@ async function openProject(p: any) {
   state.raw = null; state.model = null; state.arts.clear(); state.variants = {};
   $('#group').hidden = true; plugs = null; renderPlugs();
   ++state.token; // 让正在画的旧项目停下
-  $('#board').innerHTML = '';
+  $('#board').innerHTML = ''; slotWall(); // 档案还在读，先把墙的样子摆出来
   $('#pname').textContent = p.name; $('#pmeta').textContent = L('读取中…', 'Loading…');
   let raw: any;
   const st = readStamp(p); // 先记下版本再读档案：读的过程中又变了，下次比对还能发现
@@ -352,17 +352,46 @@ function drawArt(id: string, variant?: string): Promise<Art | null> {
   return hit;
 }
 
+/** 上次画出来的尺寸，按「风格 + 作品 + 版式」记着：空墙先按它摆好占位，作品画好落进自己的位置，不用一张张往后挤 */
+const dims: Record<string, [number, number]> = (() => { try { return JSON.parse(store.get('dims') ?? '{}'); } catch { return {}; } })();
+const dimKey = (id: string, variant?: string) => `${state.style.id}|${id}|${variant ?? ''}`;
+function slotFor(b: { id: string; span?: number }, variant?: string) {
+  const [w, h] = dims[dimKey(b.id, variant)] ?? [640, 480];
+  const g = document.createElement('div');
+  g.className = 'tile slot';
+  g.dataset.w = String(w); g.dataset.h = String(h);
+  g.dataset.span = String(b.span ?? (w / h > 2.2 ? 2 : ''));
+  g.style.aspectRatio = `${w} / ${h}`;
+  return g;
+}
+/** 空墙上摆一整面占位；已经摆着（读档案时先摆的）就接着用 */
+function slotWall() {
+  const board = $('#board');
+  const have = [...board.querySelectorAll<HTMLElement>('.slot')];
+  if (have.length === tiles().length) return have;
+  have.forEach((g) => g.remove());
+  const out = tiles().map((b, i) => board.appendChild(slotFor(b, curVariant(b.id, keyOf(b, i), b))));
+  layout();
+  return out;
+}
+
+let wallStale = false;
 async function paint() {
   const m = state.model; if (!m) return;
   const st = state.style;
   const token = ++state.token;
   const board = $('#board');
   applyView(); if (roam.ready) roamReset();
+  // 在漫游里就不在背后画整面墙（排版线程只有一个，会和漫游抢），切回墙时再画
+  wallStale = view() === 'roam';
+  if (wallStale) { board.innerHTML = ''; document.body.classList.remove('busy'); return; }
   // 墙上已经有作品（换风格、换语言）：旧的先留着，新的在后台全部画好，再一次原地换上，整面墙只滑动一次；
-  // 一张一张换的话，每换一张后面的都要重排，墙会连着抽动十几次。空墙就画一张摆一张。
-  const old = [...board.querySelectorAll('.tile')] as HTMLElement[];
+  // 一张一张换的话，每换一张后面的都要重排，墙会连着抽动十几次。空墙先摆占位，画好一张换掉一张。
+  const old = [...board.querySelectorAll('.tile:not(.slot)')] as HTMLElement[];
   const batch = old.length > 0;
   document.body.classList.toggle('busy', batch);
+  if (batch) board.querySelectorAll('.slot').forEach((g) => g.remove());
+  const slots = batch ? [] : slotWall();
   const fresh: HTMLElement[] = [];
   const keep = new Set<string>();
   for (const [i, b] of tiles().entries()) {
@@ -371,7 +400,8 @@ async function paint() {
     let a: Art | null = null;
     try { a = await drawArt(b.id, variant); } catch (e) { console.error(b.id, e); }
     if (token !== state.token) return;
-    if (!a) continue;
+    if (!a) { slots[i]?.remove(); continue; }
+    dims[dimKey(b.id, variant)] = [a.w, a.h];
     state.arts.set(k, a); keep.add(k);
     const tile = document.createElement('div');
     tile.className = 'tile';
@@ -386,9 +416,13 @@ async function paint() {
     mountHits(artEl, a.hits, a.w, a.h);
     wireTile(tile, b.id, k, vs);
     if (batch) { fresh.push(tile); continue; }
-    board.appendChild(tile);
+    const g = slots[i];
+    tile.style.left = g.style.left; tile.style.top = g.style.top; tile.style.width = g.style.width;
+    tile.classList.add('placed');
+    g.replaceWith(tile);
     layout();
   }
+  store.set('dims', JSON.stringify(dims));
   for (const tile of fresh) {
     const prev = old.shift();
     if (prev) {
@@ -402,6 +436,14 @@ async function paint() {
   document.body.classList.remove('busy');
   for (const k of [...state.arts.keys()]) if (!keep.has(k)) state.arts.delete(k);
   layout();
+  void warmRoam(token);
+}
+/** 墙画完了，再一张一张给漫游备好缩略图：一次只排一张，换风格时最多等一张 */
+async function warmRoam(token: number) {
+  for (const a of [...state.arts.values()]) {
+    if (token !== state.token) return;
+    try { await state.style.preview(a); } catch { /* 漫游里用到时再试 */ }
+  }
 }
 function tileHtml(id: string, vs: string[], cur?: string) {
   return `<div class="name">${esc(state.style.pieceName(id, state.lang))}<span class="how">${L('点击放大 · 拖动导出', 'Click to enlarge · drag to export')}</span></div>
@@ -688,10 +730,11 @@ function openFocus(id: string, k: string) {
       return true;
     }
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      const all = [...document.querySelectorAll<HTMLElement>('#board .tile')];
-      const at = all.findIndex((t) => t.dataset.k === k);
-      const next = all[at + (e.key === 'ArrowDown' ? 1 : -1)];
-      if (next) { close(false); openFocus(next.dataset.k!.split('#')[0], next.dataset.k!); next.scrollIntoView({ block: 'nearest' }); }
+      // 墙在漫游里没画，就按作品顺序走
+      const wall = [...document.querySelectorAll<HTMLElement>('#board .tile:not(.slot)')].map((t) => t.dataset.k!);
+      const all = wall.length ? wall : tiles().map(keyOf);
+      const next = all[all.indexOf(k) + (e.key === 'ArrowDown' ? 1 : -1)];
+      if (next) { close(false); openFocus(next.split('#')[0], next); document.querySelector(`.tile[data-k="${next}"]`)?.scrollIntoView({ block: 'nearest' }); }
       return true;
     }
     return false;
@@ -702,7 +745,7 @@ function openFocus(id: string, k: string) {
 // 墙之外的另一种看法。每一栏自己往上往下无限延伸，栏和栏也无限往左右排；作品按顺序轮着出现，
 // 每轮一圈就换下一种版式，所以走得越远，看到的是同一件作品的别的画法，而不是原样复制。
 // 拖动（或滚轮、触控板）移动画布；点一下放大，悬停点「导出」。只把视口附近的作品放进页面。
-type RItem = { r: number; y: number; h: number; w: number; id: string; k: string; v?: string; a: Art };
+type RItem = { r: number; y: number; h: number; w: number; id: string; k: string; v?: string; a: Art; p: Blob };
 type RCol = { items: RItem[]; busy: boolean; next: number; prev: number };
 const roam = { x: 0, y: 0, cols: new Map<number, RCol>(), els: new Map<string, HTMLElement>(), gen: 0, vx: 0, vy: 0, raf: 0, ready: false };
 const CAP = 30, RGAP = 56, STEP = 5;
@@ -725,11 +768,11 @@ function slot(X: number, r: number) {
 }
 async function rItem(X: number, r: number): Promise<RItem | null> {
   const s = slot(X, r);
-  let a: Art | null = null;
-  try { a = await drawArt(s.b.id, s.v); } catch (e) { console.error(s.b.id, e); }
-  if (!a) return null;
+  let a: Art | null = null, p: Blob | null = null;
+  try { a = await drawArt(s.b.id, s.v); if (a) p = await state.style.preview(a); } catch (e) { console.error(s.b.id, e); }
+  if (!a || !p) return null;
   const cw = rcw(), w = Math.min(cw, a.w < 500 ? a.w * 1.15 : cw);
-  return { r, y: 0, w, h: (w / a.w) * a.h, id: s.b.id, k: s.k, v: s.v, a };
+  return { r, y: 0, w, h: (w / a.w) * a.h, id: s.b.id, k: s.k, v: s.v, a, p };
 }
 /** 让第 X 栏盖住 [top, bottom]；一栏同时只长一处，长完再看一遍 */
 async function grow(X: number, top: number, bottom: number) {
@@ -775,9 +818,7 @@ const previewURLs = new WeakMap<HTMLElement, string>();
 function releasePreview(root: HTMLElement) {
   const url = previewURLs.get(root); if (url) { URL.revokeObjectURL(url); previewURLs.delete(root); }
 }
-function mountPreview(root: HTMLElement, art: Art) {
-  const preview = previewOf(art);
-  if (!preview) throw new Error('Artwork preview is missing');
+function mountPreview(root: HTMLElement, art: Art, preview: Blob) {
   const image = document.createElement('img');
   image.width = art.w; image.height = art.h; image.alt = art.title;
   image.decoding = 'async'; image.draggable = false;
@@ -812,7 +853,7 @@ function placeNow() {
       el.innerHTML = `<div class="name">${esc(state.style.pieceName(t.id, state.lang))}${t.v && state.style.variants(t.id).length > 1 ? `<span class="vn">${esc(state.style.variantName(t.v, state.lang))}</span>` : ''}</div>
         <div class="bar glass"><button data-act="export" title="${L('导出', 'Export')}">${L('导出', 'Export')} ↓</button></div><div class="art"></div>`;
       const artEl = el.querySelector('.art') as HTMLElement;
-      mountPreview(artEl, t.a);
+      mountPreview(artEl, t.a, t.p);
       mountRoamHits(artEl, t.a);
       (el as any)._item = t;
       plane.appendChild(el);
@@ -933,6 +974,7 @@ function wireRoam() {
   $('#view').onclick = (e) => {
     const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
     store.set('view', b.dataset.v!); applyView();
+    if (view() === 'wall' && wallStale) void paint();
   };
   addEventListener('keydown', (e) => {
     if (view() !== 'roam' || !document.body.classList.contains('roam') || closeFocus || !$('#sheet').hidden || !$('#menu').hidden) return;

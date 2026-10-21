@@ -4,7 +4,6 @@ import * as C from '../../../packages/render/src/classic/data.ts';
 import { themeById } from '../../../packages/render/src/classic/themes.ts';
 import { ORDERED_THEMES, themeDot, themeName, themeNote, pieceName as cPiece, pieceQ as cQ, variantName as cVariant } from '../../../packages/render/src/classic/catalog.ts';
 import { variantsOf, defaultVariant, animatedClassic } from '../../../packages/render/src/classic/art.ts';
-import { prepare, frames as classicFrames } from '../../../packages/render/src/classic/browser.ts';
 import { isBridged, bridgeStyle } from '../../../packages/render/src/classic/bridge.ts';
 import { STYLES } from '../../../packages/render/src/styles/index.ts';
 import * as V from '../../../packages/render/src/data.ts';
@@ -32,11 +31,15 @@ export interface Kit {
   pieceName(id: string, lang: Lang): string;
   pieceQ(id: string, lang: Lang): string;
   variantName(v: string, lang: Lang): string;
+  /** 漫游用的位图缩略图，第一次要时才画 */
+  preview(art: Art): Promise<Blob>;
+  /** 开 App 时先把字体取好，第一张作品不用等 */
+  warm(): void;
 }
 
 export function bootKits() {
-  prepare(fontFiles());
   registerFonts();
+  wakeRenderer();
 }
 
 /** 分组方式（按工具 / 按模型 / 自动），每个项目各记各的，由 main 在打开项目时设好 */
@@ -70,29 +73,45 @@ const V2_BOARD: Tile[] = [
 
 /** 同一份档案只传给排版线程一次；每张作品只传形式、版式和显示偏好。 */
 let renderer: Worker | null = null, renderSeq = 0, sentRaw: any;
-const previews = new WeakMap<Art, Blob>();
-export const previewOf = (art: Art) => previews.get(art);
-const rendering = new Map<number, { resolve: (a: Art | null) => void; reject: (e: Error) => void }>();
-function renderAway(raw: any, style: string, lang: Lang, id: string, variant: string | undefined, classic: boolean, grouping = group): Promise<Art | null> {
+const rendering = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+/** 排版线程启动要读一大堆模块，开 App 时先叫起来，和读档案同时进行 */
+export function wakeRenderer() {
   if (!renderer) {
     renderer = new Worker(new URL('./render-worker.ts', import.meta.url), { type: 'module' });
     renderer.onmessage = ({ data }) => {
       const job = rendering.get(data.seq); if (!job) return;
       rendering.delete(data.seq);
-      if (data.error) job.reject(new Error(data.error)); else { if (data.art) previews.set(data.art, data.preview); job.resolve(data.art); }
+      if (data.error) job.reject(new Error(data.error)); else job.resolve('preview' in data ? data.preview : data.art);
     };
     renderer.onerror = (event) => {
       for (const job of rendering.values()) job.reject(new Error(event.message || 'Artwork renderer failed'));
       rendering.clear(); renderer?.terminate(); renderer = null; sentRaw = undefined;
     };
   }
-  const seq = ++renderSeq;
-  const message: any = { seq, style, lang, id, variant, group: grouping, classic, previewWidth: Math.ceil(520 * devicePixelRatio) };
-  if (sentRaw !== raw) { message.raw = raw; sentRaw = raw; }
+  return renderer;
+}
+function ask<T>(message: any): Promise<T> {
+  const w = wakeRenderer(), seq = message.seq = ++renderSeq;
   return new Promise((resolve, reject) => {
     rendering.set(seq, { resolve, reject });
-    try { renderer!.postMessage(message); } catch (e) { rendering.delete(seq); sentRaw = undefined; reject(e); }
+    try { w.postMessage(message); } catch (e) { rendering.delete(seq); if ('raw' in message) sentRaw = undefined; reject(e); }
   });
+}
+function renderAway(raw: any, style: string, lang: Lang, id: string, variant: string | undefined, classic: boolean, grouping = group): Promise<Art | null> {
+  wakeRenderer();
+  const message: any = { style, lang, id, variant, group: grouping, classic };
+  if (sentRaw !== raw) { message.raw = raw; sentRaw = raw; }
+  return ask(message);
+}
+const previews = new WeakMap<Art, Promise<Blob>>();
+function previewAway(art: Art, style: string, classic: boolean) {
+  let p = previews.get(art);
+  if (!p) {
+    p = ask<Blob>({ svg: art.svg, style, classic, width: Math.ceil(520 * devicePixelRatio) });
+    previews.set(art, p);
+    p.catch(() => previews.delete(art));
+  }
+  return p;
 }
 
 const classicKits: Kit[] = ORDERED_THEMES.map((t) => ({
@@ -106,13 +125,18 @@ const classicKits: Kit[] = ORDERED_THEMES.map((t) => ({
     return renderAway(raw, t.id, lang, id, variant, true, grouping);
   },
   frames: async (raw, lang, id, variant) => {
+    // 动图在主线程排；satori 很大，用到才载入、初始化
+    const { prepare, frames } = await import('../../../packages/render/src/classic/browser.ts');
+    prepare(fontFiles());
     if (isBridged(id, variant)) await ready(bridgeStyle(t));
-    return classicFrames(id, classicModel(raw, lang), t, { lang, variant }, 24);
+    return frames(id, classicModel(raw, lang), t, { lang, variant }, 24);
   },
   variants: variantsOf,
   current: (id, variant) => variant ?? defaultVariant(id, t) ?? variantsOf(id)[0],
   animated: animatedClassic,
   pieceName: cPiece, pieceQ: cQ, variantName: cVariant,
+  preview: (art) => previewAway(art, t.id, true),
+  warm: () => { wakeRenderer().postMessage({ warm: true, style: t.id }); void ready(bridgeStyle(t)); },
 }));
 
 /** 新风格里和原版重名、或者原版已经有对应的，不再重复 */
@@ -129,6 +153,8 @@ const v2Kits: Kit[] = STYLES.filter((s) => !SKIP.has(s.id)).map((s) => ({
   pieceName: (id, lang) => (lang === 'zh' ? PIECES[id]?.name : PIECES[id]?.en) ?? id,
   pieceQ: (id, lang) => (lang === 'zh' ? PIECES[id]?.q : PIECES[id]?.qEn) ?? '',
   variantName: v2Variant,
+  preview: (art) => previewAway(art, s.id, false),
+  warm: () => void ready(s),
 }));
 
 export const KITS: Kit[] = [...classicKits, ...v2Kits];

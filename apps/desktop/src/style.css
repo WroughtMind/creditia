@@ -140,6 +140,8 @@ body::after { /* 底下渐隐，浮在下面的风格栏和导出坞不和作品
 .tile.swap { animation: swapin .45s ease-out both; }
 @keyframes swapin { from { opacity: 0; } }
 body.dragging .tile.placed { transition: none; }
+.tile.slot { border-radius: 8px; background: color-mix(in srgb, var(--ink) 4%, transparent); animation: enter .6s cubic-bezier(.2,.7,.2,1) both, slot 1.6s ease-in-out .6s infinite alternate; pointer-events: none; } /* 还在画的作品先占好位置 */
+@keyframes slot { to { background: color-mix(in srgb, var(--ink) 7%, transparent); } }
 .tile .art, #focus .big .art { position: relative; } /* 悬停热区按作品本身摆，不然会盖住整层、挡住点空白处关闭 */
 .tile .art { border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 16px 44px rgba(0,0,0,.10); cursor: grab; background: transparent; }
 .tile .art svg, .tile .art > img { display: block; width: 100%; height: auto; }
