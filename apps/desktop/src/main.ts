@@ -95,7 +95,7 @@ function toast(msg: string, ms = 2600, o: { acts?: Act[]; spin?: boolean } = {})
 /** 原生端的错误只带代码和细节，文案在这里按语言写 */
 const ERRORS: Record<string, [string, string]> = {
   not_in_library: ['这个项目不在作品库里', 'This project is not in the library'],
-  no_credits: ['这个项目还没有档案', 'No credits for this project yet'],
+  no_credits: ['这个项目还没分析过', 'Not analyzed yet'],
   dir_missing: ['项目目录已经不在了', 'The project folder is gone'],
   core_missing: ['找不到分析核心 creditia-core', 'Cannot find the analysis core (creditia-core)'],
   core_failed: ['分析失败', 'Analysis failed'],
@@ -126,7 +126,7 @@ const keyOf = (b: { id: string; variant?: string }, i: number) => `${b.id}#${i}`
 async function boot() {
   bootKits(); state.style.warm();
   const st = document.createElement('style'); st.textContent = INTERACT_CSS; document.head.appendChild(st);
-  $('#logo').innerHTML = LOGO_SVG;
+  if (native && OS === 'mac') document.body.classList.add('mac');
   applyLang(); renderDots(); renderDock(); wireTop(); wireRoam();
   // 滚动之后顶栏垫一层渐隐的玻璃，作品不再直接透到项目名和按钮后面
   const stageEl = $('#stage');
@@ -173,7 +173,7 @@ async function openProject(p: any) {
   try { raw = await creditsOf(p); }
   catch (e: any) {
     if (seq !== state.openSeq) return;
-    if (e?.code && e.code !== 'no_credits') return empty(() => [L('读不到这个项目的档案', 'Cannot read this project'), errText(e)], true);
+    if (e?.code && e.code !== 'no_credits') return empty(() => [L('读不到这个项目', 'Cannot read this project'), errText(e)], true);
     const can = native && p.exists !== false;
     return empty(() => [L('这个项目还没分析过', 'Not analyzed yet'), '', `cd ${p.path} && creditia analyze`, can ? { label: L('现在分析', 'Analyze now'), run: () => reanalyze(p) } : undefined], true);
   }
@@ -221,7 +221,7 @@ async function refreshIfChanged() {
     stampOf = st;
     await swapRaw(raw);
     state.projects = await api('projects').catch(() => state.projects);
-    toast(L('档案有更新，已换成最新的', 'Credits changed — showing the latest'));
+    toast(L('已更新到最新提交', 'Updated to the latest commits'));
   } catch { /* 读不到就等下一次 */ } finally { refreshing = false; }
 }
 /** 跟上新提交：仓库里有了档案之后的新提交，就在后台增量分析一次（只处理新的提交，通常几秒）。
@@ -298,24 +298,24 @@ async function setPlug(k: 'hook' | 'release', on: boolean, quiet = false) {
 }
 
 // ───────────────────────── 分组：按工具 / 按模型 ─────────────────────────
-// 默认「自动」：一个工具占了绝大部分、下面又有几个模型时自动按模型分；自动选中的那一项带个小点。
-// 点「按工具」「按模型」就钉住这个项目的选择。档案里一个模型都没记下就不显示。
+// 没点过就自动挑：一个工具占了绝大部分、下面又有几个模型时按模型分，否则按工具。
+// 点了就钉住这个项目的选择。档案里一个模型都没记下就不显示。
 type GroupPref = 'auto' | 'tool' | 'model';
 const groupPref = (): GroupPref => { const g = state.current ? store.get('group.' + state.current.id) : null; return g === 'tool' || g === 'model' ? g : 'auto'; };
 function renderGroup() {
   const el = $('#group');
   if (!state.raw || !hasModels(state.raw)) { el.hidden = true; return; }
-  const pref = groupPref(), now = groupOf(state.raw);
+  const now = groupOf(state.raw);
   el.hidden = false;
   el.setAttribute('aria-label', L('分组', 'Group by'));
-  const name = { auto: L('自动', 'Auto'), tool: L('按工具', 'By tool'), model: L('按模型', 'By model') };
-  el.innerHTML = (['auto', 'tool', 'model'] as const).map((g) => `<button data-g="${g}" class="${g === pref ? 'on' : ''}${g === now ? ' now' : ''}" aria-pressed="${g === pref}">${name[g]}</button>`).join('');
+  const name = { tool: L('按工具', 'By tool'), model: L('按模型', 'By model') };
+  el.innerHTML = (['tool', 'model'] as const).map((g) => `<button data-g="${g}" class="${g === now ? 'on' : ''}" aria-pressed="${g === now}">${name[g]}</button>`).join('');
   el.querySelectorAll<HTMLElement>('button').forEach((b) => (b.onclick = () => pickGroup(b.dataset.g as GroupPref)));
 }
 async function pickGroup(g: GroupPref) {
   const p = state.current; if (!p || !state.raw) return;
-  if (g === groupPref()) return;
-  try { if (g === 'auto') localStorage.removeItem('creditia.group.' + p.id); else store.set('group.' + p.id, g); } catch { /* 没有存储也能用 */ }
+  if (g === groupOf(state.raw)) return;
+  store.set('group.' + p.id, g);
   setGroup(g);
   rebuildModel();
   await paint();
@@ -573,7 +573,7 @@ function toggleFormats(host: HTMLElement, id: string, run: (fmt: string) => void
 /** 嵌入组件还没跟上原版，先不给；GIF 只给会动的作品 */
 const EXPORTS = FORMATS.filter((f) => f.id !== 'embed');
 const exportsFor = (id: string, kit = state.style) => EXPORTS.filter((f) => f.id !== 'gif' || kit.animated(id));
-const SIZE_NAME: Record<string, [string, string]> = { native: ['原尺寸', 'Native'], og: ['链接图', 'Link'], square: ['方图', 'Square'], portrait: ['竖图', 'Portrait'], story: ['竖屏', 'Story'] };
+const SIZE_NAME: Record<string, [string, string]> = { native: ['原尺寸', 'Native'], og: ['横图', 'Wide'], square: ['方图', 'Square'], portrait: ['竖图', 'Portrait'], story: ['竖屏', 'Story'] };
 const sizeButtons = () => SIZES.filter((s) => s.id !== 'a4').map((s) => `<button data-s="${s.id}" class="${s.id === state.size ? 'on' : ''}" title="${s.w ? `${s.w}×${s.h}` : ''}">${esc(SIZE_NAME[s.id] ? L(...SIZE_NAME[s.id]) : s.id)}</button>`).join('');
 function setSize(id: string) {
   state.size = id; store.set('size', id);
@@ -681,6 +681,7 @@ function closeTop() {
   if (!$('#sheet').hidden) return closeSheet();
   if (closeFocus) return closeFocus();
   if (!$('#menu').hidden) return closeMenu();
+  if ($('#dots').querySelector('.styles')) return closeStyles();
   closeFormats();
 }
 const closeBtn = () => `<button class="closer glass" data-act="close" aria-label="${L('关闭', 'Close')}" title="${L('关闭', 'Close')} (Esc)"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>`;
@@ -708,12 +709,12 @@ function openFocus(id: string, k: string) {
     const vs = kit.variants(id), v = variantNow(), all = keyList(), at = all.indexOf(k);
     const multiModel = !!state.raw && resolveGroup(state.raw, 'auto') === 'model';
     el.innerHTML = `${closeBtn()}
-      <div class="fhead"><b>${esc(kit.pieceName(id, state.lang))}</b><span>${esc(kit.pieceQ(id, state.lang))}</span></div>
+      <div class="fhead"><b>${esc(kit.pieceName(id, state.lang))}</b></div>
       <button class="nav prev glass" data-act="prev" ${at <= 0 ? 'disabled' : ''} title="${L('上一件', 'Previous')} (↑)" aria-label="${L('上一件', 'Previous')}"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M8.5 3 4.5 7l4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="nav next glass" data-act="next" ${at < 0 || at >= all.length - 1 ? 'disabled' : ''} title="${L('下一件', 'Next')} (↓)" aria-label="${L('下一件', 'Next')}"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M5.5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <div class="big"><div class="art"></div></div>
       <div class="strip glass">
-        ${vs.length > 1 ? `<div class="vs" title="${L('版式', 'Layout')} (← →)">${vs.map((x) => { const mm = multiModel && MODEL_VARIANTS[id]?.includes(x); return `<button data-v="${x}" class="${x === v ? 'on' : ''}${mm ? ' mm' : ''}"${mm ? ` title="${L('工具和它的各个模型分层画出来', 'Each tool with its models underneath')}"` : ''}>${esc(kit.variantName(x, state.lang))}</button>`; }).join('')}</div><span class="sep"></span>` : ''}
+        ${vs.length > 1 ? `<div class="vs" title="${L('版式', 'Layout')} (← →)">${vs.map((x) => { const mm = multiModel && MODEL_VARIANTS[id]?.includes(x); return `<button data-v="${x}" class="${x === v ? 'on' : ''}${mm ? ' mm' : ''}">${esc(kit.variantName(x, state.lang))}</button>`; }).join('')}</div><span class="sep"></span>` : ''}
         <div class="pop"><button class="kit" data-act="kits"><svg viewBox="0 0 24 24">${kit.dot}</svg>${esc(kit.name(state.lang))}</button></div>
         ${kit !== state.style ? `<button class="apply" data-act="apply">${L('整面墙都用它', 'Use for the wall')}</button>` : ''}
         <span class="sep"></span>
@@ -743,7 +744,7 @@ function openFocus(id: string, k: string) {
     if (open) return;
     const box = document.createElement('div');
     box.className = 'kits glass';
-    box.innerHTML = KITS.map((t, j) => `${j === CLASSIC_COUNT ? '<i class="divider"></i>' : ''}<button data-s="${t.id}" class="${t === kit ? 'on' : ''}" ${t.board.some((b) => b.id === id) ? '' : 'disabled'} title="${esc(t.note(state.lang))}"><svg viewBox="0 0 24 24">${t.dot}</svg>${esc(t.name(state.lang))}</button>`).join('');
+    box.innerHTML = KITS.map((t, j) => `${j === CLASSIC_COUNT ? '<i class="divider"></i>' : ''}<button data-s="${t.id}" class="${t === kit ? 'on' : ''}" ${t.board.some((b) => b.id === id) ? '' : 'disabled'}><svg viewBox="0 0 24 24">${t.dot}</svg>${esc(t.name(state.lang))}</button>`).join('');
     host.appendChild(box);
   };
   chrome(); draw();
@@ -1045,35 +1046,47 @@ function applyView() {
   else if (on && !was) place();
 }
 
-// ───────────────────────── 风格圆点 ─────────────────────────
+// ───────────────────────── 风格 ─────────────────────────
+// 左下一颗按钮写着现在的风格；‹ › 一步一换，点名字列出全部（原版主题和新风格之间一道细线）
+const STEP_SVG = (d: string) => `<svg width="12" height="12" viewBox="0 0 12 12"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 function renderDots() {
-  const nav = $('#dots');
-  // 原版主题和新风格之间留一道细线
-  nav.innerHTML = `<span class="cur" id="curstyle">${esc(state.style.name(state.lang))}</span>` + KITS.map((t, i) => `${i === CLASSIC_COUNT ? '<i class="divider"></i>' : ''}<button data-s="${t.id}" class="${t.id === state.style.id ? 'on' : ''}" aria-label="${esc(t.name(state.lang))}"><svg viewBox="0 0 24 24">${t.dot}</svg></button>`).join('');
-  const tipEl = $('#tipname');
-  nav.onmouseover = (e) => {
+  const nav = $('#dots'), t = state.style;
+  nav.innerHTML = `<button class="step" data-d="-1">${STEP_SVG('M7.5 2.5 4 6l3.5 3.5')}</button>`
+    + `<button class="cur" id="curstyle" aria-haspopup="listbox"><span class="d"><svg viewBox="0 0 24 24">${t.dot}</svg></span>${esc(t.name(state.lang))}<svg class="chev" width="8" height="12" viewBox="0 0 8 12" aria-hidden="true"><path d="M1.5 4.5 4 2l2.5 2.5M1.5 7.5 4 10l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
+    + `<button class="step" data-d="1">${STEP_SVG('M4.5 2.5 8 6l-3.5 3.5')}</button>`;
+  const [prev, next] = nav.querySelectorAll<HTMLElement>('.step');
+  prev.title = L('上一种风格', 'Previous style'); next.title = L('下一种风格', 'Next style');
+  prev.setAttribute('aria-label', prev.title); next.setAttribute('aria-label', next.title);
+  nav.onclick = (e) => {
     const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
-    const t = kitById(b.dataset.s!)!;
-    tipEl.innerHTML = `<b>${esc(t.name(state.lang))}</b><span>${esc(t.note(state.lang))}</span>`;
-    tipEl.hidden = false;
-    const r = b.getBoundingClientRect();
-    tipEl.style.left = `${Math.max(8, r.left - 10)}px`; tipEl.style.top = `${r.top - tipEl.offsetHeight - 12}px`;
+    if (b.dataset.d) { const i = KITS.indexOf(state.style); return void useStyle(KITS[(i + Number(b.dataset.d) + KITS.length) % KITS.length]); }
+    if (b.dataset.s) { closeStyles(); return void useStyle(kitById(b.dataset.s)!); }
+    if (b.id === 'curstyle') toggleStyles();
   };
-  nav.onmouseleave = () => (tipEl.hidden = true);
-  nav.onclick = async (e) => {
-    const narrow = matchMedia('(max-width: 860px)').matches;
-    const b = (e.target as HTMLElement).closest('button') as HTMLElement | null;
-    if (narrow && (!b || b.classList.contains('on'))) { nav.classList.toggle('open'); tipEl.hidden = true; return; }
-    if (!b) return;
-    nav.classList.remove('open');
-    const t = kitById(b.dataset.s!) as Kit;
-    if (t.id === state.style.id) return;
-    state.style = t; store.set('theme', t.id);
-    nav.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-    $('#curstyle').textContent = t.name(state.lang);
-    state.variants = {};
-    await paint();
-  };
+}
+function toggleStyles() {
+  const nav = $('#dots'), open = nav.querySelector('.styles');
+  if (open) return closeStyles();
+  const box = document.createElement('div');
+  box.className = 'styles glass'; box.setAttribute('role', 'listbox');
+  box.innerHTML = KITS.map((t, i) => `${i === CLASSIC_COUNT ? '<i class="divider"></i>' : ''}<button data-s="${t.id}" role="option" aria-selected="${t === state.style}" class="${t === state.style ? 'on' : ''}"><svg viewBox="0 0 24 24">${t.dot}</svg>${esc(t.name(state.lang))}</button>`).join('');
+  nav.appendChild(box);
+  $('#curstyle').setAttribute('aria-expanded', 'true');
+  box.querySelector<HTMLElement>('.on')?.scrollIntoView({ block: 'nearest' });
+  setTimeout(() => document.addEventListener('pointerdown', outsideStyles, true));
+}
+function outsideStyles(e: Event) { if (!(e.target as HTMLElement).closest('#dots')) closeStyles(); }
+function closeStyles() {
+  $('#dots').querySelector('.styles')?.remove();
+  document.querySelector('#curstyle')?.setAttribute('aria-expanded', 'false');
+  document.removeEventListener('pointerdown', outsideStyles, true);
+}
+async function useStyle(t: Kit) {
+  if (t.id === state.style.id) return;
+  state.style = t; store.set('theme', t.id);
+  state.variants = {};
+  renderDots();
+  await paint();
 }
 
 // ───────────────────────── 顶栏：项目、语言、设置 ─────────────────────────
@@ -1089,7 +1102,7 @@ function applyLang() {
   $('#dots').setAttribute('aria-label', L('风格', 'Styles'));
   $('#dock').setAttribute('aria-label', L('导出', 'Export'));
   const [w, r] = document.querySelectorAll<HTMLElement>('#view button');
-  w.title = L('墙', 'Wall'); r.title = L('漫游：拖着随便走，越远版式越多', 'Roam: drag anywhere; farther out, more layouts');
+  w.title = L('墙', 'Wall'); r.title = L('漫游', 'Roam');
   w.setAttribute('aria-label', w.title); r.setAttribute('aria-label', r.title);
   $('#view').setAttribute('aria-label', L('视图', 'View'));
   $('#home').innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="2.2"/><path d="M7 1v2.2M7 10.8V13M1 7h2.2M10.8 7H13"/></svg>${L('回到起点', 'Back to start')}`;
@@ -1139,7 +1152,7 @@ function toggleMenu() {
         <b>${esc(d.name)}</b><span class="r">${esc(toolsOf(d))}</span>
         <span class="path" title="${esc(d.path)}">${esc(short(d.path))}</span>
       </div>`).join('');
-    $('#plist').innerHTML = all + mine + (more ? `<div class="sec">${L('本机还有', 'Also on this machine')}</div>${more}` : '')
+    $('#plist').innerHTML = all + mine + (more ? `<div class="sec">${L('还没添加', 'Not added yet')}</div>${more}` : '')
       || `<div class="item"><span>${L('没有匹配的项目', 'No match')}</span></div>`;
   };
   // ↑ ↓ 选，回车打开（没选就开第一个）
@@ -1299,8 +1312,7 @@ function showWarnings(list: string[]) {
   const el = $('#sheet');
   el.hidden = false;
   el.innerHTML = `<div class="panel glass">
-    <div class="head"><h2>${L('分析提醒', 'Analysis notes')}</h2>${closeBtn()}</div>
-    <p>${L('分析完成了，但核心报告了下面这些情况：', 'The analysis finished, and the core reported:')}</p>
+    <div class="head"><h2>${L('分析时遇到的问题', 'Issues during analysis')}</h2>${closeBtn()}</div>
     <ul class="warn">${list.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>
   </div>`;
   el.onclick = (e) => { if (e.target === el || (e.target as HTMLElement).closest('[data-act="close"]')) closeSheet(); };
@@ -1319,10 +1331,10 @@ async function settings() {
     <div class="row kv"><span class="k">${L('默认尺寸', 'Default size')}</span><div class="seg" id="defsize">${sizeButtons()}</div></div>
     <h3>${L('作品库', 'Library')}</h3>
     ${info ? `<div class="row kv"><span class="k">${L('位置', 'Location')}</span><span class="v path" title="${esc(info.library)}">${esc(short(info.library))}</span><button class="mini" data-x="open-library">${L('打开', 'Open')}</button></div>` : ''}
-    <div class="row kv"><span class="k" title="${L('仓库有新提交时，在后台把它分析进来', 'Analyze new commits in the background')}">${L('跟上新提交', 'New commits')}</span><span class="v grow"></span><button class="switch" role="switch" aria-checked="${autoFresh()}" aria-label="${L('跟上新提交', 'Keep up with new commits')}" data-x="fresh"><i></i></button></div>
-    ${coll ? `<div class="row kv" id="crow"></div>${coll.agent?.supported ? '<div class="row kv" id="arow"></div>' : ''}` : ''}
-    <h3>${L('数据源', 'Data sources')}</h3><div id="doc"><p>${L('检查中…', 'Checking…')}</p></div>
-    <p class="about">${info ? `creditia ${esc(info.version)} · ` : ''}${L('全在本机分析，不存代码和 prompt，不调用模型', 'Runs on this machine. No code or prompts kept, no models called')}</p>
+    <div class="row kv"><span class="k">${L('有新提交时自动更新', 'Update on new commits')}</span><span class="v grow"></span><button class="switch" role="switch" aria-checked="${autoFresh()}" aria-label="${L('有新提交时自动更新', 'Update on new commits')}" data-x="fresh"><i></i></button></div>
+    ${coll ? `<div class="row kv" id="crow"></div>` : ''}
+    <h3>${L('AI 工具', 'AI tools')}</h3><div id="doc"><p>${L('检查中…', 'Checking…')}</p></div>
+    <p class="about">${info ? `creditia ${esc(info.version)} · ` : ''}${L('只在本机运行', 'Runs only on this computer')}</p>
   </div>`;
   const xrow = (x: any) => {
     const r = el.querySelector('#xrow'); if (!r) return;
@@ -1333,19 +1345,14 @@ async function settings() {
     const m = Math.floor((Date.now() / 1000 - t) / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
     return m < 1 ? L('刚刚', 'just now') : m < 60 ? L(`${m} 分钟前`, `${m} min ago`) : h < 24 ? L(`${h} 小时前`, `${h} h ago`) : L(`${d} 天前`, `${d} d ago`);
   };
-  let cnow = coll;
   const crow = (c: any) => {
     const r = el.querySelector('#crow'); if (!r || !c) return;
-    cnow = c;
-    const last = c.last?.at ? L(`上次 ${ago(c.last.at)} · 新增 ${fmt(c.last.newEvidence ?? 0)} 条`, `Last ${ago(c.last.at)} · ${fmt(c.last.newEvidence ?? 0)} new`)
-      + (c.last.failed ? L(` · ${c.last.failed} 个项目没收成`, ` · ${c.last.failed} failed`) : '') + (c.last.by === 'agent' ? L(' · 后台任务', ' · background task') : '') : L('还没采集过', 'Not run yet');
-    const st = c.running ? L('正在采集…', 'Collecting…') : !c.on && !c.agent?.on ? L('已关闭', 'Off') : last;
-    r.innerHTML = `<span class="k" title="${L('各工具会清理日志：每小时把新记录收进作品库，只收不分析', 'Tools clean up their logs: new records are kept hourly, collected but not analyzed')}">${L('定时采集', 'Auto collect')}</span><span class="v grow" title="${esc(last)}">${esc(st)}</span>`
-      + `<button class="mini" data-x="collect" ${c.running ? 'disabled' : ''}>${L('现在', 'Now')}</button>`
-      + `<button class="switch" role="switch" aria-checked="${!!c.on}" aria-label="${esc(L('定时采集', 'Auto collect'))}" data-x="collect-on"><i></i></button>`;
-    const a = el.querySelector('#arow');
-    if (a) a.innerHTML = `<span class="k" title="${L('在 ~/Library/LaunchAgents 装一个后台任务；关掉就删掉', 'Installs a task in ~/Library/LaunchAgents; turning it off removes it')}">${L('App 关着时', 'When closed')}</span><span class="v grow">${c.agent.on ? L('也在收', 'Still collecting') : L('不收', 'Not collecting')}</span>`
-      + `<button class="switch" role="switch" aria-checked="${!!c.agent.on}" aria-label="${esc(L('App 关着时也收', 'Collect when the app is closed'))}" data-x="agent-on"><i></i></button>`;
+    // 工具会清理自己的日志，所以定时把新记录存进作品库。三档：不备份 / App 开着时 / 一直（macOS 的后台任务）
+    const mode = c.agent?.on ? 'always' : c.on ? 'open' : 'off';
+    const modes: [string, string][] = [['off', L('关', 'Off')], ['open', L('App 开着时', 'While open')], ...(c.agent?.supported ? [['always', L('一直', 'Always')]] as [string, string][] : [])];
+    const st = c.running ? L('正在备份…', 'Backing up…') : mode !== 'off' && c.last?.at ? L(`上次 ${ago(c.last.at)}`, `Last ${ago(c.last.at)}`) : '';
+    r.innerHTML = `<span class="k" title="${L('AI 工具会定期清理自己的记录，备份下来，署名才不会丢', 'AI tools clean up their own logs; a backup keeps the credits')}">${L('备份 AI 工具记录', 'Back up AI tool logs')}</span><span class="v grow">${esc(st)}</span>`
+      + `<div class="seg" role="radiogroup">${modes.map(([m, n]) => `<button data-x="collect-mode" data-m="${m}" role="radio" aria-checked="${m === mode}" class="${m === mode ? 'on' : ''}">${esc(n)}</button>`).join('')}</div>`;
     // 一轮正在跑（定时的那轮）：跑完换成结果
     if (c.running) setTimeout(() => { if (el.querySelector('#crow')) api('collect_info').then(crow).catch(() => null); }, 2000);
   };
@@ -1366,12 +1373,11 @@ async function settings() {
         el.querySelector('[data-x="fresh"]')!.setAttribute('aria-checked', String(autoFresh()));
         if (autoFresh()) refreshIfChanged();
       }
-      else if (x === 'collect-on') crow(await api('set_collect', { on: !cnow?.on }));
-      else if (x === 'agent-on') crow(await api('set_collect_agent', { on: !cnow?.agent?.on }));
-      else if (x === 'collect') {
-        crow({ ...cnow, running: true });
-        try { await api('collect_now'); } catch (err: any) { if (err?.code !== 'busy') throw err; }
-        finally { crow(await api('collect_info').catch(() => cnow)); }
+      else if (x === 'collect-mode') {
+        const m = (t.closest('[data-m]') as HTMLElement).dataset.m!;
+        let c = await api('set_collect', { on: m !== 'off' });
+        if (c.agent?.supported && !!c.agent.on !== (m === 'always')) c = await api('set_collect_agent', { on: m === 'always' });
+        crow(c);
       }
     } catch (err) { toast(errText(err), 5000); }
   };
@@ -1379,7 +1385,7 @@ async function settings() {
   const SOURCES: Record<string, [string, string]> = { 'copilot-vscode': ['Copilot（VS Code）', 'Copilot (VS Code)'], 'copilot-cli': ['Copilot 命令行', 'Copilot CLI'], 'trae-cli': ['TRAE 命令行', 'TRAE CLI'], 'trae-ide': ['TRAE IDE', 'TRAE IDE'], 'kilo-cli': ['Kilo 命令行', 'Kilo CLI'], antigravity: ['Antigravity 命令行', 'Antigravity CLI'], windsurf: ['Windsurf', 'Windsurf'] };
   const sourceName = (id: string) => (SOURCES[id] ? L(...SOURCES[id]) : nameOf(id, state.lang));
   const doc = await api('doctor').catch(() => []);
-  const detail = (d: any) => d.unsupported ? L('读不了编辑记录', 'Edits not readable')
+  const detail = (d: any) => d.unsupported ? L('读不到改动', 'Edits not readable')
     : !d.ok ? L('没有找到', 'Not found')
     : d.records != null ? L(`${fmt(d.records)} 条记录`, `${fmt(d.records)} records`)
     : d.entries != null ? L(`${fmt(d.entries)} 个条目`, `${fmt(d.entries)} entries`)

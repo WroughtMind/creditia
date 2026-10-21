@@ -41,7 +41,8 @@ button { font: inherit; color: inherit; }
 }
 
 /* ── 顶栏 ── */
-#top { position: fixed; z-index: 20; top: 0; left: 0; right: 0; height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px 0 80px; }
+#top { position: fixed; z-index: 20; top: 0; left: 0; right: 0; height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px 0 50px; }
+body.mac #top { padding-left: 84px; } /* 原生窗口：让开左边的红绿灯 */
 #top::before { /* 滚动后才出现：一层往下渐隐的磨砂，托住顶栏 */
   content: ""; position: absolute; z-index: -1; inset: 0 0 -28px; pointer-events: none; opacity: 0; transition: opacity .25s;
   background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 82%, transparent) 30%, color-mix(in srgb, var(--bg) 0%, transparent));
@@ -53,14 +54,13 @@ body::after { /* 底下渐隐，浮在下面的风格栏不和作品打架 */
   content: ""; position: fixed; z-index: 15; left: 0; right: 0; bottom: 0; height: 80px; pointer-events: none;
   background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 0%, transparent), color-mix(in srgb, var(--bg) 88%, transparent));
 }
-/* 左上：logo 和项目名就是标题，点开换项目 */
-.pill { display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 12px 0 8px; border-radius: 10px; cursor: pointer; transition: background .15s; min-width: 0; }
+/* 左上：项目名就是标题，点开换项目。左边和墙对齐 */
+.pill { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 9px; cursor: pointer; transition: background .15s; min-width: 0; }
 .pill:hover, .pill[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 6%, transparent); }
-.pill .logo { width: 18px; height: 18px; flex: none; display: inline-block; }
-.pill .logo svg { width: 100%; height: 100%; }
-.pname { font-weight: 600; font-size: 14px; letter-spacing: -.01em; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chev { color: var(--soft); flex: none; transition: transform .2s; }
-.pill[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.pname { font-weight: 600; font-size: 15px; letter-spacing: -.015em; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chev { color: var(--faint); flex: none; transition: color .15s; }
+.pill:hover .chev, .pill[aria-expanded="true"] .chev { color: var(--ink); }
+body:has(#welcome:not([hidden])) #project { visibility: hidden; } /* 第一次打开：中间已经在挑项目 */
 /* 右上：一条胶囊装下分组、视图、语言、设置 */
 .tools { display: flex; align-items: center; gap: 2px; height: 36px; padding: 3px; border-radius: 99px; }
 .tools .seg { background: transparent; box-shadow: none; padding: 0; }
@@ -159,25 +159,25 @@ body.dragging .tile .bar, body.dragging .tile::after, body.dragging #dots { opac
 #ghost.small { scale: .32; opacity: .75; }
 #ghost svg { display: block; width: 100%; height: auto; }
 
-/* ── 风格圆点 ── */
-#dots { position: fixed; z-index: 20; left: 18px; bottom: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 11px 14px 11px 16px; border-radius: 21px; max-width: calc(100vw - 36px); }
-/* 窗口窄：只留现在的风格，点它再展开 */
-@media (max-width: 860px) {
-  #dots:not(.open) button:not(.on), #dots:not(.open) .divider { display: none; }
-  #dots .cur { cursor: pointer; }
-  #dots .cur::after { content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 8px; border-right: 1.4px solid var(--soft); border-bottom: 1.4px solid var(--soft); rotate: -135deg; vertical-align: 1px; }
-  #dots.open .cur::after { rotate: 45deg; vertical-align: 3px; }
-}
-#dots .cur { font-size: 12px; font-weight: 600; white-space: nowrap; margin-right: 8px; min-width: 4.5em; } /* 现在用的风格叫什么 */
-#dots button { width: 20px; height: 20px; padding: 0; border: 0; border-radius: 99px; background: none; cursor: pointer; position: relative; transition: transform .16s; }
-#dots button:hover { transform: scale(1.18); }
-#dots button svg { width: 20px; height: 20px; display: block; border-radius: 99px; }
-#dots button.on::after { content: ""; position: absolute; inset: -4px; border-radius: 99px; border: 1.5px solid var(--ink); }
-body.busy #dots button.on::after { border-color: transparent; border-top-color: var(--ink); border-right-color: var(--ink); animation: spin .8s linear infinite; } /* 新风格在后台画着 */
+/* ── 风格：左下一颗按钮，写着现在的风格；两边一步一换，点名字列出全部 ── */
+#dots { position: fixed; z-index: 20; left: 18px; bottom: 18px; display: flex; align-items: center; gap: 2px; height: 40px; padding: 4px; border-radius: 99px; }
+#dots > button { height: 32px; border: 0; background: none; color: var(--ink); cursor: pointer; border-radius: 99px; display: inline-flex; align-items: center; transition: background .15s; }
+#dots > button:hover { background: var(--glass2); }
+#dots .step { width: 30px; justify-content: center; color: var(--soft); }
+#dots .step:hover { color: var(--ink); }
+#dots .cur { gap: 9px; padding: 0 12px 0 7px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+#dots .cur .d { position: relative; width: 20px; height: 20px; flex: none; }
+#dots .cur .d svg { width: 20px; height: 20px; display: block; border-radius: 99px; }
+body.busy #dots .cur .d::after { content: ""; position: absolute; inset: -3px; border-radius: 99px; border: 1.5px solid transparent; border-top-color: var(--ink); border-right-color: var(--ink); animation: spin .8s linear infinite; } /* 新风格在后台画着 */
+#dots .cur .chev { color: var(--faint); }
 @keyframes spin { to { rotate: 360deg; } }
-#tipname { position: fixed; z-index: 70; pointer-events: none; padding: 7px 11px 8px; border-radius: 12px; font-size: 12px; color: #F4F4F2; background: rgba(18,18,18,.78); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 8px 24px rgba(0,0,0,.25); max-width: 260px; }
-#tipname b { display: block; font-weight: 600; font-size: 12.5px; }
-#tipname span { color: rgba(244,244,242,.7); font-size: 11.5px; }
+#dots .styles { position: absolute; left: 0; bottom: calc(100% + 10px); width: 400px; max-width: calc(100vw - 36px); max-height: min(70vh, 520px); overflow: auto; border-radius: 16px; padding: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; animation: drop2 .14s ease-out; background: color-mix(in srgb, var(--bg) 92%, transparent); }
+#dots .styles button { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; border-radius: 10px; background: none; color: var(--ink); cursor: pointer; font-size: 13px; text-align: left; }
+#dots .styles button:hover { background: var(--glass2); }
+#dots .styles button.on { background: var(--glass2); box-shadow: inset 0 0 0 1px var(--edge); font-weight: 500; }
+#dots .styles button svg { width: 18px; height: 18px; border-radius: 99px; flex: none; }
+#dots .styles .divider { grid-column: 1 / -1; height: 1px; margin: 4px 6px; background: var(--edge); }
+@media (max-width: 560px) { #dots .styles { grid-template-columns: 1fr; } }
 
 /* ── 导出坞 ── */
 #dock { display: none; } /* 只在拖起作品时出现 */
@@ -203,9 +203,9 @@ body.dragging #dock .sizes { display: flex; gap: 2px; padding: 3px; border-radiu
 /* ── 聚焦 ── */
 #focus { position: fixed; z-index: 40; inset: 0; display: grid; grid-template-rows: 1fr auto; grid-template-columns: minmax(0, 1fr); align-items: center; justify-items: center; padding: 76px 84px 22px; background: color-mix(in srgb, var(--bg) 62%, transparent); backdrop-filter: blur(28px) saturate(140%); -webkit-backdrop-filter: blur(28px) saturate(140%); animation: fade .2s; }
 @keyframes fade { from { opacity: 0; } }
-#focus .fhead { position: fixed; top: 18px; left: 84px; right: 140px; display: flex; align-items: baseline; gap: 12px; white-space: nowrap; overflow: hidden; }
-#focus .fhead b { font-size: 14px; font-weight: 600; }
-#focus .fhead span { color: var(--soft); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+#focus .fhead { position: fixed; top: 0; height: 60px; left: 60px; right: 140px; display: flex; align-items: center; white-space: nowrap; overflow: hidden; } /* 和顶栏的项目名同一位置 */
+body.mac #focus .fhead { left: 94px; }
+#focus .fhead b { font-size: 15px; font-weight: 600; letter-spacing: -.015em; overflow: hidden; text-overflow: ellipsis; }
 #focus .big { max-height: calc(100vh - 230px); max-width: min(1100px, 100%); overflow: auto; border-radius: 10px; box-shadow: var(--lift); scrollbar-width: none; transition: opacity .2s; }
 #focus .big.loading { opacity: .55; }
 #focus .big .art svg { display: block; width: 100%; height: auto; }
@@ -257,7 +257,7 @@ body.dragging #dock .sizes { display: flex; gap: 2px; padding: 3px; border-radiu
 #sheet .dot.ok { background: var(--ink); }
 #sheet .row { flex-wrap: wrap; }
 #sheet .row .v.path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11.5px "JetBrains Mono", ui-monospace, monospace; }
-#sheet .row.kv .k { flex: none; width: 96px; color: var(--soft); }
+#sheet .row.kv .k { flex: none; min-width: 96px; white-space: nowrap; color: var(--soft); }
 #sheet .row.kv .seg button { padding: 5px 10px; }
 #sheet .mini { border: 0; background: var(--glass); box-shadow: inset 0 0 0 1px var(--edge); padding: 4px 10px; border-radius: 99px; cursor: pointer; font-size: 12px; color: var(--ink); }
 #sheet .mini:hover { background: var(--ink); color: var(--bg); }
@@ -284,7 +284,6 @@ body.dragging #dock .sizes { display: flex; gap: 2px; padding: 3px; border-radiu
 #empty b { display: block; color: var(--ink); font-size: 18px; margin-bottom: 8px; font-weight: 600; }
 #empty .go { margin-top: 18px; }
 #empty code { font: 12px "JetBrains Mono", ui-monospace, monospace; background: var(--glass); padding: 6px 10px; border-radius: 8px; display: inline-block; margin-top: 10px; }
-#dots .divider{width:1px;height:16px;background:color-mix(in srgb, var(--ink) 16%, transparent);margin:0 4px;align-self:center;flex:none}
 
 
 /* ── 漫游：没有尽头的画布 ── */
@@ -316,8 +315,9 @@ body.roam #top::before { opacity: 1; }
 #welcome .row b { font-weight: 600; font-size: 13.5px; white-space: nowrap; }
 #welcome .row .path { color: var(--faint); font: 11.5px "JetBrains Mono", ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #welcome .row .tools { color: var(--soft); font-size: 12px; white-space: nowrap; }
-#welcome input[type=checkbox] { appearance: none; margin: 0; width: 16px; height: 16px; border-radius: 99px; box-shadow: inset 0 0 0 1.5px var(--faint); cursor: pointer; transition: box-shadow .15s, background .15s; }
-#welcome input[type=checkbox]:checked { background: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink), inset 0 0 0 4px var(--bg); }
+#welcome input[type=checkbox] { appearance: none; margin: 0; width: 16px; height: 16px; border-radius: 5px; box-shadow: inset 0 0 0 1.5px var(--faint); cursor: pointer; display: grid; place-items: center; transition: box-shadow .15s, background .15s; }
+#welcome input[type=checkbox]:checked { background: var(--ink); box-shadow: none; }
+#welcome input[type=checkbox]:checked::after { content: ""; width: 4px; height: 8px; margin-top: -2px; border: solid var(--bg); border-width: 0 1.6px 1.6px 0; rotate: 45deg; }
 #welcome .row .st { width: 12px; height: 12px; }
 #welcome .row.run .st { border-radius: 99px; border: 1.5px solid var(--faint); border-top-color: var(--ink); animation: spin .8s linear infinite; }
 #welcome .row.done .st::before { content: "✓"; font-style: normal; font-size: 12px; }
@@ -333,3 +333,4 @@ body.roam #top::before { opacity: 1; }
 /* 浮在作品上的菜单：底子要够实，作品的字不能透上来 */
 .fmts, #focus .kits, .menu { background: color-mix(in srgb, var(--bg) 92%, transparent); }
 #focus .kits, #focus .fmts { background: var(--bg); } /* 放大视图本身已经有一层模糊，里面的菜单再模糊不起作用，直接用实底 */
+#sheet #crow .v { text-align: right; color: var(--faint); font-size: 12px; }
