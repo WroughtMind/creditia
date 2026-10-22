@@ -66,6 +66,7 @@ export const LOGO_OF: Record<string, string> = {
   'claude-code': 'claude', codex: 'openai', cursor: 'cursor', grok: 'grok', kimi: 'kimi', gemini: 'geminicli', qwen: 'qwen', cline: 'cline',
   copilot: 'githubcopilot', amp: 'amp', windsurf: 'windsurf', trae: 'trae', deepseek: 'deepseek', 'github-actions': 'github-actions',
   dependabot: 'dependabot', renovate: 'renovate', opencode: 'opencode', roo: 'roocode', kilo: 'kilocode', devin: 'devin', jules: 'googlejules', aider: 'aider',
+  crush: 'crush', goose: 'goose', continue: 'continue', zed: 'zed', 'amazon-q': 'amazonq', antigravity: 'antigravity',
 };
 /** 各家熟悉的品牌色（只在愿意用品牌色的风格里用） */
 export const BRAND: Record<string, string> = {

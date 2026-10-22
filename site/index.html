@@ -215,7 +215,9 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 
 /* ───────── 用法：四张卡都是会自己演的小样，高度固定，内容在里面滚，不把页面撑开 ───────── */
 .ways { margin-top: 44px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.way { border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 18px 22px 0; display: flex; flex-direction: column; gap: 14px; overflow: hidden; min-width: 0; }
+.way { position: relative; border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 18px 22px 0; display: flex; flex-direction: column; gap: 14px; overflow: clip; overflow-clip-margin: 0; min-width: 0; }
+.way:has(.wpop) { overflow: visible; z-index: 3; }
+.way .wbar { border-radius: 0 0 15px 15px; }
 .way h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 10px; min-height: 28px; }
 .way h3 small { font-weight: 400; color: var(--faint); font-size: 13px; }
 .again { margin-left: auto; width: 28px; height: 28px; border-radius: 99px; border: 0; background: transparent; color: var(--faint); cursor: pointer; display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity .3s, color .15s, background-color .15s; }
@@ -370,65 +372,38 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 .dstep b { font-weight: 500; color: var(--faint); margin-right: 7px; font-variant-numeric: tabular-nums; }
 .dstep + .again { margin-left: 0; }
 
-.selfc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 56px; align-items: end; }
-.selfc .sh p { margin: 12px 0 0; color: var(--soft); }
-.selfc .go2 { margin-top: 28px; }
-.selfc a.more { color: var(--ink); text-decoration: none; font-size: 14.5px; border-bottom: 1px solid var(--line); padding-bottom: 3px; transition: border-color .15s; }
-.selfc a.more:hover { border-color: currentColor; }
-.srows { display: flex; flex-direction: column; gap: 18px; }
-.srow { display: grid; grid-template-columns: 18px 112px minmax(0, 1fr) 62px; align-items: center; column-gap: 12px; font-size: 14.5px; }
-.srow svg { width: 16px; height: 16px; fill: currentColor; display: block; }
-.srow > i { width: 13px; height: 13px; border-radius: 3px; border: 1px dashed var(--soft); }
-.srow .tr { height: 6px; border-radius: 3px; background: var(--line2); overflow: hidden; }
-.srow .tr b { display: block; height: 100%; border-radius: 3px; }
-.srow em { font-style: normal; text-align: right; font-variant-numeric: tabular-nums; }
-.srow small { grid-column: 2 / -1; margin-top: 4px; color: var(--faint); font-size: 12.5px; }
-.smeta { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px 18px; font: 12.5px "JetBrains Mono", monospace; color: var(--soft); }
-.smeta b { font-weight: 500; color: var(--ink); }
 .deskshot { display: none; }
-.vline { margin: 12px 0 0; color: var(--soft); font-size: 14px; }
-.vline code { font: 12.5px "JetBrains Mono", monospace; color: var(--ink); }
-.ibento { margin-top: 40px; display: grid; grid-template-columns: 1.15fr 1fr; grid-template-areas: "ask app" "cli skill" "cli ci"; gap: 16px; }
-.ib { border: 1px solid var(--line); border-radius: 18px; background: var(--card); padding: 22px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.ib h3 { margin: 0; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
-.ib h3 small { font-weight: 400; color: var(--faint); font-size: 12.5px; }
-.ib.ask { grid-area: ask; background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.ib.app { grid-area: app; } .ib.cli { grid-area: cli; } .ib.skill { grid-area: skill; } .ib.ci { grid-area: ci; }
-.ask .say { flex: 1; font-size: 15.5px; line-height: 1.85; white-space: pre-wrap; opacity: .92; }
-.ask .go { align-self: flex-start; height: 42px; padding: 0 18px; border-radius: 11px; border: 0; background: var(--bg); color: var(--ink); font-weight: 500; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: transform .2s; }
-.ask .go:hover { transform: translateY(-1px); }
-.ask .go svg { width: 15px; height: 15px; }
-.soon { flex: none; font-size: 11px; line-height: 1; padding: 4px 7px; border-radius: 99px; color: var(--soft); border: 1px dashed var(--line); white-space: nowrap; font-family: Inter, sans-serif; font-weight: 400; }
-.plat { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 4px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
-.plat:first-of-type { border-top: 0; padding-top: 0; }
-.plat > i svg { width: 18px; height: 18px; fill: currentColor; display: block; }
-.plat b { font-weight: 500; font-size: 14.5px; }
-.plat b em { font-style: normal; font-weight: 400; font-size: 11.5px; color: var(--faint); margin-left: 8px; }
-.plat .fmts { display: flex; gap: 6px; align-items: center; }
-.plat .fmt { font: 12px "JetBrains Mono", monospace; padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); text-decoration: none; color: var(--faint); }
-a.fmt { color: var(--ink); } a.fmt:hover { background: var(--line2); }
-.plat.me .fmt:first-child { background: var(--ink); color: var(--bg); border-color: var(--ink); opacity: .35; }
-.plat.me a.fmt:first-child { opacity: 1; }
-.plat .pm { grid-column: 2 / -1; display: flex; align-items: center; gap: 8px; font: 12px "JetBrains Mono", monospace; color: var(--faint); min-width: 0; }
-.plat .pm span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tm { border-radius: 12px; background: var(--term); color: var(--term-ink); padding: 16px 0 14px; font: 12.5px/1.7 "JetBrains Mono", monospace; flex: 1; overflow: hidden; }
-.tm .c { color: #6F6B63; padding: 10px 18px 2px; }
-.tm .c:first-child { padding-top: 0; }
-.tm .l { display: flex; align-items: center; gap: 10px; padding: 3px 10px 3px 18px; min-height: 30px; }
-.tm .l > span:first-child { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-.tm .l > span:first-child::-webkit-scrollbar { display: none; }
-.tm .l .p { color: #6F6B63; margin-right: 8px; font-style: normal; }
-.tm .l.off > span:first-child { color: #5E5A53; }
-.tm .l.off .soon { opacity: 0; transition: opacity .15s; }
-.tm .l.off:hover .soon { opacity: 1; }
-.ib h3 .key { margin-left: auto; font-weight: 400; font-size: 12px; color: var(--faint); display: inline-flex; align-items: center; gap: 6px; }
-.ib h3 .key i { width: 18px; height: 2px; background: currentColor; opacity: .5; }
-.tm .l .soon { color: #8C877D; border-color: rgba(232,228,219,.18); }
-.tm .l .cp { opacity: 0; height: 26px; min-width: 26px; padding: 0 6px; background: transparent; border-color: rgba(232,228,219,.2); color: #A9A397; transition: opacity .15s; }
-.tm .l:hover { background: rgba(255,255,255,.04); }
-.tm .l:hover .cp, .tm .l .cp:focus-visible { opacity: 1; }
-.logos { display: flex; flex-wrap: wrap; gap: 12px 14px; color: var(--soft); }
-.logos svg { width: 20px; height: 20px; fill: currentColor; display: block; }
+/* 每张卡片的最后一条就是它的安装：先摆一条现在能用的，其余方式收在「其他方式」里 */
+.wbar { position: relative; z-index: 2; display: grid; gap: 10px; margin: -14px -22px 0; padding: 14px 22px 20px; border-top: 1px solid var(--line); background: var(--card); }
+.wlab { display: flex; align-items: center; gap: 10px; min-height: 30px; font-size: 13px; color: var(--soft); }
+.wlab b { flex: none; font-weight: 600; color: var(--ink); }
+.wlab .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wfield { display: flex; align-items: center; gap: 10px; min-width: 0; height: 48px; padding: 0 7px 0 15px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
+.wc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 13px "JetBrains Mono", monospace; color: var(--ink); }
+.wc i { font-style: normal; color: var(--faint); margin-right: 10px; }
+.wc.say { font: 13.5px Inter, sans-serif; color: var(--soft); }
+.wcopy { flex: none; height: 34px; padding: 0 14px; border-radius: 9px; border: 0; background: var(--ink); color: var(--bg); font: 500 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; text-decoration: none; transition: transform .2s, opacity .2s; }
+.wcopy:hover { transform: translateY(-1px); }
+.wcopy svg { width: 14px; height: 14px; }
+a.wcopy svg { fill: currentColor; }
+.wfield.big { height: auto; padding: 0; border: 0; background: transparent; }
+.wfield.big .wcopy { width: 100%; height: 48px; justify-content: center; border-radius: 12px; font-size: 14px; }
+.wmore { flex: none; margin-left: auto; height: 30px; padding: 0 6px 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--soft); font: 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: color .15s, background-color .15s; }
+.wmore:hover, .wmore[aria-expanded="true"] { color: var(--ink); background: var(--line2); }
+.wmore svg { width: 14px; height: 14px; transition: rotate .2s; }
+.wmore[aria-expanded="true"] svg { rotate: 180deg; }
+.wpop { position: absolute; right: 10px; bottom: calc(100% + 8px); width: min(380px, calc(100% - 20px)); max-height: min(420px, 70vh); overflow: auto; padding: 6px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); animation: wpop .16s ease-out; }
+@keyframes wpop { from { opacity: 0; transform: translateY(4px); } }
+.wpop .g { padding: 8px 10px 3px; font-size: 11.5px; color: var(--faint); }
+.wpop button { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 12px; padding: 6px 10px; border: 0; border-radius: 9px; background: transparent; color: var(--ink); font: 13px Inter, sans-serif; text-align: left; cursor: pointer; }
+.wpop button:hover { background: var(--line2); }
+.wpop button.on { background: var(--line2); }
+.wpop button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11.5px "JetBrains Mono", monospace; color: var(--faint); }
+.wpop b { font-weight: 500; white-space: nowrap; }
+.wpop .ver { padding: 8px 10px 4px; margin-top: 4px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--faint); }
+.wpop .ver code { font: 11px "JetBrains Mono", monospace; color: var(--soft); }
+.way.flash { animation: wayflash 1.8s ease-out; }
+@keyframes wayflash { 0%, 30% { border-color: var(--soft); } }
 .line { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 6px 6px 6px 12px; font: 12.5px "JetBrains Mono", monospace; min-height: 40px; }
 .line > span:first-child { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
 .line > span:first-child::-webkit-scrollbar { display: none; }
@@ -444,11 +419,24 @@ a.fmt { color: var(--ink); } a.fmt:hover { background: var(--line2); }
 #toast { position: fixed; z-index: 60; left: 0; top: 0; padding: 5px 11px; border-radius: 8px; font-size: 12.5px; background: var(--ink); color: var(--bg); pointer-events: none; opacity: 0; white-space: nowrap; }
 #lb .bar .cp { background: transparent; border-color: rgba(238,233,223,.2); color: #EEE9DF; font: 12.5px "JetBrains Mono", monospace; height: 38px; max-width: min(46vw, 520px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; line-height: 36px; }
 #lb .bar .n { font: 12px "JetBrains Mono", monospace; color: #8C877D; }
-footer { margin-top: clamp(110px, 14vw, 170px); border-top: 1px solid var(--line); padding: 24px 0 calc(36px + env(safe-area-inset-bottom, 0px)); color: var(--soft); font-size: 14px; }
-footer .wrap { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+footer { margin-top: clamp(110px, 14vw, 170px); padding: 0 0 calc(36px + env(safe-area-inset-bottom, 0px)); color: var(--soft); font-size: 14px; }
+footer .fline { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 24px; }
+/* 收尾：creditia 自己的 *，瓣长就是它自己仓库里各模型写的份额；像片尾最后一行字幕，也像页脚的脚注 */
+.coda { display: grid; justify-items: center; text-align: center; padding: 0 0 clamp(70px, 9vw, 110px); }
+.coda .cm { display: block; width: 92px; height: 92px; }
+.coda .cm svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.coda .cl { margin: 26px 0 0; font-size: 13px; color: var(--faint); letter-spacing: .02em; }
+.coda .cr { margin-top: 12px; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 26px; font-size: 15px; color: var(--ink); }
+.coda .cr span { display: inline-flex; align-items: baseline; gap: 8px; cursor: default; transition: opacity .2s; }
+.coda .cr i { width: 7px; height: 7px; border-radius: 99px; align-self: center; }
+.coda .cr em { font-style: normal; color: var(--soft); font-variant-numeric: tabular-nums; }
+.coda .cr:hover span:not(:hover) { opacity: .45; }
+.coda .cmeta { margin: 12px 0 0; font: 12px "JetBrains Mono", monospace; color: var(--faint); }
+.coda .cmeta span { white-space: nowrap; }
+.coda .cmeta a { color: var(--soft); text-decoration: none; margin-left: 14px; white-space: nowrap; }
+.coda .cmeta a:hover { color: var(--ink); }
 footer a { text-decoration: none; }
 footer a:hover { color: var(--ink); }
-footer .self img { height: 20px; width: auto; }
 
 .sl { display: inline-block; overflow: hidden; vertical-align: top; padding: 0 .03em .14em; margin: 0 -.03em -.14em; }
 .sc { display: inline-block; }
@@ -496,12 +484,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   .ln .who { position: absolute; right: 8px; top: 50%; translate: 0 -50%; font-size: 10.5px; padding: 1px 8px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); box-shadow: -14px 0 14px var(--card); pointer-events: none; }
   .legend { margin-top: 24px; gap: 6px; }
   .legend span { height: 30px; padding: 0 11px; font-size: 13px; gap: 7px; }
-  .plat { grid-template-columns: 22px 1fr; }
-  .ib h3 { flex-wrap: wrap; row-gap: 4px; }
-  .plat .fmts { grid-column: 2; flex-wrap: wrap; }
   .term .mdl { display: none; }
-  .selfc { grid-template-columns: 1fr; gap: 30px; }
-  .srow { grid-template-columns: 18px 96px minmax(0, 1fr) 54px; font-size: 13.5px; column-gap: 10px; }
   #deskcard .dstep, #deskcard .again { display: none; }
   .way .body.dbody { aspect-ratio: auto; height: auto; }
   .deskbox { display: none; }
@@ -514,8 +497,10 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   .wall, .band { gap: 10px; }
   .ways { grid-template-columns: 1fr; }
   nav { display: none; }
-  .ibento { grid-template-columns: 1fr; grid-template-areas: "ask" "app" "cli" "skill" "ci"; }
-  .ib { padding: 18px 16px; }
+  .wbar { padding-inline: 16px; margin-inline: -16px; }
+  .wlab .t { white-space: normal; }
+  .wlab { align-items: flex-start; }
+  .coda .cmeta a { display: block; margin: 8px 0 0; }
   #lb .bar { flex-wrap: wrap; gap: 8px 12px; }
   #lb .bar .cp { max-width: 92vw; order: 9; }
   .way h3 { flex-wrap: nowrap; gap: 10px; white-space: nowrap; }
@@ -542,7 +527,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
       </button>
       <a href="https://github.com/WroughtMind/creditia" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg></a>
     </div>
-    <a class="get" href="#install"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v10.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6zM4 19h16v2H4z"/></svg><span data-i="nav.get">安装</span></a>
+    <a class="get" href="#use"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v10.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6zM4 19h16v2H4z"/></svg><span data-i="nav.get">安装</span></a>
   </div>
 </header>
 
@@ -555,7 +540,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
       <p data-i="hero.p">把 agent 的日志和 git 历史逐行对上，算出每个工具、每个模型写了多少，做成片尾字幕。全在本地。</p>
       <div class="acts">
         <div class="cmd mono"><span><span class="p">$</span>npx creditia analyze</span><button id="copy" aria-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button></div>
-        <a class="dl" id="herodl" href="#install"></a>
+        <a class="dl" id="herodl" href="#deskcard"></a>
       </div>
       <div class="agents" id="agents"></div>
     </div>
@@ -587,48 +572,22 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
     <div class="wrap">
       <div class="head rise"><h2 class="serif" data-i="use.t">四种用法</h2></div>
       <div class="ways">
-        <div class="way rise"><h3><span data-i="w.cli">命令行</span><button class="again" data-again="term" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="term mono" id="term"></div></div></div>
-        <div class="way rise"><h3><span data-i="w.agent">交给 agent</span><button class="again" data-again="chat" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="agent" id="chat"></div></div></div>
-        <div class="way rise" id="flowcard"><h3>GitHub Action <small class="mono">WroughtMind/creditia@main</small><button class="again" data-again="flow" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="flow2" id="flow"></div></div></div>
-        <div class="way rise" id="deskcard"><h3>App <small>macOS · Windows · Linux</small><span class="dstep" id="dsteps"></span><button class="again" data-again="desk" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body dbody"><div class="deskbox" id="deskbox"><div class="desk" id="desk"></div></div><div class="deskshot"><img class="dk" src="assets/app-dark.webp" alt="creditia App" loading="lazy" width="1200" height="750"><img class="lt" src="assets/app-light.webp" alt="creditia App" loading="lazy" width="1200" height="750"><p data-i="desk.pc">在电脑上打开这一页，可以直接上手试。</p></div></div></div>
+        <div class="way rise"><h3><span data-i="w.cli">命令行</span><button class="again" data-again="term" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="term mono" id="term"></div></div><div class="wbar" id="get-cli"></div></div>
+        <div class="way rise"><h3><span data-i="w.agent">交给 agent</span><button class="again" data-again="chat" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="agent" id="chat"></div></div><div class="wbar" id="get-agent"></div></div>
+        <div class="way rise" id="flowcard"><h3>GitHub Action <small class="mono">WroughtMind/creditia@main</small><button class="again" data-again="flow" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="flow2" id="flow"></div></div><div class="wbar" id="get-ci"></div></div>
+        <div class="way rise" id="deskcard"><h3>App <small>macOS · Windows · Linux</small><span class="dstep" id="dsteps"></span><button class="again" data-again="desk" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body dbody"><div class="deskbox" id="deskbox"><div class="desk" id="desk"></div></div><div class="deskshot"><img class="dk" src="assets/app-dark.webp" alt="creditia App" loading="lazy" width="1200" height="750"><img class="lt" src="assets/app-light.webp" alt="creditia App" loading="lazy" width="1200" height="750"><p data-i="desk.pc">在电脑上打开这一页，可以直接上手试。</p></div></div><div class="wbar" id="get-app"></div></div>
       </div>
     </div>
   </section>
 
-  <section id="self" hidden>
-    <div class="wrap">
-      <div class="selfc">
-        <div class="sh rise">
-          <h2 class="serif" data-i="self.t">creditia 自己的署名</h2>
-          <p data-i="self.p">用 creditia 分析它自己的仓库，结果原样放在这里。</p>
-          <div class="go2"><a class="more" id="selfmore" href="self/"></a></div>
-        </div>
-        <div class="sbody rise" id="selfbody"></div>
-      </div>
-    </div>
-  </section>
-
-  <section id="install">
-    <div class="wrap">
-      <div class="head rise"><div><h2 class="serif" data-i="ins.t">安装</h2><p class="vline" id="vline"></p></div></div>
-      <div class="ibento">
-        <div class="ib ask rise" id="ib-ask"></div>
-        <div class="ib app rise" id="ib-app"></div>
-        <div class="ib cli rise" id="ib-cli"></div>
-        <div class="ib skill rise" id="ib-skill"></div>
-        <div class="ib ci rise" id="ib-ci"></div>
-      </div>
-    </div>
-  </section>
 </main>
 
 <footer>
-  <div class="wrap">
+  <div class="wrap coda" id="coda" hidden><a class="cm" id="cmark" href="self/"></a><p class="cl" id="clabel"></p><div class="cr" id="crows"></div><p class="cmeta" id="cmeta"></p></div>
+  <div class="wrap fline">
     <span>creditia · MIT</span>
     <a href="https://github.com/WroughtMind/creditia">GitHub</a>
     <a href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.md" data-en-href="https://github.com/WroughtMind/creditia/blob/main/ATTRIBUTION.en.md" data-i="foot.rules">归因规则</a>
-    <div class="grow"></div>
-    <a class="self" id="selflink" href="self/" aria-label="creditia credits"><img id="selfbadge" alt="creditia credits badge"></a>
   </div>
 </footer>
 
@@ -649,7 +608,7 @@ const EN = {
   'lines.t': 'Every line has a source', 'lines.p': 'What can’t be matched is marked unattributed. Runs locally, calls no model.',
   'use.t': 'Four ways to use it', 'w.cli': 'Command line', 'w.agent': 'Your agent',
   'foot.rules': 'Attribution rules',
-  'self.t': 'creditia’s own credits', 'self.p': 'creditia, run on its own repository. Shown as is.', 'desk.pc': 'Open this page on a computer to try the app right here.',
+  'desk.pc': 'Open this page on a computer to try the app right here.',
   'nav.looks': 'Looks', 'nav.lines': 'Sources', 'nav.use': 'Usage', 'nav.get': 'Install', 'ins.t': 'Install',
 };
 const ZH = {};
@@ -1750,30 +1709,31 @@ document.addEventListener('click', (e) => { const b = e.target.closest('[data-ag
 // 手机上卡片一张接一张划过去，等打字演完太久：直接摆出结果，想看过程点 ↻。App 演示在手机上太小，换成截图
 const PHONE = matchMedia('(max-width: 900px)').matches;
 const playIO = new IntersectionObserver((es) => es.forEach((e) => { if (!e.isIntersecting) return; const k = e.target.dataset.play; playIO.unobserve(e.target); played.add(k); PLAYS[k](PHONE); }), { threshold: 0.4 });
-// creditia 自己的署名：仓库里的 credits.json（本机 creditia publish 写出），每次构建现算
-function selfCredits() {
-  const x = DATA.self?.[lang()]; $('self').hidden = !x; if (!x) return;
-  const en = lang() === 'en', f = (n) => n.toLocaleString('en-US');
-  const rows = x.rows.map((r) => {
-    const t = DATA.tools.find((y) => y.name === r.name), col = r.key === 'unattributed' ? 'var(--soft)' : AGC[r.key] || 'var(--ink)';
-    const ic = r.key === 'unattributed' ? '<i></i>' : `<span style="color:${col}">${t?.svg || ''}</span>`;
-    return `<div class="srow">${ic}<span>${esc(r.name)}</span><span class="tr"><b style="width:${Math.max(0.6, r.pct)}%;background:${col}"></b></span><em>${r.pct.toFixed(1)}%</em>${r.models ? `<small>${esc(r.models)}</small>` : ''}</div>`;
-  }).join('');
-  $('selfbody').innerHTML = `<div class="srows">${rows}</div><div class="smeta"><span><b>${f(x.commits)}</b> ${en ? 'commits' : '次提交'}</span><span><b>${f(x.lines)}</b> ${en ? 'lines' : '行'}</span><span>${x.from} → ${x.to}</span></div>`;
-  $('selfmore').textContent = en ? 'Full credits page →' : '看完整的署名页 →';
-  $('selfmore').href = en ? 'self/en/' : 'self/';
+// 收尾：creditia 自己的 *，瓣长是它自己仓库里各模型写的份额（构建时用 mark.ts 画好）；滚到页底才绽开。
+// 悬停某个模型，它那一瓣伸长。份额不到 1% 的合成「其他」
+let codaMark = null;
+const codaIO = new IntersectionObserver((es) => es.forEach((e) => { if (!e.isIntersecting) return; codaIO.unobserve(e.target); codaMark = liveMark(e.target.querySelector('svg'), { breathe: true }); }), { threshold: 0.6 });
+function coda() {
+  const x = DATA.self?.[lang()]; $('coda').hidden = !x; if (!x) return;
+  const en = lang() === 'en', f = (n) => n.toLocaleString('en-US'), href = en ? 'self/en/' : 'self/';
+  $('cmark').innerHTML = x.mark; $('cmark').href = href; $('cmark').setAttribute('aria-label', en ? 'creditia’s own credits' : 'creditia 自己的署名');
+  if (codaMark) codaMark = liveMark($('cmark').querySelector('svg'), { breathe: true }); else codaIO.observe($('cmark'));
+  $('clabel').textContent = en ? 'creditia’s own credits' : 'creditia 自己的署名';
+  const big = x.rows.filter((r) => r.pct >= 1), rest = x.rows.filter((r) => r.pct < 1), restPct = rest.reduce((a, r) => a + r.pct, 0);
+  $('crows').innerHTML = big.map((r) => `<span data-j="${r.j}"><i style="background:${r.color}"></i>${esc(r.name)}<em>${r.pct.toFixed(1)}%</em></span>`).join('')
+    + (rest.length ? `<span title="${esc(rest.map((r) => `${r.name} ${r.pct.toFixed(1)}%`).join(' · '))}"><i style="background:var(--faint)"></i>${en ? 'Other' : '其他'}<em>${restPct.toFixed(1)}%</em></span>` : '');
+  $('cmeta').innerHTML = [`${f(x.commits)} ${en ? 'commits' : '次提交'}`, `${f(x.lines)} ${en ? 'lines' : '行'}`, `${x.from} → ${x.to}`].map((v) => `<span>${v}</span>`).join(' · ') + `<a href="${href}">${en ? 'Full credits →' : '完整署名 →'}</a>`;
 }
+$('crows').addEventListener('pointerover', (e) => { const j = e.target.closest('[data-j]')?.dataset.j; if (codaMark) { codaMark.focus = j == null ? -1 : +j; codaMark.awake = true; wake(); } });
+$('crows').addEventListener('pointerleave', () => { if (codaMark) { codaMark.focus = -1; codaMark.awake = true; wake(); } });
 function usage() {
-  const L = lang();
   // 换语言：已经演过的直接摆出结果，没演过的等滚到再演
   for (const k of ['term', 'chat', 'flow']) if (played.has(k)) PLAYS[k](true);
   if (!played.has('flow')) flowFrame();
   if (!played.has('term')) $('term').innerHTML = '<span class="p">$</span> <span class="caret"></span>';
   if (!played.has('chat')) $('chat').innerHTML = '';
   if (played.has('desk')) { D.run++; D.touring = false; const src = $('appf')?.src; deskFrame(); if (src) { winOpen('aw', false); $('aboot').classList.add('gone'); } $('tw').hidden = !!src; dsteps(6); } else deskFrame();
-  selfCredits();
-  if (DATA.hasSelf) { $('selfbadge').src = `assets/usage/${L}-self-badge.svg`; $('selflink').href = L === 'en' ? 'self/en/' : 'self/'; }
-  else $('selflink').hidden = true;
+  coda();
 }
 [['term', '#term'], ['chat', '#chat'], ['flow', '#flow'], ...(PHONE ? [] : [['desk', '#deskbox']])].forEach(([k, q]) => { const el = document.querySelector(q); el.dataset.play = k; playIO.observe(el); });
 
@@ -1794,65 +1754,111 @@ async function copy(text, btn) {
 }
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-copy]'); if (b) copy(b.dataset.copy, b); });
 
-// ───────── 安装：所有方式一眼摆出来，本机对应的排最前，不用选。
-// 第四个字段 ready：已经能用的才可点、可复制；其余标「即将推出」。发布后把它改成 true 就行 ─────────
+// ───────── 安装：每张用法卡片底下一条，本机对应的排最前，不用选 ─────────
 const VER = DATA.version;
 const REPO = 'https://github.com/WroughtMind/creditia';
 const ICON = (k) => (DATA.icons[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${DATA.icons[k]}"/></svg>` : '');
-const SOON = () => `<span class="soon">${lang() === 'en' ? 'Soon' : '即将推出'}</span>`;
 const cpBtn = (text) => `<button class="cp" data-copy="${text.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" aria-label="copy">${COPY_SVG}</button>`;
 const MOBILE = /iphone|ipad|ipod|android/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const detectOS = () => { const p = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent).toLowerCase(); return /win/.test(p) ? 'win' : /linux|x11|cros/.test(p) && !/android/.test(p) ? 'linux' : 'mac'; };
 const asset = (f) => `${REPO}/releases/download/v${VER}/${f.replace('{v}', VER)}`;
 const L2 = (x) => (Array.isArray(x) ? x[lang() === 'en' ? 1 : 0] ?? x[0] : x);
-// 桌面 App：每个平台一个主安装包，其余格式跟在后面，再加一行包管理器
-const APP = {
-  mac: { name: 'macOS', icon: 'apple', sub: ['Apple 芯片、Intel 通用', 'Apple silicon & Intel'], files: [['.dmg', 'creditia_{v}_universal.dmg', false]], pm: ['brew install --cask wroughtmind/tap/creditia', false] },
-  win: { name: 'Windows', icon: 'windows', sub: ['Windows 10 / 11', 'Windows 10 / 11'], files: [['.exe', 'creditia_{v}_x64-setup.exe', false], ['.msi', 'creditia_{v}_x64_en-US.msi', false], ['ARM64', 'creditia_{v}_arm64-setup.exe', false]], pm: ['winget install WroughtMind.Creditia', false] },
-  linux: { name: 'Linux', icon: 'linux', sub: ['x64', 'x64'], files: [['.AppImage', 'creditia_{v}_amd64.AppImage', false], ['.deb', 'creditia_{v}_amd64.deb', false], ['.rpm', 'creditia-{v}-1.x86_64.rpm', false]], pm: ['flatpak install flathub dev.creditia.app', false] },
-};
-// 命令行：按来源分组，一行一个
-const CLI = () => [
-  ['npm · pnpm · bun', [['npx creditia analyze', false], ['npm i -g creditia', false], ['pnpm add -g creditia', false], ['bun add -g creditia', false]]],
-  ['Homebrew · Scoop', [['brew install wroughtmind/tap/creditia', false], ['scoop install creditia', false]]],
-  [lang() === 'en' ? 'One-line script' : '一行脚本', [['curl -fsSL https://wroughtmind.github.io/creditia/install.sh | sh', false], ['irm https://wroughtmind.github.io/creditia/install.ps1 | iex', false]]],
-  ['Docker · Cargo', [['docker run --rm -v "$PWD:/repo" ghcr.io/wroughtmind/creditia analyze', false], [`cargo install --git ${REPO} creditia-cli`, true]]],
-  [lang() === 'en' ? 'From source' : '从源码', [[`git clone ${REPO} && cd creditia/packages/cli && npm i && npm link`, true]]],
-];
-const SKILL_AGENTS = ['Claude Code', 'Codex', 'Cursor', 'Gemini CLI', 'OpenCode', 'GitHub Copilot', 'Cline', 'Qwen Code', 'Roo Code', 'Kilo Code'];
+// 四种用法各自的装法：[名字, 内容, 只适合哪个系统]。先摆第一个适合本机的，其余收在「其他方式」里
 const OSN = { mac: 'macOS', win: 'Windows', linux: 'Linux' };
+const APP = {
+  mac: { files: [['.dmg', 'creditia_{v}_universal.dmg']], pm: ['Homebrew', 'brew install --cask wroughtmind/tap/creditia'] },
+  win: { files: [['.exe', 'creditia_{v}_x64-setup.exe'], ['.msi', 'creditia_{v}_x64_en-US.msi'], ['ARM64', 'creditia_{v}_arm64-setup.exe']], pm: ['winget', 'winget install WroughtMind.Creditia'] },
+  linux: { files: [['.AppImage', 'creditia_{v}_amd64.AppImage'], ['.deb', 'creditia_{v}_amd64.deb'], ['.rpm', 'creditia-{v}-1.x86_64.rpm']], pm: ['Flatpak', 'flatpak install flathub dev.creditia.app'] },
+};
 function prompt() {
   const en = lang() === 'en', os = MOBILE ? '' : OSN[detectOS()];
   return en
     ? `Install creditia (${REPO})${os ? ` on this ${os} machine` : ''} and use it to work out which AI tools and models wrote the code in this repo.\n1. Install the command-line tool and the skills/creditia skill, following the README.\n2. Run creditia analyze at the repo root and tell me the result.\n3. Ask me before publishing or committing anything.`
     : `帮我${os ? `在这台 ${os} 上` : ''}装上 creditia（${REPO}），用它算出这个仓库的代码是哪些 AI 工具和模型写的：\n1. 按 README 安装命令行工具和 skills/creditia 这个 skill；\n2. 在仓库根目录运行 creditia analyze，把结果告诉我；\n3. 公开或提交任何东西之前先问我。`;
 }
-const cmdLine = (cmd, ready, cls = 'line') => `<div class="${cls}${ready ? '' : ' off'}"><span>${cls === 'l' ? '<i class="p">$</i>' : ''}${esc(cmd)}</span>${ready ? cpBtn(cmd) : SOON()}</div>`;
-const yamlHl = (s) => esc(s).replace(/^(\s*-?\s*)([\w-]+):/gm, '$1<span class="k">$2</span>:');
-function install() {
+function ways() {
   const en = lang() === 'en', me = detectOS();
-  $('vline').innerHTML = en ? `Current <code>v${VER}</code> · nightly builds: <code>creditia@next</code> on npm, <code>@main</code> for the Action` : `当前 <code>v${VER}</code> · 预览版：npm 用 <code>creditia@next</code>，Action 用 <code>@main</code>`;
-  // 交给 agent：最省事，放第一个
-  const say = prompt();
-  $('ib-ask').innerHTML = `<h3>${en ? 'Ask your agent' : '交给 agent'}</h3><div class="say">${esc(say)}</div><button class="go" data-copy="${esc(say).replace(/"/g, '&quot;')}">${COPY_SVG}${en ? 'Copy, then paste to your agent' : '复制，发给 agent'}</button>`;
-  // 桌面 App：本机排第一
+  const cmd = (k, text, os, tip) => ({ k, kind: 'cmd', text, os, tip });
   const order = MOBILE ? ['mac', 'win', 'linux'] : [me, ...['mac', 'win', 'linux'].filter((k) => k !== me)];
-  $('ib-app').innerHTML = `<h3>${en ? 'Desktop app' : '桌面 App'}</h3><div>${order.map((k) => {
-    const p = APP[k], isMe = k === me && !MOBILE;
-    const files = p.files.map(([label, f, r]) => (r ? `<a class="fmt" href="${asset(f)}" download>${label}</a>` : `<span class="fmt" title="${f.replace('{v}', VER)}">${label}</span>`)).join('');
-    const soonAll = p.files.every(([, , r]) => !r);
-    return `<div class="plat${isMe ? ' me' : ''}"><i>${ICON(p.icon)}</i><b>${p.name}${isMe ? `<em>${en ? 'this device' : '本机'}</em>` : ''}</b><span class="fmts">${files}${soonAll ? SOON() : ''}</span><div class="pm"><span>${esc(p.pm[0])}</span>${p.pm[1] ? cpBtn(p.pm[0]) : ''}</div></div>`;
-  }).join('')}</div>`;
-  // 命令行：一个终端，按来源分组；悬停一行出现复制
-  $('ib-cli').innerHTML = `<h3>${en ? 'Command line' : '命令行'}<small>Node 22+</small><span class="key"><i></i>${en ? 'dimmed: coming soon' : '暗的：即将推出'}</span></h3><div class="tm">${CLI().map(([g, lines]) => `<div class="c"># ${g}</div>${lines.map(([c, r]) => cmdLine(c, r, 'l')).join('')}`).join('')}</div>`;
-  // Agent skill：一行命令装进本机所有 agent；手动装 Claude Code 现在就能用
-  $('ib-skill').innerHTML = `<h3>Agent skill</h3><div class="logos">${SKILL_AGENTS.map((n) => { const t = DATA.tools.find((x) => x.name === n); return t ? `<span title="${n}">${t.svg}</span>` : ''; }).join('')}</div>${cmdLine('npx creditia skill add', false)}${cmdLine(`git clone --depth 1 ${REPO} /tmp/creditia && cp -r /tmp/creditia/skills/creditia ~/.claude/skills/`, true)}`;
-  // CI
-  const gh = `- uses: WroughtMind/creditia@main\n  with:\n    badge: assets/credits-badge.svg\n    doc: CREDITS.md`;
-  $('ib-ci').innerHTML = `<h3>CI<small>GitHub Actions</small></h3><div class="yaml">${yamlHl(gh)}${cpBtn(gh)}</div><div class="line off"><span>GitLab CI · ghcr.io/wroughtmind/creditia</span>${SOON()}</div>`;
-  // 首屏按钮：按本机系统写；手机上没有能装的 App，只写「安装」
-  $('herodl').innerHTML = MOBILE ? `${DL_SVG}${en ? 'Install' : '安装'}` : `${ICON(APP[me].icon)}${en ? `Get it for ${APP[me].name}` : `下载 ${APP[me].name} 版`}`;
+  return [
+    { id: 'cli', play: 'term', name: t('w.cli'), opts: [
+      cmd('npx', 'npx creditia analyze', null, 'Node 22+'), cmd('npm', 'npm i -g creditia'), cmd('pnpm', 'pnpm add -g creditia'), cmd('bun', 'bun add -g creditia'),
+      cmd('Homebrew', 'brew install wroughtmind/tap/creditia', 'unix'), cmd('Scoop', 'scoop install creditia', 'win'),
+      cmd('curl', 'curl -fsSL https://wroughtmind.github.io/creditia/install.sh | sh', 'unix'), cmd('PowerShell', 'irm https://wroughtmind.github.io/creditia/install.ps1 | iex', 'win'),
+      cmd('Docker', 'docker run --rm -v "$PWD:/repo" ghcr.io/wroughtmind/creditia analyze'), cmd('Cargo', `cargo install --git ${REPO} creditia-cli`),
+      cmd(en ? 'source' : '源码', `git clone ${REPO} && cd creditia/packages/cli && npm i && npm link`)] },
+    { id: 'agent', play: 'chat', name: t('w.agent'), opts: [
+      { k: en ? 'prompt' : '一段话', kind: 'say', text: prompt() },
+      cmd('skill', 'npx creditia skill add')] },
+    { id: 'ci', play: 'flow', name: 'GitHub Action', opts: [
+      { k: 'GitHub Actions', kind: 'yaml', text: `- uses: WroughtMind/creditia@main\n  with:\n    badge: assets/credits-badge.svg\n    doc: CREDITS.md` },
+      { k: 'GitLab CI', kind: 'yaml', text: 'image: ghcr.io/wroughtmind/creditia\nscript: creditia publish' }] },
+    { id: 'app', play: 'desk', name: 'App', opts: order.flatMap((os) => [
+      ...APP[os].files.map(([k, f], i) => ({ k, g: i ? '' : OSN[os], kind: 'dl', os, file: f.replace('{v}', VER) })),
+      cmd(...APP[os].pm, os)]) },
+  ];
 }
+const fits = (o) => !o.os || o.os === detectOS() || (o.os === 'unix' && detectOS() !== 'win');
+const picks = {};
+const CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>';
+// 卡片底下的安装：一句话说清楚这一步做什么，下面是能直接复制的那一条（或下载按钮）
+function guide(o) {
+  const en = lang() === 'en';
+  if (o.kind === 'say') return en ? 'Copy this and send it to the agent you use' : '复制这段话，发给你正在用的 agent';
+  if (o.kind === 'yaml') return en ? 'Add it to the steps of any workflow in .github/workflows' : '加进 .github/workflows 里任意一个 workflow 的 steps';
+  if (o.kind === 'dl') return en ? 'Download, then open the installer' : '下载后打开安装包';
+  if (o.k === 'skill') return en ? 'Installs the creditia skill into every agent on this machine' : '在终端里运行，给本机所有 agent 装上 creditia 这个 skill';
+  return (en ? 'Run in your project’s terminal' : '在项目目录的终端里运行') + (o.tip ? ` · ${o.tip}` : '');
+}
+const COPY_L = () => (lang() === 'en' ? 'Copy' : '复制');
+function pickHtml(o) {
+  const en = lang() === 'en', cp = (text) => `<button class="wcopy" data-copy="${esc(text).replace(/"/g, '&quot;')}">${COPY_SVG}${COPY_L()}</button>`;
+  if (o.kind === 'say') return `<div class="wfield"><span class="wc say" title="${esc(o.text)}">${esc(o.text.split('\n')[0])}</span>${cp(o.text)}</div>`;
+  if (o.kind === 'yaml') return `<div class="wfield"><code class="wc" title="${esc(o.text)}">${esc(o.text.split('\n')[0])}</code>${cp(o.text)}</div>`;
+  if (o.kind === 'dl') {
+    const ic = ICON(o.os === 'mac' ? 'apple' : o.os === 'win' ? 'windows' : 'linux');
+    return `<div class="wfield big"><a class="wcopy" href="${asset(o.file)}" download>${ic}${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`} · ${esc(o.k)}</a></div>`;
+  }
+  return `<div class="wfield"><code class="wc" title="${esc(o.text)}"><i>$</i>${esc(o.text)}</code>${cp(o.text)}</div>`;
+}
+function install() {
+  const en = lang() === 'en';
+  for (const w of ways()) {
+    const first = (f) => w.opts.findIndex(f);
+    const at = picks[w.id] ?? [first(fits), 0].find((j) => j >= 0), o = w.opts[at];
+    $('get-' + w.id).innerHTML = `<div class="wlab"><b>${en ? 'Install' : '安装'}</b><span class="t">${esc(guide(o))}</span><button class="wmore" aria-expanded="false" aria-haspopup="true">${en ? 'Other ways' : '其他方式'}${CHEV}</button></div>${pickHtml(o)}`;
+  }
+  // 首屏第二个按钮：下载本机的 App（手机上没有 App，去看四种用法）
+  const me = detectOS();
+  const hero = MOBILE ? [DL_SVG, en ? 'Install' : '安装', '#use'] : [ICON(me === 'mac' ? 'apple' : me === 'win' ? 'windows' : 'linux'), en ? `Get it for ${OSN[me]}` : `下载 ${OSN[me]} 版`, '#deskcard'];
+  $('herodl').innerHTML = hero[0] + hero[1]; $('herodl').setAttribute('href', hero[2]);
+}
+// 「其他方式」：这一种用法的全部装法，点一个就换到底条上
+const closePop = () => document.querySelectorAll('.wpop').forEach((x) => { x.previousElementSibling?.setAttribute('aria-expanded', 'false'); x.remove(); });
+document.addEventListener('click', (e) => {
+  const more = e.target.closest('.wmore'), item = e.target.closest('.wpop button');
+  if (item) {
+    const bar = item.closest('.wbar'), w = ways().find((x) => 'get-' + x.id === bar.id), j = +item.dataset.j;
+    picks[w.id] = j; closePop(); install();
+    return;
+  }
+  if (!more) { if (!e.target.closest('.wpop')) closePop(); return; }
+  const open = more.getAttribute('aria-expanded') === 'true';
+  closePop(); if (open) return;
+  const bar = more.closest('.wbar'), w = ways().find((x) => 'get-' + x.id === bar.id), en = lang() === 'en';
+  const cur = picks[w.id] ?? -1, pop = document.createElement('div');
+  pop.className = 'wpop'; pop.setAttribute('role', 'menu');
+  pop.innerHTML = w.opts.map((o, j) => `${o.g ? `<div class="g">${o.g}</div>` : ''}<button role="menuitem" data-j="${j}" class="${j === cur ? 'on' : ''}"${o.tip ? ` title="${o.tip}"` : ''}><b>${esc(o.k)}</b><span>${esc(o.kind === 'dl' ? o.file : o.kind === 'say' ? o.text.split('\n')[0] : o.kind === 'yaml' ? 'uses: WroughtMind/creditia@main' : o.text)}</span></button>`).join('')
+    + `<div class="ver">${en ? `Current <code>v${VER}</code> · nightly: <code>creditia@next</code>, <code>@main</code>` : `当前 <code>v${VER}</code> · 预览版 <code>creditia@next</code>、<code>@main</code>`}</div>`;
+  more.after(pop); more.setAttribute('aria-expanded', 'true');
+});
+addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
+// 首屏的下载按钮：滚到 App 那张卡片，亮一下
+function flash(el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+$('herodl').addEventListener('click', (e) => {
+  const card = document.querySelector(e.currentTarget.getAttribute('href')); if (!card) return;
+  e.preventDefault(); card.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'center' }); flash(card);
+});
 
 // ───────── 顶栏：离开首屏后变实底；往下滚收起，往上滚出现；当前在哪一节，药丸就滑到哪 ─────────
 const hdr = document.querySelector('header');
@@ -1869,7 +1875,7 @@ const navTo = (id) => {
   if (a) { navPill.style.left = `${a.offsetLeft}px`; navPill.style.width = `${a.offsetWidth}px`; navPill.style.opacity = 1; } else navPill.style.opacity = 0;
 };
 // 视口 40% 高度那条线落在哪一节，就是当前节
-const SECS = ['lines', 'looks', 'use', 'install'];
+const SECS = ['lines', 'looks', 'use'];
 let curSec;
 const spy = () => { let id = null; for (const k of SECS) if ((Z.on && k === 'lines' ? (zp() >= 0.5 ? 0 : 1e9) : $(k).getBoundingClientRect().top) < innerHeight * 0.4) id = k; if (id !== curSec) { curSec = id; navTo(id); } };
 addEventListener('scroll', spy, { passive: true });
