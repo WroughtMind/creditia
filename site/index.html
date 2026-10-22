@@ -157,7 +157,7 @@ html.zoom #looks { margin-top: -100vh; padding-top: 0; }
 .table { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; will-change: transform; }
 /* 远处的照片沉进底色里，像台灯照不到的地方 */
 /* 下沿也化进底色：舞台放开往上走时，台面是慢慢没进去的，不是一刀切开 */
-.tfog { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(var(--tbg, var(--bg)) 6%, transparent 42%, transparent 60%, var(--tbg, var(--bg)) 99%), radial-gradient(120% 90% at 50% 64%, transparent 50%, var(--tbg, var(--bg)) 96%); }
+.tfog { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(var(--tbg, var(--bg)) 6%, transparent 42%, transparent 58%, var(--tbg, var(--bg)) 93%), radial-gradient(120% 90% at 50% 64%, transparent 50%, var(--tbg, var(--bg)) 96%); }
 .print { position: absolute; padding: 0; border: 0; border-radius: 5px; background: var(--line2); cursor: zoom-in; transform: rotate(var(--r, 0deg)); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 26px 44px -22px rgba(0,0,0,.45); transition: transform .6s cubic-bezier(.2,.8,.2,1), box-shadow .6s; -webkit-tap-highlight-color: transparent; }
 .print img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: inherit; -webkit-user-drag: none; pointer-events: none; }
 .print .cap { position: absolute; left: 2px; top: calc(100% + 16px); font: 19px/1.3 "JetBrains Mono", monospace; color: var(--faint); white-space: nowrap; transition: color .3s; }
