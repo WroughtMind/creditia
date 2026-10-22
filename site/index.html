@@ -416,6 +416,7 @@ html.zoom #zcard { display: block; position: absolute; z-index: 5; left: 50%; to
 .ufield { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 8px 8px 8px 22px; border-radius: 16px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); }
 .ufield .ut { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 14px "JetBrains Mono", monospace; color: var(--ink); }
 .ufield .ut i { font-style: normal; color: var(--faint); margin-right: 12px; }
+.ufield .ut.two { display: flex; white-space: pre-line; line-height: 1.7; }
 .ufield .ut.say { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font: 14px/1.6 Inter, sans-serif; color: var(--soft); }
 .ufield .fi { flex: none; width: 18px; height: 18px; margin-right: -4px; color: var(--faint); }
 .ucopy { flex: none; height: 48px; padding: 0 20px 0 17px; border-radius: 12px; border: 0; background: var(--ink); color: var(--bg); font: 500 14px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 9px; text-decoration: none; white-space: nowrap; transition: transform .2s, opacity .2s; }
@@ -1904,7 +1905,7 @@ const L2 = (x) => (Array.isArray(x) ? x[lang() === 'en' ? 1 : 0] ?? x[0] : x);
 // 四种用法各自的装法：[名字, 内容, 只适合哪个系统]。先摆第一个适合本机的，其余收在「其他方式」里
 const OSN = { mac: 'macOS', win: 'Windows', linux: 'Linux' };
 const APP = {
-  mac: { files: [['.dmg', 'creditia_{v}_universal.dmg']], pm: ['Homebrew', 'brew install --cask wroughtmind/tap/creditia'] },
+  mac: { files: [['.dmg', 'creditia_{v}_universal.dmg']], pm: ['Homebrew', 'brew install --cask wroughtmind/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app'] },
   win: { files: [['.exe', 'creditia_{v}_x64-setup.exe'], ['.msi', 'creditia_{v}_x64_en-US.msi'], ['ARM64', 'creditia_{v}_arm64-setup.exe']], pm: ['winget', 'winget install WroughtMind.Creditia'] },
   linux: { files: [['.AppImage', 'creditia_{v}_amd64.AppImage'], ['.deb', 'creditia_{v}_amd64.deb'], ['.rpm', 'creditia-{v}-1.x86_64.rpm']], pm: ['Flatpak', 'flatpak install flathub dev.creditia.app'] },
 };
@@ -1949,11 +1950,11 @@ function uHint(w, o) {
   if (w.id === 'agent') return o.kind === 'say' ? (en ? 'Paste it into Claude Code, Codex, Cursor…' : '粘贴给 Claude Code、Codex、Cursor 等') : (en ? 'Run in a terminal to add the creditia skill' : '在终端里运行，装上 creditia skill');
   if (w.id === 'ci') return en ? `Save it as ${o.file}; the next push publishes` : `存成 ${o.file}，下次推送就生效`;
   if (o.os === 'win') return en ? 'If SmartScreen stops it: More info → Run anyway' : 'SmartScreen 拦下时，点「更多信息」→「仍要运行」';
-  if (o.os === 'mac' && o.kind === 'cmd') return en ? 'The cask clears the quarantine flag, so it opens right away' : 'cask 会自己去掉隔离标记，装完直接能打开';
+  if (o.os === 'mac' && o.kind === 'cmd') return en ? 'Line two clears the quarantine flag' : '第二行去掉隔离标记';
   if (o.k === '.AppImage') return en ? `v${VER} · chmod +x it, then run` : `v${VER} · 下载后 chmod +x 再运行`;
   return o.kind === 'dl' ? (en ? `v${VER} · open the installer once downloaded` : `v${VER} · 下载后打开安装包`) : (en ? 'Run in a terminal' : '在终端里运行');
 }
-// App 还没有 Apple 签名：直接下的 .dmg 带着隔离标记，macOS 会说「已损坏」，装好后去掉标记就能打开（Homebrew 的 cask 会自己去掉）
+// App 还没有 Apple 签名：下载的带着隔离标记，macOS 会说「已损坏」，装好后去掉标记就能打开。Homebrew 那条命令后面直接接上这一句
 const UNQ = 'xattr -dr com.apple.quarantine /Applications/creditia.app';
 const OPT_L = { cli: ['安装方式', 'Install with'], agent: ['发给它', 'Send as'], ci: ['平台', 'Platform'], app: ['安装方式', 'Install with'] };
 // 演示底下的安装：一条大的，旁边写明复制；下面一排字是这一种用法的别的装法（本机用得上的摆出来，其余收在「更多」里）
@@ -1966,7 +1967,8 @@ function install() {
     field = `<div class="ufield dl"><a class="ucopy" href="${asset(o.file)}" download>${ic}${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`} · ${esc(o.k)}</a></div>`;
   } else if (o.kind === 'say') field = `<div class="ufield"><div class="ut say">${esc(o.text.replace(/\n/g, ' '))}</div><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${en ? 'Copy, send to your agent' : '复制，发给你的 agent'}</button></div>`;
   else if (o.kind === 'yaml') field = `<div class="ufield">${FILE_SVG}<code class="ut">${esc(o.file)}</code><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${en ? 'Copy workflow' : '复制 workflow'}</button></div>`;
-  else field = `<div class="ufield"><code class="ut" title="${dq(o.text)}"><i>$</i>${esc(o.text)}</code><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${COPY_L()}</button></div>`;
+  // 两条连着的命令（&&）分两行摆，复制的还是一整句
+  else field = `<div class="ufield"><code class="ut${o.text.includes(' && ') ? ' two' : ''}" title="${dq(o.text)}"><i>$</i>${esc(o.text).replace(' &amp;&amp; ', ' &amp;&amp;\n')}</code><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${COPY_L()}</button></div>`;
   if (w.id === 'app' && o.os === 'mac' && o.kind === 'dl') field += `<div class="unq"><p>${en ? 'The app isn’t signed by Apple yet, so macOS may say it’s damaged. Once it’s in Applications, run this once:' : 'App 还没有 Apple 签名，macOS 可能提示「已损坏，无法打开」。拖进「应用程序」后，在终端运行一次：'}</p><div class="ufield sm"><code class="ut"><i>$</i>${UNQ}</code><button class="ucopy" data-copy="${UNQ}">${COPY_SVG}${COPY_L()}</button></div></div>`;
   const inl = w.opts.map((x, j) => j).filter((j) => fits(w.opts[j])).slice(0, 6);
   if (!inl.includes(at)) inl.push(at);
