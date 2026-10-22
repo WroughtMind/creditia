@@ -238,7 +238,8 @@ console.log('✓ usage');
 // 社交预览图
 for (const lang of LANGS) writeFileSync(path.join(OUT, `assets/og-${lang}.png`), exporter.png(art('share', buildModel(sample, { lang }), styleById('cinema')!)!, 1));
 
-const tools = ['claude-code', 'codex', 'cursor', 'gemini', 'qwen', 'opencode', 'cline', 'roo', 'kilo', 'copilot', 'kimi', 'grok', 'devin', 'jules', 'aider', 'amp'].map((k) => {
+// creditia 认得的全部 agent：21 个读本机日志，Devin、Jules、Windsurf 从 git 里认
+const tools = ['claude-code', 'codex', 'cursor', 'gemini', 'qwen', 'copilot', 'windsurf', 'trae', 'antigravity', 'opencode', 'cline', 'roo', 'kilo', 'kimi', 'grok', 'amp', 'zed', 'amazon-q', 'continue', 'goose', 'crush', 'aider', 'devin', 'jules'].map((k) => {
   const lg = LOGOS[LOGO_OF[k] ?? ''];
   return { name: TOOL_NAMES[k] ?? k, svg: lg ? `<svg viewBox="${lg.vb}" aria-hidden="true"><path d="${lg.d}"${lg.rule ? ` fill-rule="${lg.rule}"` : ''}/></svg>` : '' };
 });

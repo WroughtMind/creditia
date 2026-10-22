@@ -215,7 +215,9 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 
 /* ───────── 用法：四张卡都是会自己演的小样，高度固定，内容在里面滚，不把页面撑开 ───────── */
 .ways { margin-top: 44px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.way { border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 18px 22px 0; display: flex; flex-direction: column; gap: 14px; overflow: hidden; min-width: 0; }
+.way { position: relative; border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 18px 22px 0; display: flex; flex-direction: column; gap: 14px; overflow: clip; overflow-clip-margin: 0; min-width: 0; }
+.way:has(.wpop) { overflow: visible; z-index: 3; }
+.way .wbar { border-radius: 0 0 15px 15px; }
 .way h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 10px; min-height: 28px; }
 .way h3 small { font-weight: 400; color: var(--faint); font-size: 13px; }
 .again { margin-left: auto; width: 28px; height: 28px; border-radius: 99px; border: 0; background: transparent; color: var(--faint); cursor: pointer; display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity .3s, color .15s, background-color .15s; }
@@ -371,45 +373,36 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 .dstep + .again { margin-left: 0; }
 
 .deskshot { display: none; }
-.vline { margin: 12px 0 0; color: var(--soft); font-size: 14px; }
-.vline code { font: 12.5px "JetBrains Mono", monospace; color: var(--ink); }
-/* 安装：和「四种用法」一样的四行、一样的顺序；每行先摆一条能用的，其余方式在下面，点一下换上来 */
-.gets { list-style: none; margin: 44px 0 0; padding: 0; border-bottom: 1px solid var(--line); }
-.gr { position: relative; display: grid; grid-template-columns: minmax(0, 250px) minmax(0, 1fr); gap: 14px 48px; padding: 30px 0; border-top: 1px solid var(--line); scroll-margin-top: 110px; }
-.gr::before { content: ""; position: absolute; inset: 0 -22px; border-radius: 16px; background: var(--line2); opacity: 0; pointer-events: none; }
-.gr.flash::before { animation: flash 1.8s ease-out; }
-.way { position: relative; }
+/* 每张卡片的最后一条就是它的安装：先摆一条现在能用的，其余方式收在「其他方式」里 */
+.wbar { position: relative; z-index: 2; display: flex; align-items: center; gap: 10px; margin: -14px -22px 0; padding: 11px 12px 11px 22px; min-height: 60px; border-top: 1px solid var(--line); background: var(--card); }
+.wpick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.wc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px "JetBrains Mono", monospace; color: var(--ink); }
+.wc i { font-style: normal; color: var(--faint); margin-right: 9px; }
+.wc.say { font: 13px Inter, sans-serif; color: var(--faint); }
+.wc.off { color: var(--faint); }
+.wbar .cp { background: transparent; }
+.wgo { flex: none; height: 34px; padding: 0 14px; border-radius: 9px; border: 0; background: var(--ink); color: var(--bg); font: 500 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; transition: transform .2s; }
+.wgo:hover { transform: translateY(-1px); }
+.wgo svg { width: 14px; height: 14px; }
+.wgo.dl svg { fill: currentColor; }
+.wmore { flex: none; height: 34px; padding: 0 8px 0 12px; border: 0; border-radius: 9px; background: transparent; color: var(--soft); font: 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: color .15s, background-color .15s; }
+.wmore:hover, .wmore[aria-expanded="true"] { color: var(--ink); background: var(--line2); }
+.wmore svg { width: 14px; height: 14px; transition: rotate .2s; }
+.wmore[aria-expanded="true"] svg { rotate: 180deg; }
+.wpop { position: absolute; right: 10px; bottom: calc(100% + 8px); width: min(380px, calc(100% - 20px)); max-height: min(420px, 70vh); overflow: auto; padding: 6px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); animation: wpop .16s ease-out; }
+@keyframes wpop { from { opacity: 0; transform: translateY(4px); } }
+.wpop .g { padding: 8px 10px 3px; font-size: 11.5px; color: var(--faint); }
+.wpop button { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 12px; padding: 6px 10px; border: 0; border-radius: 9px; background: transparent; color: var(--ink); font: 13px Inter, sans-serif; text-align: left; cursor: pointer; }
+.wpop button:hover { background: var(--line2); }
+.wpop button.on { background: var(--line2); }
+.wpop button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11.5px "JetBrains Mono", monospace; color: var(--faint); }
+.wpop button.off b { color: var(--soft); font-weight: 400; }
+.wpop button i { font-style: normal; font-size: 11px; color: var(--faint); white-space: nowrap; }
+.wpop b { font-weight: 500; white-space: nowrap; }
+.wpop .ver { padding: 8px 10px 4px; margin-top: 4px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--faint); }
+.wpop .ver code { font: 11px "JetBrains Mono", monospace; color: var(--soft); }
 .way.flash { animation: wayflash 1.8s ease-out; }
 @keyframes wayflash { 0%, 30% { border-color: var(--soft); } }
-@keyframes flash { 0%, 30% { opacity: 1; } 100% { opacity: 0; } }
-.gh { display: grid; grid-template-columns: auto 1fr; align-content: start; column-gap: 14px; row-gap: 6px; }
-.gh .n { font: 12px "JetBrains Mono", monospace; color: var(--faint); padding-top: 5px; }
-.gh h3 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.01em; line-height: 1.35; }
-.gh small, .gh .demo { grid-column: 2; font-size: 13px; color: var(--faint); }
-.gh .demo { justify-self: start; text-decoration: none; color: var(--soft); transition: color .15s; }
-.gh .demo:hover { color: var(--ink); }
-.gb { display: grid; gap: 14px; min-width: 0; align-content: start; }
-.gb .gf { min-width: 0; }
-.gb .line { background: var(--card); min-height: 46px; font-size: 13px; }
-.gb .line .p { color: var(--faint); font-style: normal; margin-right: 10px; }
-.gb .say { border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 14px 16px; font-size: 14px; line-height: 1.8; white-space: pre-wrap; color: var(--soft); }
-.gb .go { margin-top: 12px; height: 42px; padding: 0 18px; border-radius: 11px; border: 0; background: var(--ink); color: var(--bg); font: 500 14px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 9px; text-decoration: none; transition: transform .2s; }
-.gb .go:hover { transform: translateY(-1px); }
-.gb .go svg { width: 15px; height: 15px; fill: currentColor; }
-.gb .go[data-copy] svg { fill: none; }
-.gb .go.off { background: transparent; color: var(--faint); box-shadow: inset 0 0 0 1px var(--line); cursor: default; transform: none; }
-.gb .go small { font: 12px "JetBrains Mono", monospace; opacity: .6; }
-.gb .file { display: block; margin-top: 10px; font: 12px "JetBrains Mono", monospace; color: var(--faint); }
-.alts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 4px; font-size: 13px; color: var(--faint); }
-.alts .g { margin: 0 4px 0 12px; font-size: 12px; }
-.alts .g:first-child { margin-left: 0; }
-.alts button { border: 0; background: transparent; padding: 3px 7px; border-radius: 7px; font: 12.5px "JetBrains Mono", monospace; color: var(--soft); cursor: pointer; transition: color .15s, background-color .15s; }
-.alts button:hover { color: var(--ink); background: var(--line2); }
-.alts button.off { color: var(--faint); }
-.alts button.on { color: var(--ink); background: var(--line2); }
-.toget { margin-left: 4px; font-size: 13px; font-weight: 400; color: var(--faint); text-decoration: none; white-space: nowrap; transition: color .15s; }
-.toget::after { content: " ↓"; }
-.toget:hover { color: var(--ink); }
 .line { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 6px 6px 6px 12px; font: 12.5px "JetBrains Mono", monospace; min-height: 40px; }
 .line > span:first-child { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
 .line > span:first-child::-webkit-scrollbar { display: none; }
@@ -504,14 +497,9 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   .wall, .band { gap: 10px; }
   .ways { grid-template-columns: 1fr; }
   nav { display: none; }
-  .gr { grid-template-columns: minmax(0, 1fr); padding: 24px 0; gap: 16px; }
-  .gh { grid-template-columns: auto 1fr auto; align-items: baseline; }
-  .gh .n { padding-top: 0; }
-  .gh small { grid-column: 2; grid-row: 2; }
-  .gh .demo { grid-column: 3; grid-row: 1; }
-  .gr::before { inset: 0 -10px; }
+  .wbar { padding-left: 16px; margin-inline: -16px; }
+  .wc.say { display: none; }
   .coda .cmeta a { display: block; margin: 8px 0 0; }
-  .alts .g { margin-left: 6px; }
   #lb .bar { flex-wrap: wrap; gap: 8px 12px; }
   #lb .bar .cp { max-width: 92vw; order: 9; }
   .way h3 { flex-wrap: nowrap; gap: 10px; white-space: nowrap; }
@@ -538,7 +526,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
       </button>
       <a href="https://github.com/WroughtMind/creditia" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg></a>
     </div>
-    <a class="get" href="#install"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v10.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6zM4 19h16v2H4z"/></svg><span data-i="nav.get">安装</span></a>
+    <a class="get" href="#use"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v10.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6zM4 19h16v2H4z"/></svg><span data-i="nav.get">安装</span></a>
   </div>
 </header>
 
@@ -551,7 +539,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
       <p data-i="hero.p">把 agent 的日志和 git 历史逐行对上，算出每个工具、每个模型写了多少，做成片尾字幕。全在本地。</p>
       <div class="acts">
         <div class="cmd mono"><span><span class="p">$</span>npx creditia analyze</span><button id="copy" aria-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button></div>
-        <a class="dl" id="herodl" href="#get-app"></a>
+        <a class="dl" id="herodl" href="#deskcard"></a>
       </div>
       <div class="agents" id="agents"></div>
     </div>
@@ -583,20 +571,14 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
     <div class="wrap">
       <div class="head rise"><h2 class="serif" data-i="use.t">四种用法</h2></div>
       <div class="ways">
-        <div class="way rise"><h3><span data-i="w.cli">命令行</span><button class="again" data-again="term" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><a class="toget" href="#get-cli" data-i="w.get">安装</a></h3><div class="body"><div class="term mono" id="term"></div></div></div>
-        <div class="way rise"><h3><span data-i="w.agent">交给 agent</span><button class="again" data-again="chat" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><a class="toget" href="#get-agent" data-i="w.get">安装</a></h3><div class="body"><div class="agent" id="chat"></div></div></div>
-        <div class="way rise" id="flowcard"><h3>GitHub Action <small class="mono">WroughtMind/creditia@main</small><button class="again" data-again="flow" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><a class="toget" href="#get-ci" data-i="w.get">安装</a></h3><div class="body"><div class="flow2" id="flow"></div></div></div>
-        <div class="way rise" id="deskcard"><h3>App <small>macOS · Windows · Linux</small><span class="dstep" id="dsteps"></span><button class="again" data-again="desk" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><a class="toget" href="#get-app" data-i="w.get">安装</a></h3><div class="body dbody"><div class="deskbox" id="deskbox"><div class="desk" id="desk"></div></div><div class="deskshot"><img class="dk" src="assets/app-dark.webp" alt="creditia App" loading="lazy" width="1200" height="750"><img class="lt" src="assets/app-light.webp" alt="creditia App" loading="lazy" width="1200" height="750"><p data-i="desk.pc">在电脑上打开这一页，可以直接上手试。</p></div></div></div>
+        <div class="way rise"><h3><span data-i="w.cli">命令行</span><button class="again" data-again="term" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="term mono" id="term"></div></div><div class="wbar" id="get-cli"></div></div>
+        <div class="way rise"><h3><span data-i="w.agent">交给 agent</span><button class="again" data-again="chat" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="agent" id="chat"></div></div><div class="wbar" id="get-agent"></div></div>
+        <div class="way rise" id="flowcard"><h3>GitHub Action <small class="mono">WroughtMind/creditia@main</small><button class="again" data-again="flow" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="flow2" id="flow"></div></div><div class="wbar" id="get-ci"></div></div>
+        <div class="way rise" id="deskcard"><h3>App <small>macOS · Windows · Linux</small><span class="dstep" id="dsteps"></span><button class="again" data-again="desk" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body dbody"><div class="deskbox" id="deskbox"><div class="desk" id="desk"></div></div><div class="deskshot"><img class="dk" src="assets/app-dark.webp" alt="creditia App" loading="lazy" width="1200" height="750"><img class="lt" src="assets/app-light.webp" alt="creditia App" loading="lazy" width="1200" height="750"><p data-i="desk.pc">在电脑上打开这一页，可以直接上手试。</p></div></div><div class="wbar" id="get-app"></div></div>
       </div>
     </div>
   </section>
 
-  <section id="install">
-    <div class="wrap">
-      <div class="head rise"><h2 class="serif" data-i="ins.t">安装</h2><p class="vline" id="vline"></p></div>
-      <ol class="gets rise" id="gets"></ol>
-    </div>
-  </section>
 </main>
 
 <footer>
@@ -625,7 +607,7 @@ const EN = {
   'lines.t': 'Every line has a source', 'lines.p': 'What can’t be matched is marked unattributed. Runs locally, calls no model.',
   'use.t': 'Four ways to use it', 'w.cli': 'Command line', 'w.agent': 'Your agent',
   'foot.rules': 'Attribution rules',
-  'w.get': 'Install', 'desk.pc': 'Open this page on a computer to try the app right here.',
+  'desk.pc': 'Open this page on a computer to try the app right here.',
   'nav.looks': 'Looks', 'nav.lines': 'Sources', 'nav.use': 'Usage', 'nav.get': 'Install', 'ins.t': 'Install',
 };
 const ZH = {};
@@ -1796,7 +1778,6 @@ function prompt() {
     ? `Install creditia (${REPO})${os ? ` on this ${os} machine` : ''} and use it to work out which AI tools and models wrote the code in this repo.\n1. Install the command-line tool and the skills/creditia skill, following the README.\n2. Run creditia analyze at the repo root and tell me the result.\n3. Ask me before publishing or committing anything.`
     : `帮我${os ? `在这台 ${os} 上` : ''}装上 creditia（${REPO}），用它算出这个仓库的代码是哪些 AI 工具和模型写的：\n1. 按 README 安装命令行工具和 skills/creditia 这个 skill；\n2. 在仓库根目录运行 creditia analyze，把结果告诉我；\n3. 公开或提交任何东西之前先问我。`;
 }
-const yamlHl = (s) => esc(s).replace(/^(\s*-?\s*)([\w-]+):/gm, '$1<span class="k">$2</span>:');
 function ways() {
   const en = lang() === 'en', me = detectOS();
   const cmd = (k, text, ready, os, tip) => ({ k, kind: 'cmd', text, ready, os, tip });
@@ -1822,53 +1803,55 @@ function ways() {
 }
 const fits = (o) => !o.os || o.os === detectOS() || (o.os === 'unix' && detectOS() !== 'win');
 const picks = {};
-function fieldHtml(o) {
+const CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>';
+// 卡片底条上摆的那一条：命令一行、给 agent 的一段话、Action 的 uses 那一行、App 的下载按钮
+function pickHtml(o) {
   const en = lang() === 'en';
-  if (o.kind === 'say') return `<div class="say">${esc(o.text)}</div><button class="go" data-copy="${esc(o.text).replace(/"/g, '&quot;')}">${COPY_SVG}${en ? 'Copy, then paste to your agent' : '复制，发给 agent'}</button>`;
-  if (o.kind === 'yaml') return `<div class="yaml">${yamlHl(o.text)}${cpBtn(o.text)}</div>`;
+  if (o.kind === 'say') return `<button class="wgo" data-copy="${esc(o.text).replace(/"/g, '&quot;')}">${COPY_SVG}${en ? 'Copy, then paste to your agent' : '复制，发给 agent'}</button><span class="wc say" title="${esc(o.text)}">${esc(o.text.split('\n')[0])}</span>`;
+  if (o.kind === 'yaml') return `<code class="wc" title="${esc(o.text)}"><i>-</i>uses: WroughtMind/creditia@main</code>${cpBtn(o.text)}`;
   if (o.kind === 'dl') {
-    const label = `${ICON(o.os === 'mac' ? 'apple' : o.os === 'win' ? 'windows' : 'linux')}${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`}<small>${esc(o.k)}</small>`;
-    return o.ready ? `<a class="go" href="${asset(o.file)}" download>${label}</a>` : `<span class="go off">${label}${SOON()}</span><span class="file">${esc(o.file)}</span>`;
+    const ic = ICON(o.os === 'mac' ? 'apple' : o.os === 'win' ? 'windows' : 'linux'), label = `${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`} · ${esc(o.k)}`;
+    return o.ready ? `<a class="wgo dl" href="${asset(o.file)}" download>${ic}${label}</a><span class="wc"></span>` : `<span class="wc off" title="${esc(o.file)}">${label}</span>${SOON()}`;
   }
-  return `<div class="line${o.ready ? '' : ' off'}"><span><i class="p">$</i>${esc(o.text)}</span>${o.ready ? cpBtn(o.text) : SOON()}</div>`;
+  return `<code class="wc${o.ready ? '' : ' off'}" title="${esc(o.text)}"><i>$</i>${esc(o.text)}</code>${o.ready ? cpBtn(o.text) : SOON()}`;
 }
 function install() {
   const en = lang() === 'en';
-  $('vline').innerHTML = en ? `Current <code>v${VER}</code> · nightly builds: <code>creditia@next</code> on npm, <code>@main</code> for the Action` : `当前 <code>v${VER}</code> · 预览版：npm 用 <code>creditia@next</code>，Action 用 <code>@main</code>`;
-  const W = ways();
-  $('gets').innerHTML = W.map((w, i) => {
-    // 先摆本机能用的第一个；都还不能用，就摆本机的第一个
+  for (const w of ways()) {
     const first = (f) => w.opts.findIndex(f);
     const at = picks[w.id] ?? [first((o) => o.ready && fits(o)), first(fits), 0].find((j) => j >= 0);
-    const alts = w.opts.map((o, j) => `${o.g ? `<span class="g">${o.g}</span>` : ''}<button data-j="${j}" class="${j === at ? 'on' : ''}${o.ready ? '' : ' off'}"${o.ready && !o.tip ? '' : ` title="${[o.tip, o.ready ? '' : en ? 'Coming soon' : '即将推出'].filter(Boolean).join(' · ')}"`}>${esc(o.k)}</button>`).join('');
-    return `<li class="gr" id="get-${w.id}" data-w="${i}"><div class="gh"><span class="n">0${i + 1}</span><h3>${w.name}</h3>${w.note ? `<small>${w.note}</small>` : ''}<a class="demo" href="#use" data-play="${w.play}">${en ? 'Watch the demo ↑' : '看演示 ↑'}</a></div>`
-      + `<div class="gb"><div class="gf">${fieldHtml(w.opts[at])}</div><div class="alts">${alts}</div></div></li>`;
-  }).join('');
+    $('get-' + w.id).innerHTML = `<div class="wpick">${pickHtml(w.opts[at])}</div><button class="wmore" aria-expanded="false" aria-haspopup="true">${en ? 'Other ways' : '其他方式'}${CHEV}</button>`;
+  }
   // 首屏按钮：按本机系统写；手机上没有能装的 App，只写「安装」
-  $('herodl').innerHTML = MOBILE ? `${DL_SVG}${en ? 'Install' : '安装'}` : `${ICON(detectOS() === 'mac' ? 'apple' : detectOS() === 'win' ? 'windows' : 'linux')}${en ? `Get it for ${OSN[detectOS()]}` : `下载 ${OSN[detectOS()]} 版`}`;
+  const me = detectOS();
+  $('herodl').innerHTML = MOBILE ? `${DL_SVG}${en ? 'Install' : '安装'}` : `${ICON(me === 'mac' ? 'apple' : me === 'win' ? 'windows' : 'linux')}${en ? `Get it for ${OSN[me]}` : `下载 ${OSN[me]} 版`}`;
+  $('herodl').setAttribute('href', MOBILE ? '#use' : '#deskcard');
 }
-$('gets').addEventListener('click', (e) => {
-  const b = e.target.closest('.alts button');
-  if (b) {
-    const li = b.closest('.gr'), w = ways()[+li.dataset.w], j = +b.dataset.j;
-    picks[w.id] = j;
-    li.querySelector('.gf').innerHTML = fieldHtml(w.opts[j]);
-    li.querySelectorAll('.alts button').forEach((x) => x.classList.toggle('on', x === b));
+// 「其他方式」：这一种用法的全部装法，现在能用的可点，其余标「即将推出」；点一个就换到底条上
+const closePop = () => document.querySelectorAll('.wpop').forEach((x) => { x.previousElementSibling?.setAttribute('aria-expanded', 'false'); x.remove(); });
+document.addEventListener('click', (e) => {
+  const more = e.target.closest('.wmore'), item = e.target.closest('.wpop button');
+  if (item) {
+    const bar = item.closest('.wbar'), w = ways().find((x) => 'get-' + x.id === bar.id), j = +item.dataset.j;
+    picks[w.id] = j; closePop(); install();
     return;
   }
-  // 看演示：滚回上面那张卡片，亮一下
-  const d = e.target.closest('.demo'); if (!d) return;
-  e.preventDefault();
-  const card = document.querySelector(`[data-again="${d.dataset.play}"]`)?.closest('.way');
-  if (card) { card.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'center' }); flash(card); }
+  if (!more) { if (!e.target.closest('.wpop')) closePop(); return; }
+  const open = more.getAttribute('aria-expanded') === 'true';
+  closePop(); if (open) return;
+  const bar = more.closest('.wbar'), w = ways().find((x) => 'get-' + x.id === bar.id), en = lang() === 'en';
+  const cur = picks[w.id] ?? -1, pop = document.createElement('div');
+  pop.className = 'wpop'; pop.setAttribute('role', 'menu');
+  pop.innerHTML = w.opts.map((o, j) => `${o.g ? `<div class="g">${o.g}</div>` : ''}<button role="menuitem" data-j="${j}" class="${j === cur ? 'on' : ''}${o.ready ? '' : ' off'}"${o.tip ? ` title="${o.tip}"` : ''}><b>${esc(o.k)}</b><span>${esc(o.kind === 'dl' ? o.file : o.kind === 'say' ? o.text.split('\n')[0] : o.kind === 'yaml' ? 'uses: WroughtMind/creditia@main' : o.text)}</span><i>${o.ready ? '' : en ? 'soon' : '即将推出'}</i></button>`).join('')
+    + `<div class="ver">${en ? `Current <code>v${VER}</code> · nightly: <code>creditia@next</code>, <code>@main</code>` : `当前 <code>v${VER}</code> · 预览版 <code>creditia@next</code>、<code>@main</code>`}</div>`;
+  more.after(pop); more.setAttribute('aria-expanded', 'true');
 });
-// 卡片上的「安装」、首屏的下载按钮：滚到对应那一行，亮一下
+addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
+// 首屏的下载按钮：滚到 App 那张卡片，亮一下
 function flash(el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
-document.addEventListener('click', (e) => {
-  const a = e.target.closest('a[href^="#get-"]'); if (!a) return;
-  const row = document.querySelector(a.getAttribute('href')); if (!row) return;
-  e.preventDefault();
-  row.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'center' }); flash(row);
+$('herodl').addEventListener('click', (e) => {
+  const card = document.querySelector(e.currentTarget.getAttribute('href')); if (!card) return;
+  e.preventDefault(); card.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'center' }); flash(card);
 });
 
 // ───────── 顶栏：离开首屏后变实底；往下滚收起，往上滚出现；当前在哪一节，药丸就滑到哪 ─────────
@@ -1886,7 +1869,7 @@ const navTo = (id) => {
   if (a) { navPill.style.left = `${a.offsetLeft}px`; navPill.style.width = `${a.offsetWidth}px`; navPill.style.opacity = 1; } else navPill.style.opacity = 0;
 };
 // 视口 40% 高度那条线落在哪一节，就是当前节
-const SECS = ['lines', 'looks', 'use', 'install'];
+const SECS = ['lines', 'looks', 'use'];
 let curSec;
 const spy = () => { let id = null; for (const k of SECS) if ((Z.on && k === 'lines' ? (zp() >= 0.5 ? 0 : 1e9) : $(k).getBoundingClientRect().top) < innerHeight * 0.4) id = k; if (id !== curSec) { curSec = id; navTo(id); } };
 addEventListener('scroll', spy, { passive: true });
