@@ -31,7 +31,7 @@ export interface Kit {
   pieceName(id: string, lang: Lang): string;
   pieceQ(id: string, lang: Lang): string;
   variantName(v: string, lang: Lang): string;
-  /** 漫游用的位图缩略图，第一次要时才画 */
+  /** 文字转路径的独立预览图片；展墙、漫游、放大共用，第一次要时才生成 */
   preview(art: Art): Promise<Blob>;
   /** 开 App 时先把字体取好，第一张作品不用等 */
   warm(): void;
@@ -107,7 +107,7 @@ const previews = new WeakMap<Art, Promise<Blob>>();
 function previewAway(art: Art, style: string, classic: boolean) {
   let p = previews.get(art);
   if (!p) {
-    p = ask<Blob>({ svg: art.svg, style, classic, width: Math.ceil(520 * devicePixelRatio) });
+    p = ask<Blob>({ svg: art.svg, style, classic });
     previews.set(art, p);
     p.catch(() => previews.delete(art));
   }

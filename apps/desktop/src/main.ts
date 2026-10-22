@@ -9,6 +9,8 @@ import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts
 import { INTERACT_CSS, mountHits } from '../../../packages/render/src/interact.ts';
 import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, groupOf, hasModels, type Kit } from './kits.ts';
 import { exportArt, type Format } from './engine.ts';
+import { mountRoamPreview, releaseRoamPreview } from './roam-preview.ts';
+import { RoamViewport } from './roam-viewport.ts';
 import { LOGOS, DEFAULT_LOGO, logoSvg } from './logo.ts';
 import { markPaths, sharePetals, type Petal } from '../../../packages/render/src/mark.ts';
 
@@ -176,6 +178,7 @@ async function openProject(p: any) {
   const seq = ++state.openSeq;
   state.current = p; store.set('project', p.id);
   state.raw = null; state.model = null; state.arts.clear(); state.variants = {};
+  roamReset(); // 读新档案前释放旧漫游，旧项目排队的预览不再占用绘图队列
   $('#group').hidden = true; plugs = null; renderPlugs();
   ++state.token; // 让正在画的旧项目停下
   $('#board').innerHTML = ''; slotWall(); // 档案还在读，先把墙的样子摆出来
@@ -408,10 +411,13 @@ async function paint() {
   for (const [i, b] of tiles().entries()) {
     const k = keyOf(b, i);
     const variant = curVariant(b.id, k, b);
-    let a: Art | null = null;
-    try { a = await drawArt(b.id, variant); } catch (e) { console.error(b.id, e); }
+    let a: Art | null = null, preview: Blob | null = null;
+    try {
+      a = await drawArt(b.id, variant);
+      if (a && token === state.token) preview = await st.preview(a);
+    } catch (e) { console.error(b.id, e); }
     if (token !== state.token) return;
-    if (!a) { slots[i]?.remove(); continue; }
+    if (!a || !preview) { slots[i]?.remove(); continue; }
     dims[dimKey(b.id, variant)] = [a.w, a.h];
     state.arts.set(k, a); keep.add(k);
     const tile = document.createElement('div');
@@ -423,8 +429,8 @@ async function paint() {
     const vs = st.variants(b.id);
     tile.innerHTML = tileHtml(b.id, vs, variant);
     const artEl = tile.querySelector('.art') as HTMLElement;
-    artEl.innerHTML = a.svg;
-    mountHits(artEl, a.hits, a.w, a.h);
+    mountPreview(artEl, a, preview);
+    mountRoamHits(artEl, a);
     wireTile(tile, b.id, k, vs);
     if (batch) { fresh.push(tile); continue; }
     const g = slots[i];
@@ -447,14 +453,6 @@ async function paint() {
   document.body.classList.remove('busy');
   for (const k of [...state.arts.keys()]) if (!keep.has(k)) state.arts.delete(k);
   layout();
-  void warmRoam(token);
-}
-/** 墙画完了，再一张一张给漫游备好缩略图：一次只排一张，换风格时最多等一张 */
-async function warmRoam(token: number) {
-  for (const a of [...state.arts.values()]) {
-    if (token !== state.token) return;
-    try { await state.style.preview(a); } catch { /* 漫游里用到时再试 */ }
-  }
 }
 function tileHtml(id: string, vs: string[], cur?: string) {
   return `<div class="name">${esc(state.style.pieceName(id, state.lang))}</div>
@@ -538,10 +536,12 @@ async function repaintTile(id: string, k: string) {
   const i = Number(k.split('#')[1]);
   const b = tiles()[i];
   const variant = curVariant(id, k, b);
-  const token = state.token, seq = (tileSeq.get(k) ?? 0) + 1;
+  const token = state.token, kit = state.style, seq = (tileSeq.get(k) ?? 0) + 1;
   tileSeq.set(k, seq);
   const a = await drawArt(id, variant);
   if (!a || token !== state.token || tileSeq.get(k) !== seq) return;
+  const preview = await kit.preview(a);
+  if (token !== state.token || tileSeq.get(k) !== seq) return;
   const tile = document.querySelector(`.tile[data-k="${k}"]`) as HTMLElement | null;
   if (!tile) return;
   state.arts.set(k, a);
@@ -551,8 +551,8 @@ async function repaintTile(id: string, k: string) {
   tileA11y(fresh, id);
   fresh.innerHTML = tileHtml(id, vs, variant);
   const artEl = fresh.querySelector('.art') as HTMLElement;
-  artEl.innerHTML = a.svg;
-  mountHits(artEl, a.hits, a.w, a.h);
+  mountPreview(artEl, a, preview);
+  mountRoamHits(artEl, a);
   wireTile(fresh, id, k, vs);
   if (tile.classList.contains('hover')) fresh.classList.add('hover');
   tile.replaceWith(fresh);
@@ -657,7 +657,9 @@ function startDrag(e: PointerEvent, tile: HTMLElement, id: string, k: string) {
       const w = Math.min(240, a.w);
       ghost.style.width = `${w}px`;
       ghost.style.transformOrigin = `${fx * 100}% ${fy * 100}%`;
-      ghost.innerHTML = a.svg;
+      ghost.innerHTML = '';
+      ghost.style.aspectRatio = `${a.w} / ${a.h}`;
+      void state.style.preview(a).then((p) => { if (dragging) mountPreview(ghost, a, p); });
       ghost.hidden = false;
       ghost.animate([{ scale: String(r0.width / w) }, { scale: '1' }], { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' });
       document.querySelector('.ct-tip')?.classList.remove('on');
@@ -676,6 +678,7 @@ function startDrag(e: PointerEvent, tile: HTMLElement, id: string, k: string) {
     if (!dragging) return ev.type === 'pointerup' ? openFocus(id, k) : undefined;
     if (ev.type === 'pointercancel') { over?.classList.remove('over'); over = null; }
     document.body.classList.remove('dragging');
+    dragging = false; releasePreview(ghost);
     ghost.hidden = true; ghost.innerHTML = ''; ghost.classList.remove('small');
     if (over) { const f = over.dataset.f!; over.classList.remove('over'); doExport(f, id, k); }
   };
@@ -701,7 +704,7 @@ function openFocus(id: string, k: string) {
   const i = Number(k.split('#')[1]);
   const before = curVariant(id, k, tiles()[i]);
   // 放大视图里可以只给这一件换风格试试：kit 是正在看的那一套，墙上的风格不动
-  let kit = state.style, art: Art | null = null, seq = 0, open = true;
+  let kit = state.style, art: Art | null = null, preview: Blob | null = null, seq = 0, open = true;
   const tried: Record<string, string> = {};
   const variantNow = () => kit === state.style ? curVariant(id, k, tiles()[i]) : tried[kit.id] ?? kit.current(id);
   const setVariant = (v: string) => { if (kit === state.style) state.variants[k] = v; else tried[kit.id] = v; };
@@ -730,7 +733,7 @@ function openFocus(id: string, k: string) {
         <span class="sep"></span>
         <div class="pop"><button class="xp" data-act="export">${L('导出', 'Export')}</button></div>
       </div>`;
-    if (art) { (el.querySelector('.big .art') as HTMLElement).innerHTML = art.svg; place(art); } // 换风格时旧图先留着，新的画好再换
+    if (art && preview) { mountPreview(el.querySelector('.big .art') as HTMLElement, art, preview); place(art); } // 换风格时旧图先留着，新的画好再换
   };
   const place = (a: Art) => { (el.querySelector('.big') as HTMLElement).style.width = `${Math.max(320, Math.min(a.w, 1100, ((innerHeight - 240) * a.w) / a.h))}px`; };
   // 快速连点几个版式：按钮立刻跟上，图只认最后一次（先点的画得慢，回来也不会盖掉后点的）
@@ -741,13 +744,16 @@ function openFocus(id: string, k: string) {
     el.querySelector('.big')?.classList.add('loading');
     const a = await drawArt(id, v, k0);
     if (!a || my !== seq || !open) return;
-    art = a;
+    const p = await k0.preview(a);
+    if (my !== seq || !open) return;
+    art = a; preview = p;
     if (k0 === state.style) state.arts.set(k, a);
     const big = el.querySelector('.big') as HTMLElement, artEl = el.querySelector('.big .art') as HTMLElement;
     big.classList.remove('loading');
-    artEl.innerHTML = a.svg;
+    releasePreview(artEl); artEl.replaceChildren();
+    mountPreview(artEl, a, p);
     place(a);
-    mountHits(artEl, a.hits, a.w, a.h);
+    mountRoamHits(artEl, a);
   };
   const pickKit = (host: HTMLElement) => {
     const open = host.querySelector(':scope > .kits'); closeFormats(); el.querySelector('.kits')?.remove();
@@ -809,7 +815,8 @@ function openFocus(id: string, k: string) {
 // 拖动（或滚轮、触控板）移动画布；点一下放大，悬停点「导出」。只把视口附近的作品放进页面。
 type RItem = { r: number; y: number; h: number; w: number; id: string; k: string; v?: string; a: Art; p: Blob };
 type RCol = { items: RItem[]; busy: boolean; next: number; prev: number };
-const roam = { x: 0, y: 0, cols: new Map<number, RCol>(), els: new Map<string, HTMLElement>(), gen: 0, vx: 0, vy: 0, raf: 0, ready: false };
+const roam = { x: 0, y: 0, cols: new Map<number, RCol>(), els: new Map<string, HTMLElement>(), gen: 0, ready: false };
+let roamViewport: RoamViewport | undefined;
 const CAP = 30, RGAP = 56, STEP = 5;
 const view = () => (store.get('view') === 'roam' ? 'roam' : 'wall');
 const rcw = () => Math.round(Math.max(380, Math.min(520, innerWidth / 3.1)));
@@ -829,9 +836,10 @@ function slot(X: number, r: number) {
   return { b, k, v: vs.length > 1 ? vs[mod((j < 0 ? 0 : j) + lap, vs.length)] : base };
 }
 async function rItem(X: number, r: number): Promise<RItem | null> {
-  const s = slot(X, r);
+  const s = slot(X, r), gen = roam.gen, kit = state.style;
   let a: Art | null = null, p: Blob | null = null;
-  try { a = await drawArt(s.b.id, s.v); if (a) p = await state.style.preview(a); } catch (e) { console.error(s.b.id, e); }
+  try { a = await drawArt(s.b.id, s.v); if (a && gen === roam.gen) p = await kit.preview(a); } catch (e) { console.error(s.b.id, e); }
+  if (gen !== roam.gen) return null;
   if (!a || !p) return null;
   const cw = rcw(), w = Math.min(cw, a.w < 500 ? a.w * 1.15 : cw);
   return { r, y: 0, w, h: (w / a.w) * a.h, id: s.b.id, k: s.k, v: s.v, a, p };
@@ -875,28 +883,44 @@ function place() {
   if (!roam.ready || view() !== 'roam' || placeFrame) return;
   placeFrame = requestAnimationFrame(() => { placeFrame = 0; placeNow(); });
 }
-/** 缩略图由排版线程生成；图片加载完即释放临时地址。原始 SVG 留给放大和导出。 */
+/** 预览文字在排版线程转路径，浏览器以独立图片绘制，避免把整张矢量图挂进页面。 */
 const previewURLs = new WeakMap<HTMLElement, string>();
 function releasePreview(root: HTMLElement) {
   const url = previewURLs.get(root); if (url) { URL.revokeObjectURL(url); previewURLs.delete(root); }
 }
 function mountPreview(root: HTMLElement, art: Art, preview: Blob) {
+  releasePreview(root);
   const image = document.createElement('img');
   image.width = art.w; image.height = art.h; image.alt = art.title;
   image.decoding = 'async'; image.draggable = false;
   const url = URL.createObjectURL(preview); previewURLs.set(root, url);
-  image.onload = image.onerror = () => releasePreview(root);
+  image.onload = image.onerror = () => { if (previewURLs.get(root) === url) releasePreview(root); };
   image.src = url; root.appendChild(image);
 }
-/** 悬停到这一张时才建立热区，移动画布不需要为所有作品创建几千个透明节点。 */
+/** 只给正在查看的卡片建立热区，离开即卸载；拖动时不新建交互节点。 */
+const previewHits = new WeakMap<HTMLElement, () => void>();
 function mountRoamHits(root: HTMLElement, art: Art) {
-  root.addEventListener('pointerenter', () => mountHits(root, art.hits, art.w, art.h), { once: true });
+  previewHits.get(root)?.();
+  let unmount: (() => void) | undefined;
+  const enter = () => { if (!unmount && !root.closest('#roam.moving')) unmount = mountHits(root, art.hits, art.w, art.h); };
+  const leave = () => { unmount?.(); unmount = undefined; };
+  root.addEventListener('pointerenter', enter);
+  root.addEventListener('pointerleave', leave);
+  previewHits.set(root, () => { leave(); root.removeEventListener('pointerenter', enter); root.removeEventListener('pointerleave', leave); });
+  if (root.matches(':hover')) enter();
+}
+/** 屏内优先，其次是离视口最近的预加载卡片；用布局数据计算，不读取 DOM 尺寸。 */
+function previewPriority(el: HTMLElement, t: RItem) {
+  return () => {
+    const left = parseFloat(el.style.left);
+    return Math.max(0, roam.x - left - t.w, left - roam.x - innerWidth)
+      + Math.max(0, roam.y - t.y - t.h, t.y - roam.y - innerHeight);
+  };
 }
 /** 只把视口附近的作品放进页面，远的拿掉；缺的让那一栏去长 */
 function placeNow() {
-  if (!roam.ready || view() !== 'roam') return;
+  if (!roam.ready || !state.model || view() !== 'roam') return;
   const plane = $('#roam .plane');
-  plane.style.transform = `translate3d(${-roam.x}px, ${-roam.y}px, 0)`;
   const P = pitch(), cw = rcw(), m = 700;
   const top = roam.y - m, bottom = roam.y + innerHeight + m;
   const want = new Set<string>();
@@ -915,14 +939,14 @@ function placeNow() {
       el.innerHTML = `<div class="name">${esc(state.style.pieceName(t.id, state.lang))}${t.v && state.style.variants(t.id).length > 1 ? `<span class="vn">${esc(state.style.variantName(t.v, state.lang))}</span>` : ''}</div>
         <div class="bar glass"><button data-act="export">${L('导出', 'Export')}</button></div><div class="art"></div>`;
       const artEl = el.querySelector('.art') as HTMLElement;
-      mountPreview(artEl, t.a, t.p);
+      mountRoamPreview(artEl, t.a, t.p, Math.ceil(t.w * devicePixelRatio), previewPriority(el, t));
       mountRoamHits(artEl, t.a);
       (el as any)._item = t;
       plane.appendChild(el);
       roam.els.set(key, el);
     }
   }
-  for (const [key, el] of roam.els) if (!want.has(key)) { releasePreview(el.querySelector('.art') as HTMLElement); el.remove(); roam.els.delete(key); }
+  for (const [key, el] of roam.els) if (!want.has(key)) { releaseRoamPreview(el.querySelector('.art') as HTMLElement); el.remove(); roam.els.delete(key); }
 }
 /** 全屏和调整窗口时原地重排，保留已有图像和视口中心，避免清空后再画一整屏。 */
 function resizeRoam(oldWidth: number, oldViewportWidth: number, oldViewportHeight: number) {
@@ -947,6 +971,12 @@ function resizeRoam(oldWidth: number, oldViewportWidth: number, oldViewportHeigh
   }
   roam.x = centerX * P - innerWidth / 2;
   roam.y = (anchor ? anchor.y + fraction * anchor.h + gap : centerY * cw / oldWidth) - innerHeight / 2;
+  for (const el of roam.els.values()) {
+    const t = (el as any)._item as RItem, art = el.querySelector('.art') as HTMLElement;
+    const width = Math.ceil(t.w * devicePixelRatio);
+    if (art.querySelector('canvas')?.width !== width) mountRoamPreview(art, t.a, t.p, width, previewPriority(el, t));
+  }
+  roamViewport?.moveTo(roam.x, roam.y);
   place();
 }
 
@@ -957,30 +987,35 @@ function home(): [number, number] {
   const P = pitch(), n = Math.max(1, Math.floor((innerWidth + RGAP) / P));
   return [-Math.round((innerWidth - (n * P - RGAP)) / 2), -96];
 }
-function roamReset() {
+function clearRoamElements() {
+  roamViewport?.stop();
   cancelAnimationFrame(placeFrame); placeFrame = 0;
-  roam.gen++;
-  for (const el of roam.els.values()) releasePreview(el.querySelector('.art') as HTMLElement);
-  roam.cols.clear(); roam.els.clear();
+  for (const el of roam.els.values()) releaseRoamPreview(el.querySelector('.art') as HTMLElement);
+  roam.els.clear();
   $('#roam .plane').innerHTML = '';
+}
+function roamReset() {
+  clearRoamElements();
+  roam.gen++;
+  roam.cols.clear();
   if (view() === 'roam' && state.model) place();
 }
 function glide(tx: number, ty: number) {
-  cancelAnimationFrame(roam.raf);
-  const x0 = roam.x, y0 = roam.y, t0 = performance.now(), d = 520;
-  const step = (now: number) => {
-    const p = Math.min(1, (now - t0) / d), e = 1 - Math.pow(1 - p, 3);
-    roam.x = x0 + (tx - x0) * e; roam.y = y0 + (ty - y0) * e; place();
-    if (p < 1) roam.raf = requestAnimationFrame(step);
-  };
-  roam.raf = requestAnimationFrame(step);
+  roamViewport?.moveTo(tx, ty, 'smooth');
 }
 function wireRoam() {
   const el = $('#roam');
+  let movingTimer = 0;
   let drag: { x: number; y: number; px: number; py: number; moved: boolean; t: number; hist: [number, number, number][] } | null = null;
+  const moving = () => {
+    el.classList.add('moving');
+    clearTimeout(movingTimer);
+    movingTimer = window.setTimeout(() => { if (!drag?.moved) el.classList.remove('moving'); }, 120);
+  };
+  roamViewport = new RoamViewport(el, (x, y) => { roam.x = x; roam.y = y; moving(); place(); });
   el.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest('button, .fmts')) return;
-    cancelAnimationFrame(roam.raf);
+    roamViewport!.stop();
     drag = { x: e.clientX, y: e.clientY, px: roam.x, py: roam.y, moved: false, t: performance.now(), hist: [] };
     el.setPointerCapture(e.pointerId);
   });
@@ -989,14 +1024,13 @@ function wireRoam() {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     if (!drag.moved && Math.hypot(dx, dy) > 5) { drag.moved = true; el.classList.add('panning'); closeFormats(); }
     if (!drag.moved) return;
-    roam.x = drag.px - dx; roam.y = drag.py - dy;
+    roamViewport!.moveTo(drag.px - dx, drag.py - dy);
     drag.hist.push([performance.now(), roam.x, roam.y]); if (drag.hist.length > 6) drag.hist.shift();
-    place();
   });
   const up = (e: PointerEvent) => {
     if (!drag) return;
     const d = drag; drag = null;
-    el.classList.remove('panning');
+    el.classList.remove('panning', 'moving');
     if (!d.moved) {
       if (e.type !== 'pointerup') return;
       // 没拖动就是点了一下：放大这一张
@@ -1006,26 +1040,22 @@ function wireRoam() {
       return;
     }
     // 松手后按最后一小段的速度滑一会儿
-    const h = d.hist; if (h.length < 2) return;
+    const h = d.hist; if (e.type !== 'pointerup' || h.length < 2) return;
     const [t1, x1, y1] = h[0], [t2, x2, y2] = h[h.length - 1], dt = Math.max(16, t2 - t1);
     if (performance.now() - t2 > 80) return;
-    let vx = ((x2 - x1) / dt) * 16, vy = ((y2 - y1) / dt) * 16;
-    const coast = () => {
-      vx *= 0.94; vy *= 0.94;
-      if (Math.hypot(vx, vy) < 0.3) return;
-      roam.x += vx; roam.y += vy; place();
-      roam.raf = requestAnimationFrame(coast);
-    };
-    roam.raf = requestAnimationFrame(coast);
+    // 保留原来每 16ms 衰减到 94% 的滑行距离。
+    const distance = 16 * 0.94 / (1 - 0.94);
+    glide(roam.x + (x2 - x1) / dt * distance, roam.y + (y2 - y1) / dt * distance);
   };
   el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   el.addEventListener('wheel', (e) => {
-    e.preventDefault(); cancelAnimationFrame(roam.raf);
-    const k = e.deltaMode === 1 ? 16 : 1;
-    // 普通鼠标滚轮只有上下：按住 Shift 就是左右
-    if (e.shiftKey && !e.deltaX) roam.x += e.deltaY * k; else { roam.x += e.deltaX * k; roam.y += e.deltaY * k; }
-    place();
-  }, { passive: false });
+    e.preventDefault();
+    const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
+    // 同时保留两个方向的输入，触控板可斜向移动；普通滚轮按 Shift 横移。
+    const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX;
+    const dy = e.shiftKey && !e.deltaX ? 0 : e.deltaY;
+    roamViewport!.moveTo(roam.x + dx * scale, roam.y + dy * scale);
+  }, {passive:false});
   el.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest('button[data-act="export"]'); if (!b) return;
     e.stopPropagation();
@@ -1054,9 +1084,10 @@ function applyView() {
   document.body.classList.toggle('bare', !$('#empty').hidden || !$('#welcome').hidden);
   const was = document.body.classList.contains('roam');
   document.body.classList.toggle('roam', on);
+  if (!on && was) clearRoamElements();
   $('#roam').hidden = !on; $('#home').hidden = !on;
-  if (on && !roam.ready) { roam.ready = true; [roam.x, roam.y] = home(); roamReset(); }
-  else if (on && !was) place();
+  if (on && !roam.ready) { roam.ready = true; [roam.x, roam.y] = home(); roamViewport?.moveTo(roam.x, roam.y); roamReset(); }
+  else if (on && !was) { roamViewport?.moveTo(roam.x, roam.y); place(); }
 }
 
 // ───────────────────────── 风格 ─────────────────────────
