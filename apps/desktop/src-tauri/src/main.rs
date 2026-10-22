@@ -819,6 +819,8 @@ fn logo() -> Value {
     json!(app_settings()["logo"].as_str().unwrap_or(DEFAULT_LOGO))
 }
 
+mod preview;
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -836,7 +838,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             projects, credits, stamp, head, config_of, set_display, analyze, cancel_analyze, discover, pick_folder, add_project, integrations, set_integration, embed_snippet,
-            library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor, collect_info, set_collect, collect_now, set_collect_agent, logo, set_logo
+            library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor, collect_info, set_collect, collect_now, set_collect_agent, logo, set_logo, preview::render_preview
         ])
         .run(tauri::generate_context!())
         .expect("启动 creditia App 失败");

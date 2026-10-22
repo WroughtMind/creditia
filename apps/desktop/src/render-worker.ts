@@ -15,22 +15,23 @@ let rasterReady: Promise<void> | undefined;
 let raw: any;
 let modelKey: [any, string, string, boolean] | undefined;
 let model: any;
-/** 漫游要的缩略图：展墙直接摆 SVG，用不着，所以单独来要 */
-async function rasterize(svg: string, style: string, classic: boolean, width: number) {
+/** 预览作为独立图片交给浏览器绘制。这里只把文字转路径，保留原图的滤镜和细节；
+ *  对整张图运行 resvg.render() 会让纸纹等滤镜占住排版队列数秒。 */
+async function preview(svg: string, style: string, classic: boolean) {
+  if (!svg.includes('<text')) return new Blob([svg], {type:'image/svg+xml'});
   await (rasterReady ??= initWasm(fetch(wasmUrl)));
   const styleSpec = classic ? bridgeStyle(themeById(style)!) : STYLES.find((s) => s.id === style)!;
-  const fonts = svg.includes('<text') ? await fontBytes(styleSpec, svg) : [];
-  const image = new Resvg(svg, {font:{fontBuffers:fonts,loadSystemFonts:false,defaultFontFamily:'Noto Sans SC'},fitTo:{mode:'width',value:width}});
+  const fonts = await fontBytes(styleSpec, svg);
+  const image = new Resvg(svg, {font:{fontBuffers:fonts,loadSystemFonts:false,defaultFontFamily:'Noto Sans SC'}});
   try {
-    const rendered = image.render();
-    try { return new Blob([rendered.asPng()], {type:'image/png'}); } finally { rendered.free(); }
+    return new Blob([image.toString()], {type:'image/svg+xml'});
   } finally { image.free(); }
 }
 self.onmessage = async ({ data }) => {
   const { seq, style, lang, group, id, variant, classic } = data;
   try {
     if (data.warm) { await warm(themeById(style)!); return; }
-    if (data.svg) { self.postMessage({ seq, preview: await rasterize(data.svg, style, classic, data.width) }); return; }
+    if (data.svg) { self.postMessage({ seq, preview: await preview(data.svg, style, classic) }); return; }
     if ('raw' in data) raw = data.raw;
     const current = raw;
     if (!modelKey || modelKey[0] !== current || modelKey[1] !== lang || modelKey[2] !== group || modelKey[3] !== classic) {
