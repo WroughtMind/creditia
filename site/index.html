@@ -187,6 +187,35 @@ html.zoom #lines.live { pointer-events: auto; }
 html.zoom #lines .tx { opacity: var(--zt, 1); }
 html.zoom .title { z-index: 4; }
 html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; pointer-events: none; }
+/* 第二幕：往下滚一点，亮一行出处 */
+html.zoom .ln .mark { transform: scaleY(0); transition: transform .5s cubic-bezier(.3,1.5,.5,1); }
+html.zoom .ln .who { transform: translateX(10px); transition: opacity .35s, transform .45s cubic-bezier(.2,.8,.2,1); }
+html.zoom .ln.src .mark { transform: none; }
+html.zoom .ln.src .who { opacity: 1; transform: none; }
+/* 最后一幕：各行的颜色流进一条份额条，份额条从那一道缝里展开成署名卡 */
+#zcard { display: none; }
+.zcard { padding: 30px 32px 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); transition: box-shadow .5s; }
+.zcard.lift { box-shadow: var(--shadow); }
+html.zoom #zcard { display: block; position: absolute; z-index: 5; left: 50%; top: 53%; width: min(480px, calc(100vw - 48px)); translate: -50% -50%; visibility: hidden; }
+.zcard .zt { font-size: 46px; line-height: 1; }
+.zcard .zm { margin-top: 10px; font-size: 13px; color: var(--soft); }
+.zcard .zbar { display: flex; height: 10px; margin: 26px 0 20px; border-radius: 3px; overflow: hidden; }
+.zcard .zbar i { flex: none; height: 100%; }
+.zcard .zrows { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 28px; font-size: 13.5px; }
+.zcard .zrows span { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.zcard .zrows svg { flex: none; width: 15px; height: 15px; fill: currentColor; }
+.zcard .zrows span > i { flex: none; width: 9px; height: 9px; margin: 0 3px; border-radius: 50%; background: currentColor; }
+.zcard .zrows b { font-weight: 400; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zcard .zrows em { margin-left: auto; font-style: normal; color: var(--soft); font-variant-numeric: tabular-nums; }
+.zcard .zf { margin-top: 22px; display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--faint); }
+.zcard .zf svg { width: 13px; height: 13px; }
+/* 卡片摊开成风格墙：飞行中的是墙上图块的替身，落地后换回真的 */
+#zfan { display: none; position: fixed; inset: 0; z-index: 4; pointer-events: none; }
+#zfan.on { display: block; }
+#zfan > div:not(.zcard) { position: absolute; left: 0; top: 0; border-radius: 4px; overflow: hidden; background: var(--line2); box-shadow: var(--shadow); will-change: transform; }
+#zfan .zcard { position: absolute; left: 0; top: 0; box-shadow: var(--shadow); }
+#zfan img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+#wall.fanning .tile { visibility: hidden; }
 
 /* ───────── 一行一行 ───────── */
 .legend { margin-top: 36px; display: flex; gap: 8px; flex-wrap: wrap; }
@@ -605,7 +634,9 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
     </div>
   </section>
   <canvas id="zcv" aria-hidden="true"></canvas>
+  <div id="zcard" class="zcard" aria-hidden="true"></div>
   </div></div>
+  <div id="zfan" aria-hidden="true"></div>
 
   <section id="looks">
     <div class="wrap">
@@ -932,7 +963,7 @@ $('flegend').addEventListener('pointerleave', () => legendFocus(-1));
 new MutationObserver(() => F.done && fieldDraw(0)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => F.done && fieldDraw(0));
 // ───────── 首屏 → 出处：往下滚，首屏钉住，镜头推进 analyze.ts；别的文件散开，十六行线对准编辑器里的每个词，再换成字 ─────────
-const Z = { on: false, p: -1, d: 0, top: 0, toks: [], lns: [], w: 0, h: 0, dpr: 1, raf: 0, h2: false, scanned: false };
+const Z = { on: false, p: -1, d: 0, top: 0, toks: [], lns: [], w: 0, h: 0, dpr: 1, raf: 0, h2: false, slots: [], delay: [], segs: [] };
 function zoomSetup() {
   const root = document.documentElement, was = Z.on;
   root.classList.toggle('zoom', innerWidth >= 900 && !RM);
@@ -941,39 +972,43 @@ function zoomSetup() {
   const L = $('lines');
   if (!Z.on) {
     $('zoom').style.height = ''; L.style.opacity = ''; L.classList.remove('live'); $('fcv').style.visibility = '';
-    ['--py', '--po'].forEach((v) => screenEl.style.removeProperty(v)); Z.p = -1;
+    ['--py', '--po'].forEach((v) => screenEl.style.removeProperty(v)); Z.p = -1; fanOff();
     if (was) { curSec = undefined; spy(); }
     return;
   }
   L.querySelectorAll('.rise').forEach((el) => el.classList.add('in')); // 舞台里的东西不靠滚动出场，量位置前先放到位
-  Z.d = Math.round(innerHeight * 1.35);
+  Z.d = Math.round(innerHeight * 3.1);
   $('zoom').style.height = `${innerHeight + Z.d}px`;
   const cv = $('zcv'); Z.dpr = Math.min(2, devicePixelRatio || 1); Z.w = cv.clientWidth; Z.h = cv.clientHeight;
   cv.width = Math.round(Z.w * Z.dpr); cv.height = Math.round(Z.h * Z.dpr);
-  zoomMeasure();
+  zoomMeasure(); zcardBuild(); zcardMeasure(); Z.ls = null; fanOff(); FAN.q = -1;
   Z.p = -1; zoomTick();
 }
 /** 编辑器里每个词的位置（相对舞台），和地图里 analyze.ts 的线一一对应 */
 function zoomMeasure() {
   const st = $('zstage').getBoundingClientRect();
   Z.toks = []; Z.lns = [];
-  document.querySelectorAll('#code .ln').forEach((ln) => {
+  document.querySelectorAll('#code .ln').forEach((ln, line) => {
     const lr = ln.getBoundingClientRect(); Z.lns.push({ y: lr.top - st.top, h: lr.height });
     const tx = ln.querySelector('.tx'), nodes = [], w = document.createTreeWalker(tx, NodeFilter.SHOW_TEXT);
     let n, off = 0; while ((n = w.nextNode())) { nodes.push([n, off]); off += n.length; }
     const at = (i) => { for (let k = nodes.length - 1; k >= 0; k--) if (nodes[k][1] <= i) return [nodes[k][0], Math.min(i - nodes[k][1], nodes[k][0].length)]; return [tx, 0]; };
     for (const m of tx.textContent.matchAll(/\S+/g)) {
       const r = document.createRange(); r.setStart(...at(m.index)); r.setEnd(...at(m.index + m[0].length));
-      const b = r.getBoundingClientRect(); Z.toks.push({ x: b.left - st.left, y: b.top - st.top, w: b.width, h: b.height });
+      const b = r.getBoundingClientRect(); Z.toks.push({ x: b.left - st.left, y: b.top - st.top, w: b.width, h: b.height, line });
     }
   });
 }
 const zp = () => (Z.on ? clamp01((scrollY - $('zoom').offsetTop) / Z.d) : 0); // 镜头推进到哪了，0～1
+// 舞台的几幕（占整段滚动的比例）：推进镜头 → 一行行标出处 → 颜色流进一条份额条 → 份额条展开成署名卡
+const PH = { a: [0, 0.3], b: [0.33, 0.52], c: [0.56, 0.75], d: [0.7, 0.92] };
+const ph = (u, [a, b]) => clamp01((u - a) / (b - a));
 function zoomTick() {
   if (!Z.on) return;
-  const p = zp();
-  if (p === Z.p) return;
-  Z.p = p;
+  const u = zp();
+  if (u === Z.p) return;
+  Z.p = u;
+  const p = ph(u, PH.a), pb = ph(u, PH.b), pc = ph(u, PH.c), pd = ph(u, PH.d);
   if (p > 0 && !F.done) { F.done = true; cancelAnimationFrame(F.raf); } // 首屏还没扫完就往下滚：直接用扫完的样子
   if (p > 0) { ftip.hidden = true; F.hover = -1; }
   // 首屏的字和图例先退场
@@ -982,16 +1017,21 @@ function zoomTick() {
   $('fcv').style.visibility = p > 0 ? 'hidden' : '';
   ['.fcap', '#fbar', '#flegend'].forEach((q) => (document.querySelector(q).style.opacity = String(1 - clamp01(p / 0.12))));
   const L = $('lines');
-  L.style.opacity = String(clamp01((p - 0.45) / 0.22));
-  L.style.setProperty('--zt', String(clamp01((p - 0.8) / 0.14)));
-  L.classList.toggle('live', p > 0.97);
+  L.style.opacity = String(clamp01((p - 0.45) / 0.22) * (1 - clamp01((pc - 0.04) / 0.3)));
+  L.style.setProperty('--zt', String(clamp01((p - 0.8) / 0.14) * (1 - clamp01(pc / 0.1))));
+  L.classList.toggle('live', p > 0.97 && pc === 0);
   if (p > 0.5 && !Z.h2) { Z.h2 = true; if (!RM) rise(split(L.querySelector('h2')), { step: lang() === 'zh' ? 40 : 70, dur: 1000 }); }
-  if (p > 0.93 && !Z.scanned) { Z.scanned = true; scan(); }
-  zoomDraw(p);
+  // 第二幕：滚一点亮一行出处，扫描条跟着往下走
+  const ls = Z.ls || (Z.ls = [...$('code').querySelectorAll('.ln')]), sc = $('code').querySelector('.scanner'), k = clamp01(pb * 1.12);
+  ls.forEach((l, n) => l.classList.toggle('src', k * ls.length > n + 0.4));
+  if (ls.length) { const y0 = ls[0].offsetTop, y1 = ls[ls.length - 1].offsetTop; sc.style.transform = `translateY(${y0 + (y1 - y0) * k}px)`; sc.style.opacity = pb > 0 && k < 1 ? '1' : '0'; }
+  zoomDraw(p, pc, pd);
+  zcardShow(pd);
 }
-function zoomDraw(p) {
+function zoomDraw(p, pc = 0, pd = 0) {
   const cv = $('zcv'), ctx = cv.getContext('2d');
   ctx.setTransform(Z.dpr, 0, 0, Z.dpr, 0, 0); ctx.clearRect(0, 0, Z.w, Z.h);
+  if (pc > 0) { pourDraw(ctx, pc, pd); return; }
   const f = F.files.find((x) => x.special);
   if (p <= 0 || p >= 1 || !f || !Z.toks.length || Z.toks.length !== F.zi1 - F.zi0) return;
   const cs = getComputedStyle($('screen')), soft = cs.getPropertyValue('--hero-soft').trim();
@@ -1037,9 +1077,112 @@ function zoomDraw(p) {
   }
   ctx.globalAlpha = 1;
 }
+const CUT = 0.2; // 第四幕前三成：份额条升到卡片里的位置；之后卡片从这道缝里展开
+/** 第三幕：每个词变回一道色块，往下掉进份额条，落进写它的工具那一段（同一工具的词平分那一段） */
+function pourDraw(ctx, pc, pd) {
+  if (!Z.slots.length || pd >= CUT) return;
+  const soft = getComputedStyle($('screen')).getPropertyValue('--hero-soft').trim();
+  const colorOf = (k) => (k === 5 ? soft : AGC[FT[k]]);
+  const show = clamp01(pc / 0.1), q = clamp01((pc - 0.06) / 0.7), fill = clamp01((pc - 0.72) / 0.2);
+  const B = { ...Z.bar, y: Z.bar0 + (Z.bar.y - Z.bar0) * inOut(clamp01(pd / CUT)) };
+  for (let j = 0; j < Z.toks.length; j++) {
+    const tk = Z.toks[j], sl = Z.slots[j], i = F.zi0 + j;
+    const t = clamp01((q - Z.delay[j]) / 0.5), e = inOut(t), g = t * t; // 横向先走，纵向像往下掉
+    const x0 = tk.x, y0 = tk.y + tk.h * 0.28, w0 = tk.w, h0 = tk.h * 0.44;
+    ctx.globalAlpha = (SHADE[F.s[i]] + (1 - SHADE[F.s[i]]) * e) * show; ctx.fillStyle = colorOf(F.t[i]);
+    ctx.fillRect(x0 + (sl.x - x0) * e, y0 + (B.y - y0) * g, w0 + (sl.w - w0) * e, h0 + (B.h - h0) * g);
+  }
+  if (fill > 0) {
+    ctx.save(); ctx.beginPath(); ctx.roundRect(B.x, B.y, B.w, B.h, 3); ctx.clip(); ctx.globalAlpha = fill;
+    for (const sg of Z.segs) { ctx.fillStyle = sg.color; ctx.fillRect(sg.x, B.y, sg.w + 0.5, B.h); }
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+/** 署名卡：lumen、份额条、各工具的占比 */
+function zcardBuild() {
+  const soft = getComputedStyle($('screen')).getPropertyValue('--hero-soft').trim(), rows = shareRows();
+  const col = (k) => (k === 'unattributed' ? soft : AGC[k] || soft);
+  $('zcard').innerHTML = `<div class="zfade"><div class="zt serif">lumen</div><div class="zm">${fproj().split(' · ').slice(1).join(' · ')}</div></div>`
+    + `<div class="zbar">${rows.map((r) => `<i data-k="${r.key}" style="width:${r.pct}%;background:${col(r.key)}"></i>`).join('')}</div>`
+    + `<div class="zfade"><div class="zrows">${rows.map((r) => { const t = DATA.tools.find((x) => x.name === r.name); return `<span style="color:${col(r.key)}">${t ? t.svg : '<i></i>'}<b>${r.name}</b><em>${r.pct}%</em></span>`; }).join('')}</div><div class="zf">${MARK}creditia</div></div>`;
+}
+/** 卡片和份额条在舞台里的位置；每个词落进哪一格、什么时候开始掉 */
+function zcardMeasure() {
+  const st = $('zstage').getBoundingClientRect(), c = $('zcard'), rel = (r) => ({ x: r.left - st.left, y: r.top - st.top, w: r.width, h: r.height });
+  c.style.clipPath = 'none';
+  Z.cardR = rel(c.getBoundingClientRect()); Z.bar = rel(c.querySelector('.zbar').getBoundingClientRect());
+  Z.segs = [...c.querySelectorAll('.zbar i')].map((i) => ({ key: i.dataset.k, ...rel(i.getBoundingClientRect()), color: i.style.background }));
+  Z.slots = []; Z.delay = [];
+  if (!Z.lns.length || Z.toks.length !== F.zi1 - F.zi0) return;
+  const last = Z.lns[Z.lns.length - 1], nl = Z.lns.length;
+  Z.bar0 = Math.min(Z.h - 40, last.y + last.h + 30);
+  const by = {};
+  Z.toks.forEach((tk, j) => (by[FT[F.t[F.zi0 + j]]] ||= []).push(j));
+  for (const [k, js] of Object.entries(by)) {
+    const sg = Z.segs.find((x) => x.key === k) || Z.segs[Z.segs.length - 1];
+    js.forEach((j, n) => (Z.slots[j] = { x: sg.x + (sg.w * n) / js.length, w: sg.w / js.length }));
+  }
+  // 最下面的行先流下去，上面的跟着；同一行里左边的先走一点
+  Z.toks.forEach((tk, j) => (Z.delay[j] = 0.4 * (1 - tk.line / Math.max(1, nl - 1)) + 0.08 * clamp01((tk.x - Z.toks[0].x) / 600)));
+}
+/** 第四幕：份额条到位后，卡片从这一道缝往四周展开，字随后浮出来 */
+function zcardShow(pd) {
+  const c = $('zcard'); if (!Z.cardR) return;
+  const on = pd >= CUT; c.style.visibility = on ? 'visible' : 'hidden';
+  if (!on) return;
+  const k = clamp01((pd - CUT) / (1 - CUT)), e = inOut(clamp01(k / 0.7)), R = Z.cardR, B = Z.bar;
+  const ins = [B.y - R.y, R.x + R.w - B.x - B.w, R.y + R.h - B.y - B.h, B.x - R.x].map((v) => `${(v * (1 - e)).toFixed(1)}px`).join(' ');
+  c.style.clipPath = e < 1 ? `inset(${ins} round ${(3 + 13 * e).toFixed(1)}px)` : 'none';
+  c.classList.toggle('lift', e >= 1);
+  c.querySelectorAll('.zfade').forEach((x) => (x.style.opacity = String(clamp01((k - 0.35) / 0.5))));
+}
+// ───────── 署名卡 → 风格墙：舞台放开后接着往下滚，卡片里摊出一张张风格图，各自落到墙上的位置 ─────────
+const FAN = { els: [], q: -1, card: null };
+function fanOff() {
+  if (FAN.els.length) { FAN.els = []; $('zfan').innerHTML = ''; }
+  $('zfan').classList.remove('on'); $('wall').classList.remove('fanning'); W.hold = false; $('zcard').style.opacity = ''; $('looks').querySelector('.head').style.opacity = '';
+}
+function fanBuild() {
+  W.hold = true; $('wall').classList.add('fanning'); $('zfan').classList.add('on');
+  const mid = innerWidth / 2;
+  const tiles = [...$('wall').querySelectorAll('.tile')].map((t) => ({ t, r: t.getBoundingClientRect() })).filter(({ r }) => r.right > -40 && r.left < innerWidth + 40)
+    .sort((a, b) => Math.abs(a.r.left + a.r.width / 2 - mid) - Math.abs(b.r.left + b.r.width / 2 - mid));
+  FAN.els = tiles.map(({ t }, k) => {
+    const img = t.querySelector('img.on') || t.querySelector('img'), el = document.createElement('div');
+    el.innerHTML = `<img src="${img.currentSrc || img.src}" alt="" draggable="false">`; $('zfan').append(el);
+    return { el, tile: t, d: (0.38 * k) / Math.max(1, tiles.length - 1), r: (((k * 7) % 11) - 5) * 1.1, dx: (((k * 5) % 9) - 4) * 6 };
+  });
+  // 舞台是 sticky 的，自成一层，图块没法钻到它下面；所以飞的时候在最上面放一张卡片的替身，真的那张藏起来
+  FAN.card = $('zcard').cloneNode(true); FAN.card.removeAttribute('id'); FAN.card.style.cssText = ''; $('zfan').append(FAN.card);
+  $('zcard').style.opacity = '0';
+}
+function fanTick() {
+  if (!Z.on || !W.bands.length || !Z.cardR) { if (FAN.els.length || W.hold) fanOff(); return; }
+  const s0 = $('zoom').offsetTop + Z.d, s1 = $('looks').offsetTop - 64;
+  const q = clamp01((scrollY - s0) / Math.max(1, s1 - s0));
+  if (q === FAN.q) return;
+  FAN.q = q;
+  if (q <= 0 || q >= 1) { fanOff(); return; }
+  if (!FAN.els.length) fanBuild();
+  const C = $('zcard').getBoundingClientRect();
+  FAN.card.style.width = `${C.width}px`; FAN.card.style.transform = `translate(${C.left}px,${C.top}px)`;
+  FAN.card.style.opacity = String(1 - clamp01((q - 0.06) / 0.3));
+  $('looks').querySelector('.head').style.opacity = String(clamp01((q - 0.72) / 0.28)); // 图块飞过的时候标题先让开
+  for (const o of FAN.els) {
+    const T = o.tile.getBoundingClientRect(), t = inOut(clamp01((q - o.d) / 0.62));
+    const s0 = Math.min((C.height * 0.8) / T.height, (C.width * 0.8) / T.width), s = s0 + (1 - s0) * t;
+    const cx0 = C.left + C.width / 2 + o.dx, cy0 = C.top + C.height / 2;
+    const cx = cx0 + (T.left + T.width / 2 - cx0) * t, cy = cy0 + (T.top + T.height / 2 - cy0) * t;
+    o.el.style.width = `${T.width}px`; o.el.style.height = `${T.height}px`;
+    o.el.style.transform = `translate(${(cx - T.width / 2).toFixed(1)}px,${(cy - T.height / 2).toFixed(1)}px) rotate(${(o.r * (1 - t)).toFixed(2)}deg) scale(${s.toFixed(4)})`;
+    o.el.style.opacity = t > 0 ? '1' : '0';
+  }
+}
+addEventListener('scroll', fanTick, { passive: true });
 addEventListener('scroll', () => { if (Z.on) { cancelAnimationFrame(Z.raf); Z.raf = requestAnimationFrame(zoomTick); } }, { passive: true });
 // 导航点「出处」：滚到镜头推完的位置
-document.querySelector('nav a[href="#lines"]').addEventListener('click', (e) => { if (!Z.on) return; e.preventDefault(); scrollTo({ top: $('zoom').offsetTop + Z.d, behavior: RM ? 'auto' : 'smooth' }); });
+document.querySelector('nav a[href="#lines"]').addEventListener('click', (e) => { if (!Z.on) return; e.preventDefault(); scrollTo({ top: $('zoom').offsetTop + Math.round(Z.d * PH.b[1]), behavior: RM ? 'auto' : 'smooth' }); });
 // 往下滚：标题慢慢退开
 const screenEl = $('screen');
 const parallax = () => {
@@ -1158,7 +1301,7 @@ function wall() {
 function measure() { const gap = parseFloat(getComputedStyle($('wall')).columnGap) || 14; W.bands.forEach((b) => (b.half = (b.el.scrollWidth + gap) / 2)); }
 new IntersectionObserver(([e]) => (W.visible = e.isIntersecting), { rootMargin: '100px' }).observe($('wall'));
 tickers.add((dt) => {
-  if (!W.visible || RM) return;
+  if (!W.visible || RM || W.hold) return;
   const boost = 1 + Math.min(5, Math.abs(sv) / 300);
   for (const b of W.bands) {
     if (W.drag?.b !== b) {
