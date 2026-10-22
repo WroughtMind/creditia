@@ -9,6 +9,7 @@ import { roll, ROLL_VARIANTS } from './pieces/roll.ts';
 import { DONUT_VARIANTS, WAFFLE_VARIANTS, donut, waffle, stream, lanes, clock, versions, survival, mosaic, calendar, evidence, areas } from './pieces/charts.ts';
 import { receipt, RECEIPT_VARIANTS, share, badge, BADGE_VARIANTS, byline, BYLINE_VARIANTS, hand } from './pieces/cards.ts';
 import { codemap } from './pieces/map.ts';
+import { asterisk } from './pieces/asterisk.ts';
 
 export interface PieceDef {
   name: string;
@@ -24,6 +25,7 @@ export interface PieceDef {
 
 export const PIECES: Record<string, PieceDef> = {
   tier: { name: '署名榜', en: 'Credits', q: '工具与模型占比', qEn: 'Contribution shares by tool and model', variants: TIER_VARIANTS, animated: true, render: tier },
+  asterisk: { name: '星号', en: 'Asterisk', q: '各家份额长成的 *', qEn: 'Shares grown into an asterisk', animated: true, render: asterisk },
   share: { name: '分享图', en: 'Share Card', q: '链接预览、社交媒体', qEn: 'Link previews, social posts', animated: true, render: share },
   hand: { name: '开发者', en: 'Developers', q: '提示词、审阅与手写代码', qEn: 'Prompts, reviews, and hand-written code', animated: true, render: hand },
   receipt: { name: '小票', en: 'Receipt', q: '工期、会话与 Token', qEn: 'Time, sessions, and tokens spent', variants: RECEIPT_VARIANTS, render: receipt },

@@ -427,8 +427,8 @@ async function exportCmd() {
 }
 
 const boardIds = (l: Look) => (l.kind === 'classic'
-  ? ['share', 'tier', 'roll', 'receipt', 'donut', 'ribbon', 'stream', 'waffle', 'mosaic', 'versions', 'area', 'lanes', 'clock', 'settle', 'survival', 'evidence', 'areas', 'codemap', 'calendar']
-  : ['share', 'tier', 'roll', 'receipt', 'donut', 'stream', 'survival', 'evidence', 'versions', 'areas', 'lanes', 'clock', 'mosaic', 'codemap', 'calendar']);
+  ? ['share', 'tier', 'asterisk', 'roll', 'receipt', 'donut', 'ribbon', 'stream', 'waffle', 'mosaic', 'versions', 'area', 'lanes', 'clock', 'settle', 'survival', 'evidence', 'areas', 'codemap', 'calendar']
+  : ['share', 'tier', 'asterisk', 'roll', 'receipt', 'donut', 'stream', 'survival', 'evidence', 'versions', 'areas', 'lanes', 'clock', 'mosaic', 'codemap', 'calendar']);
 async function artsOf(ids: string[], raw: any, l: Look): Promise<Art[]> {
   const out: Art[] = [];
   for (const id of ids) if (piecesOf(l).includes(id)) { const a = await artOf(id, raw, l); if (a) out.push(a); }
