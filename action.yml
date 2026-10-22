@@ -23,6 +23,11 @@ inputs:
       徽章写到哪里（留空不生成），例如 assets/credits-badge.svg
       Where to write the badge (empty: none), e.g. assets/credits-badge.svg
     default: ''
+  asterisk:
+    description: |-
+      星号（各家份额长成的 *）写到哪里（留空不生成），例如 assets/credits-asterisk.svg；按 style 的颜色画
+      Where to write the asterisk (each tool's share grown into a *; empty: none), e.g. assets/credits-asterisk.svg; drawn in the style's colours
+    default: ''
   badge-json:
     description: |-
       动态徽章的数据写到哪里（留空不生成），例如 badge.json。README 里用 https://img.shields.io/endpoint?url=<这个文件的地址>；没有 credits.json 时读提交盖章。site 目录里总会带一份 badge.json
@@ -82,6 +87,7 @@ runs:
         GROUP: ${{ inputs.group }}
         BADGE: ${{ inputs.badge }}
         BADGE_JSON: ${{ inputs.badge-json }}
+        ASTERISK: ${{ inputs.asterisk }}
         DOC: ${{ inputs.doc }}
         SITE: ${{ inputs.site }}
       run: |
@@ -90,10 +96,11 @@ runs:
         if [ -n "$BADGE_JSON" ]; then $CT badge-json --credits "$CREDITS" --lang "$LANG_CT" --group "$GROUP" --out "$BADGE_JSON"; fi
         if [ ! -f "$CREDITS" ]; then
           # 只写 PR 评论、Release 说明时不需要 credits.json（读提交盖章）
-          if [ -z "$BADGE$DOC$SITE" ]; then exit 0; fi
+          if [ -z "$BADGE$ASTERISK$DOC$SITE" ]; then exit 0; fi
           say "::error::没有 $CREDITS。先在本机运行 creditia analyze && creditia publish，把 credits.json 提交进仓库。" "::error::no $CREDITS. Run creditia analyze && creditia publish locally first, then commit credits.json."; exit 1
         fi
         if [ -n "$BADGE" ]; then $CT export --credits "$CREDITS" --piece badge --style "$STYLE" --lang "$LANG_CT" --group "$GROUP" --format svg --out "$BADGE"; fi
+        if [ -n "$ASTERISK" ]; then $CT export --credits "$CREDITS" --piece asterisk --style "$STYLE" --lang "$LANG_CT" --group "$GROUP" --format svg --out "$ASTERISK"; fi
         if [ -n "$DOC" ]; then $CT doc --credits "$CREDITS" --lang "$LANG_CT" --out "$DOC"; fi
         if [ -n "$SITE" ]; then $CT site --credits "$CREDITS" --style "$STYLE" --lang "$LANG_CT" --group "$GROUP" --out "$SITE"; fi
     - name: 跟着发版 · Release credits

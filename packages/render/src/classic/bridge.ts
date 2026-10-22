@@ -179,8 +179,8 @@ export function bridgeStyle(t: Theme): Style {
 
 // ───────────────────────── 新作品 ─────────────────────────
 
-/** 原版没有、借新风格的作品画出来的：河流、留存、出处、板块、代码地图、日历 */
-export const BRIDGED = ['stream', 'survival', 'evidence', 'areas', 'codemap', 'calendar'];
+/** 原版没有、借新风格的作品画出来的：河流、留存、出处、板块、代码地图、日历、星号 */
+export const BRIDGED = ['stream', 'survival', 'evidence', 'areas', 'codemap', 'calendar', 'asterisk'];
 /** 原版作品追加的新风格版式（和原版版式重名的不追加）；原版自己的画法叫 original，仍是默认 */
 export const BRIDGED_LAYOUTS: Record<string, string[]> = {
   tier: TIER_VARIANTS,

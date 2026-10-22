@@ -185,3 +185,14 @@ test('PR 评论按分支上的提交汇总；Release 说明只换掉上次放的
   assert.equal(twice.split("<!-- creditia:release -->").length, 2);
   assert.ok(twice.includes('B 40%') && !twice.includes('A 60%') && twice.startsWith('My notes'), twice);
 });
+
+test('星号：每个风格都画得出，瓣跟着动画长出来', () => {
+  for (const st of STYLES) {
+    const a = art('asterisk', m, st, {})!;
+    assert.ok(a && a.svg.includes('<path'), st.id);
+    assert.ok(a.hits.some((h) => /Claude Code/.test(JSON.stringify(h))), st.id);
+  }
+  const fr = frames('asterisk', m, STYLES[0], {}, 4);
+  assert.equal(fr.length, 5);
+  assert.notEqual(fr[0].svg, fr[4].svg);
+});
