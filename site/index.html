@@ -215,9 +215,8 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 
 /* ───────── 用法：四张卡都是会自己演的小样，高度固定，内容在里面滚，不把页面撑开 ───────── */
 .ways { margin-top: 44px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.way { position: relative; border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 18px 22px 0; display: flex; flex-direction: column; gap: 14px; overflow: clip; overflow-clip-margin: 0; min-width: 0; }
+.way { position: relative; border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 18px 22px 22px; display: flex; flex-direction: column; gap: 14px; overflow: clip; overflow-clip-margin: 0; min-width: 0; }
 .way:has(.wpop) { overflow: visible; z-index: 3; }
-.way .wbar { border-radius: 0 0 15px 15px; }
 .way h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 10px; min-height: 28px; }
 .way h3 small { font-weight: 400; color: var(--faint); font-size: 13px; }
 .again { margin-left: auto; width: 28px; height: 28px; border-radius: 99px; border: 0; background: transparent; color: var(--faint); cursor: pointer; display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity .3s, color .15s, background-color .15s; }
@@ -225,8 +224,11 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 .again:hover { color: var(--ink); background: var(--line2); }
 .again svg { width: 15px; height: 15px; }
 .way .body { position: relative; height: 458px; flex: 1 0 auto; min-width: 0; display: flex; flex-direction: column; }
-.way .body > * { flex: 1; min-height: 0; border-radius: 12px 12px 0 0; }
-.way .body > .turn { flex: none; min-height: auto; border-radius: 0; }
+.way .body > * { flex: 1; min-height: 0; border-radius: 0; }
+.way .body > :first-child { border-top-left-radius: 12px; border-top-right-radius: 12px; }
+.way .body > :last-child { border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
+.way .body > .turn { flex: none; min-height: auto; }
+.way .body.dbody > * { border-radius: 12px; }
 /* 命令行 */
 .term { font-variant-ligatures: none; background: var(--term); color: var(--term-ink); padding: 16px 18px 20px; font-size: 12px; line-height: 1.72; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .term .p { color: #8C877D; }
@@ -387,13 +389,18 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 .tcp svg { width: 13px; height: 13px; }
 .tc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px "JetBrains Mono", monospace; }
 /* 终端：最后一行提示符 */
-.turn.tt { background: var(--term); color: var(--term-ink); padding: 9px 10px 11px 18px; border-top: 1px solid rgba(232,228,219,.1); }
+.turn.tt { background: var(--term); color: var(--term-ink); padding: 4px 10px 12px 18px; }
+.way .body > .term:has(+ .tt) { -webkit-mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent); border-radius: 12px 12px 0 0; }
+.way .body:has(> .tt) { background: var(--term); border-radius: 12px; }
 .tt .cwd { flex: none; font: 12.5px "JetBrains Mono", monospace; color: #8C877D; }
 .tt .cwd em { font-style: normal; color: #7CCB9F; }
 .tt .tc { color: var(--term-ink); }
 .tt .tcp { background: #E8E4DB; color: #121211; }
 /* agent：对话框底部的输入框 */
-.turn.comp { display: block; background: var(--bg); border: 1px solid var(--line); border-block: 0; padding: 0 12px 12px; }
+.turn.comp { display: block; background: var(--bg); border: 1px solid var(--line); border-top: 0; padding: 0 12px 12px; }
+.way .body > .agent:has(+ .comp) { -webkit-mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent); }
+.way .body:has(> .comp) { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.way .body > .agent:has(+ .comp), .way .body > .comp { border: 0; }
 .cbox { border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 11px 12px 8px 14px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
 .cbox .ctx { font-size: 13px; line-height: 1.6; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cbox .ctx.mono { font: 12.5px/1.6 "JetBrains Mono", monospace; }
@@ -404,13 +411,13 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 .csend:hover { transform: translateY(-1px); }
 .csend svg { width: 14px; height: 14px; }
 /* Action：底下露出的 workflow 文件 */
-.turn.tf { margin-top: 10px; padding: 8px 8px 8px 14px; border: 1px solid var(--line); border-bottom: 0; border-radius: 12px 12px 0 0; background: var(--bg); color: var(--soft); }
+.turn.tf { margin-top: 10px; padding: 8px 8px 8px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--soft); }
 .tf .fi { flex: none; width: 14px; height: 14px; color: var(--faint); }
 .tf .tc { color: var(--ink); font-size: 12px; }
 .tf .tcp { background: var(--ink); color: var(--bg); }
 /* App：卡片底下一条下载，和原来一样 */
 /* 每张卡片的最后一条就是它的安装：先摆一条现在能用的，其余方式收在「其他方式」里 */
-.wbar { position: relative; display: grid !important; z-index: 2; display: grid; gap: 10px; margin: -14px -22px 0; padding: 14px 22px 20px; border-top: 1px solid var(--line); background: var(--card); }
+.wbar { position: relative; display: grid !important; z-index: 2; gap: 10px; margin-top: 2px; }
 .wlab { display: flex; align-items: center; gap: 10px; min-height: 30px; font-size: 13px; color: var(--soft); }
 .wlab b { flex: none; font-weight: 600; color: var(--ink); }
 .wlab .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -524,7 +531,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   #deskcard .dstep, #deskcard .again { display: none; }
   .way .body.dbody { aspect-ratio: auto; height: auto; }
   .deskbox { display: none; }
-  .deskshot { display: block; padding-bottom: 18px; }
+  .deskshot { display: block; }
   .deskshot img { width: 100%; height: auto; display: block; border-radius: 10px; border: 1px solid var(--line); }
   .deskshot .dk { display: none; }
   :root[data-theme="dark"] .deskshot .dk { display: block; } :root[data-theme="dark"] .deskshot .lt { display: none; }
@@ -534,7 +541,6 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   .ways { grid-template-columns: 1fr; }
   nav { display: none; }
   .tt .cwd em { display: none; }
-  .wbar { padding-inline: 16px; margin-inline: -16px; }
   .wlab .t { white-space: normal; }
   .wlab { align-items: flex-start; }
   .turn.tt { padding: 8px 8px 9px 12px; gap: 8px; }
@@ -546,7 +552,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   .way h3 { flex-wrap: nowrap; gap: 10px; white-space: nowrap; }
   .way h3 small { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .term { font-size: 10px; padding: 12px 12px 16px; }
-  .way { padding: 16px 16px 0; }
+  .way { padding: 16px; }
   .way .body { height: 424px; }
   .fst li:not(.on) span { display: none; }
   .yml pre { font-size: 10px; overflow-x: auto; }
