@@ -29,7 +29,7 @@
    },
    "contributor": "unattributed",
    "linesAdded": 136,
-   "linesSurviving": 100
+   "linesSurviving": 81
   },
   {
    "byArea": {
@@ -62,19 +62,23 @@
    },
    "contributor": "a:claude-code/claude-fable-5-1",
    "linesAdded": 11628,
-   "linesSurviving": 7068
+   "linesSurviving": 6372
   },
   {
    "byArea": {
-    "core": 46,
-    "frontend": 110
+    "assets": 199,
+    "build": 502,
+    "core": 24033,
+    "docs": 1026,
+    "frontend": 7317,
+    "tests": 5778
    },
    "byEvidence": {
     "declared": {
-     "linesAdded": 156
+     "linesAdded": 16161
     },
     "inferred": {
-     "linesAdded": 0
+     "linesAdded": 1234
     },
     "manual": {
      "linesAdded": 0
@@ -83,48 +87,76 @@
      "linesAdded": 0
     },
     "verified": {
-     "linesAdded": 0
+     "linesAdded": 21460
     }
    },
    "byVersion": {
-    "unreleased": 156
-   },
-   "contributor": "a:claude-code",
-   "linesAdded": 156,
-   "linesSurviving": 145
-  },
-  {
-   "byArea": {
-    "assets": 171,
-    "build": 340,
-    "core": 11973,
-    "docs": 651,
-    "frontend": 5602,
-    "tests": 3405
-   },
-   "byEvidence": {
-    "declared": {
-     "linesAdded": 126
-    },
-    "inferred": {
-     "linesAdded": 15457
-    },
-    "manual": {
-     "linesAdded": 0
-    },
-    "unattributed": {
-     "linesAdded": 0
-    },
-    "verified": {
-     "linesAdded": 6559
-    }
-   },
-   "byVersion": {
-    "unreleased": 22142
+    "unreleased": 38855
    },
    "contributor": "a:claude-code/claude-opus-5-5",
-   "linesAdded": 22142,
-   "linesSurviving": 18109
+   "linesAdded": 38855,
+   "linesSurviving": 32806
+  },
+  {
+   "byArea": {
+    "build": 4,
+    "core": 161,
+    "frontend": 4,
+    "tests": 209
+   },
+   "byEvidence": {
+    "declared": {
+     "linesAdded": 378
+    },
+    "inferred": {
+     "linesAdded": 0
+    },
+    "manual": {
+     "linesAdded": 0
+    },
+    "unattributed": {
+     "linesAdded": 0
+    },
+    "verified": {
+     "linesAdded": 0
+    }
+   },
+   "byVersion": {
+    "unreleased": 378
+   },
+   "contributor": "a:codex",
+   "linesAdded": 378,
+   "linesSurviving": 329
+  },
+  {
+   "byArea": {
+    "core": 167,
+    "docs": 14,
+    "tests": 4
+   },
+   "byEvidence": {
+    "declared": {
+     "linesAdded": 0
+    },
+    "inferred": {
+     "linesAdded": 185
+    },
+    "manual": {
+     "linesAdded": 0
+    },
+    "unattributed": {
+     "linesAdded": 0
+    },
+    "verified": {
+     "linesAdded": 0
+    }
+   },
+   "byVersion": {
+    "unreleased": 185
+   },
+   "contributor": "a:claude-code",
+   "linesAdded": 185,
+   "linesSurviving": 180
   }
  ],
  "clock": [
@@ -151,7 +183,7 @@
    0,
    0,
    0,
-   0,
+   7,
    3
   ],
   [
@@ -166,10 +198,77 @@
    0,
    0,
    0,
-   0,
-   2,
+   1,
+   4,
    4,
    2,
+   2,
+   1,
+   2,
+   0,
+   0,
+   4,
+   4,
+   0,
+   0
+  ],
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   3,
+   0,
+   2,
+   0,
+   0,
+   2,
+   3,
+   1,
+   0,
+   1,
+   1,
+   3,
+   4,
+   1,
+   0
+  ],
+  [
+   0,
+   0,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   5,
+   0,
+   1,
+   0,
+   0,
+   0,
+   1,
+   2,
+   0,
+   2,
+   8,
+   3,
+   2,
+   2,
+   0
+  ],
+  [
+   8,
+   2,
+   0,
+   0,
    1,
    0,
    0,
@@ -178,9 +277,6 @@
    0,
    0,
    0,
-   0
-  ],
-  [
    0,
    0,
    0,
@@ -190,72 +286,8 @@
    0,
    0,
    0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0
-  ],
-  [
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0
-  ],
-  [
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
+   1,
+   2,
    0
   ],
   [
@@ -330,9 +362,20 @@
    "where": "local"
   },
   {
-   "family": null,
+   "family": "anthropic",
    "harness": "claude-code",
-   "id": "a:claude-code",
+   "id": "a:claude-code/claude-opus-5-5",
+   "kind": "agent",
+   "model": "claude-opus-5-5",
+   "roles": [
+    "author"
+   ],
+   "where": "local"
+  },
+  {
+   "family": null,
+   "harness": "codex",
+   "id": "a:codex",
    "kind": "agent",
    "model": null,
    "roles": [
@@ -341,11 +384,11 @@
    "where": "local"
   },
   {
-   "family": "anthropic",
+   "family": null,
    "harness": "claude-code",
-   "id": "a:claude-code/claude-opus-5-5",
+   "id": "a:claude-code",
    "kind": "agent",
-   "model": "claude-opus-5-5",
+   "model": null,
    "roles": [
     "author"
    ],
@@ -357,1327 +400,9289 @@
    "best": "verified",
    "from": "2026-10-10",
    "name": "2026-10",
-   "to": "2026-10-13",
-   "verifiedShare": 0.235
+   "to": "2026-10-22",
+   "verifiedShare": 0.509
   }
  ],
  "days": [
   {
    "by": {
-    "claude-code": 11628,
+    "a:claude-code/claude-fable-5-1": 11628,
     "unattributed": 136
    },
    "date": "2026-10-10"
   },
   {
    "by": {
-    "claude-code": 9281
+    "a:claude-code/claude-opus-5-5": 9281
    },
    "date": "2026-10-11"
   },
   {
    "by": {
-    "claude-code": 6806
+    "a:claude-code/claude-opus-5-5": 6806
    },
    "date": "2026-10-12"
   },
   {
    "by": {
-    "claude-code": 6211
+    "a:claude-code/claude-opus-5-5": 7646
    },
    "date": "2026-10-13"
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "date": "2026-10-14"
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 9439
+   },
+   "date": "2026-10-15"
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 2884,
+    "a:codex": 378
+   },
+   "date": "2026-10-16"
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 485
+   },
+   "date": "2026-10-19"
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 324
+   },
+   "date": "2026-10-20"
+  },
+  {
+   "by": {
+    "a:claude-code": 185,
+    "a:claude-code/claude-opus-5-5": 1806
+   },
+   "date": "2026-10-21"
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 183
+   },
+   "date": "2026-10-22"
   }
  ],
  "files": [
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo-dark.svg"
+   "path": ".github/readme/logo-dark.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo-light.svg"
+   "path": ".github/readme/logo-light.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/aider.svg"
+   "path": ".github/readme/logo/aider.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/claude-code.svg"
+   "path": ".github/readme/logo/claude-code.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/cline.svg"
+   "path": ".github/readme/logo/cline.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/codex.svg"
+   "path": ".github/readme/logo/codex.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/copilot.svg"
+   "path": ".github/readme/logo/copilot.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/cursor.svg"
+   "path": ".github/readme/logo/cursor.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/devin.svg"
+   "path": ".github/readme/logo/devin.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/gemini.svg"
+   "path": ".github/readme/logo/gemini.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/grok.svg"
+   "path": ".github/readme/logo/grok.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/jules.svg"
+   "path": ".github/readme/logo/jules.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/kilo.svg"
+   "path": ".github/readme/logo/kilo.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/kimi.svg"
+   "path": ".github/readme/logo/kimi.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/opencode.svg"
+   "path": ".github/readme/logo/opencode.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/qwen.svg"
+   "path": ".github/readme/logo/qwen.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-opus-5-5": 1
    },
    "lines": 1,
-   "path": ".github/readme/logo/roo.svg"
+   "path": ".github/readme/logo/roo.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 21
+    "a:claude-code/claude-opus-5-5": 21
    },
    "lines": 21,
-   "path": ".github/readme/map-dark-en.svg"
+   "path": ".github/readme/map-dark-en.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 21
+    "a:claude-code/claude-opus-5-5": 21
    },
    "lines": 21,
-   "path": ".github/readme/map-dark.svg"
+   "path": ".github/readme/map-dark.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 21
+    "a:claude-code/claude-opus-5-5": 21
    },
    "lines": 21,
-   "path": ".github/readme/map-light-en.svg"
+   "path": ".github/readme/map-light-en.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 21
+    "a:claude-code/claude-opus-5-5": 21
    },
    "lines": 21,
-   "path": ".github/readme/map-light.svg"
+   "path": ".github/readme/map-light.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 64
+    "a:claude-code/claude-opus-5-5": 73,
+    "a:codex": 2
    },
-   "lines": 64,
-   "path": ".github/workflows/ci.yml"
+   "lines": 75,
+   "path": ".github/workflows/ci.yml",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     52
+    ],
+    [
+     "a:codex",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 45
+    "a:claude-code/claude-opus-5-5": 45
    },
    "lines": 45,
-   "path": ".github/workflows/pages.yml"
+   "path": ".github/workflows/pages.yml",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     45
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 29
+    "a:claude-code/claude-opus-5-5": 29
    },
    "lines": 29,
-   "path": ".github/workflows/release.yml"
+   "path": ".github/workflows/release.yml",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     29
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 32,
+    "a:claude-code/claude-fable-5-1": 29,
+    "a:claude-code/claude-opus-5-5": 3,
     "unattributed": 3
    },
    "lines": 35,
-   "path": ".gitignore"
+   "path": ".gitignore",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     27
+    ],
+    [
+     "unattributed",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 102
+    "a:claude-code/claude-opus-5-5": 130
    },
-   "lines": 102,
-   "path": "ATTRIBUTION.md"
+   "lines": 130,
+   "path": "ATTRIBUTION.en.md",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     130
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1,
-    "unattributed": 19
+    "a:claude-code": 1,
+    "a:claude-code/claude-opus-5-5": 129
    },
-   "lines": 20,
-   "path": "CREDITS.md"
+   "lines": 130,
+   "path": "ATTRIBUTION.md",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     66
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     63
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 25
+    "a:claude-code": 2,
+    "a:claude-code/claude-opus-5-5": 17,
+    "unattributed": 10
+   },
+   "lines": 29,
+   "path": "CREDITS.md",
+   "runs": [
+    [
+     "unattributed",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "unattributed",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "unattributed",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     13
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "unattributed",
+     2
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 25
    },
    "lines": 25,
-   "path": "Cargo.toml"
+   "path": "Cargo.toml",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     25
+    ]
+   ]
   },
   {
    "by": {
     "unattributed": 21
    },
    "lines": 21,
-   "path": "LICENSE"
+   "path": "LICENSE",
+   "runs": [
+    [
+     "unattributed",
+     21
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 181
-   },
-   "lines": 181,
-   "path": "README.en.md"
-  },
-  {
-   "by": {
-    "claude-code": 181
-   },
-   "lines": 181,
-   "path": "README.md"
-  },
-  {
-   "by": {
-    "claude-code": 52
-   },
-   "lines": 52,
-   "path": "action.yml"
-  },
-  {
-   "by": {
-    "claude-code": 39
-   },
-   "lines": 39,
-   "path": "apps/desktop/index.html"
-  },
-  {
-   "by": {
-    "claude-code": 22
-   },
-   "lines": 22,
-   "path": "apps/desktop/package.json"
-  },
-  {
-   "by": {
-    "claude-code": 24
-   },
-   "lines": 24,
-   "path": "apps/desktop/src-tauri/Cargo.toml"
-  },
-  {
-   "by": {
-    "claude-code": 3
-   },
-   "lines": 3,
-   "path": "apps/desktop/src-tauri/build.rs"
-  },
-  {
-   "by": {
-    "claude-code": 7
-   },
-   "lines": 7,
-   "path": "apps/desktop/src-tauri/capabilities/default.json"
-  },
-  {
-   "by": {
-    "claude-code": 229
-   },
-   "lines": 229,
-   "path": "apps/desktop/src-tauri/src/main.rs"
-  },
-  {
-   "by": {
-    "claude-code": 43
-   },
-   "lines": 43,
-   "path": "apps/desktop/src-tauri/tauri.conf.json"
-  },
-  {
-   "by": {
-    "claude-code": 47
-   },
-   "lines": 47,
-   "path": "apps/desktop/src/engine.ts"
-  },
-  {
-   "by": {
-    "claude-code": 54
-   },
-   "lines": 54,
-   "path": "apps/desktop/src/fonts.ts"
-  },
-  {
-   "by": {
-    "claude-code": 91
-   },
-   "lines": 91,
-   "path": "apps/desktop/src/kits.ts"
-  },
-  {
-   "by": {
-    "claude-code": 2
-   },
-   "lines": 2,
-   "path": "apps/desktop/src/logo.ts"
-  },
-  {
-   "by": {
-    "claude-code": 437
-   },
-   "lines": 437,
-   "path": "apps/desktop/src/main.ts"
-  },
-  {
-   "by": {
-    "claude-code": 172
-   },
-   "lines": 172,
-   "path": "apps/desktop/src/style.css"
-  },
-  {
-   "by": {
-    "claude-code": 13
-   },
-   "lines": 13,
-   "path": "apps/desktop/tools/core.mjs"
-  },
-  {
-   "by": {
-    "claude-code": 41
-   },
-   "lines": 41,
-   "path": "apps/desktop/tools/fonts.mjs"
-  },
-  {
-   "by": {
-    "claude-code": 21
-   },
-   "lines": 21,
-   "path": "apps/desktop/tools/icon.mjs"
-  },
-  {
-   "by": {
-    "claude-code": 43
-   },
-   "lines": 43,
-   "path": "apps/desktop/vite.config.ts"
-  },
-  {
-   "by": {
-    "claude-code": 15
-   },
-   "lines": 15,
-   "path": "crates/adapters/Cargo.toml"
-  },
-  {
-   "by": {
-    "claude-code": 213
-   },
-   "lines": 213,
-   "path": "crates/adapters/src/claude.rs"
-  },
-  {
-   "by": {
-    "claude-code": 176
-   },
-   "lines": 176,
-   "path": "crates/adapters/src/cline.rs"
-  },
-  {
-   "by": {
-    "claude-code": 178
-   },
-   "lines": 178,
-   "path": "crates/adapters/src/codex.rs"
-  },
-  {
-   "by": {
-    "claude-code": 155
-   },
-   "lines": 155,
-   "path": "crates/adapters/src/cursor.rs"
-  },
-  {
-   "by": {
-    "claude-code": 166
-   },
-   "lines": 166,
-   "path": "crates/adapters/src/gemini.rs"
-  },
-  {
-   "by": {
-    "claude-code": 394
-   },
-   "lines": 394,
-   "path": "crates/adapters/src/git.rs"
-  },
-  {
-   "by": {
-    "claude-code": 148
-   },
-   "lines": 148,
-   "path": "crates/adapters/src/grok.rs"
-  },
-  {
-   "by": {
-    "claude-code": 170
-   },
-   "lines": 170,
-   "path": "crates/adapters/src/kimi.rs"
-  },
-  {
-   "by": {
-    "claude-code": 199
-   },
-   "lines": 199,
-   "path": "crates/adapters/src/lib.rs"
-  },
-  {
-   "by": {
-    "claude-code": 125
-   },
-   "lines": 125,
-   "path": "crates/adapters/src/opencode.rs"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "crates/adapters/tests/norm.json"
-  },
-  {
-   "by": {
-    "unattributed": 1
-   },
-   "lines": 1,
-   "path": "crates/adapters/tests/vectors.json"
-  },
-  {
-   "by": {
-    "claude-code": 20
-   },
-   "lines": 20,
-   "path": "crates/cli/Cargo.toml"
-  },
-  {
-   "by": {
-    "claude-code": 593,
-    "unattributed": 2
-   },
-   "lines": 595,
-   "path": "crates/cli/src/analyze.rs"
-  },
-  {
-   "by": {
-    "claude-code": 780,
-    "unattributed": 3
-   },
-   "lines": 783,
-   "path": "crates/cli/src/main.rs"
-  },
-  {
-   "by": {
-    "claude-code": 411,
-    "unattributed": 2
-   },
-   "lines": 413,
-   "path": "crates/cli/tests/e2e.rs"
-  },
-  {
-   "by": {
-    "claude-code": 13
-   },
-   "lines": 13,
-   "path": "crates/core/Cargo.toml"
-  },
-  {
-   "by": {
-    "claude-code": 152
-   },
-   "lines": 152,
-   "path": "crates/core/src/config.rs"
-  },
-  {
-   "by": {
-    "claude-code": 331
-   },
-   "lines": 331,
-   "path": "crates/core/src/engine.rs"
-  },
-  {
-   "by": {
-    "claude-code": 128
-   },
-   "lines": 128,
-   "path": "crates/core/src/hash.rs"
-  },
-  {
-   "by": {
-    "claude-code": 7
-   },
-   "lines": 7,
-   "path": "crates/core/src/lib.rs"
-  },
-  {
-   "by": {
-    "claude-code": 424,
-    "unattributed": 36
-   },
-   "lines": 460,
-   "path": "crates/core/src/model.rs"
-  },
-  {
-   "by": {
-    "claude-code": 82
-   },
-   "lines": 82,
-   "path": "crates/core/src/util.rs"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "crates/core/tests/norm.json"
-  },
-  {
-   "by": {
-    "unattributed": 1
-   },
-   "lines": 1,
-   "path": "crates/core/tests/vectors.json"
-  },
-  {
-   "by": {
-    "claude-code": 11
-   },
-   "lines": 11,
-   "path": "crates/store/Cargo.toml"
-  },
-  {
-   "by": {
-    "claude-code": 231
-   },
-   "lines": 231,
-   "path": "crates/store/src/lib.rs"
-  },
-  {
-   "by": {
-    "claude-code": 2476
-   },
-   "lines": 2476,
-   "path": "credits.json"
-  },
-  {
-   "by": {
-    "claude-code": 32
-   },
-   "lines": 32,
-   "path": "packages/cli/README.md"
-  },
-  {
-   "by": {
-    "claude-code": 5
-   },
-   "lines": 5,
-   "path": "packages/cli/bin/creditia.mjs"
-  },
-  {
-   "by": {
-    "claude-code": 87
-   },
-   "lines": 87,
-   "path": "packages/cli/package.json"
-  },
-  {
-   "by": {
-    "claude-code": 351
-   },
-   "lines": 351,
-   "path": "packages/cli/src/cli.ts"
-  },
-  {
-   "by": {
-    "claude-code": 32
-   },
-   "lines": 32,
-   "path": "packages/cli/templates/com.creditia.collect.plist"
-  },
-  {
-   "by": {
-    "claude-code": 38
-   },
-   "lines": 38,
-   "path": "packages/cli/templates/creditia-update.yml"
-  },
-  {
-   "by": {
-    "claude-code": 57,
-    "unattributed": 1
-   },
-   "lines": 58,
-   "path": "packages/cli/test/text.test.ts"
-  },
-  {
-   "by": {
-    "claude-code": 15
-   },
-   "lines": 15,
-   "path": "packages/embed/package.json"
-  },
-  {
-   "by": {
-    "claude-code": 57
-   },
-   "lines": 57,
-   "path": "packages/embed/src/creditia-card.ts"
-  },
-  {
-   "by": {
-    "claude-code": 3
-   },
-   "lines": 3,
-   "path": "packages/render/.gitignore"
-  },
-  {
-   "by": {
-    "claude-code": 44
-   },
-   "lines": 44,
-   "path": "packages/render/README.md"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/creditia/logo.svg"
-  },
-  {
-   "by": {
-    "claude-code": 18
-   },
-   "lines": 18,
-   "path": "packages/render/assets/logos/SOURCES.md"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/aider.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/amp.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/anthropic.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/claude.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/cline.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/cursor.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/deepseek.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/dependabot.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/devin.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/geminicli.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/github-actions.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/githubcopilot.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/googlegemini.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/googlejules.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/grok.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/kilocode.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/kimi.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/openai.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/opencode.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/openrouter.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/qwen.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/renovate.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/roocode.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/trae.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/windsurf.svg"
-  },
-  {
-   "by": {
-    "claude-code": 1
-   },
-   "lines": 1,
-   "path": "packages/render/assets/logos/x.svg"
-  },
-  {
-   "by": {
-    "claude-code": 3067
-   },
-   "lines": 3067,
-   "path": "packages/render/fixtures/lumen.json"
-  },
-  {
-   "by": {
-    "claude-code": 62
-   },
-   "lines": 62,
-   "path": "packages/render/package.json"
-  },
-  {
-   "by": {
-    "claude-code": 91
-   },
-   "lines": 91,
-   "path": "packages/render/src/classic/art.ts"
-  },
-  {
-   "by": {
-    "claude-code": 94
-   },
-   "lines": 94,
-   "path": "packages/render/src/classic/brand.ts"
-  },
-  {
-   "by": {
-    "claude-code": 34
-   },
-   "lines": 34,
-   "path": "packages/render/src/classic/browser.ts"
-  },
-  {
-   "by": {
-    "claude-code": 75
-   },
-   "lines": 75,
-   "path": "packages/render/src/classic/catalog.ts"
-  },
-  {
-   "by": {
-    "claude-code": 124
-   },
-   "lines": 124,
-   "path": "packages/render/src/classic/data.ts"
-  },
-  {
-   "by": {
-    "claude-code": 38
-   },
-   "lines": 38,
-   "path": "packages/render/src/classic/fonts.ts"
-  },
-  {
-   "by": {
-    "claude-code": 1771
-   },
-   "lines": 1771,
-   "path": "packages/render/src/classic/forms.ts"
-  },
-  {
-   "by": {
-    "claude-code": 96,
-    "unattributed": 10
-   },
-   "lines": 106,
-   "path": "packages/render/src/classic/gallery.ts"
-  },
-  {
-   "by": {
-    "claude-code": 85
-   },
-   "lines": 85,
-   "path": "packages/render/src/classic/i18n.ts"
-  },
-  {
-   "by": {
-    "claude-code": 74
-   },
-   "lines": 74,
-   "path": "packages/render/src/classic/index.ts"
-  },
-  {
-   "by": {
-    "claude-code": 40
-   },
-   "lines": 40,
-   "path": "packages/render/src/classic/registry.ts"
-  },
-  {
-   "by": {
-    "claude-code": 149
-   },
-   "lines": 149,
-   "path": "packages/render/src/classic/rolls.ts"
-  },
-  {
-   "by": {
-    "claude-code": 160
-   },
-   "lines": 160,
-   "path": "packages/render/src/classic/text.ts"
-  },
-  {
-   "by": {
-    "claude-code": 207
+    "a:claude-code/claude-opus-5-5": 207
    },
    "lines": 207,
-   "path": "packages/render/src/classic/themes.ts"
+   "path": "README.en.md",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     207
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 150
+    "a:claude-code": 5,
+    "a:claude-code/claude-fable-5-1": 22,
+    "a:claude-code/claude-opus-5-5": 180
    },
-   "lines": 150,
-   "path": "packages/render/src/classic/ui.ts"
+   "lines": 207,
+   "path": "README.md",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     39
+    ],
+    [
+     "a:claude-code",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     18
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     17
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     30
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     26
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     20
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 313
+    "a:claude-code/claude-opus-5-5": 142
    },
-   "lines": 313,
-   "path": "packages/render/src/data.ts"
+   "lines": 142,
+   "path": "action.yml",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     142
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 201
-   },
-   "lines": 201,
-   "path": "packages/render/src/export.ts"
-  },
-  {
-   "by": {
-    "claude-code": 51
-   },
-   "lines": 51,
-   "path": "packages/render/src/fonts.ts"
-  },
-  {
-   "by": {
-    "claude-code": 31
-   },
-   "lines": 31,
-   "path": "packages/render/src/gallery.ts"
-  },
-  {
-   "by": {
-    "claude-code": 42
+    "a:claude-code/claude-fable-5-1": 12,
+    "a:claude-code/claude-opus-5-5": 30
    },
    "lines": 42,
-   "path": "packages/render/src/index.ts"
+   "path": "apps/desktop/index.html",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     27
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 57
+    "a:claude-code/claude-fable-5-1": 19,
+    "a:claude-code/claude-opus-5-5": 2,
+    "a:codex": 2
    },
-   "lines": 57,
-   "path": "packages/render/src/interact.ts"
+   "lines": 23,
+   "path": "apps/desktop/package.json",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     10
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 27
+    "a:claude-code/claude-fable-5-1": 23,
+    "a:claude-code/claude-opus-5-5": 10
    },
-   "lines": 27,
-   "path": "packages/render/src/logos.ts"
+   "lines": 33,
+   "path": "apps/desktop/src-tauri/Cargo.toml",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     15
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1
+    "a:claude-code/claude-fable-5-1": 3
    },
-   "lines": 1,
-   "path": "packages/render/src/metrics.json"
+   "lines": 3,
+   "path": "apps/desktop/src-tauri/build.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 324
+    "a:claude-code/claude-fable-5-1": 5,
+    "a:claude-code/claude-opus-5-5": 2
    },
-   "lines": 324,
-   "path": "packages/render/src/pieces/cards.ts"
+   "lines": 7,
+   "path": "apps/desktop/src-tauri/capabilities/default.json",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 320
+    "a:claude-code/claude-fable-5-1": 130,
+    "a:claude-code/claude-opus-5-5": 868
    },
-   "lines": 320,
-   "path": "packages/render/src/pieces/charts.ts"
+   "lines": 998,
+   "path": "apps/desktop/src-tauri/src/main.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     29
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     13
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     12
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     36
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     170
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     43
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     14
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     314
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     10
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     12
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     49
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     13
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     155
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 75
+    "a:claude-code": 1,
+    "a:claude-code/claude-fable-5-1": 22,
+    "a:claude-code/claude-opus-5-5": 22,
+    "a:codex": 1
    },
-   "lines": 75,
-   "path": "packages/render/src/pieces/common.ts"
+   "lines": 46,
+   "path": "apps/desktop/src-tauri/tauri.conf.json",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     14
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 303
+    "a:claude-code/claude-opus-5-5": 47
    },
-   "lines": 303,
-   "path": "packages/render/src/pieces/roll.ts"
+   "lines": 47,
+   "path": "apps/desktop/src/engine.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     47
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 305
+    "a:claude-code/claude-fable-5-1": 1,
+    "a:claude-code/claude-opus-5-5": 53
    },
-   "lines": 305,
-   "path": "packages/render/src/pieces/tier.ts"
+   "lines": 54,
+   "path": "apps/desktop/src/fonts.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     49
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 77
+    "a:claude-code/claude-opus-5-5": 141,
+    "a:codex": 22
    },
-   "lines": 77,
-   "path": "packages/render/src/registry.ts"
+   "lines": 163,
+   "path": "apps/desktop/src/kits.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     63
+    ],
+    [
+     "a:codex",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:codex",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:codex",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     22
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     15
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 160
+    "a:claude-code/claude-opus-5-5": 23
    },
-   "lines": 160,
-   "path": "packages/render/src/style.ts"
+   "lines": 23,
+   "path": "apps/desktop/src/logo.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     23
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 110
+    "a:claude-code": 15,
+    "a:claude-code/claude-fable-5-1": 51,
+    "a:claude-code/claude-opus-5-5": 1292,
+    "a:codex": 77
    },
-   "lines": 110,
-   "path": "packages/render/src/styles/base.ts"
+   "lines": 1435,
+   "path": "apps/desktop/src/main.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     13
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     22
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     17
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:codex",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     12
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     86
+    ],
+    [
+     "a:codex",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     20
+    ],
+    [
+     "a:claude-code",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     47
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     175
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     25
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     35
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     36
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     38
+    ],
+    [
+     "a:claude-code",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     31
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     20
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     30
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:codex",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:codex",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:codex",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:codex",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     8
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     10
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:codex",
+     26
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     110
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     24
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     34
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     86
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     81
+    ],
+    [
+     "a:claude-code",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     37
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     45
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 103
+    "a:claude-code/claude-opus-5-5": 19,
+    "a:codex": 24
    },
-   "lines": 103,
-   "path": "packages/render/src/styles/cyber.ts"
+   "lines": 43,
+   "path": "apps/desktop/src/render-worker.ts",
+   "runs": [
+    [
+     "a:codex",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     12
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:codex",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:codex",
+     2
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 259
+    "a:claude-code/claude-fable-5-1": 17,
+    "a:claude-code/claude-opus-5-5": 336,
+    "a:codex": 4
    },
-   "lines": 259,
-   "path": "packages/render/src/styles/east.ts"
+   "lines": 357,
+   "path": "apps/desktop/src/style.css",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     48
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     50
+    ],
+    [
+     "a:codex",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     24
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     19
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     20
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     40
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     31
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     18
+    ],
+    [
+     "a:codex",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     60
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 11
+    "a:claude-code/claude-opus-5-5": 18,
+    "a:codex": 197
    },
-   "lines": 11,
-   "path": "packages/render/src/styles/index.ts"
+   "lines": 215,
+   "path": "apps/desktop/test/roam.test.cjs",
+   "runs": [
+    [
+     "a:codex",
+     19
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     87
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     16
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     14
+    ],
+    [
+     "a:codex",
+     70
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:codex",
+     3
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 144
-   },
-   "lines": 144,
-   "path": "packages/render/src/styles/pop.ts"
-  },
-  {
-   "by": {
-    "claude-code": 223
-   },
-   "lines": 223,
-   "path": "packages/render/src/styles/story.ts"
-  },
-  {
-   "by": {
-    "claude-code": 247
-   },
-   "lines": 247,
-   "path": "packages/render/src/styles/west.ts"
-  },
-  {
-   "by": {
-    "claude-code": 253
-   },
-   "lines": 253,
-   "path": "packages/render/src/svg.ts"
-  },
-  {
-   "by": {
-    "claude-code": 110
-   },
-   "lines": 110,
-   "path": "packages/render/src/text.ts"
-  },
-  {
-   "by": {
-    "claude-code": 72
-   },
-   "lines": 72,
-   "path": "packages/render/test/classic.test.ts"
-  },
-  {
-   "by": {
-    "claude-code": 105
-   },
-   "lines": 105,
-   "path": "packages/render/test/render.test.ts"
-  },
-  {
-   "by": {
-    "claude-code": 59
-   },
-   "lines": 59,
-   "path": "packages/render/tools/fixture.mjs"
-  },
-  {
-   "by": {
-    "claude-code": 15
-   },
-   "lines": 15,
-   "path": "packages/render/tools/logos.mjs"
-  },
-  {
-   "by": {
-    "claude-code": 29
-   },
-   "lines": 29,
-   "path": "packages/render/tools/metrics.py"
-  },
-  {
-   "by": {
-    "claude-code": 127
-   },
-   "lines": 127,
-   "path": "packages/schema/credits.schema.json"
-  },
-  {
-   "by": {
-    "claude-code": 13
+    "a:claude-code/claude-opus-5-5": 13
    },
    "lines": 13,
-   "path": "packages/schema/package.json"
+   "path": "apps/desktop/tools/core.mjs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     13
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 71
+    "a:claude-code/claude-fable-5-1": 11,
+    "a:claude-code/claude-opus-5-5": 30
    },
-   "lines": 71,
-   "path": "packages/schema/types.ts"
+   "lines": 41,
+   "path": "apps/desktop/tools/fonts.mjs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     10
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 301
+    "a:claude-code/claude-fable-5-1": 7,
+    "a:claude-code/claude-opus-5-5": 21
+   },
+   "lines": 28,
+   "path": "apps/desktop/tools/icon.mjs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 21,
+    "a:claude-code/claude-opus-5-5": 22
+   },
+   "lines": 43,
+   "path": "apps/desktop/vite.config.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 14,
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 15,
+   "path": "crates/adapters/Cargo.toml",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     14
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 505
+   },
+   "lines": 505,
+   "path": "crates/adapters/src/aider.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     505
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 226
+   },
+   "lines": 226,
+   "path": "crates/adapters/src/amazonq.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     226
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 192
+   },
+   "lines": 192,
+   "path": "crates/adapters/src/amp.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     192
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 290
+   },
+   "lines": 290,
+   "path": "crates/adapters/src/antigravity.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     290
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 153,
+    "a:claude-code/claude-opus-5-5": 81
+   },
+   "lines": 234,
+   "path": "crates/adapters/src/claude.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     38
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     14
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     20
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     18
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     11
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     19
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     19
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     45
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 178
+   },
+   "lines": 178,
+   "path": "crates/adapters/src/cline.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     178
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 163,
+    "a:claude-code/claude-opus-5-5": 109
+   },
+   "lines": 272,
+   "path": "crates/adapters/src/codex.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     23
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     36
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     18
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     10
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     17
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     27
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     28
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     67
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 226
+   },
+   "lines": 226,
+   "path": "crates/adapters/src/cont.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     226
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 582
+   },
+   "lines": 582,
+   "path": "crates/adapters/src/copilot.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     582
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 301
    },
    "lines": 301,
-   "path": "site/build.ts"
+   "path": "crates/adapters/src/crush.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     301
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 19
+    "a:claude-code/claude-fable-5-1": 146,
+    "a:claude-code/claude-opus-5-5": 9
    },
-   "lines": 19,
-   "path": "site/icons.ts"
+   "lines": 155,
+   "path": "crates/adapters/src/cursor.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     22
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     39
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     28
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     47
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 1876
+    "a:claude-code/claude-opus-5-5": 262
    },
-   "lines": 1876,
-   "path": "site/index.html"
+   "lines": 262,
+   "path": "crates/adapters/src/gemini.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     262
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 198
+    "a:claude-code/claude-fable-5-1": 306,
+    "a:claude-code/claude-opus-5-5": 305
    },
-   "lines": 198,
-   "path": "site/readme.ts"
+   "lines": 611,
+   "path": "crates/adapters/src/git.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     45
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     48
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     13
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     22
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     8
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     17
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     71
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     15
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     10
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     47
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     101
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     8
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     59
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     51
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 63
+    "a:claude-code/claude-opus-5-5": 274
    },
-   "lines": 63,
-   "path": "skills/creditia/SKILL.md"
+   "lines": 274,
+   "path": "crates/adapters/src/goose.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     274
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 16
+    "a:claude-code/claude-fable-5-1": 145,
+    "a:claude-code/claude-opus-5-5": 4
    },
-   "lines": 16,
-   "path": "spike/Cargo.toml"
+   "lines": 149,
+   "path": "crates/adapters/src/grok.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     113
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     24
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 341
+    "a:claude-code/claude-fable-5-1": 166,
+    "a:claude-code/claude-opus-5-5": 5
    },
-   "lines": 341,
-   "path": "spike/src/adapters.rs"
+   "lines": 171,
+   "path": "crates/adapters/src/kimi.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     37
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     93
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     30
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 309
+    "a:claude-code/claude-fable-5-1": 121,
+    "a:claude-code/claude-opus-5-5": 366
    },
-   "lines": 309,
-   "path": "spike/src/engine.rs"
+   "lines": 487,
+   "path": "crates/adapters/src/lib.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     24
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     19
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     16
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     196
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     25
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     39
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     127
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 99
+    "a:claude-code/claude-opus-5-5": 406
    },
-   "lines": 99,
-   "path": "spike/src/ev.rs"
+   "lines": 406,
+   "path": "crates/adapters/src/opencode.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     406
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 281
+    "a:claude-code/claude-opus-5-5": 52
    },
-   "lines": 281,
-   "path": "spike/src/git.rs"
+   "lines": 52,
+   "path": "crates/adapters/src/others.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     52
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 129
+    "a:claude-code/claude-opus-5-5": 210
    },
-   "lines": 129,
-   "path": "spike/src/hash.rs"
+   "lines": 210,
+   "path": "crates/adapters/src/qwen.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     210
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 561
+    "a:claude-code/claude-opus-5-5": 249
    },
-   "lines": 561,
-   "path": "spike/src/main.rs"
+   "lines": 249,
+   "path": "crates/adapters/src/trae.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     249
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 32
+    "a:claude-code/claude-opus-5-5": 292
    },
-   "lines": 32,
-   "path": "spike/src/paths.rs"
+   "lines": 292,
+   "path": "crates/adapters/src/zed.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     292
+    ]
+   ]
   },
   {
    "by": {
-    "claude-code": 74
-   },
-   "lines": 74,
-   "path": "spike/src/util.rs"
-  },
-  {
-   "by": {
-    "claude-code": 1
+    "a:claude-code/claude-fable-5-1": 1
    },
    "lines": 1,
-   "path": "spike/tests/norm.json"
+   "path": "crates/adapters/tests/norm.json",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
   },
   {
    "by": {
     "unattributed": 1
    },
    "lines": 1,
-   "path": "spike/tests/vectors.json"
+   "path": "crates/adapters/tests/vectors.json",
+   "runs": [
+    [
+     "unattributed",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 19,
+    "a:claude-code/claude-opus-5-5": 2
+   },
+   "lines": 21,
+   "path": "crates/cli/Cargo.toml",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     19
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 411,
+    "a:claude-code/claude-opus-5-5": 293,
+    "unattributed": 2
+   },
+   "lines": 706,
+   "path": "crates/cli/src/analyze.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     14
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     19
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     13
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     13
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     22
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     27
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     94
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     14
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     10
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     15
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     22
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     69
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     14
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     38
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     8
+    ],
+    [
+     "unattributed",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     26
+    ],
+    [
+     "unattributed",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     15
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     22
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 6,
+    "a:claude-code/claude-fable-5-1": 607,
+    "a:claude-code/claude-opus-5-5": 541,
+    "unattributed": 3
+   },
+   "lines": 1157,
+   "path": "crates/cli/src/main.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     23
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     19
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     36
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     8
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     15
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     13
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     54
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     22
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     52
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     20
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "unattributed",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     25
+    ],
+    [
+     "unattributed",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     23
+    ],
+    [
+     "unattributed",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     12
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     10
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     12
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     12
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     62
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     13
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     116
+    ],
+    [
+     "a:claude-code",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     18
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     22
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     20
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     14
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     23
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     33
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     12
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     64
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     10
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     8
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 858
+   },
+   "lines": 858,
+   "path": "crates/cli/tests/bench.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     858
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 270,
+    "a:claude-code/claude-opus-5-5": 1051,
+    "unattributed": 2
+   },
+   "lines": 1323,
+   "path": "crates/cli/tests/e2e.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     40
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     11
+    ],
+    [
+     "unattributed",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     11
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     166
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     21
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     11
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     28
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "unattributed",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     995
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 13
+   },
+   "lines": 13,
+   "path": "crates/core/Cargo.toml",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     13
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 122,
+    "a:claude-code/claude-opus-5-5": 145
+   },
+   "lines": 267,
+   "path": "crates/core/src/config.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     32
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     32
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     13
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     12
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     12
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     8
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     16
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     74
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 1,
+    "a:claude-code/claude-fable-5-1": 189,
+    "a:claude-code/claude-opus-5-5": 455
+   },
+   "lines": 645,
+   "path": "crates/core/src/engine.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     10
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     11
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     13
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     41
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     27
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     47
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     10
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     14
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     56
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     22
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     8
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     16
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     31
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     130
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 125,
+    "a:claude-code/claude-opus-5-5": 13
+   },
+   "lines": 138,
+   "path": "crates/core/src/hash.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     70
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     24
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     30
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 44
+   },
+   "lines": 44,
+   "path": "crates/core/src/i18n.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     44
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 7,
+    "a:claude-code/claude-opus-5-5": 2
+   },
+   "lines": 9,
+   "path": "crates/core/src/lib.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 282,
+    "a:claude-code/claude-opus-5-5": 232,
+    "unattributed": 36
+   },
+   "lines": 550,
+   "path": "crates/core/src/model.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     15
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     10
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     15
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     16
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     16
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     37
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     13
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     27
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     43
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     35
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "unattributed",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     50
+    ],
+    [
+     "unattributed",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "unattributed",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "unattributed",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     18
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     22
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     15
+    ],
+    [
+     "unattributed",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     23
+    ],
+    [
+     "unattributed",
+     11
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "unattributed",
+     17
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     18
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 70
+   },
+   "lines": 70,
+   "path": "crates/core/src/progress.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     70
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 82
+   },
+   "lines": 82,
+   "path": "crates/core/src/util.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     82
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 1
+   },
+   "lines": 1,
+   "path": "crates/core/tests/norm.json",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "unattributed": 1
+   },
+   "lines": 1,
+   "path": "crates/core/tests/vectors.json",
+   "runs": [
+    [
+     "unattributed",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 11
+   },
+   "lines": 11,
+   "path": "crates/store/Cargo.toml",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     11
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 1,
+    "a:claude-code/claude-fable-5-1": 184,
+    "a:claude-code/claude-opus-5-5": 210
+   },
+   "lines": 395,
+   "path": "crates/store/src/lib.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     46
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     15
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     11
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     41
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     9
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     29
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     19
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     17
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     139
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 2461
+   },
+   "lines": 2461,
+   "path": "credits.json",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     2461
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 19,
+    "a:claude-code/claude-opus-5-5": 13
+   },
+   "lines": 32,
+   "path": "packages/cli/README.md",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     17
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     12
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 1,
+    "a:claude-code/claude-opus-5-5": 4
+   },
+   "lines": 5,
+   "path": "packages/cli/bin/creditia.mjs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 16,
+    "a:claude-code/claude-opus-5-5": 71
+   },
+   "lines": 87,
+   "path": "packages/cli/package.json",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     12
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     22
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 10,
+    "a:claude-code/claude-fable-5-1": 101,
+    "a:claude-code/claude-opus-5-5": 425
+   },
+   "lines": 536,
+   "path": "packages/cli/src/cli.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     10
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     16
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     42
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     10
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     8
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     69
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     12
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     14
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     10
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     21
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     75
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 82
+   },
+   "lines": 82,
+   "path": "packages/cli/src/privacy.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     82
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 65
+   },
+   "lines": 65,
+   "path": "packages/cli/test/privacy.test.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     65
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 71
+   },
+   "lines": 71,
+   "path": "packages/cli/test/stamps.test.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     71
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 4,
+    "a:claude-code/claude-fable-5-1": 30,
+    "a:claude-code/claude-opus-5-5": 25,
+    "unattributed": 1
+   },
+   "lines": 60,
+   "path": "packages/cli/test/text.test.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "unattributed",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     21
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 15
+   },
+   "lines": 15,
+   "path": "packages/embed/package.json",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     15
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 8,
+    "a:claude-code/claude-opus-5-5": 54
+   },
+   "lines": 62,
+   "path": "packages/embed/src/creditia-card.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     17
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     14
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 3
+   },
+   "lines": 3,
+   "path": "packages/render/.gitignore",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 17,
+    "a:claude-code/claude-opus-5-5": 27
+   },
+   "lines": 44,
+   "path": "packages/render/README.md",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     15
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/creditia/logo-color.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/creditia/logo-orb.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/creditia/logo-ring.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/creditia/logo-star-mono.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/creditia/logo-star.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/creditia/logo.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 7,
+    "a:claude-code/claude-opus-5-5": 15
+   },
+   "lines": 22,
+   "path": "packages/render/assets/logos/SOURCES.md",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     12
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/aider.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 4
+   },
+   "lines": 4,
+   "path": "packages/render/assets/logos/amazonq.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/amp.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/anthropic.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/antigravity.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/claude.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/cline.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 4
+   },
+   "lines": 4,
+   "path": "packages/render/assets/logos/continue.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/crush.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/cursor.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/deepseek.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/dependabot.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/devin.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/geminicli.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/github-actions.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/githubcopilot.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/googlegemini.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/googlejules.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/goose.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/grok.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/kilocode.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/kimi.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/openai.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/opencode.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/openrouter.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/qwen.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/renovate.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/roocode.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/trae.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/windsurf.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/x.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/assets/logos/zed.svg",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 3300
+   },
+   "lines": 3300,
+   "path": "packages/render/fixtures/lumen.json",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     3300
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 25,
+    "a:claude-code/claude-opus-5-5": 38
+   },
+   "lines": 63,
+   "path": "packages/render/package.json",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 1,
+    "a:claude-code/claude-opus-5-5": 187
+   },
+   "lines": 188,
+   "path": "packages/render/src/classic/art.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     152
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     35
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 106
+   },
+   "lines": 106,
+   "path": "packages/render/src/classic/brand.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     106
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 211
+   },
+   "lines": 211,
+   "path": "packages/render/src/classic/bridge.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     211
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 42
+   },
+   "lines": 42,
+   "path": "packages/render/src/classic/browser.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     42
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 16,
+    "a:claude-code/claude-opus-5-5": 68
+   },
+   "lines": 84,
+   "path": "packages/render/src/classic/catalog.ts",
+   "runs": [
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     43
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     5
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 140
+   },
+   "lines": 140,
+   "path": "packages/render/src/classic/data.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     140
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 38
+   },
+   "lines": 38,
+   "path": "packages/render/src/classic/fonts.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     38
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 28,
+    "a:claude-code/claude-opus-5-5": 2023
+   },
+   "lines": 2051,
+   "path": "packages/render/src/classic/forms.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     74
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     222
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     19
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     370
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     260
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     94
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     200
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     348
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     15
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     10
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     223
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     153
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 106
+   },
+   "lines": 106,
+   "path": "packages/render/src/classic/gallery.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     106
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 70
+   },
+   "lines": 70,
+   "path": "packages/render/src/classic/hits.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     70
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 6,
+    "a:claude-code/claude-opus-5-5": 79
+   },
+   "lines": 85,
+   "path": "packages/render/src/classic/i18n.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     68
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 79
+   },
+   "lines": 79,
+   "path": "packages/render/src/classic/index.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     79
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 48
+   },
+   "lines": 48,
+   "path": "packages/render/src/classic/motion.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     48
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 15,
+    "a:claude-code/claude-opus-5-5": 25
+   },
+   "lines": 40,
+   "path": "packages/render/src/classic/registry.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     12
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     7
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 150
+   },
+   "lines": 150,
+   "path": "packages/render/src/classic/rolls.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     150
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 3,
+    "a:claude-code/claude-opus-5-5": 155
+   },
+   "lines": 158,
+   "path": "packages/render/src/classic/text.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     52
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     23
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     79
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 207
+   },
+   "lines": 207,
+   "path": "packages/render/src/classic/themes.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     207
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 186
+   },
+   "lines": 186,
+   "path": "packages/render/src/classic/ui.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     186
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 50,
+    "a:claude-code/claude-opus-5-5": 371
+   },
+   "lines": 421,
+   "path": "packages/render/src/data.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     12
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     15
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     17
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     15
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     12
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     18
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     91
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     17
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     25
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     12
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     43
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     6
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     33
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 201
+   },
+   "lines": 201,
+   "path": "packages/render/src/export.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     201
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 64
+   },
+   "lines": 64,
+   "path": "packages/render/src/fonts.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     64
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 5,
+    "a:claude-code/claude-opus-5-5": 26
+   },
+   "lines": 31,
+   "path": "packages/render/src/gallery.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 9,
+    "a:claude-code/claude-opus-5-5": 33
+   },
+   "lines": 42,
+   "path": "packages/render/src/index.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     14
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 57
+   },
+   "lines": 57,
+   "path": "packages/render/src/interact.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     57
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 33
+   },
+   "lines": 33,
+   "path": "packages/render/src/logos.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     33
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 68
+   },
+   "lines": 68,
+   "path": "packages/render/src/mark.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     68
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 87
+   },
+   "lines": 87,
+   "path": "packages/render/src/merge.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     87
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "packages/render/src/metrics.json",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 11,
+    "a:claude-code/claude-opus-5-5": 438
+   },
+   "lines": 449,
+   "path": "packages/render/src/pieces/cards.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     357
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     28
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     30
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 19,
+    "a:claude-code/claude-opus-5-5": 556
+   },
+   "lines": 575,
+   "path": "packages/render/src/pieces/charts.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     50
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     187
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     40
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     28
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     22
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     28
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     13
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     10
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     16
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     39
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     10
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     28
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     14
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     22
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 5,
+    "a:claude-code/claude-opus-5-5": 99
+   },
+   "lines": 104,
+   "path": "packages/render/src/pieces/common.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     33
+    ],
+    [
+     "a:claude-code",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     54
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 1,
+    "a:claude-code/claude-opus-5-5": 137
+   },
+   "lines": 138,
+   "path": "packages/render/src/pieces/map.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     44
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     93
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 4,
+    "a:claude-code/claude-opus-5-5": 343
+   },
+   "lines": 347,
+   "path": "packages/render/src/pieces/roll.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     37
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     17
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     283
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 430
+   },
+   "lines": 430,
+   "path": "packages/render/src/pieces/tier.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     430
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 19,
+    "a:claude-code/claude-fable-5-1": 5,
+    "a:claude-code/claude-opus-5-5": 64
+   },
+   "lines": 88,
+   "path": "packages/render/src/registry.ts",
+   "runs": [
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     9
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code",
+     13
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     14
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     24
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 182
+   },
+   "lines": 182,
+   "path": "packages/render/src/style.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     182
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 111
+   },
+   "lines": 111,
+   "path": "packages/render/src/styles/base.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     111
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 106
+   },
+   "lines": 106,
+   "path": "packages/render/src/styles/cyber.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     106
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 259
+   },
+   "lines": 259,
+   "path": "packages/render/src/styles/east.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     259
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 11
+   },
+   "lines": 11,
+   "path": "packages/render/src/styles/index.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     11
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 162
+   },
+   "lines": 162,
+   "path": "packages/render/src/styles/pop.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     162
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 244
+   },
+   "lines": 244,
+   "path": "packages/render/src/styles/story.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     244
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 248
+   },
+   "lines": 248,
+   "path": "packages/render/src/styles/west.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     248
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 274
+   },
+   "lines": 274,
+   "path": "packages/render/src/svg.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     274
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 2,
+    "a:claude-code/claude-fable-5-1": 33,
+    "a:claude-code/claude-opus-5-5": 165
+   },
+   "lines": 200,
+   "path": "packages/render/src/text.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     6
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     97
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     20
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 129
+   },
+   "lines": 129,
+   "path": "packages/render/test/classic.test.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     129
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 33
+   },
+   "lines": 33,
+   "path": "packages/render/test/merge.test.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     33
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 17,
+    "a:claude-code/claude-opus-5-5": 170
+   },
+   "lines": 187,
+   "path": "packages/render/test/render.test.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     7
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     12
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     35
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     81
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 59
+   },
+   "lines": 59,
+   "path": "packages/render/tools/fixture.mjs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     59
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 15
+   },
+   "lines": 15,
+   "path": "packages/render/tools/logos.mjs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     15
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 8
+   },
+   "lines": 8,
+   "path": "packages/render/tools/mark.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     8
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 29
+   },
+   "lines": 29,
+   "path": "packages/render/tools/metrics.py",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     29
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 121,
+    "a:claude-code/claude-opus-5-5": 6
+   },
+   "lines": 127,
+   "path": "packages/schema/credits.schema.json",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     20
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     27
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     45
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     25
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 13
+   },
+   "lines": 13,
+   "path": "packages/schema/package.json",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     13
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 66,
+    "a:claude-code/claude-opus-5-5": 5
+   },
+   "lines": 71,
+   "path": "packages/schema/types.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     20
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     12
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     34
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1
+   },
+   "lines": 1,
+   "path": "promo/.gitignore",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 24
+   },
+   "lines": 24,
+   "path": "promo/build.sh",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     24
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 24
+   },
+   "lines": 24,
+   "path": "promo/pieces.txt",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     24
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 15
+   },
+   "lines": 15,
+   "path": "promo/poster.py",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     15
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 58
+   },
+   "lines": 58,
+   "path": "promo/render.mjs",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     58
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 746
+   },
+   "lines": 746,
+   "path": "promo/scene.html",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     746
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 527
+   },
+   "lines": 527,
+   "path": "promo/score.py",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     527
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 316
+   },
+   "lines": 316,
+   "path": "site/build.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     316
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 19
+   },
+   "lines": 19,
+   "path": "site/icons.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     19
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 1950
+   },
+   "lines": 1950,
+   "path": "site/index.html",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     1950
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-opus-5-5": 205
+   },
+   "lines": 205,
+   "path": "site/readme.ts",
+   "runs": [
+    [
+     "a:claude-code/claude-opus-5-5",
+     205
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code": 4,
+    "a:claude-code/claude-fable-5-1": 23,
+    "a:claude-code/claude-opus-5-5": 45
+   },
+   "lines": 72,
+   "path": "skills/creditia/SKILL.md",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     5
+    ],
+    [
+     "a:claude-code",
+     2
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     13
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     3
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     4
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     1
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     4
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     2
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ],
+    [
+     "a:claude-code/claude-opus-5-5",
+     3
+    ],
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 16
+   },
+   "lines": 16,
+   "path": "spike/Cargo.toml",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     16
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 341
+   },
+   "lines": 341,
+   "path": "spike/src/adapters.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     341
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 309
+   },
+   "lines": 309,
+   "path": "spike/src/engine.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     309
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 99
+   },
+   "lines": 99,
+   "path": "spike/src/ev.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     99
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 281
+   },
+   "lines": 281,
+   "path": "spike/src/git.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     281
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 129
+   },
+   "lines": 129,
+   "path": "spike/src/hash.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     129
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 561
+   },
+   "lines": 561,
+   "path": "spike/src/main.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     561
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 32
+   },
+   "lines": 32,
+   "path": "spike/src/paths.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     32
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 74
+   },
+   "lines": 74,
+   "path": "spike/src/util.rs",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     74
+    ]
+   ]
+  },
+  {
+   "by": {
+    "a:claude-code/claude-fable-5-1": 1
+   },
+   "lines": 1,
+   "path": "spike/tests/norm.json",
+   "runs": [
+    [
+     "a:claude-code/claude-fable-5-1",
+     1
+    ]
+   ]
+  },
+  {
+   "by": {
+    "unattributed": 1
+   },
+   "lines": 1,
+   "path": "spike/tests/vectors.json",
+   "runs": [
+    [
+     "unattributed",
+     1
+    ]
+   ]
   }
  ],
- "generatedAt": "2026-10-13T16:17:15+08:00",
- "head": "1ed6670d32791e9dcd04829efca31b78cc42ea6e",
+ "generatedAt": "2026-10-22T10:09:27+08:00",
+ "head": "5eaab573d9354dfa7cc2f8b79c2e7548557814d0",
  "human": {
   "agentReviews": 0,
   "plans": 0,
-  "prompts": 64,
+  "prompts": 207,
   "reviews": 0,
   "tabAssistedLines": 0
  },
@@ -1686,7 +9691,7 @@
   "name": "creditia",
   "range": {
    "from": "2026-10-10",
-   "to": "2026-10-13"
+   "to": "2026-10-22"
   },
   "repos": [
    "github.com/wroughtmind/creditia"
@@ -1696,11 +9701,11 @@
  "sessions": [
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "end": 1791879261,
-   "prompts": 62,
+   "end": 1791885785,
+   "prompts": 66,
    "review": false,
    "start": 1791692687,
-   "tokens": 485740833
+   "tokens": 504775873
   },
   {
    "contributor": "a:claude-code/claude-sonnet-5-5",
@@ -1717,6 +9722,78 @@
    "review": false,
    "start": 1791834593,
    "tokens": 28564
+  },
+  {
+   "contributor": "a:claude-code/claude-opus-5-5",
+   "end": 1791903465,
+   "prompts": 7,
+   "review": false,
+   "start": 1791889596,
+   "tokens": 34691339
+  },
+  {
+   "contributor": "a:claude-code/claude-opus-5-5",
+   "end": 1792034905,
+   "prompts": 11,
+   "review": false,
+   "start": 1791981400,
+   "tokens": 35766866
+  },
+  {
+   "contributor": "a:claude-code/claude-opus-5-5",
+   "end": 1791981888,
+   "prompts": 4,
+   "review": false,
+   "start": 1791981400,
+   "tokens": 655901
+  },
+  {
+   "contributor": "a:claude-code/claude-opus-5-5",
+   "end": 1792088848,
+   "prompts": 41,
+   "review": false,
+   "start": 1792034920,
+   "tokens": 278996109
+  },
+  {
+   "contributor": "a:claude-code/claude-opus-5-5",
+   "end": 1792105639,
+   "prompts": 7,
+   "review": false,
+   "start": 1792088953,
+   "tokens": 17521950
+  },
+  {
+   "contributor": "a:claude-code/claude-opus-5-5",
+   "end": 1792156323,
+   "prompts": 7,
+   "review": false,
+   "start": 1792105700,
+   "tokens": 39864920
+  },
+  {
+   "contributor": "a:claude-code/claude-opus-5-5",
+   "end": 1792481688,
+   "prompts": 8,
+   "review": false,
+   "start": 1792417331,
+   "tokens": 75285816
+  },
+  {
+   "contributor": "a:claude-code/claude-opus-5-5",
+   "end": 1792585009,
+   "prompts": 44,
+   "review": false,
+   "start": 1792494617,
+   "tokens": 131643332
+  },
+  {
+   "contributor": "a:claude-code/claude-opus-5-5",
+   "end": 1792634933,
+   "prompts": 10,
+   "review": false,
+   "start": 1792585656,
+   "tokens": 30853772
   }
  ],
  "timeline": [
@@ -1730,22 +9807,29 @@
   },
   {
    "byContributor": {
-    "a:claude-code": 156,
-    "a:claude-code/claude-opus-5-5": 12861
+    "a:claude-code/claude-opus-5-5": 26776,
+    "a:codex": 378
    },
    "week": "2026-W42"
+  },
+  {
+   "byContributor": {
+    "a:claude-code": 185,
+    "a:claude-code/claude-opus-5-5": 2798
+   },
+   "week": "2026-W43"
   }
  ],
  "totals": {
-  "binaryFiles": 57,
-  "commits": 42,
-  "days": 4,
-  "linesAdded": 34062,
-  "linesSurviving": 25422,
-  "linesWritten": 6563,
-  "sessions": 3,
-  "tokens": 485787807,
-  "units": 32
+  "binaryFiles": 142,
+  "commits": 126,
+  "days": 11,
+  "linesAdded": 51182,
+  "linesSurviving": 39768,
+  "linesWritten": 84456,
+  "sessions": 12,
+  "tokens": 1150102852,
+  "units": 89
  },
  "units": [
   {
@@ -2082,12 +10166,7 @@
     {
      "contributor": "a:claude-code/claude-opus-5-5",
      "evidence": "verified",
-     "share": 0.997
-    },
-    {
-     "contributor": "a:claude-code",
-     "evidence": "declared",
-     "share": 0.003
+     "share": 1
     }
    ],
    "title": "原版渲染器回来，和新风格并存；作品里只写 AI；官网手机端",
@@ -2343,8 +10422,8 @@
    "lines": 79,
    "shares": [
     {
-     "contributor": "a:claude-code",
-     "evidence": "declared",
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
      "share": 1
     }
    ],
@@ -2406,8 +10485,8 @@
    "lines": 31,
    "shares": [
     {
-     "contributor": "a:claude-code",
-     "evidence": "declared",
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
      "share": 1
     }
    ],
@@ -2448,12 +10527,1275 @@
    "lines": 36,
    "shares": [
     {
-     "contributor": "a:claude-code",
-     "evidence": "declared",
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
      "share": 1
     }
    ],
    "title": "Site: self-hosted, subset fonts",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs"
+   ],
+   "commits": [
+    "f9003521237c11205fc2afa168de358e66e6ff5a"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:24",
+   "lines": 151,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Skip archive/** tags when grouping by version",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "tests"
+   ],
+   "commits": [
+    "b5bd2965b52ef67b1f094292ca63d654c99a8f2a"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:25",
+   "lines": 376,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Tests: store, config, adapter helpers, Grok/Kimi/Roo/Kilo",
+   "version": null
+  },
+  {
+   "areas": [
+    "assets",
+    "build",
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "8e1c1417ffc4974e2e8fa1d30d570537468a8b28"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:26",
+   "lines": 123,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App：拖动不抖、换风格不抽动、每一层都有关闭按钮；CI 加 clippy",
+   "version": null
+  },
+  {
+   "areas": [
+    "core"
+   ],
+   "commits": [
+    "9eed5b06ba6f7014c723fac6a7d720d0a91c3052"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:32",
+   "lines": 40,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "store：并发第一次打开作品库时不再报 database is locked（修 CI 偶发失败）",
+   "version": null
+  },
+  {
+   "areas": [
+    "build",
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "3d650f540029a2f47901d0f6b2fac75f2a9ef6f6"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:27",
+   "lines": 411,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App 1/5：修 bug、i18n 补全、分析进度可取消、在访达中显示",
+   "version": null
+  },
+  {
+   "areas": [
+    "core"
+   ],
+   "commits": [
+    "05574a9565fc20fcf800c564160be7bd046d0067"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:28",
+   "lines": 51,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App 2/5：作品缓存，切回看过的风格秒换；修版式连点的竞态",
+   "version": null
+  },
+  {
+   "areas": [
+    "core"
+   ],
+   "commits": [
+    "ef79bb4cb0911782b09ed72062cc3b78b66f595c"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:29",
+   "lines": 57,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App 3/5：档案变了自动原地刷新",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "40e38b315411220c9769d67d1115fcfdd814f0b9"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:30",
+   "lines": 174,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App 4/5：键盘操作；设置页（导出目录、默认尺寸、作品库、版本）",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "c74d305705012ccf7e0ff42ad794f57a6072c3da"
+   ],
+   "date": "2026-10-13",
+   "id": "pr:31",
+   "lines": 52,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App 5/5：CSP、收窄原生接口、安全文件名、显示核心的提醒",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "frontend",
+    "tests"
+   ],
+   "commits": [
+    "d9cb47b124967d8886af9842d792ad84051e39de"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:34",
+   "lines": 1105,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Attribution: accuracy benchmark; infer within a change, not a whole commit",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "c6502b93f6b50782ae0c74696c5f927ae4535f62"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:36",
+   "lines": 244,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Evidence from shell commands: heredocs and scripts that carry the new text",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "5c9b972a22bdf6a7200c452dc5cd1b5b10b7537e"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:35",
+   "lines": 408,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Code map: a new piece that draws every line of the current code",
+   "version": null
+  },
+  {
+   "areas": [
+    "docs"
+   ],
+   "commits": [
+    "63677d1f08594c85282c71ceacfd28ae8f2fcfc3"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:33",
+   "lines": 1,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "skill: describe creditia as crediting AI tools and models only",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "e8f259e771dae1eb8ad5a520e82aba6228e4d680"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:37",
+   "lines": 2179,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "New readers for Copilot, Aider, Amp and TRAE CLI; bilingual CLI and core",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "ae1105cbc91c6ea18b034150029d3f5a4c28523f"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:38",
+   "lines": 253,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Attribution: short lines and inserted lines follow the write they came from",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs"
+   ],
+   "commits": [
+    "c5c8c569c54b66bb21d8b9e1d209668643c7876b"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:39",
+   "lines": 108,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Two new pieces: Evidence and Areas",
+   "version": null
+  },
+  {
+   "areas": [
+    "core"
+   ],
+   "commits": [
+    "ae019d79f08002bfce654c3a2a554a7f1426e270"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:40",
+   "lines": 136,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Big repos: compact blame, resumable first run, clearer doctor",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "2d9b9f5676c209ad080a8f64b92910e5d119bd5c"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:41",
+   "lines": 296,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Analysis progress, faster first blame, blame cache fix",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "frontend",
+    "tests"
+   ],
+   "commits": [
+    "af8a8bdbd1f40bad7f8542406a41b85f9e1d8368"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:42",
+   "lines": 450,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Classic themes get every new-style feature",
+   "version": null
+  },
+  {
+   "areas": [
+    "build",
+    "core"
+   ],
+   "commits": [
+    "553e9540d4eadd550242f93e4ffcbe45a3eb7384",
+    "9d92c1e92145314f26a3c068a9de0a7c861906a3"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:43",
+   "lines": 8,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Embed takes classic theme ids; Action badge keeps the classic default",
+   "version": null
+  },
+  {
+   "areas": [
+    "docs",
+    "frontend"
+   ],
+   "commits": [
+    "9eddef7e6feca7ec69bb2a72be3b4decaa03e7b4",
+    "965fec2caa605b25415639c986f429b65f4b4384"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:44",
+   "lines": 142,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "English attribution rules; fix stale sections",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "10f4b5a310b777d75715004d33e7d8c3abf9db1b"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:45",
+   "lines": 458,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Read Crush sessions and Assisted-by trailers",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "1b5e4df9c6d59e5c9b84533ca90bc808a74be588"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:46",
+   "lines": 666,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Read Goose and Continue sessions",
+   "version": null
+  },
+  {
+   "areas": [
+    "build",
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "a8e878cd8174d8b8ca01e7a76baa141ff060b8f4"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:47",
+   "lines": 384,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Read Zed agent threads",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "71357b7115f8c9b1c3e6e544c43c594441c02fc0"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:48",
+   "lines": 306,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Read Amazon Q CLI conversations",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "1c899203a96d93bfd9a4fe2e8a8f80afa87d7f77"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:49",
+   "lines": 422,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Read OpenCode's SQLite store and the Kilo CLI",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "fe8bd523524b1a81792ea9e9d686dbfa7ee9e3bb"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:51",
+   "lines": 376,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Read Antigravity CLI (agy) transcripts",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs"
+   ],
+   "commits": [
+    "f5b18b6af263d4511fb75a3204107bf782bba19f"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:50",
+   "lines": 109,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Gemini CLI: read the newer session-*.jsonl chat format",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "ee48b6be2cd91a38dd8cc63b6bafcb3ce42f5224"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:52",
+   "lines": 278,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Qwen Code: read the newer projects/*/chats/*.jsonl sessions",
+   "version": null
+  },
+  {
+   "areas": [
+    "core"
+   ],
+   "commits": [
+    "378ac0e980d2229511b464a783718238c8bb1e3e"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:53",
+   "lines": 14,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Detect Antigravity for commit stamps",
+   "version": null
+  },
+  {
+   "areas": [
+    "build",
+    "core",
+    "docs",
+    "frontend",
+    "tests"
+   ],
+   "commits": [
+    "3eb9c2cf4a6ab75817c467e00a84628b7b35682f"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:54",
+   "lines": 542,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Group credits by model, with split/grouped/nested layouts",
+   "version": null
+  },
+  {
+   "areas": [
+    "build",
+    "core",
+    "docs",
+    "frontend",
+    "tests"
+   ],
+   "commits": [
+    "3f8cbac322a2cff654ec32e2172b0a82143a7420"
+   ],
+   "date": "2026-10-15",
+   "id": "pr:55",
+   "lines": 555,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Per-project switches for commit stamps and release credits",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "frontend",
+    "tests"
+   ],
+   "commits": [
+    "685d93838dc8fb14281ec74c5e81a9bc3e304cf5"
+   ],
+   "date": "2026-10-16",
+   "id": "pr:56",
+   "lines": 226,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Model-aware layouts for every piece",
+   "version": null
+  },
+  {
+   "areas": [
+    "build",
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "9af37de1faaa2bfb63b2bbce6ab8f8e696902ac1",
+    "4c0041f96b5f9ad0317a388f526e3fab0fe90b10"
+   ],
+   "date": "2026-10-16",
+   "id": "pr:57",
+   "lines": 416,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Stamp line counts on commits so CI can credit PRs and releases",
+   "version": null
+  },
+  {
+   "areas": [
+    "build",
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "bccbc1b5441ed2a0cd45b127175c3c293bffc580"
+   ],
+   "date": "2026-10-16",
+   "id": "pr:58",
+   "lines": 62,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Dynamic shields.io badge",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "4ee32e835443b37ae856b275a587f1917b989f6b"
+   ],
+   "date": "2026-10-16",
+   "id": "pr:59",
+   "lines": 54,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Keep the App current with new commits",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "9bec239e774049e2fa151dcfdbaada736050a443"
+   ],
+   "date": "2026-10-16",
+   "id": "pr:60",
+   "lines": 211,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Privacy check before publishing",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "86399ee2fca75941cb2b3839d1603a5d881c8432",
+    "ea5b7ffb9921b7887a7ed996244c12a30aa5d289"
+   ],
+   "date": "2026-10-16",
+   "id": "pr:61",
+   "lines": 203,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Cross-project summary",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "4197cbb7e353002a14151613ef2e0ca65969ecf6"
+   ],
+   "date": "2026-10-16",
+   "id": "pr:62",
+   "lines": 76,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App design pass: top bar, integrations strip, style bar, masonry, captions",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "9859f87466a84f0d20fd9b87fecf799df4992274"
+   ],
+   "date": "2026-10-16",
+   "id": "pr:63",
+   "lines": 233,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App: endless roam view alongside the wall",
+   "version": null
+  },
+  {
+   "areas": [
+    "assets",
+    "build",
+    "core",
+    "docs",
+    "frontend"
+   ],
+   "commits": [
+    "3ef12a724c15ed715a6cd4661cfc1c08f1597c49"
+   ],
+   "date": "2026-10-16",
+   "id": "pr:64",
+   "lines": 1401,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "宣传片：52 秒，不靠文字也看得懂",
+   "version": null
+  },
+  {
+   "areas": [
+    "build",
+    "core",
+    "frontend",
+    "tests"
+   ],
+   "commits": [
+    "ae095baca9b6c2a1664180127cfa6e67d1ded19e",
+    "df70d902966258c9cc29e8cb8b0754e82df0f459",
+    "9cd2187e53c198598e0761b5ce3ef5bf3c27da61"
+   ],
+   "date": "2026-10-16",
+   "id": "pr:65",
+   "lines": 380,
+   "shares": [
+    {
+     "contributor": "a:codex",
+     "evidence": "declared",
+     "share": 0.995
+    },
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 0.005
+    }
+   ],
+   "title": "修复漫游卡顿、重复标题和全屏重排",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "720d4c9e05a522035a6c6d5d80fe67ab2bd752b3",
+    "c7f7f51ede565ac0e2180d79e007b831f51176c7",
+    "89ebde3a297980b1dc3a844a2192b2c6be036683",
+    "06c8ae64d9feccaa84bf57cc864061989c3d4dfa",
+    "29ab8d8369232bfc80d702ffba285b43a97edc2d",
+    "60cc69911d2ff200d2898730e0c7f5c44ee29417"
+   ],
+   "date": "2026-10-19",
+   "id": "pr:66",
+   "lines": 394,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "风格适配：修复交接单里能直接判定的排版问题（F01–F07、F12、F13）",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "29e479204dc177e3b52d00b322ea4613d702927f",
+    "0094ee447aa59c6bf01a2403c296c98653051689"
+   ],
+   "date": "2026-10-20",
+   "id": "pr:67",
+   "lines": 117,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "随风格小票与 App 致谢页、单色严格灰阶、手稿逐家字符（F08/F09/F10/F14）",
+   "version": null
+  },
+  {
+   "areas": [
+    "core"
+   ],
+   "commits": [
+    "fd8dbe49f80d141f2b05d7f64df07963a1392016"
+   ],
+   "date": "2026-10-20",
+   "id": "pr:68",
+   "lines": 54,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "霓虹统计图：灯管材质与光晕（F11 第一步）",
+   "version": null
+  },
+  {
+   "areas": [
+    "core"
+   ],
+   "commits": [
+    "de79ea036407e042ddc76611a37feedef69e2ae8"
+   ],
+   "date": "2026-10-20",
+   "id": "pr:69",
+   "lines": 14,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "玻璃统计图：放到磨砂玻璃卡上（F11 第二步）",
+   "version": null
+  },
+  {
+   "areas": [
+    "core"
+   ],
+   "commits": [
+    "ef0b4b109906c134c071fa76f78214083feb1fe0"
+   ],
+   "date": "2026-10-20",
+   "id": "pr:70",
+   "lines": 183,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "declared",
+     "share": 1
+    }
+   ],
+   "title": "终端统计图落到字符格上（F11 第三步）",
+   "version": null
+  },
+  {
+   "areas": [
+    "build"
+   ],
+   "commits": [
+    "160618c7cb84ecbf24dd20a1b500018f4b65f0b0"
+   ],
+   "date": "2026-10-20",
+   "id": "pr:71",
+   "lines": 39,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "Action 双语：报错按 lang 输出，输入说明和步骤名中英并列",
+   "version": null
+  },
+  {
+   "areas": [
+    "build"
+   ],
+   "commits": [
+    "01c484ffc19339f949ca62a4d0b6157ae06a9db9"
+   ],
+   "date": "2026-10-20",
+   "id": "pr:72",
+   "lines": 8,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "CI：macOS 上跑 App 自己的 clippy 和单测",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "78e0631bc82cc710e9d08ea69fc1e4609f8418ed"
+   ],
+   "date": "2026-10-21",
+   "id": "pr:74",
+   "lines": 194,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App 在后台定时采集证据",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "tests"
+   ],
+   "commits": [
+    "f7b7d92b6ee6c6a2c34a49f848259144fcc71d8a"
+   ],
+   "date": "2026-10-21",
+   "id": "pr:75",
+   "lines": 271,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App 关着时也收：macOS launchd 后台任务",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "frontend",
+    "tests"
+   ],
+   "commits": [
+    "186a7093bd734fd06a6717ef27af2253c907d271"
+   ],
+   "date": "2026-10-21",
+   "id": "pr:76",
+   "lines": 142,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App 展墙提速：缩略图只给漫游、占位先摆好",
+   "version": null
+  },
+  {
+   "areas": [
+    "assets",
+    "build",
+    "core",
+    "docs",
+    "frontend"
+   ],
+   "commits": [
+    "eb5f08cd1347b6f9577df57a3aa7d67d5cf73e25",
+    "fa717975912b965240b20ad1631f9671073d1fff",
+    "32063c4cc9833e3e5b9ed7cbac5373766de5c6fc",
+    "4769746b437f0f29d72db83c6d01e98abeab5162",
+    "a61bb8838ec573e81c9d25ead186dfd0fbdc177d",
+    "34b45527c3926dbf38bf8d5b9a7505a3da5a9f9a",
+    "3eb2da1af0ae17dae9b0dac4589fc90d0d6e7689",
+    "7755535fcf8574dc14bb2200cc71d3efdb96e110"
+   ],
+   "date": "2026-10-21",
+   "id": "pr:77",
+   "lines": 935,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "App 改版：界面收拾、文案减半、第一次打开的引导",
+   "version": null
+  },
+  {
+   "areas": [
+    "assets",
+    "core",
+    "docs",
+    "frontend"
+   ],
+   "commits": [
+    "7ee28076b5cede7fc20bbf9d4f75f92d1120f716"
+   ],
+   "date": "2026-10-21",
+   "id": "pr:79",
+   "lines": 82,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "site: English app screenshots; livelier asterisk motion",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "frontend"
+   ],
+   "commits": [
+    "8b8c9736471e97e62a0a99f78442bee96b74036e"
+   ],
+   "date": "2026-10-21",
+   "id": "pr:80",
+   "lines": 3,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "app: wall layout back to before the redesign",
+   "version": null
+  },
+  {
+   "areas": [
+    "core",
+    "docs",
+    "tests"
+   ],
+   "commits": [
+    "9dacdf4d63dd5697860ea083ef05d6300251ebf6",
+    "f7bb7084c78768bcfc3a40e3eca8a953a9e02595",
+    "2ef4bc7baa758b4cad17db43628a8b46d689d874"
+   ],
+   "date": "2026-10-21",
+   "id": "pr:82",
+   "lines": 185,
+   "shares": [
+    {
+     "contributor": "a:claude-code",
+     "evidence": "inferred",
+     "share": 1
+    }
+   ],
+   "title": "文案与术语规范：去除 AI 腔调、统一卡片与档案用语、精炼工程表述",
+   "version": null
+  },
+  {
+   "areas": [
+    "assets",
+    "core",
+    "docs",
+    "frontend"
+   ],
+   "commits": [
+    "e9403ea6d2de26c5a7eb919ffb5421dd0e13fe0c",
+    "38fd30d089d9ea48a84385db02a0ad2b1b91040d",
+    "a66191122d1ee4579111e753e9cea5593723e7d8",
+    "e3a9de74e3a5e734a981a6711fdb7fffbdb0a310"
+   ],
+   "date": "2026-10-22",
+   "id": "pr:83",
+   "lines": 362,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "evidence": "verified",
+     "share": 1
+    }
+   ],
+   "title": "site: install inside the usage cards; creditia's own credits close the page; logos for every agent",
    "version": null
   }
  ],
