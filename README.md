@@ -198,7 +198,7 @@ node site/build.ts                            # 官网 → _site/
 node site/readme.ts                           # README 的图 → .github/readme/
 ```
 
-macOS 的 App 目前没有 Apple 签名：下载的 App 第一次打开可能提示「已损坏，无法打开」。拖进「应用程序」后运行一次 `xattr -dr com.apple.quarantine /Applications/creditia.app`，或者到「系统设置 → 隐私与安全性」里点「仍要打开」。用 Homebrew 装的话，同一行接上就行：`brew install --cask wroughtmind/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app`。Windows 上 SmartScreen 拦下时，点「更多信息」→「仍要运行」。
+macOS 的 App 目前没有 Apple 签名：下载的 App 第一次打开可能提示「已损坏，无法打开」。拖进「应用程序」后运行一次 `xattr -dr com.apple.quarantine /Applications/creditia.app`，或者到「系统设置 → 隐私与安全性」里点「仍要打开」。用 Homebrew 装的话，同一行接上就行：`brew install --cask taekchef/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app`。Windows 上 SmartScreen 拦下时，点「更多信息」→「仍要运行」。
 
 </details>
 

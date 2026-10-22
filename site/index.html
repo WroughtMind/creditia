@@ -1912,7 +1912,7 @@ const L2 = (x) => (Array.isArray(x) ? x[lang() === 'en' ? 1 : 0] ?? x[0] : x);
 // 四种用法各自的装法：[名字, 内容, 只适合哪个系统]。先摆第一个适合本机的，其余收在「其他方式」里
 const OSN = { mac: 'macOS', win: 'Windows', linux: 'Linux' };
 const APP = {
-  mac: { files: [['.dmg', 'creditia_{v}_universal.dmg']], pm: ['Homebrew', 'brew install --cask wroughtmind/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app'] },
+  mac: { files: [['.dmg', 'creditia_{v}_universal.dmg']], pm: ['Homebrew', 'brew install --cask taekchef/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app'] },
   win: { files: [['.exe', 'creditia_{v}_x64-setup.exe'], ['.msi', 'creditia_{v}_x64_en-US.msi'], ['ARM64', 'creditia_{v}_arm64-setup.exe']], pm: ['winget', 'winget install WroughtMind.Creditia'] },
   linux: { files: [['.AppImage', 'creditia_{v}_amd64.AppImage'], ['.deb', 'creditia_{v}_amd64.deb'], ['.rpm', 'creditia-{v}-1.x86_64.rpm']], pm: ['Flatpak', 'flatpak install flathub dev.creditia.app'] },
 };
@@ -1929,7 +1929,7 @@ function ways() {
   return [
     { id: 'cli', play: 'term', name: t('w.cli'), opts: [
       cmd('npx', 'npx creditia analyze', null, 'Node 22+'), cmd('npm', 'npm i -g creditia'), cmd('pnpm', 'pnpm add -g creditia'), cmd('bun', 'bun add -g creditia'),
-      cmd('Homebrew', 'brew install wroughtmind/tap/creditia', 'unix'), cmd('Scoop', 'scoop install creditia', 'win'),
+      cmd('Homebrew', 'brew install taekchef/tap/creditia', 'unix'), cmd('Scoop', 'scoop install creditia', 'win'),
       cmd('curl', 'curl -fsSL https://wroughtmind.github.io/creditia/install.sh | sh', 'unix'), cmd('PowerShell', 'irm https://wroughtmind.github.io/creditia/install.ps1 | iex', 'win'),
       cmd('Docker', 'docker run --rm -v "$PWD:/repo" ghcr.io/wroughtmind/creditia analyze'), cmd('Cargo', `cargo install --git ${REPO} creditia-cli`),
       cmd(en ? 'source' : '源码', `git clone ${REPO} && cd creditia/packages/cli && npm i && npm link`)] },

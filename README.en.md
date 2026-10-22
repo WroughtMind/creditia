@@ -198,7 +198,7 @@ node site/build.ts                            # website → _site/
 node site/readme.ts                           # README images → .github/readme/
 ```
 
-The macOS app isn't signed by Apple yet: a downloaded copy may say it's damaged the first time. Once it's in Applications, run `xattr -dr com.apple.quarantine /Applications/creditia.app` once, or click Open Anyway under System Settings → Privacy & Security. With Homebrew, chain it on: `brew install --cask wroughtmind/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app`. On Windows, if SmartScreen stops it, click More info → Run anyway.
+The macOS app isn't signed by Apple yet: a downloaded copy may say it's damaged the first time. Once it's in Applications, run `xattr -dr com.apple.quarantine /Applications/creditia.app` once, or click Open Anyway under System Settings → Privacy & Security. With Homebrew, chain it on: `brew install --cask taekchef/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app`. On Windows, if SmartScreen stops it, click More info → Run anyway.
 
 </details>
 
