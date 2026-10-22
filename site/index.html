@@ -215,17 +215,20 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 
 /* ───────── 用法：四张卡都是会自己演的小样，高度固定，内容在里面滚，不把页面撑开 ───────── */
 .ways { margin-top: 44px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.way { position: relative; border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 18px 22px 0; display: flex; flex-direction: column; gap: 14px; overflow: clip; overflow-clip-margin: 0; min-width: 0; }
+.way { position: relative; border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 18px 22px 22px; display: flex; flex-direction: column; gap: 14px; overflow: clip; overflow-clip-margin: 0; min-width: 0; }
 .way:has(.wpop) { overflow: visible; z-index: 3; }
-.way .wbar { border-radius: 0 0 15px 15px; }
 .way h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 10px; min-height: 28px; }
 .way h3 small { font-weight: 400; color: var(--faint); font-size: 13px; }
 .again { margin-left: auto; width: 28px; height: 28px; border-radius: 99px; border: 0; background: transparent; color: var(--faint); cursor: pointer; display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity .3s, color .15s, background-color .15s; }
 .again.on { opacity: 1; pointer-events: auto; }
 .again:hover { color: var(--ink); background: var(--line2); }
 .again svg { width: 15px; height: 15px; }
-.way .body { position: relative; height: 410px; min-width: 0; }
-.way .body > * { height: 100%; border-radius: 12px 12px 0 0; }
+.way .body { position: relative; height: 458px; flex: 1 0 auto; min-width: 0; display: flex; flex-direction: column; }
+.way .body > * { flex: 1; min-height: 0; border-radius: 0; }
+.way .body > :first-child { border-top-left-radius: 12px; border-top-right-radius: 12px; }
+.way .body > :last-child { border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
+.way .body > .turn { flex: none; min-height: auto; }
+.way .body.dbody > * { border-radius: 12px; }
 /* 命令行 */
 .term { font-variant-ligatures: none; background: var(--term); color: var(--term-ink); padding: 16px 18px 20px; font-size: 12px; line-height: 1.72; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .term .p { color: #8C877D; }
@@ -312,7 +315,9 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 .res .url span { margin-left: 6px; flex: 1; text-align: center; background: var(--line2); border-radius: 6px; padding: 2px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .res .site img { width: 100%; display: block; }
 /* App：一块桌面，上面是真的 App（打包成网页的 creditia），先自己演一遍，随时可以接手 */
-.way .body.dbody { height: auto; aspect-ratio: 1040 / 840; }
+/* App 的桌面按宽度缩放；行比它高时，桌面往下多长一截，跟同一行的卡片齐平 */
+.way .body.dbody { display: block; flex: 1 0 auto; height: auto; aspect-ratio: 1040 / 840; }
+.way .body.dbody > * { height: 100%; }
 .deskbox { position: relative; overflow: hidden; background: #1b1b22; box-shadow: inset 0 0 0 1px var(--line); }
 .desk { position: absolute; left: 0; top: 0; width: 1040px; height: 840px; transform-origin: 0 0; transform: scale(var(--ds, 1)); overflow: hidden; user-select: none; -webkit-user-select: none;
   font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif; color: #1d1d1f; --mb: rgba(246,240,236,.42); --mb-ink: #1d1d1f; }
@@ -373,8 +378,46 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 .dstep + .again { margin-left: 0; }
 
 .deskshot { display: none; }
+/* 轮到你：每个演示在它自己的界面里停在「该你了」——终端停在一行提示符上，对话框里是要发的那段话，
+   Action 底下露出那个 workflow 文件，App 在标题栏上给下载。换别的装法点旁边的小开关 */
+.turn { position: relative; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tsw { flex: none; height: 26px; padding: 0 5px 0 8px; border: 0; border-radius: 7px; background: transparent; color: inherit; opacity: .62; font: 12px "JetBrains Mono", monospace; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; transition: opacity .15s, background-color .15s; }
+.tsw:hover, .tsw[aria-expanded="true"] { opacity: 1; background: color-mix(in srgb, currentColor 10%, transparent); }
+.tsw svg { width: 13px; height: 13px; }
+.tcp { flex: none; height: 30px; padding: 0 11px; border-radius: 8px; border: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font: 500 12.5px Inter, sans-serif; transition: transform .15s, opacity .15s; }
+.tcp:hover { transform: translateY(-1px); }
+.tcp svg { width: 13px; height: 13px; }
+.tc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px "JetBrains Mono", monospace; }
+/* 终端：最后一行提示符 */
+.turn.tt { background: var(--term); color: var(--term-ink); padding: 4px 10px 12px 18px; }
+.way .body > .term:has(+ .tt) { -webkit-mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent); border-radius: 12px 12px 0 0; }
+.way .body:has(> .tt) { background: var(--term); border-radius: 12px; }
+.tt .cwd { flex: none; font: 12.5px "JetBrains Mono", monospace; color: #8C877D; }
+.tt .cwd em { font-style: normal; color: #7CCB9F; }
+.tt .tc { color: var(--term-ink); }
+.tt .tcp { background: #E8E4DB; color: #121211; }
+/* agent：对话框底部的输入框 */
+.turn.comp { display: block; background: var(--bg); border: 1px solid var(--line); border-top: 0; padding: 0 12px 12px; }
+.way .body > .agent:has(+ .comp) { -webkit-mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent); }
+.way .body:has(> .comp) { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.way .body > .agent:has(+ .comp), .way .body > .comp { border: 0; }
+.cbox { border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 11px 12px 8px 14px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+.cbox .ctx { font-size: 13px; line-height: 1.6; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cbox .ctx.mono { font: 12.5px/1.6 "JetBrains Mono", monospace; }
+.cbox .crow { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--soft); }
+.cbox .crow .tsw { margin: 0 auto 0 -6px; font-family: Inter, sans-serif; }
+.cbox .ch { font-size: 12px; color: var(--faint); }
+.csend { flex: none; height: 32px; padding: 0 14px 0 12px; border-radius: 99px; border: 0; background: var(--ink); color: var(--bg); font: 500 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; transition: transform .15s; }
+.csend:hover { transform: translateY(-1px); }
+.csend svg { width: 14px; height: 14px; }
+/* Action：底下露出的 workflow 文件 */
+.turn.tf { margin-top: 10px; padding: 8px 8px 8px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--soft); }
+.tf .fi { flex: none; width: 14px; height: 14px; color: var(--faint); }
+.tf .tc { color: var(--ink); font-size: 12px; }
+.tf .tcp { background: var(--ink); color: var(--bg); }
+/* App：卡片底下一条下载，和原来一样 */
 /* 每张卡片的最后一条就是它的安装：先摆一条现在能用的，其余方式收在「其他方式」里 */
-.wbar { position: relative; z-index: 2; display: grid; gap: 10px; margin: -14px -22px 0; padding: 14px 22px 20px; border-top: 1px solid var(--line); background: var(--card); }
+.wbar { position: relative; display: grid !important; z-index: 2; gap: 10px; margin-top: 2px; }
 .wlab { display: flex; align-items: center; gap: 10px; min-height: 30px; font-size: 13px; color: var(--soft); }
 .wlab b { flex: none; font-weight: 600; color: var(--ink); }
 .wlab .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -392,9 +435,11 @@ a.wcopy svg { fill: currentColor; }
 .wmore:hover, .wmore[aria-expanded="true"] { color: var(--ink); background: var(--line2); }
 .wmore svg { width: 14px; height: 14px; transition: rotate .2s; }
 .wmore[aria-expanded="true"] svg { rotate: 180deg; }
-.wpop { position: absolute; right: 10px; bottom: calc(100% + 8px); width: min(380px, calc(100% - 20px)); max-height: min(420px, 70vh); overflow: auto; padding: 6px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); animation: wpop .16s ease-out; }
+.wpop { position: absolute; z-index: 6; right: 10px; bottom: calc(100% + 8px); width: min(380px, calc(100% - 20px)); color: var(--ink); text-align: left; max-height: min(420px, 70vh); overflow: auto; padding: 6px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); animation: wpop .16s ease-out; }
 @keyframes wpop { from { opacity: 0; transform: translateY(4px); } }
 .wpop .g { padding: 8px 10px 3px; font-size: 11.5px; color: var(--faint); }
+.way.flash { animation: wayflash 1.8s ease-out; }
+@keyframes wayflash { 0%, 30% { border-color: var(--soft); } }
 .wpop button { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 12px; padding: 6px 10px; border: 0; border-radius: 9px; background: transparent; color: var(--ink); font: 13px Inter, sans-serif; text-align: left; cursor: pointer; }
 .wpop button:hover { background: var(--line2); }
 .wpop button.on { background: var(--line2); }
@@ -402,8 +447,6 @@ a.wcopy svg { fill: currentColor; }
 .wpop b { font-weight: 500; white-space: nowrap; }
 .wpop .ver { padding: 8px 10px 4px; margin-top: 4px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--faint); }
 .wpop .ver code { font: 11px "JetBrains Mono", monospace; color: var(--soft); }
-.way.flash { animation: wayflash 1.8s ease-out; }
-@keyframes wayflash { 0%, 30% { border-color: var(--soft); } }
 .line { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 6px 6px 6px 12px; font: 12.5px "JetBrains Mono", monospace; min-height: 40px; }
 .line > span:first-child { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
 .line > span:first-child::-webkit-scrollbar { display: none; }
@@ -488,7 +531,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   #deskcard .dstep, #deskcard .again { display: none; }
   .way .body.dbody { aspect-ratio: auto; height: auto; }
   .deskbox { display: none; }
-  .deskshot { display: block; padding-bottom: 18px; }
+  .deskshot { display: block; }
   .deskshot img { width: 100%; height: auto; display: block; border-radius: 10px; border: 1px solid var(--line); }
   .deskshot .dk { display: none; }
   :root[data-theme="dark"] .deskshot .dk { display: block; } :root[data-theme="dark"] .deskshot .lt { display: none; }
@@ -497,17 +540,20 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   .wall, .band { gap: 10px; }
   .ways { grid-template-columns: 1fr; }
   nav { display: none; }
-  .wbar { padding-inline: 16px; margin-inline: -16px; }
+  .tt .cwd em { display: none; }
   .wlab .t { white-space: normal; }
   .wlab { align-items: flex-start; }
+  .turn.tt { padding: 8px 8px 9px 12px; gap: 8px; }
+  .turn .tc, .tt .cwd { font-size: 11px; }
+  .tcp { padding: 0 9px; }
   .coda .cmeta a { display: block; margin: 8px 0 0; }
   #lb .bar { flex-wrap: wrap; gap: 8px 12px; }
   #lb .bar .cp { max-width: 92vw; order: 9; }
   .way h3 { flex-wrap: nowrap; gap: 10px; white-space: nowrap; }
   .way h3 small { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .term { font-size: 10px; padding: 12px 12px 16px; }
-  .way { padding: 16px 16px 0; }
-  .way .body { height: 380px; }
+  .way { padding: 16px; }
+  .way .body { height: 424px; }
   .fst li:not(.on) span { display: none; }
   .yml pre { font-size: 10px; overflow-x: auto; }
 }
@@ -572,10 +618,10 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
     <div class="wrap">
       <div class="head rise"><h2 class="serif" data-i="use.t">四种用法</h2></div>
       <div class="ways">
-        <div class="way rise"><h3><span data-i="w.cli">命令行</span><button class="again" data-again="term" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="term mono" id="term"></div></div><div class="wbar" id="get-cli"></div></div>
-        <div class="way rise"><h3><span data-i="w.agent">交给 agent</span><button class="again" data-again="chat" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="agent" id="chat"></div></div><div class="wbar" id="get-agent"></div></div>
-        <div class="way rise" id="flowcard"><h3>GitHub Action <small class="mono">WroughtMind/creditia@main</small><button class="again" data-again="flow" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="flow2" id="flow"></div></div><div class="wbar" id="get-ci"></div></div>
-        <div class="way rise" id="deskcard"><h3>App <small>macOS · Windows · Linux</small><span class="dstep" id="dsteps"></span><button class="again" data-again="desk" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body dbody"><div class="deskbox" id="deskbox"><div class="desk" id="desk"></div></div><div class="deskshot"><img class="dk" src="assets/app-dark.webp" alt="creditia App" loading="lazy" width="1200" height="750"><img class="lt" src="assets/app-light.webp" alt="creditia App" loading="lazy" width="1200" height="750"><p data-i="desk.pc">在电脑上打开这一页，可以直接上手试。</p></div></div><div class="wbar" id="get-app"></div></div>
+        <div class="way rise"><h3><span data-i="w.cli">命令行</span><button class="again" data-again="term" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="term mono" id="term"></div><div class="turn tt" id="get-cli"></div></div></div>
+        <div class="way rise"><h3><span data-i="w.agent">交给 agent</span><button class="again" data-again="chat" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="agent" id="chat"></div><div class="turn comp" id="get-agent"></div></div></div>
+        <div class="way rise" id="flowcard"><h3>GitHub Action <small class="mono">WroughtMind/creditia@main</small><button class="again" data-again="flow" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="flow2" id="flow"></div><div class="turn tf" id="get-ci"></div></div></div>
+        <div class="way rise" id="deskcard"><h3>App <small>macOS · Windows · Linux</small><span class="dstep" id="dsteps"></span><button class="again" data-again="desk" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body dbody"><div class="deskbox" id="deskbox"><div class="desk" id="desk"></div></div><div class="deskshot"><img class="dk" src="assets/app-dark.webp" alt="creditia App" loading="lazy" width="1200" height="750"><img class="lt" src="assets/app-light.webp" alt="creditia App" loading="lazy" width="1200" height="750"><p data-i="desk.pc">在电脑上打开这一页，可以直接上手试。</p></div></div><div class="wbar turn" id="get-app"></div></div>
       </div>
     </div>
   </section>
@@ -1387,7 +1433,6 @@ async function playTerm(fast) {
     await w(f === 'gif' ? 650 : 260); if (!live()) return;
     add(`<span class="ok">→</span> <a class="out" href="${base}/credits.${f}" target="_blank" rel="noopener" data-f="${f}">credits.${f}</a>  <span class="d">${sz[f]}</span>\n`);
   }
-  add('<span class="p">$</span> <span class="caret"></span>');
   done('term');
 }
 // 悬停 → 文件名：弹出这个文件的样子
@@ -1533,7 +1578,10 @@ const TRASH_IC = '<svg viewBox="0 0 54 54"><path d="M12 12h30l-3 36a3 3 0 0 1-3 
 const DOC_IC = (ext) => `<svg viewBox="0 0 48 56"><path d="M6 2h26l12 12v38a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#fff" stroke="#c9c9c9"/><path d="M32 2v12h12" fill="#eee" stroke="#c9c9c9"/><text x="24" y="44" font-size="9" font-family="Helvetica,Arial" font-weight="700" text-anchor="middle" fill="#8a8a8a">${ext.toUpperCase()}</text></svg>`;
 const CURSOR = '<svg viewBox="0 0 20 20"><path d="M4 2.5v13.2l3.3-3.1 2.2 5.1 2.2-.95-2.15-5h4.6z" fill="#111" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 const D = { run: 0, started: false, cur: { x: 900, y: 600 }, files: [] };
-function deskScale() { const b = $('deskbox'); $('desk').style.setProperty('--ds', (b.clientWidth / 1040).toFixed(4)); }
+function deskScale() {
+  const b = $('deskbox'), ds = b.clientWidth / 1040;
+  $('desk').style.setProperty('--ds', ds.toFixed(4)); $('desk').style.height = `${Math.max(840, Math.ceil(b.clientHeight / ds))}px`;
+}
 function deskFrame() {
   const en = EN_(), dark = isDark();
   const apple = DATA.icons.apple ? `<svg viewBox="0 0 24 24"><path d="${DATA.icons.apple}"/></svg>` : '';
@@ -1791,8 +1839,8 @@ function ways() {
       { k: en ? 'prompt' : '一段话', kind: 'say', text: prompt() },
       cmd('skill', 'npx creditia skill add')] },
     { id: 'ci', play: 'flow', name: 'GitHub Action', opts: [
-      { k: 'GitHub Actions', kind: 'yaml', text: `- uses: WroughtMind/creditia@main\n  with:\n    badge: assets/credits-badge.svg\n    doc: CREDITS.md` },
-      { k: 'GitLab CI', kind: 'yaml', text: 'image: ghcr.io/wroughtmind/creditia\nscript: creditia publish' }] },
+      { k: 'GitHub', kind: 'yaml', file: '.github/workflows/credits.yml', text: 'on: { push: { branches: [main] } }\npermissions: { contents: read, pages: write, id-token: write }\njobs:\n  credits:\n    runs-on: ubuntu-latest\n    environment: github-pages\n    steps:\n      - uses: actions/checkout@v4\n      - uses: WroughtMind/creditia@main\n        with: { site: _site }\n      - uses: actions/upload-pages-artifact@v3\n        with: { path: _site }\n      - uses: actions/deploy-pages@v4\n' },
+      { k: 'GitLab', kind: 'yaml', file: '.gitlab-ci.yml', text: 'credits:\n  image: ghcr.io/wroughtmind/creditia\n  script: creditia publish\n' }] },
     { id: 'app', play: 'desk', name: 'App', opts: order.flatMap((os) => [
       ...APP[os].files.map(([k, f], i) => ({ k, g: i ? '' : OSN[os], kind: 'dl', os, file: f.replace('{v}', VER) })),
       cmd(...APP[os].pm, os)]) },
@@ -1801,56 +1849,52 @@ function ways() {
 const fits = (o) => !o.os || o.os === detectOS() || (o.os === 'unix' && detectOS() !== 'win');
 const picks = {};
 const CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>';
-// 卡片底下的安装：一句话说清楚这一步做什么，下面是能直接复制的那一条（或下载按钮）
-function guide(o) {
-  const en = lang() === 'en';
-  if (o.kind === 'say') return en ? 'Copy this and send it to the agent you use' : '复制这段话，发给你正在用的 agent';
-  if (o.kind === 'yaml') return en ? 'Add it to the steps of any workflow in .github/workflows' : '加进 .github/workflows 里任意一个 workflow 的 steps';
-  if (o.kind === 'dl') return en ? 'Download, then open the installer' : '下载后打开安装包';
-  if (o.k === 'skill') return en ? 'Installs the creditia skill into every agent on this machine' : '在终端里运行，给本机所有 agent 装上 creditia 这个 skill';
-  return (en ? 'Run in your project’s terminal' : '在项目目录的终端里运行') + (o.tip ? ` · ${o.tip}` : '');
-}
 const COPY_L = () => (lang() === 'en' ? 'Copy' : '复制');
-function pickHtml(o) {
-  const en = lang() === 'en', cp = (text) => `<button class="wcopy" data-copy="${esc(text).replace(/"/g, '&quot;')}">${COPY_SVG}${COPY_L()}</button>`;
-  if (o.kind === 'say') return `<div class="wfield"><span class="wc say" title="${esc(o.text)}">${esc(o.text.split('\n')[0])}</span>${cp(o.text)}</div>`;
-  if (o.kind === 'yaml') return `<div class="wfield"><code class="wc" title="${esc(o.text)}">${esc(o.text.split('\n')[0])}</code>${cp(o.text)}</div>`;
-  if (o.kind === 'dl') {
-    const ic = ICON(o.os === 'mac' ? 'apple' : o.os === 'win' ? 'windows' : 'linux');
-    return `<div class="wfield big"><a class="wcopy" href="${asset(o.file)}" download>${ic}${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`} · ${esc(o.k)}</a></div>`;
+const FILE_SVG = '<svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>';
+const dq = (x) => esc(x).replace(/"/g, '&quot;');
+const swBtn = (label) => `<button class="tsw" aria-expanded="false" aria-haspopup="true" aria-label="${lang() === 'en' ? 'Other ways' : '其他方式'}">${label ? esc(label) : ''}${CHEV}</button>`;
+// 轮到你的那一下，长成各自演示的样子：终端提示符、对话输入框、workflow 文件、App 标题栏上的下载
+function turnHtml(w, o) {
+  const en = lang() === 'en';
+  if (w.id === 'cli') return `<span class="cwd"><em>~/your-repo</em> ❯</span><code class="tc" title="${dq(o.text)}">${esc(o.text)}</code>${swBtn(o.k)}<button class="tcp" data-copy="${dq(o.text)}"${o.tip ? ` title="${dq(o.tip)}"` : ''}>${COPY_SVG}${COPY_L()}</button>`;
+  if (w.id === 'agent') {
+    const say = o.kind === 'say';
+    return `<div class="cbox"><div class="ctx${say ? '' : ' mono'}">${esc(say ? o.text.replace(/\n/g, ' ') : o.text)}</div><div class="crow">${swBtn(o.k)}${say ? '' : `<span class="ch">${en ? 'Run it in a terminal' : '在终端里运行'}</span>`}<button class="csend" data-copy="${dq(o.text)}">${COPY_SVG}${say ? (en ? 'Copy, send to your agent' : '复制，发给你的 agent') : COPY_L()}</button></div></div>`;
   }
-  return `<div class="wfield"><code class="wc" title="${esc(o.text)}"><i>$</i>${esc(o.text)}</code>${cp(o.text)}</div>`;
+  if (w.id === 'ci') return `${FILE_SVG}<code class="tc">${esc(o.file)}</code>${swBtn(o.k)}<button class="tcp" data-copy="${dq(o.text)}">${COPY_SVG}${COPY_L()}</button>`;
+  // App：卡片底下一条，粗体「安装」+ 一句话，下面一个整行宽的下载按钮
+  const ic = ICON(o.os === 'mac' ? 'apple' : o.os === 'win' ? 'windows' : 'linux');
+  const lab = `<div class="wlab"><b>${en ? 'Install' : '安装'}</b><span class="t">${o.kind === 'dl' ? (en ? 'Download, then open the installer' : '下载后打开安装包') : (en ? 'Run in a terminal' : '在终端里运行')}</span><button class="wmore" aria-expanded="false" aria-haspopup="true">${en ? 'Other ways' : '其他方式'}${CHEV}</button></div>`;
+  if (o.kind === 'dl') return lab + `<div class="wfield big"><a class="wcopy" href="${asset(o.file)}" download>${ic}${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`} · ${esc(o.k)}</a></div>`;
+  return lab + `<div class="wfield"><code class="wc" title="${dq(o.text)}"><i>$</i>${esc(o.text)}</code><button class="wcopy" data-copy="${dq(o.text)}">${COPY_SVG}${COPY_L()}</button></div>`;
 }
 function install() {
   const en = lang() === 'en';
   for (const w of ways()) {
     const first = (f) => w.opts.findIndex(f);
-    const at = picks[w.id] ?? [first(fits), 0].find((j) => j >= 0), o = w.opts[at];
-    $('get-' + w.id).innerHTML = `<div class="wlab"><b>${en ? 'Install' : '安装'}</b><span class="t">${esc(guide(o))}</span><button class="wmore" aria-expanded="false" aria-haspopup="true">${en ? 'Other ways' : '其他方式'}${CHEV}</button></div>${pickHtml(o)}`;
+    const at = picks[w.id] ?? [first(fits), 0].find((j) => j >= 0);
+    $('get-' + w.id).innerHTML = turnHtml(w, w.opts[at]);
   }
   // 首屏第二个按钮：下载本机的 App（手机上没有 App，去看四种用法）
   const me = detectOS();
   const hero = MOBILE ? [DL_SVG, en ? 'Install' : '安装', '#use'] : [ICON(me === 'mac' ? 'apple' : me === 'win' ? 'windows' : 'linux'), en ? `Get it for ${OSN[me]}` : `下载 ${OSN[me]} 版`, '#deskcard'];
   $('herodl').innerHTML = hero[0] + hero[1]; $('herodl').setAttribute('href', hero[2]);
 }
-// 「其他方式」：这一种用法的全部装法，点一个就换到底条上
-const closePop = () => document.querySelectorAll('.wpop').forEach((x) => { x.previousElementSibling?.setAttribute('aria-expanded', 'false'); x.remove(); });
+// 旁边的小开关：这一种用法的全部装法，点一个就换上去
+const closePop = () => document.querySelectorAll('.wpop').forEach((x) => { x.parentElement.querySelector('.tsw, .wmore')?.setAttribute('aria-expanded', 'false'); x.remove(); });
+const wayOf = (el) => { const turn = el.closest('.turn'); return ways().find((x) => 'get-' + x.id === turn.id); };
 document.addEventListener('click', (e) => {
-  const more = e.target.closest('.wmore'), item = e.target.closest('.wpop button');
-  if (item) {
-    const bar = item.closest('.wbar'), w = ways().find((x) => 'get-' + x.id === bar.id), j = +item.dataset.j;
-    picks[w.id] = j; closePop(); install();
-    return;
-  }
+  const more = e.target.closest('.tsw, .wmore'), item = e.target.closest('.wpop button');
+  if (item) { picks[wayOf(item).id] = +item.dataset.j; closePop(); install(); return; }
   if (!more) { if (!e.target.closest('.wpop')) closePop(); return; }
   const open = more.getAttribute('aria-expanded') === 'true';
   closePop(); if (open) return;
-  const bar = more.closest('.wbar'), w = ways().find((x) => 'get-' + x.id === bar.id), en = lang() === 'en';
+  const w = wayOf(more), en = lang() === 'en';
   const cur = picks[w.id] ?? -1, pop = document.createElement('div');
   pop.className = 'wpop'; pop.setAttribute('role', 'menu');
-  pop.innerHTML = w.opts.map((o, j) => `${o.g ? `<div class="g">${o.g}</div>` : ''}<button role="menuitem" data-j="${j}" class="${j === cur ? 'on' : ''}"${o.tip ? ` title="${o.tip}"` : ''}><b>${esc(o.k)}</b><span>${esc(o.kind === 'dl' ? o.file : o.kind === 'say' ? o.text.split('\n')[0] : o.kind === 'yaml' ? 'uses: WroughtMind/creditia@main' : o.text)}</span></button>`).join('')
+  pop.innerHTML = w.opts.map((o, j) => `${o.g ? `<div class="g">${o.g}</div>` : ''}<button role="menuitem" data-j="${j}" class="${j === cur ? 'on' : ''}"${o.tip ? ` title="${o.tip}"` : ''}><b>${esc(o.k)}</b><span>${esc(o.kind === 'dl' ? o.file : o.kind === 'say' ? o.text.split('\n')[0] : o.kind === 'yaml' ? o.file : o.text)}</span></button>`).join('')
     + `<div class="ver">${en ? `Current <code>v${VER}</code> · nightly: <code>creditia@next</code>, <code>@main</code>` : `当前 <code>v${VER}</code> · 预览版 <code>creditia@next</code>、<code>@main</code>`}</div>`;
-  more.after(pop); more.setAttribute('aria-expanded', 'true');
+  more.closest('.turn').append(pop); more.setAttribute('aria-expanded', 'true');
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
 // 首屏的下载按钮：滚到 App 那张卡片，亮一下
