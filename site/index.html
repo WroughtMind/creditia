@@ -147,24 +147,24 @@ section, #screen { scroll-margin-top: 64px; }
 .agents span::after { content: attr(data-n); position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap; font-size: 12px; color: var(--hero-ink); opacity: 0; pointer-events: none; transition: opacity .15s; }
 .agents span:hover::after { opacity: 1; }
 
-/* ───────── 风格墙：三条带子，图块大小不一；可以拖，悬停会停 ───────── */
-.wall { margin-top: 48px; display: grid; gap: 14px; overflow: hidden; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; padding: 14px 0;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent); mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent); }
-.wall.drag { cursor: grabbing; }
-.band { display: flex; gap: 14px; width: max-content; will-change: transform; }
-.col { display: flex; flex-direction: column; flex: none; }
-.tile { position: relative; display: block; width: 100%; flex: none; padding: 0; border: 0; background: var(--line2); border-radius: 4px; overflow: hidden; cursor: inherit; box-shadow: var(--shadow);
-  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(var(--s, 1)); transition: transform .6s cubic-bezier(.2,.8,.2,1); -webkit-tap-highlight-color: transparent; }
-.tile.hot { transition: transform .15s ease-out; z-index: 2; }
-.tile > img, .tile .roller img { width: 100%; height: 100%; object-fit: cover; object-position: top; -webkit-user-drag: none; pointer-events: none; }
-.tile::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .4s; background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,.28), transparent 50%); mix-blend-mode: overlay; }
-.tile.hot::after { opacity: 1; }
-.tile .lab { position: absolute; z-index: 3; left: 8px; bottom: 8px; padding: 3px 9px; border-radius: 99px; font-size: 12px; line-height: 1.5; background: rgba(12,12,11,.78); color: #EEE9DF; opacity: 0; transform: translateY(4px); transition: opacity .25s, transform .25s; white-space: nowrap; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-.tile.hot .lab, .tile:focus-visible .lab, .tile.morph .lab { opacity: 1; transform: none; }
-.live .roller { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
-.live .roller img { height: auto; }
-.morph > img { position: absolute; inset: 0; }
-.morph > img.on { z-index: 1; }
+/* ───────── 风格：一张看样台。署名卡原来就躺在台面上，镜头往后拉、压低，四周摊着同一份署名的各种样子 ───────── */
+#looks { position: relative; z-index: 1; }
+.tstage { position: relative; height: 100vh; height: 100svh; overflow: hidden; background: var(--tbg, var(--bg)); perspective: 1500px; perspective-origin: 50% 30%; touch-action: pan-y; }
+#looks.pin .tstage { position: sticky; top: 0; }
+html.zoom #looks { margin-top: -100vh; padding-top: 0; }
+#looks.idle .tstage { visibility: hidden; }
+.tview { position: absolute; inset: 0; }
+.table { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; will-change: transform; }
+/* 远处的照片沉进底色里，像台灯照不到的地方 */
+.tfog { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(var(--tbg, var(--bg)) 6%, transparent 42%), radial-gradient(120% 90% at 50% 64%, transparent 50%, var(--tbg, var(--bg)) 96%); }
+.print { position: absolute; padding: 0; border: 0; border-radius: 5px; background: var(--line2); cursor: zoom-in; transform: rotate(var(--r, 0deg)); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 26px 44px -22px rgba(0,0,0,.45); transition: transform .6s cubic-bezier(.2,.8,.2,1), box-shadow .6s; -webkit-tap-highlight-color: transparent; }
+.print img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: inherit; -webkit-user-drag: none; pointer-events: none; }
+.print .cap { position: absolute; left: 2px; top: calc(100% + 16px); font: 19px/1.3 "JetBrains Mono", monospace; color: var(--faint); white-space: nowrap; transition: color .3s; }
+.print:hover, .print:focus-visible { z-index: 2; transform: translateY(-18px) scale(1.035); box-shadow: 0 2px 4px rgba(0,0,0,.08), 0 50px 70px -30px rgba(0,0,0,.55); outline: none; }
+.print:hover .cap, .print:focus-visible .cap { color: var(--ink); }
+.tcard { position: absolute; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 26px 44px -22px rgba(0,0,0,.45); }
+.thead { position: absolute; z-index: 2; left: 0; right: 0; top: calc(64px + 6vh); pointer-events: none; }
+.thead p { margin: 12px 0 0; color: var(--soft); }
 /* 放大看 */
 #lb { position: fixed; inset: 0; z-index: 50; background: rgba(8,8,8,.86); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); display: grid; grid-template-rows: 1fr auto; padding: 4vh 4vw 3vh; color: #EEE9DF; }
 #lb .big { display: grid; place-items: center; min-height: 0; }
@@ -210,12 +210,6 @@ html.zoom #zcard { display: block; position: absolute; z-index: 5; left: 50%; to
 .zcard .zf { margin-top: 22px; display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--faint); }
 .zcard .zf svg { width: 13px; height: 13px; }
 /* 卡片摊开成风格墙：飞行中的是墙上图块的替身，落地后换回真的 */
-#zfan { display: none; position: fixed; inset: 0; z-index: 4; pointer-events: none; }
-#zfan.on { display: block; }
-#zfan > div:not(.zcard) { position: absolute; left: 0; top: 0; border-radius: 4px; overflow: hidden; background: var(--line2); box-shadow: var(--shadow); will-change: transform; }
-#zfan .zcard { position: absolute; left: 0; top: 0; box-shadow: var(--shadow); }
-#zfan img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
-#wall.fanning .tile { visibility: hidden; }
 
 /* ───────── 一行一行 ───────── */
 .legend { margin-top: 36px; display: flex; gap: 8px; flex-wrap: wrap; }
@@ -243,23 +237,34 @@ html.zoom #zcard { display: block; position: absolute; z-index: 5; left: 50%; to
 .tok-c { color: var(--faint); font-style: italic; }
 
 /* ───────── 用法：四张卡都是会自己演的小样，高度固定，内容在里面滚，不把页面撑开 ───────── */
-.ways { margin-top: 44px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.way { position: relative; border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 18px 22px 22px; display: flex; flex-direction: column; gap: 14px; overflow: clip; overflow-clip-margin: 0; min-width: 0; }
-.way:has(.wpop) { overflow: visible; z-index: 3; }
-.way h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 10px; min-height: 28px; }
-.way h3 small { font-weight: 400; color: var(--faint); font-size: 13px; }
+/* 用法：左边一列挑一种，右边只演这一种，演示底下就是它的安装 */
+.uses { margin-top: 48px; display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 56px; align-items: start; }
+.upick { position: sticky; top: 96px; display: grid; gap: 6px; }
+.upick button { display: grid; gap: 4px; padding: 16px 18px 17px; border: 0; border-radius: 16px; background: transparent; text-align: left; cursor: pointer; transition: background-color .3s; }
+.upick b { font-size: 17px; font-weight: 600; color: var(--soft); transition: color .3s; }
+.upick span { font-size: 13.5px; line-height: 1.55; color: var(--faint); transition: color .3s; }
+.upick button:hover b { color: var(--ink); }
+.upick button[aria-selected="true"] { background: var(--card); box-shadow: var(--shadow); }
+.upick button[aria-selected="true"] b { color: var(--ink); }
+.upick button[aria-selected="true"] span { color: var(--soft); }
+.ushow { min-width: 0; }
+.ubar { display: flex; align-items: center; gap: 12px; min-height: 30px; margin-bottom: 10px; }
+.ubar small { min-width: 0; font-size: 12.5px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ubar .dstep { margin-left: auto; }
 .again { margin-left: auto; width: 28px; height: 28px; border-radius: 99px; border: 0; background: transparent; color: var(--faint); cursor: pointer; display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity .3s, color .15s, background-color .15s; }
 .again.on { opacity: 1; pointer-events: auto; }
 .again:hover { color: var(--ink); background: var(--line2); }
 .again svg { width: 15px; height: 15px; }
-.way .body { position: relative; height: 458px; flex: 1 0 auto; min-width: 0; display: flex; flex-direction: column; }
-.way .body > * { flex: 1; min-height: 0; border-radius: 0; }
-.way .body > :first-child { border-top-left-radius: 12px; border-top-right-radius: 12px; }
-.way .body > :last-child { border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
-.way .body > .turn { flex: none; min-height: auto; }
-.way .body.dbody > * { border-radius: 12px; }
+.ustage { position: relative; display: grid; height: 470px; }
+.upane { grid-area: 1 / 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; opacity: 0; visibility: hidden; transform: translateY(12px); transition: opacity .5s, transform .6s cubic-bezier(.2,.8,.2,1), visibility 0s .5s; }
+.upane.on { opacity: 1; visibility: visible; transform: none; transition: opacity .5s .08s, transform .6s .08s cubic-bezier(.2,.8,.2,1); }
+.upane > * { flex: 1; min-height: 0; }
+.upane[data-w="cli"] { background: var(--term); }
+.upane[data-w="agent"], .upane[data-w="ci"] { background: var(--card); box-shadow: inset 0 0 0 1px var(--line); }
+.upane[data-w="ci"] { padding: 20px 22px 22px; }
+.upane .term, .upane .agent { -webkit-mask-image: linear-gradient(transparent, #000 24px); mask-image: linear-gradient(transparent, #000 24px); }
 /* 命令行 */
-.term { font-variant-ligatures: none; background: var(--term); color: var(--term-ink); padding: 16px 18px 20px; font-size: 12px; line-height: 1.72; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.term { font-variant-ligatures: none; background: var(--term); color: var(--term-ink); padding: 20px 24px 24px; font-size: 12.5px; line-height: 1.72; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .term .p { color: #8C877D; }
 .term .o { color: #A9A397; }
 .term .d { color: #625E57; }
@@ -277,7 +282,7 @@ html.zoom #zcard { display: block; position: absolute; z-index: 5; left: 50%; to
 #peek pre { margin: 0; padding: 6px 8px; font: 10.5px/1.55 "JetBrains Mono", monospace; color: var(--soft); white-space: pre; overflow-x: hidden; max-height: 210px; overflow: hidden; }
 #peek small { display: flex; justify-content: space-between; padding: 7px 4px 0; font-size: 11.5px; color: var(--faint); }
 /* agent */
-.agent { position: relative; background: var(--bg); border: 1px solid var(--line); border-bottom: 0; padding: 16px 16px 24px; overflow: hidden; display: flex; flex-direction: column; gap: 12px; font-size: 13.5px; line-height: 1.65; }
+.agent { position: relative; padding: 20px 22px 24px; overflow: hidden; display: flex; flex-direction: column; gap: 12px; font-size: 13.5px; line-height: 1.65; }
 .agent > * { flex: none; }
 .agent .u { align-self: flex-end; max-width: 85%; background: var(--ink); color: var(--bg); padding: 7px 13px; border-radius: 14px 14px 4px 14px; }
 .agent .a { display: grid; grid-template-columns: 16px 1fr; gap: 9px; }
@@ -345,9 +350,7 @@ html.zoom #zcard { display: block; position: absolute; z-index: 5; left: 50%; to
 .res .site img { width: 100%; display: block; }
 /* App：一块桌面，上面是真的 App（打包成网页的 creditia），先自己演一遍，随时可以接手 */
 /* App 的桌面按宽度缩放；行比它高时，桌面往下多长一截，跟同一行的卡片齐平 */
-.way .body.dbody { display: block; flex: 1 0 auto; height: auto; aspect-ratio: 1040 / 840; }
-.way .body.dbody > * { height: 100%; }
-.deskbox { position: relative; overflow: hidden; background: #1b1b22; box-shadow: inset 0 0 0 1px var(--line); }
+.deskbox { position: relative; overflow: hidden; background: #1b1b22; }
 .desk { position: absolute; left: 0; top: 0; width: 1040px; height: 840px; transform-origin: 0 0; transform: scale(var(--ds, 1)); overflow: hidden; user-select: none; -webkit-user-select: none;
   font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif; color: #1d1d1f; --mb: rgba(246,240,236,.42); --mb-ink: #1d1d1f; }
 :root[data-theme="dark"] .desk { --mb: rgba(24,22,34,.42); --mb-ink: #f2f2f2; }
@@ -407,74 +410,40 @@ html.zoom #zcard { display: block; position: absolute; z-index: 5; left: 50%; to
 .dstep + .again { margin-left: 0; }
 
 .deskshot { display: none; }
-/* 轮到你：每个演示在它自己的界面里停在「该你了」——终端停在一行提示符上，对话框里是要发的那段话，
-   Action 底下露出那个 workflow 文件，App 在标题栏上给下载。换别的装法点旁边的小开关 */
-.turn { position: relative; display: flex; align-items: center; gap: 10px; min-width: 0; }
-.tsw { flex: none; height: 26px; padding: 0 5px 0 8px; border: 0; border-radius: 7px; background: transparent; color: inherit; opacity: .62; font: 12px "JetBrains Mono", monospace; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; transition: opacity .15s, background-color .15s; }
-.tsw:hover, .tsw[aria-expanded="true"] { opacity: 1; background: color-mix(in srgb, currentColor 10%, transparent); }
-.tsw svg { width: 13px; height: 13px; }
-.tcp { flex: none; height: 30px; padding: 0 11px; border-radius: 8px; border: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font: 500 12.5px Inter, sans-serif; transition: transform .15s, opacity .15s; }
-.tcp:hover { transform: translateY(-1px); }
-.tcp svg { width: 13px; height: 13px; }
-.tc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px "JetBrains Mono", monospace; }
-/* 终端：最后一行提示符 */
-.turn.tt { background: var(--term); color: var(--term-ink); padding: 4px 10px 12px 18px; }
-.way .body > .term:has(+ .tt) { -webkit-mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent); border-radius: 12px 12px 0 0; }
-.way .body:has(> .tt) { background: var(--term); border-radius: 12px; }
-.tt .cwd { flex: none; font: 12.5px "JetBrains Mono", monospace; color: #8C877D; }
-.tt .cwd em { font-style: normal; color: #7CCB9F; }
-.tt .tc { color: var(--term-ink); }
-.tt .tcp { background: #E8E4DB; color: #121211; }
-/* agent：对话框底部的输入框 */
-.turn.comp { display: block; background: var(--bg); border: 1px solid var(--line); border-top: 0; padding: 0 12px 12px; }
-.way .body > .agent:has(+ .comp) { -webkit-mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(transparent, #000 22px, #000 calc(100% - 28px), transparent); }
-.way .body:has(> .comp) { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-.way .body > .agent:has(+ .comp), .way .body > .comp { border: 0; }
-.cbox { border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 11px 12px 8px 14px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
-.cbox .ctx { font-size: 13px; line-height: 1.6; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.cbox .ctx.mono { font: 12.5px/1.6 "JetBrains Mono", monospace; }
-.cbox .crow { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--soft); }
-.cbox .crow .tsw { margin: 0 auto 0 -6px; font-family: Inter, sans-serif; }
-.cbox .ch { font-size: 12px; color: var(--faint); }
-.csend { flex: none; height: 32px; padding: 0 14px 0 12px; border-radius: 99px; border: 0; background: var(--ink); color: var(--bg); font: 500 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; transition: transform .15s; }
-.csend:hover { transform: translateY(-1px); }
-.csend svg { width: 14px; height: 14px; }
-/* Action：底下露出的 workflow 文件 */
-.turn.tf { margin-top: 10px; padding: 8px 8px 8px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--soft); }
-.tf .fi { flex: none; width: 14px; height: 14px; color: var(--faint); }
-.tf .tc { color: var(--ink); font-size: 12px; }
-.tf .tcp { background: var(--ink); color: var(--bg); }
-/* App：卡片底下一条下载，和原来一样 */
-/* 每张卡片的最后一条就是它的安装：先摆一条现在能用的，其余方式收在「其他方式」里 */
-.wbar { position: relative; display: grid !important; z-index: 2; gap: 10px; margin-top: 2px; }
-.wlab { display: flex; align-items: center; gap: 10px; min-height: 30px; font-size: 13px; color: var(--soft); }
-.wlab b { flex: none; font-weight: 600; color: var(--ink); }
-.wlab .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wfield { display: flex; align-items: center; gap: 10px; min-width: 0; height: 48px; padding: 0 7px 0 15px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
-.wc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 13px "JetBrains Mono", monospace; color: var(--ink); }
-.wc i { font-style: normal; color: var(--faint); margin-right: 10px; }
-.wc.say { font: 13.5px Inter, sans-serif; color: var(--soft); }
-.wcopy { flex: none; height: 34px; padding: 0 14px; border-radius: 9px; border: 0; background: var(--ink); color: var(--bg); font: 500 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; text-decoration: none; transition: transform .2s, opacity .2s; }
-.wcopy:hover { transform: translateY(-1px); }
-.wcopy svg { width: 14px; height: 14px; }
-a.wcopy svg { fill: currentColor; }
-.wfield.big { height: auto; padding: 0; border: 0; background: transparent; }
-.wfield.big .wcopy { width: 100%; height: 48px; justify-content: center; border-radius: 12px; font-size: 14px; }
-.wmore { flex: none; margin-left: auto; height: 30px; padding: 0 6px 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--soft); font: 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: color .15s, background-color .15s; }
-.wmore:hover, .wmore[aria-expanded="true"] { color: var(--ink); background: var(--line2); }
-.wmore svg { width: 14px; height: 14px; transition: rotate .2s; }
-.wmore[aria-expanded="true"] svg { rotate: 180deg; }
-.wpop { position: absolute; z-index: 6; right: 10px; bottom: calc(100% + 8px); width: min(380px, calc(100% - 20px)); color: var(--ink); text-align: left; max-height: min(420px, 70vh); overflow: auto; padding: 6px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); animation: wpop .16s ease-out; }
+/* 安装：一条大的（命令、那段话、workflow 文件或下载按钮），旁边写明「复制」；下面一排字是别的装法，点了就换上去 */
+.uget { position: relative; margin-top: 18px; }
+.ufield { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 8px 8px 8px 22px; border-radius: 16px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); }
+.ufield .ut { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 14px "JetBrains Mono", monospace; color: var(--ink); }
+.ufield .ut i { font-style: normal; color: var(--faint); margin-right: 12px; }
+.ufield .ut.say { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font: 14px/1.6 Inter, sans-serif; color: var(--soft); }
+.ufield .fi { flex: none; width: 18px; height: 18px; margin-right: -4px; color: var(--faint); }
+.ucopy { flex: none; height: 48px; padding: 0 20px 0 17px; border-radius: 12px; border: 0; background: var(--ink); color: var(--bg); font: 500 14px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 9px; text-decoration: none; white-space: nowrap; transition: transform .2s, opacity .2s; }
+.ucopy:hover { transform: translateY(-1px); }
+.ucopy svg { width: 16px; height: 16px; }
+a.ucopy svg { fill: currentColor; }
+.ufield.dl { padding: 0; background: none; box-shadow: none; }
+.ufield.dl .ucopy { flex: 1; height: 64px; border-radius: 16px; font-size: 15.5px; }
+.ufield.dl .ucopy svg { width: 18px; height: 18px; }
+.uopts { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 2px; margin-top: 12px; padding-left: 8px; font-size: 13px; }
+.uopts .ul { color: var(--faint); margin-right: 8px; }
+.uopts button { height: 30px; padding: 0 10px; border: 0; border-radius: 99px; background: transparent; color: var(--soft); font: 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: color .15s, background-color .15s; }
+.uopts button:hover { color: var(--ink); background: var(--line2); }
+.uopts button.on { color: var(--ink); background: var(--line2); font-weight: 500; }
+.uopts button svg { width: 14px; height: 14px; transition: rotate .2s; }
+.uopts button[aria-expanded="true"] { color: var(--ink); background: var(--line2); }
+.uopts button[aria-expanded="true"] svg { rotate: 180deg; }
+.uopts .uh { margin-left: auto; padding-left: 12px; color: var(--faint); font-size: 12.5px; }
+.uget.flash .ucopy { animation: uflash 1.6s ease-out; }
+@keyframes uflash { 0% { transform: scale(.97); } 25% { transform: scale(1.02); box-shadow: 0 0 0 6px color-mix(in srgb, var(--ink) 14%, transparent); } }
+.wpop { position: absolute; z-index: 6; left: 0; top: calc(100% + 6px); width: min(380px, calc(100% - 20px)); color: var(--ink); text-align: left; max-height: min(420px, 70vh); overflow: auto; padding: 6px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); animation: wpop .16s ease-out; }
 @keyframes wpop { from { opacity: 0; transform: translateY(4px); } }
 .wpop .g { padding: 8px 10px 3px; font-size: 11.5px; color: var(--faint); }
-.way.flash { animation: wayflash 1.8s ease-out; }
-@keyframes wayflash { 0%, 30% { border-color: var(--soft); } }
 .wpop button { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 12px; padding: 6px 10px; border: 0; border-radius: 9px; background: transparent; color: var(--ink); font: 13px Inter, sans-serif; text-align: left; cursor: pointer; }
 .wpop button:hover { background: var(--line2); }
 .wpop button.on { background: var(--line2); }
 .wpop button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11.5px "JetBrains Mono", monospace; color: var(--faint); }
 .wpop b { font-weight: 500; white-space: nowrap; }
-.wpop .ver { padding: 8px 10px 4px; margin-top: 4px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--faint); }
+.wpop .ver { padding: 10px 10px 4px; margin-top: 2px; font-size: 11.5px; color: var(--faint); }
 .wpop .ver code { font: 11px "JetBrains Mono", monospace; color: var(--soft); }
 .line { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 6px 6px 6px 12px; font: 12.5px "JetBrains Mono", monospace; min-height: 40px; }
 .line > span:first-child { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
@@ -524,7 +493,7 @@ html.vt-theme::view-transition-old(root), html.vt-theme::view-transition-new(roo
 html.vt-theme::view-transition-new(root) { z-index: 9999; }
 .rise { opacity: 0; transform: translateY(16px); transition: opacity .9s cubic-bezier(.2,.7,.2,1), transform .9s cubic-bezier(.2,.7,.2,1); }
 .rise.in { opacity: 1; transform: none; }
-@media (prefers-reduced-motion: reduce) { .rise { opacity: 1; transform: none; transition: none; } .aw .boot { transition: none; } .aw .boot img { animation: none; } .wall { overflow-x: auto; cursor: auto; } }
+@media (prefers-reduced-motion: reduce) { .rise { opacity: 1; transform: none; transition: none; } .aw .boot { transition: none; } .aw .boot img { animation: none; } }
 
 @media (max-width: 900px) {
   .wrap, header .wrap { width: calc(100% - 40px); }
@@ -557,8 +526,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   .legend { margin-top: 24px; gap: 6px; }
   .legend span { height: 30px; padding: 0 11px; font-size: 13px; gap: 7px; }
   .term .mdl { display: none; }
-  #deskcard .dstep, #deskcard .again { display: none; }
-  .way .body.dbody { aspect-ratio: auto; height: auto; }
+  .ubar .dstep, .ubar .again[data-again="desk"] { display: none; }
   .deskbox { display: none; }
   .deskshot { display: block; }
   .deskshot img { width: 100%; height: auto; display: block; border-radius: 10px; border: 1px solid var(--line); }
@@ -566,23 +534,34 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   :root[data-theme="dark"] .deskshot .dk { display: block; } :root[data-theme="dark"] .deskshot .lt { display: none; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .deskshot .dk { display: block; } :root:not([data-theme="light"]) .deskshot .lt { display: none; } }
   .deskshot p { margin: 12px 0 0; font-size: 13px; color: var(--soft); }
-  .wall, .band { gap: 10px; }
-  .ways { grid-template-columns: 1fr; }
+  .print .cap { font-size: 24px; }
+  /* 用法：四种排成一行药丸，下面是演示和安装 */
+  .uses { margin-top: 32px; grid-template-columns: 1fr; gap: 14px; }
+  .upick { position: static; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; margin: 0 -20px; padding: 2px 20px 8px; }
+  .upick::-webkit-scrollbar { display: none; }
+  .upick button { flex: none; padding: 7px 15px; border-radius: 99px; }
+  .upick b { font-size: 14.5px; }
+  .upick span { display: none; }
+  .ubar { margin-bottom: 8px; }
+  .ubar small { white-space: normal; font-family: Inter, sans-serif; font-size: 13px; line-height: 1.5; color: var(--soft); }
+  .ustage { height: 430px; }
+  .upane { border-radius: 14px; }
+  .upane[data-w="app"] { background: none; }
+  .upane[data-w="ci"] { padding: 14px; }
+  .ufield { min-height: 56px; gap: 10px; padding: 6px 6px 6px 14px; border-radius: 14px; }
+  .ufield .ut { font-size: 12.5px; }
+  .ufield .ut i { margin-right: 8px; }
+  .ufield .ut.say { font-size: 13px; }
+  .ucopy { height: 44px; padding: 0 14px 0 12px; font-size: 13.5px; }
+  .ufield.dl .ucopy { height: 56px; border-radius: 14px; font-size: 14.5px; }
+  .uopts { padding-left: 0; }
+  .uopts .uh { flex-basis: 100%; margin: 4px 0 0; padding-left: 10px; }
   nav { display: none; }
-  .tt .cwd em { display: none; }
-  .wlab .t { white-space: normal; }
-  .wlab { align-items: flex-start; }
-  .turn.tt { padding: 8px 8px 9px 12px; gap: 8px; }
-  .turn .tc, .tt .cwd { font-size: 11px; }
-  .tcp { padding: 0 9px; }
   .coda .cmeta a { display: block; margin: 8px 0 0; }
   #lb .bar { flex-wrap: wrap; gap: 8px 12px; }
   #lb .bar .cp { max-width: 92vw; order: 9; }
-  .way h3 { flex-wrap: nowrap; gap: 10px; white-space: nowrap; }
-  .way h3 small { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .term { font-size: 10px; padding: 12px 12px 16px; }
-  .way { padding: 16px; }
-  .way .body { height: 424px; }
+  .term { font-size: 10px; padding: 14px 14px 16px; }
+  .agent { padding: 14px 14px 18px; }
   .fst li:not(.on) span { display: none; }
   .yml pre { font-size: 10px; overflow-x: auto; }
 }
@@ -615,7 +594,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
       <p data-i="hero.p">把 agent 的日志和 git 历史逐行对上，算出每个工具、每个模型写了多少，做成片尾字幕。全在本地。</p>
       <div class="acts">
         <div class="cmd mono"><span><span class="p">$</span>npx creditia analyze</span><button id="copy" aria-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button></div>
-        <a class="dl" id="herodl" href="#deskcard"></a>
+        <a class="dl" id="herodl" href="#use"></a>
       </div>
       <div class="agents" id="agents"></div>
     </div>
@@ -636,23 +615,35 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   <canvas id="zcv" aria-hidden="true"></canvas>
   <div id="zcard" class="zcard" aria-hidden="true"></div>
   </div></div>
-  <div id="zfan" aria-hidden="true"></div>
 
   <section id="looks">
-    <div class="wrap">
-      <div class="head rise"><h2 class="serif" data-i="looks.t">同一份署名，二十六种样子</h2></div>
+    <div class="tstage" id="tstage">
+      <div class="tview"><div class="table" id="table"></div></div>
+      <div class="tfog" id="tfog"></div>
+      <div class="thead" id="thead"><div class="wrap"><h2 class="serif" data-i="looks.t">同一份署名，二十六种样子</h2><p data-i="looks.p">点开任意一张，看大图和导出它的命令。</p></div></div>
     </div>
-    <div class="wall rise" id="wall"></div>
   </section>
 
   <section id="use">
     <div class="wrap">
       <div class="head rise"><h2 class="serif" data-i="use.t">四种用法</h2></div>
-      <div class="ways">
-        <div class="way rise"><h3><span data-i="w.cli">命令行</span><button class="again" data-again="term" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="term mono" id="term"></div><div class="turn tt" id="get-cli"></div></div></div>
-        <div class="way rise"><h3><span data-i="w.agent">交给 agent</span><button class="again" data-again="chat" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="agent" id="chat"></div><div class="turn comp" id="get-agent"></div></div></div>
-        <div class="way rise" id="flowcard"><h3>GitHub Action <small class="mono">WroughtMind/creditia@main</small><button class="again" data-again="flow" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body"><div class="flow2" id="flow"></div><div class="turn tf" id="get-ci"></div></div></div>
-        <div class="way rise" id="deskcard"><h3>App <small>macOS · Windows · Linux</small><span class="dstep" id="dsteps"></span><button class="again" data-again="desk" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></h3><div class="body dbody"><div class="deskbox" id="deskbox"><div class="desk" id="desk"></div></div><div class="deskshot"><img class="dk" src="assets/app-dark.webp" alt="creditia App" loading="lazy" width="1200" height="750"><img class="lt" src="assets/app-light.webp" alt="creditia App" loading="lazy" width="1200" height="750"><p data-i="desk.pc">在电脑上打开这一页，可以直接上手试。</p></div></div><div class="wbar turn" id="get-app"></div></div>
+      <div class="uses rise">
+        <div class="upick" id="upick" role="tablist">
+          <button role="tab" data-w="cli" aria-selected="true"><b data-i="w.cli">命令行</b><span data-i="w.cli.d">在仓库里跑一行命令，算出来，导出来</span></button>
+          <button role="tab" data-w="agent" aria-selected="false"><b data-i="w.agent">交给 agent</b><span data-i="w.agent.d">发一段话，它自己装好、跑完，提交前先问你</span></button>
+          <button role="tab" data-w="ci" aria-selected="false"><b>GitHub Action</b><span data-i="w.ci.d">每次推送，署名页自己更新</span></button>
+          <button role="tab" data-w="app" aria-selected="false"><b>App</b><span data-i="w.app.d">macOS、Windows、Linux 上点几下就出图</span></button>
+        </div>
+        <div class="ushow">
+          <div class="ubar"><small class="mono" id="usub"></small><span class="dstep" id="dsteps"></span><button class="again" data-again="term" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><button class="again" data-again="chat" aria-label="replay" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><button class="again" data-again="flow" aria-label="replay" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><button class="again" data-again="desk" aria-label="replay" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+          <div class="ustage" id="ustage">
+            <div class="upane on" data-w="cli"><div class="term mono" id="term"></div></div>
+            <div class="upane" data-w="agent"><div class="agent" id="chat"></div></div>
+            <div class="upane" data-w="ci"><div class="flow2" id="flow"></div></div>
+            <div class="upane" data-w="app" id="deskcard"><div class="deskbox" id="deskbox"><div class="desk" id="desk"></div></div><div class="deskshot"><img class="dk" src="assets/app-dark.webp" alt="creditia App" loading="lazy" width="1200" height="750"><img class="lt" src="assets/app-light.webp" alt="creditia App" loading="lazy" width="1200" height="750"><p data-i="desk.pc">在电脑上打开这一页，可以直接上手试。</p></div></div>
+          </div>
+          <div class="uget" id="uget"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -681,9 +672,10 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 const EN = {
   'hero.t': 'Which AI<br>wrote your code',
   'hero.p': 'creditia matches your agents’ logs against git history line by line, works out what each tool and each model wrote, and rolls it as end credits. Runs locally.',
-  'looks.t': 'Same credits, twenty-six looks',
+  'looks.t': 'Same credits, twenty-six looks', 'looks.p': 'Open any print for the full size and the command that exports it.',
   'lines.t': 'Every line has a source', 'lines.p': 'What can’t be matched is marked unattributed. Runs locally, calls no model.',
   'use.t': 'Four ways to use it', 'w.cli': 'Command line', 'w.agent': 'Your agent',
+  'w.cli.d': 'One command in your repo works it out and exports it', 'w.agent.d': 'Send one message; it installs, runs, and asks before committing', 'w.ci.d': 'Your credits page updates itself on every push', 'w.app.d': 'A few clicks on macOS, Windows or Linux',
   'foot.rules': 'Attribution rules',
   'desk.pc': 'Open this page on a computer to try the app right here.',
   'nav.looks': 'Looks', 'nav.lines': 'Sources', 'nav.use': 'Usage', 'nav.get': 'Install', 'ins.t': 'Install',
@@ -972,7 +964,7 @@ function zoomSetup() {
   const L = $('lines');
   if (!Z.on) {
     $('zoom').style.height = ''; L.style.opacity = ''; L.classList.remove('live'); $('fcv').style.visibility = '';
-    ['--py', '--po'].forEach((v) => screenEl.style.removeProperty(v)); Z.p = -1; fanOff();
+    ['--py', '--po'].forEach((v) => screenEl.style.removeProperty(v)); Z.p = -1;
     if (was) { curSec = undefined; spy(); }
     return;
   }
@@ -981,7 +973,7 @@ function zoomSetup() {
   $('zoom').style.height = `${innerHeight + Z.d}px`;
   const cv = $('zcv'); Z.dpr = Math.min(2, devicePixelRatio || 1); Z.w = cv.clientWidth; Z.h = cv.clientHeight;
   cv.width = Math.round(Z.w * Z.dpr); cv.height = Math.round(Z.h * Z.dpr);
-  zoomMeasure(); zcardBuild(); zcardMeasure(); Z.ls = null; fanOff(); FAN.q = -1;
+  zoomMeasure(); zcardBuild(); zcardMeasure(); Z.ls = null;
   Z.p = -1; zoomTick();
 }
 /** 编辑器里每个词的位置（相对舞台），和地图里 analyze.ts 的线一一对应 */
@@ -1100,10 +1092,11 @@ function pourDraw(ctx, pc, pd) {
   ctx.globalAlpha = 1;
 }
 /** 署名卡：lumen、份额条、各工具的占比 */
-function zcardBuild() {
+function zcardBuild() { $('zcard').innerHTML = zcardHtml(); }
+function zcardHtml() {
   const soft = getComputedStyle($('screen')).getPropertyValue('--hero-soft').trim(), rows = shareRows();
   const col = (k) => (k === 'unattributed' ? soft : AGC[k] || soft);
-  $('zcard').innerHTML = `<div class="zfade"><div class="zt serif">lumen</div><div class="zm">${fproj().split(' · ').slice(1).join(' · ')}</div></div>`
+  return `<div class="zfade"><div class="zt serif">lumen</div><div class="zm">${fproj().split(' · ').slice(1).join(' · ')}</div></div>`
     + `<div class="zbar">${rows.map((r) => `<i data-k="${r.key}" style="width:${r.pct}%;background:${col(r.key)}"></i>`).join('')}</div>`
     + `<div class="zfade"><div class="zrows">${rows.map((r) => { const t = DATA.tools.find((x) => x.name === r.name); return `<span style="color:${col(r.key)}">${t ? t.svg : '<i></i>'}<b>${r.name}</b><em>${r.pct}%</em></span>`; }).join('')}</div><div class="zf">${MARK}creditia</div></div>`;
 }
@@ -1137,49 +1130,6 @@ function zcardShow(pd) {
   c.classList.toggle('lift', e >= 1);
   c.querySelectorAll('.zfade').forEach((x) => (x.style.opacity = String(clamp01((k - 0.35) / 0.5))));
 }
-// ───────── 署名卡 → 风格墙：舞台放开后接着往下滚，卡片里摊出一张张风格图，各自落到墙上的位置 ─────────
-const FAN = { els: [], q: -1, card: null };
-function fanOff() {
-  if (FAN.els.length) { FAN.els = []; $('zfan').innerHTML = ''; }
-  $('zfan').classList.remove('on'); $('wall').classList.remove('fanning'); W.hold = false; $('zcard').style.opacity = ''; $('looks').querySelector('.head').style.opacity = '';
-}
-function fanBuild() {
-  W.hold = true; $('wall').classList.add('fanning'); $('zfan').classList.add('on');
-  const mid = innerWidth / 2;
-  const tiles = [...$('wall').querySelectorAll('.tile')].map((t) => ({ t, r: t.getBoundingClientRect() })).filter(({ r }) => r.right > -40 && r.left < innerWidth + 40)
-    .sort((a, b) => Math.abs(a.r.left + a.r.width / 2 - mid) - Math.abs(b.r.left + b.r.width / 2 - mid));
-  FAN.els = tiles.map(({ t }, k) => {
-    const img = t.querySelector('img.on') || t.querySelector('img'), el = document.createElement('div');
-    el.innerHTML = `<img src="${img.currentSrc || img.src}" alt="" draggable="false">`; $('zfan').append(el);
-    return { el, tile: t, d: (0.38 * k) / Math.max(1, tiles.length - 1), r: (((k * 7) % 11) - 5) * 1.1, dx: (((k * 5) % 9) - 4) * 6 };
-  });
-  // 舞台是 sticky 的，自成一层，图块没法钻到它下面；所以飞的时候在最上面放一张卡片的替身，真的那张藏起来
-  FAN.card = $('zcard').cloneNode(true); FAN.card.removeAttribute('id'); FAN.card.style.cssText = ''; $('zfan').append(FAN.card);
-  $('zcard').style.opacity = '0';
-}
-function fanTick() {
-  if (!Z.on || !W.bands.length || !Z.cardR) { if (FAN.els.length || W.hold) fanOff(); return; }
-  const s0 = $('zoom').offsetTop + Z.d, s1 = $('looks').offsetTop - 64;
-  const q = clamp01((scrollY - s0) / Math.max(1, s1 - s0));
-  if (q === FAN.q) return;
-  FAN.q = q;
-  if (q <= 0 || q >= 1) { fanOff(); return; }
-  if (!FAN.els.length) fanBuild();
-  const C = $('zcard').getBoundingClientRect();
-  FAN.card.style.width = `${C.width}px`; FAN.card.style.transform = `translate(${C.left}px,${C.top}px)`;
-  FAN.card.style.opacity = String(1 - clamp01((q - 0.06) / 0.3));
-  $('looks').querySelector('.head').style.opacity = String(clamp01((q - 0.72) / 0.28)); // 图块飞过的时候标题先让开
-  for (const o of FAN.els) {
-    const T = o.tile.getBoundingClientRect(), t = inOut(clamp01((q - o.d) / 0.62));
-    const s0 = Math.min((C.height * 0.8) / T.height, (C.width * 0.8) / T.width), s = s0 + (1 - s0) * t;
-    const cx0 = C.left + C.width / 2 + o.dx, cy0 = C.top + C.height / 2;
-    const cx = cx0 + (T.left + T.width / 2 - cx0) * t, cy = cy0 + (T.top + T.height / 2 - cy0) * t;
-    o.el.style.width = `${T.width}px`; o.el.style.height = `${T.height}px`;
-    o.el.style.transform = `translate(${(cx - T.width / 2).toFixed(1)}px,${(cy - T.height / 2).toFixed(1)}px) rotate(${(o.r * (1 - t)).toFixed(2)}deg) scale(${s.toFixed(4)})`;
-    o.el.style.opacity = t > 0 ? '1' : '0';
-  }
-}
-addEventListener('scroll', fanTick, { passive: true });
 addEventListener('scroll', () => { if (Z.on) { cancelAnimationFrame(Z.raf); Z.raf = requestAnimationFrame(zoomTick); } }, { passive: true });
 // 导航点「出处」：滚到镜头推完的位置
 document.querySelector('nav a[href="#lines"]').addEventListener('click', (e) => { if (!Z.on) return; e.preventDefault(); scrollTo({ top: $('zoom').offsetTop + Math.round(Z.d * PH.b[1]), behavior: RM ? 'auto' : 'smooth' }); });
@@ -1271,124 +1221,108 @@ let ALL = [];
 const styleOf = (id) => DATA.styles.find((s) => s.id === id);
 const label = (x) => `${sname(styleOf(x.style))} · ${lang() === 'en' ? x.pe : x.pz}`;
 const thumb = (x) => `assets/wall/${lang()}/${x.name}.${DATA.thumbExt || 'png'}`;
-const W = { bands: [], lives: [], morphs: [], visible: false, drag: null, clock: 0, k: 1 };
-const BASE = [26, -20, 32]; // 每条带子的速度（px/s），正数往左
-function wall() {
-  const rows = DATA.wall[lang()];
-  const k = (W.k = innerWidth < 640 ? 0.58 : innerWidth < 1000 ? 0.78 : 1);
-  ALL = [];
-  const html = rows.map((row) => {
-    const one = row.cols.map((c) => `<div class="col" style="width:${Math.round(c.w * k)}px;gap:${Math.round(12 * k)}px">${c.items.map((x) => {
-      const st = `height:${Math.round(x.dh * k)}px`;
-      if (x.kind === 'morph') {
-        const first = ALL.length; x.list.forEach((y) => ALL.push({ ...y, kind: 'still' }));
-        return `<button class="tile morph" data-i="${first}" data-n="${x.list.length}" style="${st}">${x.list.map((y, j) => `<img src="${thumb(y)}" alt="${label(y)}" class="${j ? '' : 'on'}" loading="lazy" draggable="false">`).join('')}<span class="lab">${label(x.list[0])}</span></button>`;
-      }
-      ALL.push(x);
-      const img = `<img src="${thumb(x)}" width="${x.w}" height="${x.h}" alt="${label(x)}" loading="lazy" draggable="false">`;
-      return `<button class="tile${x.kind === 'live' ? ' live' : ''}" data-i="${ALL.length - 1}" style="${st}">${x.kind === 'live' ? `<div class="roller">${img}</div>` : img}<span class="lab">${label(x)}</span></button>`;
-    }).join('')}</div>`).join('');
-    return `<div class="band">${one}${one}</div>`; // 内容放两遍，挪过一半正好接上
-  }).join('');
-  $('wall').innerHTML = html;
-  const old = W.bands;
-  W.bands = [...document.querySelectorAll('#wall .band')].map((el, i) => ({ el, x: old[i]?.x ?? -Math.random() * 400, v: BASE[i % 3], base: BASE[i % 3], fling: 0, hover: false, half: 0 }));
-  measure();
-  W.lives = [...document.querySelectorAll('#wall .live')].map((el) => ({ el, r: el.firstElementChild, y: 0 }));
-  W.morphs = [...document.querySelectorAll('#wall .morph')].map((el) => ({ el, j: 0, n: +el.dataset.n, base: +el.dataset.i }));
-  W.bands.forEach((b) => { b.el.onpointerenter = () => (b.hover = true); b.el.onpointerleave = () => (b.hover = false); });
+// ───────── 风格：一张看样台。上一幕的署名卡原来就躺在台面上——镜头往后拉、压低，四周摊着同一份署名的各种样子 ─────────
+// 台面坐标以卡片中心为原点；镜头 = 盯着台面上哪一点（fx, fy）、这一点放在屏幕哪里（X, Y）、离多远（s）、压多低（ax）
+const TB = { w: innerWidth, on: false, d: 0, q: -1, prints: [], ch: 0, mx: 0, my: 0, tx: 0, ty: 0, t: 0, visible: false, x0: 0, y0: 0, s0: 1, s1: 0.6 };
+const CARD_W = 480;
+function table() {
+  // 墙上的图拍平成一叠：同一张分享图换了风格的排在最前，摆在卡片旁边；其余打散
+  const all = [];
+  for (const row of DATA.wall[lang()]) for (const c of row.cols) for (const x of c.items) {
+    if (x.kind === 'morph') x.list.forEach((y) => all.push({ ...y, kind: 'still' })); else all.push(x);
+  }
+  const R = rng(11), share = all.filter((x) => x.piece === 'share'), rest = all.filter((x) => x.piece !== 'share').map((x) => [R(), x]).sort((a, b) => a[0] - b[0]).map((p) => p[1]);
+  ALL = [...share, ...rest];
+  const el = $('table');
+  el.innerHTML = `<div class="zcard tcard" style="width:${CARD_W}px">${zcardHtml()}</div>`;
+  const card = el.firstElementChild; TB.ch = card.offsetHeight || 300;
+  card.style.left = `${-CARD_W / 2}px`; card.style.top = `${-TB.ch / 2}px`;
+  // 一列一列摆：中间那列是卡片，往两边各三列；每列从中间往上下两头码，码到台面边上为止
+  const GX = 70, GY = 84, TOP = -1500, BOT = 1150, widths = [300, 340, 280, 330, 360, 290];
+  const cols = [{ x: -CARD_W / 2, w: CARD_W, mid: true }];
+  let xr = CARD_W / 2 + GX, xl = -CARD_W / 2 - GX;
+  for (let i = 0; i < 3; i++) {
+    const wr = widths[i], wl = widths[i + 3];
+    cols.push({ x: xr, w: wr }); xr += wr + GX;
+    cols.push({ x: xl - wl, w: wl }); xl -= wl + GX;
+  }
+  let n = 0;
+  const next = () => ALL[n++ % ALL.length];
+  const html = [];
+  const place = (x, c, y, up) => {
+    const w = c.w - Math.round(R() * 30), ar = x.kind === 'live' ? 0.95 : Math.max(0.62, x.w / x.h), h = Math.round(w / ar);
+    const top = up ? y - h : y, left = c.x + (c.w - w) / 2 + Math.round((R() - 0.5) * 26);
+    const i = ALL.indexOf(x), r = ((R() - 0.5) * 3.2).toFixed(2);
+    html.push({ i, x: left, y: top, w, h, r });
+    return h;
+  };
+  for (const c of cols) {
+    let up, down;
+    if (c.mid) { up = -TB.ch / 2 - GY; down = TB.ch / 2 + GY; }
+    else { const ph = (R() - 0.5) * 220; up = ph - 40; down = ph + GY - 40; }
+    // 上下交替着码，近处先码，台面中心附近的就是排在前面的那几张
+    let goUp = true;
+    while (up > TOP || down < BOT) {
+      if ((goUp && up > TOP) || down >= BOT) up -= place(next(), c, up, true) + GY;
+      else down += place(next(), c, down, false) + GY;
+      goUp = !goUp;
+    }
+  }
+  const far = Math.max(...html.map((p) => Math.hypot(p.x + p.w / 2, p.y + p.h / 2)));
+  el.insertAdjacentHTML('beforeend', html.map((p) => {
+    const x = ALL[p.i], img = `<img src="${thumb(x)}" alt="${label(x)}" loading="lazy" decoding="async" draggable="false">`;
+    return `<button class="print" data-i="${p.i}" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px;--r:${p.r}deg;opacity:0">${img}<span class="cap">${label(x)}</span></button>`;
+  }).join(''));
+  TB.prints = [...el.querySelectorAll('.print')].map((b, k) => ({ el: b, d: Math.hypot(html[k].x + html[k].w / 2, html[k].y + html[k].h / 2) / far, o: 0 }));
+  tableSetup();
 }
-function measure() { const gap = parseFloat(getComputedStyle($('wall')).columnGap) || 14; W.bands.forEach((b) => (b.half = (b.el.scrollWidth + gap) / 2)); }
-new IntersectionObserver(([e]) => (W.visible = e.isIntersecting), { rootMargin: '100px' }).observe($('wall'));
-tickers.add((dt) => {
-  if (!W.visible || RM || W.hold) return;
-  const boost = 1 + Math.min(5, Math.abs(sv) / 300);
-  for (const b of W.bands) {
-    if (W.drag?.b !== b) {
-      const target = b.hover && FINE ? 0 : b.base * boost;
-      b.v += (target - b.v) * Math.min(1, dt * 2.5);
-      b.fling *= Math.exp(-dt * 2.2);
-      b.x -= (b.v - b.fling) * dt;
-    }
-    if (b.half) { b.x %= b.half; if (b.x > 0) b.x -= b.half; }
-    b.el.style.transform = `translate3d(${b.x}px,0,0)`;
+function tableSetup() {
+  const sec = $('looks');
+  TB.on = !RM;
+  sec.classList.toggle('pin', TB.on);
+  TB.d = TB.on ? Math.round(innerHeight * 1.6) : 0;
+  sec.style.height = TB.on ? `${innerHeight + TB.d}px` : '';
+  // 起点：和上一幕最后那张卡片一样大、一样的位置
+  const cw = Math.min(CARD_W, innerWidth - 48);
+  TB.s0 = cw / CARD_W; TB.x0 = innerWidth / 2; TB.y0 = innerHeight * 0.53;
+  TB.s1 = innerWidth < 640 ? 0.34 : innerWidth < 1100 ? 0.52 : 0.6;
+  TB.q = -1; tableTick(0);
+}
+const tq = () => (TB.on ? (scrollY - $('looks').offsetTop) / TB.d : 1);
+function tableTick(dt) {
+  const q = tq(), c = clamp01(q);
+  // 舞台和上一幕叠着：还没轮到它时整个藏起来，免得挡住上一幕
+  $('looks').classList.toggle('idle', Z.on && q <= 0);
+  // 鼠标带着镜头微微偏一点；停着不动时镜头自己极慢地飘
+  TB.t += dt;
+  TB.tx += (TB.mx - TB.tx) * Math.min(1, dt * 2.2); TB.ty += (TB.my - TB.ty) * Math.min(1, dt * 2.2);
+  const pull = 1 - (1 - clamp01(c / 0.62)) ** 2.4, glide = inOut(clamp01((c - 0.25) / 0.75)), live = pull * (RM ? 0 : 1);
+  const s = TB.s0 + (TB.s1 - TB.s0) * pull;
+  const ax = 42 * pull - 14 * glide + TB.ty * 4 * live, ay = TB.tx * 3 * live, az = -6 * pull + 2 * glide;
+  const g = innerWidth < 640 ? 0.35 : 1, fx = 240 * g * glide + (Math.sin(TB.t / 7) * 22 + TB.tx * 50) * live, fy = -300 * g * glide + Math.cos(TB.t / 9) * 14 * live;
+  const X = TB.x0 + (innerWidth * 0.5 - TB.x0) * pull, Y = TB.y0 + (innerHeight * 0.6 - TB.y0) * pull;
+  $('table').style.transform = `translate3d(${X.toFixed(1)}px,${Y.toFixed(1)}px,0) rotateX(${ax.toFixed(2)}deg) rotateY(${ay.toFixed(2)}deg) rotateZ(${az.toFixed(2)}deg) scale(${s.toFixed(4)}) translate(${(-fx).toFixed(1)}px,${(-fy).toFixed(1)}px)`;
+  if (q === TB.q) return;
+  TB.q = q;
+  const st = $('tstage');
+  st.style.setProperty('--tbg', `color-mix(in srgb, var(--bg) ${Math.round(pull * 100)}%, var(--hero))`);
+  $('tfog').style.opacity = String(pull);
+  // 台灯从卡片这儿往外一圈圈亮起来
+  for (const p of TB.prints) {
+    const o = Math.round(clamp01((c * 1.3 - 0.06 - p.d * 0.6) / 0.22) * 100) / 100;
+    if (o !== p.o) { p.o = o; p.el.style.opacity = String(o); p.el.style.visibility = o ? '' : 'hidden'; }
   }
-  // 小窗里的字幕：滚到底淡出，回到开头再淡入
-  for (const l of W.lives) {
-    const travel = l.r.offsetHeight - l.el.offsetHeight;
-    if (travel <= 0) continue;
-    l.y += 20 * W.k * dt;
-    if (l.y > travel + 40) l.y = 0;
-    l.r.style.transform = `translate3d(0,${-Math.min(l.y, travel)}px,0)`;
-    l.r.style.opacity = Math.min(1, l.y / 24 + 0.15, (travel + 40 - l.y) / 24);
-  }
-  // 同一张分享图换风格：新的那张从左往右擦出来
-  W.clock += dt;
-  if (W.clock > 2.6) {
-    W.clock = 0;
-    for (const m of W.morphs) {
-      const imgs = m.el.querySelectorAll('img'), prev = imgs[m.j];
-      m.j = (m.j + 1) % m.n;
-      const next = imgs[m.j];
-      prev.classList.remove('on'); prev.style.zIndex = 0; next.style.zIndex = 1;
-      next.animate([{ clipPath: 'inset(0 100% 0 0)', transform: 'scale(1.06)' }, { clipPath: 'inset(0 0 0 0)', transform: 'none' }], { duration: 1100, easing: 'cubic-bezier(.7,0,.2,1)' });
-      const lab = m.el.querySelector('.lab');
-      lab.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(4px)' }, { opacity: 1 }], { duration: 700 });
-      setTimeout(() => (lab.textContent = label(ALL[m.base + m.j])), 350);
-      next.classList.add('on');
-    }
-  }
-});
-// 拖：按住带子左右拖，松手有惯性；拖过的不算点击
-let moved = false;
-$('wall').addEventListener('pointerdown', (e) => {
-  const el = e.target.closest('.band'); if (!el || e.button) return;
-  const b = W.bands.find((x) => x.el === el);
-  W.drag = { b, x0: e.clientX, last: e.clientX, t: performance.now(), vel: 0, id: e.pointerId };
-  moved = false;
-});
-addEventListener('pointermove', (e) => {
-  const d = W.drag; if (!d || e.pointerId !== d.id) return;
-  if (!moved && Math.abs(e.clientX - d.x0) > 6) { moved = true; $('wall').classList.add('drag'); untilt(); try { $('wall').setPointerCapture(e.pointerId); } catch (err) {} }
-  if (!moved) return;
-  const now = performance.now(), dx = e.clientX - d.last;
-  d.b.x += dx; d.vel = d.vel * 0.6 + (dx / Math.max(1, now - d.t)) * 1000 * 0.4;
-  d.last = e.clientX; d.t = now;
-});
-const endDrag = () => { const d = W.drag; if (!d) return; if (moved) { d.b.v = 0; d.b.fling = d.vel; } W.drag = null; $('wall').classList.remove('drag'); };
-addEventListener('pointerup', endDrag); addEventListener('pointercancel', endDrag);
-// 悬停：图块朝鼠标微微转过来，带一点反光
-let hot = null;
-const untilt = () => { if (hot) { hot.classList.remove('hot'); hot.style.removeProperty('--rx'); hot.style.removeProperty('--ry'); hot.style.removeProperty('--s'); hot = null; } };
-$('wall').addEventListener('pointermove', (e) => {
-  if (!FINE || W.drag) return;
-  const t = e.target.closest('.tile');
-  if (t !== hot) untilt();
-  if (!t) return;
-  hot = t; t.classList.add('hot');
-  const r = t.getBoundingClientRect(), px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
-  t.style.setProperty('--rx', `${(0.5 - py) * 9}deg`); t.style.setProperty('--ry', `${(px - 0.5) * 11}deg`); t.style.setProperty('--s', '1.04');
-  t.style.setProperty('--mx', `${px * 100}%`); t.style.setProperty('--my', `${py * 100}%`);
-});
-$('wall').addEventListener('pointerleave', untilt);
-$('wall').addEventListener('focusin', (e) => {
-  const t = e.target.closest('.tile'); if (!t) return;
-  const b = W.bands.find((x) => x.el.contains(t)); W.bands.forEach((x) => (x.hover = x === b));
-  const r = t.getBoundingClientRect(), pad = 60;
-  if (r.left < pad) b.x += pad - r.left; else if (r.right > innerWidth - pad) b.x -= r.right - innerWidth + pad;
-});
-$('wall').addEventListener('focusout', (e) => { if (!$('wall').contains(e.relatedTarget)) W.bands.forEach((x) => (x.hover = false)); });
-$('wall').addEventListener('wheel', (e) => {
-  if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-  const el = e.target.closest('.band'); if (!el) return;
-  e.preventDefault();
-  const b = W.bands.find((x) => x.el === el); b.x -= e.deltaX; b.v = 0;
-}, { passive: false });
-$('wall').addEventListener('click', (e) => {
-  const t = e.target.closest('.tile'); if (!t || moved) return;
-  const m = W.morphs.find((x) => x.el === t);
-  openLb(+t.dataset.i + (m ? m.j : 0), t);
-});
+  const h = clamp01((c - 0.4) / 0.25);
+  $('thead').style.opacity = String(h); $('thead').style.transform = `translateY(${((1 - h) * 18).toFixed(1)}px)`;
+  st.style.pointerEvents = c > 0.3 ? '' : 'none';
+}
+new IntersectionObserver(([e]) => (TB.visible = e.isIntersecting)).observe($('tstage'));
+tickers.add((dt) => { if (TB.visible || TB.q !== tq()) tableTick(dt); });
+$('tstage').addEventListener('pointermove', (e) => { if (!FINE) return; TB.mx = e.clientX / innerWidth - 0.5; TB.my = e.clientY / innerHeight - 0.5; });
+$('tstage').addEventListener('pointerleave', () => { TB.mx = TB.my = 0; });
+$('table').addEventListener('click', (e) => { const b = e.target.closest('.print'); if (b) openLb(+b.dataset.i, b); });
+// 导航点「风格」：滚到镜头差不多停稳的位置
+document.querySelector('nav a[href="#looks"]').addEventListener('click', (e) => { if (!TB.on) return; e.preventDefault(); scrollTo({ top: $('looks').offsetTop + Math.round(TB.d * 0.9), behavior: 'smooth' }); });
 
 // ───────── 放大看：从图块的位置长出来，关的时候缩回去 ─────────
 let cur = -1, src = null, opener = null; // src：缩回去的目标（翻页后就没有了）；opener：关掉后焦点回到哪
@@ -1576,6 +1510,7 @@ async function playTerm(fast) {
     await w(f === 'gif' ? 650 : 260); if (!live()) return;
     add(`<span class="ok">→</span> <a class="out" href="${base}/credits.${f}" target="_blank" rel="noopener" data-f="${f}">credits.${f}</a>  <span class="d">${sz[f]}</span>\n`);
   }
+  add('<span class="p">$</span> <span class="caret"></span>');
   done('term');
 }
 // 悬停 → 文件名：弹出这个文件的样子
@@ -1722,8 +1657,9 @@ const DOC_IC = (ext) => `<svg viewBox="0 0 48 56"><path d="M6 2h26l12 12v38a2 2 
 const CURSOR = '<svg viewBox="0 0 20 20"><path d="M4 2.5v13.2l3.3-3.1 2.2 5.1 2.2-.95-2.15-5h4.6z" fill="#111" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 const D = { run: 0, started: false, cur: { x: 900, y: 600 }, files: [] };
 function deskScale() {
-  const b = $('deskbox'), ds = b.clientWidth / 1040;
-  $('desk').style.setProperty('--ds', ds.toFixed(4)); $('desk').style.height = `${Math.max(840, Math.ceil(b.clientHeight / ds))}px`;
+  // 桌面整块装进框里；框比 1040×840 宽或高的那一边，桌面跟着多长一截
+  const b = $('deskbox'), ds = Math.min(b.clientWidth / 1040, b.clientHeight / 840) || 1;
+  $('desk').style.setProperty('--ds', ds.toFixed(4)); $('desk').style.width = `${Math.ceil(b.clientWidth / ds)}px`; $('desk').style.height = `${Math.ceil(b.clientHeight / ds)}px`;
 }
 function deskFrame() {
   const en = EN_(), dark = isDark();
@@ -1818,7 +1754,7 @@ async function playDesk() {
   }
   D.touring = true; D.cur = { x: 760, y: 520 };
   const c = $('dcur'); c.style.transform = `translate(${D.cur.x}px,${D.cur.y}px)`; c.classList.add('on');
-  const pause = async (ms) => { await sleep(ms); while (live() && !D.visible) await sleep(200); return live(); };
+  const pause = async (ms) => { await sleep(ms); while (live() && !(D.visible && USE.cur === 'app')) await sleep(200); return live(); };
   // 1 分析
   dsteps(0);
   await curTo(onDesk($('tw'), 0.4, 0.4)); tap(); front('tw');
@@ -1899,7 +1835,10 @@ function done(k) { document.querySelector(`[data-again="${k}"]`)?.classList.add(
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-again]'); if (!b) return; b.classList.remove('on'); PLAYS[b.dataset.again](); });
 // 手机上卡片一张接一张划过去，等打字演完太久：直接摆出结果，想看过程点 ↻。App 演示在手机上太小，换成截图
 const PHONE = matchMedia('(max-width: 900px)').matches;
-const playIO = new IntersectionObserver((es) => es.forEach((e) => { if (!e.isIntersecting) return; const k = e.target.dataset.play; playIO.unobserve(e.target); played.add(k); PLAYS[k](PHONE); }), { threshold: 0.4 });
+const USE = { cur: 'cli', vis: false };
+const PLAY_OF = { cli: 'term', agent: 'chat', ci: 'flow', app: 'desk' };
+function playCur() { const k = PLAY_OF[USE.cur]; if (played.has(k) || (PHONE && k === 'desk')) return; played.add(k); PLAYS[k](PHONE); }
+const playIO = new IntersectionObserver((es) => es.forEach((e) => { USE.vis = e.isIntersecting; if (USE.vis) playCur(); }), { threshold: 0.4 });
 // 收尾：creditia 自己的 *，瓣长是它自己仓库里各模型写的份额（构建时用 mark.ts 画好）；滚到页底才绽开。
 // 悬停某个模型，它那一瓣伸长。份额不到 1% 的合成「其他」
 let codaMark = null;
@@ -1926,7 +1865,7 @@ function usage() {
   if (played.has('desk')) { D.run++; D.touring = false; const src = $('appf')?.src; deskFrame(); if (src) { winOpen('aw', false); $('aboot').classList.add('gone'); } $('tw').hidden = !!src; dsteps(6); } else deskFrame();
   coda();
 }
-[['term', '#term'], ['chat', '#chat'], ['flow', '#flow'], ...(PHONE ? [] : [['desk', '#deskbox']])].forEach(([k, q]) => { const el = document.querySelector(q); el.dataset.play = k; playIO.observe(el); });
+playIO.observe($('ustage'));
 
 // ───────── 复制：按钮上方冒一个小提示 ─────────
 const DL_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v10.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6zM4 19h16v2H4z"/></svg>';
@@ -1991,60 +1930,82 @@ function ways() {
 }
 const fits = (o) => !o.os || o.os === detectOS() || (o.os === 'unix' && detectOS() !== 'win');
 const picks = {};
-const CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>';
+const CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 const COPY_L = () => (lang() === 'en' ? 'Copy' : '复制');
 const FILE_SVG = '<svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>';
 const dq = (x) => esc(x).replace(/"/g, '&quot;');
-const swBtn = (label) => `<button class="tsw" aria-expanded="false" aria-haspopup="true" aria-label="${lang() === 'en' ? 'Other ways' : '其他方式'}">${label ? esc(label) : ''}${CHEV}</button>`;
-// 轮到你的那一下，长成各自演示的样子：终端提示符、对话输入框、workflow 文件、App 标题栏上的下载
-function turnHtml(w, o) {
+/** 选中的那种装法底下那句小字：要什么、装完做什么 */
+function uHint(w, o) {
   const en = lang() === 'en';
-  if (w.id === 'cli') return `<span class="cwd"><em>~/your-repo</em> ❯</span><code class="tc" title="${dq(o.text)}">${esc(o.text)}</code>${swBtn(o.k)}<button class="tcp" data-copy="${dq(o.text)}"${o.tip ? ` title="${dq(o.tip)}"` : ''}>${COPY_SVG}${COPY_L()}</button>`;
-  if (w.id === 'agent') {
-    const say = o.kind === 'say';
-    return `<div class="cbox"><div class="ctx${say ? '' : ' mono'}">${esc(say ? o.text.replace(/\n/g, ' ') : o.text)}</div><div class="crow">${swBtn(o.k)}${say ? '' : `<span class="ch">${en ? 'Run it in a terminal' : '在终端里运行'}</span>`}<button class="csend" data-copy="${dq(o.text)}">${COPY_SVG}${say ? (en ? 'Copy, send to your agent' : '复制，发给你的 agent') : COPY_L()}</button></div></div>`;
-  }
-  if (w.id === 'ci') return `${FILE_SVG}<code class="tc">${esc(o.file)}</code>${swBtn(o.k)}<button class="tcp" data-copy="${dq(o.text)}">${COPY_SVG}${COPY_L()}</button>`;
-  // App：卡片底下一条，粗体「安装」+ 一句话，下面一个整行宽的下载按钮
-  const ic = ICON(o.os === 'mac' ? 'apple' : o.os === 'win' ? 'windows' : 'linux');
-  const lab = `<div class="wlab"><b>${en ? 'Install' : '安装'}</b><span class="t">${o.kind === 'dl' ? (en ? 'Download, then open the installer' : '下载后打开安装包') : (en ? 'Run in a terminal' : '在终端里运行')}</span><button class="wmore" aria-expanded="false" aria-haspopup="true">${en ? 'Other ways' : '其他方式'}${CHEV}</button></div>`;
-  if (o.kind === 'dl') return lab + `<div class="wfield big"><a class="wcopy" href="${asset(o.file)}" download>${ic}${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`} · ${esc(o.k)}</a></div>`;
-  return lab + `<div class="wfield"><code class="wc" title="${dq(o.text)}"><i>$</i>${esc(o.text)}</code><button class="wcopy" data-copy="${dq(o.text)}">${COPY_SVG}${COPY_L()}</button></div>`;
+  if (w.id === 'cli') return o.k === 'npx' ? (en ? 'Node 22+, nothing to install' : '需要 Node 22+，不用安装') : (en ? 'Then run creditia analyze in your repo' : '装好后在仓库里运行 creditia analyze');
+  if (w.id === 'agent') return o.kind === 'say' ? (en ? 'Paste it into Claude Code, Codex, Cursor…' : '粘贴给 Claude Code、Codex、Cursor 等') : (en ? 'Run in a terminal to add the creditia skill' : '在终端里运行，装上 creditia skill');
+  if (w.id === 'ci') return en ? `Save it as ${o.file}; the next push publishes` : `存成 ${o.file}，下次推送就生效`;
+  return o.kind === 'dl' ? (en ? `v${VER} · open the installer once downloaded` : `v${VER} · 下载后打开安装包`) : (en ? 'Run in a terminal' : '在终端里运行');
 }
+const OPT_L = { cli: ['安装方式', 'Install with'], agent: ['发给它', 'Send as'], ci: ['平台', 'Platform'], app: ['安装方式', 'Install with'] };
+// 演示底下的安装：一条大的，旁边写明复制；下面一排字是这一种用法的别的装法（本机用得上的摆出来，其余收在「更多」里）
 function install() {
-  const en = lang() === 'en';
-  for (const w of ways()) {
-    const first = (f) => w.opts.findIndex(f);
-    const at = picks[w.id] ?? [first(fits), 0].find((j) => j >= 0);
-    $('get-' + w.id).innerHTML = turnHtml(w, w.opts[at]);
-  }
+  const en = lang() === 'en', w = ways().find((x) => x.id === USE.cur);
+  const at = picks[w.id] ?? [w.opts.findIndex(fits), 0].find((j) => j >= 0), o = w.opts[at];
+  let field;
+  if (o.kind === 'dl') {
+    const ic = ICON(o.os === 'mac' ? 'apple' : o.os === 'win' ? 'windows' : 'linux');
+    field = `<div class="ufield dl"><a class="ucopy" href="${asset(o.file)}" download>${ic}${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`} · ${esc(o.k)}</a></div>`;
+  } else if (o.kind === 'say') field = `<div class="ufield"><div class="ut say">${esc(o.text.replace(/\n/g, ' '))}</div><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${en ? 'Copy, send to your agent' : '复制，发给你的 agent'}</button></div>`;
+  else if (o.kind === 'yaml') field = `<div class="ufield">${FILE_SVG}<code class="ut">${esc(o.file)}</code><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${en ? 'Copy workflow' : '复制 workflow'}</button></div>`;
+  else field = `<div class="ufield"><code class="ut" title="${dq(o.text)}"><i>$</i>${esc(o.text)}</code><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${COPY_L()}</button></div>`;
+  const inl = w.opts.map((x, j) => j).filter((j) => fits(w.opts[j])).slice(0, 6);
+  if (!inl.includes(at)) inl.push(at);
+  const more = w.opts.length > inl.length;
+  $('uget').innerHTML = field + `<div class="uopts"><span class="ul">${OPT_L[w.id][en ? 1 : 0]}</span>`
+    + inl.map((j) => `<button data-j="${j}" class="${j === at ? 'on' : ''}">${esc(w.opts[j].k)}</button>`).join('')
+    + (more ? `<button class="umore" aria-expanded="false" aria-haspopup="true">${en ? 'More' : '更多'}${CHEV}</button>` : '')
+    + `<span class="uh">${esc(uHint(w, o))}</span></div>`;
   // 首屏第二个按钮：下载本机的 App（手机上没有 App，去看四种用法）
   const me = detectOS();
-  const hero = MOBILE ? [DL_SVG, en ? 'Install' : '安装', '#use'] : [ICON(me === 'mac' ? 'apple' : me === 'win' ? 'windows' : 'linux'), en ? `Get it for ${OSN[me]}` : `下载 ${OSN[me]} 版`, '#deskcard'];
-  $('herodl').innerHTML = hero[0] + hero[1]; $('herodl').setAttribute('href', hero[2]);
+  const hero = MOBILE ? [DL_SVG, en ? 'Install' : '安装'] : [ICON(me === 'mac' ? 'apple' : me === 'win' ? 'windows' : 'linux'), en ? `Get it for ${OSN[me]}` : `下载 ${OSN[me]} 版`];
+  $('herodl').innerHTML = hero[0] + hero[1]; $('herodl').setAttribute('href', '#use');
 }
-// 旁边的小开关：这一种用法的全部装法，点一个就换上去
-const closePop = () => document.querySelectorAll('.wpop').forEach((x) => { x.parentElement.querySelector('.tsw, .wmore')?.setAttribute('aria-expanded', 'false'); x.remove(); });
-const wayOf = (el) => { const turn = el.closest('.turn'); return ways().find((x) => 'get-' + x.id === turn.id); };
+// 「更多」：这一种用法的全部装法，点一个就换上去
+const closePop = () => document.querySelectorAll('.wpop').forEach((x) => { document.querySelector('.umore')?.setAttribute('aria-expanded', 'false'); x.remove(); });
 document.addEventListener('click', (e) => {
-  const more = e.target.closest('.tsw, .wmore'), item = e.target.closest('.wpop button');
-  if (item) { picks[wayOf(item).id] = +item.dataset.j; closePop(); install(); return; }
+  const item = e.target.closest('.uopts button[data-j], .wpop button'), more = e.target.closest('.umore');
+  if (item) { picks[USE.cur] = +item.dataset.j; closePop(); install(); return; }
   if (!more) { if (!e.target.closest('.wpop')) closePop(); return; }
   const open = more.getAttribute('aria-expanded') === 'true';
   closePop(); if (open) return;
-  const w = wayOf(more), en = lang() === 'en';
+  const w = ways().find((x) => x.id === USE.cur), en = lang() === 'en';
   const cur = picks[w.id] ?? -1, pop = document.createElement('div');
   pop.className = 'wpop'; pop.setAttribute('role', 'menu');
   pop.innerHTML = w.opts.map((o, j) => `${o.g ? `<div class="g">${o.g}</div>` : ''}<button role="menuitem" data-j="${j}" class="${j === cur ? 'on' : ''}"${o.tip ? ` title="${o.tip}"` : ''}><b>${esc(o.k)}</b><span>${esc(o.kind === 'dl' ? o.file : o.kind === 'say' ? o.text.split('\n')[0] : o.kind === 'yaml' ? o.file : o.text)}</span></button>`).join('')
     + `<div class="ver">${en ? `Current <code>v${VER}</code> · nightly: <code>creditia@next</code>, <code>@main</code>` : `当前 <code>v${VER}</code> · 预览版 <code>creditia@next</code>、<code>@main</code>`}</div>`;
-  more.closest('.turn').append(pop); more.setAttribute('aria-expanded', 'true');
+  $('uget').append(pop); more.setAttribute('aria-expanded', 'true');
+  pop.style.left = `${Math.max(0, Math.min(more.offsetLeft - 6, $('uget').clientWidth - pop.offsetWidth))}px`;
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
-// 首屏的下载按钮：滚到 App 那张卡片，亮一下
-function flash(el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+// 左边挑一种：右边换成它的演示，没演过的现在演；底下换成它的安装
+const SUB = { cli: '~/your-repo', agent: 'Claude Code · Codex · Cursor · Gemini CLI …', ci: 'WroughtMind/creditia@main', app: 'macOS · Windows · Linux' };
+function pickWay(id, focus) {
+  USE.cur = id; closePop();
+  $('upick').querySelectorAll('button').forEach((b) => { const on = b.dataset.w === id; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
+  document.querySelectorAll('.upane').forEach((p) => p.classList.toggle('on', p.dataset.w === id));
+  document.querySelectorAll('.ubar .again').forEach((b) => (b.hidden = b.dataset.again !== PLAY_OF[id]));
+  $('dsteps').hidden = id !== 'app';
+  $('usub').textContent = PHONE ? t(`w.${id}.d`) : SUB[id];
+  if (id === 'app') deskScale();
+  install();
+  if (USE.vis) playCur();
+}
+$('upick').addEventListener('click', (e) => { const b = e.target.closest('button[data-w]'); if (b && b.dataset.w !== USE.cur) pickWay(b.dataset.w); });
+$('upick').addEventListener('keydown', (e) => {
+  const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key]; if (!d) return;
+  e.preventDefault(); const ids = Object.keys(PLAY_OF); pickWay(ids[(ids.indexOf(USE.cur) + d + ids.length) % ids.length], true);
+});
+// 首屏的下载按钮：换到 App，滚过来，下载按钮亮一下
 $('herodl').addEventListener('click', (e) => {
-  const card = document.querySelector(e.currentTarget.getAttribute('href')); if (!card) return;
-  e.preventDefault(); card.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'center' }); flash(card);
+  e.preventDefault(); pickWay('app');
+  document.querySelector('.uses').scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'center' });
+  const g = $('uget'); g.classList.remove('flash'); void g.offsetWidth; g.classList.add('flash');
 });
 
 // ───────── 顶栏：离开首屏后变实底；往下滚收起，往上滚出现；当前在哪一节，药丸就滑到哪 ─────────
@@ -2064,7 +2025,7 @@ const navTo = (id) => {
 // 视口 40% 高度那条线落在哪一节，就是当前节
 const SECS = ['lines', 'looks', 'use'];
 let curSec;
-const spy = () => { let id = null; for (const k of SECS) if ((Z.on && k === 'lines' ? (zp() >= 0.5 ? 0 : 1e9) : $(k).getBoundingClientRect().top) < innerHeight * 0.4) id = k; if (id !== curSec) { curSec = id; navTo(id); } };
+const spy = () => { let id = null; for (const k of SECS) if ((Z.on && k === 'lines' ? (zp() >= 0.5 ? 0 : 1e9) : $(k).getBoundingClientRect().top + (Z.on && k === 'looks' ? innerHeight * 0.5 : 0)) < innerHeight * 0.4) id = k; if (id !== curSec) { curSec = id; navTo(id); } };
 addEventListener('scroll', spy, { passive: true });
 addEventListener('resize', () => { curSec = undefined; spy(); });
 
@@ -2096,7 +2057,7 @@ function applyLang() {
   document.querySelectorAll('[data-en-href]').forEach((a) => { a.dataset.zhHref ??= a.getAttribute('href'); a.setAttribute('href', lang() === 'en' ? a.dataset.enHref : a.dataset.zhHref); });
   $('lang').textContent = lang() === 'en' ? '中' : 'EN';
   document.title = lang() === 'en' ? 'creditia — which AI wrote your code' : 'creditia — 你的代码，是哪些 AI 写的';
-  field(); wall(); lines(); usage(); install(); zoomSetup();
+  field(); lines(); usage(); pickWay(USE.cur); zoomSetup(); table();
 }
 // 换语言：整页淡入淡出；换主题：从按钮那里一圈扩开
 const transition = (fn, circleFrom) => {
@@ -2127,7 +2088,7 @@ $('theme').onclick = (e) => {
 };
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (!document.documentElement.dataset.theme) onTheme(); });
 $('copy').dataset.copy = 'npx creditia analyze';
-let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { field(); zoomSetup(); const k = W.k; if ((innerWidth < 640 ? 0.58 : innerWidth < 1000 ? 0.78 : 1) !== k) wall(); else measure(); }, 200); });
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { field(); zoomSetup(); if (innerWidth !== TB.w) { TB.w = innerWidth; table(); } else tableSetup(); }, 200); });
 applyLang();
 intro();
 document.fonts?.ready.then(() => Z.on && zoomSetup()); // 字体到了再量一次词的位置

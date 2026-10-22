@@ -98,8 +98,8 @@ for (const lang of LANGS) {
   meta.share[lang] = segs.filter((l) => l.length >= 4 && l[0].color).map((l) => ({ key: l[0].color, name: l[0].text.trim(), pct: parseFloat(l[3].text), model: (l[4]?.text ?? '').trim() }));
 }
 
-// 风格墙：三条带子，图块大小不一；一列可以是一张，也可以上下叠两三张。
-// 有的图块会动：live 是一整卷字幕在小窗里滚，morph 是同一张分享图在几种风格之间切换
+// 风格：按三条带子列出来的一批作品（缩略图按这个尺寸出）；官网把它们拍平摊在一张看样台上。
+// live 是一整卷字幕（台面上裁成一截），morph 是同一张分享图的几种风格（各摆一张，挨着署名卡）
 const styles = [
   ...ORDERED_THEMES.map((t) => ({ id: t.id, name: themeName(t, 'zh'), en: themeName(t, 'en'), note: themeNote(t, 'zh'), noteEn: themeNote(t, 'en'), dot: themeDot(t), bg: t.bg })),
   ...V2_STYLES.map((s) => ({ id: s.id, name: s.name, en: s.en, note: s.note, noteEn: s.noteEn, dot: s.dot(), bg: s.c.bg })),
