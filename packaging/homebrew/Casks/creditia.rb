@@ -1,4 +1,4 @@
-# creditia 的 App（macOS）。放进 WroughtMind/homebrew-tap 的 Casks/ 下：brew install --cask wroughtmind/tap/creditia
+# creditia 的 App（macOS）。和魏碑放在同一个 tap 里：taekchef/homebrew-tap 的 Casks/ 下，brew install --cask taekchef/tap/creditia
 # 发版时改 version，sha256 换成 creditia_<version>_universal.dmg 的：shasum -a 256 creditia_*_universal.dmg
 cask "creditia" do
   version "0.1.0"
