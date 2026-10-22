@@ -11,10 +11,12 @@ cask "creditia" do
 
   app "creditia.app"
 
-  # App 还没有 Apple 签名：Homebrew 下载时会打上隔离标记，macOS 就说「已损坏」。装好后替用户去掉，打开就能用
-  postflight do
-    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/creditia.app"]
-  end
+  # App 还没有 Apple 签名：Homebrew 下载时会打上隔离标记，macOS 就说「已损坏」。
+  # 不在 postflight 里替用户去掉（Homebrew 不鼓励这么做），官网和 README 给的安装命令后面直接接着 xattr
+  caveats <<~EOS
+    creditia is not signed by Apple yet. If macOS says it is damaged, run:
+      xattr -dr com.apple.quarantine #{appdir}/creditia.app
+  EOS
 
   zap trash: [
     "~/Library/Caches/dev.creditia.app",
