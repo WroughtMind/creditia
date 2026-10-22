@@ -198,7 +198,7 @@ node site/build.ts                            # website → _site/
 node site/readme.ts                           # README images → .github/readme/
 ```
 
-The macOS app isn't signed by Apple yet: a downloaded copy (Homebrew included) may say it's damaged the first time. Once it's in Applications, run `xattr -dr com.apple.quarantine /Applications/creditia.app` once, or click Open Anyway under System Settings → Privacy & Security. On Windows, if SmartScreen stops it, click More info → Run anyway.
+The macOS app isn't signed by Apple yet: a .dmg you download directly may say it's damaged the first time. Once it's in Applications, run `xattr -dr com.apple.quarantine /Applications/creditia.app` once, or click Open Anyway under System Settings → Privacy & Security. If you install with Homebrew there is nothing to do: the cask clears the flag itself. On Windows, if SmartScreen stops it, click More info → Run anyway.
 
 </details>
 
