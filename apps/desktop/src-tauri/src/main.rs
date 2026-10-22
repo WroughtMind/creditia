@@ -860,7 +860,7 @@ mod tests {
 
     #[test]
     fn export_names_stay_in_the_folder() {
-        assert_eq!(safe_name("lumen-share-ink.png"), "lumen-share-ink.png");
+        assert_eq!(safe_name("catnap-share-ink.png"), "catnap-share-ink.png");
         assert_eq!(safe_name("../../etc/passwd"), "-..-etc-passwd");
         assert_eq!(safe_name(".."), "export");
         assert_eq!(safe_name("a:b*c?.svg"), "a-b-c-.svg");

@@ -1,6 +1,6 @@
 // README 用的图：node site/readme.ts → .github/readme/
 // 代码地图（和官网首屏同一套算法，SVG 动画，深浅两版 × 中英文）、风格拼图（PNG）、工具 logo、creditia 自己的 logo。
-// 图都是从样例项目 lumen 现画的，改了渲染器或样例以后重跑一遍就行。
+// 图都是从样例项目 catnap 现画的，改了渲染器或样例以后重跑一遍就行。
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { buildModel, styleById, art, exporter } from '../packages/render/src/index.ts';
@@ -13,7 +13,7 @@ import { ORDERED_THEMES } from '../packages/render/src/classic/catalog.ts';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const OUT = path.join(ROOT, '.github/readme');
 mkdirSync(path.join(OUT, 'logo'), { recursive: true });
-const sample = JSON.parse(readFileSync(path.join(ROOT, 'packages/render/fixtures/lumen.json'), 'utf8'));
+const sample = JSON.parse(readFileSync(path.join(ROOT, 'packages/render/fixtures/catnap.json'), 'utf8'));
 const LANGS = ['zh', 'en'] as const;
 type Lang = (typeof LANGS)[number];
 const put = (rel: string, data: string | Uint8Array) => { writeFileSync(path.join(OUT, rel), data); console.log(`  ${rel}  ${(Buffer.byteLength(data as any) / 1024).toFixed(0)} KB`); };
@@ -116,7 +116,8 @@ function mapSvg(toks: Tok[], theme: keyof typeof THEMES, lang: Lang): string {
     lx += w + gap;
     return s;
   }).join('');
-  const lines = 49360, cap = en ? `${lines.toLocaleString('en-US')} lines · 612 commits · 112 days` : `${lines.toLocaleString('en-US')} 行 · 612 次提交 · 112 天`;
+  const r = sample.project.range, days = Math.round((Date.parse(r.to) - Date.parse(r.from)) / 864e5) + 1, n = sample.totals.commits;
+  const lines = sample.totals.linesAdded, cap = en ? `${lines.toLocaleString('en-US')} lines · ${n} commits · ${days} days` : `${lines.toLocaleString('en-US')} 行 · ${n} 次提交 · ${days} 天`;
   const note = en ? 'every line, matched to the agent that wrote it' : '每一行，对上写它的 AI';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
 <defs>
@@ -127,7 +128,7 @@ function mapSvg(toks: Tok[], theme: keyof typeof THEMES, lang: Lang): string {
 <mask id="flash" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect x="-150" y="0" width="150" height="${H}" fill="url(#fl)">${move}</rect></mask>
 </defs>
 <rect width="${W}" height="${H}" rx="18" fill="${c.bg}"/>
-<text x="${MX}" y="58" font-family="${sans}" font-size="20" fill="${c.ink}"><tspan font-family="${mono}" font-weight="600">lumen</tspan><tspan dx="14" fill="${c.soft}">${esc(note)}</tspan></text>
+<text x="${MX}" y="58" font-family="${sans}" font-size="20" fill="${c.ink}"><tspan font-family="${mono}" font-weight="600">${esc(sample.project.name)}</tspan><tspan dx="14" fill="${c.soft}">${esc(note)}</tspan></text>
 <text x="${W - MX}" y="58" text-anchor="end" font-family="${mono}" font-size="17" fill="${c.soft}">${esc(cap)}</text>
 <g fill="none" stroke-width="2">
 <use href="#all" stroke="${c.ink}" stroke-opacity=".16"/>

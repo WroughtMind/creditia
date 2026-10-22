@@ -107,7 +107,7 @@ section, #screen { scroll-margin-top: 64px; }
 /* ───────── 首屏 ───────── */
 #screen { position: relative; height: 100vh; height: 100svh; min-height: 660px; max-height: 1100px; overflow: hidden; background: var(--hero); color: var(--hero-ink); transition: background-color .3s, color .3s; }
 @property --p { syntax: '<percentage>'; inherits: false; initial-value: 130%; }
-/* 首屏右边：lumen 整个仓库摊开成一片代码地图，一个文件一段、一行一道线；一道光扫过去，每一行染上写它的 AI 的颜色 */
+/* 首屏右边：catnap 整个仓库摊开成一片代码地图，一个文件一段、一行一道线；一道光扫过去，每一行染上写它的 AI 的颜色 */
 .field { position: absolute; z-index: 1; top: 96px; bottom: 52px; left: calc(max(32px, (100vw - 1120px) / 2) + min(520px, 46vw) + 64px); right: 0; display: flex; flex-direction: column; gap: 16px; translate: 0 calc(var(--py, 0px) * -0.3); }
 .fcap { display: flex; justify-content: space-between; gap: 16px; padding-right: max(32px, calc((100vw - 1120px) / 2)); font-size: 12px; color: var(--hero-soft); white-space: nowrap; }
 .fcap #fcount { color: var(--hero-ink); font-variant-numeric: tabular-nums; transition: opacity .6s; }
@@ -156,7 +156,8 @@ html.zoom #looks { margin-top: -100vh; padding-top: 0; }
 .tview { position: absolute; inset: 0; }
 .table { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; will-change: transform; }
 /* 远处的照片沉进底色里，像台灯照不到的地方 */
-.tfog { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(var(--tbg, var(--bg)) 6%, transparent 42%), radial-gradient(120% 90% at 50% 64%, transparent 50%, var(--tbg, var(--bg)) 96%); }
+/* 下沿也化进底色：舞台放开往上走时，台面是慢慢没进去的，不是一刀切开 */
+.tfog { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(var(--tbg, var(--bg)) 6%, transparent 42%, transparent 58%, var(--tbg, var(--bg)) 93%), radial-gradient(120% 90% at 50% 64%, transparent 50%, var(--tbg, var(--bg)) 96%); }
 .print { position: absolute; padding: 0; border: 0; border-radius: 5px; background: var(--line2); cursor: zoom-in; transform: rotate(var(--r, 0deg)); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 26px 44px -22px rgba(0,0,0,.45); transition: transform .6s cubic-bezier(.2,.8,.2,1), box-shadow .6s; -webkit-tap-highlight-color: transparent; }
 .print img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: inherit; -webkit-user-drag: none; pointer-events: none; }
 .print .cap { position: absolute; left: 2px; top: calc(100% + 16px); font: 19px/1.3 "JetBrains Mono", monospace; color: var(--faint); white-space: nowrap; transition: color .3s; }
@@ -424,6 +425,11 @@ a.ucopy svg { fill: currentColor; }
 .ufield.dl { padding: 0; background: none; box-shadow: none; }
 .ufield.dl .ucopy { flex: 1; height: 64px; border-radius: 16px; font-size: 15.5px; }
 .ufield.dl .ucopy svg { width: 18px; height: 18px; }
+.unq { margin-top: 14px; display: grid; gap: 8px; }
+.unq p { margin: 0; padding-left: 8px; font-size: 13px; color: var(--soft); }
+.ufield.sm { min-height: 48px; padding: 6px 6px 6px 18px; border-radius: 13px; background: transparent; }
+.ufield.sm .ut { font-size: 12.5px; color: var(--soft); }
+.ufield.sm .ucopy { height: 36px; padding: 0 13px 0 11px; border-radius: 9px; font-size: 13px; background: var(--line2); color: var(--ink); }
 .uopts { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 2px; margin-top: 12px; padding-left: 8px; font-size: 13px; }
 .uopts .ul { color: var(--faint); margin-right: 8px; }
 .uopts button { height: 30px; padding: 0 10px; border: 0; border-radius: 99px; background: transparent; color: var(--soft); font: 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: color .15s, background-color .15s; }
@@ -736,23 +742,23 @@ function count(el, to, fmt, dur = 1000) {
 
 // ───────── 首屏 ─────────
 $('agents').innerHTML = DATA.tools.map((x) => `<span data-n="${x.name}" aria-label="${x.name}">${x.svg}</span>`).join('');
-// 首屏：同一张分享图（样例项目 lumen），在几种风格之间换。一道光从左扫到右，新风格就显出来；
+// 首屏：同一张分享图（样例项目 catnap），在几种风格之间换。一道光从左扫到右，新风格就显出来；
 // 背后的光晕跟着换色。点圆点直接换，鼠标放在图上就停
-// ───────── 首屏：lumen 的代码地图 ─────────
+// ───────── 首屏：catnap 的代码地图 ─────────
 // 一个文件一段、一行一道线，先是一片灰；一道光从左扫到右，扫过的行染上写它的 AI 的颜色，占比跟着涨到最终数字。
 // 扫完以后：悬停一段看这个文件谁写了多少，悬停图例只亮这个工具写的行。
 const FT = ['claude-code', 'codex', 'cursor', 'kimi', 'grok', 'unattributed'];
 const F = { n: 0, cols: 0, rows: 0, w: 0, h: 0, dpr: 1, cw: 9, gap: 7, files: [], byCol: [], t0: 0, raf: 0, done: false, hover: -1, focus: -1, key: '' };
-const PITCH = 4.5, SH = 2, INTRO = 900, SCAN = 2700, LINES = 49360;
-const FDIRS = [['src/core', 'ts'], ['src/render', 'ts'], ['src/lens', 'ts'], ['src/ui', 'tsx'], ['crates/lumen-core/src', 'rs'], ['crates/lumen-cli/src', 'rs'], ['tests', 'ts'], ['scripts', 'sh']];
-const FNAMES = ['exposure', 'timeline', 'grain', 'histogram', 'palette', 'shutter', 'decode', 'export', 'session', 'layers', 'mask', 'tone', 'curve', 'bloom', 'viewport', 'cache', 'thumb', 'queue', 'worker', 'config', 'plugin', 'metadata', 'lut', 'raw', 'sharpen', 'crop', 'white_balance', 'preview', 'keymap', 'undo'];
+const PITCH = 4.5, SH = 2, INTRO = 900, SCAN = 2700, LINES = DATA.sample.lines;
+const FDIRS = [['src/spots', 'ts'], ['src/treats', 'ts'], ['src/purr', 'ts'], ['apps/web/src', 'tsx'], ['crates/catnap-core/src', 'rs'], ['crates/catnap-cli/src', 'rs'], ['tests', 'ts'], ['scripts', 'sh']];
+const FNAMES = ['sunbeam', 'keyboard', 'grudges', 'zoomies', 'hairball', 'laptop', 'boxes', 'yarn', 'whiskers', 'litter', 'treats', 'catnip', 'windowsill', 'red_dot', 'slow_blink', 'kneading', 'meow', 'purr', 'nap', 'tail', 'scratch', 'cushion', 'vet_day', 'bird_tv', 'food_bowl', 'blanket', 'cardboard', 'string', 'paws', 'toe_beans']
 const zTool = (who) => { const w = Array.isArray(who) ? who[1] : who; return w.startsWith('Claude') ? 0 : w.startsWith('Codex') ? 1 : w.startsWith('Cursor') ? 2 : 5; };
 function rng(seed) { return () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const inOut = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 /** 按画布大小摆出所有的线；同一个种子，换尺寸也是同一个仓库的样子 */
 function fieldBuild() {
-  // 挑一个种子，让各色线的比例贴近 lumen 真实的占比
+  // 挑一个种子，让各色线的比例贴近 catnap 真实的占比
   const want = FT.map((k) => (DATA.share.zh.find((r) => r.key === k)?.pct || 0) / 100);
   let best = null;
   for (let seed = 1; seed <= 40; seed++) {
@@ -775,13 +781,13 @@ function fieldLay(seed) {
   const pick = () => { let v = R() * tot; for (let k = 0; k < wt.length; k++) { v -= wt[k]; if (v <= 0) return k; } return 0; };
   const X = [], Y = [], Wd = [], T = [], S = [];
   F.files = []; F.byCol = [];
-  // 地图里有一个真文件：src/core/analyze.ts，十六行的形状就是「出处」那一节编辑器里的十六行；往下滚时镜头推进它
+  // 地图里有一个真文件：src/spots/pick.ts，十六行的形状就是「出处」那一节编辑器里的十六行；往下滚时镜头推进它
   const cz = Math.min(F.cols - 2, Math.max(0, Math.round(F.cols * 0.38))), rz = Math.round(F.rows * 0.42);
   const special = (c, list) => {
-    const f = { name: 'src/core/analyze.ts', r0: rz, r1: rz + CODE.length, i0: X.length, counts: [0, 0, 0, 0, 0, 0], special: true }, cwz = F.cw / 62;
+    const f = { name: 'src/spots/pick.ts', r0: rz, r1: rz + CODE.length, i0: X.length, counts: [0, 0, 0, 0, 0, 0], special: true }, cwz = F.cw / 62;
     CODE.forEach(([tx, , who], r) => {
       const tool = zTool(who);
-      for (const m of tx.matchAll(/\S+/g)) { X.push(c * (F.cw + F.gap) + m.index * cwz); Y.push((rz + r) * PITCH); Wd.push(Math.max(1.2, m[0].length * cwz)); T.push(tool); S.push(/^(export|async|function|const|await|for|of|return)$/.test(m[0]) ? 0 : 1); }
+      for (const m of tx.matchAll(/\S+/g)) { X.push(c * (F.cw + F.gap) + m.index * cwz); Y.push((rz + r) * PITCH); Wd.push(Math.max(1.2, m[0].length * cwz)); T.push(tool); S.push(/^(export|async|function|const|let|await|for|of|if|return)$/.test(m[0]) ? 0 : 1); }
       if (tx.trim()) f.counts[tool]++;
     });
     f.i1 = X.length; F.zi0 = f.i0; F.zi1 = f.i1;
@@ -900,7 +906,8 @@ function field() {
   cancelAnimationFrame(F.raf);
   if (F.done) { fieldDraw(performance.now()); liveNext(); } else F.raf = requestAnimationFrame(fieldLoop);
 }
-const fproj = () => (EN_() ? 'lumen · 612 commits · 5 AI tools · 112 days' : 'lumen · 612 次提交 · 5 个 AI 工具 · 112 天');
+const SP = DATA.sample;
+const fproj = () => (EN_() ? `${SP.name} · ${SP.commits} commits · ${SP.tools} AI tools · ${SP.days} days` : `${SP.name} · ${SP.commits} 次提交 · ${SP.tools} 个 AI 工具 · ${SP.days} 天`);
 // 扫完以后，隔几秒来一次“新提交”：随机一个文件里的一小段被某个工具重写
 function liveNext() { clearTimeout(F.liveT); if (!RM) F.liveT = setTimeout(liveCommit, 4500 + Math.random() * 4000); }
 function liveCommit() {
@@ -954,7 +961,7 @@ $('flegend').addEventListener('pointerleave', () => legendFocus(-1));
 // 换主题：颜色重读一遍
 new MutationObserver(() => F.done && fieldDraw(0)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => F.done && fieldDraw(0));
-// ───────── 首屏 → 出处：往下滚，首屏钉住，镜头推进 analyze.ts；别的文件散开，十六行线对准编辑器里的每个词，再换成字 ─────────
+// ───────── 首屏 → 出处：往下滚，首屏钉住，镜头推进 pick.ts；别的文件散开，十六行线对准编辑器里的每个词，再换成字 ─────────
 const Z = { on: false, p: -1, d: 0, top: 0, toks: [], lns: [], w: 0, h: 0, dpr: 1, raf: 0, h2: false, slots: [], delay: [], segs: [] };
 function zoomSetup() {
   const root = document.documentElement, was = Z.on;
@@ -976,7 +983,7 @@ function zoomSetup() {
   zoomMeasure(); zcardBuild(); zcardMeasure(); Z.ls = null;
   Z.p = -1; zoomTick();
 }
-/** 编辑器里每个词的位置（相对舞台），和地图里 analyze.ts 的线一一对应 */
+/** 编辑器里每个词的位置（相对舞台），和地图里 pick.ts 的线一一对应 */
 function zoomMeasure() {
   const st = $('zstage').getBoundingClientRect();
   Z.toks = []; Z.lns = [];
@@ -1030,7 +1037,7 @@ function zoomDraw(p, pc = 0, pd = 0) {
   const colorOf = (k) => (k === 5 ? soft : AGC[FT[k]]);
   const st = $('zstage').getBoundingClientRect(), fr = $('fcv').getBoundingClientRect();
   const O = { x: fr.left - st.left, y: fr.top - st.top };
-  // 镜头：地图里 analyze.ts 的左上角 B，最后落到编辑器第一行第一个词的位置 E；一行的间距从 PITCH 放到编辑器的行高
+  // 镜头：地图里 pick.ts 的左上角 B，最后落到编辑器第一行第一个词的位置 E；一行的间距从 PITCH 放到编辑器的行高
   const B = { x: F.x[F.zi0], y: f.r0 * PITCH }, lh = Z.lns[1].y - Z.lns[0].y, sF = lh / PITCH;
   const E = { x: Z.toks[0].x, y: Z.lns[0].y + (lh - SH * sF) / 2 };
   const k = 1 - (1 - clamp01(p / 0.6)) ** 2.2, s = sF ** k, t = (s - 1) / (sF - 1); // 先快后慢：一开始就看得出在往里推
@@ -1058,7 +1065,7 @@ function zoomDraw(p, pc = 0, pd = 0) {
       ctx.globalAlpha = 1 - k; ctx.fillStyle = g; ctx.fillRect(fx, 0, Z.w - fx, Z.h);
     }
   }
-  // analyze.ts 的线：先跟着镜头放大，再对准每个词，最后淡掉，换成字
+  // pick.ts 的线：先跟着镜头放大，再对准每个词，最后淡掉，换成字
   const m = inOut(clamp01((p - 0.4) / 0.36)), fade = 1 - clamp01((p - 0.8) / 0.14);
   for (let i = F.zi0; i < F.zi1; i++) {
     const tk = Z.toks[i - F.zi0];
@@ -1091,12 +1098,12 @@ function pourDraw(ctx, pc, pd) {
   }
   ctx.globalAlpha = 1;
 }
-/** 署名卡：lumen、份额条、各工具的占比 */
+/** 署名卡：catnap、份额条、各工具的占比 */
 function zcardBuild() { $('zcard').innerHTML = zcardHtml(); }
 function zcardHtml() {
   const soft = getComputedStyle($('screen')).getPropertyValue('--hero-soft').trim(), rows = shareRows();
   const col = (k) => (k === 'unattributed' ? soft : AGC[k] || soft);
-  return `<div class="zfade"><div class="zt serif">lumen</div><div class="zm">${fproj().split(' · ').slice(1).join(' · ')}</div></div>`
+  return `<div class="zfade"><div class="zt serif">${SP.name}</div><div class="zm">${fproj().split(' · ').slice(1).join(' · ')}</div></div>`
     + `<div class="zbar">${rows.map((r) => `<i data-k="${r.key}" style="width:${r.pct}%;background:${col(r.key)}"></i>`).join('')}</div>`
     + `<div class="zfade"><div class="zrows">${rows.map((r) => { const t = DATA.tools.find((x) => x.name === r.name); return `<span style="color:${col(r.key)}">${t ? t.svg : '<i></i>'}<b>${r.name}</b><em>${r.pct}%</em></span>`; }).join('')}</div><div class="zf">${MARK}creditia</div></div>`;
 }
@@ -1400,26 +1407,26 @@ addEventListener('keydown', (e) => { if (lb.hidden) return; if (e.key === 'Tab')
 // ───────── 一行一行：进到视野里时像在逐行比对 ─────────
 const SRC = { verified: ['日志里对得上', 'Matched in a log'], declared: ['提交里写明了', 'Stated in the commit'], inferred: ['推断', 'Inferred'], unknown: ['未确认', 'Unattributed'] };
 const CODE = [
-  ['export async function analyze(repo: Repo, opts: Options) {', 'verified', 'Claude Code · Claude Opus 5.5'],
-  ['  const commits = await readCommits(repo, opts.since)', 'verified', 'Claude Code · Claude Opus 5.5'],
-  ['  const index = buildIndex(await loadEvidence(repo))', 'verified', 'Codex · GPT-5.6 Sol'],
-  ['  for (const c of commits) {', 'verified', 'Claude Code · Claude Opus 5.5'],
-  ['    for (const line of c.addedLines) {', 'verified', 'Claude Code · Claude Opus 5.5'],
-  ['      const hit = index.match(line.file, line.hash, c.time)', 'verified', 'Codex · GPT-5.6 Sol'],
-  ['      line.author = hit ?? fallback(c)', 'declared', 'GitHub Copilot · Co-authored-by'],
-  ['    }', 'inferred', ['Claude Code，同一段改动', 'Claude Code, same change']],
+  ['export function pickSpot(cat: Cat, room: Room) {', 'verified', 'Claude Code · Claude Opus 5.5'],
+  ['  let best = { spot: room.door, score: -Infinity }', 'verified', 'Claude Code · Claude Opus 5.5'],
+  ['  for (const spot of room.spots) {', 'verified', 'Claude Code · Claude Opus 5.5'],
+  ['    const warmth = spot.sunlight * 2 + spot.softness', 'verified', 'Codex · GPT-5.6 Sol'],
+  ['    const score = warmth - (cat.grudges[spot.id] ?? 0)', 'verified', 'Codex · GPT-5.6 Sol'],
+  ['    if (spot.isKeyboard) return spot', 'declared', 'GitHub Copilot · Co-authored-by'],
+  ['    if (score > best.score) best = { spot, score }', 'inferred', ['Claude Code，同一段改动', 'Claude Code, same change']],
   ['  }', 'inferred', ['Claude Code，同一段改动', 'Claude Code, same change']],
-  ['  // 没有日志的行，按提交信息补', 'declared', 'Cursor · Co-authored-by'],
-  ['  return summarize(commits, { level: opts.level })', 'declared', 'Cursor · Co-authored-by'],
+  ['  return best.spot', 'verified', 'Claude Code · Claude Opus 5.5'],
   ['}', 'inferred', ['Claude Code，同一段改动', 'Claude Code, same change']],
   ['', 'unknown', ''],
-  ['function fallback(c: Commit) {', 'verified', 'Codex · GPT-5.6 Sol'],
-  ['  return c.stamp ?? c.coauthor ?? UNATTRIBUTED', 'unknown', ''],
+  ['// 3am zoomies are a feature, not a bug', 'declared', 'Cursor · Co-authored-by'],
+  ['export function zoomies(cat: Cat, now: Date) {', 'declared', 'Cursor · Co-authored-by'],
+  ['  const odds = now.getHours() === 3 ? 0.9 : 0.05', 'verified', 'Codex · GPT-5.6 Sol'],
+  ['  return !cat.asleep && Math.random() < odds', 'unknown', ''],
   ['}', 'unknown', ''],
 ];
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-const hl = (s) => esc(s).replace(/^(\s*)(\/\/.*)$/, '$1<span class="tok-c">$2</span>').replace(/\b(export|async|function|const|await|for|of|return)\b/g, '<span class="tok-k">$1</span>');
+const hl = (s) => esc(s).replace(/^(\s*)(\/\/.*)$/, '$1<span class="tok-c">$2</span>').replace(/\b(export|async|function|const|let|await|for|of|if|return)\b/g, '<span class="tok-k">$1</span>');
 let scanned = false, pinned = null;
 function lines() {
   const i = lang() === 'en' ? 1 : 0;
@@ -1460,7 +1467,7 @@ const AGC = { 'claude-code': '#D97757', codex: '#4FA37F', cursor: '#7D8AE0', kim
 const EN_ = () => lang() === 'en';
 const shareRows = () => [...DATA.share[lang()]].sort((a, b) => b.pct - a.pct);
 const tierLine = () => shareRows().map((r) => `${r.key === 'unattributed' ? (EN_() ? 'Unattributed' : '未确认') : r.name} ${r.pct.toFixed(1)}%`).join(' · ');
-const analyzeOut = () => (EN_() ? 'lumen: 612 commits (612 new), 20 units, 49,360 lines; 2.4s' : 'lumen：612 个提交（新增 612），20 项，49,360 行；2.4s');
+const analyzeOut = () => { const n = SP.commits, l = SP.lines.toLocaleString('en-US'); return EN_() ? `${SP.name}: ${n} commits (${n} new), ${SP.units} units, ${l} lines; 2.4s` : `${SP.name}：${n} 个提交（新增 ${n}），${SP.units} 项，${l} 行；2.4s`; };
 const follow = (el, fast) => el.scrollTo({ top: el.scrollHeight, behavior: fast || RM ? 'auto' : 'smooth' });
 const runs = {}; // 每张卡一个代号：重播或换语言时，旧的那一遍自己停下
 const FMTS = ['png', 'svg', 'pdf', 'gif', 'html', 'md'];
@@ -1485,7 +1492,7 @@ async function playTerm(fast) {
   if (!fast && !RM) {
     add(`<span class="o spin" id="tsp"></span>`);
     const sp = $('tsp'), t0 = performance.now();
-    while (performance.now() - t0 < 1300 && live()) { const n = Math.round(612 * Math.min(1, (performance.now() - t0) / 1100)); sp.textContent = EN_() ? ` reading commits ${n}/612 · matching agent logs` : ` 读取提交 ${n}/612 · 对照 agent 日志`; await sleep(40); }
+    while (performance.now() - t0 < 1300 && live()) { const n = Math.round(SP.commits * Math.min(1, (performance.now() - t0) / 1100)); sp.textContent = EN_() ? ` reading commits ${n}/${SP.commits} · matching agent logs` : ` 读取提交 ${n}/${SP.commits} · 对照 agent 日志`; await sleep(40); }
     sp.remove(); if (!live()) return;
   }
   add(`<span class="o">${analyzeOut()}\n${tierLine()}\n${EN_() ? 'wrote' : '写入'} .creditia/credits.json</span>\n`);
@@ -1532,11 +1539,12 @@ document.addEventListener('pointerover', async (e) => {
 });
 
 /** agent：说一句 → 它自己跑命令、出图、问一句 → 继续 → 改好 README */
+const pctOf = (k) => Math.round(DATA.share[lang()].find((r) => r.key === k)?.pct || 0);
 const AGENT = () => (EN_()
   ? { ask: 'Make a credits card for this repo and put it in the README', look: 'Let me see who wrote what in this repo first.', exp: 'npx creditia export --piece share --style ukiyoe --out assets/credits.png',
-    q: 'Claude Code wrote 59%, Codex 28%, Cursor 7%; 2% is unattributed. Putting the card in the README makes the project name and these numbers public. Go ahead?', go: 'Go ahead', fin: 'Added to the top of the README.' }
+    q: `Claude Code wrote ${pctOf('claude-code')}%, Codex ${pctOf('codex')}%, Cursor ${pctOf('cursor')}%; ${pctOf('unattributed')}% is unattributed. Putting the card in the README makes the project name and these numbers public. Go ahead?`, go: 'Go ahead', fin: 'Added to the top of the README.' }
   : { ask: '给这个仓库做一张署名图，放进 README', look: '先看看这个仓库的代码各是谁写的。', exp: 'npx creditia export --piece share --style ukiyoe --out assets/credits.png',
-    q: 'Claude Code 写了 59%，Codex 28%，Cursor 7%，2% 未确认。放进 README 会公开项目名和这些数字，要继续吗？', go: '继续', fin: '已经放到 README 顶部。' });
+    q: `Claude Code 写了 ${pctOf('claude-code')}%，Codex ${pctOf('codex')}%，Cursor ${pctOf('cursor')}%，${pctOf('unattributed')}% 未确认。放进 README 会公开项目名和这些数字，要继续吗？`, go: '继续', fin: '已经放到 README 顶部。' });
 async function playChat(fast) {
   const g = (runs.chat = (runs.chat || 0) + 1), el = $('chat'), live = () => runs.chat === g, x = AGENT();
   const w = (ms) => (fast || RM ? null : sleep(ms));
@@ -1587,7 +1595,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
       - uses: actions/deploy-pages@v4`;
 const pubOut = (x) => `<span class="o">${esc(x.pub)}</span>`;
-const termAll = (x) => `<span class="p">$</span> npx creditia publish\n${pubOut(x)}\n<span class="p">$</span> git add credits.json && git commit -m credits\n<span class="p">$</span> git push\n<span class="ok">→ github.com/you/lumen  main</span>`;
+const termAll = (x) => `<span class="p">$</span> npx creditia publish\n${pubOut(x)}\n<span class="p">$</span> git add credits.json && git commit -m credits\n<span class="p">$</span> git push\n<span class="ok">→ github.com/you/${SP.name}  main</span>`;
 function flowFrame() {
   const x = FLOW(), L = lang();
   const rows = shareRows().filter((r) => r.key !== 'unattributed').slice(0, 3);
@@ -1599,10 +1607,10 @@ function flowFrame() {
       <div class="run"><div class="rh"><i class="ico"></i><b>${x.run}</b><span>#12 · push</span></div>${x.steps.map(([n, d]) => `<div class="s"><i class="ico"></i>${n}<small>${d}</small></div>`).join('')}</div>
     </div>
     <div class="fpane" data-n="2">
-      <div class="res"><div class="fn">README.md<em>${x.new}</em></div><div class="bd"><h5>lumen</h5><img class="cb" src="assets/usage/${L}-ink-badge.svg" alt="credits badge" width="${DATA.usage.ink.w}" height="${DATA.usage.ink.h}" style="width:${Math.round((20 * DATA.usage.ink.w) / DATA.usage.ink.h)}px"></div></div>
+      <div class="res"><div class="fn">README.md<em>${x.new}</em></div><div class="bd"><h5>${SP.name}</h5><img class="cb" src="assets/usage/${L}-ink-badge.svg" alt="credits badge" width="${DATA.usage.ink.w}" height="${DATA.usage.ink.h}" style="width:${Math.round((20 * DATA.usage.ink.w) / DATA.usage.ink.h)}px"></div></div>
       <div class="fgrid">
         <div class="res"><div class="fn">CREDITS.md<em>${x.new}</em></div><div class="bd"><table>${rows.map((r) => `<tr><td>${r.name}</td><td class="m">${r.model}</td><td class="n">${pct(r.pct)}</td></tr>`).join('')}</table></div></div>
-        <div class="res site"><div class="url"><i></i><i></i><i></i><span>you.github.io/lumen</span></div><img src="assets/usage/${L}-ink-share.png" alt="credits page" loading="lazy"><div class="fn" style="border:0;border-top:1px solid var(--line)">${EN_() ? 'credits page' : '署名页'}<em>${x.new}</em></div></div>
+        <div class="res site"><div class="url"><i></i><i></i><i></i><span>you.github.io/${SP.name}</span></div><img src="assets/usage/${L}-ink-share.png" alt="credits page" loading="lazy"><div class="fn" style="border:0;border-top:1px solid var(--line)">${EN_() ? 'credits page' : '署名页'}<em>${x.new}</em></div></div>
       </div>
     </div>
   </div>`;
@@ -1634,7 +1642,7 @@ async function playFlow(fast) {
   await typeIn('npx creditia publish'); if (!live()) return;
   term.insertAdjacentHTML('beforeend', pubOut(x) + '\n'); await sleep(900); if (!live()) return;
   await typeIn('git add credits.json && git commit -m credits'); await typeIn('git push'); if (!live()) return;
-  term.insertAdjacentHTML('beforeend', '<span class="ok">→ github.com/you/lumen  main</span>');
+  term.insertAdjacentHTML('beforeend', `<span class="ok">→ github.com/you/${SP.name}  main</span>`);
   await sleep(1200); if (!live()) return;
   flowShow(1); await sleep(700); if (!live()) return;
   rh.classList.add('go');
@@ -1666,8 +1674,8 @@ function deskFrame() {
   const apple = DATA.icons.apple ? `<svg viewBox="0 0 24 24"><path d="${DATA.icons.apple}"/></svg>` : '';
   $('desk').innerHTML = `<div class="wp"></div>
   <div class="mbar">${apple}<b>creditia</b>${(en ? ['File', 'Edit', 'View', 'Window', 'Help'] : ['文件', '编辑', '显示', '窗口', '帮助']).map((m) => `<span>${m}</span>`).join('')}<span class="r"><span id="dclock"></span></span></div>
-  <div class="dfiles" id="dfiles"><div class="dfile"><div class="th">${FOLDER}</div><span>lumen</span></div></div>
-  <div class="win tw" id="tw"><div class="lights" data-win="tw"><i data-a="close"></i><i data-a="min"></i><i></i></div><div class="tb">lumen — zsh</div><pre id="twp"><span class="p">~/code/lumen ❯</span> <span class="c"></span></pre></div>
+  <div class="dfiles" id="dfiles"><div class="dfile"><div class="th">${FOLDER}</div><span>${SP.name}</span></div></div>
+  <div class="win tw" id="tw"><div class="lights" data-win="tw"><i data-a="close"></i><i data-a="min"></i><i></i></div><div class="tb">${SP.name} — zsh</div><pre id="twp"><span class="p">~/code/${SP.name} ❯</span> <span class="c"></span></pre></div>
   <div class="win aw" id="aw" hidden><div class="lights" data-win="aw"><i data-a="close"></i><i data-a="min"></i><i></i></div><div class="boot" id="aboot"><img src="assets/app-icon.png" alt=""></div><iframe id="appf" title="creditia app"></iframe></div>
   <div class="ddock" id="ddock"><div class="ic" data-open="files">${FOLDER.replace('viewBox="0 0 64 56"', 'viewBox="0 -4 64 64"')}<span class="tip">${en ? 'Files' : '文件'}</span></div><div class="ic run" data-open="tw">${TERM_IC}<span class="tip">${en ? 'Terminal' : '终端'}</span></div><div class="ic" data-open="aw"><img src="assets/app-icon.png" alt=""><span class="tip">creditia</span></div><i class="sep"></i><div class="ic">${TRASH_IC}<span class="tip">${en ? 'Trash' : '废纸篓'}</span></div></div>
   <div class="ql" id="ql" hidden><div class="card"><button class="x" aria-label="close"></button><b></b><img alt=""></div></div>
@@ -1688,7 +1696,7 @@ function winOpen(id, fromDock = true) {
   const w = $(id); if (!w.hidden) return front(id);
   w.hidden = false; front(id);
   $('ddock').querySelector(`[data-open="${id}"]`)?.classList.add('run');
-  if (id === 'aw' && !$('appf').src) { try { localStorage.setItem('creditia.lang', lang()); localStorage.setItem('creditia.theme', 'cinema'); localStorage.setItem('creditia.project', 'lumen'); } catch (e) {} $('appf').src = 'app/'; }
+  if (id === 'aw' && !$('appf').src) { try { localStorage.setItem('creditia.lang', lang()); localStorage.setItem('creditia.theme', 'cinema'); localStorage.setItem('creditia.project', SP.name); } catch (e) {} $('appf').src = 'app/'; }
   if (RM || !fromDock) return;
   const ic = $('ddock').querySelector(`[data-open="${id}"]`), a = ic.getBoundingClientRect(), b = w.getBoundingClientRect();
   w.animate([{ transformOrigin: `${((a.left + a.width / 2 - b.left) / b.width) * 100}% ${((a.top - b.top) / b.height) * 100}%`, transform: 'scale(.06)', opacity: 0 }, { transformOrigin: `${((a.left + a.width / 2 - b.left) / b.width) * 100}% ${((a.top - b.top) / b.height) * 100}%`, transform: 'none', opacity: 1 }], { duration: 520, easing: 'cubic-bezier(.2,.8,.2,1)' });
@@ -1758,7 +1766,7 @@ async function playDesk() {
   // 1 分析
   dsteps(0);
   await curTo(onDesk($('tw'), 0.4, 0.4)); tap(); front('tw');
-  const pre = $('twp'), cmd = 'npx creditia analyze', prompt = '<span class="p">~/code/lumen ❯</span> ';
+  const pre = $('twp'), cmd = 'npx creditia analyze', prompt = `<span class="p">~/code/${SP.name} ❯</span> `;
   for (let n = 1; n <= cmd.length; n++) { if (!live()) return; pre.innerHTML = `${prompt}${cmd.slice(0, n)}<span class="c"></span>`; await sleep(45); }
   await sleep(300);
   pre.innerHTML = `${prompt}${cmd}\n<span class="o">${esc(analyzeOut())}\n${esc(tierLine())}\n${EN_() ? 'wrote' : '写入'} .creditia/credits.json</span>\n${prompt}<span class="c"></span>`;
@@ -1940,8 +1948,13 @@ function uHint(w, o) {
   if (w.id === 'cli') return o.k === 'npx' ? (en ? 'Node 22+, nothing to install' : '需要 Node 22+，不用安装') : (en ? 'Then run creditia analyze in your repo' : '装好后在仓库里运行 creditia analyze');
   if (w.id === 'agent') return o.kind === 'say' ? (en ? 'Paste it into Claude Code, Codex, Cursor…' : '粘贴给 Claude Code、Codex、Cursor 等') : (en ? 'Run in a terminal to add the creditia skill' : '在终端里运行，装上 creditia skill');
   if (w.id === 'ci') return en ? `Save it as ${o.file}; the next push publishes` : `存成 ${o.file}，下次推送就生效`;
+  if (o.os === 'win') return en ? 'If SmartScreen stops it: More info → Run anyway' : 'SmartScreen 拦下时，点「更多信息」→「仍要运行」';
+  if (o.os === 'mac' && o.kind === 'cmd') return en ? 'The cask clears the quarantine flag, so it opens right away' : 'cask 会自己去掉隔离标记，装完直接能打开';
+  if (o.k === '.AppImage') return en ? `v${VER} · chmod +x it, then run` : `v${VER} · 下载后 chmod +x 再运行`;
   return o.kind === 'dl' ? (en ? `v${VER} · open the installer once downloaded` : `v${VER} · 下载后打开安装包`) : (en ? 'Run in a terminal' : '在终端里运行');
 }
+// App 还没有 Apple 签名：直接下的 .dmg 带着隔离标记，macOS 会说「已损坏」，装好后去掉标记就能打开（Homebrew 的 cask 会自己去掉）
+const UNQ = 'xattr -dr com.apple.quarantine /Applications/creditia.app';
 const OPT_L = { cli: ['安装方式', 'Install with'], agent: ['发给它', 'Send as'], ci: ['平台', 'Platform'], app: ['安装方式', 'Install with'] };
 // 演示底下的安装：一条大的，旁边写明复制；下面一排字是这一种用法的别的装法（本机用得上的摆出来，其余收在「更多」里）
 function install() {
@@ -1954,6 +1967,7 @@ function install() {
   } else if (o.kind === 'say') field = `<div class="ufield"><div class="ut say">${esc(o.text.replace(/\n/g, ' '))}</div><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${en ? 'Copy, send to your agent' : '复制，发给你的 agent'}</button></div>`;
   else if (o.kind === 'yaml') field = `<div class="ufield">${FILE_SVG}<code class="ut">${esc(o.file)}</code><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${en ? 'Copy workflow' : '复制 workflow'}</button></div>`;
   else field = `<div class="ufield"><code class="ut" title="${dq(o.text)}"><i>$</i>${esc(o.text)}</code><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${COPY_L()}</button></div>`;
+  if (w.id === 'app' && o.os === 'mac' && o.kind === 'dl') field += `<div class="unq"><p>${en ? 'The app isn’t signed by Apple yet, so macOS may say it’s damaged. Once it’s in Applications, run this once:' : 'App 还没有 Apple 签名，macOS 可能提示「已损坏，无法打开」。拖进「应用程序」后，在终端运行一次：'}</p><div class="ufield sm"><code class="ut"><i>$</i>${UNQ}</code><button class="ucopy" data-copy="${UNQ}">${COPY_SVG}${COPY_L()}</button></div></div>`;
   const inl = w.opts.map((x, j) => j).filter((j) => fits(w.opts[j])).slice(0, 6);
   if (!inl.includes(at)) inl.push(at);
   const more = w.opts.length > inl.length;

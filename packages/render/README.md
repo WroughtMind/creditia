@@ -7,7 +7,7 @@
 ```bash
 cd packages/render && npm install
 npm test                         # 全部作品 × 全部版式 × 全部风格
-npm run gallery                  # 样张 → gallery/index.html（fixtures/lumen.json 是虚构的样例档案）
+npm run gallery                  # 样张 → gallery/index.html（fixtures/catnap.json 是虚构的样例档案）
 node src/gallery.ts my/credits.json out ink,cinema   # 指定档案、输出目录、风格
 ```
 

@@ -29,7 +29,7 @@ async function api(cmd: string, args: any = {}): Promise<any> {
   switch (cmd) {
     case 'projects': return demo ? demo.projects : devFresh.on && !devFresh.added ? [] : get('/__dev/projects');
     case 'discover': if (demo) throw new Error('demo'); await new Promise((r) => setTimeout(r, 900)); return { projects: [
-      { name: 'lumen', path: '/Users/me/code/lumen', tools: { 'claude-code': 42, codex: 12 }, lastActive: '2026-10-20', exists: true, inLibrary: !devFresh.on },
+      { name: 'catnap', path: '/Users/me/code/catnap', tools: { 'claude-code': 42, codex: 12 }, lastActive: '2026-10-20', exists: true, inLibrary: !devFresh.on },
       { name: 'atlas', path: '/Users/me/code/atlas', tools: { cursor: 30 }, lastActive: '2026-10-12', exists: true, inLibrary: false },
       { name: 'dotfiles', path: '/Users/me/dotfiles', tools: { 'claude-code': 4 }, lastActive: '2026-09-02', exists: true, inLibrary: false },
       { name: 'scratch', path: '/Users/me/tmp/scratch', tools: { codex: 3 }, lastActive: '2026-08-30', exists: true, inLibrary: false },

@@ -23,7 +23,7 @@ jobs:
       - run: pip install fonttools brotli pillow
       - run: npm ci --no-audit --no-fund
         working-directory: packages/render
-      # 首页「桌面 App」那一段里跑的是真的 App 前端（网页版，数据是 lumen 示例）
+      # 首页「桌面 App」那一段里跑的是真的 App 前端（网页版，数据是 catnap 示例）
       - run: npm ci --no-audit --no-fund
         working-directory: apps/desktop
       - name: App 字体子集

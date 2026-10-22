@@ -10,7 +10,7 @@ import { hanzi, modelName, resolveGroup } from '../src/data.ts';
 import * as C from '../src/classic/data.ts';
 import { creditsOf } from '../src/pieces/roll.ts';
 
-const raw = JSON.parse(readFileSync(new URL('../fixtures/lumen.json', import.meta.url), 'utf8'));
+const raw = JSON.parse(readFileSync(new URL('../fixtures/catnap.json', import.meta.url), 'utf8'));
 const m = buildModel(raw);
 const ex = makeExporter(raster, (d) => new Uint8Array(deflateSync(d)));
 
