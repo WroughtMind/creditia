@@ -7,7 +7,7 @@ FFMPEG=${FFMPEG:-ffmpeg}
 FPS=${FPS:-60}
 B=promo/.build
 mkdir -p $B/pieces
-C=packages/render/fixtures/lumen.json
+C=packages/render/fixtures/catnap.json
 CLI=packages/cli/bin/creditia.mjs
 while read -r name piece style variant; do
   [ -f $B/pieces/$name.png ] && continue

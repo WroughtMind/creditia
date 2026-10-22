@@ -24,23 +24,23 @@ and turns the result into badges, CREDITS.md, end credits and share cards. Runs 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme/map-dark-en.svg">
-  <img src=".github/readme/map-light-en.svg" alt="Code map of the sample project lumen: one block per file, one stroke per line, coloured by the agent that wrote it">
+  <img src=".github/readme/map-light-en.svg" alt="Code map of the sample project catnap: one block per file, one stroke per line, coloured by the agent that wrote it">
 </picture>
 
 ## One command
 
 ```text
 $ creditia analyze && creditia fetch
-lumen  2026-06-02 → 2026-09-21
-───────────────────────────────
-Claude Code     ███████████████░░░░░░░░░░  59.3%  Claude Opus 5.5
-Codex           ███████░░░░░░░░░░░░░░░░░░  27.6%  GPT-5.6 Sol
-Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   6.7%  Composer 2
-Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   3.1%  Kimi K3
-Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   1.3%  Grok 5 Code
-Unattributed    █░░░░░░░░░░░░░░░░░░░░░░░░   2.0%
+catnap  2026-05-11 → 2026-09-28
+────────────────────────────────
+Claude Code     █████████████░░░░░░░░░░░░  50.9%  Claude Opus 5.5
+Codex           ████████░░░░░░░░░░░░░░░░░  30.8%  GPT-5.6 Sol
+Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   9.1%  Composer 2
+Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   4.7%  Kimi K3
+Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   2.1%  Grok 5 Code
+Unattributed    █░░░░░░░░░░░░░░░░░░░░░░░░   2.5%
 
-commits 612  lines 49,360  tokens 491M
+commits 734  lines 50,190  tokens 447M
 ```
 
 Once analyzed, put the result to use:
@@ -198,7 +198,7 @@ node site/build.ts                            # website → _site/
 node site/readme.ts                           # README images → .github/readme/
 ```
 
-The macOS app isn't signed yet: the first time you open a build, right-click → Open, or run `xattr -cr /Applications/creditia.app`.
+The macOS app isn't signed by Apple yet: a downloaded copy (Homebrew included) may say it's damaged the first time. Once it's in Applications, run `xattr -dr com.apple.quarantine /Applications/creditia.app` once, or click Open Anyway under System Settings → Privacy & Security. On Windows, if SmartScreen stops it, click More info → Run anyway.
 
 </details>
 

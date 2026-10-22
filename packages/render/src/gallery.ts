@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { buildModel, STYLES, PIECES, art, exporter } from './index.ts';
 
-const [, , dataFile = path.join(import.meta.dirname, '../fixtures/lumen.json'), outDir = 'gallery', only] = process.argv;
+const [, , dataFile = path.join(import.meta.dirname, '../fixtures/catnap.json'), outDir = 'gallery', only] = process.argv;
 const m = buildModel(JSON.parse(readFileSync(dataFile, 'utf8')), { lang: (process.env.LANG_CT as 'zh' | 'en') ?? 'zh', named: process.env.NAMED === '1', sign: process.env.SIGN ?? '' });
 mkdirSync(outDir, { recursive: true });
 const styles = STYLES.filter((s) => !only || only.split(',').includes(s.id));

@@ -25,7 +25,7 @@ const OUT = path.resolve(process.argv[2] ?? path.join(ROOT, '_site'));
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(path.join(OUT, 'assets'), { recursive: true });
 
-const sample = JSON.parse(readFileSync(path.join(ROOT, 'packages/render/fixtures/lumen.json'), 'utf8'));
+const sample = JSON.parse(readFileSync(path.join(ROOT, 'packages/render/fixtures/catnap.json'), 'utf8'));
 const own = existsSync(path.join(ROOT, 'credits.json')) ? JSON.parse(readFileSync(path.join(ROOT, 'credits.json'), 'utf8')) : null;
 const LANGS = ['zh', 'en'] as const;
 type Lang = (typeof LANGS)[number];
@@ -48,8 +48,8 @@ if (hasApp) {
   const r = spawnSync(process.execPath, [path.join(DESK, 'node_modules/vite/bin/vite.js'), 'build', '--base', './', '--outDir', path.join(OUT, 'app'), '--emptyOutDir', '--logLevel', 'warn'], { cwd: DESK, stdio: 'inherit' });
   if (r.status !== 0) throw new Error('App 网页版打包失败');
   const demo = {
-    projects: [{ id: 'lumen', name: 'lumen', path: '~/code/lumen', paths: ['~/code/lumen'], lastAnalyzed: Math.floor(Date.now() / 1000), evidence: 18234, exists: true, hasCredits: true }],
-    credits: { lumen: sample },
+    projects: [{ id: 'catnap', name: 'catnap', path: '~/code/catnap', paths: ['~/code/catnap'], lastAnalyzed: Math.floor(Date.now() / 1000), evidence: 18234, exists: true, hasCredits: true }],
+    credits: { catnap: sample },
     doctor: [{ id: 'claude-code', ok: true }, { id: 'codex', ok: true }, { id: 'cursor', ok: true }],
   };
   const f = path.join(OUT, 'app/index.html');
@@ -89,6 +89,12 @@ async function draw(rel: string, piece: string, style: string, lang: Lang, o: { 
 }
 
 const meta: any = { wall: {}, usage: {} };
+
+// 样例项目的几个数：首屏、终端、对话里的文字都从这里取，换样例不用改页面
+{
+  const r = sample.project.range, tools = new Set(sample.contributors.filter((c: any) => c.kind === 'agent' && !c.roles?.every((x: string) => x === 'reviewer')).map((c: any) => c.harness));
+  meta.sample = { name: sample.project.name, commits: sample.totals.commits, units: sample.totals.units, lines: sample.totals.linesAdded, tools: tools.size, days: Math.round((Date.parse(r.to) - Date.parse(r.from)) / 864e5) + 1 };
+}
 
 // 首屏和命令行演示用的数字：样例项目 creditia fetch 的输出（各工具占比、模型）
 meta.fetch = {}; meta.share = {};
@@ -196,7 +202,7 @@ for (const lang of LANGS) {
   out('svg', exp.svg(tierA));
   out('pdf', await exp.pdf(tierA, 1));
   out('gif', exp.gif(frames('tier', vm, st, {}, 20), { width: 400 }));
-  out('html', exp.html(['tier', 'share', 'donut'].map((id) => art(id, vm, st)!).filter(Boolean), { title: 'lumen · credits', lang, bg: st.c.bg, note: 'lumen' }));
+  out('html', exp.html(['tier', 'share', 'donut'].map((id) => art(id, vm, st)!).filter(Boolean), { title: `${sample.project.name} · credits`, lang, bg: st.c.bg, note: sample.project.name }));
   out('md', creditsBlock(vm, 4));
   write(`out/${lang}/peek.png`, exporter.png(tierA, 520 / tierA.w)); // 悬停时的小预览
   meta.formats[lang] = { sizes: f, w: tierA.w, h: tierA.h };

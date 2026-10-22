@@ -9,7 +9,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "gallery": "node src/gallery.ts fixtures/lumen.json gallery",
+    "gallery": "node src/gallery.ts fixtures/catnap.json gallery",
     "test": "node --test test/*.test.ts",
     "metrics": "python3 tools/metrics.py",
     "logos": "node tools/logos.mjs",

@@ -8,7 +8,7 @@ import { BRIDGED, BRIDGED_LAYOUTS } from '../src/classic/bridge.ts';
 import { variantsOf, defaultVariant } from '../src/classic/art.ts';
 import { ORDERED_THEMES, THEME_INFO, PIECE_INFO } from '../src/classic/catalog.ts';
 
-const raw = JSON.parse(readFileSync(path.join(import.meta.dirname, '../fixtures/lumen.json'), 'utf8'));
+const raw = JSON.parse(readFileSync(path.join(import.meta.dirname, '../fixtures/catnap.json'), 'utf8'));
 const m = buildModel(raw, { director: false, lang: 'zh' });
 
 test('目录覆盖全部主题和作品', () => {

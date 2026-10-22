@@ -40,7 +40,7 @@ const sm = (k) => k * k * (3 - 2 * k);
 
 const BG = '#070708', INK = '#F1EADC', SOFT = '#A39B8B', DIM = '#5E594F';
 
-// ───────── 演员表（lumen 样例项目，只算 AI 与未确认的行）─────────
+// ───────── 演员表（catnap 样例项目，只算 AI 与未确认的行）─────────
 const AG = [
   { key: 'claude-code', name: 'Claude Code', models: ['Claude Opus 5.5', 'Claude Fable 5.1'], color: '#D97757', pct: 59.3 },
   { key: 'codex', name: 'Codex', models: ['GPT-5.6 Sol'], color: '#10A37F', pct: 27.6 },
@@ -141,9 +141,9 @@ pub struct Owner {
 
 #[test]
 fn shares_ignore_people() {
-    let c = fixture("lumen").attribute();
-    assert_eq!(c.share(Tool::Claude), 0.593);
-    assert_eq!(c.share(Tool::Codex), 0.276);
+    let c = fixture("catnap").attribute();
+    assert_eq!(c.share(Tool::Claude), 0.509);
+    assert_eq!(c.share(Tool::Codex), 0.308);
 }
 `.split('\n');
 

@@ -24,23 +24,23 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme/map-dark.svg">
-  <img src=".github/readme/map-light.svg" alt="样例项目 lumen 的代码地图：一个文件一段，一行一道线，颜色是写它的 AI">
+  <img src=".github/readme/map-light.svg" alt="样例项目 catnap 的代码地图：一个文件一段，一行一道线，颜色是写它的 AI">
 </picture>
 
 ## 一行命令
 
 ```text
 $ creditia analyze && creditia fetch
-lumen  2026-06-02 → 2026-09-21
-───────────────────────────────
-Claude Code     ███████████████░░░░░░░░░░  59.3%  Claude Opus 5.5
-Codex           ███████░░░░░░░░░░░░░░░░░░  27.6%  GPT-5.6 Sol
-Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   6.7%  Composer 2
-Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   3.1%  Kimi K3
-Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   1.3%  Grok 5 Code
-未确认          █░░░░░░░░░░░░░░░░░░░░░░░░   2.0%
+catnap  2026-05-11 → 2026-09-28
+────────────────────────────────
+Claude Code     █████████████░░░░░░░░░░░░  50.9%  Claude Opus 5.5
+Codex           ████████░░░░░░░░░░░░░░░░░  30.8%  GPT-5.6 Sol
+Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   9.1%  Composer 2
+Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   4.7%  Kimi K3
+Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   2.1%  Grok 5 Code
+未确认          █░░░░░░░░░░░░░░░░░░░░░░░░   2.5%
 
-提交 612  行 49,360  token 491M
+提交 734  行 50,190  token 447M
 ```
 
 分析完，结果可以拿去用：
@@ -198,7 +198,7 @@ node site/build.ts                            # 官网 → _site/
 node site/readme.ts                           # README 的图 → .github/readme/
 ```
 
-macOS 的 App 目前没有签名：自己打包的第一次打开时右键 → 打开，或者运行 `xattr -cr /Applications/creditia.app`。
+macOS 的 App 目前没有 Apple 签名：下载的（包括 Homebrew 装的）第一次打开可能提示「已损坏，无法打开」。拖进「应用程序」后运行一次 `xattr -dr com.apple.quarantine /Applications/creditia.app`，或者到「系统设置 → 隐私与安全性」里点「仍要打开」。Windows 上 SmartScreen 拦下时，点「更多信息」→「仍要运行」。
 
 </details>
 
