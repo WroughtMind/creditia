@@ -374,18 +374,24 @@ html.zoom #zcv { display: block; position: absolute; inset: 0; z-index: 3; width
 
 .deskshot { display: none; }
 /* 每张卡片的最后一条就是它的安装：先摆一条现在能用的，其余方式收在「其他方式」里 */
-.wbar { position: relative; z-index: 2; display: flex; align-items: center; gap: 10px; margin: -14px -22px 0; padding: 11px 12px 11px 22px; min-height: 60px; border-top: 1px solid var(--line); background: var(--card); }
-.wpick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
-.wc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px "JetBrains Mono", monospace; color: var(--ink); }
-.wc i { font-style: normal; color: var(--faint); margin-right: 9px; }
-.wc.say { font: 13px Inter, sans-serif; color: var(--faint); }
-.wc.off { color: var(--faint); }
-.wbar .cp { background: transparent; }
-.wgo { flex: none; height: 34px; padding: 0 14px; border-radius: 9px; border: 0; background: var(--ink); color: var(--bg); font: 500 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; transition: transform .2s; }
-.wgo:hover { transform: translateY(-1px); }
-.wgo svg { width: 14px; height: 14px; }
-.wgo.dl svg { fill: currentColor; }
-.wmore { flex: none; height: 34px; padding: 0 8px 0 12px; border: 0; border-radius: 9px; background: transparent; color: var(--soft); font: 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: color .15s, background-color .15s; }
+.wbar { position: relative; z-index: 2; display: grid; gap: 10px; margin: -14px -22px 0; padding: 14px 22px 20px; border-top: 1px solid var(--line); background: var(--card); }
+.wlab { display: flex; align-items: center; gap: 10px; min-height: 30px; font-size: 13px; color: var(--soft); }
+.wlab b { flex: none; font-weight: 600; color: var(--ink); }
+.wlab .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wfield { display: flex; align-items: center; gap: 10px; min-width: 0; height: 48px; padding: 0 7px 0 15px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
+.wfield.soon { border-style: dashed; background: transparent; }
+.wc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 13px "JetBrains Mono", monospace; color: var(--ink); }
+.wc i { font-style: normal; color: var(--faint); margin-right: 10px; }
+.wc.say { font: 13.5px Inter, sans-serif; color: var(--soft); }
+.wc.off { font: 13.5px Inter, sans-serif; color: var(--soft); display: inline-flex; align-items: center; gap: 9px; }
+.wc.off svg { width: 15px; height: 15px; fill: currentColor; flex: none; }
+.wcopy { flex: none; height: 34px; padding: 0 14px; border-radius: 9px; border: 0; background: var(--ink); color: var(--bg); font: 500 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; text-decoration: none; transition: transform .2s, opacity .2s; }
+.wcopy:hover { transform: translateY(-1px); }
+.wcopy svg { width: 14px; height: 14px; }
+a.wcopy svg { fill: currentColor; }
+.wfield.big { height: auto; padding: 0; border: 0; background: transparent; }
+.wfield.big .wcopy { width: 100%; height: 48px; justify-content: center; border-radius: 12px; font-size: 14px; }
+.wmore { flex: none; margin-left: auto; height: 30px; padding: 0 6px 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--soft); font: 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: color .15s, background-color .15s; }
 .wmore:hover, .wmore[aria-expanded="true"] { color: var(--ink); background: var(--line2); }
 .wmore svg { width: 14px; height: 14px; transition: rotate .2s; }
 .wmore[aria-expanded="true"] svg { rotate: 180deg; }
@@ -497,8 +503,9 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   .wall, .band { gap: 10px; }
   .ways { grid-template-columns: 1fr; }
   nav { display: none; }
-  .wbar { padding-left: 16px; margin-inline: -16px; }
-  .wc.say { display: none; }
+  .wbar { padding-inline: 16px; margin-inline: -16px; }
+  .wlab .t { white-space: normal; }
+  .wlab { align-items: flex-start; }
   .coda .cmeta a { display: block; margin: 8px 0 0; }
   #lb .bar { flex-wrap: wrap; gap: 8px 12px; }
   #lb .bar .cp { max-width: 92vw; order: 9; }
@@ -1804,28 +1811,38 @@ function ways() {
 const fits = (o) => !o.os || o.os === detectOS() || (o.os === 'unix' && detectOS() !== 'win');
 const picks = {};
 const CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>';
-// 卡片底条上摆的那一条：命令一行、给 agent 的一段话、Action 的 uses 那一行、App 的下载按钮
-function pickHtml(o) {
+// 卡片底下的安装：一句话说清楚这一步做什么，下面是能直接复制的那一条（或下载按钮）
+function guide(o) {
   const en = lang() === 'en';
-  if (o.kind === 'say') return `<button class="wgo" data-copy="${esc(o.text).replace(/"/g, '&quot;')}">${COPY_SVG}${en ? 'Copy, then paste to your agent' : '复制，发给 agent'}</button><span class="wc say" title="${esc(o.text)}">${esc(o.text.split('\n')[0])}</span>`;
-  if (o.kind === 'yaml') return `<code class="wc" title="${esc(o.text)}"><i>-</i>uses: WroughtMind/creditia@main</code>${cpBtn(o.text)}`;
+  if (o.kind === 'say') return en ? 'Copy this and send it to the agent you use' : '复制这段话，发给你正在用的 agent';
+  if (o.kind === 'yaml') return en ? 'Add it to the steps of any workflow in .github/workflows' : '加进 .github/workflows 里任意一个 workflow 的 steps';
+  if (o.kind === 'dl') return o.ready ? (en ? 'Download, then open the installer' : '下载后打开安装包') : MOBILE ? (en ? 'Installers are on the way' : '安装包还在准备') : (en ? 'Installers are on the way. Try the app in the window above' : '安装包还在准备，先在上面的窗口里试用');
+  if (o.k.startsWith('skill')) return en ? 'Run in a terminal, then ask your agent to use creditia' : '在终端里运行，装好后让 agent 用 creditia';
+  return (en ? 'Run in your project’s terminal' : '在项目目录的终端里运行') + (o.tip ? ` · ${o.tip}` : '');
+}
+const COPY_L = () => (lang() === 'en' ? 'Copy' : '复制');
+function pickHtml(o) {
+  const en = lang() === 'en', cp = (text) => `<button class="wcopy" data-copy="${esc(text).replace(/"/g, '&quot;')}">${COPY_SVG}${COPY_L()}</button>`;
+  if (o.kind === 'say') return `<div class="wfield"><span class="wc say" title="${esc(o.text)}">${esc(o.text.split('\n')[0])}</span>${cp(o.text)}</div>`;
+  if (o.kind === 'yaml') return `<div class="wfield"><code class="wc" title="${esc(o.text)}"><i>-</i>uses: WroughtMind/creditia@main</code>${cp(o.text)}</div>`;
   if (o.kind === 'dl') {
-    const ic = ICON(o.os === 'mac' ? 'apple' : o.os === 'win' ? 'windows' : 'linux'), label = `${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`} · ${esc(o.k)}`;
-    return o.ready ? `<a class="wgo dl" href="${asset(o.file)}" download>${ic}${label}</a><span class="wc"></span>` : `<span class="wc off" title="${esc(o.file)}">${label}</span>${SOON()}`;
+    const ic = ICON(o.os === 'mac' ? 'apple' : o.os === 'win' ? 'windows' : 'linux');
+    return o.ready ? `<div class="wfield big"><a class="wcopy" href="${asset(o.file)}" download>${ic}${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`} · ${esc(o.k)}</a></div>`
+      : `<div class="wfield soon"><span class="wc off" title="${esc(o.file)}">${ic}${en ? `${OSN[o.os]} installer` : `${OSN[o.os]} 安装包`} · ${esc(o.k)}</span>${SOON()}</div>`;
   }
-  return `<code class="wc${o.ready ? '' : ' off'}" title="${esc(o.text)}"><i>$</i>${esc(o.text)}</code>${o.ready ? cpBtn(o.text) : SOON()}`;
+  return o.ready ? `<div class="wfield"><code class="wc" title="${esc(o.text)}"><i>$</i>${esc(o.text)}</code>${cp(o.text)}</div>` : `<div class="wfield soon"><code class="wc off">${esc(o.text)}</code>${SOON()}</div>`;
 }
 function install() {
   const en = lang() === 'en';
   for (const w of ways()) {
     const first = (f) => w.opts.findIndex(f);
-    const at = picks[w.id] ?? [first((o) => o.ready && fits(o)), first(fits), 0].find((j) => j >= 0);
-    $('get-' + w.id).innerHTML = `<div class="wpick">${pickHtml(w.opts[at])}</div><button class="wmore" aria-expanded="false" aria-haspopup="true">${en ? 'Other ways' : '其他方式'}${CHEV}</button>`;
+    const at = picks[w.id] ?? [first((o) => o.ready && fits(o)), first(fits), 0].find((j) => j >= 0), o = w.opts[at];
+    $('get-' + w.id).innerHTML = `<div class="wlab"><b>${en ? 'Install' : '安装'}</b><span class="t">${esc(guide(o))}</span><button class="wmore" aria-expanded="false" aria-haspopup="true">${en ? 'Other ways' : '其他方式'}${CHEV}</button></div>${pickHtml(o)}`;
   }
-  // 首屏按钮：按本机系统写；手机上没有能装的 App，只写「安装」
-  const me = detectOS();
-  $('herodl').innerHTML = MOBILE ? `${DL_SVG}${en ? 'Install' : '安装'}` : `${ICON(me === 'mac' ? 'apple' : me === 'win' ? 'windows' : 'linux')}${en ? `Get it for ${OSN[me]}` : `下载 ${OSN[me]} 版`}`;
-  $('herodl').setAttribute('href', MOBILE ? '#use' : '#deskcard');
+  // 首屏第二个按钮：本机的安装包有了就下载；还没有就去 App 卡片里在线试（手机上没有在线版，去看四种用法）
+  const me = detectOS(), app = ways().find((w) => w.id === 'app').opts.find((o) => o.kind === 'dl' && o.os === me && o.ready);
+  const hero = MOBILE ? [DL_SVG, en ? 'Install' : '安装', '#use'] : app ? [ICON(me === 'mac' ? 'apple' : me === 'win' ? 'windows' : 'linux'), en ? `Get it for ${OSN[me]}` : `下载 ${OSN[me]} 版`, '#deskcard'] : ['<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>', en ? 'Try the app' : '在线试用 App', '#deskcard'];
+  $('herodl').innerHTML = hero[0] + hero[1]; $('herodl').setAttribute('href', hero[2]);
 }
 // 「其他方式」：这一种用法的全部装法，现在能用的可点，其余标「即将推出」；点一个就换到底条上
 const closePop = () => document.querySelectorAll('.wpop').forEach((x) => { x.previousElementSibling?.setAttribute('aria-expanded', 'false'); x.remove(); });
