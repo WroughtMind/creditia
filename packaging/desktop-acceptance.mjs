@@ -1,13 +1,14 @@
 // Exercise the installed candidate through native WebDriver, without IPC mocks.
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, copyFileSync } from 'node:fs';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 const [application, output] = process.argv.slice(2);
+assert.equal(process.platform, 'linux', 'This acceptance uses Linux native WebKitWebDriver');
 assert(application && output, 'Usage: desktop-acceptance.mjs <installed-app> <evidence-dir>');
 mkdirSync(output, { recursive: true });
 const driver = spawn('tauri-driver', process.env.NATIVE_DRIVER ? ['--native-driver', process.env.NATIVE_DRIVER] : [], { stdio: ['ignore', 'pipe', 'pipe'] });
-let log = '', session, appProcess;
+let log = '', session;
 driver.stdout.on('data', b => { log += b; });
 driver.stderr.on('data', b => { log += b; });
 const pause = ms => new Promise(r => setTimeout(r, ms));
@@ -43,20 +44,7 @@ async function screenshot(name) {
   writeFileSync(path.join(output, name + '.png'), Buffer.from(await command('GET', '/screenshot'), 'base64'));
 }
 async function start() {
-  let capabilities = { 'tauri:options': { application: path.resolve(application) } };
-  if (process.platform === 'win32') {
-    // Attach to the actual installed WebView2 app. Native driver launch is broken
-    // with recent Evergreen runtimes (actions/runner-images#14738).
-    appProcess = spawn(path.resolve(application), [], { env: { ...process.env,
-      WEBVIEW2_USER_DATA_FOLDER: path.resolve(output, 'webview-profile'),
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9222 --remote-debugging-address=127.0.0.1',
-    }, stdio: ['ignore', 'pipe', 'pipe'] });
-    appProcess.stdout.on('data', b => { log += b; });
-    appProcess.stderr.on('data', b => { log += b; });
-    await until(async () => (await fetch('http://127.0.0.1:9222/json/version')).ok, 'installed WebView2 debugging endpoint', 30000);
-    capabilities = { browserName: 'MicrosoftEdge', 'ms:edgeOptions': { debuggerAddress: '127.0.0.1:9222' } };
-  }
-  const result = await request('POST', '/session', { capabilities: { alwaysMatch: capabilities } });
+  const result = await request('POST', '/session', { capabilities: { alwaysMatch: { 'tauri:options': { application: path.resolve(application) } } } });
   session = result.sessionId;
   await command('POST', '/window/rect', { width: 1360, height: 880 });
   await ready();
@@ -64,12 +52,6 @@ async function start() {
 const files = directory => {
   try { return readdirSync(directory); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
 };
-function stopApp() {
-  if (appProcess) {
-    spawnSync('taskkill', ['/PID', String(appProcess.pid), '/T', '/F']);
-    appProcess = undefined;
-  }
-}
 const records = [];
 const record = (test, detail) => { records.push({ test, detail }); console.log(test, detail ?? ''); };
 try {
@@ -136,7 +118,7 @@ try {
     record(`native ${format} export`, { file, bytes: data.length });
   }
   await screenshot('exports');
-  await command('DELETE', ''); session = undefined; stopApp();
+  await command('DELETE', ''); session = undefined;
   await pause(2000);
   await start();
   assert.equal(await js('return document.documentElement.lang'), 'en');
@@ -155,7 +137,6 @@ try {
   throw error;
 } finally {
   if (session) await command('DELETE', '').catch(() => {});
-  stopApp();
   driver.kill();
   // Native WebDriver children may inherit these pipes after the session closes.
   driver.stdout.destroy(); driver.stderr.destroy(); driver.unref();
