@@ -78,9 +78,13 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: |
-          app="apps/desktop/src-tauri/target/$TARGET/release/bundle/macos/creditia.app"
-          codesign --verify --deep --strict "$app"
-          "$app/Contents/MacOS/creditia-core" help
+          set -euo pipefail
+          mount="$RUNNER_TEMP/creditia-dmg"
+          mkdir -p "$mount"
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount" apps/desktop/src-tauri/target/"$TARGET"/release/bundle/dmg/*.dmg
+          trap 'hdiutil detach "$mount"' EXIT
+          codesign --verify --deep --strict "$mount/creditia.app"
+          "$mount/creditia.app/Contents/MacOS/creditia-core" help
       - name: Collect installers
         if: matrix.bundles != ''
         run: node packaging/release.mjs collect ${{ matrix.target }} release-assets
