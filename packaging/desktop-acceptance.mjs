@@ -48,6 +48,7 @@ async function start() {
     // Attach to the actual installed WebView2 app. Native driver launch is broken
     // with recent Evergreen runtimes (actions/runner-images#14738).
     appProcess = spawn(path.resolve(application), [], { env: { ...process.env,
+      WEBVIEW2_USER_DATA_FOLDER: path.resolve(output, 'webview-profile'),
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9222 --remote-debugging-address=127.0.0.1',
     }, stdio: ['ignore', 'pipe', 'pipe'] });
     appProcess.stdout.on('data', b => { log += b; });
@@ -83,8 +84,8 @@ try {
   const info = await command('POST', '/execute/async', { script: 'window.__TAURI__.core.invoke("app_info").then(arguments[arguments.length-1])', args: [] });
   writeFileSync(path.join(output, 'app-info.json'), JSON.stringify(info, null, 2));
   assert.equal(path.resolve(info.library), path.resolve(process.env.CREDITIA_HOME));
-  if (await js('return document.documentElement.lang !== "en"')) await click('#lang');
-  await ready();
+  await click('#lang'); await ready();
+  if (await js('return document.documentElement.lang !== "en"')) { await click('#lang'); await ready(); }
   assert.equal(await js('return document.documentElement.lang'), 'en');
   record('switch language', 'English');
   await click('#project');
@@ -123,6 +124,7 @@ try {
     const before = new Set(files(info.exportDir));
     await click(`#focus .fmts [data-f="${format}"]`);
     const file = await until(() => files(info.exportDir).find(f => !before.has(f) && f.endsWith('.' + format)), `${format} export`, 180000);
+    await until(() => js('return document.querySelector("#toast .msg")?.textContent.startsWith("Saved to")'), 'native save completes');
     const data = readFileSync(path.join(info.exportDir, file));
     assert(data.length > 100);
     if (format === 'png') assert.equal(data.subarray(1, 4).toString(), 'PNG');
