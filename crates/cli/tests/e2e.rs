@@ -1321,3 +1321,45 @@ fn collect_all_keeps_going_past_a_broken_project() {
 
     let _ = fs::remove_dir_all(&env.root);
 }
+
+#[test]
+fn detached_checkout_analyzes_the_checked_out_commit() {
+    let env = setup();
+    fs::write(env.repo.join("hello.rs"), "pub fn hello() {}\n").unwrap();
+    let head = commit(&env.repo, "initial", "me@example.com", "2026-09-01T10:00:00+00:00");
+    git(&env.repo, &["checkout", "--detach", &head]);
+    git(&env.repo, &["branch", "-D", "main"]);
+    let (ok, report) = run(&env, &["analyze", "--repo", env.repo.to_str().unwrap()]);
+    assert!(ok, "{report}");
+    assert_eq!(report["head"], head);
+    assert_eq!(report["commits"], 1);
+    let raw: serde_json::Value = serde_json::from_str(&fs::read_to_string(env.repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    assert_eq!(raw["head"], head);
+    assert_eq!(raw["files"].as_array().unwrap().len(), 1);
+    let (ok, collected) = run(&env, &["collect", "--repo", env.repo.to_str().unwrap()]);
+    assert!(ok, "{collected}");
+}
+
+#[test]
+fn missing_configured_revision_is_an_error() {
+    let env = setup();
+    fs::write(env.repo.join("hello.rs"), "pub fn hello() {}\n").unwrap();
+    commit(&env.repo, "initial", "me@example.com", "2026-09-01T10:00:00+00:00");
+    fs::create_dir_all(env.repo.join(".creditia")).unwrap();
+    fs::write(env.repo.join(".creditia/config.json"), r#"{"name":"test","repo":"","branch":"missing-release-branch"}"#).unwrap();
+    for command in ["analyze", "collect"] {
+        let (ok, report) = run(&env, &[command, "--repo", env.repo.to_str().unwrap()]);
+        assert!(!ok, "{command} must reject a missing revision: {report}");
+        assert!(report["error"].as_str().unwrap().contains("missing-release-branch"), "{report}");
+    }
+    assert!(!env.repo.join(".creditia/credits.json").exists());
+}
+
+#[test]
+fn empty_repository_cannot_produce_a_successful_analysis() {
+    let env = setup();
+    let (ok, report) = run(&env, &["analyze", "--repo", env.repo.to_str().unwrap()]);
+    assert!(!ok, "{report}");
+    assert!(report["error"].is_string(), "{report}");
+    assert!(!env.repo.join(".creditia/credits.json").exists());
+}

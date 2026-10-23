@@ -289,13 +289,9 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
 pub fn detect_config(repo: &Path) -> Config {
     let mut c = Config { repo: repo.display().to_string(), name: project_name(repo), ..Default::default() };
     let cur = ad::git::git(repo, &["rev-parse", "--abbrev-ref", "HEAD"]).trim().to_string();
-    c.branch = if !cur.is_empty() && cur != "HEAD" {
-        cur
-    } else if ad::git::git_ok(repo, &["rev-parse", "--verify", "main"]) {
-        "main".into()
-    } else {
-        "master".into()
-    };
+    // A detached checkout (CI, a tag, or a specific commit) must analyze that
+    // commit, rather than inventing a local main/master branch.
+    c.branch = if cur.is_empty() || cur == "HEAD" { "HEAD".into() } else { cur };
     let (_, remotes) = ad::git::identity(repo);
     c.remotes = remotes.clone();
     // 主导者：把 (名字, 邮箱) 聚成"同一个人"——同名、同邮箱、同 GitHub 登录名（123+login@users.noreply）、

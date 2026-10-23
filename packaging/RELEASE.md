@@ -51,7 +51,7 @@ creditia doc --credits credits.json --out CREDITS.md
 
 ## 安装验收
 
-`installer-acceptance` workflow 只下载指定 `release` 运行的 `release-candidate`，核对所有 SHA-256，再执行 Windows NSIS 安装、Linux deb 安装 / AppImage 解包运行、Intel Mac DMG 复制安装。它不打标签、不构建新安装包、不发布版本。手动运行时填入本次待验收的候选运行 ID；修改验收脚本的 PR 默认回归首个候选 `39920541789`。
+`installer-acceptance` workflow 只下载指定 `release` 运行的 `release-candidate`，核对所有 SHA-256，再执行 Windows NSIS 安装、Linux deb 安装 / AppImage 解包运行、Intel Mac DMG 复制安装。它不打标签、不构建新安装包、不发布版本。每次候选包汇总后会自动验收同一次运行的产物；也可手动填入既有候选运行 ID 重试。
 
 每个平台使用安装目录中的核心分析当前仓库，核对生成档案的 head 和文件记录，并验证 App 能持续运行；Windows/Linux 还检查原生窗口。结果和日志保存在 `acceptance-<runner>` artifact。CI 中缺少本机 agent 日志应如实保留警告。
 

@@ -6,9 +6,11 @@ on:
       candidate_run:
         description: Successful release workflow run containing release-candidate
         required: true
-        default: '39920541789'
-  pull_request:
-    paths: ['.github/workflows/acceptance.yml', 'packaging/acceptance.mjs']
+  workflow_call:
+    inputs:
+      candidate_run:
+        type: string
+        required: true
 permissions:
   contents: read
   actions: read
@@ -20,7 +22,7 @@ jobs:
         os: [windows-latest, ubuntu-22.04, macos-15-intel]
     runs-on: ${{ matrix.os }}
     env:
-      CANDIDATE_RUN: ${{ inputs.candidate_run || '39920541789' }}
+      CANDIDATE_RUN: ${{ inputs.candidate_run }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
