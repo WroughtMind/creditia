@@ -92,6 +92,9 @@ jobs:
                 if xwininfo -name creditia -stats >"$EVIDENCE/main-window.txt" 2>/dev/null && grep -q "Map State: IsViewable" "$EVIDENCE/main-window.txt"; then break; fi
                 sleep 2
               done
+              sleep 12
+              kill -0 "$pid"
+              xwininfo -name creditia -stats >"$EVIDENCE/main-window.txt"
               xwininfo -root -tree >"$EVIDENCE/windows.txt"
               import -window root "$EVIDENCE/window.png"
               grep -q "Map State: IsViewable" "$EVIDENCE/main-window.txt"
