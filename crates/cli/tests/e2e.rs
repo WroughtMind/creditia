@@ -14,7 +14,9 @@ struct Env {
 }
 
 fn tmp() -> PathBuf {
-    let p = std::env::temp_dir().join(format!("creditia-e2e-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let p = std::env::temp_dir().join(format!("creditia-e2e-{}-{}-{id}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
     fs::create_dir_all(&p).unwrap();
     p
 }
@@ -56,6 +58,7 @@ fn setup() -> Env {
     git(&repo, &["init", "-q", "-b", "main"]);
     let mut vars = HashMap::new();
     vars.insert("HOME".into(), root.display().to_string());
+    vars.insert("APPDATA".into(), root.join("AppData/Roaming").display().to_string());
     vars.insert("CREDITIA_HOME".into(), root.join("lib").display().to_string());
     vars.insert("CODEX_HOME".into(), root.join("codex").display().to_string());
     vars.insert("CLAUDE_CONFIG_DIR".into(), root.join("claude").display().to_string());
@@ -625,7 +628,8 @@ fn aider_copilot_amp_trae() {
 
     // Copilot Chat（VS Code）：workspaceStorage 里的 chatSessions，增量 jsonl；workspace.json 的地址是百分号编码的
     let enc: String = rs.bytes().map(|b| if b.is_ascii_alphanumeric() || b"/-_.".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
-    let ws = env.root.join(".config/Code/User/workspaceStorage/0123abcd");
+    let config_dir = if cfg!(target_os = "macos") { "Library/Application Support" } else if cfg!(target_os = "windows") { "AppData/Roaming" } else { ".config" };
+    let ws = env.root.join(config_dir).join("Code/User/workspaceStorage/0123abcd");
     fs::create_dir_all(ws.join("chatSessions")).unwrap();
     fs::write(ws.join("workspace.json"), serde_json::json!({ "folder": format!("file://{enc}") }).to_string()).unwrap();
     let chat = [

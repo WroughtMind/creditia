@@ -136,6 +136,7 @@ impl Sim {
             ("CREDITIA_QWEN_DIR", "qwen"),
             ("CREDITIA_OPENCODE_DIR", "opencode"),
             ("CREDITIA_VSCODE_STORAGE", "vscode"),
+            ("APPDATA", "AppData/Roaming"),
         ] {
             vars.insert(k.to_string(), root.join(v).display().to_string());
         }
@@ -471,7 +472,8 @@ impl Sim {
     fn flush_logs(&self) {
         fs::write(self.repo.join(".aider.chat.history.md"), &self.aider).unwrap();
         fs::write(self.repo.join(".git/info/exclude"), ".aider*\n").unwrap();
-        let ws = self.root.join(".config/Code/User/workspaceStorage/bench");
+        let config_dir = if cfg!(target_os = "macos") { "Library/Application Support" } else if cfg!(target_os = "windows") { "AppData/Roaming" } else { ".config" };
+        let ws = self.root.join(config_dir).join("Code/User/workspaceStorage/bench");
         fs::create_dir_all(ws.join("chatSessions")).unwrap();
         fs::write(ws.join("workspace.json"), json!({ "folder": format!("file://{}", self.repo.display()) }).to_string()).unwrap();
         fs::write(ws.join("chatSessions/b1.json"), json!({ "version": 3, "sessionId": "b1", "creationDate": 1_780_000_000_000i64, "requests": self.copilot }).to_string()).unwrap();
