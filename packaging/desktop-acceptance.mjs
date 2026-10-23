@@ -48,6 +48,9 @@ async function start() {
   await command('POST', '/window/rect', { width: 1360, height: 880 });
   await ready();
 }
+const files = directory => {
+  try { return readdirSync(directory); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
+};
 const records = [];
 const record = (test, detail) => { records.push({ test, detail }); console.log(test, detail ?? ''); };
 try {
@@ -99,9 +102,9 @@ try {
       await click('#focus .xp');
       record('GIF not applicable to selected card'); continue;
     }
-    const before = new Set(readdirSync(info.exportDir));
+    const before = new Set(files(info.exportDir));
     await click(`#focus .fmts [data-f="${format}"]`);
-    const file = await until(() => readdirSync(info.exportDir).find(f => !before.has(f) && f.endsWith('.' + format)), `${format} export`, 180000);
+    const file = await until(() => files(info.exportDir).find(f => !before.has(f) && f.endsWith('.' + format)), `${format} export`, 180000);
     const data = readFileSync(path.join(info.exportDir, file));
     assert(data.length > 100);
     if (format === 'png') assert.equal(data.subarray(1, 4).toString(), 'PNG');
