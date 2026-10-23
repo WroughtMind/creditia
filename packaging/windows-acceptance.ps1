@@ -12,12 +12,26 @@ function Find-Control([string]$name) {
   if ($p.MainWindowHandle -eq 0) { return $null }
   $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
   $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,$name)
-  return $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$condition)
+  $matches = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,$condition)
+  return $matches | Where-Object { -not $_.Current.IsOffscreen } | Select-Object -First 1
 }
 function Wait-Control([string]$name) {
   $until = [DateTime]::UtcNow.AddSeconds(90)
   do { $el = Find-Control $name; if ($null -ne $el) { return $el }; Start-Sleep -Milliseconds 500 } while ([DateTime]::UtcNow -lt $until)
   throw "No native control: $name"
+}
+# The style label updates before paint() replaces the old artwork and its menus.
+# Wait for the native image element to be replaced, rather than using a fixed delay.
+function Wait-ReplacedControl([string]$name, [string]$previousId) {
+  $until = [DateTime]::UtcNow.AddSeconds(120)
+  do {
+    try {
+      $el = Find-Control $name
+      if ($null -ne $el -and ($el.GetRuntimeId() -join ',') -ne $previousId) { return $el }
+    } catch [System.Windows.Automation.ElementNotAvailableException] { }
+    Start-Sleep -Milliseconds 500
+  } while ([DateTime]::UtcNow -lt $until)
+  throw "Native artwork was not replaced: $name"
 }
 function Click-Control([string]$name) {
   $el = Wait-Control $name
@@ -36,7 +50,7 @@ function Wait-Text([string]$pattern) {
   do {
     $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
     $all = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
-    $matches = @($all | Where-Object { $_.Current.Name -match $pattern })
+    $matches = @($all | Where-Object { -not $_.Current.IsOffscreen -and $_.Current.Name -match $pattern })
     if ($matches.Count) { return $matches[0].Current.Name }
     Start-Sleep -Milliseconds 500
   } while ([DateTime]::UtcNow -lt $until)
@@ -48,19 +62,22 @@ try {
   Click-Control '切换到英文'
   $null = Wait-Control 'Switch to Chinese'
   Record 'language switched to English'
+  Click-Control 'By model'
+  Click-Control 'By tool'
+  Record 'model and tool grouping'
   Click-Control 'Switch project'
   Click-Control 'Re-analyze'
   $updated = Wait-Text '^Updated'
   Record 'native re-analysis completed' $updated
-  Click-Control 'By model'
-  Click-Control 'By tool'
-  Record 'model and tool grouping'
+  $previousArt = (Wait-Control 'creditia · Share card').GetRuntimeId() -join ','
   Click-Control 'Next style'
   $null = Wait-Control 'Minimal Dark'
+  $null = Wait-ReplacedControl 'creditia · Share card' $previousArt
   Record 'visual style switched' 'Minimal Dark'
   Click-Control 'Roam'
   $null = Wait-Text 'creditia.*Share card'
   Click-Control 'Wall'
+  $null = Wait-Control 'creditia · Share card'
   Record 'wall and roam views'
   $exportDir = Join-Path $env:USERPROFILE 'Downloads'
   foreach ($format in @('PNG','SVG','PDF','HTML','GIF')) {
