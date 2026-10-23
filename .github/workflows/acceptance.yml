@@ -124,6 +124,7 @@ jobs:
         shell: bash
         run: cargo install tauri-driver --version 2.1.0 --locked
       - name: Exercise Windows installed app
+        timeout-minutes: 10
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -140,6 +141,7 @@ jobs:
           node packaging/desktop-acceptance.mjs $app.FullName evidence/ui
           if ($LASTEXITCODE -ne 0) { throw 'Native UI acceptance failed' }
       - name: Exercise Linux deb and direct AppImage
+        timeout-minutes: 12
         if: runner.os == 'Linux'
         shell: bash
         run: |

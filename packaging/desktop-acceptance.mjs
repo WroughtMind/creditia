@@ -155,5 +155,7 @@ try {
   if (session) await command('DELETE', '').catch(() => {});
   stopApp();
   driver.kill();
+  // Native WebDriver children may inherit these pipes after the session closes.
+  driver.stdout.destroy(); driver.stderr.destroy(); driver.unref();
   writeFileSync(path.join(output, 'driver.log'), log);
 }
