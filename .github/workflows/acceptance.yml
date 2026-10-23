@@ -120,26 +120,17 @@ jobs:
           pgrep -f "$app/Contents/MacOS/$executable" > evidence/app-pids.txt
           xargs kill < evidence/app-pids.txt
       - name: Install native UI test drivers
-        if: runner.os != 'macOS'
+        if: runner.os == 'Linux'
         shell: bash
         run: cargo install tauri-driver --version 2.1.0 --locked
-      - name: Exercise Windows installed app
-        timeout-minutes: 10
+      - name: Inspect Windows native accessibility
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $runtime = Get-ChildItem "${env:ProgramFiles(x86)}/Microsoft/EdgeWebView/Application/*/msedgewebview2.exe" | Sort-Object { [version]$_.VersionInfo.ProductVersion } -Descending | Select-Object -First 1
-          if (-not $runtime) { throw 'WebView2 runtime not found' }
-          $version = $runtime.VersionInfo.ProductVersion
-          Invoke-WebRequest "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile "$env:RUNNER_TEMP/edgedriver.zip"
-          Expand-Archive "$env:RUNNER_TEMP/edgedriver.zip" "$env:RUNNER_TEMP/edgedriver"
-          $env:NATIVE_DRIVER = "$env:RUNNER_TEMP/edgedriver/msedgedriver.exe"
           $env:CREDITIA_HOME = Join-Path (Get-Location) 'evidence/library'
           Remove-Item Env:CREDITIA_CORE -ErrorAction SilentlyContinue
           $app = Get-ChildItem "$env:RUNNER_TEMP/creditia-installed" -Recurse -Filter *.exe | Where-Object { $_.Name -notmatch 'core|uninstall' }
-          node packaging/desktop-acceptance.mjs $app.FullName evidence/ui
-          if ($LASTEXITCODE -ne 0) { throw 'Native UI acceptance failed' }
+          ./packaging/windows-ui-probe.ps1 -App $app.FullName
       - name: Exercise Linux deb and direct AppImage
         timeout-minutes: 12
         if: runner.os == 'Linux'
