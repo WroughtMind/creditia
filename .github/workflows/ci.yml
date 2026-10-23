@@ -25,10 +25,25 @@ jobs:
         with: { node-version: 24 }
       - run: npm ci
         working-directory: packages/render
+      - run: node --test packaging/*.test.mjs site/*.test.mjs
       - run: npm test
         working-directory: packages/render
       - run: node --test test/*.test.ts
         working-directory: packages/cli
+      - name: Install CLI build dependencies
+        run: npm ci
+        working-directory: packages/cli
+      - name: Verify the actual npm tarball outside the repository
+        shell: bash
+        run: |
+          cd packages/cli
+          npm pack --pack-destination "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP"
+          npm install --prefix creditia-package-smoke ./creditia-*.tgz --no-audit --no-fund
+          cd creditia-package-smoke
+          node_modules/.bin/creditia --help
+          node_modules/.bin/creditia doc --credits "$GITHUB_WORKSPACE/packages/render/fixtures/catnap.json" --out CREDITS.md
+          node_modules/.bin/creditia export --credits "$GITHUB_WORKSPACE/packages/render/fixtures/catnap.json" --piece tier --style ink --format png --out tier.png
 
   desktop-macos:
     runs-on: macos-latest

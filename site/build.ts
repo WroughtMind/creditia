@@ -18,6 +18,8 @@ import { LOGO_OF } from '../packages/render/src/style.ts';
 import { TOOL_NAMES } from '../packages/render/src/data.ts';
 import * as C from '../packages/render/src/classic/index.ts';
 import { ICONS } from './icons.ts';
+import { downloads } from './downloads.mjs';
+const channels = await downloads();
 import { ORDERED_THEMES, themeName, themeNote, themeDot, pieceName, variantName } from '../packages/render/src/classic/catalog.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -267,7 +269,7 @@ const logo = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo-
 
 let html = readFileSync(path.join(import.meta.dirname, 'index.html'), 'utf8');
 html = html
-  .replace('/*__DATA__*/', `const DATA = ${JSON.stringify({ ...meta, styles, tools, hasSelf: !!own, hasApp, icons: ICONS, version: JSON.parse(readFileSync(path.join(ROOT, 'packages/cli/package.json'), 'utf8')).version })};`)
+  .replace('/*__DATA__*/', `const DATA = ${JSON.stringify({ ...meta, channels, styles, tools, hasSelf: !!own, hasApp, icons: ICONS, version: JSON.parse(readFileSync(path.join(ROOT, 'packages/cli/package.json'), 'utf8')).version })};`)
   .replaceAll('<!--__LOGO__-->', logo);
 // 字体放在自己站上：按页面里实际出现的字截出 woff2（衬线中文只用在几个大标题上，截出来只有几 KB），
 // 不再等 Google Fonts。本机没有 fontTools 就照旧用 Google Fonts

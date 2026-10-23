@@ -143,13 +143,21 @@ jobs:
 
 ## Install
 
-Needs Node 22+. npm, Homebrew, one-line scripts and app installers are coming soon; for now, install from source:
+The npm package and app installers are not published yet. Install from source with Git, Rust and Node 22.18+:
 
 ```bash
-git clone https://github.com/WroughtMind/creditia && cd creditia/packages/cli && npm i && npm link
+git clone https://github.com/WroughtMind/creditia
+cd creditia
+cargo build --release -p creditia-cli
+npm ci --prefix packages/render
+cd packages/cli && npm ci && npm link
 # or just the Rust analysis core
 cargo install --git https://github.com/WroughtMind/creditia creditia-cli
 ```
+
+App installers are in preparation. macOS builds use ad-hoc signing, without Apple Developer ID signing or notarization. Once released, verify the download source and SHA-256 first. For an unidentified-developer warning, try opening the app once, then use System Settings → Privacy & Security → Open Anyway. If macOS reports damage, check or download the file again; do not assume every warning is caused by notarization. Do not disable Gatekeeper globally.
+
+See the [release procedure](packaging/RELEASE.md) for packaging and acceptance checks.
 
 Agent skill (Claude Code):
 
@@ -198,7 +206,6 @@ node site/build.ts                            # website → _site/
 node site/readme.ts                           # README images → .github/readme/
 ```
 
-The macOS app isn't signed by Apple yet: a downloaded copy may say it's damaged the first time. Once it's in Applications, run `xattr -dr com.apple.quarantine /Applications/creditia.app` once, or click Open Anyway under System Settings → Privacy & Security. With Homebrew, chain it on: `brew install --cask taekchef/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app`. On Windows, if SmartScreen stops it, click More info → Run anyway.
 
 </details>
 
