@@ -143,13 +143,21 @@ jobs:
 
 ## 安装
 
-需要 Node 22+。npm、Homebrew、一行脚本和 App 安装包即将推出，现在从源码装：
+npm 和 App 安装包尚未发布。当前可从源码安装，需要 Git、Rust 和 Node 22.18+：
 
 ```bash
-git clone https://github.com/WroughtMind/creditia && cd creditia/packages/cli && npm i && npm link
+git clone https://github.com/WroughtMind/creditia
+cd creditia
+cargo build --release -p creditia-cli
+npm ci --prefix packages/render
+cd packages/cli && npm ci && npm link
 # 或者只要 Rust 分析核心
 cargo install --git https://github.com/WroughtMind/creditia creditia-cli
 ```
+
+App 安装包准备中。macOS 产物使用本地签名（ad-hoc），未经 Apple 开发者签名与公证。发布后先核对下载来源与 SHA-256；遇到无法验证开发者的提示时，尝试打开一次，再到「系统设置 → 隐私与安全性」点「仍要打开」。若提示文件已损坏，应先核对或重新下载，不能一律归因于未公证。不要关闭整个 Gatekeeper。
+
+发布流程与验收步骤见 [发布说明](packaging/RELEASE.md)。
 
 Agent skill（Claude Code）：
 
@@ -198,7 +206,6 @@ node site/build.ts                            # 官网 → _site/
 node site/readme.ts                           # README 的图 → .github/readme/
 ```
 
-macOS 的 App 目前没有 Apple 签名：下载的 App 第一次打开可能提示「已损坏，无法打开」。拖进「应用程序」后运行一次 `xattr -dr com.apple.quarantine /Applications/creditia.app`，或者到「系统设置 → 隐私与安全性」里点「仍要打开」。用 Homebrew 装的话，同一行接上就行：`brew install --cask taekchef/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app`。Windows 上 SmartScreen 拦下时，点「更多信息」→「仍要运行」。
 
 </details>
 

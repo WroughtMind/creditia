@@ -41,6 +41,9 @@
     "shortDescription": "软件项目 AI 协作与贡献署名档案",
     "externalBin": [
       "binaries/creditia-core"
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": "-"
+    }
   }
 }

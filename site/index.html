@@ -429,6 +429,13 @@ a.ucopy svg { fill: currentColor; }
 .gcard > .ucopy svg { width: 18px; height: 18px; }
 .gsub { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 4px 4px 4px 16px; border-radius: 12px; background: var(--line2); min-width: 0; }
 .gsub .glab { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--soft); cursor: default; }
+.gsub button.glab { border: 0; background: transparent; font-family: inherit; padding: 8px 0; cursor: pointer; }
+.gsub button.glab:hover { color: var(--ink); }
+.gsub button.glab:active { opacity: .65; }
+.gpending { padding: 18px 16px; font-size: 16px; color: var(--soft); }
+.ghelp { margin: 0; padding: 6px 16px 10px; color: var(--soft); font-size: 13px; line-height: 1.75; }
+.gcheck { margin-left: auto; color: var(--soft); font-size: 13px; cursor: pointer; }
+.gcheck:hover { color: var(--ink); }
 .gsub .glab svg { width: 14px; height: 14px; color: var(--faint); }
 .gsub code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px "JetBrains Mono", monospace; color: var(--ink); }
 .gsub code i { font-style: normal; color: var(--faint); margin-right: 10px; }
@@ -607,7 +614,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
       <h1 class="serif" data-i="hero.t">你的代码，<br>是哪些 AI 写的</h1>
       <p data-i="hero.p">把 agent 的日志和 git 历史逐行对上，算出每个工具、每个模型写了多少，做成片尾字幕。全在本地。</p>
       <div class="acts">
-        <div class="cmd mono"><span><span class="p">$</span>npx creditia analyze</span><button id="copy" aria-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button></div>
+        <div class="cmd mono"><span><span class="p">$</span>creditia analyze</span><button id="copy" aria-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button></div>
         <a class="dl" id="herodl" href="#use"></a>
       </div>
       <div class="agents" id="agents"></div>
@@ -1351,7 +1358,7 @@ function show(x) {
   big.onload = () => { if (ALL[cur] === x) lbimg.src = big.src; };
   $('lbname').textContent = label(x);
   $('lbn').textContent = `${cur + 1} / ${ALL.length}`;
-  const cmd = `npx creditia export --piece ${x.piece} --style ${x.style}${x.variant ? ` --variant ${x.variant}` : ''}`;
+  const cmd = `creditia export --piece ${x.piece} --style ${x.style}${x.variant ? ` --variant ${x.variant}` : ''}`;
   $('lbcmd').textContent = cmd; $('lbcmd').dataset.copy = cmd; $('lbcmd').title = cmd;
   const st = styleOf(x.style);
   $('lbnote').textContent = lang() === 'en' ? st.noteEn || '' : st.note;
@@ -1496,7 +1503,7 @@ async function playTerm(fast) {
   };
   el.innerHTML = '';
   await w(300);
-  await type('npx creditia analyze'); if (!live()) return;
+  await type('creditia analyze'); if (!live()) return;
   if (!fast && !RM) {
     add(`<span class="o spin" id="tsp"></span>`);
     const sp = $('tsp'), t0 = performance.now();
@@ -1505,7 +1512,7 @@ async function playTerm(fast) {
   }
   add(`<span class="o">${analyzeOut()}\n${tierLine()}\n${EN_() ? 'wrote' : '写入'} .creditia/credits.json</span>\n`);
   await w(500);
-  await type('npx creditia fetch'); if (!live()) return;
+  await type('creditia fetch'); if (!live()) return;
   const C = (k) => (k === 'unattributed' ? '#8C877D' : AGC[k] || 'inherit');
   for (const line of DATA.fetch[lang()]) {
     add(line.map((sg, i) => {
@@ -1519,7 +1526,7 @@ async function playTerm(fast) {
     await w(70);
   }
   await w(500);
-  await type(`for f in ${FMTS.join(' ')}; do npx creditia export --piece tier --style noir --out credits.$f; done`); if (!live()) return;
+  await type(`for f in ${FMTS.join(' ')}; do creditia export --piece tier --style noir --out credits.$f; done`); if (!live()) return;
   const base = `assets/out/${lang()}`, sz = DATA.formats[lang()].sizes;
   for (const f of FMTS) {
     await w(f === 'gif' ? 650 : 260); if (!live()) return;
@@ -1549,9 +1556,9 @@ document.addEventListener('pointerover', async (e) => {
 /** agent：说一句 → 它自己跑命令、出图、问一句 → 继续 → 改好 README */
 const pctOf = (k) => Math.round(DATA.share[lang()].find((r) => r.key === k)?.pct || 0);
 const AGENT = () => (EN_()
-  ? { ask: 'Make a credits card for this repo and put it in the README', look: 'Let me see who wrote what in this repo first.', exp: 'npx creditia export --piece share --style ukiyoe --out assets/credits.png',
+  ? { ask: 'Make a credits card for this repo and put it in the README', look: 'Let me see who wrote what in this repo first.', exp: 'creditia export --piece share --style ukiyoe --out assets/credits.png',
     q: `Claude Code wrote ${pctOf('claude-code')}%, Codex ${pctOf('codex')}%, Cursor ${pctOf('cursor')}%; ${pctOf('unattributed')}% is unattributed. Putting the card in the README makes the project name and these numbers public. Go ahead?`, go: 'Go ahead', fin: 'Added to the top of the README.' }
-  : { ask: '给这个仓库做一张署名图，放进 README', look: '先看看这个仓库的代码各是谁写的。', exp: 'npx creditia export --piece share --style ukiyoe --out assets/credits.png',
+  : { ask: '给这个仓库做一张署名图，放进 README', look: '先看看这个仓库的代码各是谁写的。', exp: 'creditia export --piece share --style ukiyoe --out assets/credits.png',
     q: `Claude Code 写了 ${pctOf('claude-code')}%，Codex ${pctOf('codex')}%，Cursor ${pctOf('cursor')}%，${pctOf('unattributed')}% 未确认。放进 README 会公开项目名和这些数字，要继续吗？`, go: '继续', fin: '已经放到 README 顶部。' });
 async function playChat(fast) {
   const g = (runs.chat = (runs.chat || 0) + 1), el = $('chat'), live = () => runs.chat === g, x = AGENT();
@@ -1577,7 +1584,7 @@ async function playChat(fast) {
   await w(300);
   add(`<div class="u">${x.ask}</div>`); await w(700); if (!live()) return;
   await say(x.look); await w(300); if (!live()) return;
-  await tool('Bash', 'npx creditia analyze', `${esc(analyzeOut())}\n${esc(tierLine())}`, 1400); await w(400); if (!live()) return;
+  await tool('Bash', 'creditia analyze', `${esc(analyzeOut())}\n${esc(tierLine())}`, 1400); await w(400); if (!live()) return;
   const img = `<img src="assets/usage/${lang()}-share.png" alt="credits card" width="640" height="336">`;
   await tool('Bash', x.exp, `→ assets/credits.png\n${img}`, 1100); await w(700); if (!live()) return;
   await say(x.q); await w(900); if (!live()) return;
@@ -1603,7 +1610,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
       - uses: actions/deploy-pages@v4`;
 const pubOut = (x) => `<span class="o">${esc(x.pub)}</span>`;
-const termAll = (x) => `<span class="p">$</span> npx creditia publish\n${pubOut(x)}\n<span class="p">$</span> git add credits.json && git commit -m credits\n<span class="p">$</span> git push\n<span class="ok">→ github.com/you/${SP.name}  main</span>`;
+const termAll = (x) => `<span class="p">$</span> creditia publish\n${pubOut(x)}\n<span class="p">$</span> git add credits.json && git commit -m credits\n<span class="p">$</span> git push\n<span class="ok">→ github.com/you/${SP.name}  main</span>`;
 function flowFrame() {
   const x = FLOW(), L = lang();
   const rows = shareRows().filter((r) => r.key !== 'unattributed').slice(0, 3);
@@ -1647,7 +1654,7 @@ async function playFlow(fast) {
   const typeIn = async (cmd) => { const sp = document.createElement('span'); term.append(Object.assign(document.createElement('span'), { className: 'p', textContent: '$ ' }), sp); for (let n = 1; n <= cmd.length; n += 2) { if (!live()) return; sp.textContent = cmd.slice(0, n); await sleep(22); } sp.textContent = cmd; term.append('\n'); await sleep(250); };
   term.innerHTML = '';
   await sleep(400);
-  await typeIn('npx creditia publish'); if (!live()) return;
+  await typeIn('creditia publish'); if (!live()) return;
   term.insertAdjacentHTML('beforeend', pubOut(x) + '\n'); await sleep(900); if (!live()) return;
   await typeIn('git add credits.json && git commit -m credits'); await typeIn('git push'); if (!live()) return;
   term.insertAdjacentHTML('beforeend', `<span class="ok">→ github.com/you/${SP.name}  main</span>`);
@@ -1774,7 +1781,7 @@ async function playDesk() {
   // 1 分析
   dsteps(0);
   await curTo(onDesk($('tw'), 0.4, 0.4)); tap(); front('tw');
-  const pre = $('twp'), cmd = 'npx creditia analyze', prompt = `<span class="p">~/code/${SP.name} ❯</span> `;
+  const pre = $('twp'), cmd = 'creditia analyze', prompt = `<span class="p">~/code/${SP.name} ❯</span> `;
   for (let n = 1; n <= cmd.length; n++) { if (!live()) return; pre.innerHTML = `${prompt}${cmd.slice(0, n)}<span class="c"></span>`; await sleep(45); }
   await sleep(300);
   pre.innerHTML = `${prompt}${cmd}\n<span class="o">${esc(analyzeOut())}\n${esc(tierLine())}\n${EN_() ? 'wrote' : '写入'} .creditia/credits.json</span>\n${prompt}<span class="c"></span>`;
@@ -1907,15 +1914,17 @@ const ICON = (k) => (DATA.icons[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true
 const cpBtn = (text) => `<button class="cp" data-copy="${text.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" aria-label="copy">${COPY_SVG}</button>`;
 const MOBILE = /iphone|ipad|ipod|android/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const detectOS = () => { const p = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent).toLowerCase(); return /win/.test(p) ? 'win' : /linux|x11|cros/.test(p) && !/android/.test(p) ? 'linux' : 'mac'; };
-const asset = (f) => `${REPO}/releases/download/v${VER}/${f.replace('{v}', VER)}`;
 const L2 = (x) => (Array.isArray(x) ? x[lang() === 'en' ? 1 : 0] ?? x[0] : x);
 // 四种用法各自的装法：[名字, 内容, 只适合哪个系统]。先摆第一个适合本机的，其余收在「其他方式」里
 const OSN = { mac: 'macOS', win: 'Windows', linux: 'Linux' };
-const APP = {
-  mac: { files: [['.dmg', 'creditia_{v}_universal.dmg']], pm: ['Homebrew', 'brew install --cask taekchef/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app'] },
-  win: { files: [['.exe', 'creditia_{v}_x64-setup.exe'], ['.msi', 'creditia_{v}_x64_en-US.msi'], ['ARM64', 'creditia_{v}_arm64-setup.exe']], pm: ['winget', 'winget install WroughtMind.Creditia'] },
-  linux: { files: [['.AppImage', 'creditia_{v}_amd64.AppImage'], ['.deb', 'creditia_{v}_amd64.deb'], ['.rpm', 'creditia-{v}-1.x86_64.rpm']], pm: ['Flatpak', 'flatpak install flathub dev.creditia.app'] },
-};
+const CHANNELS = DATA.channels;
+const APP = Object.fromEntries(['mac', 'win', 'linux'].map(os => [os, {
+  files: CHANNELS.catalog.filter(a => a.os === os).map(a => [
+    a.os === 'mac' ? `${a.arch === 'aarch64' ? 'Apple silicon' : 'Intel'} · .dmg` : a.os === 'win' ? '.exe' : a.bundle === 'appimage' ? '.AppImage' : '.deb', a.file,
+  ]),
+}]));
+const SOURCE = `git clone ${REPO} && cd creditia && cargo build --release -p creditia-cli && npm ci --prefix packages/render && cd packages/cli && npm ci && npm link`;
+
 function prompt() {
   const en = lang() === 'en', os = MOBILE ? '' : OSN[detectOS()];
   return en
@@ -1928,20 +1937,18 @@ function ways() {
   const order = MOBILE ? ['mac', 'win', 'linux'] : [me, ...['mac', 'win', 'linux'].filter((k) => k !== me)];
   return [
     { id: 'cli', play: 'term', name: t('w.cli'), opts: [
-      cmd('npx', 'npx creditia analyze', null, 'Node 22+'), cmd('npm', 'npm i -g creditia'), cmd('pnpm', 'pnpm add -g creditia'), cmd('bun', 'bun add -g creditia'),
-      cmd('Homebrew', 'brew install taekchef/tap/creditia', 'unix'), cmd('Scoop', 'scoop install creditia', 'win'),
-      cmd('curl', 'curl -fsSL https://wroughtmind.github.io/creditia/install.sh | sh', 'unix'), cmd('PowerShell', 'irm https://wroughtmind.github.io/creditia/install.ps1 | iex', 'win'),
-      cmd('Docker', 'docker run --rm -v "$PWD:/repo" ghcr.io/wroughtmind/creditia analyze'), cmd('Cargo', `cargo install --git ${REPO} creditia-cli`),
-      cmd(en ? 'source' : '源码', `git clone ${REPO} && cd creditia/packages/cli && npm i && npm link`)] },
+      ...(CHANNELS.npm ? [cmd('npx', 'npx creditia analyze', null, 'Node 22.18+'), cmd('npm', 'npm i -g creditia')] : []),
+      cmd(en ? 'source' : '源码', SOURCE),
+      cmd('Cargo', `cargo install --git ${REPO} creditia-cli`),
+      ...(!CHANNELS.npm ? [{ k: 'npm', kind: 'pending', text: en ? 'The npm package is coming soon. Install from source for now.' : 'npm 包即将推出，现在可从源码安装。' }] : [])] },
     { id: 'agent', play: 'chat', name: t('w.agent'), opts: [
       { k: en ? 'prompt' : '一段话', kind: 'say', text: prompt() },
-      cmd('skill', 'npx creditia skill add')] },
+      cmd('skill', `git clone --depth 1 ${REPO} creditia-skill && mkdir -p ~/.claude/skills && cp -R creditia-skill/skills/creditia ~/.claude/skills/`)] },
     { id: 'ci', play: 'flow', name: 'GitHub Action', opts: [
-      { k: 'GitHub', kind: 'yaml', file: '.github/workflows/credits.yml', text: 'on: { push: { branches: [main] } }\npermissions: { contents: read, pages: write, id-token: write }\njobs:\n  credits:\n    runs-on: ubuntu-latest\n    environment: github-pages\n    steps:\n      - uses: actions/checkout@v4\n      - uses: WroughtMind/creditia@main\n        with: { site: _site }\n      - uses: actions/upload-pages-artifact@v3\n        with: { path: _site }\n      - uses: actions/deploy-pages@v4\n' },
-      { k: 'GitLab', kind: 'yaml', file: '.gitlab-ci.yml', text: 'credits:\n  image: ghcr.io/wroughtmind/creditia\n  script: creditia publish\n' }] },
+      { k: 'GitHub', kind: 'yaml', file: '.github/workflows/credits.yml', text: 'on: { push: { branches: [main] } }\npermissions: { contents: read, pages: write, id-token: write }\njobs:\n  credits:\n    runs-on: ubuntu-latest\n    environment: github-pages\n    steps:\n      - uses: actions/checkout@v4\n      - uses: WroughtMind/creditia@main\n        with: { site: _site }\n      - uses: actions/upload-pages-artifact@v3\n        with: { path: _site }\n      - uses: actions/deploy-pages@v4\n' }] },
     { id: 'app', play: 'desk', name: 'App', opts: order.flatMap((os) => [
-      ...APP[os].files.map(([k, f], i) => ({ k, g: i ? '' : OSN[os], kind: 'dl', os, file: f.replace('{v}', VER) })),
-      cmd(...APP[os].pm, os)]) },
+      ...APP[os].files.map(([k, file], i) => ({ k, g: i ? '' : OSN[os], kind: 'dl', os, file, available: CHANNELS.apps.find(a => a.file === file) })),
+      ...(os === 'mac' && CHANNELS.brew ? [cmd('Homebrew', 'brew install --cask taekchef/tap/creditia', os)] : [])]) },
   ];
 }
 const fits = (o) => !o.os || o.os === detectOS() || (o.os === 'unix' && detectOS() !== 'win');
@@ -1953,30 +1960,31 @@ const dq = (x) => esc(x).replace(/"/g, '&quot;');
 /** 选中的那种装法底下那句小字：要什么、装完做什么 */
 function uHint(w, o) {
   const en = lang() === 'en';
-  if (w.id === 'cli') return o.k === 'npx' ? (en ? 'Node 22+, nothing to install' : '需要 Node 22+，不用安装') : (en ? 'Then run creditia analyze in your repo' : '装好后在仓库里运行 creditia analyze');
+  if (o.kind === 'pending') return en ? 'Not published yet' : '尚未发布';
+  if (w.id === 'cli' && (o.k === '源码' || o.k === 'source')) return en ? 'Requires Git, Rust and Node 22.18+' : '需要 Git、Rust 和 Node 22.18+';
+  if (w.id === 'cli' && o.k === 'Cargo') return en ? 'Analysis core only; run creditia-core analyze' : '仅分析核心，装好后运行 creditia-core analyze';
+  if (w.id === 'cli') return o.k === 'npx' ? (en ? 'Node 22.18+, nothing to install' : '需要 Node 22.18+，不用安装') : (en ? 'Then run creditia analyze in your repo' : '装好后在仓库里运行 creditia analyze');
   if (w.id === 'agent') return o.kind === 'say' ? (en ? 'Paste it into Claude Code, Codex, Cursor…' : '粘贴给 Claude Code、Codex、Cursor 等') : (en ? 'Run in a terminal to add the creditia skill' : '在终端里运行，装上 creditia skill');
   if (w.id === 'ci') return en ? `Save it as ${o.file}; the next push publishes` : `存成 ${o.file}，下次推送就生效`;
   if (o.kind === 'dl') return `v${VER} · ${archOf(o, en)}`;
-  if (o.os === 'mac' && o.kind === 'cmd') return en ? 'Line two clears the quarantine flag' : '第二行去掉隔离标记';
+  if (o.os === 'mac' && o.kind === 'cmd') return en ? 'First launch: see the DMG installation notes' : '首次打开请参考 DMG 安装说明';
   return o.kind === 'dl' ? (en ? `v${VER} · open the installer once downloaded` : `v${VER} · 下载后打开安装包`) : (en ? 'Run in a terminal' : '在终端里运行');
 }
-// App 还没有 Apple 签名：下载的带着隔离标记，macOS 会说「已损坏」，装好后去掉标记就能打开。Homebrew 那条命令后面直接接上这一句
-const UNQ = 'xattr -dr com.apple.quarantine /Applications/creditia.app';
 const OPT_L = { cli: ['安装方式', 'Install with'], agent: ['发给它', 'Send as'], ci: ['平台', 'Platform'], app: ['安装方式', 'Install with'] };
-// 下载 App：整宽的大按钮，紧贴着下面一行是下载后要做的那件事（命令能复制），理由收进 ⓘ。版本和芯片在右下角小字里
-const archOf = (o, en) => (o.os === 'mac' ? (en ? 'Apple silicon & Intel' : 'Apple 芯片和 Intel 通用') : o.k === 'ARM64' ? 'ARM64' : 'x64');
+const archOf = (o, en) => o.file.includes('aarch64') ? (en ? 'Apple silicon' : 'Apple 芯片') : 'x64';
 function dlCard(o, en) {
   const ic = ICON(o.os === 'mac' ? 'apple' : o.os === 'win' ? 'windows' : 'linux');
-  const then = {
-    '.dmg': [en ? 'Before first launch' : '第一次打开前', UNQ, en ? 'The app isn’t signed by Apple yet; without this macOS says it’s damaged. Run it after dragging creditia into Applications.' : 'App 还没有 Apple 签名，不跑这一句 macOS 会说它「已损坏」。拖进「应用程序」以后运行。'],
-    '.AppImage': [en ? 'Then' : '下载后', `chmod +x ${o.file}`, en ? 'Make it executable, then double-click it' : '给它执行权限，然后双击运行'],
-    '.deb': [en ? 'Then' : '下载后', `sudo apt install ./${o.file}`],
-    '.rpm': [en ? 'Then' : '下载后', `sudo dnf install ./${o.file}`],
-  }[o.k];
-  const sub = then
-    ? `<div class="gsub"><span class="glab"${then[2] ? ` title="${dq(then[2])}"` : ''}>${esc(then[0])}${then[2] ? INFO_SVG : ''}</span><code><i>$</i>${esc(then[1])}</code><button class="ucopy" data-copy="${dq(then[1])}">${COPY_SVG}${COPY_L()}</button></div>`
-    : `<div class="gsub"><span class="glab">${en ? 'If SmartScreen stops it' : 'SmartScreen 拦下时'}</span><span class="gtx">${en ? 'More info → Run anyway' : '「更多信息」→「仍要运行」'}</span></div>`;
-  return `<div class="gcard"><a class="ucopy" href="${asset(o.file)}" download title="${dq(o.file)}">${ic}${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`} · ${esc(o.k)}</a>${sub}</div>`;
+  const mac = o.os === 'mac';
+  const label = mac ? (en ? 'First launch' : '首次打开') : (en ? 'After downloading' : '下载后');
+  const detail = mac
+    ? (en ? 'The app uses an ad-hoc signature, without Apple Developer ID signing or notarization. Verify the source and SHA-256, then drag it into Applications. If an unidentified-developer warning appears, try opening it once and use System Settings → Privacy & Security → Open Anyway. If it reports damage, check the download again; do not assume every warning is caused by notarization.' : 'App 使用本地签名，未经 Apple 开发者签名与公证。先核对下载来源与 SHA-256，再拖进「应用程序」。遇到无法验证开发者的提示时，尝试打开一次，再到「系统设置 → 隐私与安全性」点「仍要打开」。若提示已损坏，应先重新核对下载文件，不能一律归因于未公证。')
+    : o.os === 'win'
+      ? (en ? 'Verify the download source and SHA-256 before running the installer. Windows may show a SmartScreen warning for this unsigned installer.' : '先核对下载来源与 SHA-256，再运行安装程序。安装包未签名，Windows 可能显示 SmartScreen 提示。')
+      : (en ? 'Verify the SHA-256. For an AppImage, grant execute permission before opening it; for a deb, install it with your package manager.' : '先核对 SHA-256。AppImage 需要赋予执行权限再打开；deb 使用系统包管理器安装。');
+  const action = o.available
+    ? `<a class="ucopy" href="${dq(o.available.url)}" download>${ic}${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`} · ${esc(o.k)}</a>`
+    : `<div class="gpending">${en ? `${OSN[o.os]} installer coming soon` : `${OSN[o.os]} 安装包即将推出`}</div>`;
+  return `<div class="gcard">${action}<div class="gsub"><button type="button" class="glab" aria-expanded="false" aria-controls="install-help">${label}${INFO_SVG}</button><span class="gtx">${en ? (mac ? 'Verify the download, then open' : 'Verify before installing') : (mac ? '核对下载文件后打开' : '核对后安装')}</span>${o.available ? `<a class="gcheck" href="${dq(o.available.checksum)}">SHA-256</a>` : ''}</div><p id="install-help" class="ghelp" hidden>${detail}</p></div>`;
 }
 const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
 // 演示底下的安装：一条大的，旁边写明复制；下面一排字是这一种用法的别的装法（本机用得上的摆出来，其余收在「更多」里）
@@ -1985,6 +1993,7 @@ function install() {
   const at = picks[w.id] ?? [w.opts.findIndex(fits), 0].find((j) => j >= 0), o = w.opts[at];
   let field;
   if (o.kind === 'dl') field = dlCard(o, en);
+  else if (o.kind === 'pending') field = `<div class="gpending">${esc(o.text)}</div>`;
   else if (o.kind === 'say') field = `<div class="ufield"><div class="ut say">${esc(o.text.replace(/\n/g, ' '))}</div><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${en ? 'Copy, send to your agent' : '复制，发给你的 agent'}</button></div>`;
   else if (o.kind === 'yaml') field = `<div class="ufield">${FILE_SVG}<code class="ut">${esc(o.file)}</code><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${en ? 'Copy workflow' : '复制 workflow'}</button></div>`;
   // 两条连着的命令（&&）分两行摆，复制的还是一整句
@@ -1998,7 +2007,7 @@ function install() {
     + `<span class="uh">${esc(uHint(w, o))}</span></div>`;
   // 首屏第二个按钮：下载本机的 App（手机上没有 App，去看四种用法）
   const me = detectOS();
-  const hero = MOBILE ? [DL_SVG, en ? 'Install' : '安装'] : [ICON(me === 'mac' ? 'apple' : me === 'win' ? 'windows' : 'linux'), en ? `Get it for ${OSN[me]}` : `下载 ${OSN[me]} 版`];
+  const hero = !CHANNELS.apps.some(a => a.os === me) ? [DL_SVG, en ? 'Installation options' : '查看安装方式'] : MOBILE ? [DL_SVG, en ? 'Install' : '安装'] : [ICON(me === 'mac' ? 'apple' : me === 'win' ? 'windows' : 'linux'), en ? `Get it for ${OSN[me]}` : `下载 ${OSN[me]} 版`];
   $('herodl').innerHTML = hero[0] + hero[1]; $('herodl').setAttribute('href', '#use');
 }
 // 「更多」：这一种用法的全部装法，点一个就换上去
@@ -2013,11 +2022,30 @@ document.addEventListener('click', (e) => {
   const cur = picks[w.id] ?? -1, pop = document.createElement('div');
   pop.className = 'wpop'; pop.setAttribute('role', 'menu');
   pop.innerHTML = w.opts.map((o, j) => `${o.g ? `<div class="g">${o.g}</div>` : ''}<button role="menuitem" data-j="${j}" class="${j === cur ? 'on' : ''}"${o.tip ? ` title="${o.tip}"` : ''}><b>${esc(o.k)}</b><span>${esc(o.kind === 'dl' ? o.file : o.kind === 'say' ? o.text.split('\n')[0] : o.kind === 'yaml' ? o.file : o.text)}</span></button>`).join('')
-    + `<div class="ver">${en ? `Current <code>v${VER}</code> · nightly: <code>creditia@next</code>, <code>@main</code>` : `当前 <code>v${VER}</code> · 预览版 <code>creditia@next</code>、<code>@main</code>`}</div>`;
+    + `<div class="ver">${en ? `Source v${VER}` : `源码版本 v${VER}`}</div>`;
   $('uget').append(pop); more.setAttribute('aria-expanded', 'true');
   pop.style.left = `${Math.max(0, Math.min(more.offsetLeft - 6, $('uget').clientWidth - pop.offsetWidth))}px`;
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closePop(); });
+// The same explanation is available to touch, keyboard and mouse users.
+const help = (open) => {
+  const button = document.querySelector('.glab[aria-controls]'), text = $('install-help');
+  if (button && text) { button.setAttribute('aria-expanded', String(open)); text.hidden = !open; }
+};
+document.addEventListener('click', e => {
+  const b = e.target.closest('.glab[aria-controls]');
+  if (b) { const open = b.dataset.pinned !== 'true'; b.dataset.pinned = String(open); help(open); }
+  else if (!e.target.closest('.gcard')) help(false);
+});
+$('uget').addEventListener('pointerover', e => {
+  if (e.pointerType === 'mouse' && e.target.closest('.glab[aria-controls]')) help(true);
+});
+$('uget').addEventListener('pointerout', e => {
+  const b = e.target.closest('.glab[aria-controls]');
+  if (e.pointerType === 'mouse' && b && !b.contains(e.relatedTarget) && b.dataset.pinned !== 'true') help(false);
+});
+addEventListener('keydown', e => { if (e.key === 'Escape') { help(false); const b = document.querySelector('.glab[aria-controls]'); if (b) b.dataset.pinned = 'false'; } });
+
 // 左边挑一种：右边换成它的演示，没演过的现在演；底下换成它的安装
 const SUB = { cli: '~/your-repo', agent: 'Claude Code · Codex · Cursor · Gemini CLI …', ci: 'WroughtMind/creditia@main', app: 'macOS · Windows · Linux' };
 function pickWay(id, focus) {
@@ -2122,7 +2150,7 @@ $('theme').onclick = (e) => {
   }, b);
 };
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (!document.documentElement.dataset.theme) onTheme(); });
-$('copy').dataset.copy = 'npx creditia analyze';
+$('copy').dataset.copy = 'creditia analyze';
 let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { field(); zoomSetup(); if (innerWidth !== TB.w) { TB.w = innerWidth; table(); } else tableSetup(); }, 200); });
 applyLang();
 intro();

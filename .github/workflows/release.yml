@@ -1,29 +1,118 @@
-# 发版：打 v* 标签时，为各平台编译分析核心，挂到 GitHub Release 上（npx creditia 第一次用到分析时会下载它）
+# PR/manual runs build downloadable candidates only. Tags assemble a draft Release;
+# publishing the Release and npm package remains a maintainer action.
 name: release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - 'packaging/**'
+      - 'apps/desktop/tools/core.mjs'
+      - 'apps/desktop/src-tauri/tauri.conf.json'
 permissions:
-  contents: write
+  contents: read
 jobs:
-  core:
+  build:
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - { os: macos-latest, target: aarch64-apple-darwin }
-          - { os: macos-13, target: x86_64-apple-darwin }
-          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
-          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
-          - { os: windows-latest, target: x86_64-pc-windows-msvc, ext: .exe }
+          - { os: macos-15, target: aarch64-apple-darwin, bundles: dmg }
+          - { os: macos-15-intel, target: x86_64-apple-darwin, bundles: dmg }
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, bundles: 'appimage,deb' }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, bundles: '' }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, bundles: nsis }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - run: cargo build --release -p creditia-cli --target ${{ matrix.target }}
-      - shell: bash
-        run: cp target/${{ matrix.target }}/release/creditia-core${{ matrix.ext }} creditia-core-${{ matrix.target }}${{ matrix.ext }}
-      - uses: softprops/action-gh-release@v2
+      - uses: Swatinem/rust-cache@v2
         with:
-          files: creditia-core-${{ matrix.target }}${{ matrix.ext }}
+          workspaces: |
+            . -> target
+            apps/desktop/src-tauri -> target
+      - run: node packaging/release.mjs check
+      - name: Linux desktop dependencies
+        if: runner.os == 'Linux' && matrix.bundles != ''
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev librsvg2-dev libayatana-appindicator3-dev patchelf
+      - name: Build matching analysis core
+        run: node apps/desktop/tools/core.mjs ${{ matrix.target }}
+      - name: Stage standalone core
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          ext=''
+          if [[ "$TARGET" == *windows* ]]; then ext='.exe'; fi
+          cp "target/$TARGET/release/creditia-core$ext" "release-assets/creditia-core-$TARGET$ext"
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            codesign --force --sign - "release-assets/creditia-core-$TARGET"
+            codesign --verify --strict "release-assets/creditia-core-$TARGET"
+          fi
+          "release-assets/creditia-core-$TARGET$ext" help
+      - uses: actions/setup-python@v5
+        if: matrix.bundles != ''
+        with: { python-version: '3.12' }
+      - name: Prepare desktop
+        if: matrix.bundles != ''
+        shell: bash
+        run: |
+          python -m pip install fonttools brotli
+          npm ci --prefix packages/render
+          npm ci --prefix apps/desktop
+          npm run fonts --prefix apps/desktop
+      - name: Build installers
+        if: matrix.bundles != ''
+        working-directory: apps/desktop
+        run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+      - name: Verify macOS signatures
+        if: runner.os == 'macOS'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          app="apps/desktop/src-tauri/target/$TARGET/release/bundle/macos/creditia.app"
+          codesign --verify --deep --strict "$app"
+          "$app/Contents/MacOS/creditia-core" help
+      - name: Collect installers
+        if: matrix.bundles != ''
+        run: node packaging/release.mjs collect ${{ matrix.target }} release-assets
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: release-assets/*
+          if-no-files-found: error
+  assemble:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release-assets
+      - name: Verify completeness, checksum and generate Homebrew cask
+        run: node packaging/release.mjs assemble release-assets
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate
+          path: release-assets/*
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        with:
+          draft: true
+          fail_on_unmatched_files: true
+          files: release-assets/*
