@@ -123,6 +123,15 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: cargo install tauri-driver --version 2.1.0 --locked
+      - name: Exercise installed Windows app through native controls
+        if: runner.os == 'Windows'
+        timeout-minutes: 12
+        shell: pwsh
+        run: |
+          $env:CREDITIA_HOME = Join-Path (Get-Location) 'evidence/library'
+          Remove-Item Env:CREDITIA_CORE -ErrorAction SilentlyContinue
+          $app = Get-ChildItem "$env:RUNNER_TEMP/creditia-installed" -Recurse -Filter *.exe | Where-Object { $_.Name -notmatch 'core|uninstall' }
+          ./packaging/windows-acceptance.ps1 -App $app.FullName
       - name: Exercise Linux deb and direct AppImage
         timeout-minutes: 12
         if: runner.os == 'Linux'
