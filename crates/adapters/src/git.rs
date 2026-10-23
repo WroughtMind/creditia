@@ -15,6 +15,17 @@ pub fn git(repo: &Path, args: &[&str]) -> String {
     }
 }
 
+/// Resolve only an existing commit. Plain rev-parse can echo an invalid name
+/// to stdout while exiting unsuccessfully; that text is not a commit hash.
+pub fn resolve_commit(repo: &Path, rev: &str) -> Option<String> {
+    let commit = format!("{rev}^{{commit}}");
+    let out = Command::new("git").arg("-C").arg(repo)
+        .args(["rev-parse", "--verify", "--end-of-options", &commit]).output().ok()?;
+    if !out.status.success() { return None; }
+    let head = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if head.is_empty() { None } else { Some(head) }
+}
+
 pub fn git_ok(repo: &Path, args: &[&str]) -> bool {
     Command::new("git").arg("-C").arg(repo).args(args).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false)
 }

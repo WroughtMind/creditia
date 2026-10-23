@@ -14,7 +14,9 @@ struct Env {
 }
 
 fn tmp() -> PathBuf {
-    let p = std::env::temp_dir().join(format!("creditia-e2e-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let p = std::env::temp_dir().join(format!("creditia-e2e-{}-{}-{id}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
     fs::create_dir_all(&p).unwrap();
     p
 }
@@ -56,6 +58,7 @@ fn setup() -> Env {
     git(&repo, &["init", "-q", "-b", "main"]);
     let mut vars = HashMap::new();
     vars.insert("HOME".into(), root.display().to_string());
+    vars.insert("APPDATA".into(), root.join("AppData/Roaming").display().to_string());
     vars.insert("CREDITIA_HOME".into(), root.join("lib").display().to_string());
     vars.insert("CODEX_HOME".into(), root.join("codex").display().to_string());
     vars.insert("CLAUDE_CONFIG_DIR".into(), root.join("claude").display().to_string());
@@ -625,7 +628,8 @@ fn aider_copilot_amp_trae() {
 
     // Copilot Chat（VS Code）：workspaceStorage 里的 chatSessions，增量 jsonl；workspace.json 的地址是百分号编码的
     let enc: String = rs.bytes().map(|b| if b.is_ascii_alphanumeric() || b"/-_.".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
-    let ws = env.root.join(".config/Code/User/workspaceStorage/0123abcd");
+    let config_dir = if cfg!(target_os = "macos") { "Library/Application Support" } else if cfg!(target_os = "windows") { "AppData/Roaming" } else { ".config" };
+    let ws = env.root.join(config_dir).join("Code/User/workspaceStorage/0123abcd");
     fs::create_dir_all(ws.join("chatSessions")).unwrap();
     fs::write(ws.join("workspace.json"), serde_json::json!({ "folder": format!("file://{enc}") }).to_string()).unwrap();
     let chat = [
@@ -1320,4 +1324,46 @@ fn collect_all_keeps_going_past_a_broken_project() {
     assert!(!ok);
 
     let _ = fs::remove_dir_all(&env.root);
+}
+
+#[test]
+fn detached_checkout_analyzes_the_checked_out_commit() {
+    let env = setup();
+    fs::write(env.repo.join("hello.rs"), "pub fn hello() {}\n").unwrap();
+    let head = commit(&env.repo, "initial", "me@example.com", "2026-09-01T10:00:00+00:00");
+    git(&env.repo, &["checkout", "--detach", &head]);
+    git(&env.repo, &["branch", "-D", "main"]);
+    let (ok, report) = run(&env, &["analyze", "--repo", env.repo.to_str().unwrap()]);
+    assert!(ok, "{report}");
+    assert_eq!(report["head"], head);
+    assert_eq!(report["commits"], 1);
+    let raw: serde_json::Value = serde_json::from_str(&fs::read_to_string(env.repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    assert_eq!(raw["head"], head);
+    assert_eq!(raw["files"].as_array().unwrap().len(), 1);
+    let (ok, collected) = run(&env, &["collect", "--repo", env.repo.to_str().unwrap()]);
+    assert!(ok, "{collected}");
+}
+
+#[test]
+fn missing_configured_revision_is_an_error() {
+    let env = setup();
+    fs::write(env.repo.join("hello.rs"), "pub fn hello() {}\n").unwrap();
+    commit(&env.repo, "initial", "me@example.com", "2026-09-01T10:00:00+00:00");
+    fs::create_dir_all(env.repo.join(".creditia")).unwrap();
+    fs::write(env.repo.join(".creditia/config.json"), r#"{"name":"test","repo":"","branch":"missing-release-branch"}"#).unwrap();
+    for command in ["analyze", "collect"] {
+        let (ok, report) = run(&env, &[command, "--repo", env.repo.to_str().unwrap()]);
+        assert!(!ok, "{command} must reject a missing revision: {report}");
+        assert!(report["error"].as_str().unwrap().contains("missing-release-branch"), "{report}");
+    }
+    assert!(!env.repo.join(".creditia/credits.json").exists());
+}
+
+#[test]
+fn empty_repository_cannot_produce_a_successful_analysis() {
+    let env = setup();
+    let (ok, report) = run(&env, &["analyze", "--repo", env.repo.to_str().unwrap()]);
+    assert!(!ok, "{report}");
+    assert!(report["error"].is_string(), "{report}");
+    assert!(!env.repo.join(".creditia/credits.json").exists());
 }

@@ -48,3 +48,11 @@ creditia doc --credits credits.json --out CREDITS.md
 7. 检查官网中英文、各系统入口、校验链接、复制命令和 `self/` 页面。Release published 会触发一次网站更新；npm/tap 随后上线后还需再运行 pages。
 
 官网构建实时核对当前版本的公开 Release、npm 与 cask；没有发布的显示准备中，查询异常则构建失败，不伪造渠道状态。不会自动发布 npm 或修改 Homebrew tap。
+
+## 安装验收
+
+`installer-acceptance` workflow 只下载指定 `release` 运行的 `release-candidate`，核对所有 SHA-256，再执行 Windows NSIS 安装、Linux deb 安装 / AppImage 解包运行、Intel Mac DMG 复制安装。它不打标签、不构建新安装包、不发布版本。每次候选包汇总后会自动验收同一次运行的产物；也可手动填入既有候选运行 ID 重试。
+
+每个平台使用安装目录中的核心分析当前仓库，核对生成档案的 head 和文件记录，并验证 App 能持续运行；Windows/Linux 还检查原生窗口。结果和日志保存在 `acceptance-<runner>` artifact。CI 中缺少本机 agent 日志应如实保留警告。
+
+这些检查不替代浏览器下载后的 Gatekeeper / SmartScreen 操作，也不替代完整桌面交互。macOS 本机使用独立安装目录和 `CREDITIA_HOME`，通过原生界面选项目、分析、导出，再退出重开检查数据；不要修改签名或删除隔离标记来让测试通过。

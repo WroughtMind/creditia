@@ -73,6 +73,16 @@ pub fn load_config(repo: &Path, override_path: Option<&Path>) -> Config {
     c
 }
 
+fn analysis_head(repo: &Path, revision: &str) -> Result<String, String> {
+    ad::git::resolve_commit(repo, revision).ok_or_else(|| {
+        if ad::git::resolve_commit(repo, "HEAD").is_none() {
+            creditia_core::tr!("仓库没有提交", "the repository has no commits")
+        } else {
+            creditia_core::tr!("无法解析分析版本：{revision}；请检查 branch 配置", "cannot resolve analysis revision: {revision}; check the branch configuration")
+        }
+    })
+}
+
 /// 项目身份：根提交 + 远程地址。同一仓库的不同克隆、worktree、搬过家的目录认作同一个项目；
 /// 根提交相同但远程地址完全不同的（fork）分开记
 pub fn project_of(repo: &Path, cfg: &Config, lib: Option<&Library>) -> Project {
@@ -156,8 +166,7 @@ fn register_paths(lib: &Library, project: &str, repo: &Path, invoked: Option<&Pa
 pub fn collect(repo: &Path, lib: &mut Library, config: Option<&Path>) -> Result<(usize, Vec<String>, String), String> {
     let cfg = load_config(repo, config);
     let proj = project_of(repo, &cfg, Some(lib));
-    let head = ad::git::git(repo, &["rev-parse", &cfg.branch]).trim().to_string();
-    let head = if head.is_empty() { ad::git::git(repo, &["rev-parse", "HEAD"]).trim().to_string() } else { head };
+    let head = analysis_head(repo, &cfg.branch)?;
     lib.upsert_project(&proj)?;
     register_paths(lib, &proj.id, repo, None);
     let roots = known_roots(repo, &cfg, Some(lib), &proj.id);
@@ -286,14 +295,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let mut warnings = vec![];
 
     // ---- git：提交（增量）
-    let rev = cfg.branch.clone();
-    let mut head = ad::git::git(repo, &["rev-parse", &rev]).trim().to_string();
-    if head.is_empty() {
-        head = ad::git::git(repo, &["rev-parse", "HEAD"]).trim().to_string();
-    }
-    if head.is_empty() {
-        return Err(creditia_core::tr!("仓库没有提交", "the repository has no commits"));
-    }
+    let head = analysis_head(repo, &cfg.branch)?;
     let mut cc: CommitCache = load_json(&cache.join("commits.json"));
     if cc.version != COMMIT_CACHE_VERSION {
         cc = CommitCache { version: COMMIT_CACHE_VERSION, ..Default::default() };

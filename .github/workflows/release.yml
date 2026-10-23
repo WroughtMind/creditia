@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/release.yml'
+      - '.github/workflows/acceptance.yml'
       - 'packaging/**'
       - 'apps/desktop/tools/core.mjs'
       - 'apps/desktop/src-tauri/tauri.conf.json'
@@ -120,3 +121,12 @@ jobs:
           draft: true
           fail_on_unmatched_files: true
           files: release-assets/*
+
+  acceptance:
+    needs: assemble
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/acceptance.yml
+    with:
+      candidate_run: ${{ format('{0}', github.run_id) }}
