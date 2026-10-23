@@ -21,6 +21,7 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-22.04, macos-15-intel]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
     env:
       CANDIDATE_RUN: ${{ inputs.candidate_run }}
     steps:
@@ -118,6 +119,48 @@ jobs:
           sleep 12
           pgrep -f "$app/Contents/MacOS/$executable" > evidence/app-pids.txt
           xargs kill < evidence/app-pids.txt
+      - name: Install native UI test drivers
+        if: runner.os != 'macOS'
+        shell: bash
+        run: cargo install tauri-driver --locked
+      - name: Exercise Windows installed app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $runtime = Get-ChildItem "${env:ProgramFiles(x86)}/Microsoft/EdgeWebView/Application/*/msedgewebview2.exe" | Sort-Object { [version]$_.VersionInfo.ProductVersion } -Descending | Select-Object -First 1
+          if (-not $runtime) { throw 'WebView2 runtime not found' }
+          $version = $runtime.VersionInfo.ProductVersion
+          Invoke-WebRequest "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile "$env:RUNNER_TEMP/edgedriver.zip"
+          Expand-Archive "$env:RUNNER_TEMP/edgedriver.zip" "$env:RUNNER_TEMP/edgedriver"
+          $env:NATIVE_DRIVER = "$env:RUNNER_TEMP/edgedriver/msedgedriver.exe"
+          $env:CREDITIA_HOME = Join-Path (Get-Location) 'evidence/library'
+          Remove-Item Env:CREDITIA_CORE -ErrorAction SilentlyContinue
+          $app = Get-ChildItem "$env:RUNNER_TEMP/creditia-installed" -Recurse -Filter *.exe | Where-Object { $_.Name -notmatch 'core|uninstall' }
+          node packaging/desktop-acceptance.mjs $app.FullName evidence/ui
+          if ($LASTEXITCODE -ne 0) { throw 'Native UI acceptance failed' }
+      - name: Exercise Linux deb and direct AppImage
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y webkit2gtk-driver libfuse2
+          for kind in deb appimage; do
+            export CREDITIA_HOME="$PWD/evidence/$kind/library"
+            export EVIDENCE="$PWD/evidence/$kind/ui"
+            unset CREDITIA_CORE
+            if [[ "$kind" == deb ]]; then
+              package=$(dpkg-deb -f candidate/*.deb Package)
+              export APP=$(dpkg -L "$package" | grep '/creditia-app$')
+            else
+              export APP=$(realpath candidate/*.AppImage)
+            fi
+            dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" bash -c '
+              set -euo pipefail
+              openbox >/tmp/creditia-ui-openbox.log 2>&1 &
+              node packaging/desktop-acceptance.mjs "$APP" "$EVIDENCE"
+            '
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
