@@ -143,7 +143,22 @@ jobs:
 
 ## Install
 
-Needs Node 22+. npm, Homebrew, one-line scripts and app installers are coming soon; for now, install from source:
+Command line, needs Node 22+:
+
+```bash
+npx creditia analyze        # nothing to install
+npm i -g creditia           # or install it and run creditia
+```
+
+App: download the macOS, Windows or Linux installer from [Releases](https://github.com/WroughtMind/creditia/releases). On macOS you can also use Homebrew:
+
+```bash
+brew install --cask taekchef/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app
+```
+
+The app isn't signed by Apple yet, so a downloaded copy may say it's damaged the first time. Once it's in Applications, run `xattr -dr com.apple.quarantine /Applications/creditia.app` once, or click Open Anyway under System Settings → Privacy & Security. On Windows, if SmartScreen stops it, click More info → Run anyway.
+
+From source:
 
 ```bash
 git clone https://github.com/WroughtMind/creditia && cd creditia/packages/cli && npm i && npm link
@@ -197,8 +212,6 @@ npm run core && npm run tauri dev             # native app (core puts the analys
 node site/build.ts                            # website → _site/
 node site/readme.ts                           # README images → .github/readme/
 ```
-
-The macOS app isn't signed by Apple yet: a downloaded copy may say it's damaged the first time. Once it's in Applications, run `xattr -dr com.apple.quarantine /Applications/creditia.app` once, or click Open Anyway under System Settings → Privacy & Security. With Homebrew, chain it on: `brew install --cask taekchef/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app`. On Windows, if SmartScreen stops it, click More info → Run anyway.
 
 </details>
 
