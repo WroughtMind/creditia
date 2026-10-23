@@ -143,7 +143,22 @@ jobs:
 
 ## 安装
 
-需要 Node 22+。npm、Homebrew、一行脚本和 App 安装包即将推出，现在从源码装：
+命令行，需要 Node 22+：
+
+```bash
+npx creditia analyze        # 不用装，直接跑
+npm i -g creditia           # 或者装上，之后直接用 creditia
+```
+
+App：到 [Releases](https://github.com/WroughtMind/creditia/releases) 下载 macOS、Windows、Linux 的安装包。macOS 也可以用 Homebrew：
+
+```bash
+brew install --cask taekchef/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app
+```
+
+App 目前没有 Apple 签名：下载的 App 第一次打开可能提示「已损坏，无法打开」。拖进「应用程序」后运行一次 `xattr -dr com.apple.quarantine /Applications/creditia.app`，或者到「系统设置 → 隐私与安全性」里点「仍要打开」。Windows 上 SmartScreen 拦下时，点「更多信息」→「仍要运行」。
+
+从源码装：
 
 ```bash
 git clone https://github.com/WroughtMind/creditia && cd creditia/packages/cli && npm i && npm link
@@ -197,8 +212,6 @@ npm run core && npm run tauri dev             # 原生 App（core 把分析核�
 node site/build.ts                            # 官网 → _site/
 node site/readme.ts                           # README 的图 → .github/readme/
 ```
-
-macOS 的 App 目前没有 Apple 签名：下载的 App 第一次打开可能提示「已损坏，无法打开」。拖进「应用程序」后运行一次 `xattr -dr com.apple.quarantine /Applications/creditia.app`，或者到「系统设置 → 隐私与安全性」里点「仍要打开」。用 Homebrew 装的话，同一行接上就行：`brew install --cask taekchef/tap/creditia && xattr -dr com.apple.quarantine /Applications/creditia.app`。Windows 上 SmartScreen 拦下时，点「更多信息」→「仍要运行」。
 
 </details>
 
