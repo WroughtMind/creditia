@@ -429,7 +429,7 @@ a.ucopy svg { fill: currentColor; }
 .gcard > .ucopy svg { width: 18px; height: 18px; }
 .gsub { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 4px 4px 4px 16px; border-radius: 12px; background: var(--line2); min-width: 0; }
 .gsub .glab { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--soft); cursor: default; }
-.gsub button.glab { border: 0; background: transparent; font-family: inherit; padding: 8px 0; cursor: pointer; }
+.gsub button.glab { border: 0; background: transparent; font-family: inherit; padding: 8px 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .gsub button.glab:hover { color: var(--ink); }
 .gsub button.glab:active { opacity: .65; }
 .gpending { padding: 18px 16px; font-size: 16px; color: var(--soft); }
@@ -1948,7 +1948,7 @@ function ways() {
       { k: 'GitHub', kind: 'yaml', file: '.github/workflows/credits.yml', text: 'on: { push: { branches: [main] } }\npermissions: { contents: read, pages: write, id-token: write }\njobs:\n  credits:\n    runs-on: ubuntu-latest\n    environment: github-pages\n    steps:\n      - uses: actions/checkout@v4\n      - uses: WroughtMind/creditia@main\n        with: { site: _site }\n      - uses: actions/upload-pages-artifact@v3\n        with: { path: _site }\n      - uses: actions/deploy-pages@v4\n' }] },
     { id: 'app', play: 'desk', name: 'App', opts: order.flatMap((os) => [
       ...APP[os].files.map(([k, file], i) => ({ k, g: i ? '' : OSN[os], kind: 'dl', os, file, available: CHANNELS.apps.find(a => a.file === file) })),
-      ...(os === 'mac' && CHANNELS.brew ? [cmd('Homebrew', 'brew install --cask taekchef/tap/creditia', os)] : [])]) },
+      ...(os === 'mac' ? [CHANNELS.brew ? cmd('Homebrew', 'brew install --cask taekchef/tap/creditia', os) : { k: 'Homebrew', os, kind: 'pending', text: en ? 'Homebrew installation is coming soon, after the first macOS release.' : 'Homebrew 安装即将推出，将在首个 macOS 版本发布后上线。' }] : [])]) },
   ];
 }
 const fits = (o) => !o.os || o.os === detectOS() || (o.os === 'unix' && detectOS() !== 'win');
