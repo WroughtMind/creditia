@@ -22,8 +22,14 @@ function Wait-Control([string]$name) {
 function Click-Control([string]$name) {
   $el = Wait-Control $name
   if (-not $el.Current.IsEnabled) { throw "Disabled native control: $name" }
-  $pattern = $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-  $pattern.Invoke()
+  Write-Host "Activating native control: $name"
+  $pattern = $null
+  if ($el.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern,[ref]$pattern)) { $pattern.Invoke(); return }
+  if ($el.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern,[ref]$pattern)) { $pattern.Expand(); return }
+  if ($el.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern,[ref]$pattern)) { $pattern.Toggle(); return }
+  if ($el.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern,[ref]$pattern)) { $pattern.Select(); return }
+  if ($el.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern,[ref]$pattern)) { $pattern.DoDefaultAction(); return }
+  throw "No supported native action on $name"
 }
 function Wait-Text([string]$pattern) {
   $until = [DateTime]::UtcNow.AddSeconds(120)
