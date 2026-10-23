@@ -122,7 +122,7 @@ jobs:
       - name: Install native UI test drivers
         if: runner.os != 'macOS'
         shell: bash
-        run: cargo install tauri-driver --locked
+        run: cargo install tauri-driver --version 2.1.0 --locked
       - name: Exercise Windows installed app
         if: runner.os == 'Windows'
         shell: pwsh
