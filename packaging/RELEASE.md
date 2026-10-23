@@ -19,7 +19,7 @@ PR 涉及发布文件时，或手动运行 `release` workflow 时，只上传 Ac
 1. 检查版本一致：`node packaging/release.mjs check`；标签必须与 manifest 版本相同。
 2. 确认每个构建任务通过。macOS App 与随包核心均须通过 `codesign --verify --deep --strict`；独立核心也使用 ad-hoc 签名。
 3. 在没有源码构建产物、`CREDITIA_CORE` 或 PATH 中开发版核心的环境验证：安装 → 打开 → 添加项目 → 分析 → 导出。分别记录 Apple 芯片、Intel、Windows、Linux；只有构建通过不能记成用户安装验收通过。
-4. macOS 必须保留浏览器下载产生的隔离标记来检查真实首次打开提示；不要为了让验收通过而预先移除隔离标记。DMG 拖入应用程序后，按实际系统提示验证「仍要打开」。损坏或签名失败先修产物。
+4. 浏览器下载后的 Gatekeeper / SmartScreen 首次打开属于可选实机抽查，未做时如实记录，不要求为此专门准备设备。抽查时保留浏览器下载产生的隔离标记，按实际系统提示操作，不要预先移除隔离标记或重签名制造通过。当前 macOS 为 ad-hoc 签名、未公证，Windows 安装包未签名；这些限制应在安装说明中保留。损坏或签名失败先修产物。
 5. Homebrew 不自动清除隔离标记。校验值由最终签名后的文件计算，不使用占位值。
 6. 用 `npm pack` 生成 tarball，在仓库以外安装并执行 `creditia --help`、用公开档案执行 `creditia doc`，检查包内容和渲染依赖。首次下载核心的端到端检查在 Release 公开后执行。
 
@@ -53,6 +53,6 @@ creditia doc --credits credits.json --out CREDITS.md
 
 `installer-acceptance` workflow 只下载指定 `release` 运行的 `release-candidate`，核对所有 SHA-256，再执行 Windows NSIS 安装、Linux deb 安装 / AppImage 解包运行、Intel Mac DMG 复制安装。它不打标签、不构建新安装包、不发布版本。每次候选包汇总后会自动验收同一次运行的产物；也可手动填入既有候选运行 ID 重试。
 
-每个平台使用安装目录中的核心分析当前仓库，核对生成档案的 head 和文件记录，并验证 App 能持续运行；Windows/Linux 还检查原生窗口。结果和日志保存在 `acceptance-<runner>` artifact。CI 中缺少本机 agent 日志应如实保留警告。
+每个平台使用安装目录中的核心分析当前仓库，核对生成档案的 head 和文件记录，并验证 App 能持续运行。Windows 通过系统原生控件、Linux 通过实际 WebKit 界面自动操作安装后的 App：重新分析、切换语言/模型与工具分组/风格/展墙与漫游，导出 PNG、SVG、PDF、HTML、GIF，再正常退出并重启验证设置恢复。Linux 同时覆盖 deb 和直接执行 AppImage。Intel Mac CI 覆盖 DMG 安装、签名、随包核心分析与启动。结果和日志保存在 `acceptance-<runner>` artifact；CI 中缺少本机 agent 日志应如实保留警告。
 
-这些检查不替代浏览器下载后的 Gatekeeper / SmartScreen 操作，也不替代完整桌面交互。macOS 本机使用独立安装目录和 `CREDITIA_HOME`，通过原生界面选项目、分析、导出，再退出重开检查数据；不要修改签名或删除隔离标记来让测试通过。
+上述 CI 加上 Apple Silicon 本机的分析、五种导出和重启恢复，作为当前候选包的功能验收依据。额外逐平台人工体验为可选抽查；自动操作不等于人工手感，也不证明浏览器下载后的 Gatekeeper / SmartScreen 流程已通过。macOS 本机验收使用独立安装目录和 `CREDITIA_HOME`，保护原有安装和数据。正式 Release、npm 首次下载核心、Homebrew 与官网渠道互通仍须在正式发布后另行验证。
