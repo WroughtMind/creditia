@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
+import { Resvg } from '@resvg/resvg-js';
 import { buildModel, STYLES, PIECES, MODEL_VARIANTS, art, frames, raster } from '../src/index.ts';
 import { makeExporter, sized } from '../src/export.ts';
 import { creditsBlock, fetchSegs, commitsComment, mergeMarked } from '../src/text.ts';
@@ -49,6 +50,11 @@ test('每种作品在每种风格下都能出图，交互区域都在画面里',
       }
     }
   }
+});
+
+test('赛博英文标题中的特殊字符不会让环形图预览消失', () => {
+  const a = art('donut', buildModel(raw, { lang: 'en' }), STYLES.find((s) => s.id === 'cyber')!, { variant: 'ring' })!;
+  assert.doesNotThrow(() => new Resvg(a.svg, { font: { loadSystemFonts: false } }));
 });
 
 test('不写「主导」；人名默认不出现，选择署名才出现', () => {

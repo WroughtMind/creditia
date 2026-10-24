@@ -296,33 +296,51 @@ pub fn units(repo: &Path, rev: &str, prs: &[PrMeta]) -> (Vec<Unit>, HashMap<Stri
     (units, parents)
 }
 
-/// 每个提交首次出现在哪个 tag。ignore 里的 tag（通配）不算版本，比如存档用的 `archive/**`
-pub fn versions(repo: &Path, parents: &HashMap<String, Vec<String>>, ignore: &[String]) -> (Vec<(String, i64)>, HashMap<String, String>) {
+/// 每个提交首次出现在哪个版本节点。只认分析分支的祖先，按提交拓扑而非打标签时间划分。
+/// ignore 里的 tag（通配）不算版本，比如存档用的 `archive/**`。
+pub type VersionAttribution = (Vec<(String, i64)>, HashMap<String, String>);
+
+pub fn versions(repo: &Path, rev: &str, parents: &HashMap<String, Vec<String>>, ignore: &[String]) -> Result<VersionAttribution, String> {
+    let read = |args: &[&str]| -> Result<String, String> {
+        let out = Command::new("git").arg("-C").arg(repo).args(args).output().map_err(|e| e.to_string())?;
+        if !out.status.success() {
+            return Err(format!("cannot read version tags: {}", String::from_utf8_lossy(&out.stderr).trim()));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    };
     let skip: Vec<regex::Regex> = ignore.iter().filter_map(|p| regex::Regex::new(&tag_re(p)).ok()).collect();
-    let tags = git(repo, &["for-each-ref", "--sort=creatordate", "--format=%(refname:short)%00%(objectname)%00%(*objectname)%00%(creatordate:unix)", "refs/tags"]);
+    let tags = read(&["for-each-ref", &format!("--merged={rev}"), "--sort=creatordate", "--format=%(refname:strip=2)%00%(objectname)%00%(*objectname)%00%(creatordate:unix)%00%(*objecttype)", "refs/tags"])?;
+    let mut eligible = vec![];
+    for l in tags.lines() {
+        let p: Vec<&str> = l.split('\0').collect();
+        if p.len() < 5 || skip.iter().any(|r| r.is_match(p[0])) { continue; }
+        let target = if p[4] == "tag" {
+            read(&["rev-parse", "--verify", &format!("refs/tags/{}^{{commit}}", p[0])])?.trim().to_string()
+        } else if p[2].is_empty() { p[1].to_string() } else { p[2].to_string() };
+        if parents.contains_key(&target) {
+            eligible.push((p[0].to_string(), p[3].parse::<i64>().unwrap_or(0), target));
+        }
+    }
+    if eligible.is_empty() { return Ok((vec![], HashMap::new())); }
+    // 旧版本后来补打标签，仍应先分到旧版本；同一提交的别名以创建时间、名字稳定排序。
+    let history = read(&["log", "--topo-order", "--reverse", "--format=%H", rev])?;
+    let order: HashMap<&str, usize> = history.lines().enumerate().map(|(i, h)| (h, i)).collect();
+    eligible.sort_by(|a, b| order.get(a.2.as_str()).cmp(&order.get(b.2.as_str())).then(a.1.cmp(&b.1)).then(a.0.cmp(&b.0)));
     let mut seen: HashSet<String> = HashSet::new();
     let mut of: HashMap<String, String> = HashMap::new();
     let mut list = vec![];
-    for l in tags.lines() {
-        let p: Vec<&str> = l.split('\0').collect();
-        if p.len() < 4 {
-            continue;
-        }
-        if skip.iter().any(|r| r.is_match(p[0])) {
-            continue;
-        }
-        let target = if p[2].is_empty() { p[1] } else { p[2] };
-        list.push((p[0].to_string(), p[3].parse().unwrap_or(0)));
-        let mut q = VecDeque::from([target.to_string()]);
+    for (tag, date, target) in eligible {
+        list.push((tag.clone(), date));
+        let mut q = VecDeque::from([target]);
         while let Some(c) = q.pop_front() {
             if !seen.insert(c.clone()) {
                 continue;
             }
-            of.insert(c.clone(), p[0].to_string());
+            of.insert(c.clone(), tag.clone());
             q.extend(parents.get(&c).cloned().unwrap_or_default());
         }
     }
-    (list, of)
+    Ok((list, of))
 }
 
 /// 存活代码：HEAD 上每一行来自哪个提交。只 blame 文本文件；按 blob 缓存

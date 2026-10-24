@@ -18,7 +18,7 @@ function scene(missing) {
     mountRoamPreview() {}, releaseRoamPreview() {},
     store: { get: () => 'roam' }, tiles: () => Array.from({ length: 25 }, (_, i) => ({ id: String(i) })),
     keyOf: (b) => b.id, curVariant: () => undefined,
-    state: { model: {}, style: { variants: () => [], pieceName: (id) => id, preview: async () => ({}) } },
+    state: { model: {}, style: { board: Array.from({ length: 25 }, (_, i) => ({ id: String(i) })), current: () => undefined, variants: () => [], pieceName: (id) => id, preview: async () => ({}) } },
     drawArt: async (id) => {
       calls.push(id);
       // The old bug never yields to a timer; stop it deterministically to report failure.

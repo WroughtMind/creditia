@@ -6,6 +6,7 @@ import { fmt, pct, compact } from '../data.ts';
 import type { Style, Box } from '../style.ts';
 import { T, colorOf, tip, canvas, plateCorner, handTip, keyRank, legendRows, type PieceOpts } from './common.ts';
 import { segsOf, segTip } from './tier.ts';
+import { historyLabels, historyEmpty } from '../history.ts';
 
 /** 图的外框：标签 + 标题 + 图例，返回绘图区 */
 function frame(m: Model, st: Style, W: number, plotH: number, kicker: string, title: string, legend = true): { s: Scene; p: Box } {
@@ -344,13 +345,18 @@ export function clock(m: Model, st: Style, o: PieceOpts): Scene | null {
 // ───────────────────────── 版本 ─────────────────────────
 
 export function versions(m: Model, st: Style, o: PieceOpts): Scene | null {
-  if (m.versions.length < 2) return null;
+  const { buckets, basis } = m.history;
+  const labels = historyLabels(basis, m.lang);
   const t = o.t ?? 1;
-  const { s, p } = frame(m, st, 1200, 520, T(m, '版本', 'RELEASES'), T(m, '各版本贡献', 'Contributions per release'));
-  const keys = orderKeys(m, m.versions.flatMap((v) => Object.keys(v.by)));
-  const max = Math.max(...m.versions.map((v) => v.total), 1);
-  const n = m.versions.length, bw = Math.min(120, (p.w / n) * 0.55);
-  m.versions.forEach((v, i) => {
+  const { s, p } = frame(m, st, Math.max(1200, buckets.length * 170 + 168), 520, labels.kicker, labels.caption, buckets.length > 0);
+  if (!buckets.length) {
+    s.text(historyEmpty(m.history, m.lang), p.x + p.w / 2, p.y + p.h / 2, { font: st.f.body, size: 22, fill: st.c.soft, anchor: 'middle', maxW: p.w });
+    return s;
+  }
+  const keys = orderKeys(m, buckets.flatMap((v) => Object.keys(v.by)));
+  const max = Math.max(...buckets.map((v) => v.total), 1);
+  const n = buckets.length, bw = Math.min(120, (p.w / n) * 0.55);
+  buckets.forEach((v, i) => {
     const x = p.x + (i + 0.5) * (p.w / n) - bw / 2;
     let y = p.y + p.h;
     const k = ease(t, i, n);
@@ -360,9 +366,10 @@ export function versions(m: Model, st: Style, o: PieceOpts): Scene | null {
       y -= h;
       s.add(rect(x, y, bw, Math.max(0, h - 1.5), { fill: fillKey(s, st, m, key) }));
     }
-    s.text(v.tag === 'unreleased' ? T(m, '未发布', 'unreleased') : v.tag, x + bw / 2, p.y + p.h + 28, { font: st.f.label, size: 14, fill: st.c.soft, anchor: 'middle' });
+    const label = v.tag === 'unreleased' ? T(m, '未发布', 'Unreleased') : v.tag;
+    s.text(label, x + bw / 2, p.y + p.h + 28, { font: st.f.label, size: 14, fill: st.c.soft, anchor: 'middle', maxW: p.w / n - 16 });
     st.num(s, compact(v.total), x + bw / 2, y - 12, 16, 'middle', { fill: st.c.soft });
-    s.hit(x - 10, p.y, bw + 20, p.h + 40, { t: v.tag, d: [v.date, T(m, `${fmt(v.total)} 行`, `${fmt(v.total)} lines`), ...keys.filter((q) => v.by[q]).slice(0, 4).map((q) => `${agentOf(m, q)?.name ?? q} ${Math.round((v.by[q] / v.total) * 100)}%`)] });
+    s.hit(x - 10, p.y, bw + 20, p.h + 40, { t: label, d: [v.date, T(m, `${fmt(v.total)} 行`, `${fmt(v.total)} lines`), ...keys.filter((q) => v.by[q]).slice(0, 4).map((q) => `${agentOf(m, q)?.name ?? q} ${Math.round((v.by[q] / v.total) * 100)}%`)].filter(Boolean) });
   });
   st.rule(s, p.x, p.y + p.h, p.w, 'thin');
   return s;

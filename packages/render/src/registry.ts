@@ -10,6 +10,7 @@ import { DONUT_VARIANTS, WAFFLE_VARIANTS, donut, waffle, stream, lanes, clock, v
 import { receipt, RECEIPT_VARIANTS, share, badge, BADGE_VARIANTS, byline, BYLINE_VARIANTS, hand } from './pieces/cards.ts';
 import { codemap } from './pieces/map.ts';
 import { asterisk } from './pieces/asterisk.ts';
+import { historyLabels } from './history.ts';
 
 export interface PieceDef {
   name: string;
@@ -66,7 +67,8 @@ export function art(id: string, m: Model, st: Style, o: PieceOpts = {}): Art | n
   if (!p) throw new Error(`未知卡片：${id}`);
   const s = p.render(m, st, o);
   if (!s) return null;
-  return { w: s.w, h: s.h, svg: s.toString(), hits: s.hits, bg: s.bg, title: `${m.project} · ${m.lang === 'en' ? p.en : p.name}`, motion: (s as any).motion };
+  const name = id === 'versions' ? historyLabels(m.history.basis, m.lang).name : m.lang === 'en' ? p.en : p.name;
+  return { w: s.w, h: s.h, svg: s.toString(), hits: s.hits, bg: s.bg, title: `${m.project} · ${name}`, motion: (s as any).motion };
 }
 /** 动画帧：t 从 0 到 1 */
 export function frames(id: string, m: Model, st: Style, o: PieceOpts = {}, n = 28): Art[] {
