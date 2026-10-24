@@ -1,4 +1,4 @@
-// 逐帧渲染短片《脚注》（promo/short，three.js + WebGL2）
+// 逐帧渲染宣传片（three.js + WebGL2）：默认短片《脚注》（promo/short）；FILM=long 是长片《片尾字幕》（promo/long/render.mjs 就是这样调的）
 //   node promo/short/render.mjs stills 2.4,9,14 [out-dir] [scale]   抽几帧看看
 //   node promo/short/render.mjs events [out.json]                    导出配乐要对齐的时间表
 //   node promo/short/render.mjs video out.mp4 [fps] [from] [to] [scale]  整片（无声，CRF 12 母版）
@@ -17,6 +17,7 @@ const require = createRequire(join(resolve(process.env.PLAYWRIGHT_DIR ?? join(he
 const { chromium } = require('playwright');
 const FFMPEG = process.env.FFMPEG ?? 'ffmpeg';
 const PORTRAIT = process.env.ASPECT === '9:16';
+const FILM = process.env.FILM ?? 'short';
 
 // 片子按模块加载，file:// 不让加载模块：起一个只读的本地静态服务；帧画面由页面直接 POST 回来
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.ttf': 'font/ttf', '.woff2': 'font/woff2' };
@@ -46,7 +47,7 @@ const browser = await chromium.launch({ headless: true, args: gpu });
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
 page.on('pageerror', (e) => console.error('page:', e.message));
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.error('console:', m.text()); });
-await page.goto(`http://127.0.0.1:${port}/promo/short/index.html?scale=${scale}${PORTRAIT ? '&aspect=9:16' : ''}`);
+await page.goto(`http://127.0.0.1:${port}/promo/${FILM}/index.html?scale=${scale}${PORTRAIT ? '&aspect=9:16' : ''}`);
 for (let i = 0; ; i++) {
   const s = await page.evaluate(() => (window.ERROR ? 'error: ' + window.ERROR : window.READY ? 'ok' : ''));
   if (s) { if (s !== 'ok') throw new Error(s); break; }
@@ -76,7 +77,7 @@ function ffmpeg(args) { return spawn(FFMPEG, ['-hide_banner', '-loglevel', 'erro
 const RAW = ['-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${W}x${H}`];
 
 if (mode === 'stills') {
-  const out = rest[0] ?? join(root, 'promo/.build/short/stills');
+  const out = rest[0] ?? join(root, `promo/.build/${FILM}/stills`);
   mkdirSync(out, { recursive: true });
   for (const t of arg.split(',').map(Number)) {
     const t0 = Date.now();
@@ -88,7 +89,7 @@ if (mode === 'stills') {
   }
 } else if (mode === 'events') {
   const ev = await page.evaluate(() => window.EVENTS);
-  const out = arg ?? join(root, 'promo/.build/short/events.json');
+  const out = arg ?? join(root, `promo/.build/${FILM}/events.json`);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(ev));
   console.log('events →', out);
