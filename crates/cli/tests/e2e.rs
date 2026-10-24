@@ -1367,3 +1367,75 @@ fn empty_repository_cannot_produce_a_successful_analysis() {
     assert!(report["error"].is_string(), "{report}");
     assert!(!env.repo.join(".creditia/credits.json").exists());
 }
+
+/// 伪造 Claude Code 一次 Write：返回日志文件路径
+fn claude_write(env: &Env, sid: &str, rel: &str, content: &str, ts: i64) -> PathBuf {
+    let dir = env.root.join("claude/projects/-e2e-write");
+    fs::create_dir_all(&dir).unwrap();
+    let iso = |t: i64| {
+        let (y, m, d) = creditia_core::util::civil_from_days(t.div_euclid(86400));
+        let s = t.rem_euclid(86400);
+        format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}.000Z", s / 3600, s / 60 % 60, s % 60)
+    };
+    let cwd = env.repo.display().to_string();
+    let lines = [
+        serde_json::json!({ "type": "user", "cwd": cwd, "sessionId": sid, "timestamp": iso(ts - 100), "message": { "role": "user", "content": "go" } }),
+        serde_json::json!({ "type": "assistant", "cwd": cwd, "sessionId": sid, "timestamp": iso(ts - 50), "message": { "id": format!("msg_{sid}"), "model": "claude-test", "usage": { "input_tokens": 1, "output_tokens": 1 }, "content": [{ "type": "tool_use", "id": format!("tu_{sid}"), "name": "Write", "input": { "file_path": env.repo.join(rel).display().to_string(), "content": content } }] } }),
+    ];
+    let p = dir.join(format!("{sid}.jsonl"));
+    fs::write(&p, lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n") + "\n").unwrap();
+    p
+}
+
+fn verified_of(env: &Env, id: &str) -> u64 {
+    let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(env.repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0)
+}
+
+/// agent 新建的文件，提交之前先跑了一次分析（提交 hook 每次都这样）：提交以后这个文件的证据不能丢
+#[test]
+fn new_file_analyzed_before_commit_keeps_its_evidence() {
+    let env = setup();
+    let rs = env.repo.display().to_string();
+    let base: i64 = 1_787_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    fs::write(env.repo.join(".git/info/exclude"), ".creditia/\n").unwrap();
+    fs::write(env.repo.join("README.md"), "# a readme line for the project\n").unwrap();
+    commit(&env.repo, "init", "me@example.com", &d(base - 86400));
+    let content: String = (0..20).map(|i| format!("pub fn written_by_agent_{i}() -> u32 {{ {i} * 11 }}\n")).collect();
+    claude_write(&env, "s-new", "src/new.rs", &content, base);
+    fs::create_dir_all(env.repo.join("src")).unwrap();
+    fs::write(env.repo.join("src/new.rs"), &content).unwrap();
+    run(&env, &["init", "--repo", &rs]);
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    commit(&env.repo, "add new.rs", "me@example.com", &d(base + 60));
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(verified_of(&env, "a:claude-code/claude-test"), 20);
+}
+
+/// 一次写入里重复的行：日志在的时候、删了日志再重建缓存以后，逐行证据一样多
+#[test]
+fn repeated_lines_survive_log_cleanup() {
+    let env = setup();
+    let rs = env.repo.display().to_string();
+    let base: i64 = 1_787_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    fs::write(env.repo.join(".git/info/exclude"), ".creditia/\n").unwrap();
+    fs::write(env.repo.join("README.md"), "# a readme line for the project\n").unwrap();
+    commit(&env.repo, "init", "me@example.com", &d(base - 86400));
+    let content: String = (0..6).map(|i| format!("    let value_{i} = compute_something({i});\n")).collect::<String>() + &"        assert_eq!(result.status, Status::Ok);\n".repeat(10);
+    let log = claude_write(&env, "s-dup", "tests/t.rs", &content, base);
+    fs::create_dir_all(env.repo.join("tests")).unwrap();
+    fs::write(env.repo.join("tests/t.rs"), &content).unwrap();
+    commit(&env.repo, "tests", "me@example.com", &d(base + 60));
+    run(&env, &["init", "--repo", &rs]);
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(verified_of(&env, "a:claude-code/claude-test"), 16);
+    fs::remove_file(log).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs, "--fresh"]);
+    assert!(ok, "{v}");
+    assert_eq!(verified_of(&env, "a:claude-code/claude-test"), 16);
+}

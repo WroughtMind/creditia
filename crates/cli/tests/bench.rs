@@ -541,6 +541,8 @@ struct Tally {
     missed: usize,
     human: usize,
     claimed: usize,
+    /// 人写的行里认出是人写的（不是「未确认」）
+    recognized: usize,
 }
 impl Tally {
     fn add(&mut self, truth: &str, pred: &str) {
@@ -548,6 +550,9 @@ impl Tally {
             self.human += 1;
             if pred.starts_with("a:") {
                 self.claimed += 1;
+            }
+            if pred.starts_with("h:") {
+                self.recognized += 1;
             }
             return;
         }
@@ -575,10 +580,11 @@ impl Tally {
         self.missed += o.missed;
         self.human += o.human;
         self.claimed += o.claimed;
+        self.recognized += o.recognized;
     }
     fn json(&self) -> Value {
         let p = |a: usize, b: usize| if b == 0 { Value::Null } else { json!((a as f64 / b as f64 * 1000.0).round() / 10.0) };
-        json!({ "aiLines": self.ai, "toolCorrect": p(self.exact + self.tool_only, self.ai), "modelCorrect": p(self.exact, self.ai), "wrongTool": p(self.wrong_tool, self.ai), "missed": p(self.missed, self.ai), "humanLines": self.human, "falseClaims": p(self.claimed, self.human) })
+        json!({ "aiLines": self.ai, "toolCorrect": p(self.exact + self.tool_only, self.ai), "modelCorrect": p(self.exact, self.ai), "wrongTool": p(self.wrong_tool, self.ai), "missed": p(self.missed, self.ai), "humanLines": self.human, "falseClaims": p(self.claimed, self.human), "humanRecognized": p(self.recognized, self.human) })
     }
 }
 
@@ -774,7 +780,19 @@ fn accuracy_bench() {
     s.copilot_failed_then_human("gpt-c", "web/failed.ts", 30);
     s.commit("written by hand after copilot failed");
 
+    // 下面两个场景在本机日志的覆盖期里（分析时刻往回一个保留期）：以上的场景都在覆盖期以前
+    s.scene("22 日志都在时手写");
+    s.agent_new(OPUS, "src/cov_ai.rs", 30);
+    s.human_edit("src/cov_me.rs", 0, 60);
+    s.commit("agent file + hand file while logs are complete");
+
+    s.scene("23 在 agent 里提交的手写");
+    s.agent_new(GPT, "web/stamped_ai.ts", 20);
+    s.human_edit("src/stamped_me.rs", 0, 40);
+    s.commit("committed from inside an agent\n\nCreditia-Harness: claude-code\nCreditia-Model: opus-x\nCreditia-Lines: codex/gpt-a 20 / 60");
+
     s.flush_logs();
+    s.vars.insert("CREDITIA_NOW".into(), (s.t + 3600).to_string());
     let rs = s.repo.display().to_string();
     s.run(&["init", "--repo", &rs]);
     let v = s.run(&["analyze", "--repo", &rs, "--fresh"]);
@@ -823,13 +841,13 @@ fn accuracy_bench() {
     }
 
     let mut all = Tally::default();
-    println!("\n场景                         AI行  工具对%  模型对%  错给别的AI%  漏掉%   非AI行  误认%");
+    println!("\n场景                         AI行  工具对%  模型对%  错给别的AI%  漏掉%   非AI行  误认%  认出手写%");
     for (k, t) in &by_scene {
         all.merge(t);
-        println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}", k, t.ai, pct(t.exact + t.tool_only, t.ai), pct(t.exact, t.ai), pct(t.wrong_tool, t.ai), pct(t.missed, t.ai), t.human, pct(t.claimed, t.human));
+        println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}", k, t.ai, pct(t.exact + t.tool_only, t.ai), pct(t.exact, t.ai), pct(t.wrong_tool, t.ai), pct(t.missed, t.ai), t.human, pct(t.claimed, t.human), pct(t.recognized, t.human));
     }
-    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}", "历史合计", all.ai, pct(all.exact + all.tool_only, all.ai), pct(all.exact, all.ai), pct(all.wrong_tool, all.ai), pct(all.missed, all.ai), all.human, pct(all.claimed, all.human));
-    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}", "当前代码（存活）", surv.ai, pct(surv.exact + surv.tool_only, surv.ai), pct(surv.exact, surv.ai), pct(surv.wrong_tool, surv.ai), pct(surv.missed, surv.ai), surv.human, pct(surv.claimed, surv.human));
+    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}", "历史合计", all.ai, pct(all.exact + all.tool_only, all.ai), pct(all.exact, all.ai), pct(all.wrong_tool, all.ai), pct(all.missed, all.ai), all.human, pct(all.claimed, all.human), pct(all.recognized, all.human));
+    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}", "当前代码（存活）", surv.ai, pct(surv.exact + surv.tool_only, surv.ai), pct(surv.exact, surv.ai), pct(surv.wrong_tool, surv.ai), pct(surv.missed, surv.ai), surv.human, pct(surv.claimed, surv.human), pct(surv.recognized, surv.human));
     let tot: usize = share_t.values().sum();
     println!("\n份额（历史，非空行）  真实    算出");
     let mut keys: Vec<&String> = share_t.keys().chain(share_p.keys()).collect();
@@ -857,4 +875,11 @@ fn accuracy_bench() {
     assert!(all.wrong_tool * 100 <= all.ai, "错给别的 AI：{}/{}", all.wrong_tool, all.ai);
     assert!((all.exact + all.tool_only) * 100 >= all.ai * 95, "工具对的比例：{}/{}", all.exact + all.tool_only, all.ai);
     assert!(l1 / 2.0 <= 0.04, "份额总偏差 {:.1} 个百分点", l1 / 2.0 * 100.0);
+    // 覆盖期里人写的行要认出来，不能留成「未确认」；在 agent 里提交的手写不能被章整个算给 agent
+    for k in ["22 日志都在时手写", "23 在 agent 里提交的手写"] {
+        let t = &by_scene[k];
+        assert!(t.recognized * 100 >= t.human * 95, "{k}：认出手写 {}/{}", t.recognized, t.human);
+        assert_eq!(t.claimed, 0, "{k}：人写的行被算给 AI");
+        assert!((t.exact + t.tool_only) * 100 >= t.ai * 95, "{k}：AI 行 {}/{}", t.exact + t.tool_only, t.ai);
+    }
 }

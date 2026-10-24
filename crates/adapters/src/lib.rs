@@ -71,6 +71,26 @@ pub fn source_dir(src: Src) -> PathBuf {
     }
 }
 
+/// 本机装着读得懂的 agent 工具（有它的数据目录）。CI 这类没有任何 agent 日志的环境返回 false：
+/// 那里「没有证据」不说明任何事，不能推断为手写
+pub fn any_agent_installed() -> bool {
+    Src::all().iter().filter(|s| **s != Src::Aider).any(|s| source_dir(*s).exists()) || cursor_global_storage().exists()
+}
+
+/// 本机日志至少能保留多久（秒）：各工具里清理最勤的那个。Claude Code 默认 30 天（settings.json 的 cleanupPeriodDays 可改），
+/// Cursor 的行级库 30 天；其余工具不自动清理。留两天余量
+pub fn log_retention_secs() -> i64 {
+    let mut days: i64 = 30;
+    let claude = source_dir(Src::Claude);
+    if claude.exists() {
+        let v: serde_json::Value = std::fs::read_to_string(claude.join("settings.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        if let Some(d) = v["cleanupPeriodDays"].as_i64() {
+            days = days.min(d.max(0));
+        }
+    }
+    (days - 2).max(0) * 86400
+}
+
 /// Cursor 对话库（state.vscdb）所在目录，各平台不同
 pub fn cursor_global_storage() -> PathBuf {
     if let Ok(p) = std::env::var("CREDITIA_CURSOR_STORAGE") {

@@ -885,7 +885,10 @@ pub fn detect_agent(env: &HashMap<String, String>) -> Option<(String, Option<Str
     if has("CLAUDECODE") || has("CLAUDE_CODE_ENTRYPOINT") {
         return Some(("claude-code".into(), env.get("ANTHROPIC_MODEL").cloned()));
     }
-    if has("CODEX_SANDBOX") || has("CODEX_THREAD_ID") || env.keys().any(|k| k.starts_with("CODEX_") && k != "CODEX_HOME") {
+    // Codex 给它跑的命令带上 CODEX_SANDBOX*、CODEX_THREAD_ID、npm 包装器的 CODEX_MANAGED_BY_*；
+    // 用户自己在 shell 配置里设的（CODEX_HOME、API key、证书）不算，不然人在终端里的每次提交都会被盖成 Codex
+    let user_set = |k: &str| matches!(k, "CODEX_HOME" | "CODEX_API_KEY" | "CODEX_CA_CERTIFICATE" | "CODEX_QUIET_MODE") || k.ends_with("_KEY") || k.ends_with("_TOKEN");
+    if has("CODEX_SANDBOX") || has("CODEX_THREAD_ID") || env.keys().any(|k| k.starts_with("CODEX_") && !user_set(k)) {
         return Some(("codex".into(), None));
     }
     if has("CURSOR_AGENT") || has("CURSOR_TRACE_ID") {
@@ -938,8 +941,9 @@ fn cmd_hook_trailers(a: &Args) -> R<(Value, Vec<String>)> {
     let msg = std::fs::read_to_string(msgfile).map_err(|e| e.to_string())?;
     // 这次提交里各工具写了几行：本机日志里有证据的才算。CI 里没有日志，PR 评论和 Release 说明读这一行。
     // 扫日志最多等几秒，等不到就不写，不耽误提交
-    let lines = if msg.contains("Creditia-Lines:") { None } else { staged_lines(&repo) };
     let harness = harness.filter(|_| !msg.contains("Creditia-Harness:"));
+    // 在 agent 里提交、这次却没有 AI 写的行：也写上 `Creditia-Lines: / N`，不然章会把整个提交都算给 agent
+    let lines = if msg.contains("Creditia-Lines:") { None } else { staged_lines(&repo, harness.is_some()) };
     if harness.is_none() && lines.is_none() {
         return Ok((json!({ "added": false, "summary": "" }), vec![]));
     }
@@ -967,8 +971,9 @@ fn cmd_hook_trailers(a: &Args) -> R<(Value, Vec<String>)> {
     Ok((json!({ "added": true, "harness": harness, "model": model, "lines": lines, "summary": "" }), vec![]))
 }
 
-/// `Creditia-Lines` 的值：`工具/模型 行数, 工具 行数 / 暂存区新增总行数`。没有 AI 写的行、或超时，返回 None
-fn staged_lines(repo: &Path) -> Option<String> {
+/// `Creditia-Lines` 的值：`工具/模型 行数, 工具 行数 / 暂存区新增总行数`。超时返回 None；
+/// 没有 AI 写的行时，`keep_empty` 才返回 `/ 总行数`
+fn staged_lines(repo: &Path, keep_empty: bool) -> Option<String> {
     let secs = std::env::var("CREDITIA_HOOK_TIMEOUT").ok().and_then(|v| v.parse().ok()).unwrap_or(8u64);
     if secs == 0 {
         return None;
@@ -979,13 +984,16 @@ fn staged_lines(repo: &Path) -> Option<String> {
         let _ = tx.send(analyze::staged(&repo));
     });
     let (by, total) = rx.recv_timeout(std::time::Duration::from_secs(secs)).ok()?.ok()?;
-    if by.is_empty() {
+    if total == 0 || (by.is_empty() && !keep_empty) {
         return None;
     }
     Some(lines_value(&by, total))
 }
 
 fn lines_value(by: &[(String, usize)], total: usize) -> String {
+    if by.is_empty() {
+        return format!("/ {total}");
+    }
     format!("{} / {total}", by.iter().map(|(k, n)| format!("{k} {n}")).collect::<Vec<_>>().join(", "))
 }
 
@@ -1142,6 +1150,22 @@ mod hook_tests {
         assert_eq!(detect_agent(&env), Some(("antigravity".to_string(), None)));
         let env: HashMap<String, String> = [("ANTIGRAVITY_TRAJECTORY_ID".to_string(), "t1".to_string()), ("GEMINI_CLI".to_string(), "1".to_string())].into();
         assert_eq!(detect_agent(&env).map(|(h, _)| h), Some("antigravity".to_string()));
+    }
+
+    #[test]
+    fn user_codex_config_is_not_an_agent() {
+        let env: HashMap<String, String> = [("CODEX_HOME".to_string(), "/x".to_string()), ("CODEX_API_KEY".to_string(), "k".to_string())].into();
+        assert_eq!(detect_agent(&env), None);
+        let env: HashMap<String, String> = [("CODEX_MANAGED_BY_NPM".to_string(), "1".to_string())].into();
+        assert_eq!(detect_agent(&env).map(|(h, _)| h), Some("codex".to_string()));
+    }
+
+    #[test]
+    fn empty_lines_stamp() {
+        assert_eq!(super::lines_value(&[], 12), "/ 12");
+        assert_eq!(super::lines_value(&[("codex/gpt-5".into(), 3)], 12), "codex/gpt-5 3 / 12");
+        assert_eq!(creditia_adapters::git::parse_lines_stamp("/ 12"), Some((vec![], 12)));
+        assert_eq!(creditia_adapters::git::parse_lines_stamp("claude-code/claude-opus-5-5 30, codex 4 / 120"), Some((vec![("claude-code/claude-opus-5-5".into(), 30), ("codex".into(), 4)], 120)));
     }
 
     #[test]

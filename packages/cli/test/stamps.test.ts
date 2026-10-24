@@ -20,6 +20,9 @@ test('盖章汇总：Creditia-Lines 按行数记，只有 Harness 的整个提�
   assert.ok(s.startsWith('**creditia** · Claude Code (Claude Opus 5.5) 30% · Codex 10% · Kimi'), s);
   assert.ok(!/[　-鿿]/.test(s), s);
   assert.equal(stampedComment([{ added: 10 }], 'zh'), '');
+  // 在 agent 里提交、一行 AI 代码都没有：hook 写 `/ 30`，不能退回去把整个提交算给章上的工具
+  const zero = stampedShares([{ lines: '/ 30', harness: 'claude-code', model: 'claude-opus-5-5', added: 30 }]);
+  assert.deepEqual(zero, { by: [], total: 30 });
 });
 
 // 直接跑源码（本机可能有打包过的旧 dist）

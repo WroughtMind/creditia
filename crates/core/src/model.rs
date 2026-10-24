@@ -114,6 +114,27 @@ pub struct FileGroup {
 pub struct Store {
     pub version: u32,
     pub groups: HashMap<String, FileGroup>,
+    /// 上次扫描时认项目用的关键词（含各个根目录）。变了（新登记了 worktree、克隆、手动关联的路径），
+    /// 之前因为认不出而跳过的日志要重新读，不能因为文件没变就一直用空结果
+    #[serde(default)]
+    pub markers: Vec<String>,
+}
+
+impl Store {
+    /// 认项目的关键词变了：没读出任何证据的日志分组作废重读（读出了证据的照旧用缓存）
+    pub fn rescan_if_markers_changed(&mut self, markers: &[String]) {
+        let mut m = markers.to_vec();
+        m.sort();
+        m.dedup();
+        if self.markers != m {
+            for g in self.groups.values_mut() {
+                if g.evs.is_empty() {
+                    g.fp = (0, 0);
+                }
+            }
+            self.markers = m;
+        }
+    }
 }
 
 /// 日志缓存的格式版本：adapter 的读法变了就加一，升级后整份重新解析（2：编辑只记新增的行）
@@ -164,7 +185,14 @@ pub struct FileAdd {
     /// 每个新增行在提交后的文件里是第几行（从 1 起）：存活代码按 blame 的原行号对回来
     #[serde(default)]
     pub at: Vec<u32>,
+    /// 格式化拆行用：第 i 行起连续 2、3、4 行（同一改动块内）规范化后拼起来的键，依次放在 `joins[i * 3 ..]`；0 是没有。
+    /// agent 写的一长行被格式化工具拆成几行，拼回去就和证据对得上
+    #[serde(default)]
+    pub joins: Vec<u32>,
 }
+
+/// 拆行识别看的窗口：连续 2 到 4 行
+pub const JOIN_WINDOWS: usize = 3;
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct Commit {
@@ -180,6 +208,10 @@ pub struct Commit {
     /// `Assisted-by: 工具:模型` trailer（Crush 默认写这个，Linux 内核的 AI 署名也用这个格式）
     #[serde(default)]
     pub assisted: Vec<String>,
+    /// 提交盖章 hook 写的 `Creditia-Lines`：提交时按本机日志算出的（工具/模型, 行数）和新增总行数。
+    /// 有它的提交，章只认这些行数，其余的行提交时已经核对过日志、没有 AI 证据
+    #[serde(default)]
+    pub lines_stamp: Option<(Vec<(String, usize)>, usize)>,
     #[serde(default)]
     pub files: Vec<FileAdd>,
 }
@@ -294,31 +326,177 @@ pub struct Registry {
     by_id: HashMap<String, usize>,
 }
 
-/// 不同工具、不同渠道记录的同一模型名不一样，统一成官方 id：
-/// - 去掉渠道前缀：`anthropic/`、`openrouter/anthropic/`、`bedrock/`、`us.anthropic.`、`vertex_ai/`……
-/// - 去掉渠道后缀：Bedrock 的 `-v1:0`、Vertex 的 `@20250514`、OpenRouter 的 `:free` / `:thinking`、中转站常见的 `-thinking`
-/// - Claude 系列官方 id 用横线（`claude-fable-5.1` → `claude-fable-5-1`），去掉 8 位日期后缀；GPT 系列官方名本身带点（`gpt-5.6-sol`），保留
+/// 不同工具、不同渠道记录的同一模型名不一样，统一成官方 id。规则按「它是不是同一个模型」来定，而不是按字符串长得像不像：
+/// - 渠道：`anthropic/`、`openrouter/anthropic/`、`bedrock/`、`us.anthropic.`、`vertex_ai/`、`models/`……只留最后一段；
+///   Bedrock 的 `-v1:0`、Vertex 的 `@20250514`、OpenRouter 的 `:free` / `:thinking` / `:nitro` 去掉
+/// - 快照与预览：日期（`-20250929`、`-2024-08-06`、`-0709`、`-2507`）、`-latest`、`-preview` / `-exp` 去掉
+/// - 界面写法：`Claude Sonnet 4.5`、`Gemini 3 Pro (High)`、`CLAUDE_SONNET_4_20250514_V1_0`（空格、下划线、括号标签）
+/// - 同一模型的调用档位不是另一个模型：OpenAI 系的推理强度（`-high`、`-xhigh`、Cursor 的 `-fast`）、
+///   Claude 的 `-thinking`、Cursor MAX 模式的 `-max`、`[1m]` 上下文、`-instruct`
+/// - 真不同的模型保留：`kimi-k2-thinking`、`gpt-5.1-codex-max`、本地模型的尺寸（`gpt-oss:20b` → `gpt-oss-20b`）
+/// - Claude 用官方词序：4 代起 `claude-<系列>-<版本>`（Cursor 的 `claude-4.5-sonnet` → `claude-sonnet-4-5`），
+///   3 代及以前 `claude-<版本>-<系列>`；版本用横线。GPT 系列官方名本身带点（`gpt-5.6-sol`），保留
 pub fn normalize_model(m: &str) -> String {
-    let mut m = m.trim().to_lowercase();
-    // 中转站常见的方括号标签：`[逆向]claude-…`、`【官方】gpt-…`
-    while let Some(end) = m.find(']').or_else(|| m.find('】')) {
-        if m.starts_with('[') || m.starts_with('【') { m = m[end + m[end..].chars().next().unwrap().len_utf8()..].trim().to_string(); } else { break; }
+    use regex::Regex;
+    use std::sync::OnceLock;
+    struct Re { tags: Regex, sep: Regex, size: Regex, dated: Regex, effort: Regex, gpt_join: Regex, gpt_dash: Regex }
+    static RE: OnceLock<Re> = OnceLock::new();
+    let re = RE.get_or_init(|| Re {
+        // 中转站、界面的括号标签：`[逆向]`、`【官方】`、`[1m]`、`(High)`、`(1M context)`
+        tags: Regex::new(r"\[[^\]]*\]|【[^】]*】|\([^)]*\)|（[^）]*）").unwrap(),
+        sep: Regex::new(r"[\s_]+").unwrap(),
+        size: Regex::new(r"^\d+(\.\d+)?[bmk](-a\d+(\.\d+)?b)?$").unwrap(),
+        // 日期快照：8 位、YYYY-MM-DD、MM-DD（预览版）、4 位 MMDD / YYMM
+        dated: Regex::new(r"-(\d{8}|\d{4}-\d{2}-\d{2}|\d{2}-\d{2}|\d{4})$").unwrap(),
+        effort: Regex::new(r"-(minimal|low|medium|high|xhigh|fast)$").unwrap(),
+        gpt_join: Regex::new(r"^gpt(\d)").unwrap(),
+        // `gpt-5-1-codex` → `gpt-5.1-codex`（官方写法是点）
+        gpt_dash: Regex::new(r"^gpt-(\d+)-(\d)(-|$)").unwrap(),
+    });
+    let mut m = re.tags.replace_all(m.trim(), " ").to_lowercase();
+    m = m.trim().rsplit('/').next().unwrap_or("").trim().to_string();
+    for p in ["us.", "eu.", "apac.", "global.", "jp.", "au."] {
+        if let Some(x) = m.strip_prefix(p).filter(|x| x.contains('.')) {
+            m = x.to_string();
+        }
     }
-    m = m.rsplit('/').next().unwrap_or(&m).to_string();
-    for p in ["us.anthropic.", "eu.anthropic.", "apac.anthropic.", "global.anthropic.", "anthropic.", "openai.", "google.", "xai.", "moonshotai.", "deepseek."] {
-        if let Some(x) = m.strip_prefix(p) { m = x.to_string(); }
+    // Bedrock 的 `厂商.模型-版本:修订`（`anthropic.claude-…-v1:0`、`openai.gpt-oss-120b-1:0`）
+    let mut bedrock = false;
+    for p in ["anthropic.", "openai.", "google.", "xai.", "moonshotai.", "moonshot.", "deepseek.", "meta.", "mistral.", "qwen.", "amazon."] {
+        if let Some(x) = m.strip_prefix(p) {
+            m = x.to_string();
+            bedrock = true;
+        }
     }
-    if let Some((a, _)) = m.split_once('@') { m = a.to_string(); }
-    if let Some((a, _)) = m.split_once(':') { m = a.to_string(); }
-    for suf in ["-v1", "-v2", "-thinking", "-latest"] {
-        if let Some(x) = m.strip_suffix(suf) { m = x.to_string(); }
+    if let Some((a, _)) = m.split_once('@') {
+        m = a.to_string();
     }
-    if m.starts_with("claude") {
-        m = m.replace('.', "-");
-        // 去掉日期后缀 claude-sonnet-4-5-20250929 → claude-sonnet-4-5
-        if let Some((a, d)) = m.rsplit_once('-') { if d.len() == 8 && d.chars().all(|c| c.is_ascii_digit()) { m = a.to_string(); } }
+    // `:20b` 这类尺寸是不同的模型，接回名字里；其余（`:free`、`:latest`、Bedrock 的 `:0`）是渠道标签
+    if let Some((a, tag)) = m.clone().split_once(':') {
+        m = if re.size.is_match(tag.trim()) && !a.ends_with(tag.trim()) { format!("{}-{}", a.trim(), tag.trim()) } else { a.trim().to_string() };
+        if bedrock && tag.chars().all(|c| c.is_ascii_digit()) {
+            if let Some((b, v)) = m.rsplit_once('-') {
+                let n = v.trim_start_matches('v');
+                if !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()) {
+                    m = b.to_string();
+                }
+            }
+        }
+    }
+    m = re.sep.replace_all(&m, "-").to_string();
+    while m.contains("--") {
+        m = m.replace("--", "-");
+    }
+    m = m.trim_matches('-').to_string();
+    let openai = |m: &str| m.starts_with("gpt") || m.starts_with("chatgpt") || (m.starts_with('o') && m[1..].starts_with(|c: char| c.is_ascii_digit())) || m.starts_with("codex-");
+    let claude = |m: &str| m.starts_with("claude");
+    // 后缀反复剥，直到不再变化：`claude-sonnet-4-5-20250929-v1-0`、`gemini-2.5-pro-preview-05-06`
+    loop {
+        let before = m.clone();
+        for suf in ["-v1-0", "-v2-0", "-v1", "-v2", "-latest", "-preview", "-exp", "-experimental", "-instruct", "-free"] {
+            if let Some(x) = m.strip_suffix(suf).filter(|x| !x.is_empty()) {
+                m = x.to_string();
+            }
+        }
+        if let Some(c) = re.dated.captures(&m) {
+            // 只剥像日期的四位数：月份 01-12 开头的 MMDD，或 23-29 开头的 YYMM；`-1106` 这类老快照也算
+            let d = &c[1];
+            let looks_dated = d.len() != 4 || matches!(&d[..2], "01" | "02" | "03" | "04" | "05" | "06" | "07" | "08" | "09" | "10" | "11" | "12" | "23" | "24" | "25" | "26" | "27" | "28" | "29");
+            if looks_dated && c.get(0).unwrap().start() > 0 {
+                m.truncate(c.get(0).unwrap().start());
+            }
+        }
+        if openai(&m) {
+            if let Some(c) = re.effort.find(&m) {
+                m.truncate(c.start());
+            }
+        }
+        if openai(&m) || claude(&m) {
+            for suf in ["-thinking", "-reasoning"] {
+                if let Some(x) = m.strip_suffix(suf) {
+                    m = x.to_string();
+                }
+            }
+        }
+        if claude(&m) {
+            for suf in ["-max", "-1m"] {
+                if let Some(x) = m.strip_suffix(suf) {
+                    m = x.to_string();
+                }
+            }
+        }
+        if m == before {
+            break;
+        }
+    }
+    if openai(&m) {
+        m = re.gpt_join.replace(&m, "gpt-$1").to_string();
+        m = re.gpt_dash.replace(&m, "gpt-$1.$2$3").to_string();
+    }
+    if claude(&m) {
+        m = claude_id(&m);
     }
     m
+}
+
+/// Claude 的官方词序：4 代起 `claude-<系列>-<版本>`，3 代及以前 `claude-<版本>-<系列>`；版本号一律横线
+fn claude_id(m: &str) -> String {
+    let rest = m.strip_prefix("claude").unwrap_or(m).trim_start_matches('-');
+    let mut ver: Vec<String> = vec![];
+    let mut words: Vec<String> = vec![];
+    for t in rest.split(['-', '.']).filter(|t| !t.is_empty()) {
+        if t.chars().all(|c| c.is_ascii_digit()) {
+            ver.push(t.to_string());
+        } else {
+            words.push(t.to_string());
+        }
+    }
+    let major: u32 = ver.first().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let mut out = vec!["claude".to_string()];
+    // 第一个词是系列（opus、sonnet、haiku、fable……），其余的词跟在版本后面
+    let (family, extra) = if words.is_empty() { (vec![], vec![]) } else { (words[..1].to_vec(), words[1..].to_vec()) };
+    if major == 3 {
+        out.extend(ver);
+        out.extend(family);
+    } else {
+        out.extend(family);
+        out.extend(ver);
+    }
+    out.extend(extra);
+    out.join("-")
+}
+
+/// 工具名的别名：盖章、`Assisted-by`、命令行参数里写法五花八门，统一成 creditia 的工具 id
+pub fn canonical_harness(h: &str) -> String {
+    let k = h.trim().to_lowercase().split(|c: char| c.is_whitespace() || c == '_').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("-");
+    let k = k.trim_end_matches("-agent").trim_end_matches("-cli").to_string();
+    let k = k.as_str();
+    match k {
+        "claude" | "claude-code" | "claudecode" | "anthropic-claude" | "anthropic-claude-code" | "claude-code-cli" => "claude-code",
+        "codex" | "openai-codex" | "codex-cli" | "chatgpt-codex" => "codex",
+        "cursor" | "cursoragent" | "cursor-composer" | "composer" => "cursor",
+        "copilot" | "github-copilot" | "gh-copilot" | "copilot-chat" | "github-copilot-chat" | "copilot-coding" => "copilot",
+        "gemini" | "gemini-cli" | "google-gemini" | "google-gemini-cli" => "gemini",
+        "qwen" | "qwen-code" | "qwencode" => "qwen",
+        "roo" | "roo-code" | "roocode" | "roo-cline" => "roo",
+        "kilo" | "kilo-code" | "kilocode" => "kilo",
+        "opencode" | "open-code" | "sst-opencode" => "opencode",
+        "amp" | "sourcegraph-amp" | "ampcode" => "amp",
+        "trae" | "trae-ai" | "traecli" => "trae",
+        "crush" | "charm-crush" => "crush",
+        "goose" | "block-goose" => "goose",
+        "continue" | "continue-dev" => "continue",
+        "zed" | "zed-ai" => "zed",
+        "amazon-q" | "amazonq" | "q" | "q-developer" | "amazon-q-developer" | "aws-q" => "amazon-q",
+        "agy" | "antigravity" | "google-antigravity" => "antigravity",
+        "grok" | "xai-grok" | "grok-code" => "grok",
+        "kimi" | "kimi-code" | "moonshot-kimi" => "kimi",
+        "windsurf" | "cascade" | "codeium" => "windsurf",
+        "devin" | "devin-ai" => "devin",
+        "jules" | "google-jules" => "jules",
+        other => other,
+    }
+    .to_string()
 }
 
 /// 从模型串本身能看出的渠道（看不出就 None，不猜）
@@ -353,7 +531,9 @@ pub fn vendor(model: &str) -> &'static str {
 
 impl Registry {
     pub fn agent(&mut self, harness: &str, model: Option<&str>) -> usize {
-        let model = model.filter(|m| !m.is_empty()).map(normalize_model);
+        let harness = canonical_harness(harness);
+        let harness = harness.as_str();
+        let model = model.map(normalize_model).filter(|m| !m.is_empty());
         let id = match &model {
             Some(m) => format!("a:{harness}/{m}"),
             None => format!("a:{harness}"),
@@ -475,7 +655,8 @@ impl PathMap {
         let lower = format!("{}/", s.to_lowercase());
         self.markers.iter().any(|m| lower.contains(m.as_str())) && !self.excludes.iter().any(|m| lower.contains(m.as_str()))
     }
-    /// 取能在仓库历史路径集合里找到的最长后缀
+    /// 取能在仓库路径集合里找到的最长后缀；找不到时，路径在某个已知根目录（主仓库、worktree、登记过的克隆）下面，
+    /// 就按根目录切出相对路径：agent 新建、还没提交的文件也认得出，提交以后才不会丢
     pub fn to_rel(&self, abs: &str) -> Option<String> {
         if !self.in_project(abs) {
             return None;
@@ -488,7 +669,12 @@ impl PathMap {
                 return Some(cand);
             }
         }
-        None
+        let lower = abs.to_lowercase();
+        let root = self.markers.iter().filter(|m| m.len() > 4 && lower.starts_with(m.as_str())).max_by_key(|m| m.len())?;
+        // 小写不改变 ASCII 的字节长度；含非 ASCII 大小写变化时长度可能不同，退回按字符数切
+        let rest = if lower.len() == abs.len() { abs.get(root.len()..)? } else { &abs[abs.char_indices().nth(root.chars().count())?.0..] };
+        let rel = rest.trim_matches('/');
+        (!rel.is_empty() && !rel.split('/').any(|s| s == "..")).then(|| rel.to_string())
     }
 }
 
@@ -518,6 +704,78 @@ mod tests {
         let b = r.agent("claude-code", Some("claude-fable-5-1"));
         assert_eq!(a, b);
         assert_eq!(r.list[a].id, "a:claude-code/claude-fable-5-1");
+        // 工具名别名
+        let c = r.agent("Claude Code", Some("claude-fable-5-1"));
+        assert_eq!(c, a);
+    }
+
+    /// 同一个模型在各工具、渠道、界面里的写法：都要归到同一个 id
+    #[test]
+    fn same_model_everywhere() {
+        let groups: &[(&str, &[&str])] = &[
+            ("claude-sonnet-4-5", &[
+                "claude-sonnet-4-5", "claude-sonnet-4-5-20250929", "claude-sonnet-4.5", "copilot/claude-sonnet-4.5",
+                "anthropic/claude-sonnet-4.5", "openrouter/anthropic/claude-sonnet-4.5", "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+                "global.anthropic.claude-sonnet-4-5-20250929-v1:0", "claude-sonnet-4-5@20250929", "vertex_ai/claude-sonnet-4-5@20250929",
+                "claude-4.5-sonnet", "claude-4.5-sonnet-thinking", "Claude Sonnet 4.5", "Claude Sonnet 4.5 (Thinking)",
+                "claude-sonnet-4-5-thinking", "[逆向]claude-sonnet-4-5-thinking", "【官方】claude-sonnet-4.5", "claude-sonnet-4.5:thinking",
+                "CLAUDE_SONNET_4_5_20250929_V1_0", "claude-sonnet-4-5-latest",
+            ]),
+            ("claude-opus-4-6", &["claude-opus-4-6", "claude-opus-4-6[1m]", "Claude Opus 4.6 (1M context)", "claude-4.6-opus-max", "claude-opus-4-6-1m"]),
+            ("claude-sonnet-4", &["claude-sonnet-4", "claude-4-sonnet", "claude-sonnet-4-20250514", "CLAUDE_SONNET_4_20250514_V1_0", "claude-4-sonnet-thinking"]),
+            ("claude-3-7-sonnet", &["claude-3-7-sonnet", "claude-3.7-sonnet", "claude-3-7-sonnet-20250219", "claude-3.7-sonnet-max", "claude-sonnet-3.7", "anthropic.claude-3-7-sonnet-20250219-v1:0"]),
+            ("claude-3-5-sonnet", &["claude-3-5-sonnet-20241022", "claude-3.5-sonnet", "anthropic.claude-3-5-sonnet-20241022-v2:0", "claude-3-5-sonnet-latest"]),
+            ("claude-haiku-4-5", &["claude-haiku-4-5", "claude-haiku-4-5-20251001", "claude-4.5-haiku", "Claude Haiku 4.5"]),
+            ("gpt-5.1-codex", &["gpt-5.1-codex", "openai/gpt-5.1-codex", "gpt-5.1-codex-high", "gpt-5.1-codex-medium", "GPT-5.1 Codex", "gpt-5-1-codex", "gpt5.1-codex"]),
+            ("gpt-5.1-codex-max", &["gpt-5.1-codex-max", "gpt-5.1-codex-max-xhigh", "GPT-5.1-Codex-Max"]),
+            ("gpt-5", &["gpt-5", "gpt-5-high", "gpt-5-high-fast", "gpt-5-2025-08-07", "openai/gpt-5", "azure/gpt-5", "gpt-5-thinking", "GPT-5"]),
+            ("gpt-4.1", &["gpt-4.1", "gpt-4-1", "gpt-4.1-2025-04-14"]),
+            ("o4-mini", &["o4-mini", "o4-mini-high", "o4-mini-2025-04-16"]),
+            ("gemini-2.5-pro", &["gemini-2.5-pro", "models/gemini-2.5-pro", "google/gemini-2.5-pro", "gemini-2.5-pro-preview-05-06", "gemini-2.5-pro-exp-03-25", "vertex_ai/gemini-2.5-pro", "Gemini 2.5 Pro"]),
+            ("gemini-3-pro", &["gemini-3-pro", "gemini-3-pro-preview", "Gemini 3 Pro (High)", "Gemini 3 Pro (Low)"]),
+            ("grok-4", &["grok-4", "grok-4-0709", "x-ai/grok-4", "xai/grok-4"]),
+            ("grok-code-fast-1", &["grok-code-fast-1", "x-ai/grok-code-fast-1"]),
+            ("kimi-k2", &["kimi-k2", "kimi-k2-0905", "kimi-k2-0905-preview", "moonshotai/kimi-k2", "moonshotai/kimi-k2-instruct", "kimi-k2-instruct-0905"]),
+            ("kimi-k2-thinking", &["kimi-k2-thinking", "moonshotai/kimi-k2-thinking"]),
+            ("deepseek-v3", &["deepseek-v3", "deepseek-v3-0324", "deepseek/deepseek-v3", "deepseek-ai/deepseek-v3"]),
+            ("qwen3-coder-plus", &["qwen3-coder-plus", "qwen/qwen3-coder-plus", "qwen3-coder-plus-2025-07-22"]),
+            ("glm-4.6", &["glm-4.6", "z-ai/glm-4.6", "zhipuai/glm-4.6"]),
+            ("gpt-oss-120b", &["gpt-oss-120b", "gpt-oss:120b", "openai/gpt-oss-120b", "openai.gpt-oss-120b-1:0"]),
+            ("mistral-large", &["mistral-large-2411", "mistral-large-latest", "mistral/mistral-large-latest"]),
+        ];
+        for (want, names) in groups {
+            for n in *names {
+                assert_eq!(normalize_model(n), *want, "{n}");
+            }
+        }
+        // 真不同的模型：不能并在一起
+        let distinct = [
+            ("kimi-k2-thinking", "kimi-k2"), ("gpt-oss:20b", "gpt-oss:120b"), ("qwen3-coder:30b", "qwen3-coder:480b"),
+            ("gpt-5.1-codex-max", "gpt-5.1-codex"), ("gpt-5-mini", "gpt-5"), ("o3-mini", "o3"), ("claude-opus-4-1", "claude-opus-4"),
+            ("claude-sonnet-4-5", "claude-sonnet-4"), ("gemini-2.5-flash", "gemini-2.5-pro"), ("gemini-2.0-flash-thinking-exp", "gemini-2.0-flash"),
+            ("grok-4-fast", "grok-4"), ("deepseek-reasoner", "deepseek-chat"), ("composer-1", "composer-2"),
+        ];
+        for (a, b) in distinct {
+            assert_ne!(normalize_model(a), normalize_model(b), "{a} vs {b}");
+        }
+        assert_eq!(normalize_model("qwen3-coder:30b"), "qwen3-coder-30b");
+        assert_eq!(normalize_model("llama3.1:latest"), "llama3.1");
+        assert_eq!(normalize_model("claude-instant-1.2"), "claude-instant-1-2");
+        assert_eq!(normalize_model("gpt-5.6-sol"), "gpt-5.6-sol");
+        assert_eq!(normalize_model("auto"), "auto");
+        assert_eq!(normalize_model(""), "");
+    }
+
+    #[test]
+    fn harness_aliases() {
+        for (raw, want) in [
+            ("Claude Code", "claude-code"), ("claude", "claude-code"), ("claude_code", "claude-code"), ("openai-codex", "codex"),
+            ("Codex CLI", "codex"), ("cursor-agent", "cursor"), ("GitHub Copilot", "copilot"), ("copilot-cli", "copilot"),
+            ("Gemini CLI", "gemini"), ("Qwen Code", "qwen"), ("Roo Code", "roo"), ("Kilo Code", "kilo"), ("Amazon Q", "amazon-q"),
+            ("q", "amazon-q"), ("agy", "antigravity"), ("Antigravity CLI", "antigravity"), ("cascade", "windsurf"), ("my-own-bot", "my-own-bot"),
+        ] {
+            assert_eq!(canonical_harness(raw), want, "{raw}");
+        }
     }
 
     #[test]
@@ -528,6 +786,12 @@ mod tests {
         assert!(pm.in_project("github.com/org/demo.git"));
         assert!(!pm.in_project("/Users/x/projects/demo-film/src/a.rs"));
         assert_eq!(pm.to_rel("C:\\Users\\x\\demo\\src\\a.rs").as_deref(), Some("src/a.rs"));
+        // 还没进历史的新文件：按已知根目录切；worktree 在主仓库里面时取最长的根
+        let pm = PathMap { known: HashSet::new(), markers: vec!["/home/me/demo/".into(), "/home/me/demo/.claude/worktrees/x/".into()], excludes: vec![] };
+        assert_eq!(pm.to_rel("/home/me/demo/src/New.rs").as_deref(), Some("src/New.rs"));
+        assert_eq!(pm.to_rel("/home/me/demo/.claude/worktrees/x/src/b.rs").as_deref(), Some("src/b.rs"));
+        assert_eq!(pm.to_rel("/home/me/demo"), None);
+        assert_eq!(pm.to_rel("/home/me/demo/../etc/passwd"), None);
     }
 }
 

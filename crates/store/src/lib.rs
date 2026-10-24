@@ -89,6 +89,32 @@ impl Library {
         let _ = conn.execute("alter table sessions add column provider text", []);
         // 证据的下一行
         let _ = conn.execute("alter table evidence add column next integer not null default 0", []);
+        // evidence2：每一次写入的每一行都单独记（主键带时间和序号）。旧表按会话去重，同一会话里写了几次的同一行只剩一条，
+        // 日志被清理、缓存重建以后，这些行就从「逐行证据」掉成了推断或未确认
+        conn.execute_batch(
+            "create table if not exists evidence2(
+               project text not null, rel text not null, key integer not null, src text not null, model text not null,
+               session text not null, ts integer not null, tab integer not null default 0, next integer not null default 0,
+               seq integer not null default 0,
+               primary key(project, rel, key, src, session, ts, seq));
+             create index if not exists idx_ev2_project on evidence2(project);
+             create table if not exists coverage(
+               project text not null, src text not null, from_ts integer not null, to_ts integer not null,
+               primary key(project, src, from_ts));",
+        )
+        .map_err(|e| e.to_string())?;
+        let ver: i64 = conn.query_row("pragma user_version", [], |r| r.get(0)).unwrap_or(0);
+        if ver < 1 {
+            conn.execute_batch(
+                "begin;
+                 insert or ignore into evidence2(project,rel,key,src,model,session,ts,tab,next,seq)
+                   select project,rel,key,src,model,session,ts,tab,next,0 from evidence;
+                 delete from evidence;
+                 pragma user_version = 1;
+                 commit;",
+            )
+            .map_err(|e| e.to_string())?;
+        }
         Ok(Library { conn })
     }
 
@@ -124,20 +150,23 @@ impl Library {
         Ok(rows)
     }
 
-    /// 把内存证据写进证据库（幂等）
+    /// 把内存证据写进证据库（幂等）。同一分组里时间、内容都相同的几条（一次写入里重复的行）按出现的序号分开记
     pub fn save_evidence(&mut self, project: &str, store: &Store) -> Result<usize, String> {
         let tx = self.conn.transaction().map_err(|e| e.to_string())?;
         let mut n = 0;
         {
             let mut ins = tx
-                .prepare("insert or ignore into evidence(project,rel,key,src,model,session,ts,tab,next) values(?1,?2,?3,?4,?5,?6,?7,?8,?9)")
+                .prepare("insert or ignore into evidence2(project,rel,key,src,model,session,ts,tab,next,seq) values(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)")
                 .map_err(|e| e.to_string())?;
             let mut ses = tx
                 .prepare("insert or replace into sessions(project,src,id,model,start,end,tokens,branch,prompts,reviewer,has_content,provider) values(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)")
                 .map_err(|e| e.to_string())?;
             for g in store.groups.values() {
+                let mut seq: std::collections::HashMap<(&str, u32, &str, i64), i64> = std::collections::HashMap::new();
                 for e in &g.evs {
-                    n += ins.execute(params![project, e.rel, e.key as i64, e.src.harness(), e.model, e.session, e.ts, e.tab as i64, e.next as i64]).map_err(|x| x.to_string())?;
+                    let k = seq.entry((e.rel.as_str(), e.key, e.session.as_str(), e.ts)).or_insert(0);
+                    n += ins.execute(params![project, e.rel, e.key as i64, e.src.harness(), e.model, e.session, e.ts, e.tab as i64, e.next as i64, *k]).map_err(|x| x.to_string())?;
+                    *k += 1;
                 }
                 for s in &g.sessions {
                     ses.execute(params![project, s.src.harness(), s.id, s.model, s.start, s.end, s.tokens, s.branch, s.prompts, s.reviewer as i64, s.has_content as i64, s.provider]).map_err(|x| x.to_string())?;
@@ -151,7 +180,7 @@ impl Library {
     /// 从证据库读回（日志已被清理时仍能归因）
     pub fn load_evidence(&self, project: &str) -> Result<(Vec<Ev>, Vec<Session>), String> {
         let src_of = Src::from_harness;
-        let mut st = self.conn.prepare("select rel,key,src,model,session,ts,tab,next from evidence where project=?1").map_err(|e| e.to_string())?;
+        let mut st = self.conn.prepare("select rel,key,src,model,session,ts,tab,next from evidence2 where project=?1").map_err(|e| e.to_string())?;
         let evs = st
             .query_map([project], |r| {
                 Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?, r.get::<_, i64>(5)?, (r.get::<_, i64>(6)?, r.get::<_, i64>(7)?)))
@@ -228,8 +257,34 @@ impl Library {
         Ok(v)
     }
 
+    /// 记下一段「本机日志完整」的时段，和已有的合并成不重叠的几段
+    pub fn add_coverage(&mut self, project: &str, from: i64, to: i64) -> Result<(), String> {
+        let mut all = self.coverage(project);
+        all.push((from.min(to), to.max(from)));
+        all.sort();
+        let mut merged: Vec<(i64, i64)> = vec![];
+        for (a, b) in all {
+            match merged.last_mut() {
+                Some(last) if a <= last.1 => last.1 = last.1.max(b),
+                _ => merged.push((a, b)),
+            }
+        }
+        let tx = self.conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute("delete from coverage where project=?1", [project]).map_err(|e| e.to_string())?;
+        for (a, b) in merged {
+            tx.execute("insert into coverage(project,src,from_ts,to_ts) values(?1,'all',?2,?3)", params![project, a, b]).map_err(|e| e.to_string())?;
+        }
+        tx.commit().map_err(|e| e.to_string())
+    }
+
+    /// 本机日志完整的时段（按时间排好、不重叠）
+    pub fn coverage(&self, project: &str) -> Vec<(i64, i64)> {
+        let Ok(mut st) = self.conn.prepare("select from_ts, to_ts from coverage where project=?1 order by from_ts") else { return vec![] };
+        st.query_map([project], |r| Ok((r.get(0)?, r.get(1)?))).map(|rows| rows.flatten().collect()).unwrap_or_default()
+    }
+
     pub fn evidence_count(&self, project: &str) -> u64 {
-        self.conn.query_row("select count(*) from evidence where project=?1", [project], |r| r.get::<_, i64>(0)).unwrap_or(0) as u64
+        self.conn.query_row("select count(*) from evidence2 where project=?1", [project], |r| r.get::<_, i64>(0)).unwrap_or(0) as u64
     }
 
     pub fn path(&self) -> PathBuf {
@@ -298,6 +353,30 @@ mod tests {
         assert_eq!(ses[0].branch.as_deref(), Some("main"));
         // 别的项目看不到
         assert_eq!(l.evidence_count("p-other"), 0);
+    }
+
+    /// 一次写入里重复的行（同一会话、同一时间、同一内容）：每一行都要留下，删日志后重建也不少
+    #[test]
+    fn repeated_lines_in_one_write_are_kept() {
+        let mut l = lib();
+        let mut store = Store::default();
+        let evs: Vec<Ev> = (0..3).map(|_| ev("tests/t.rs", 9, "s1")).chain([ev("tests/t.rs", 10, "s1")]).collect();
+        store.groups.insert("g".into(), FileGroup { fp: (1, 1), evs, sessions: vec![] });
+        assert_eq!(l.save_evidence("p-dup", &store).unwrap(), 4);
+        assert_eq!(l.save_evidence("p-dup", &store).unwrap(), 0);
+        let (evs, _) = l.load_evidence("p-dup").unwrap();
+        assert_eq!(evs.iter().filter(|e| e.key == 9).count(), 3);
+    }
+
+    #[test]
+    fn coverage_merges() {
+        let mut l = lib();
+        l.add_coverage("p-cov", 100, 200).unwrap();
+        l.add_coverage("p-cov", 150, 300).unwrap();
+        l.add_coverage("p-cov", 500, 600).unwrap();
+        assert_eq!(l.coverage("p-cov"), vec![(100, 300), (500, 600)]);
+        l.add_coverage("p-cov", 250, 550).unwrap();
+        assert_eq!(l.coverage("p-cov"), vec![(100, 600)]);
     }
 
     /// 几个进程同时第一次打开一个新库（App 和命令行、并行的测试）：都要打开成功，不能报 database is locked
