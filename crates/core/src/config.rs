@@ -98,7 +98,7 @@ pub struct Config {
     /// 归因口径：strict 只认逐行证据和明确声明；standard（默认）再加三种推断：同一改动块内的延伸、分支前缀、日志覆盖期里的手写；loose 再加同时间窗口的会话。推断全部单独记账
     #[serde(default = "standard")]
     pub level: String,
-    /// 日志覆盖期内、你自己的提交里没有任何 AI 证据的行，推断为你手写（记为推断，strict 口径不做）。
+    /// 日志覆盖期内、你自己的提交里没有任何 AI 证据的行，而且 agent 同期没写过那个文件，推断为你手写（记为推断，strict 口径不做）。
     /// 有几台电脑、另一台的证据没导入时可以关掉，那些行会照旧记「未确认」
     #[serde(default = "yes")]
     pub infer_human: bool,

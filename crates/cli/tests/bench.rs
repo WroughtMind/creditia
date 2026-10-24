@@ -441,6 +441,26 @@ impl Sim {
         self.write_disk(path);
     }
 
+    /// 格式化把相邻的两行并成一行（短的对象字面量、链式调用收回一行）。并出来的行仍记原作者，但逐行证据对不上了
+    fn join(&mut self, path: &str) {
+        self.t += 30;
+        let v = self.files.remove(path).unwrap();
+        let mut out: Vec<L> = vec![];
+        let mut i = 0;
+        while i < v.len() {
+            let long = |l: &L| l.text.trim().len() > 3;
+            if i + 1 < v.len() && long(&v[i]) && long(&v[i + 1]) {
+                out.push(L { text: format!("{} {}", v[i].text.trim_end(), v[i + 1].text.trim()), who: v[i].who });
+                i += 2;
+            } else {
+                out.push(v[i].clone());
+                i += 1;
+            }
+        }
+        self.files.insert(path.to_string(), out);
+        self.write_disk(path);
+    }
+
     fn commit_as(&mut self, msg: &str, email: &str) -> String {
         self.t += 600;
         git_in(&self.repo, &["add", "-A"]);
@@ -543,6 +563,8 @@ struct Tally {
     claimed: usize,
     /// 人写的行里认出是人写的（不是「未确认」）
     recognized: usize,
+    /// AI 写的行被当成了手写
+    as_human: usize,
 }
 impl Tally {
     fn add(&mut self, truth: &str, pred: &str) {
@@ -570,6 +592,7 @@ impl Tally {
             self.wrong_tool += 1;
         } else {
             self.missed += 1;
+            self.as_human += pred.starts_with("h:") as usize;
         }
     }
     fn merge(&mut self, o: &Tally) {
@@ -581,10 +604,11 @@ impl Tally {
         self.human += o.human;
         self.claimed += o.claimed;
         self.recognized += o.recognized;
+        self.as_human += o.as_human;
     }
     fn json(&self) -> Value {
         let p = |a: usize, b: usize| if b == 0 { Value::Null } else { json!((a as f64 / b as f64 * 1000.0).round() / 10.0) };
-        json!({ "aiLines": self.ai, "toolCorrect": p(self.exact + self.tool_only, self.ai), "modelCorrect": p(self.exact, self.ai), "wrongTool": p(self.wrong_tool, self.ai), "missed": p(self.missed, self.ai), "humanLines": self.human, "falseClaims": p(self.claimed, self.human), "humanRecognized": p(self.recognized, self.human) })
+        json!({ "aiLines": self.ai, "toolCorrect": p(self.exact + self.tool_only, self.ai), "modelCorrect": p(self.exact, self.ai), "wrongTool": p(self.wrong_tool, self.ai), "missed": p(self.missed, self.ai), "humanLines": self.human, "falseClaims": p(self.claimed, self.human), "humanRecognized": p(self.recognized, self.human), "aiAsHuman": p(self.as_human, self.ai) })
     }
 }
 
@@ -791,6 +815,15 @@ fn accuracy_bench() {
     s.human_edit("src/stamped_me.rs", 0, 40);
     s.commit("committed from inside an agent\n\nCreditia-Harness: claude-code\nCreditia-Model: opus-x\nCreditia-Lines: codex/gpt-a 20 / 60");
 
+    // 也在覆盖期里，只隔一天（再隔 20 天，22 就出了覆盖期）。格式化把 agent 的行两两并成一行，逐行证据全对不上：
+    // 不能因为「日志都在、没找到 AI 证据」就算成手写——agent 同期写过这个文件。agent 没碰过的文件照旧认出手写
+    s.scenario = "24 日志都在时格式化合并的行";
+    s.t += DAY;
+    s.agent_new(SONNET, "web/joined.ts", 40);
+    s.join("web/joined.ts");
+    s.human_edit("src/joined_me.rs", 0, 30);
+    s.commit("agent file reformatted onto fewer lines + hand file");
+
     s.flush_logs();
     s.vars.insert("CREDITIA_NOW".into(), (s.t + 3600).to_string());
     let rs = s.repo.display().to_string();
@@ -841,13 +874,13 @@ fn accuracy_bench() {
     }
 
     let mut all = Tally::default();
-    println!("\n场景                         AI行  工具对%  模型对%  错给别的AI%  漏掉%   非AI行  误认%  认出手写%");
+    println!("\n场景                         AI行  工具对%  模型对%  错给别的AI%  漏掉%   非AI行  误认%  认出手写%  AI当手写%");
     for (k, t) in &by_scene {
         all.merge(t);
-        println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}", k, t.ai, pct(t.exact + t.tool_only, t.ai), pct(t.exact, t.ai), pct(t.wrong_tool, t.ai), pct(t.missed, t.ai), t.human, pct(t.claimed, t.human), pct(t.recognized, t.human));
+        println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}    {}", k, t.ai, pct(t.exact + t.tool_only, t.ai), pct(t.exact, t.ai), pct(t.wrong_tool, t.ai), pct(t.missed, t.ai), t.human, pct(t.claimed, t.human), pct(t.recognized, t.human), pct(t.as_human, t.ai));
     }
-    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}", "历史合计", all.ai, pct(all.exact + all.tool_only, all.ai), pct(all.exact, all.ai), pct(all.wrong_tool, all.ai), pct(all.missed, all.ai), all.human, pct(all.claimed, all.human), pct(all.recognized, all.human));
-    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}", "当前代码（存活）", surv.ai, pct(surv.exact + surv.tool_only, surv.ai), pct(surv.exact, surv.ai), pct(surv.wrong_tool, surv.ai), pct(surv.missed, surv.ai), surv.human, pct(surv.claimed, surv.human), pct(surv.recognized, surv.human));
+    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}    {}", "历史合计", all.ai, pct(all.exact + all.tool_only, all.ai), pct(all.exact, all.ai), pct(all.wrong_tool, all.ai), pct(all.missed, all.ai), all.human, pct(all.claimed, all.human), pct(all.recognized, all.human), pct(all.as_human, all.ai));
+    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}    {}", "当前代码（存活）", surv.ai, pct(surv.exact + surv.tool_only, surv.ai), pct(surv.exact, surv.ai), pct(surv.wrong_tool, surv.ai), pct(surv.missed, surv.ai), surv.human, pct(surv.claimed, surv.human), pct(surv.recognized, surv.human), pct(surv.as_human, surv.ai));
     let tot: usize = share_t.values().sum();
     println!("\n份额（历史，非空行）  真实    算出");
     let mut keys: Vec<&String> = share_t.keys().chain(share_p.keys()).collect();
@@ -882,4 +915,8 @@ fn accuracy_bench() {
         assert_eq!(t.claimed, 0, "{k}：人写的行被算给 AI");
         assert!((t.exact + t.tool_only) * 100 >= t.ai * 95, "{k}：AI 行 {}/{}", t.exact + t.tool_only, t.ai);
     }
+    // 认手写要有正面理由：AI 写的行一行都不能被当成手写
+    assert_eq!(all.as_human, 0, "AI 写的行被当成手写");
+    let t = &by_scene["24 日志都在时格式化合并的行"];
+    assert!(t.recognized * 100 >= t.human * 95, "24：认出手写 {}/{}", t.recognized, t.human);
 }
