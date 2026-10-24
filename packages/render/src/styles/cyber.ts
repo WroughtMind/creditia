@@ -1,6 +1,6 @@
 // 赛博：酸黄、青、警示红；倒角面板、HUD 角标、扫描线、错位故障。
 import { defineStyle, grain, linear, chamfer, logo, type Style } from '../style.ts';
-import { Scene, el, g, rect, line, path, circle, r, rng, hash, measure } from '../svg.ts';
+import { Scene, el, g, rect, line, path, circle, r, rng, hash, measure, esc } from '../svg.ts';
 
 const Y = '#F3E600', C = '#00E5F0', R = '#FF2A4D', BG = '#08090D', INK = '#E9ECEF';
 const DISP = { family: 'Rajdhani, Noto Sans SC', weight: 700 };
@@ -61,7 +61,7 @@ export const cyber: Style = defineStyle({
     const x0 = anchor === 'middle' ? x - w / 2 : anchor === 'end' ? x - w : x;
     const clip = s.def(`cy-slice-${Math.round(x)}-${Math.round(y)}`, (id) => el('clipPath', { id }, rect(x0 - 20, y - size * 0.52, w + 40, size * 0.12)));
     s.add(g({ clipPath: `url(#${clip})`, transform: `translate(${r(size * 0.06)} 0)` }, rect(x0 - 20, y - size * 0.52, w + 40, size * 0.12, { fill: BG }),
-      el('text', { x, y, fontFamily: DISP.family, fontWeight: 700, fontSize: Math.min(size, o.maxW ? size : size), textAnchor: anchor === 'start' ? null : anchor, fill: INK, letterSpacing: r(size * 0.02) }, t)));
+      el('text', { x, y, fontFamily: DISP.family, fontWeight: 700, fontSize: Math.min(size, o.maxW ? size : size), textAnchor: anchor === 'start' ? null : anchor, fill: INK, letterSpacing: r(size * 0.02) }, esc(t))));
     return w;
   },
   bar(s, x, y, w, h, color, i) {

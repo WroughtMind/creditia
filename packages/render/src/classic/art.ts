@@ -141,7 +141,7 @@ export const variantsOf = (id: string): string[] => {
 export const defaultVariant = (id: string, t: Theme): string | undefined => FORMS[id]?.def?.(t) ?? (BRIDGED_LAYOUTS[id] ? 'original' : undefined);
 
 export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, satori: Satori, fonts: any[]): Promise<Art | null> {
-  const title = `${m.project || 'credits'} · ${pieceName(id, ctx.lang)}`;
+  const title = `${m.project || 'credits'} · ${pieceName(id, ctx.lang, m.raw)}`;
   // 原版没有的作品、追加的新风格版式：按这个主题的颜色、字体、框线用新风格的画法画
   if (isBridged(id, ctx.variant)) return bridgeArt(id, m, t, ctx);
   if (id === 'badge') {
@@ -174,7 +174,7 @@ export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, sa
   const laid = JSON.stringify(out.tree);
   const variant = ctx.variant ?? f.def?.(t);
   const rising = id === 'roll' && RISING.has(variant ?? '');
-  const title = `${m.project || 'credits'} · ${pieceName(id, ctx.lang)}`;
+  const title = `${m.project || 'credits'} · ${pieceName(id, ctx.lang, m.raw)}`;
   const frames: Art[] = [];
   for (let i = 0; i <= n; i++) {
     const k = i / n;

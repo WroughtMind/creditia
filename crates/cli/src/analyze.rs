@@ -342,7 +342,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         }
     }
     let (units, parents) = ad::git::units(repo, &head, &prs);
-    let (tags, ver_of) = ad::git::versions(repo, &parents, &cfg.ignore_tags);
+    let (tags, ver_of) = ad::git::versions(repo, &head, &parents, &cfg.ignore_tags)?;
 
     // ---- 证据：日志（增量）+ 证据库（日志被清理后仍在）
     let (store, mut st) = evidence(repo, &cfg, &mut lib, &proj.id, &head)?;

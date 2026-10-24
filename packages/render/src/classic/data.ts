@@ -1,3 +1,4 @@
+import { contributionHistory, type ContributionHistory } from '../history.ts';
 // credits.json → 展示用模型。所有形式只读这一份模型。
 import { resolveGroup, modelGroups, type Group, type GroupOpt } from '../data.ts';
 
@@ -24,6 +25,8 @@ export const DEFAULTS: Options = { director: false, lang: 'zh', group: 'auto' };
 
 export interface Model {
   project: string;
+  lang: Options['lang'];
+  history: ContributionHistory;
   director: string;
   group: Group;
   /** 贡献者 id（或旧档案里的工具名）→ 当前分组 key */
@@ -115,7 +118,7 @@ export function buildModel(c: any, opt: Options = DEFAULTS): Model {
     return id;
   };
   return {
-    project: c.project?.name ?? '', group, keyOf,
+    project: c.project?.name ?? '', lang: opt.lang, history: contributionHistory(c, keyOf), group, keyOf,
     // 不写任何人的名字：主导者和个人名单都不出现，人写的行数只作为一行合计
     director: '',
     range: { from: range.from ?? '', to: range.to ?? '' },

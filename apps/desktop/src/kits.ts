@@ -10,6 +10,7 @@ import * as V from '../../../packages/render/src/data.ts';
 import { PIECES, frames as v2Frames, variantName as v2Variant } from '../../../packages/render/src/registry.ts';
 import type { Style } from '../../../packages/render/src/style.ts';
 import type { Art } from '../../../packages/render/src/export.ts';
+import { historyBasis, historyLabels } from '../../../packages/render/src/history.ts';
 import { fontFiles, registerFonts, ready } from './fonts.ts';
 
 type Lang = 'zh' | 'en';
@@ -28,7 +29,7 @@ export interface Kit {
   variants(id: string): string[];
   current(id: string, variant?: string): string | undefined;
   animated(id: string): boolean;
-  pieceName(id: string, lang: Lang): string;
+  pieceName(id: string, lang: Lang, raw?: any): string;
   pieceQ(id: string, lang: Lang): string;
   variantName(v: string, lang: Lang): string;
   /** 文字转路径的独立预览图片；展墙、漫游、放大共用，第一次要时才生成 */
@@ -150,7 +151,7 @@ const v2Kits: Kit[] = STYLES.filter((s) => !SKIP.has(s.id)).map((s) => ({
   variants: (id) => PIECES[id]?.variants ?? [],
   current: (id, variant) => variant ?? s.prefer[id] ?? PIECES[id]?.variants?.[0],
   animated: (id) => !!PIECES[id]?.animated,
-  pieceName: (id, lang) => (lang === 'zh' ? PIECES[id]?.name : PIECES[id]?.en) ?? id,
+  pieceName: (id, lang, raw) => id === 'versions' && raw ? historyLabels(historyBasis(raw), lang).name : (lang === 'zh' ? PIECES[id]?.name : PIECES[id]?.en) ?? id,
   pieceQ: (id, lang) => (lang === 'zh' ? PIECES[id]?.q : PIECES[id]?.qEn) ?? '',
   variantName: v2Variant,
   preview: (art) => previewAway(art, s.id, false),

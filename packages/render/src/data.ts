@@ -1,3 +1,4 @@
+import { contributionHistory, versionBuckets, type ContributionHistory } from './history.ts';
 // credits.json → 展示模型。所有作品只读这一份。
 //
 // 口径：
@@ -98,6 +99,7 @@ export interface Model {
   sessions: number;
   verifiedShare: number;
   versions: { tag: string; date: string; by: Record<string, number>; total: number }[];
+  history: ContributionHistory;
   weeks: { week: string; by: Record<string, number> }[];
   days: { date: string; by: Record<string, number> }[];
   clock: number[][];
@@ -323,13 +325,8 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
   };
 
   // 按版本、按周、按天：都换成分组 key
-  const versionsRaw: any[] = c.versions ?? [];
-  const verTags = [...versionsRaw.map((v) => v.tag), 'unreleased'];
-  const versions = verTags.map((tag) => {
-    const by: Record<string, number> = {};
-    for (const b of c.breakdown ?? []) { const v = n(b.byVersion?.[tag]); if (v && groupOf(b.contributor).kind !== 'human') { const k = keyOf(b.contributor); by[k] = (by[k] ?? 0) + v; } }
-    return { tag, date: versionsRaw.find((v) => v.tag === tag)?.date ?? '', by, total: Object.values(by).reduce((s, x) => s + x, 0) };
-  }).filter((v) => v.total > 0);
+  const versions = versionBuckets(c, keyOf);
+  const history = contributionHistory(c, keyOf);
   const regroup = (by: Record<string, number>) => {
     const out: Record<string, number> = {};
     for (const [id, v] of Object.entries(by ?? {})) {
@@ -371,7 +368,7 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
     agents, rows, unknown, people, named: o.named, sign, hand, showHand: false,
     commits: n(t.commits), units: n(t.units), linesAdded: n(t.linesAdded) || total, linesSurviving: n(t.linesSurviving), tokens: n(t.tokens), sessions: n(t.sessions),
     verifiedShare: total ? verifiedAll / total : 0,
-    versions, weeks, days, clock: Array.isArray(c.clock) ? c.clock : [], files, areas, timeline, units: c.units ?? [], reviewers, raw: c,
+    versions, history, weeks, days, clock: Array.isArray(c.clock) ? c.clock : [], files, areas, timeline, units: c.units ?? [], reviewers, raw: c,
   };
 }
 

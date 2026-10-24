@@ -1,6 +1,7 @@
 // 给 App、官网、命令行看的目录：主题、卡片、版式的中英文名字，主题圆点。不碰文件系统，也不碰 satori。
 import { THEMES, type Theme } from './themes.ts';
 import { PIECES, VARIANT_NAMES } from '../registry.ts';
+import { historyBasis, historyLabels } from '../history.ts';
 
 export const THEME_INFO: Record<string, { zh: string; en: string; note: string; noteEn: string }> = {
   'minimal-light': { zh: '极简', en: 'Minimal', note: '白底黑字，什么场合都不出错', noteEn: 'Plain and safe anywhere' },
@@ -61,7 +62,7 @@ export const PIECE_INFO: Record<string, { zh: string; en: string; q: string; qEn
   settle: { zh: '沉淀', en: 'Survival', q: '新增与留存对比', qEn: 'Code retention comparison' },
 };
 // 借新风格画的卡片（河流、留存、出处……）沿用新风格的名字
-export const pieceName = (id: string, lang: 'zh' | 'en') => PIECE_INFO[id]?.[lang] ?? (lang === 'zh' ? PIECES[id]?.name : PIECES[id]?.en) ?? id;
+export const pieceName = (id: string, lang: 'zh' | 'en', raw?: any) => id === 'versions' && raw ? historyLabels(historyBasis(raw), lang).name : PIECE_INFO[id]?.[lang] ?? (lang === 'zh' ? PIECES[id]?.name : PIECES[id]?.en) ?? id;
 export const pieceQ = (id: string, lang: 'zh' | 'en') => (lang === 'zh' ? PIECE_INFO[id]?.q ?? PIECES[id]?.q : PIECE_INFO[id]?.qEn ?? PIECES[id]?.qEn) ?? '';
 
 export const VARIANT_INFO: Record<string, [string, string]> = {

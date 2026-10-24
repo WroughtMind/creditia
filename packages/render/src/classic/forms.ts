@@ -10,6 +10,7 @@ import { BRANDS, BOTS, colorOf, famColor, logoSvg } from './brand.ts';
 import { h, box, col, txt, label, mark, bar, fill, neonTube, backdrop, surface, svgImage, stripes, blocks, plate, plateMetrics, ornament, fit, spread, eq, oneLine, MONO_FONT, BODY_KEY, CONTENT_KEY, nameFit, nameFitH, nameFitNode, type Node, type Out } from './ui.ts';
 import { measure } from '../svg.ts';
 import { markSvg, sharePetals } from '../mark.ts';
+import { historyLabels, historyEmpty } from '../history.ts';
 
 const keysOf = (m: Model) => m.rows.map((r) => r.key);
 /** 主演名单：有 logo 的 AI 工具按名次排 */
@@ -1598,18 +1599,21 @@ export function clock(m: Model, t: Theme): Out | null {
 
 /** 版本柱状图 */
 export function versions(m: Model, t: Theme): Out | null {
-  const tags: { tag: string; date: string }[] = m.raw.versions ?? [];
-  if (!tags.length) return null;
-  const g = groupFn(m);
+  const { buckets, basis } = m.history;
+  const caption = historyLabels(basis, m.lang).caption;
+  if (!buckets.length) return frame(m, t, 1200, 740, caption,
+    box({ flex: 1, justifyContent: 'center', alignItems: 'center' }, txt({ fontSize: 22, color: t.soft }, historyEmpty(m.history, m.lang))), false);
   const by: Record<string, Record<string, number>> = {};
-  for (const b of m.raw.breakdown ?? []) {
-    const k = g(b.contributor);
-    if ((m.raw.directors ?? []).some((d: any) => d.id === b.contributor)) continue;
-    for (const [v, num] of Object.entries<number>(b.byVersion ?? {})) { by[v] ??= {}; by[v][k] = (by[v][k] ?? 0) + num; }
+  for (const b of buckets) {
+    by[b.tag] = {};
+    for (const [key, num] of Object.entries(b.by)) {
+      const k = m.rows.some((r) => r.key === key) || key === 'unattributed' ? key : 'other';
+      by[b.tag][k] = (by[b.tag][k] ?? 0) + num;
+    }
   }
-  const order = [...tags.map((x) => x.tag), 'unreleased'].filter((v) => by[v]);
-  const stack = m.rows.map((r) => r.key);
-  const totals = order.map((v) => Object.values(by[v]).reduce((a, b) => a + b, 0));
+  const order = buckets.map((b) => b.tag);
+  const stack = [...new Set([...m.rows.map((r) => r.key), ...Object.values(by).flatMap(Object.keys)])];
+  const totals = buckets.map((b) => b.total);
   const max = Math.max(...totals), BH = 340;
   // 终端：柱子是一摞方块字，每段的行数按累计取整分（总行数和柱高对得上）
   const termBar = (v: string, i: number) => {
@@ -1623,15 +1627,15 @@ export function versions(m: Model, t: Theme): Out | null {
     });
     return svgImage(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="${nr * TG}">${glyphSvg(t, runs)}</svg>`, 96, nr * TG);
   };
-  const bars = order.map((v, i) => col({ alignItems: 'center', width: 200 },
+  const bars = order.map((v, i) => col({ alignItems: 'center', width: 200, flexShrink: 0 },
     t.family === 'terminal' ? box({ height: BH, alignItems: 'flex-end' }, termBar(v, i)) : box({ height: BH, alignItems: 'flex-end' },
       // 霓虹：每根柱子整体一圈光晕（光晕按柱子算，不按每一段，出图不慢）
       col({ width: 96, height: (totals[i] / max) * BH, borderRadius: t.family === 'glass' ? 10 : t.barRadius ? 8 : 0, overflow: 'hidden', flexDirection: 'column-reverse', gap: 2, boxShadow: t.family === 'neon' ? `0 0 16px ${famColor(stack.find((k) => by[v][k]) ?? '', t, 0)}88` : undefined },
         ...stack.map((k, j) => (by[v][k] ? box({ height: `${(by[v][k] / totals[i]) * 100}%`, minHeight: 2, ...fill({ key: k }, t, j, 3) }) : null)))),
-    txt({ marginTop: 22, fontFamily: t.num === t.sans ? MONO_FONT : t.num, fontSize: 22, color: t.ink }, v === 'unreleased' ? '未发布' : v),
-    txt({ marginTop: 6, fontSize: 14, color: t.soft }, v === 'unreleased' ? `${compact(totals[i])} 行` : `${tags.find((x) => x.tag === v)?.date.replaceAll('-', '.')} · ${compact(totals[i])} 行`)));
+    txt({ marginTop: 22, fontFamily: t.num === t.sans ? MONO_FONT : t.num, fontSize: 22, color: t.ink, textAlign: 'center', wordBreak: 'break-all' }, v === 'unreleased' ? (m.lang === 'en' ? 'Unreleased' : '未发布') : v),
+    txt({ marginTop: 6, fontSize: 14, color: t.soft }, `${buckets[i].date ? `${buckets[i].date.replaceAll('-', '.')} · ` : ''}${compact(totals[i])} ${m.lang === 'en' ? 'lines' : '行'}`)));
   // 版本说明和图例之间留出一截（表头高的体裁里两行几乎贴在一起）；放不下时和泳道一样出图前量一遍再加高
-  return { ...frame(m, t, 1200, 740, '各版本新增代码', box({ justifyContent: 'center', gap: 64, flex: 1, alignItems: 'flex-end', paddingBottom: 30 }, ...bars)), grow: true };
+  return { ...frame(m, t, Math.max(1200, buckets.length * 224 + 136), 740, caption, box({ justifyContent: 'center', gap: 24, flex: 1, alignItems: 'flex-end', paddingBottom: 30 }, ...bars)), grow: true };
 }
 
 /** 沉淀：新增与留存对比 */

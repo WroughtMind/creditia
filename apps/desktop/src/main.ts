@@ -11,6 +11,7 @@ import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, groupOf, hasModels, t
 import { exportArt, type Format } from './engine.ts';
 import { mountRoamPreview, releaseRoamPreview } from './roam-preview.ts';
 import { RoamViewport } from './roam-viewport.ts';
+import { wallTiles, tileKey as keyOf, wallVariant, selectWallVariant } from './wall.ts';
 import { LOGOS, DEFAULT_LOGO, logoSvg } from './logo.ts';
 import { markPaths, sharePetals, type Petal } from '../../../packages/render/src/mark.ts';
 
@@ -132,8 +133,7 @@ const short = (path: string) => path.replace(/^(\/Users|\/home)\/[^/]+/, '~').re
 const OS = /Mac/.test(navigator.userAgent) ? 'mac' : /Windows/.test(navigator.userAgent) ? 'win' : 'linux';
 const revealLabel = () => (OS === 'mac' ? L('在访达中显示', 'Show in Finder') : OS === 'win' ? L('在资源管理器中显示', 'Show in Explorer') : L('打开所在文件夹', 'Open folder'));
 
-const tiles = () => state.style.board;
-const keyOf = (b: { id: string; variant?: string }, i: number) => `${b.id}#${i}`;
+const tiles = () => wallTiles(state.style);
 
 // ───────────────────────── 启动 ─────────────────────────
 async function boot() {
@@ -338,7 +338,7 @@ async function pickGroup(g: GroupPref) {
 }
 
 // ───────────────────────── 展墙 ─────────────────────────
-const curVariant = (id: string, k: string, b: { variant?: string }) => state.style.current(id, state.variants[k] ?? b.variant);
+const curVariant = (k: string) => wallVariant(state.style, state.variants, k);
 
 /** 画过的作品按「档案 + 风格 + 语言 + 作品 + 版式」记住：切回看过的风格、来回换版式都不用再画。
  *  存的是 Promise，同一张正在画的时候墙和放大视图共用一次；按 SVG 总长度限量，最久没用的先丢 */
@@ -384,7 +384,7 @@ function slotWall() {
   const have = [...board.querySelectorAll<HTMLElement>('.slot')];
   if (have.length === tiles().length) return have;
   have.forEach((g) => g.remove());
-  const out = tiles().map((b, i) => board.appendChild(slotFor(b, curVariant(b.id, keyOf(b, i), b))));
+  const out = tiles().map((b) => board.appendChild(slotFor(b, curVariant(keyOf(b)))));
   layout();
   return out;
 }
@@ -409,12 +409,15 @@ async function paint() {
   const fresh: HTMLElement[] = [];
   const keep = new Set<string>();
   for (const [i, b] of tiles().entries()) {
-    const k = keyOf(b, i);
-    const variant = curVariant(b.id, k, b);
+    const k = keyOf(b);
+    let variant: string | undefined;
     let a: Art | null = null, preview: Blob | null = null;
     try {
-      a = await drawArt(b.id, variant);
-      if (a && token === state.token) preview = await st.preview(a);
+      do {
+        variant = curVariant(k);
+        a = await drawArt(b.id, variant);
+        preview = a && token === state.token ? await st.preview(a) : null;
+      } while (token === state.token && variant !== curVariant(k));
     } catch (e) { console.error(b.id, e); }
     if (token !== state.token) return;
     if (!a || !preview) { slots[i]?.remove(); continue; }
@@ -424,6 +427,7 @@ async function paint() {
     tile.className = 'tile';
     tileA11y(tile, b.id);
     tile.dataset.k = k;
+    tile.dataset.variant = variant ?? '';
     tile.dataset.w = String(a.w); tile.dataset.h = String(a.h);
     tile.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : ''));
     const vs = st.variants(b.id);
@@ -455,20 +459,22 @@ async function paint() {
   layout();
 }
 function tileHtml(id: string, vs: string[], cur?: string) {
-  return `<div class="name">${esc(state.style.pieceName(id, state.lang))}</div>
+  return `<div class="name">${esc(state.style.pieceName(id, state.lang, state.raw))}</div>
       <div class="bar glass">${vs.length > 1 ? `<button data-act="prev" title="${L('上一种版式', 'Previous layout')}">‹</button><span class="vname">${esc(state.style.variantName(cur ?? '', state.lang))}</span><button data-act="next" title="${L('下一种版式', 'Next layout')}">›</button>` : ''}<button data-act="export">${L('导出', 'Export')}</button></div>
       <div class="art"></div>`;
 }
 
-/** 瀑布流：一栏宽度跟着窗口变，横向作品跨两栏，小件不放大。
+/** 瀑布流：先确定缩略图尺寸，再排能容纳的栏数；减栏时不能反过来放大作品。
  *  跨栏的作品会在矮的那栏下面留洞，所以每次往后看几张，挑放下去最高、留洞最少的那张先放 */
 function layout() {
   const board = $('#board');
   const tiles = [...board.querySelectorAll('.tile')] as HTMLElement[];
-  const W = Math.min(innerWidth - 120, 1680);
+  const available = Math.min(innerWidth - 120, 1680);
   const gap = 40;
-  const cols = Math.max(1, Math.min(4, Math.floor((W + gap) / (400 + gap))));
-  const cw = (W - gap * (cols - 1)) / cols;
+  // 普通窗口按三栏缩略预览；窄窗口保留可辨认的作品尺寸，剩余空间留在墙的两侧。
+  const cw = Math.min(available, 360, Math.max(300, Math.floor((available - gap * 2) / 3)));
+  const cols = Math.max(1, Math.min(4, Math.floor((available + gap) / (cw + gap))));
+  const W = cw * cols + gap * (cols - 1);
   const hs = new Array(cols).fill(0);
   const at = (t: HTMLElement, span: number) => {
     const a = { w: Number(t.dataset.w), h: Number(t.dataset.h) };
@@ -481,12 +487,10 @@ function layout() {
   };
   const fit = (t: HTMLElement) => {
     const set = Number(t.dataset.span);
-    const small = Number(t.dataset.w) < 500; // 徽章这种小件，跨栏也只是居中，有洞时放一栏
-    if (set && !(small && set > 1)) return at(t, Math.min(cols, set));
-    // 很扁的图表在窄栏里字太小，三栏以上时让它跨两栏；跨了会留大洞就还是放一栏
-    const wide = small ? set > 1 : cols >= 3 && Number(t.dataset.w) / Number(t.dataset.h) > 1.7;
-    const two = wide ? at(t, 2) : null;
-    return two && two.hole < 160 && two.y - Math.min(...hs) < 160 ? two : at(t, 1);
+    const small = Number(t.dataset.w) < 500;
+    // 跨栏只用于三栏以上的宽幅作品；不按临时空洞改变尺寸，避免重排时忽大忽小。
+    const span = cols >= 3 && !small ? set || (Number(t.dataset.w) / Number(t.dataset.h) > 1.7 ? 2 : 1) : 1;
+    return at(t, Math.min(cols, span));
   };
   const queue = tiles.slice();
   while (queue.length) {
@@ -511,12 +515,10 @@ function wireTile(tile: HTMLElement, id: string, k: string, vs: string[]) {
     e.stopPropagation();
     const act = b.dataset.act;
     if (act === 'prev' || act === 'next') {
-      // 从现在选中的算起（不是这张画出来时的），连点两下就走两步；名字先换，图画好再换
-      const i = vs.indexOf(curVariant(id, k, tiles()[Number(k.split('#')[1])]) ?? '');
+      // 从现在选中的算起，连点两下就走两步；名字和图一起换。
+      const i = vs.indexOf(requestedVariant(k) ?? '');
       const v = vs[(i + (act === 'next' ? 1 : vs.length - 1)) % vs.length];
-      state.variants[k] = v;
-      const name = tile.querySelector('.vname'); if (name) name.textContent = state.style.variantName(v, state.lang);
-      return repaintTile(id, k);
+      return changeVariant(id, k, v);
     }
     if (act === 'export') toggleFormats(tile, id, (f) => doExport(f, id, k));
   });
@@ -528,35 +530,61 @@ function wireTile(tile: HTMLElement, id: string, k: string, vs: string[]) {
 function tileA11y(tile: HTMLElement, id: string) {
   tile.tabIndex = 0;
   tile.setAttribute('role', 'button');
-  tile.setAttribute('aria-label', `${state.style.pieceName(id, state.lang)} · ${L('回车放大', 'press Enter to enlarge')}`);
+  tile.setAttribute('aria-label', `${state.style.pieceName(id, state.lang, state.raw)} · ${L('回车放大', 'press Enter to enlarge')}`);
 }
-/** 只重画一张（换版式）。连着换的时候只认最后一次，换下来的是墙上现在那一张 */
+function applyVariant(id: string, k: string, variant: string) {
+  if (!selectWallVariant(state.style, state.variants, k, variant).length) return;
+  if (view() === 'roam') { wallStale = true; return; }
+  // 整墙正在换风格或语言时，旧批次里已经画好的版式也要作废。
+  if (document.body.classList.contains('busy')) void paint();
+  else void repaintPiece(id);
+}
+const variantRequests = new Map<string, { variant: string; valid(): boolean }>();
+const requestedVariant = (k: string) => {
+  const request = variantRequests.get(k);
+  return request?.valid() ? request.variant : curVariant(k);
+};
+/** 先确认目标版式能生成；失败时保留原图和原选择，连续点击仍按最后一次意图走。 */
+async function changeVariant(id: string, k: string, variant: string) {
+  const kit = state.style, raw = state.raw, lang = state.lang, project = state.openSeq, group = groupPref();
+  const request = { variant, valid: () => state.style === kit && state.raw === raw && state.lang === lang && state.openSeq === project && groupPref() === group };
+  variantRequests.set(k, request);
+  const current = () => variantRequests.get(k) === request && request.valid();
+  try {
+    const a = await drawArt(id, variant, kit);
+    if (!current()) return;
+    if (!a) throw new Error(L('当前档案无法生成这个版式', 'This layout is unavailable for the current project'));
+    await kit.preview(a);
+    if (current()) applyVariant(id, k, variant);
+  } catch (e) { if (current()) toast(errText(e), 8000); }
+  finally { if (variantRequests.get(k) === request) variantRequests.delete(k); }
+}
+/** 同一作品的版式一起换好，再一次落位；连点只采用最后一次，避免交换到一半出现重复。 */
 const tileSeq = new Map<string, number>();
-async function repaintTile(id: string, k: string) {
-  const i = Number(k.split('#')[1]);
-  const b = tiles()[i];
-  const variant = curVariant(id, k, b);
-  const token = state.token, kit = state.style, seq = (tileSeq.get(k) ?? 0) + 1;
-  tileSeq.set(k, seq);
-  const a = await drawArt(id, variant);
-  if (!a || token !== state.token || tileSeq.get(k) !== seq) return;
-  const preview = await kit.preview(a);
-  if (token !== state.token || tileSeq.get(k) !== seq) return;
-  const tile = document.querySelector(`.tile[data-k="${k}"]`) as HTMLElement | null;
-  if (!tile) return;
-  state.arts.set(k, a);
-  const vs = state.style.variants(id);
-  const fresh = document.createElement('div');
-  fresh.className = 'tile placed'; fresh.dataset.k = k; fresh.dataset.w = String(a.w); fresh.dataset.h = String(a.h); fresh.style.left = tile.style.left; fresh.style.top = tile.style.top; fresh.style.width = tile.style.width; fresh.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : '')); fresh.style.animation = 'none';
-  tileA11y(fresh, id);
-  fresh.innerHTML = tileHtml(id, vs, variant);
-  const artEl = fresh.querySelector('.art') as HTMLElement;
-  mountPreview(artEl, a, preview);
-  mountRoamHits(artEl, a);
-  wireTile(fresh, id, k, vs);
-  if (tile.classList.contains('hover')) fresh.classList.add('hover');
-  tile.replaceWith(fresh);
-  layout();
+async function repaintPiece(id: string) {
+  const token = state.token, kit = state.style, seq = (tileSeq.get(id) ?? 0) + 1;
+  tileSeq.set(id, seq);
+  try {
+    const fresh = await Promise.all(tiles().filter((b) => b.id === id && document.querySelector(`#board .tile[data-k="${keyOf(b)}"]`)).map(async (b) => {
+      const k = keyOf(b), variant = curVariant(k), a = await drawArt(id, variant);
+      return { b, k, variant, a, preview: a && token === state.token && tileSeq.get(id) === seq ? await kit.preview(a) : null };
+    }));
+    if (token !== state.token || tileSeq.get(id) !== seq) return;
+    for (const { b, k, variant, a, preview } of fresh) {
+      const tile = document.querySelector(`#board .tile[data-k="${k}"]`) as HTMLElement | null;
+      if (!tile || !a || !preview) continue;
+      state.arts.set(k, a);
+      dims[dimKey(id, variant)] = [a.w, a.h];
+      tile.dataset.variant = variant ?? '';
+      tile.dataset.w = String(a.w); tile.dataset.h = String(a.h);
+      tile.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : ''));
+      const name = tile.querySelector('.vname'); if (name) name.textContent = kit.variantName(variant ?? '', state.lang);
+      const artEl = tile.querySelector('.art') as HTMLElement;
+      releasePreview(artEl); artEl.replaceChildren();
+      mountPreview(artEl, a, preview); mountRoamHits(artEl, a);
+    }
+    layout();
+  } catch (e) { toast(errText(e), 8000); }
 }
 
 // ───────────────────────── 导出 ─────────────────────────
@@ -593,10 +621,8 @@ function setSize(id: string) {
 /** 默认导出墙上这一张；放大视图里试别的风格时，把那一套和画好的图传进来 */
 async function doExport(fmtId: string, id: string, k: string, o: { kit?: Kit; art?: Art; variant?: string } = {}) {
   const kit = o.kit ?? state.style;
-  const a = o.art ?? state.arts.get(k)!;
   const m = state.model!;
-  const i = Number(k.split('#')[1]);
-  const variant = o.kit ? o.variant : curVariant(id, k, tiles()[i]);
+  const variant = o.kit ? o.variant : curVariant(k);
   const base = `${m.project || 'credits'}-${id}${variant && variant !== 'original' ? '-' + variant : ''}-${kit.id}`;
   try {
     if (fmtId === 'md') {
@@ -605,6 +631,8 @@ async function doExport(fmtId: string, id: string, k: string, o: { kit?: Kit; ar
       catch { return toast(L('没能写进剪贴板', 'Could not copy to the clipboard'), 8000, { acts: [{ label: L('存成文件', 'Save as a file'), run: () => saveBytes('CREDITS.md', new TextEncoder().encode(text), 'text/markdown').catch((e) => toast(errText(e), 5000)) }] }); }
     }
     toast(fmtId === 'gif' ? L('正在逐帧生成 GIF…', 'Rendering GIF frames…') : L('正在导出…', 'Exporting…'), 60000, { spin: true });
+    const a = o.art ?? await drawArt(id, variant, kit);
+    if (!a) throw new Error(L('当前档案无法生成这个版式', 'This layout is unavailable for the current project'));
     await new Promise((r) => setTimeout(r, 30));
     const out = await exportArt(fmtId as Format, kit.style, a, state.size, kit.frames ? () => kit.frames!(state.raw, state.lang, id, variant) : undefined);
     const sz = state.size !== 'native' && fmtId !== 'html' ? `-${state.size}` : '';
@@ -701,13 +729,11 @@ const closeBtn = () => `<button class="closer glass" data-act="close" aria-label
 
 function openFocus(id: string, k: string) {
   const el = $('#focus');
-  const i = Number(k.split('#')[1]);
-  const before = curVariant(id, k, tiles()[i]);
   // 放大视图里可以只给这一件换风格试试：kit 是正在看的那一套，墙上的风格不动
   let kit = state.style, art: Art | null = null, preview: Blob | null = null, seq = 0, open = true;
   const tried: Record<string, string> = {};
-  const variantNow = () => kit === state.style ? curVariant(id, k, tiles()[i]) : tried[kit.id] ?? kit.current(id);
-  const setVariant = (v: string) => { if (kit === state.style) state.variants[k] = v; else tried[kit.id] = v; };
+  const variantNow = () => kit === state.style ? curVariant(k) : tried[kit.id] ?? kit.current(id);
+  const setVariant = async (v: string) => { if (kit === state.style) await changeVariant(id, k, v); else tried[kit.id] = v; };
   const keyList = () => {
     const wall = [...document.querySelectorAll<HTMLElement>('#board .tile:not(.slot)')].map((t) => t.dataset.k!);
     return wall.length ? wall : tiles().map(keyOf); // 墙在漫游里没画，就按作品顺序走
@@ -722,7 +748,7 @@ function openFocus(id: string, k: string) {
     const vs = kit.variants(id), v = variantNow(), all = keyList(), at = all.indexOf(k);
     const multiModel = !!state.raw && resolveGroup(state.raw, 'auto') === 'model';
     el.innerHTML = `${closeBtn()}
-      <div class="fhead"><b>${esc(kit.pieceName(id, state.lang))}</b></div>
+      <div class="fhead"><b>${esc(kit.pieceName(id, state.lang, state.raw))}</b></div>
       <button class="nav prev glass" data-act="prev" ${at <= 0 ? 'disabled' : ''} title="${L('上一张', 'Previous')} (↑)" aria-label="${L('上一张', 'Previous')}"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M8.5 3 4.5 7l4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="nav next glass" data-act="next" ${at < 0 || at >= all.length - 1 ? 'disabled' : ''} title="${L('下一张', 'Next')} (↓)" aria-label="${L('下一张', 'Next')}"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M5.5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <div class="big"><div class="art"></div></div>
@@ -781,17 +807,17 @@ function openFocus(id: string, k: string) {
       const v = variantNow(), t = kit;
       close(false);
       state.style = t; store.set('theme', t.id); state.variants = {}; renderDots();
-      if (v && v !== t.current(id)) state.variants[k] = v;
+      const first = tiles().find((b) => b.id === id);
+      if (first && v) selectWallVariant(t, state.variants, keyOf(first), v);
       return void paint();
     }
     if (act === 'export') { el.querySelector('.kits')?.remove(); return toggleFormats(b.parentElement!, id, (f) => { if (art) doExport(f, id, k, kit === state.style ? {} : { kit, art, variant: variantNow() }); }, kit); }
-    if (b.dataset.v) { setVariant(b.dataset.v); draw(); }
+    if (b.dataset.v) void setVariant(b.dataset.v).then(() => { if (open) draw(); });
   };
-  // 只有换过版式才把墙上那一张换掉，别的作品不动；键盘焦点回到墙上这一张
+  // 版式已同步到墙上；关闭后键盘焦点回到刚才的位置。
   const close = (refocus = true) => {
     open = false; el.hidden = true; el.innerHTML = ''; closeFocus = null; focusKeys = null;
     document.querySelector('.ct-tip')?.classList.remove('on');
-    if (curVariant(id, k, tiles()[i]) !== before) repaintTile(id, k);
     if (refocus) (document.querySelector(`.tile[data-k="${k}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
   };
   closeFocus = close;
@@ -799,9 +825,8 @@ function openFocus(id: string, k: string) {
     if (e.metaKey || e.ctrlKey || e.altKey) return false;
     const vs = kit.variants(id);
     if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && vs.length > 1) {
-      const j = vs.indexOf(variantNow() ?? '');
-      setVariant(vs[(j + (e.key === 'ArrowRight' ? 1 : vs.length - 1)) % vs.length]);
-      draw();
+      const j = vs.indexOf((kit === state.style ? requestedVariant(k) : variantNow()) ?? '');
+      void setVariant(vs[(j + (e.key === 'ArrowRight' ? 1 : vs.length - 1)) % vs.length]).then(() => { if (open) draw(); });
       return true;
     }
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { step(e.key === 'ArrowDown' ? 1 : -1); return true; }
@@ -827,11 +852,11 @@ const colOff = (X: number) => mod(Math.imul(X ^ 0x5bd1e995, 0x27d4eb2d) >>> 0, 9
 
 /** 第 X 栏第 r 个是哪件作品、哪个版式 */
 function slot(X: number, r: number) {
-  const list = tiles(), n = list.length;
+  const list = state.style.board, n = list.length;
   const v = X + r * STEP, i = mod(v, n), lap = Math.floor(v / n);
-  const b = list[i], k = keyOf(b, i);
+  const b = list[i], k = keyOf({ ...b, variant: state.style.current(b.id, b.variant) });
   const vs = state.style.variants(b.id);
-  const base = curVariant(b.id, k, b);
+  const base = curVariant(k);
   const j = vs.indexOf(base ?? '');
   return { b, k, v: vs.length > 1 ? vs[mod((j < 0 ? 0 : j) + lap, vs.length)] : base };
 }
@@ -936,7 +961,7 @@ function placeNow() {
       const el = document.createElement('div');
       el.className = 'tile rt';
       el.style.left = `${X * P + (cw - t.w) / 2}px`; el.style.top = `${t.y}px`; el.style.width = `${t.w}px`;
-      el.innerHTML = `<div class="name">${esc(state.style.pieceName(t.id, state.lang))}${t.v && state.style.variants(t.id).length > 1 ? `<span class="vn">${esc(state.style.variantName(t.v, state.lang))}</span>` : ''}</div>
+      el.innerHTML = `<div class="name">${esc(state.style.pieceName(t.id, state.lang, state.raw))}${t.v && state.style.variants(t.id).length > 1 ? `<span class="vn">${esc(state.style.variantName(t.v, state.lang))}</span>` : ''}</div>
         <div class="bar glass"><button data-act="export">${L('导出', 'Export')}</button></div><div class="art"></div>`;
       const artEl = el.querySelector('.art') as HTMLElement;
       mountRoamPreview(artEl, t.a, t.p, Math.ceil(t.w * devicePixelRatio), previewPriority(el, t));
@@ -981,7 +1006,7 @@ function resizeRoam(oldWidth: number, oldViewportWidth: number, oldViewportHeigh
 }
 
 /** 墙上那件作品借用这一张的版式和画好的图：放大、导出都照这一张来 */
-function adopt(t: RItem) { state.variants[t.k] = t.v ?? ''; state.arts.set(t.k, t.a); }
+function adopt(t: RItem) { if (t.v) applyVariant(t.id, t.k, t.v); state.arts.set(t.k, t.a); }
 /** 回到起点：第一栏贴着左边居中排开，最上面让出顶栏 */
 function home(): [number, number] {
   const P = pitch(), n = Math.max(1, Math.floor((innerWidth + RGAP) / P));
