@@ -58,7 +58,7 @@ One project in several places (worktrees, scratch clones, another machine): `cre
 
 Pieces list one row per tool by default. When one tool wrote nearly everything and switched models along the way, they switch to one row per model on their own. Pick with `--group tool` / `--group model`, or flip it in the App's top bar and go back to automatic any time. When one tool used several models, its model rows sit next to each other in shades of the same brand color. Each kind of piece also has a layout that draws every tool with its models underneath: "split" and "grouped" bars, the "nested" donut, the "troupe" credits roll, the "itemized" receipt, "blocks" waffle, "split" badge and the "with models" byline (marked with a small dot in the App).
 
-Commit stamps and release credits both change your repository, so they are your call, per project: `init` / `analyze` ask once in a terminal (the answer goes into `.creditia/config.json` and isn't asked again), and the App shows both switches at the top of each project's wall, ready to flip back any time. `creditia integrations` shows where they stand.
+Commit stamps and release credits both change your repository, so they are your call, per project: `init` / `analyze` ask once in a terminal (the answer goes into `.creditia/config.json` and isn't asked again), and the App shows both switches in each project's Project Settings (the “…” on its row in the project menu, or ⌘I), ready to flip back any time. `creditia integrations` shows where they stand.
 
 ## Every line has a source
 

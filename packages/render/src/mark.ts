@@ -8,7 +8,11 @@ const TOOL_COLOR: Record<string, string> = { 'claude-code': '#D97757', codex: '#
 /** 未确认和其余工具 */
 export const MARK_GREY = '#8A8478';
 
-export interface Petal { color: string; /** 相对长度 0–1，默认 1 */ len?: number; /** 0–1，默认 1 */ opacity?: number }
+export interface Petal {
+  color: string; /** 相对长度 0–1，默认 1 */ len?: number; /** 0–1，默认 1 */ opacity?: number;
+  /** 这一瓣的方向，按圈算（0 是正上方，顺时针）；默认按瓣数等分。App 里两个项目的 * 互相形变时用 */
+  at?: number;
+}
 
 const f = (n: number) => +n.toFixed(3);
 
@@ -30,17 +34,22 @@ export interface MarkOpts {
   cx?: number; cy?: number;
   /** 最长一瓣的长度（24 的画布上） */
   R?: number;
+  /** 小尺寸（20px 上下）的光学修正：中心空隙小一点、瓣头圆一点，缩小了不糊 */
+  optical?: boolean;
 }
 
 /** 只要路径，放进别人的 <svg> / <g> 里 */
 export function markPaths(o: MarkOpts = {}): string {
-  const { cx = 12, cy = 12, R = 10.7, ink } = o;
-  const petals = o.petals ?? MARK_COLORS.map((color) => ({ color }));
-  const n = petals.length, gap = ink ? 0 : R * 0.07;
+  const { cx = 12, cy = 12, R = 10.7, ink, optical } = o;
+  const petals: Petal[] = o.petals ?? MARK_COLORS.map((color) => ({ color }));
+  const n = petals.length, gap = ink ? 0 : R * (optical ? 0.035 : 0.07), head = optical ? 0.25 : 0.224;
   return petals.map((p, i) => {
-    const len = R * (p.len ?? 1), rb = R * 0.224 * Math.sqrt(p.len ?? 1);
-    const op = p.opacity != null && p.opacity < 1 ? ` fill-opacity="${p.opacity}"` : '';
-    return `<path d="${petal(cx, cy, -Math.PI / 2 + (i * 2 * Math.PI) / n, len, rb, gap)}" fill="${ink ?? p.color}"${op}/>`;
+    // 太短的瓣画不出切线（末端圆比瓣还长），干脆不画
+    if ((p.len ?? 1) < 0.12 || p.opacity === 0) return '';
+    const len = R * (p.len ?? 1), rb = R * head * Math.sqrt(p.len ?? 1);
+    const op = p.opacity != null && p.opacity < 1 ? ` fill-opacity="${+p.opacity.toFixed(3)}"` : '';
+    const a = -Math.PI / 2 + 2 * Math.PI * (p.at ?? i / n);
+    return `<path d="${petal(cx, cy, a, len, rb, gap)}" fill="${ink ?? p.color}"${op}/>`;
   }).join('');
 }
 

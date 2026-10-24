@@ -218,6 +218,11 @@ impl Library {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+    /// 从作品库里移除一个项目：只删项目这一行。证据、会话、路径、快照和缓存都留着，
+    /// 以后再加回同一个仓库（项目 id 由根提交算出，不会变）就直接接上，不用从头分析
+    pub fn remove_project(&self, project: &str) -> Result<usize, String> {
+        self.conn.execute("delete from projects where id=?1", [project]).map_err(|e| e.to_string())
+    }
     pub fn remove_path(&self, project: &str, path: &str) -> Result<usize, String> {
         self.conn.execute("delete from paths where project=?1 and path=?2", params![project, path]).map_err(|e| e.to_string())
     }
@@ -359,6 +364,27 @@ mod tests {
         assert_eq!(l.remove_path("p-path", "/tmp/clone").unwrap(), 1);
         assert_eq!(l.remove_path("p-path", "/tmp/clone").unwrap(), 0);
         assert_eq!(l.paths("p-path").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn removing_a_project_keeps_its_evidence() {
+        let mut l = lib();
+        let p = Project { id: "p-rm".into(), name: "gone".into(), path: "/tmp/gone".into(), root_commit: "r".into(), remotes: vec![], last_head: Some("h".into()), last_analyzed: Some(1) };
+        l.upsert_project(&p).unwrap();
+        let mut store = Store::default();
+        store.groups.insert("g".into(), FileGroup { fp: (1, 1), evs: vec![ev("a.rs", 1, "s")], sessions: vec![] });
+        l.save_evidence("p-rm", &store).unwrap();
+        l.add_path("p-rm", "/tmp/gone-wt", "worktree").unwrap();
+        l.save_snapshot("p-rm", "h", "2026-01-01T00:00:00Z", "{}").unwrap();
+        assert_eq!(l.remove_project("p-rm").unwrap(), 1);
+        assert!(!l.projects().unwrap().iter().any(|x| x.id == "p-rm"));
+        // 证据、路径、快照都还在；加回来之后照旧
+        assert_eq!(l.evidence_count("p-rm"), 1);
+        assert_eq!(l.paths("p-rm").unwrap().len(), 1);
+        assert!(l.snapshot_json("p-rm").unwrap().is_some());
+        l.upsert_project(&p).unwrap();
+        assert!(l.projects().unwrap().iter().any(|x| x.id == "p-rm"));
+        assert_eq!(l.remove_project("p-none").unwrap(), 0);
     }
 
     #[test]
