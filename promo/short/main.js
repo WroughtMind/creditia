@@ -366,7 +366,7 @@ function render(t) {
     cr.visible = typing && L.len > 0; cr.material.opacity = blink * (i === 0 ? 1 : 0.9) * (t > L.t1 ? 1 - prog(t, L.t1, L.t1 + 0.25) : 1);
     cr.position.set(Math.min(rev, L.len) * CW + CW * 0.12, -L.row * LP, 0.01);
   });
-  strokeMat.uniforms.t.value = t; strokeMat.uniforms.alpha.value = 0.42 * codeA * (1 - 0.45 * smr(Math.log(d), Math.log(80), Math.log(500)));
+  strokeMat.uniforms.t.value = t; strokeMat.uniforms.alpha.value = 0.42 * codeA * (1 - 0.6 * smr(Math.log(d), Math.log(80), Math.log(500)));
 
   // 脚注
   const fa = smr(t, T.foot[0], T.foot[1]) * (1 - smr(t, T.foot[2], T.foot[3]));
@@ -402,7 +402,7 @@ function render(t) {
   const close = esin(prog(t, T.close[0], T.close[1]));
   const gone = esin(prog(t, T.deck[0], T.deck[1]));
   const wavePos = lerp(-2.5, NC + 1.5, prog(t, T.ripple[0], T.ripple[1]));
-  const al = smr(t, T.rise[0], T.rise[0] + 0.55) * (1 - smr(t, T.deck[0] + 0.05, T.deck[0] + 0.6));
+  const al = smr(t, T.rise[0], T.rise[0] + 0.55) * (1 - smr(t, T.deck[0] - 0.1, T.deck[0] + 0.4));
   for (const c of cards) {
     const fanA = Math.PI / 2 + FAN / 2 - (FAN * (c.i + 0.5)) / NC;      // 从左到右
     const a = lerp(Math.PI / 2, lerp(Math.PI / 2, fanA, open), 1 - close);

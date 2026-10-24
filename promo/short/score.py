@@ -241,11 +241,11 @@ for j in range(16):
     tk = h0 + k * (h1 - h0)
     n = int(0.02 * SR)
     x = bp(rng.standard_normal(n) * np.exp(-np.arange(n) / SR / 0.003), 3000, 9000, 1)
-    place(x, tk, 0.007, 0.25, 0.4)
+    place(x, tk, 0.012, 0.25, 0.4)
 
 # 行尾的 *：Claude 的音，第一次响
 hs = T["heroStar"]
-pnote(VOICE[0], hs, 0.42, send=0.6)
+pnote(VOICE[0], hs, 0.36, send=0.6)
 glass(VOICE_HI[0], hs + 0.01, 0.03, 0.2, 2.8)
 drone("D2", hs - 0.4, T["gather"][0] + 0.5, 0.045, attack=3.0)
 
