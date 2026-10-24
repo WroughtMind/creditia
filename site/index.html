@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>creditia — 你的代码，是哪些 AI 写的</title>
-<meta name="description" content="把 AI 编程工具的日志和 git 历史逐行对上，算出每个工具、每个模型写了多少代码，做成片尾字幕。开源，本地运行。">
+<title>creditia — See who writes your code · 字里行间，皆有其名</title>
+<meta name="description" content="See who writes your code. 逐行核实代码出处，开源，纯本地运行。">
 <meta property="og:title" content="creditia">
-<meta property="og:description" content="你的代码，是哪些 AI 写的。">
+<meta property="og:description" content="See who writes your code. 字里行间，皆有其名。">
 <meta property="og:image" content="https://wroughtmind.github.io/creditia/assets/og-zh.png">
 <meta property="og:url" content="https://wroughtmind.github.io/creditia/">
 <meta name="twitter:card" content="summary_large_image">
@@ -105,7 +105,7 @@ section, #screen { scroll-margin-top: 64px; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #theme .sun { display: block; } :root:not([data-theme="light"]) #theme .moon { display: none; } }
 
 /* ───────── 首屏 ───────── */
-#screen { position: relative; height: 100vh; height: 100svh; min-height: 660px; max-height: 1100px; overflow: hidden; background: var(--hero); color: var(--hero-ink); transition: background-color .3s, color .3s; }
+#screen { position: relative; min-height: min(100svh, 1100px); padding: 96px max(32px, calc((100vw - 1120px) / 2)) 60px; display: flex; align-items: center; overflow: hidden; background: var(--hero); color: var(--hero-ink); transition: background-color .3s, color .3s; }
 @property --p { syntax: '<percentage>'; inherits: false; initial-value: 130%; }
 /* 首屏右边：catnap 整个仓库摊开成一片代码地图，一个文件一段、一行一道线；一道光扫过去，每一行染上写它的 AI 的颜色 */
 .field { position: absolute; z-index: 1; top: 96px; bottom: 52px; left: calc(max(32px, (100vw - 1120px) / 2) + min(520px, 46vw) + 64px); right: 0; display: flex; flex-direction: column; gap: 16px; translate: 0 calc(var(--py, 0px) * -0.3); }
@@ -126,13 +126,12 @@ section, #screen { scroll-margin-top: 64px; }
 .flegend span em { font-style: normal; color: var(--hero-ink); font-variant-numeric: tabular-nums; }
 .flegend.focus span:not(.on) { opacity: .4; }
 .title { translate: 0 var(--py, 0px); opacity: var(--po, 1); }
-.title { position: absolute; z-index: 2; left: max(32px, calc((100vw - 1120px) / 2)); top: 50%; transform: translateY(-48%); width: min(520px, 46vw); }
-.title h1 { font-size: clamp(48px, 6vw, 84px); line-height: 1; }
-:lang(zh) .title h1 { font-size: clamp(40px, 4.6vw, 64px); line-height: 1.24; }
-.title p { margin: 26px 0 0; font-size: 17px; line-height: 1.75; color: var(--hero-soft); max-width: 27em; text-wrap: pretty; }
+.title { position: relative; z-index: 2; width: min(520px, 46vw); }
+.title h1 { font-size: clamp(40px, 5.2vw, 72px); line-height: 1.15; min-height: 2.3em; }
+:lang(zh) .title h1 { font-size: clamp(36px, 4.4vw, 58px); line-height: 1.25; }
 .cmd { margin-top: 32px; display: inline-flex; align-items: center; gap: 14px; height: 46px; padding: 0 6px 0 16px; border-radius: 10px; border: 1px solid var(--hero-line); font-size: 14.5px; }
 .cmd .p { color: var(--hero-soft); margin-right: 8px; }
-.acts { margin-top: 32px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.acts { margin-top: 36px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .acts .cmd { margin-top: 0; }
 .dl { height: 46px; padding: 0 18px; border-radius: 10px; display: inline-flex; align-items: center; gap: 9px; text-decoration: none; background: var(--hero-ink); color: var(--hero); font-weight: 500; font-size: 14.5px; transition: transform .2s, box-shadow .2s; }
 .dl:hover { transform: translateY(-1px); box-shadow: 0 10px 30px -12px var(--hero-ink); }
@@ -241,13 +240,11 @@ html.zoom #zcard { display: block; position: absolute; z-index: 5; left: 50%; to
 /* 用法：左边一列挑一种，右边只演这一种，演示底下就是它的安装 */
 .uses { margin-top: 48px; display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 56px; align-items: start; }
 .upick { position: sticky; top: 96px; display: grid; gap: 6px; }
-.upick button { display: grid; gap: 4px; padding: 16px 18px 17px; border: 0; border-radius: 16px; background: transparent; text-align: left; cursor: pointer; transition: background-color .3s; }
-.upick b { font-size: 17px; font-weight: 600; color: var(--soft); transition: color .3s; }
-.upick span { font-size: 13.5px; line-height: 1.55; color: var(--faint); transition: color .3s; }
+.upick button { display: flex; align-items: center; padding: 13px 18px; border: 0; border-radius: 14px; background: transparent; text-align: left; cursor: pointer; transition: background-color .3s; }
+.upick b { font-size: 16px; font-weight: 500; color: var(--soft); transition: color .3s; }
 .upick button:hover b { color: var(--ink); }
 .upick button[aria-selected="true"] { background: var(--card); box-shadow: var(--shadow); }
-.upick button[aria-selected="true"] b { color: var(--ink); }
-.upick button[aria-selected="true"] span { color: var(--soft); }
+.upick button[aria-selected="true"] b { color: var(--ink); font-weight: 600; }
 .ushow { min-width: 0; }
 .ubar { display: flex; align-items: center; gap: 12px; min-height: 30px; margin-bottom: 10px; }
 .ubar small { min-width: 0; font-size: 12.5px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -611,8 +608,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
   <div id="screen">
     <div class="field" id="field"><div class="fcap mono"><span id="fproj"></span><span id="fcount"></span></div><div class="fcv"><canvas id="fcv" aria-hidden="true"></canvas><div class="ftip" id="ftip" hidden></div></div><div class="fbar" id="fbar"></div><div class="flegend" id="flegend"></div></div>
     <div class="title">
-      <h1 class="serif" data-i="hero.t">你的代码，<br>是哪些 AI 写的</h1>
-      <p data-i="hero.p">把 agent 的日志和 git 历史逐行对上，算出每个工具、每个模型写了多少，做成片尾字幕。全在本地。</p>
+      <h1 class="serif" id="hero-title"><span id="hero-text">See who writes your code.</span><span hidden aria-hidden="true">字里行间，皆有其名。致每一位写下代码的协作者。</span></h1>
       <div class="acts">
         <div class="cmd mono"><span><span class="p">$</span>creditia analyze</span><button id="copy" aria-label="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button></div>
         <a class="dl" id="herodl" href="#use"></a>
@@ -625,8 +621,7 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
     <div class="wrap">
       <div class="head rise">
         <div>
-          <h2 class="serif" data-i="lines.t">每一行，都有出处</h2>
-          <p data-i="lines.p">对不上的记为未确认。全在本地，不调用模型。</p>
+          <h2 class="serif" data-i="lines.t">逐行核实。</h2>
         </div>
       </div>
       <div class="legend rise" id="legend"></div>
@@ -641,19 +636,19 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
     <div class="tstage" id="tstage">
       <div class="tview"><div class="table" id="table"></div></div>
       <div class="tfog" id="tfog"></div>
-      <div class="thead" id="thead"><div class="wrap"><h2 class="serif" data-i="looks.t">同一份署名，二十六种样子</h2><p data-i="looks.p">点开任意一张，看大图和导出它的命令。</p></div></div>
+      <div class="thead" id="thead"><div class="wrap"><h2 class="serif" data-i="looks.t">各有看头。</h2></div></div>
     </div>
   </section>
 
   <section id="use">
     <div class="wrap">
-      <div class="head rise"><h2 class="serif" data-i="use.t">四种用法</h2></div>
+      <div class="head rise"><h2 class="serif" data-i="use.t">四种用法。</h2></div>
       <div class="uses rise">
         <div class="upick" id="upick" role="tablist">
-          <button role="tab" data-w="cli" aria-selected="true"><b data-i="w.cli">命令行</b><span data-i="w.cli.d">在仓库里跑一行命令，算出来，导出来</span></button>
-          <button role="tab" data-w="agent" aria-selected="false"><b data-i="w.agent">交给 agent</b><span data-i="w.agent.d">发一段话，它自己装好、跑完，提交前先问你</span></button>
-          <button role="tab" data-w="ci" aria-selected="false"><b>GitHub Action</b><span data-i="w.ci.d">每次推送，署名页自己更新</span></button>
-          <button role="tab" data-w="app" aria-selected="false"><b>App</b><span data-i="w.app.d">macOS、Windows、Linux 上点几下就出图</span></button>
+          <button role="tab" data-w="cli" aria-selected="true"><b data-i="w.cli">命令行</b></button>
+          <button role="tab" data-w="agent" aria-selected="false"><b data-i="w.agent">交给 Agent</b></button>
+          <button role="tab" data-w="ci" aria-selected="false"><b data-i="w.ci">GitHub Action</b></button>
+          <button role="tab" data-w="app" aria-selected="false"><b data-i="w.app">桌面 App</b></button>
         </div>
         <div class="ushow">
           <div class="ubar"><small class="mono" id="usub"></small><span class="dstep" id="dsteps"></span><button class="again" data-again="term" aria-label="replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><button class="again" data-again="chat" aria-label="replay" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><button class="again" data-again="flow" aria-label="replay" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><button class="again" data-again="desk" aria-label="replay" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></div>
@@ -691,12 +686,13 @@ html.vt-theme::view-transition-new(root) { z-index: 9999; }
 <script>
 /*__DATA__*/
 const EN = {
-  'hero.t': 'Which AI<br>wrote your code',
-  'hero.p': 'creditia matches your agents’ logs against git history line by line, works out what each tool and each model wrote, and rolls it as end credits. Runs locally.',
-  'looks.t': 'Same credits, twenty-six looks', 'looks.p': 'Open any print for the full size and the command that exports it.',
-  'lines.t': 'Every line has a source', 'lines.p': 'What can’t be matched is marked unattributed. Runs locally, calls no model.',
-  'use.t': 'Four ways to use it', 'w.cli': 'Command line', 'w.agent': 'Your agent',
-  'w.cli.d': 'One command in your repo works it out and exports it', 'w.agent.d': 'Send one message; it installs, runs, and asks before committing', 'w.ci.d': 'Your credits page updates itself on every push', 'w.app.d': 'A few clicks on macOS, Windows or Linux',
+  'lines.t': 'Every line verified.',
+  'looks.t': 'Looks with character.',
+  'use.t': 'Four ways to use it.',
+  'w.cli': 'Command line',
+  'w.agent': 'Your agent',
+  'w.ci': 'GitHub Action',
+  'w.app': 'Desktop App',
   'foot.rules': 'Attribution rules',
   'desk.pc': 'Open this page on a computer to try the app right here.',
   'nav.looks': 'Looks', 'nav.lines': 'Sources', 'nav.use': 'Usage', 'nav.get': 'Install', 'ins.t': 'Install',
@@ -708,6 +704,45 @@ const t = (k) => (lang() === 'en' ? EN[k] : ZH[k]) ?? k;
 const isDark = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
 const sname = (s) => (lang() === 'en' ? s.en : s.name);
 const size = (img, d) => { img.width = d.w; img.height = d.h; };
+
+let heroIdx = 0, heroTimer = null;
+const HERO_TITLES = {
+  zh: ['See who writes your code.', '字里行间，皆有其名。', '致每一位写下代码的协作者。'],
+  en: ['See who writes your code.', 'Credits for work made with agents.', 'A tribute to every collaborator behind the code.']
+};
+
+function renderHero(idx, animate = true) {
+  heroIdx = idx;
+  const l = lang();
+  const list = HERO_TITLES[l] || HERO_TITLES.zh;
+  const text = list[heroIdx % list.length];
+  const el = $('hero-text');
+  if (!el) return;
+  if (!animate || RM) {
+    el.textContent = text;
+    return;
+  }
+  const animOut = el.animate(
+    [{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-10px)' }],
+    { duration: 280, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'forwards' }
+  );
+  animOut.onfinish = () => {
+    el.textContent = text;
+    el.animate(
+      [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }],
+      { duration: 380, easing: 'cubic-bezier(.2, .8, .2, 1)', fill: 'forwards' }
+    );
+  };
+}
+
+function startHeroCarousel() {
+  clearInterval(heroTimer);
+  heroTimer = setInterval(() => {
+    if (document.hidden) return;
+    heroIdx = (heroIdx + 1) % 3;
+    renderHero(heroIdx, true);
+  }, 4500);
+}
 
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const FINE = matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -741,7 +776,7 @@ function split(el) {
         o.className = 'sl'; i.className = 'sc'; i.textContent = p; o.append(i); f.append(o); out.push(i);
       });
       n.replaceWith(f);
-    } else if (n.nodeType === 1 && n.tagName !== 'BR') walk(n);
+    } else if (n.nodeType === 1 && n.tagName !== 'BR' && !n.hidden && !n.classList.contains('ast')) walk(n);
   });
   walk(el);
   return out;
@@ -896,7 +931,7 @@ function fieldDraw(now) {
 }
 function fieldNums(scan) {
   const en = EN_(), k = inOut(scan);
-  $('fcount').textContent = `${en ? 'matched' : '已对上'} ${Math.round(k * LINES).toLocaleString('en-US')} / ${LINES.toLocaleString('en-US')} ${en ? 'lines' : '行'}`;
+  $('fcount').textContent = `${en ? 'verified' : '已核实'} ${Math.round(k * LINES).toLocaleString('en-US')} / ${LINES.toLocaleString('en-US')} ${en ? 'lines' : '行'}`;
   document.querySelectorAll('#flegend em').forEach((e) => (e.textContent = `${(+e.dataset.p * k).toFixed(1)}%`));
   document.querySelectorAll('#fbar i').forEach((e) => (e.style.width = `${+e.dataset.p * k}%`));
 }
@@ -1230,7 +1265,7 @@ function intro() {
   if (RM) return;
   rise(chars, { blur: true, step: lang() === 'zh' ? 55 : 90, delay: 100, dur: 1100 });
   const after = 100 + chars.length * (lang() === 'zh' ? 55 : 90) + 200;
-  rise([document.querySelector('.title p'), document.querySelector('.acts')], { y: 30, delay: after, step: 120, dur: 1000 });
+  rise([document.querySelector('.acts')], { y: 30, delay: after, step: 120, dur: 1000 });
   liveMark(document.querySelector('.brand svg'), { delay: 150 });
   heroMark = liveMark(document.querySelector('.title .ast svg'), { delay: after - 250, breathe: true });
   document.querySelectorAll('#agents span').forEach((s, k) => s.animate(
@@ -1420,21 +1455,21 @@ lb.addEventListener('pointerup', (e) => {
 addEventListener('keydown', (e) => { if (lb.hidden) return; if (e.key === 'Tab') { const f = [...lb.querySelectorAll('button')]; const i = f.indexOf(document.activeElement); if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); } } if (e.key === 'Escape') closeLb(); if (e.key === 'ArrowRight') step(1); if (e.key === 'ArrowLeft') step(-1); });
 
 // ───────── 一行一行：进到视野里时像在逐行比对 ─────────
-const SRC = { verified: ['日志里对得上', 'Matched in a log'], declared: ['提交里写明了', 'Stated in the commit'], inferred: ['推断', 'Inferred'], unknown: ['未确认', 'Unattributed'] };
+const SRC = { verified: ['日志确认', 'Verified'], declared: ['提交声明', 'Declared'], inferred: ['改动推断', 'Inferred'], unknown: ['未确认', 'Unattributed'] };
 const CODE = [
   ['export function pickSpot(cat: Cat, room: Room) {', 'verified', 'Claude Code · Claude Opus 5.5'],
   ['  let best = { spot: room.door, score: -Infinity }', 'verified', 'Claude Code · Claude Opus 5.5'],
   ['  for (const spot of room.spots) {', 'verified', 'Claude Code · Claude Opus 5.5'],
   ['    const warmth = spot.sunlight * 2 + spot.softness', 'verified', 'Codex · GPT-5.6 Sol'],
   ['    const score = warmth - (cat.grudges[spot.id] ?? 0)', 'verified', 'Codex · GPT-5.6 Sol'],
-  ['    if (spot.isKeyboard) return spot', 'declared', 'GitHub Copilot · Co-authored-by'],
-  ['    if (score > best.score) best = { spot, score }', 'inferred', ['Claude Code，同一段改动', 'Claude Code, same change']],
-  ['  }', 'inferred', ['Claude Code，同一段改动', 'Claude Code, same change']],
+  ['    if (spot.isKeyboard) return spot', 'declared', 'GitHub Copilot'],
+  ['    if (score > best.score) best = { spot, score }', 'inferred', 'Claude Code'],
+  ['  }', 'inferred', 'Claude Code'],
   ['  return best.spot', 'verified', 'Claude Code · Claude Opus 5.5'],
-  ['}', 'inferred', ['Claude Code，同一段改动', 'Claude Code, same change']],
+  ['}', 'inferred', 'Claude Code'],
   ['', 'unknown', ''],
-  ['// 3am zoomies are a feature, not a bug', 'declared', 'Cursor · Co-authored-by'],
-  ['export function zoomies(cat: Cat, now: Date) {', 'declared', 'Cursor · Co-authored-by'],
+  ['// 3am zoomies are a feature, not a bug', 'declared', 'Cursor'],
+  ['export function zoomies(cat: Cat, now: Date) {', 'declared', 'Cursor'],
   ['  const odds = now.getHours() === 3 ? 0.9 : 0.05', 'verified', 'Codex · GPT-5.6 Sol'],
   ['  return !cat.asleep && Math.random() < odds', 'unknown', ''],
   ['}', 'unknown', ''],
@@ -1556,10 +1591,10 @@ document.addEventListener('pointerover', async (e) => {
 /** agent：说一句 → 它自己跑命令、出图、问一句 → 继续 → 改好 README */
 const pctOf = (k) => Math.round(DATA.share[lang()].find((r) => r.key === k)?.pct || 0);
 const AGENT = () => (EN_()
-  ? { ask: 'Make a credits card for this repo and put it in the README', look: 'Let me see who wrote what in this repo first.', exp: 'creditia export --piece share --style ukiyoe --out assets/credits.png',
-    q: `Claude Code wrote ${pctOf('claude-code')}%, Codex ${pctOf('codex')}%, Cursor ${pctOf('cursor')}%; ${pctOf('unattributed')}% is unattributed. Putting the card in the README makes the project name and these numbers public. Go ahead?`, go: 'Go ahead', fin: 'Added to the top of the README.' }
-  : { ask: '给这个仓库做一张署名图，放进 README', look: '先看看这个仓库的代码各是谁写的。', exp: 'creditia export --piece share --style ukiyoe --out assets/credits.png',
-    q: `Claude Code 写了 ${pctOf('claude-code')}%，Codex ${pctOf('codex')}%，Cursor ${pctOf('cursor')}%，${pctOf('unattributed')}% 未确认。放进 README 会公开项目名和这些数字，要继续吗？`, go: '继续', fin: '已经放到 README 顶部。' });
+  ? { ask: 'Make a credits card for this repo and put it in the README', look: 'Matching local agent logs with git history...', exp: 'creditia export --piece share --style ukiyoe --out assets/credits.png',
+    q: `Claude Code ${pctOf('claude-code')}%, Codex ${pctOf('codex')}%, Cursor ${pctOf('cursor')}%, unattributed ${pctOf('unattributed')}%. Writing to README will make this public. Proceed?`, go: 'Proceed', fin: 'Added to the top of README.md.' }
+  : { ask: '给这个仓库做张署名卡片，放进 README', look: '正在匹配本地日志与提交...', exp: 'creditia export --piece share --style ukiyoe --out assets/credits.png',
+    q: `Claude Code ${pctOf('claude-code')}%，Codex ${pctOf('codex')}%，Cursor ${pctOf('cursor')}%，未确认 ${pctOf('unattributed')}%。写入 README 会公开数据，确认继续？`, go: '确认', fin: '已写入 README.md 顶部。' });
 async function playChat(fast) {
   const g = (runs.chat = (runs.chat || 0) + 1), el = $('chat'), live = () => runs.chat === g, x = AGENT();
   const w = (ms) => (fast || RM ? null : sleep(ms));
@@ -1597,8 +1632,8 @@ async function playChat(fast) {
 /** GitHub Action：三步走——本机 publish、推上去 Action 跑、拿到徽章 / CREDITS.md / 署名页 */
 const pct = (v) => `${v.toFixed(1)}%`;
 const FLOW = () => (EN_()
-  ? { s: ['On your machine', 'On GitHub, every push', 'What you get'], pub: 'wrote credits.json\nonly line counts, tools, models and times — no code, prompts, emails or local paths', steps: [['Checkout', '1s'], ['creditia · badge, CREDITS.md, credits page', '9s'], ['Deploy to GitHub Pages', '14s']], run: 'credits', rb: 'README.md', new: 'updated' }
-  : { s: ['在你的电脑上', 'GitHub 上，每次推送', '你得到'], pub: '已写入 credits.json\n只含行数、工具、模型、时间；不含代码、prompt、邮箱、本机路径', steps: [['Checkout', '1s'], ['creditia · 徽章、CREDITS.md、署名页', '9s'], ['发布到 GitHub Pages', '14s']], run: 'credits', rb: 'README.md', new: '已更新' });
+  ? { s: ['On your machine', 'Push triggers Action', 'Ready'], pub: 'wrote credits.json\nonly line counts, tools, models and times — no code, prompts, emails or local paths', steps: [['Checkout', '1s'], ['creditia · badge, CREDITS.md, credits page', '9s'], ['Deploy to GitHub Pages', '14s']], run: 'credits', rb: 'README.md', new: 'updated' }
+  : { s: ['本机发布', '代码推送', '自动就绪'], pub: '已写入 credits.json\n只含行数、工具、模型、时间；不含代码、prompt、邮箱、本机路径', steps: [['Checkout', '1s'], ['creditia · 徽章、CREDITS.md、署名页', '9s'], ['发布到 GitHub Pages', '14s']], run: 'credits', rb: 'README.md', new: '已更新' });
 const YML = `on: push
 jobs:
   credits:
@@ -1671,7 +1706,7 @@ async function playFlow(fast) {
 }
 
 /** App：一块桌面。终端里先 analyze，再从 Dock 打开真的 App（apps/desktop 打包成的网页），换风格、换版式、拖去导出，文件落到桌面上 */
-const DSTEPS = () => (EN_() ? ['Analyze', 'Open the app', 'Pick a style', 'Change a layout', 'Drag to export', 'Get the file', 'Your turn: click, hover, drag'] : ['分析', '打开 App', '换风格', '换版式', '拖去导出', '拿到文件', '轮到你了：点、悬停、拖']);
+const DSTEPS = () => (EN_() ? ['Analyze', 'Open App', 'Pick style', 'Adjust layout', 'Drag to desktop', 'Done.'] : ['分析', '打开 App', '选风格', '调排版', '随手一拖', '搞定。']);
 const WP = (dark) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 800' preserveAspectRatio='xMidYMid slice'><defs><linearGradient id='s' x1='0' y1='0' x2='0' y2='1'>${dark ? "<stop offset='0' stop-color='#0B1026'/><stop offset='.55' stop-color='#2A1F4E'/><stop offset='1' stop-color='#5A2E55'/>" : "<stop offset='0' stop-color='#F7E3CC'/><stop offset='.5' stop-color='#F3BE98'/><stop offset='1' stop-color='#E39282'/>"}</linearGradient><radialGradient id='g' cx='.68' cy='.42' r='.4'><stop offset='0' stop-color='${dark ? '#B25E84' : '#FFF4DF'}' stop-opacity='.7'/><stop offset='1' stop-color='${dark ? '#B25E84' : '#FFF4DF'}' stop-opacity='0'/></radialGradient></defs><rect width='1280' height='800' fill='url(#s)'/><rect width='1280' height='800' fill='url(#g)'/>${(dark ? ['#3A2D66', '#2B2556', '#1E1C44', '#131430'] : ['#D88A93', '#B4709A', '#7E5F99', '#4B4D86']).map((c, i) => `<path d='M0 ${440 + i * 85} C 220 ${380 + i * 85} 380 ${520 + i * 80} 640 ${460 + i * 85} S 1060 ${390 + i * 90} 1280 ${450 + i * 80} V800 H0Z' fill='${c}'/>`).join('')}</svg>`)}")`;
 const FOLDER = '<svg viewBox="0 0 64 56"><path d="M4 10a5 5 0 0 1 5-5h15l5 6h26a5 5 0 0 1 5 5v31a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#3E8FE4"/><path d="M4 19a5 5 0 0 1 5-5h46a5 5 0 0 1 5 5v28a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#6CB3F7"/></svg>';
 const TERM_IC = '<svg viewBox="0 0 54 54"><rect x="2" y="2" width="50" height="50" rx="12" fill="#2B2B2E"/><rect x="2.5" y="2.5" width="49" height="49" rx="11.5" fill="none" stroke="#5A5A5E"/><path d="M13 19l7 6-7 6" stroke="#E8E8E8" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 33h12" stroke="#E8E8E8" stroke-width="3" stroke-linecap="round"/></svg>';
@@ -1702,8 +1737,8 @@ function deskFrame() {
 function tickClock() { const el = $('dclock'); if (el) el.textContent = new Date().toLocaleString(EN_() ? 'en-US' : 'zh-CN', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
 setInterval(tickClock, 30000);
 function dsteps(i) {
-  const el = $('dsteps'), n = DSTEPS()[Math.min(i, 6)];
-  el.innerHTML = i < 0 ? '' : i >= 6 ? esc(n) : `<b>${i + 1}/6</b>${esc(n)}`;
+  const el = $('dsteps'), arr = DSTEPS(), n = arr[Math.min(i, arr.length - 1)];
+  el.innerHTML = i < 0 ? '' : i >= arr.length - 1 ? esc(n) : `<b>${i + 1}/${arr.length - 1}</b>${esc(n)}`;
   if (!RM && i >= 0) el.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: EASE });
 }
 const front = (id) => { ['tw', 'aw'].forEach((w) => ($(w).style.zIndex = w === id ? 6 : 4)); };
@@ -1752,7 +1787,7 @@ $('desk').addEventListener('click', (e) => {
 $('desk').addEventListener('dblclick', (e) => { const f = e.target.closest('.dfile[data-url]'); if (f) quickLook(f); });
 function deskTake() {
   if (!D.touring) return;
-  D.run++; D.touring = false; $('dcur').classList.remove('on'); dsteps(6); done('desk');
+  D.run++; D.touring = false; $('dcur').classList.remove('on'); dsteps(5); done('desk');
 }
 const appDoc = () => { try { return $('appf').contentDocument; } catch (e) { return null; } };
 /** App 里某个元素的中心，换算到桌面坐标 */
@@ -1771,7 +1806,7 @@ async function playDesk() {
   deskFrame();
   if (!DATA.hasApp) return;
   if (RM) { // 减少动效：不演，直接把开着的 App 交给你
-    winOpen('aw', false); $('tw').hidden = true; dsteps(6); done('desk');
+    winOpen('aw', false); $('tw').hidden = true; dsteps(5); done('desk');
     if (await waitFor(() => { const d = appDoc(); return d && d.querySelector('#board .tile'); }, 30000, live)) $('aboot').classList.add('gone');
     return;
   }
@@ -1847,7 +1882,7 @@ async function playDesk() {
   tap(); await sleep(140); tap(); file.classList.add('sel'); quickLook(file);
   if (!(await pause(2600))) return;
   $('ql').hidden = true; file.classList.remove('sel');
-  D.touring = false; $('dcur').classList.remove('on'); dsteps(6); done('desk');
+  D.touring = false; $('dcur').classList.remove('on'); dsteps(5); done('desk');
 }
 new IntersectionObserver((es) => es.forEach((e) => (D.visible = e.isIntersecting)), { threshold: 0.25 }).observe($('deskbox'));
 addEventListener('resize', deskScale);
@@ -1869,13 +1904,13 @@ const codaIO = new IntersectionObserver((es) => es.forEach((e) => { if (!e.isInt
 function coda() {
   const x = DATA.self?.[lang()]; $('coda').hidden = !x; if (!x) return;
   const en = lang() === 'en', f = (n) => n.toLocaleString('en-US'), href = en ? 'self/en/' : 'self/';
-  $('cmark').innerHTML = x.mark; $('cmark').href = href; $('cmark').setAttribute('aria-label', en ? 'creditia’s own credits' : 'creditia 自己的署名');
+  $('cmark').innerHTML = x.mark; $('cmark').href = href; $('cmark').setAttribute('aria-label', en ? 'Behind the scenes' : '幕后');
   if (codaMark) codaMark = liveMark($('cmark').querySelector('svg'), { breathe: true }); else codaIO.observe($('cmark'));
-  $('clabel').textContent = en ? 'creditia’s own credits' : 'creditia 自己的署名';
+  $('clabel').textContent = en ? 'Behind the scenes' : '幕后';
   const big = x.rows.filter((r) => r.pct >= 1), rest = x.rows.filter((r) => r.pct < 1), restPct = rest.reduce((a, r) => a + r.pct, 0);
   $('crows').innerHTML = big.map((r) => `<span data-j="${r.j}"><i style="background:${r.color}"></i>${esc(r.name)}<em>${r.pct.toFixed(1)}%</em></span>`).join('')
     + (rest.length ? `<span title="${esc(rest.map((r) => `${r.name} ${r.pct.toFixed(1)}%`).join(' · '))}"><i style="background:var(--faint)"></i>${en ? 'Other' : '其他'}<em>${restPct.toFixed(1)}%</em></span>` : '');
-  $('cmeta').innerHTML = [`${f(x.commits)} ${en ? 'commits' : '次提交'}`, `${f(x.lines)} ${en ? 'lines' : '行'}`, `${x.from} → ${x.to}`].map((v) => `<span>${v}</span>`).join(' · ') + `<a href="${href}">${en ? 'Full credits →' : '完整署名 →'}</a>`;
+  $('cmeta').innerHTML = [`${f(x.commits)} ${en ? 'commits' : '次提交'}`, `${f(x.lines)} ${en ? 'lines' : '行'}`, `${x.from} → ${x.to}`].map((v) => `<span>${v}</span>`).join(' · ') + `<a href="${href}">${en ? 'Full archive →' : '完整档案 →'}</a>`;
 }
 $('crows').addEventListener('pointerover', (e) => { const j = e.target.closest('[data-j]')?.dataset.j; if (codaMark) { codaMark.focus = j == null ? -1 : +j; codaMark.awake = true; wake(); } });
 $('crows').addEventListener('pointerleave', () => { if (codaMark) { codaMark.focus = -1; codaMark.awake = true; wake(); } });
@@ -1885,7 +1920,7 @@ function usage() {
   if (!played.has('flow')) flowFrame();
   if (!played.has('term')) $('term').innerHTML = '<span class="p">$</span> <span class="caret"></span>';
   if (!played.has('chat')) $('chat').innerHTML = '';
-  if (played.has('desk')) { D.run++; D.touring = false; const src = $('appf')?.src; deskFrame(); if (src) { winOpen('aw', false); $('aboot').classList.add('gone'); } $('tw').hidden = !!src; dsteps(6); } else deskFrame();
+  if (played.has('desk')) { D.run++; D.touring = false; const src = $('appf')?.src; deskFrame(); if (src) { winOpen('aw', false); $('aboot').classList.add('gone'); } $('tw').hidden = !!src; dsteps(5); } else deskFrame();
   coda();
 }
 playIO.observe($('ustage'));
@@ -1928,8 +1963,8 @@ const SOURCE = `git clone ${REPO} && cd creditia && cargo build --release -p cre
 function prompt() {
   const en = lang() === 'en', os = MOBILE ? '' : OSN[detectOS()];
   return en
-    ? `Install creditia (${REPO})${os ? ` on this ${os} machine` : ''} and use it to work out which AI tools and models wrote the code in this repo.\n1. Install the command-line tool and the skills/creditia skill, following the README.\n2. Run creditia analyze at the repo root and tell me the result.\n3. Ask me before publishing or committing anything.`
-    : `帮我${os ? `在这台 ${os} 上` : ''}装上 creditia（${REPO}），用它算出这个仓库的代码是哪些 AI 工具和模型写的：\n1. 按 README 安装命令行工具和 skills/creditia 这个 skill；\n2. 在仓库根目录运行 creditia analyze，把结果告诉我；\n3. 公开或提交任何东西之前先问我。`;
+    ? `Install creditia (${REPO})${os ? ` on this ${os} machine` : ''} and use it to attribute the code in this repo:\n1. Follow the README to install the CLI and skills/creditia.\n2. Run creditia analyze at repo root and show me the summary.\n3. Confirm with me before publishing or committing anything.`
+    : `帮我${os ? `在这台 ${os} 上` : ''}装上 creditia（${REPO}），用它核实这个仓库的代码出处：\n1. 按 README 安装命令行工具和 skills/creditia；\n2. 在仓库根目录运行 creditia analyze，把结果告诉我；\n3. 公开或提交任何东西之前先问我。`;
 }
 function ways() {
   const en = lang() === 'en', me = detectOS();
@@ -1970,7 +2005,7 @@ function uHint(w, o) {
   if (o.os === 'mac' && o.kind === 'cmd') return en ? 'First launch: see the DMG installation notes' : '首次打开请参考 DMG 安装说明';
   return o.kind === 'dl' ? (en ? `v${VER} · open the installer once downloaded` : `v${VER} · 下载后打开安装包`) : (en ? 'Run in a terminal' : '在终端里运行');
 }
-const OPT_L = { cli: ['安装方式', 'Install with'], agent: ['发给它', 'Send as'], ci: ['平台', 'Platform'], app: ['安装方式', 'Install with'] };
+const OPT_L = { cli: ['安装方式', 'Install with'], agent: ['接入方式', 'Method'], ci: ['平台', 'Platform'], app: ['安装方式', 'Install with'] };
 const archOf = (o, en) => o.file.includes('aarch64') ? (en ? 'Apple silicon' : 'Apple 芯片') : 'x64';
 function dlCard(o, en) {
   const ic = ICON(o.os === 'mac' ? 'apple' : o.os === 'win' ? 'windows' : 'linux');
@@ -1994,7 +2029,7 @@ function install() {
   let field;
   if (o.kind === 'dl') field = dlCard(o, en);
   else if (o.kind === 'pending') field = `<div class="gpending">${esc(o.text)}</div>`;
-  else if (o.kind === 'say') field = `<div class="ufield"><div class="ut say">${esc(o.text.replace(/\n/g, ' '))}</div><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${en ? 'Copy, send to your agent' : '复制，发给你的 agent'}</button></div>`;
+  else if (o.kind === 'say') field = `<div class="ufield"><div class="ut say">${esc(o.text.replace(/\n/g, ' '))}</div><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${en ? 'Copy prompt' : '复制提示词'}</button></div>`;
   else if (o.kind === 'yaml') field = `<div class="ufield">${FILE_SVG}<code class="ut">${esc(o.file)}</code><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${en ? 'Copy workflow' : '复制 workflow'}</button></div>`;
   // 两条连着的命令（&&）分两行摆，复制的还是一整句
   else field = `<div class="ufield"><code class="ut${o.text.includes(' && ') ? ' two' : ''}" title="${dq(o.text)}"><i>$</i>${esc(o.text).replace(' &amp;&amp; ', ' &amp;&amp;\n')}</code><button class="ucopy" data-copy="${dq(o.text)}">${COPY_SVG}${COPY_L()}</button></div>`;
@@ -2054,7 +2089,7 @@ function pickWay(id, focus) {
   document.querySelectorAll('.upane').forEach((p) => p.classList.toggle('on', p.dataset.w === id));
   document.querySelectorAll('.ubar .again').forEach((b) => (b.hidden = b.dataset.again !== PLAY_OF[id]));
   $('dsteps').hidden = id !== 'app';
-  $('usub').textContent = PHONE ? t(`w.${id}.d`) : SUB[id];
+  $('usub').textContent = SUB[id];
   if (id === 'app') deskScale();
   install();
   if (USE.vis) playCur();
@@ -2112,14 +2147,16 @@ function applyLang() {
   document.querySelectorAll('[data-i]').forEach((el) => (el.innerHTML = t(el.dataset.i)));
   // 像脚注一样：点标题后面的 *，跳到「出处」
   const h1 = document.querySelector('.title h1'), ast = document.createElement('a');
+  h1.querySelector('.ast')?.remove();
   ast.className = 'ast'; ast.href = '#lines'; ast.setAttribute('aria-label', t('nav.lines')); ast.innerHTML = MARK; h1.append(ast);
   if (heroMark) heroMark = liveMark(ast.querySelector('svg'), { delay: 250, breathe: true });
+  renderHero(heroIdx, false);
   // 有英文版的文档：链接跟着语言换
   // App 截图：英文页放英文界面的
   document.querySelectorAll('.deskshot img').forEach((im) => { im.src = `assets/app-${im.classList.contains('dk') ? 'dark' : 'light'}${lang() === 'en' ? '-en' : ''}.webp`; });
   document.querySelectorAll('[data-en-href]').forEach((a) => { a.dataset.zhHref ??= a.getAttribute('href'); a.setAttribute('href', lang() === 'en' ? a.dataset.enHref : a.dataset.zhHref); });
   $('lang').textContent = lang() === 'en' ? '中' : 'EN';
-  document.title = lang() === 'en' ? 'creditia — which AI wrote your code' : 'creditia — 你的代码，是哪些 AI 写的';
+  document.title = lang() === 'en' ? 'creditia — See who writes your code' : 'creditia — See who writes your code · 字里行间，皆有其名';
   field(); lines(); usage(); pickWay(USE.cur); zoomSetup(); table();
 }
 // 换语言：整页淡入淡出；换主题：从按钮那里一圈扩开
@@ -2138,7 +2175,7 @@ const transition = (fn, circleFrom) => {
 $('lang').onclick = () => transition(() => {
   document.documentElement.lang = lang() === 'en' ? 'zh' : 'en';
   try { localStorage.setItem('ct-lang', document.documentElement.lang); } catch (e) {}
-  applyLang(); split(document.querySelector('.title h1'));
+  applyLang();
 });
 const onTheme = () => {};
 $('theme').onclick = (e) => {
@@ -2154,6 +2191,7 @@ $('copy').dataset.copy = 'creditia analyze';
 let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { field(); zoomSetup(); if (innerWidth !== TB.w) { TB.w = innerWidth; table(); } else tableSetup(); }, 200); });
 applyLang();
 intro();
+startHeroCarousel();
 document.fonts?.ready.then(() => Z.on && zoomSetup()); // 字体到了再量一次词的位置
 document.querySelectorAll('.rise').forEach((el) => io.observe(el));
 </script>

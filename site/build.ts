@@ -276,12 +276,12 @@ html = html
 html = selfHostFonts(html);
 writeFileSync(path.join(OUT, 'index.html'), html);
 // 英文版：同一页，默认英文，分享出去的标题、描述、预览图也是英文（和 index.html 在同一目录，相对路径不用改）
-const EN_DESC = 'Matches your AI coding agents’ logs against git history line by line, works out how much each tool and each model wrote, and rolls it as end credits. Open source, runs locally.';
+const EN_DESC = 'See who writes your code. Line-by-line attribution from local agent logs and Git history. Open source, 100% local.';
 writeFileSync(path.join(OUT, 'en.html'), html
   .replace('<html lang="zh"', '<html lang="en" data-lang="en"')
-  .replace(/<title>[^<]*<\/title>/, '<title>creditia — which AI wrote your code</title>')
+  .replace(/<title>[^<]*<\/title>/, '<title>creditia — See who writes your code</title>')
   .replace(/(<meta name="description" content=")[^"]*/, `$1${EN_DESC}`)
-  .replace(/(<meta property="og:description" content=")[^"]*/, '$1Which AI wrote your code.')
+  .replace(/(<meta property="og:description" content=")[^"]*/, '$1See who writes your code.')
   .replace('assets/og-zh.png', 'assets/og-en.png')
   .replace(/(<meta property="og:url" content=")[^"]*/, '$1https://wroughtmind.github.io/creditia/en.html')
   .replace(/(<link rel="canonical" href=")[^"]*/, '$1https://wroughtmind.github.io/creditia/en.html'));
@@ -298,7 +298,7 @@ function selfHostFonts(page: string): string {
   const latin = all.filter((c) => c.codePointAt(0)! < 0x2e80).join('');
   // 大标题：class="serif" 的元素里的字（中文版在模板里，英文版在 EN 里，拉丁部分已经在 latin 里）
   const ASCII = Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)).join('');
-  const heads = [...page.matchAll(/class="serif"[^>]*>([^]*?)<\/h[12]>/g)].map((m) => m[1].replace(/<[^>]+>/g, '')).join('');
+  const heads = [...page.matchAll(/class="serif"[^>]*>([^]*?)<\/h[12]>/g)].map((m) => m[1].replace(/<[^>]+>/g, '')).join('') + '字里行间皆有其名致每一位写下代码的协作者';
   const faces = [
     { family: 'Instrument Serif', w: 400, pkg: 'instrument-serif', dir: '400Regular', text: latin },
     { family: 'Inter', w: 400, pkg: 'inter', dir: '400Regular', text: latin },
