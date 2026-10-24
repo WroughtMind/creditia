@@ -212,6 +212,9 @@ pub struct Commit {
     /// 有它的提交，章只认这些行数，其余的行提交时已经核对过日志、没有 AI 证据
     #[serde(default)]
     pub lines_stamp: Option<(Vec<(String, usize)>, usize)>,
+    /// 在 GitHub 网页上合并（提交者是 GitHub）：作者只是点了合并、或者开 PR 的人，不说明代码是谁写的
+    #[serde(default)]
+    pub web: bool,
     #[serde(default)]
     pub files: Vec<FileAdd>,
 }

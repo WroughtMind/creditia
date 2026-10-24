@@ -478,6 +478,26 @@ impl Sim {
         h
     }
 
+    /// 在 GitHub 网页上合并：作者是 GitHub 账号的邮箱，提交者是 GitHub
+    fn commit_web(&mut self, msg: &str, author: &str) -> String {
+        self.t += 600;
+        git_in(&self.repo, &["add", "-A"]);
+        let date = format!("@{} +0000", self.t);
+        let o = Command::new("git")
+            .arg("-C")
+            .arg(&self.repo)
+            .args(["-c", "user.name=X", "-c", &format!("user.email={author}"), "-c", "commit.gpgsign=false", "commit", "-q", "-m", msg, "--date", &date])
+            .env("GIT_COMMITTER_DATE", &date)
+            .env("GIT_COMMITTER_NAME", "GitHub")
+            .env("GIT_COMMITTER_EMAIL", "noreply@github.com")
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        let h = git_in(&self.repo, &["rev-parse", "HEAD"]).trim().to_string();
+        self.snaps.insert(h.clone(), (self.scenario, self.files.clone()));
+        h
+    }
+
     fn commit(&mut self, msg: &str) -> String {
         self.commit_as(msg, ME)
     }
@@ -561,9 +581,7 @@ struct Tally {
     missed: usize,
     human: usize,
     claimed: usize,
-    /// 人写的行里认出是人写的（不是「未确认」）
-    recognized: usize,
-    /// AI 写的行被当成了手写
+    /// AI 写的行被算给了人
     as_human: usize,
 }
 impl Tally {
@@ -572,9 +590,6 @@ impl Tally {
             self.human += 1;
             if pred.starts_with("a:") {
                 self.claimed += 1;
-            }
-            if pred.starts_with("h:") {
-                self.recognized += 1;
             }
             return;
         }
@@ -603,12 +618,11 @@ impl Tally {
         self.missed += o.missed;
         self.human += o.human;
         self.claimed += o.claimed;
-        self.recognized += o.recognized;
         self.as_human += o.as_human;
     }
     fn json(&self) -> Value {
         let p = |a: usize, b: usize| if b == 0 { Value::Null } else { json!((a as f64 / b as f64 * 1000.0).round() / 10.0) };
-        json!({ "aiLines": self.ai, "toolCorrect": p(self.exact + self.tool_only, self.ai), "modelCorrect": p(self.exact, self.ai), "wrongTool": p(self.wrong_tool, self.ai), "missed": p(self.missed, self.ai), "humanLines": self.human, "falseClaims": p(self.claimed, self.human), "humanRecognized": p(self.recognized, self.human), "aiAsHuman": p(self.as_human, self.ai) })
+        json!({ "aiLines": self.ai, "toolCorrect": p(self.exact + self.tool_only, self.ai), "modelCorrect": p(self.exact, self.ai), "wrongTool": p(self.wrong_tool, self.ai), "missed": p(self.missed, self.ai), "humanLines": self.human, "falseClaims": p(self.claimed, self.human), "aiToPeople": p(self.as_human, self.ai) })
     }
 }
 
@@ -804,28 +818,31 @@ fn accuracy_bench() {
     s.copilot_failed_then_human("gpt-c", "web/failed.ts", 30);
     s.commit("written by hand after copilot failed");
 
-    // 下面两个场景在本机日志的覆盖期里（分析时刻往回一个保留期）：以上的场景都在覆盖期以前
-    s.scene("22 日志都在时手写");
-    s.agent_new(OPUS, "src/cov_ai.rs", 30);
-    s.human_edit("src/cov_me.rs", 0, 60);
-    s.commit("agent file + hand file while logs are complete");
-
-    s.scene("23 在 agent 里提交的手写");
+    s.scene("22 在 agent 里提交的手写");
     s.agent_new(GPT, "web/stamped_ai.ts", 20);
     s.human_edit("src/stamped_me.rs", 0, 40);
     s.commit("committed from inside an agent\n\nCreditia-Harness: claude-code\nCreditia-Model: opus-x\nCreditia-Lines: codex/gpt-a 20 / 60");
 
-    // 也在覆盖期里，只隔一天（再隔 20 天，22 就出了覆盖期）。格式化把 agent 的行两两并成一行，逐行证据全对不上：
-    // 不能因为「日志都在、没找到 AI 证据」就算成手写——agent 同期写过这个文件。agent 没碰过的文件照旧认出手写
-    s.scenario = "24 日志都在时格式化合并的行";
-    s.t += DAY;
+    // 格式化把 agent 的行两两并成一行，逐行证据全对不上：记未确认，不能算给人
+    s.scene("23 格式化合并的行");
     s.agent_new(SONNET, "web/joined.ts", 40);
     s.join("web/joined.ts");
     s.human_edit("src/joined_me.rs", 0, 30);
     s.commit("agent file reformatted onto fewer lines + hand file");
 
+    // 在云端写、在 GitHub 网页上 squash 合并：本机没有日志，提交作者是 GitHub 账号的邮箱、提交者是 GitHub。
+    // 原分支各提交的盖章被并进正文中间，只有最后一段算 trailer
+    s.scene("24 GitHub 网页 squash 合并");
+    s.t += 300;
+    let v: Vec<L> = s.gen("src/web.rs", 30).into_iter().map(|text| L { text, who: GPT }).collect();
+    s.files.insert("src/web.rs".into(), v);
+    s.write_disk("src/web.rs");
+    s.commit_web(
+        "cloud work (#7)\n\n* first part\n\nCreditia-Harness: codex\nCreditia-Lines: codex/gpt-a 20 / 20\n\n* second part\n\nCreditia-Harness: codex\nCreditia-Lines: codex/gpt-a 10 / 10\n\nCo-authored-by: me <me@example.com>",
+        "account@gmail.com",
+    );
+
     s.flush_logs();
-    s.vars.insert("CREDITIA_NOW".into(), (s.t + 3600).to_string());
     let rs = s.repo.display().to_string();
     s.run(&["init", "--repo", &rs]);
     let v = s.run(&["analyze", "--repo", &rs, "--fresh"]);
@@ -874,13 +891,13 @@ fn accuracy_bench() {
     }
 
     let mut all = Tally::default();
-    println!("\n场景                         AI行  工具对%  模型对%  错给别的AI%  漏掉%   非AI行  误认%  认出手写%  AI当手写%");
+    println!("\n场景                         AI行  工具对%  模型对%  错给别的AI%  漏掉%   非AI行  误认%  AI算给人%");
     for (k, t) in &by_scene {
         all.merge(t);
-        println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}    {}", k, t.ai, pct(t.exact + t.tool_only, t.ai), pct(t.exact, t.ai), pct(t.wrong_tool, t.ai), pct(t.missed, t.ai), t.human, pct(t.claimed, t.human), pct(t.recognized, t.human), pct(t.as_human, t.ai));
+        println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}", k, t.ai, pct(t.exact + t.tool_only, t.ai), pct(t.exact, t.ai), pct(t.wrong_tool, t.ai), pct(t.missed, t.ai), t.human, pct(t.claimed, t.human), pct(t.as_human, t.ai));
     }
-    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}    {}", "历史合计", all.ai, pct(all.exact + all.tool_only, all.ai), pct(all.exact, all.ai), pct(all.wrong_tool, all.ai), pct(all.missed, all.ai), all.human, pct(all.claimed, all.human), pct(all.recognized, all.human), pct(all.as_human, all.ai));
-    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}    {}", "当前代码（存活）", surv.ai, pct(surv.exact + surv.tool_only, surv.ai), pct(surv.exact, surv.ai), pct(surv.wrong_tool, surv.ai), pct(surv.missed, surv.ai), surv.human, pct(surv.claimed, surv.human), pct(surv.recognized, surv.human), pct(surv.as_human, surv.ai));
+    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}", "历史合计", all.ai, pct(all.exact + all.tool_only, all.ai), pct(all.exact, all.ai), pct(all.wrong_tool, all.ai), pct(all.missed, all.ai), all.human, pct(all.claimed, all.human), pct(all.as_human, all.ai));
+    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}", "当前代码（存活）", surv.ai, pct(surv.exact + surv.tool_only, surv.ai), pct(surv.exact, surv.ai), pct(surv.wrong_tool, surv.ai), pct(surv.missed, surv.ai), surv.human, pct(surv.claimed, surv.human), pct(surv.as_human, surv.ai));
     let tot: usize = share_t.values().sum();
     println!("\n份额（历史，非空行）  真实    算出");
     let mut keys: Vec<&String> = share_t.keys().chain(share_p.keys()).collect();
@@ -908,15 +925,12 @@ fn accuracy_bench() {
     assert!(all.wrong_tool * 100 <= all.ai, "错给别的 AI：{}/{}", all.wrong_tool, all.ai);
     assert!((all.exact + all.tool_only) * 100 >= all.ai * 95, "工具对的比例：{}/{}", all.exact + all.tool_only, all.ai);
     assert!(l1 / 2.0 <= 0.04, "份额总偏差 {:.1} 个百分点", l1 / 2.0 * 100.0);
-    // 覆盖期里人写的行要认出来，不能留成「未确认」；在 agent 里提交的手写不能被章整个算给 agent
-    for k in ["22 日志都在时手写", "23 在 agent 里提交的手写"] {
-        let t = &by_scene[k];
-        assert!(t.recognized * 100 >= t.human * 95, "{k}：认出手写 {}/{}", t.recognized, t.human);
-        assert_eq!(t.claimed, 0, "{k}：人写的行被算给 AI");
-        assert!((t.exact + t.tool_only) * 100 >= t.ai * 95, "{k}：AI 行 {}/{}", t.exact + t.tool_only, t.ai);
-    }
-    // 认手写要有正面理由：AI 写的行一行都不能被当成手写
-    assert_eq!(all.as_human, 0, "AI 写的行被当成手写");
-    let t = &by_scene["24 日志都在时格式化合并的行"];
-    assert!(t.recognized * 100 >= t.human * 95, "24：认出手写 {}/{}", t.recognized, t.human);
+    // 在 agent 里提交的手写不能被章整个算给 agent
+    let t = &by_scene["22 在 agent 里提交的手写"];
+    assert_eq!(t.claimed, 0, "22：人写的行被算给 AI");
+    assert!((t.exact + t.tool_only) * 100 >= t.ai * 95, "22：AI 行 {}/{}", t.exact + t.tool_only, t.ai);
+    // AI 写的行一行都不能算给人（网页合并的作者、找不到记录的行）
+    assert_eq!(all.as_human, 0, "AI 写的行被算给了人");
+    let t = &by_scene["24 GitHub 网页 squash 合并"];
+    assert!((t.exact + t.tool_only) * 100 >= t.ai * 95, "24：AI 行 {}/{}", t.exact + t.tool_only, t.ai);
 }

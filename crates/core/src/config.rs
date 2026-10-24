@@ -95,13 +95,9 @@ pub struct Config {
     /// 分支前缀 → harness（如 `codex/`）
     #[serde(default)]
     pub branch_prefixes: HashMap<String, String>,
-    /// 归因口径：strict 只认逐行证据和明确声明；standard（默认）再加三种推断：同一改动块内的延伸、分支前缀、日志覆盖期里的手写；loose 再加同时间窗口的会话。推断全部单独记账
+    /// 归因口径：strict 只认逐行证据和明确声明；standard（默认）再加两种推断：同一改动块内的延伸、分支前缀；loose 再加同时间窗口的会话。推断全部单独记账
     #[serde(default = "standard")]
     pub level: String,
-    /// 日志覆盖期内、你自己的提交里没有任何 AI 证据的行，而且 agent 同期没写过那个文件，推断为你手写（记为推断，strict 口径不做）。
-    /// 有几台电脑、另一台的证据没导入时可以关掉，那些行会照旧记「未确认」
-    #[serde(default = "yes")]
-    pub infer_human: bool,
     /// 本项目的其他路径（别的电脑、已删除的临时目录、搬家前的位置）：日志里的这些路径也算本项目
     #[serde(default)]
     pub paths: Vec<String>,
@@ -124,7 +120,6 @@ pub struct Config {
 }
 
 fn one() -> u32 { 1 }
-fn yes() -> bool { true }
 fn standard() -> String { "standard".into() }
 pub fn default_ignore_tags() -> Vec<String> { vec!["archive/**".into()] }
 
@@ -145,7 +140,6 @@ impl Default for Config {
                 "29139614+renovate[bot]@users.noreply.github.com".into(),
             ],
             level: "standard".into(),
-            infer_human: true,
             paths: vec![],
             branch_prefixes: [("codex/", "codex"), ("cursor/", "cursor"), ("claude/", "claude-code"), ("grok/", "grok"), ("kimi/", "kimi"), ("copilot/", "copilot"), ("devin/", "devin"), ("jules/", "jules"), ("opencode/", "opencode")]
                 .iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(),

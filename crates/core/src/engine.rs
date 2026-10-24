@@ -13,7 +13,7 @@ const WINDOW_AFTER: i64 = 3600;
 pub enum Strictness {
     /// 只认逐行证据和明确声明（盖章、agent 邮箱、Co-authored-by、bot）
     Strict,
-    /// 默认：再加三种推断——同一改动块内的延伸（块里大半有逐行证据，其余的行跟着它）、分支前缀、日志覆盖期里的手写
+    /// 默认：再加两种推断——同一改动块内的延伸（块里大半有逐行证据，其余的行跟着它）和分支前缀
     Standard,
     /// 再加同时间窗口的会话（标为推断）
     Loose,
@@ -36,12 +36,8 @@ pub struct Engine<'a> {
     pub stamps: HashMap<String, (String, Option<String>)>,
     /// 已被提交认领过的证据（与 idx.map 里的 Vec 一一对应）
     used: HashMap<(String, u32), Vec<bool>>,
-    /// 本机日志的覆盖期 [(起, 止)]（已合并、按时间排好）：这些时段里 agent 写进本项目的每一次编辑都读得到
-    pub coverage: Vec<(i64, i64)>,
-    /// 每个文件被 agent 写入的时间（排好序，不含 Tab 补全）
-    writes: HashMap<String, Vec<i64>>,
-    /// 每个文件上一次被提交的时间（按时间顺序处理提交时记下）
-    last_commit: HashMap<String, i64>,
+    /// 主导者的 GitHub 账号名：同一个账号的几种 noreply 邮箱（`123+login@…`、`login@…`）都是他
+    director_logins: HashSet<String>,
 }
 
 impl<'a> Engine<'a> {
@@ -64,27 +60,12 @@ impl<'a> Engine<'a> {
                 }
             }
         }
-        let mut writes: HashMap<String, Vec<i64>> = HashMap::new();
-        for ((rel, _), evs) in &idx.map {
-            writes.entry(rel.clone()).or_default().extend(evs.iter().filter(|e| !e.tab).map(|e| e.ts));
-        }
-        for v in writes.values_mut() {
-            v.sort_unstable();
-        }
-        Engine { cfg, strictness: Strictness::parse(&cfg.level), idx, sessions, reg, director_emails, unit_branch, stamps, used: HashMap::new(), coverage: vec![], writes, last_commit: HashMap::new() }
+        let director_logins = cfg.director_emails().iter().filter_map(|e| gh_login(e)).map(String::from).collect();
+        Engine { cfg, strictness: Strictness::parse(&cfg.level), idx, sessions, reg, director_emails, director_logins, unit_branch, stamps, used: HashMap::new() }
     }
 
-    /// [lo, hi] 里有 agent 写过这个文件
-    fn agent_wrote(&self, rel: &str, lo: i64, hi: i64) -> bool {
-        self.writes.get(rel).is_some_and(|v| {
-            let i = v.partition_point(|&t| t < lo);
-            i < v.len() && v[i] <= hi
-        })
-    }
-
-    /// [lo, hi] 整段落在同一个覆盖期里
-    fn covered(&self, lo: i64, hi: i64) -> bool {
-        self.coverage.iter().any(|&(a, b)| a <= lo && hi <= b)
+    fn is_director(&self, email: &str) -> bool {
+        self.director_emails.contains(email) || gh_login(email).is_some_and(|l| self.director_logins.contains(l))
     }
 
     fn director(&self) -> usize {
@@ -219,52 +200,11 @@ impl<'a> Engine<'a> {
                 }
             }
         }
-        // 第四轮：还没着落的行走提交级的降级（会话、分支前缀、未确认）
+        // 第四轮：还没着落的行走提交级的降级（会话、分支前缀、未确认）。
+        // 没有 AI 证据不说明是人写的：creditia 只认 AI 留下的记录，不推断谁手写
         let (fallback, r) = match &declared {
             Some(d) => d.clone(),
             None => self.guess(c),
-        };
-        // 再按文件看能不能认成手写。只靠「没找到 AI 证据」不够，还要有正面的理由：
-        // 本机日志在这段时间是完整的（或提交时 hook 核对过），而且从这个文件上次提交到这次提交，没有 agent 写过它。
-        // agent 同期写过这个文件、这行却对不上它的记录：可能是 agent 写完被人改过，也可能是人自己写的，分不清，照旧未确认
-        let human_ok = declared.is_none()
-            && fallback.level == Level::Unattributed
-            && self.strictness != Strictness::Strict
-            && self.cfg.infer_human
-            && self.director_emails.contains(&c.email)
-            && (c.lines_stamp.is_some() || self.covered(lo + WINDOW_BEFORE - 86400, hi - WINDOW_AFTER));
-        let human = Attr { who: self.director(), level: Level::Inferred };
-        let (mut by_human, mut by_doubt) = (false, false);
-        let fb: Vec<Attr> = c
-            .files
-            .iter()
-            .enumerate()
-            .map(|(fi, f)| {
-                let open = (0..f.keys.len()).any(|i| f.keys[i] != 0 && lines[fi][i].is_none());
-                if !human_ok || !open {
-                    return fallback;
-                }
-                let since = self.last_commit.get(&f.rel).map_or(lo, |&t| t.max(lo));
-                if self.agent_wrote(&f.rel, since, hi) {
-                    by_doubt = true;
-                    fallback
-                } else {
-                    by_human = true;
-                    human
-                }
-            })
-            .collect();
-        for f in &c.files {
-            self.last_commit.insert(f.rel.clone(), c.commit_ts.max(c.author_ts));
-        }
-        let r = if by_doubt {
-            crate::tr!("agent 同期改过这些文件，没对上它记录的行未确认", "an agent edited these files at the time; lines that match none of its edits stay unattributed")
-        } else if by_human && c.lines_stamp.is_some() {
-            crate::tr!("提交时核对过本机日志，agent 没改过这些文件（推断为手写）", "checked against local logs at commit time; no agent edited these files (inferred hand-written)")
-        } else if by_human {
-            crate::tr!("本机日志完整，这段时间 agent 没改过这些文件（推断为手写）", "local logs complete; no agent edited these files at the time (inferred hand-written)")
-        } else {
-            r
         };
         let reason = reason.unwrap_or(r);
         // 主要贡献者：所有长行里最多的那个
@@ -272,21 +212,20 @@ impl<'a> Engine<'a> {
         for (fi, f) in c.files.iter().enumerate() {
             for (i, a) in lines[fi].iter().enumerate() {
                 if f.keys[i] != 0 {
-                    *counts.entry(a.map(|a| a.who).unwrap_or(fb[fi].who)).or_default() += 1;
+                    *counts.entry(a.map(|a| a.who).unwrap_or(fallback.who)).or_default() += 1;
                 }
             }
         }
         let main = counts.iter().max_by_key(|(w, n)| (**n, std::cmp::Reverse(**w))).map(|(w, _)| *w);
         let main_attr = match main {
             Some(w) if w == fallback.who => fallback,
-            Some(w) if by_human && w == human.who => human,
             Some(w) => Attr { who: w, level: Level::Declared },
             None => fallback,
         };
         let mut out = vec![];
         for (fi, fl) in lines.into_iter().enumerate() {
             let f = &c.files[fi];
-            let mut res: Vec<Attr> = fl.iter().map(|a| a.unwrap_or(fb[fi])).collect();
+            let mut res: Vec<Attr> = fl.iter().map(|a| a.unwrap_or(fallback)).collect();
             // 自己对上了写入的短行不再跟随别人
             let placed: Vec<bool> = fl.iter().zip(&f.keys).map(|(a, &k)| k == 0 && a.is_some()).collect();
             // 过短的行（`}`、空行）跟随同一改动块里它上面最近的长行（`}` 收的是上面那段代码），
@@ -318,7 +257,11 @@ impl<'a> Engine<'a> {
         // 多出来的不动——那是提交以后才读到的证据
         let mut reason = reason;
         let mut main = main;
-        if let Some((quota, _)) = &c.lines_stamp {
+        if let Some((quota, stamped)) = &c.lines_stamp {
+            // 网页 squash 合并把原分支各提交的 Creditia-Lines 加在一起：后面的提交改写过前面的行时，
+            // 总数比这个提交实际新增的多，按比例缩
+            let actual: usize = out.iter().map(Vec::len).sum();
+            let scale = |n: usize| if *stamped > actual { n * actual / stamped } else { n };
             let mut have: HashMap<String, usize> = HashMap::new();
             for a in out.iter().flatten() {
                 if let Some(h) = self.reg.list[a.who].harness.clone().filter(|_| self.reg.list[a.who].kind == "agent") {
@@ -332,8 +275,9 @@ impl<'a> Engine<'a> {
                     None => (canonical_harness(id), None),
                 };
                 let got = have.entry(h.clone()).or_default();
+                let n = scale(*n);
                 let mut deficit = n.saturating_sub(*got);
-                *got = got.saturating_sub(*n);
+                *got = got.saturating_sub(n);
                 if deficit == 0 {
                     continue;
                 }
@@ -438,7 +382,8 @@ impl<'a> Engine<'a> {
         if c.name.trim_end().ends_with("(aider)") {
             return Some((Attr { who: self.reg.agent("aider", None), level: Level::Declared }, crate::tr!("aider 署名的作者", "author marked (aider)")));
         }
-        if !self.director_emails.contains(&c.email) {
+        // 在 GitHub 网页上合并的提交，作者只是开 PR、点合并的人（还是那个账号的邮箱，不是写代码时用的），不算他写的
+        if !c.web && !self.is_director(&c.email) {
             // 以邮箱为身份，显示 git 作者名
             let name = if c.name.is_empty() { c.email.clone() } else { c.name.clone() };
             let name = self.cfg.display_name(&name);
@@ -448,8 +393,7 @@ impl<'a> Engine<'a> {
         None
     }
 
-    /// 既没有逐行证据、也没有声明的行：同时间窗口的会话（loose，推断）→ 分支前缀（standard，推断）→ 未确认。
-    /// 未确认的行能不能认成手写，在 attribute 里按文件看
+    /// 既没有逐行证据、也没有声明的行：同时间窗口的会话（loose，推断）→ 分支前缀（standard，推断）→ 未确认（写明为什么找不到）
     fn guess(&mut self, c: &Commit) -> (Attr, String) {
         if self.strictness == Strictness::Loose {
             if let Some(s) = self.session_at(c, None) {
@@ -465,7 +409,14 @@ impl<'a> Engine<'a> {
                 }
             }
         }
-        (Attr { who: self.reg.unattributed(), level: Level::Unattributed }, crate::tr!("没有证据", "no evidence"))
+        let why = if c.web {
+            crate::tr!("GitHub 网页合并的提交，原分支提交的记录不在本机", "merged on GitHub; the original branch commits left no record on this computer")
+        } else if c.lines_stamp.is_some() {
+            crate::tr!("提交时核对过本机日志，这些行没有 AI 写入记录", "checked against local logs at commit time; no AI edits recorded for these lines")
+        } else {
+            crate::tr!("没有证据", "no evidence")
+        };
+        (Attr { who: self.reg.unattributed(), level: Level::Unattributed }, why)
     }
 
     /// 提交时间落在某个写代码会话里（会话结束后 30 分钟内也算）；分支一致的优先
@@ -478,6 +429,12 @@ impl<'a> Engine<'a> {
             .filter(|s| harness.map(|h| s.src.harness() == h).unwrap_or(true))
             .max_by_key(|s| (br.is_some() && s.branch.as_ref() == br, s.start))
     }
+}
+
+/// GitHub noreply 邮箱里的账号名：`123+login@users.noreply.github.com` 和 `login@users.noreply.github.com` 是同一个账号
+fn gh_login(email: &str) -> Option<&str> {
+    let local = email.strip_suffix("@users.noreply.github.com")?;
+    Some(local.rsplit_once('+').map_or(local, |(_, l)| l)).filter(|l| !l.is_empty())
 }
 
 /// Co-authored-by 的名字里写了模型（Claude Code 会写 `Claude Opus 5.5 <noreply@anthropic.com>`）就取出来；
@@ -818,7 +775,7 @@ mod tests {
 
     #[test]
     fn lines_stamp_is_a_quota_not_the_whole_commit() {
-        // 在 Kimi 里提交：hook 记下 Kimi 写了 2 行、共 3 行。日志后来没了：2 行按章补给 Kimi，另 1 行提交时就核对过，是手写
+        // 在 Kimi 里提交：hook 记下 Kimi 写了 2 行、共 3 行。日志后来没了：2 行按章补给 Kimi，另 1 行未确认（不推断是谁手写）
         let store = Store::default();
         let idx = Index::build(&store);
         let cfg = cfg();
@@ -830,64 +787,51 @@ mod tests {
         let r = e.attribute(&c);
         let ids: Vec<&str> = r.lines[0].iter().map(|x| e.reg.list[x.who].id.as_str()).collect();
         assert_eq!(ids.iter().filter(|i| **i == "a:kimi/k3").count(), 2, "{ids:?}");
-        assert_eq!(ids.iter().filter(|i| **i == "h:me").count(), 1, "{ids:?}");
+        assert_eq!(ids.iter().filter(|i| **i == "unattributed").count(), 1, "{ids:?}");
         // 章写着 0 行：整个提交都不算给 Kimi
         let mut c = commit("me@x.com", vec![4, 5]);
         c.lines_stamp = Some((vec![], 2));
         c.coauthors = vec!["claude opus 5.5 <noreply@anthropic.com>".into()];
         let r = e.attribute(&c);
-        assert!(r.lines[0].iter().all(|x| e.reg.list[x.who].kind == "human" && x.level == Level::Inferred), "{:?}", r.lines[0]);
+        assert!(r.lines[0].iter().all(|x| x.level == Level::Unattributed), "{:?}", r.lines[0]);
     }
 
     #[test]
-    fn hand_written_inside_log_coverage() {
-        // 本机日志完整的时段里，你自己的提交里一行 AI 证据都没有：推断为手写；覆盖期以外照旧未确认；strict 不推断
+    fn web_merge_is_not_the_mergers_code() {
+        // GitHub 网页上合并的提交：作者是别的邮箱也不算那个人写的；找不到记录就是未确认，写明原因
         let store = Store::default();
-        let idx = Index::build(&store);
-        for (lv, cov, want) in [("standard", vec![(-200_000, 10_000)], Level::Inferred), ("standard", vec![(-1_000, 10_000)], Level::Unattributed), ("strict", vec![(-200_000, 10_000)], Level::Unattributed)] {
-            let mut c = cfg();
-            c.level = lv.into();
-            let mut e = Engine::new(&c, &idx, &[], &[], HashMap::new());
-            e.coverage = cov;
-            let r = e.attribute(&commit("me@x.com", vec![1, 2]));
-            assert_eq!(r.lines[0][0].level, want, "{lv}");
-            if want == Level::Inferred {
-                assert_eq!(e.reg.list[r.lines[0][0].who].id, "h:me");
-            }
-        }
-        // 关掉 infer_human：照旧未确认
-        let mut c = cfg();
-        c.infer_human = false;
-        let mut e = Engine::new(&c, &idx, &[], &[], HashMap::new());
-        e.coverage = vec![(-200_000, 10_000)];
-        assert_eq!(e.attribute(&commit("me@x.com", vec![1])).lines[0][0].level, Level::Unattributed);
-    }
-
-    #[test]
-    fn hand_written_needs_a_file_no_agent_touched() {
-        // 日志都在，但只有「没找到 AI 证据」不够：agent 同期写过 a.rs，a.rs 里对不上的行照旧未确认；agent 没碰过的 b.rs 才认成手写
-        let mut store = Store::default();
-        store.groups.entry("x".into()).or_default().evs.push(ev(7, Src::Codex, "m"));
         let idx = Index::build(&store);
         let cfg = cfg();
         let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
-        e.coverage = vec![(-200_000, 10_000)];
-        let mut c = commit("me@x.com", vec![30, 31]);
-        c.files.push(FileAdd { rel: "b.rs".into(), keys: vec![40, 41], ..Default::default() });
+        let mut c = commit("someone@gmail.com", vec![1, 2, 3, 4]);
+        c.web = true;
         let r = e.attribute(&c);
         assert!(r.lines[0].iter().all(|x| x.level == Level::Unattributed), "{:?}", r.lines[0]);
-        assert!(r.lines[1].iter().all(|x| x.level == Level::Inferred && e.reg.list[x.who].id == "h:me"), "{:?}", r.lines[1]);
-        assert!(r.reason.contains("agent"), "{}", r.reason);
-        // agent 那次写入在 a.rs 上一次提交之前：这次提交里 a.rs 新增的行是之后写的，和它无关
-        let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
-        e.coverage = vec![(-200_000, 10_000)];
-        let mut first = commit("me@x.com", vec![7]);
-        first.hash = "c".repeat(40);
-        first.author_ts = 950;
-        first.commit_ts = 950;
-        assert_eq!(e.attribute(&first).lines[0][0].level, Level::Verified);
-        let r = e.attribute(&commit("me@x.com", vec![30, 31]));
-        assert!(r.lines[0].iter().all(|x| x.level == Level::Inferred && e.reg.list[x.who].id == "h:me"), "{:?}", r.lines[0]);
+        assert!(r.reason.contains("GitHub"), "{}", r.reason);
+        // 正文里各提交的 Creditia-Lines 加起来是 6 / 8，提交实际只新增 4 行：按比例 3 行给 Codex
+        c.hash = "b".repeat(40);
+        c.lines_stamp = Some((vec![("codex/gpt-a".into(), 6)], 8));
+        let r = e.attribute(&c);
+        let ids: Vec<&str> = r.lines[0].iter().map(|x| e.reg.list[x.who].id.as_str()).collect();
+        assert_eq!(ids.iter().filter(|i| **i == "a:codex/gpt-a").count(), 3, "{ids:?}");
+        assert_eq!(ids.iter().filter(|i| **i == "unattributed").count(), 1, "{ids:?}");
+        // 不是网页合并的、别人的提交：照旧算那个人
+        let r = e.attribute(&commit("someone@gmail.com", vec![5]));
+        assert_eq!(e.reg.list[r.lines[0][0].who].kind, "human");
+    }
+
+    #[test]
+    fn same_github_account_is_the_same_person() {
+        let store = Store::default();
+        let idx = Index::build(&store);
+        let mut c = Config::default();
+        c.directors.push(crate::config::Director { id: "h:me".into(), name: "me".into(), emails: vec!["123+me@users.noreply.github.com".into()] });
+        let mut e = Engine::new(&c, &idx, &[], &[], HashMap::new());
+        let r = e.attribute(&commit("me@users.noreply.github.com", vec![1]));
+        assert_eq!(r.lines[0][0].level, Level::Unattributed);
+        let r = e.attribute(&commit("456+you@users.noreply.github.com", vec![1]));
+        assert_eq!(e.reg.list[r.lines[0][0].who].kind, "human");
+        assert_eq!(gh_login("me@x.com"), None);
     }
 
     #[test]

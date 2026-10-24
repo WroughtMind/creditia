@@ -199,12 +199,6 @@ fn evidence(repo: &Path, cfg: &Config, lib: &mut Library, project: &str, head: &
     scan_all(&mut store, &pm, &roots, &mut st);
     save_json(&cache.join("store.json"), &store)?;
     lib.save_evidence(project, &store)?;
-    // 这一刻往回一个保留期，本机 agent 日志都还在：这段时间里没留下证据的行不是这台电脑上的 agent 写的
-    if ad::any_agent_installed() && st.warnings.is_empty() {
-        // CREDITIA_NOW：测试里模拟的「现在」，不跟着真实时钟走
-        let now = std::env::var("CREDITIA_NOW").ok().and_then(|v| v.parse().ok()).unwrap_or_else(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0));
-        lib.add_coverage(project, now - ad::log_retention_secs(), now)?;
-    }
     let (db_evs, db_sessions) = lib.load_evidence(project)?;
     // 合并：证据库里有、当前日志里没有的（已清理）补进来
     // 日志还在的会话以这次解析为准（读法可能改进过，比如不再把编辑的上下文行记成证据），只补日志已经没了的会话；
@@ -360,7 +354,6 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
 
     // ---- 归因
     let mut eng = Engine::new(&cfg, &idx, &sessions, &units, cc.stamps.clone());
-    eng.coverage = lib.coverage(&proj.id);
     let mut attrs: HashMap<String, CommitAttr> = HashMap::new();
     // 按时间先后归因：一条证据只认领一次，先提交的先用
     let mut order: Vec<&Commit> = cc.commits.iter().collect();

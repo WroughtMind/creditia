@@ -97,10 +97,7 @@ impl Library {
                session text not null, ts integer not null, tab integer not null default 0, next integer not null default 0,
                seq integer not null default 0,
                primary key(project, rel, key, src, session, ts, seq));
-             create index if not exists idx_ev2_project on evidence2(project);
-             create table if not exists coverage(
-               project text not null, src text not null, from_ts integer not null, to_ts integer not null,
-               primary key(project, src, from_ts));",
+             create index if not exists idx_ev2_project on evidence2(project);",
         )
         .map_err(|e| e.to_string())?;
         let ver: i64 = conn.query_row("pragma user_version", [], |r| r.get(0)).unwrap_or(0);
@@ -257,32 +254,6 @@ impl Library {
         Ok(v)
     }
 
-    /// 记下一段「本机日志完整」的时段，和已有的合并成不重叠的几段
-    pub fn add_coverage(&mut self, project: &str, from: i64, to: i64) -> Result<(), String> {
-        let mut all = self.coverage(project);
-        all.push((from.min(to), to.max(from)));
-        all.sort();
-        let mut merged: Vec<(i64, i64)> = vec![];
-        for (a, b) in all {
-            match merged.last_mut() {
-                Some(last) if a <= last.1 => last.1 = last.1.max(b),
-                _ => merged.push((a, b)),
-            }
-        }
-        let tx = self.conn.transaction().map_err(|e| e.to_string())?;
-        tx.execute("delete from coverage where project=?1", [project]).map_err(|e| e.to_string())?;
-        for (a, b) in merged {
-            tx.execute("insert into coverage(project,src,from_ts,to_ts) values(?1,'all',?2,?3)", params![project, a, b]).map_err(|e| e.to_string())?;
-        }
-        tx.commit().map_err(|e| e.to_string())
-    }
-
-    /// 本机日志完整的时段（按时间排好、不重叠）
-    pub fn coverage(&self, project: &str) -> Vec<(i64, i64)> {
-        let Ok(mut st) = self.conn.prepare("select from_ts, to_ts from coverage where project=?1 order by from_ts") else { return vec![] };
-        st.query_map([project], |r| Ok((r.get(0)?, r.get(1)?))).map(|rows| rows.flatten().collect()).unwrap_or_default()
-    }
-
     pub fn evidence_count(&self, project: &str) -> u64 {
         self.conn.query_row("select count(*) from evidence2 where project=?1", [project], |r| r.get::<_, i64>(0)).unwrap_or(0) as u64
     }
@@ -366,17 +337,6 @@ mod tests {
         assert_eq!(l.save_evidence("p-dup", &store).unwrap(), 0);
         let (evs, _) = l.load_evidence("p-dup").unwrap();
         assert_eq!(evs.iter().filter(|e| e.key == 9).count(), 3);
-    }
-
-    #[test]
-    fn coverage_merges() {
-        let mut l = lib();
-        l.add_coverage("p-cov", 100, 200).unwrap();
-        l.add_coverage("p-cov", 150, 300).unwrap();
-        l.add_coverage("p-cov", 500, 600).unwrap();
-        assert_eq!(l.coverage("p-cov"), vec![(100, 300), (500, 600)]);
-        l.add_coverage("p-cov", 250, 550).unwrap();
-        assert_eq!(l.coverage("p-cov"), vec![(100, 600)]);
     }
 
     /// 几个进程同时第一次打开一个新库（App 和命令行、并行的测试）：都要打开成功，不能报 database is locked

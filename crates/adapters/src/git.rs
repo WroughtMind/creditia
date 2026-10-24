@@ -113,7 +113,7 @@ pub fn worktrees(repo: &Path) -> Vec<String> {
 }
 
 // trailer 都指定 separator，这样 git 不会在值后面补换行，一条提交始终占一行
-const FMT: &str = "@@@C%x00%H%x00%ae%x00%an%x00%at%x00%ct%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Harness,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Model,valueonly,separator=%x7C)%x00%(trailers:key=Assisted-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Lines,valueonly,separator=%x7C)";
+const FMT: &str = "@@@C%x00%H%x00%ae%x00%an%x00%at%x00%ct%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Harness,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Model,valueonly,separator=%x7C)%x00%(trailers:key=Assisted-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Lines,valueonly,separator=%x7C)%x00%ce";
 
 /// `Creditia-Lines: claude-code/claude-opus-5-5 30, codex 4 / 120` → ([(工具/模型, 行数)], 总行数)。没有 AI 行时写成 `/ 120`
 pub fn parse_lines_stamp(v: &str) -> Option<(Vec<(String, usize)>, usize)> {
@@ -129,6 +129,95 @@ pub fn parse_lines_stamp(v: &str) -> Option<(Vec<(String, usize)>, usize)> {
 
 /// 盖章表：提交哈希 → (工具, 模型)
 pub type Stamps = HashMap<String, (String, Option<String>)>;
+
+/// 正文里找到的盖章和署名
+#[derive(Default, Debug, PartialEq)]
+pub struct BodyStamps {
+    /// 各条 `Creditia-Lines` 加起来
+    pub lines: Option<(Vec<(String, usize)>, usize)>,
+    /// 出现最多的 `Creditia-Harness`（和它后面的 `Creditia-Model`）
+    pub harness: Option<(String, Option<String>)>,
+    pub coauthors: Vec<String>,
+    pub assisted: Vec<String>,
+}
+
+/// GitHub 网页上 squash 合并时，原分支每个提交的说明连同它们的盖章、`Co-authored-by` 都被并进正文，
+/// 只有最后一段还算 trailer。读整个正文（也认 `* ` / `- ` 开头的列表行），把它们都找回来
+pub fn body_stamps(body: &str) -> BodyStamps {
+    let mut out = BodyStamps::default();
+    let mut by: Vec<(String, usize)> = vec![];
+    let mut total = 0;
+    let mut found = false;
+    let mut hs: Vec<(String, Option<String>)> = vec![];
+    for l in body.lines() {
+        let l = l.trim().trim_start_matches(['*', '-']).trim();
+        let Some((k, v)) = l.split_once(':') else { continue };
+        let v = v.trim();
+        match k.trim().to_ascii_lowercase().as_str() {
+            "creditia-lines" => {
+                if let Some((parts, t)) = parse_lines_stamp(v) {
+                    found = true;
+                    total += t;
+                    for (id, n) in parts {
+                        match by.iter_mut().find(|(x, _)| *x == id) {
+                            Some(e) => e.1 += n,
+                            None => by.push((id, n)),
+                        }
+                    }
+                }
+            }
+            "creditia-harness" if !v.is_empty() => hs.push((creditia_core::model::canonical_harness(v), None)),
+            "creditia-model" if !v.is_empty() => {
+                if let Some(h) = hs.last_mut().filter(|h| h.1.is_none()) {
+                    h.1 = Some(v.to_string());
+                }
+            }
+            "co-authored-by" if !v.is_empty() => {
+                let v = v.to_lowercase();
+                if !out.coauthors.contains(&v) {
+                    out.coauthors.push(v);
+                }
+            }
+            "assisted-by" if !v.is_empty() && !out.assisted.iter().any(|a| a == v) => out.assisted.push(v.to_string()),
+            _ => {}
+        }
+    }
+    if found {
+        out.lines = Some((by, total));
+    }
+    let count = |h: &str| hs.iter().filter(|x| x.0 == h).count();
+    out.harness = hs.iter().max_by_key(|x| (count(&x.0), x.1.is_some())).cloned();
+    out
+}
+
+/// 网页合并的提交（提交者是 GitHub）：正文里原分支提交的盖章和署名补进来
+fn web_bodies(repo: &Path, spec: &str, commits: &mut [Commit], stamps: &mut Stamps) {
+    if !commits.iter().any(|c| c.web) {
+        return;
+    }
+    let log = git(repo, &["log", "--no-merges", "--committer=noreply@github.com", "--format=%H%x00%B%x1e", spec]);
+    let bodies: HashMap<&str, &str> = log.split('\x1e').filter_map(|r| r.trim_start().split_once('\0')).collect();
+    for c in commits.iter_mut().filter(|c| c.web) {
+        let Some(b) = bodies.get(c.hash.as_str()) else { continue };
+        let bs = body_stamps(b);
+        if bs.lines.is_some() {
+            c.lines_stamp = bs.lines;
+        }
+        for co in bs.coauthors {
+            if !c.coauthors.contains(&co) {
+                c.coauthors.push(co);
+            }
+        }
+        for a in bs.assisted {
+            if !c.assisted.contains(&a) {
+                c.assisted.push(a);
+            }
+        }
+        if let Some(h) = bs.harness {
+            stamps.entry(c.hash.clone()).or_insert(h);
+        }
+    }
+}
 
 /// 解析 `git log -p` 输出。`range` 为空表示全量到 `rev`。返回提交和盖章表
 pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>, Stamps) {
@@ -148,9 +237,10 @@ pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>
         return (vec![], HashMap::new());
     };
     let rd = BufReader::with_capacity(1 << 20, child.stdout.take().unwrap());
-    let r = parse_log(rd, total);
+    let (mut commits, mut stamps) = parse_log(rd, total);
     let _ = child.wait();
-    r
+    web_bodies(repo, &spec, &mut commits, &mut stamps);
+    (commits, stamps)
 }
 
 /// 暂存区（`git diff --cached`）当成一个还没提交的提交：提交盖章 hook 用它算这次提交里各工具写了几行
@@ -212,6 +302,7 @@ fn parse_log(rd: impl BufRead, total: usize) -> (Vec<Commit>, Stamps) {
                 coauthors: p[6].split('|').filter(|x| !x.is_empty()).map(|x| x.to_lowercase()).collect(),
                 assisted: p.get(9).map(|s| s.split('|').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
                 lines_stamp,
+                web: p.get(11).is_some_and(|e| e.trim().eq_ignore_ascii_case("noreply@github.com")),
                 files: vec![],
             });
         } else if line.starts_with("diff --git ") {
@@ -625,6 +716,16 @@ pub fn mailmap_emails(repo: &Path, canonical: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn squash_body_stamps() {
+        // GitHub 网页 squash 合并的正文：每个原提交一段，盖章在中间，最后一段才是 trailer
+        let body = "* add parser\n\nCreditia-Harness: codex\nCreditia-Lines: codex/gpt-6 20, claude-code/claude-opus-5-5 5 / 40\n\n* fix\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n\n* docs\n\nCreditia-Harness: Codex CLI\nCreditia-Model: gpt-6\nCreditia-Lines: codex/gpt-6 3 / 10\n\nCo-authored-by: me <me@users.noreply.github.com>";
+        let b = body_stamps(body);
+        assert_eq!(b.lines, Some((vec![("codex/gpt-6".into(), 23), ("claude-code/claude-opus-5-5".into(), 5)], 50)));
+        assert_eq!(b.harness, Some(("codex".into(), Some("gpt-6".into()))));
+        assert_eq!(b.coauthors, vec!["claude opus 5.5 <noreply@anthropic.com>".to_string(), "me <me@users.noreply.github.com>".to_string()]);
+        assert_eq!(body_stamps("just a message"), BodyStamps::default());
+    }
     #[test]
     fn globs() {
         let m = |p: &str, f: &str| regex::Regex::new(&glob_re(p)).unwrap().is_match(f);
