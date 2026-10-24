@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>creditia · footnote</title>
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  canvas { display: block; }
+</style>
+<script type="importmap">{ "imports": { "three": "/promo/node_modules/three/build/three.module.js" } }</script>
+</head>
+<body>
+<script type="module">
+  // 字体先装好：代码行、脚注、字标都画在贴图上
+  const F = '/packages/render/node_modules/@expo-google-fonts/';
+  const fonts = [
+    ['Mono', 'jetbrains-mono/400Regular/JetBrainsMono_400Regular.ttf', '400'],
+    ['Mono', 'jetbrains-mono/500Medium/JetBrainsMono_500Medium.ttf', '500'],
+    ['Sans', 'inter/400Regular/Inter_400Regular.ttf', '400'],
+    ['Sans', 'inter/500Medium/Inter_500Medium.ttf', '500'],
+    ['Sans', 'inter/600SemiBold/Inter_600SemiBold.ttf', '600'],
+  ];
+  try {
+    await Promise.all(fonts.map(async ([fam, f, w]) => { const ff = new FontFace(fam, `url(${F + f})`, { weight: w }); await ff.load(); document.fonts.add(ff); }));
+    await import('./main.js');
+  } catch (e) { window.ERROR = String(e && e.stack || e); }
+</script>
+</body>
+</html>
