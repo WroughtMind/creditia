@@ -393,7 +393,7 @@ impl<'a> Engine<'a> {
         None
     }
 
-    /// 既没有逐行证据、也没有声明的行：同时间窗口的会话（loose，推断）→ 分支前缀（standard，推断）→ 未确认（写明为什么找不到）
+    /// 既没有逐行证据、也没有声明的行：同时间窗口的会话（loose，推断）→ 分支前缀（standard，推断）→ 未确认
     fn guess(&mut self, c: &Commit) -> (Attr, String) {
         if self.strictness == Strictness::Loose {
             if let Some(s) = self.session_at(c, None) {
@@ -409,14 +409,7 @@ impl<'a> Engine<'a> {
                 }
             }
         }
-        let why = if c.web {
-            crate::tr!("GitHub 网页合并的提交，原分支提交的记录不在本机", "merged on GitHub; the original branch commits left no record on this computer")
-        } else if c.lines_stamp.is_some() {
-            crate::tr!("提交时核对过本机日志，这些行没有 AI 写入记录", "checked against local logs at commit time; no AI edits recorded for these lines")
-        } else {
-            crate::tr!("没有证据", "no evidence")
-        };
-        (Attr { who: self.reg.unattributed(), level: Level::Unattributed }, why)
+        (Attr { who: self.reg.unattributed(), level: Level::Unattributed }, crate::tr!("没有证据", "no evidence"))
     }
 
     /// 提交时间落在某个写代码会话里（会话结束后 30 分钟内也算）；分支一致的优先
@@ -798,7 +791,7 @@ mod tests {
 
     #[test]
     fn web_merge_is_not_the_mergers_code() {
-        // GitHub 网页上合并的提交：作者是别的邮箱也不算那个人写的；找不到记录就是未确认，写明原因
+        // GitHub 网页上合并的提交：作者是别的邮箱也不算那个人写的；找不到记录就是未确认
         let store = Store::default();
         let idx = Index::build(&store);
         let cfg = cfg();
@@ -807,7 +800,6 @@ mod tests {
         c.web = true;
         let r = e.attribute(&c);
         assert!(r.lines[0].iter().all(|x| x.level == Level::Unattributed), "{:?}", r.lines[0]);
-        assert!(r.reason.contains("GitHub"), "{}", r.reason);
         // 正文里各提交的 Creditia-Lines 加起来是 6 / 8，提交实际只新增 4 行：按比例 3 行给 Codex
         c.hash = "b".repeat(40);
         c.lines_stamp = Some((vec![("codex/gpt-a".into(), 6)], 8));
