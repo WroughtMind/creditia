@@ -120,6 +120,10 @@ jobs:
 
 ## 支持的工具
 
+开发版已登记 **78 个 agent 入口**，全部可按名称使用提交署名、启动身份和 skill 安装指引。其中 **72 个入口已有历史读取实现**（包含有限编辑、会话、导入和条件读取），5 个从实际执行宿主归因，CodeMaker 的原生编辑格式仍未确认。灵码真实历史、Eve 本地源码沙箱及 inference.sh 的 Codex 驱动已完成相应验收；MCPJam 的官方本地启动链与真实执行器已通过脚本模型验收，账户和云端模式另行跟踪。详见 [原生实测](SUPPORT_NATIVE_LIVE.md)、[MCPJam 验收](SUPPORT_MCPJAM_LIVE.md)及[剩余事项](https://github.com/WroughtMind/creditia/issues/110)。这些数字不表示所有版本或账号均已验收。
+
+运行 `creditia agents --json` 查看完整目录；[逐项覆盖表](AGENT_SUPPORT.md)列出全部 78 项，[读取边界](ADAPTERS.md)说明能计算哪些编辑。CLI 和 App 使用同一组读取器。未记录的模型保持未知，提交声明与逐行证据分开计算。
+
 | | 工具 | 读什么 | 逐行 | 模型 |
 |:-:|---|---|:-:|:-:|
 | <img src=".github/readme/logo/claude-code.svg" width="18"> | Claude Code | `~/.claude/projects/*/*.jsonl` 的 Write / Edit / MultiEdit；渠道含 Bedrock、Vertex、中转站 | ✓ | ✓ |
@@ -141,6 +145,8 @@ jobs:
 | <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> | Copilot 云端 · Devin · Jules · Cursor 云端 · bot | 提交邮箱、`Co-authored-by`、`Assisted-by`、作者名 | 声明 | — |
 | | 任何工具 | `creditia stamp` / 提交 hook 盖章（`Creditia-Harness` trailer） | 声明 | ✓ |
 
+此外已接入 Pi / Oh My Pi、Command Code、ZCode、Mistral Vibe、MiniMax Code、Droid、Qoder（含 CN）、CodeBuddy、Auggie、Junie、Kiro、iFlow、Neovate、TRAE 编辑器、Windsurf、Antigravity 编辑器等历史；Hermes Agent 读取 `state.db`，OpenClaw 读取当前 SQLite 与旧 JSONL。云端导入及其他来源的格式、限制和核验记录均在[读取边界](ADAPTERS.md)。
+
 ## 安装
 
 npm 和 App 安装包尚未发布。当前可从源码安装，需要 Git、Rust 和 Node 22.18+：
@@ -159,11 +165,13 @@ App 安装包准备中。macOS 产物使用本地签名（ad-hoc），未经 App
 
 发布流程与验收步骤见 [发布说明](packaging/RELEASE.md)。
 
-Agent skill（Claude Code）：
+Agent skill（用 `creditia agents` 查询工具 ID，示例为 Claude Code）：
 
 ```bash
-git clone --depth 1 https://github.com/WroughtMind/creditia /tmp/creditia && cp -r /tmp/creditia/skills/creditia ~/.claude/skills/
+npx skills add WroughtMind/creditia --skill creditia -a claude-code
 ```
+
+本地开发版可把 `WroughtMind/creditia` 换成此仓库的路径。其他工具换用目录中的 ID，例如 `codex`、`cursor`、`openclaw`；安装 skill 不等于开启了历史读取。
 
 GitHub Action 直接用 `WroughtMind/creditia@main`，不用装。
 

@@ -16,6 +16,9 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
 rusqlite.workspace = true
 zstd.workspace = true
 sha2 = "0.10"
+flate2 = "1"
+rmpv = "1"

@@ -1477,10 +1477,16 @@ async function settings() {
     } catch (err) { toast(errText(err), 5000); }
   };
   /** doctor 的数据源名：一个工具有两处记录时分开写 */
-  const SOURCES: Record<string, [string, string]> = { 'copilot-vscode': ['Copilot（VS Code）', 'Copilot (VS Code)'], 'copilot-cli': ['Copilot 命令行', 'Copilot CLI'], 'trae-cli': ['TRAE 命令行', 'TRAE CLI'], 'trae-ide': ['TRAE IDE', 'TRAE IDE'], 'kilo-cli': ['Kilo 命令行', 'Kilo CLI'], antigravity: ['Antigravity 命令行', 'Antigravity CLI'], windsurf: ['Windsurf', 'Windsurf'] };
-  const sourceName = (id: string) => (SOURCES[id] ? L(...SOURCES[id]) : nameOf(id, state.lang));
+  const SOURCES: Record<string, [string, string]> = { 'copilot-vscode': ['Copilot（VS Code）', 'Copilot (VS Code)'], 'copilot-cli': ['Copilot 命令行', 'Copilot CLI'], 'cursor-cli': ['Cursor 命令行', 'Cursor CLI'], 'cline-cli': ['Cline 命令行', 'Cline CLI'], 'amazon-q-ide': ['Amazon Q（编辑器）', 'Amazon Q (IDE)'], 'costrict-ide': ['CoStrict（编辑器）', 'CoStrict (IDE)'], 'trae-cli': ['TRAE 命令行', 'TRAE CLI'], 'trae-ide': ['TRAE IDE', 'TRAE IDE'], 'kilo-cli': ['Kilo 命令行', 'Kilo CLI'], antigravity: ['Antigravity 命令行', 'Antigravity CLI'], windsurf: ['Windsurf Cascade', 'Windsurf Cascade'] };
+  Object.assign(SOURCES, { 'kiro-cli-classic': ['Kiro CLI（classic）', 'Kiro CLI (classic)'], 'tabnine-ide': ['Tabnine（编辑器）', 'Tabnine (IDE)'], 'devin-cloud': ['Devin 云端', 'Devin Cloud'], 'devin-cli': ['Devin CLI', 'Devin CLI'] });
+  Object.assign(SOURCES, { 'warp-oz': ['Warp Oz 运行信息', 'Warp Oz run information'] });
+  Object.assign(SOURCES, { 'kiro-kas-v3': ['Kiro CLI（V3 会话）', 'Kiro CLI (V3 sessions)'], 'kiro-cli-v2': ['Kiro CLI（V2 会话）', 'Kiro CLI (V2 sessions)'] });
+  Object.assign(SOURCES, { 'trae-native': ['TRAE（编辑器历史）', 'TRAE (editor history)'] });
+  const sourceName = (id: string) => id.endsWith('-acp') ? `${nameOf(id.slice(0, -4), state.lang)} ${L('采集', 'capture')}` : (SOURCES[id] ? L(...SOURCES[id]) : nameOf(id.replace(/-cli$/, ''), state.lang));
   const doc = await api('doctor').catch(() => []);
-  const detail = (d: any) => d.unsupported ? L('读不到改动', 'Edits not readable')
+  const detail = (d: any) => d.scope === 'sessions' && d.ok ? L('仅会话信息', 'Session information only')
+    : d.scope === 'capture' && !d.ok ? L('需开启采集', 'Capture required')
+    : d.unsupported ? L('编辑格式待接', 'Edit format unconfirmed')
     : !d.ok ? L('没有找到', 'Not found')
     : d.records != null ? L(`${fmt(d.records)} 条记录`, `${fmt(d.records)} records`)
     : d.entries != null ? L(`${fmt(d.entries)} 个条目`, `${fmt(d.entries)} entries`)

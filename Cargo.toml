@@ -13,8 +13,9 @@ repository = "https://github.com/WroughtMind/creditia"
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.37", features = ["bundled", "serialize"] }
 zstd = "0.13"
+base64 = "0.22"
 walkdir = "2.5"
 regex = "1"
 
