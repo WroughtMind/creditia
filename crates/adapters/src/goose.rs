@@ -8,7 +8,7 @@
 
 use crate::{added_lines, open_ro, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use rusqlite::types::Value as Sql;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -240,8 +240,8 @@ pub fn doctor() -> Health {
         readable: db.is_file(),
         format: "sessions.db (sessions + messages + usage_ledger)".into(),
         records: ss.len() as u64,
-        earliest: ss.iter().map(|s| s.created).filter(|&t| t > 0).min().map(date_cn),
-        latest: ss.iter().map(|s| s.updated).max().filter(|&t| t > 0).map(date_cn),
+        earliest: ss.iter().map(|s| s.created).filter(|&t| t > 0).min().map(date_local),
+        latest: ss.iter().map(|s| s.updated).max().filter(|&t| t > 0).map(date_local),
         note: creditia_core::tr!(
             "会话含工作目录、模型与渠道；工具调用逐条配结果。尚未用真实日志核对",
             "sessions carry working dir, model and provider; each tool call is paired with its result. Not yet checked against real logs"

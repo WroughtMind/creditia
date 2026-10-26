@@ -12,7 +12,7 @@
 
 use crate::{any_ts, apply_patch_files, new_text, open_ro, path_arg, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, Ev, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -370,8 +370,8 @@ pub fn doctor() -> Vec<Health> {
             readable,
             format: "opencode.db (session / message / part, session_v2 / session_message) + storage/*.json".into(),
             records: ss.len() as u64,
-            earliest: ss.iter().map(|s| s.2).filter(|&t| t > 0).min().map(date_cn),
-            latest: ss.iter().map(|s| s.3).max().filter(|&t| t > 0).map(date_cn),
+            earliest: ss.iter().map(|s| s.2).filter(|&t| t > 0).min().map(date_local),
+            latest: ss.iter().map(|s| s.3).max().filter(|&t| t > 0).map(date_local),
             note,
             ..Default::default()
         }

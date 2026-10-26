@@ -270,14 +270,14 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
         .map(|p| {
             json!({
                 "name": p.name, "path": p.path, "rootCommit": p.root, "remotes": p.remotes, "exists": p.exists,
-                "tools": p.tools, "lastActive": creditia_core::util::date_cn(p.last),
+                "tools": p.tools, "lastActive": creditia_core::util::date_local(p.last),
                 "inLibrary": known.contains_key(&p.root),
             })
         })
         .collect();
     let summary = merged
         .iter()
-        .map(|p| format!("{:<28} {}  {}  {}", p.name, creditia_core::util::date_cn(p.last), p.tools.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>().join(" · "), status(p)))
+        .map(|p| format!("{:<28} {}  {}  {}", p.name, creditia_core::util::date_local(p.last), p.tools.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>().join(" · "), status(p)))
         .collect::<Vec<_>>()
         .join("\n");
     Ok((json!({ "projects": list, "summary": summary }), vec![]))
@@ -1065,9 +1065,9 @@ fn cmd_projects(_a: &Args) -> R<(Value, Vec<String>)> {
     let ps = lib.projects()?;
     let list: Vec<Value> = ps
         .iter()
-        .map(|p| json!({ "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "lastHead": p.last_head, "lastAnalyzed": p.last_analyzed.map(creditia_core::util::date_cn), "evidence": lib.evidence_count(&p.id) }))
+        .map(|p| json!({ "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "lastHead": p.last_head, "lastAnalyzed": p.last_analyzed.map(creditia_core::util::date_local), "evidence": lib.evidence_count(&p.id) }))
         .collect();
-    let summary = ps.iter().map(|p| format!("{:<28} {}  {}", p.name, p.last_analyzed.map(creditia_core::util::date_cn).unwrap_or_else(|| tr!("未分析", "not analyzed")), p.path)).collect::<Vec<_>>().join("\n");
+    let summary = ps.iter().map(|p| format!("{:<28} {}  {}", p.name, p.last_analyzed.map(creditia_core::util::date_local).unwrap_or_else(|| tr!("未分析", "not analyzed")), p.path)).collect::<Vec<_>>().join("\n");
     Ok((json!({ "projects": list, "summary": if summary.is_empty() { tr!("本地项目记录为空；先 creditia-core analyze", "the library is empty; run creditia-core analyze first") } else { summary } }), vec![]))
 }
 

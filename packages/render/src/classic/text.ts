@@ -2,6 +2,7 @@
 import type { Model } from './data.ts';
 import { fmt, pct, compact, nameOf } from './data.ts';
 import type { Seg } from './forms.ts';
+import { tzOf } from '../data.ts';
 
 const clean = (s: string) => s.replace(/\s*\(#\d+\)\s*$/, '');
 
@@ -32,7 +33,7 @@ export function fetchSegs(m: Model): Seg[][] {
 /** creditia blame */
 export function blameSegs(b: any): Seg[][] {
   const who = b.harness ? nameOf(b.harness) : b.name ?? nameOf('unattributed');
-  const t = b.sessionTime ? new Date((b.sessionTime + 8 * 3600) * 1000).toISOString().replace('T', ' ').slice(0, 16) : '';
+  const t = b.sessionTime ? new Date((b.sessionTime + tzOf(b)) * 1000).toISOString().replace('T', ' ').slice(0, 16) : '';
   const ev: Record<string, string> = { verified: '日志里的编辑与这一行逐字对上', declared: '提交信息或会话时间吻合', inferred: '按分支名推断', unattributed: '没有证据' };
   const kv = (k: string, v: Seg[]): Seg[] => [{ text: k.padEnd(6, ' '), dim: true }, ...v];
   return [

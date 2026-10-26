@@ -7,6 +7,8 @@ export interface Credits {
   schemaVersion: 0;
   project: { name: string; repos?: string[]; range?: { from?: DateStr; to?: DateStr } };
   generatedAt: string;
+  /** 按天、会话时间用的时区偏移（秒）；旧档案没有，按 +08:00 */
+  tzOffset?: number;
   level?: 'strict' | 'standard' | 'loose';
   head?: string;
   versions?: { tag: string; date: DateStr }[];

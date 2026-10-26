@@ -11,6 +11,7 @@ import { h, box, col, txt, label, mark, bar, fill, neonTube, backdrop, surface, 
 import { measure } from '../svg.ts';
 import { markSvg, sharePetals } from '../mark.ts';
 import { historyLabels, historyEmpty } from '../history.ts';
+import { tzOf } from '../data.ts';
 
 const keysOf = (m: Model) => m.rows.map((r) => r.key);
 /** 主演名单：有 logo 的 AI 工具按名次排 */
@@ -1550,8 +1551,8 @@ export function lanes(m: Model, t: Theme): Out | null {
   const term = t.family === 'terminal';
   const keys = m.rows.filter((r) => r.kind === 'agent' && ss.some((s) => g(s.contributor) === r.key)).map((r) => r.key);
   const t0 = Math.min(...ss.map((s) => s.start)), t1 = Math.max(...ss.map((s) => s.end));
-  const f = new Date((t0 + 8 * 3600) * 1000);
-  const from = Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), 1) / 1000 - 8 * 3600;
+  const tz = tzOf(m.raw), f = new Date((t0 + tz) * 1000);
+  const from = Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), 1) / 1000 - tz;
   const LW = 1040 - 170, LH = 64;
   const X = (ts: number) => ((ts - from) / (t1 - from)) * LW;
   const rows = keys.map((k) => box({ alignItems: 'center', height: LH, borderBottom: `1px solid ${hair(t)}` },
@@ -1564,7 +1565,7 @@ export function lanes(m: Model, t: Theme): Out | null {
         ((w) => box({ position: 'absolute', left: X(s.start), top: 0, width: w, height: 20, borderRadius: term ? 0 : t.barRadius ? 3 : 0, ...(t.family === 'neon' && w >= 6 ? neonTube(famColor(k, t, rankOf(m, k))) : { backgroundColor: famColor(k, t, rankOf(m, k)), opacity: 0.9 }) }))(Math.max(X(s.end) - X(s.start), 2))))));
   const ticks: Node[] = [];
   for (let d = from; d <= t1 - 4 * 86400; d += 86400) {
-    const cn = new Date((d + 8 * 3600) * 1000);
+    const cn = new Date((d + tz) * 1000);
     if (cn.getUTCDate() === 1) ticks.push(txt({ position: 'absolute', left: X(d), fontSize: 14, color: t.soft, letterSpacing: 1 }, `${cn.getUTCMonth() + 1}月`));
   }
   // 这是最小高度：各体裁的表头、框线高矮不一，出图前按实际排版加高（grow）

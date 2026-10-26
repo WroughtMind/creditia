@@ -2,7 +2,7 @@
 
 use crate::{cursor_global_storage, open_ro, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, Ev, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -143,8 +143,8 @@ pub fn doctor() -> Health {
         Ok(r) => {
             h.readable = true;
             h.records = r.len() as u64;
-            h.earliest = r.iter().map(|x| x.ts_ms / 1000).min().map(date_cn);
-            h.latest = r.iter().map(|x| x.ts_ms / 1000).max().map(date_cn);
+            h.earliest = r.iter().map(|x| x.ts_ms / 1000).min().map(date_local);
+            h.latest = r.iter().map(|x| x.ts_ms / 1000).max().map(date_local);
             let auto = r.iter().filter(|x| x.model == "default").count();
             let vscdb = cursor_global_storage().join("state.vscdb");
             h.note = if vscdb.exists() { creditia_core::tr!("只保留 30 天；{auto} 条模型为 Auto；对话库可用", "kept for 30 days; {auto} records with model Auto; chat database found") } else { creditia_core::tr!("只保留 30 天；{auto} 条模型为 Auto；对话库未找到", "kept for 30 days; {auto} records with model Auto; chat database not found") };

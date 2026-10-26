@@ -18,6 +18,7 @@
       }
     },
     "generatedAt": { "type": "string", "format": "date-time" },
+    "tzOffset": { "type": "integer", "description": "按天、会话时间用的时区偏移（秒）；按天、按周、作息里的提交按提交者当地时间。没有这个字段的旧档案按 +08:00" },
     "level": { "type": "string", "enum": ["strict", "standard", "loose"], "description": "归因口径：strict 只认逐行证据与明确声明；standard 再加同提交延伸与分支前缀（标为推断）；loose 再加同时间窗口的会话（推断）" },
     "head": { "type": "string", "description": "分析时的 HEAD" },
     "versions": { "type": "array", "items": { "type": "object", "required": ["tag", "date"], "properties": { "tag": { "type": "string" }, "date": { "$ref": "#/$defs/date" } } } },

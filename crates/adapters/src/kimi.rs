@@ -3,7 +3,7 @@
 
 use crate::{any_ts, home, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -163,8 +163,8 @@ pub fn doctor() -> Health {
         readable: base.join("sessions").is_dir(),
         format: "sessions/*/session_*/state.json + agents/*/wire.jsonl".into(),
         records: ss.len() as u64,
-        earliest: mt.iter().min().copied().map(date_cn),
-        latest: mt.iter().max().copied().map(date_cn),
+        earliest: mt.iter().min().copied().map(date_local),
+        latest: mt.iter().max().copied().map(date_local),
         note: creditia_core::tr!("{no_cwd} 个会话无 cwd（已用 session_index 回退）", "{no_cwd} sessions without cwd (recovered from session_index)"),
         ..Default::default()
     }

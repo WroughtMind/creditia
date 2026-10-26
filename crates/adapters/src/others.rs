@@ -6,12 +6,12 @@
 
 use crate::{home, vscode_user_dirs, Health};
 use creditia_core::tr;
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use std::path::PathBuf;
 
 fn mtimes(files: &[PathBuf]) -> (Option<String>, Option<String>) {
     let mt: Vec<i64> = files.iter().filter_map(|f| std::fs::metadata(f).ok()?.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).collect();
-    (mt.iter().min().copied().map(date_cn), mt.iter().max().copied().map(date_cn))
+    (mt.iter().min().copied().map(date_local), mt.iter().max().copied().map(date_local))
 }
 
 pub fn doctor() -> Vec<Health> {

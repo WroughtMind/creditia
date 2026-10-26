@@ -229,7 +229,9 @@ export function modelGroups(c: any, lang: Lang) {
 // ───────────────────────── 构建 ─────────────────────────
 
 const n = (x: unknown) => (typeof x === 'number' && isFinite(x) && x > 0 ? x : 0);
-const day = (ts: number) => new Date(ts * 1000 + 8 * 3600e3).toISOString().slice(0, 10);
+/** 档案的时区偏移（秒）：分析时按项目定下的；旧档案没有这个字段，当时按 +08:00 算的 */
+export const tzOf = (c: any) => (typeof c?.tzOffset === 'number' ? c.tzOffset : 8 * 3600);
+const dayAt = (ts: number, off: number) => new Date((ts + off) * 1000).toISOString().slice(0, 10);
 
 export function buildModel(c: any, opt: Partial<Options> = {}): Model {
   const o = { ...DEFAULTS, ...opt };
@@ -292,7 +294,7 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
     const a = agentsBy.get(s.key);
     if (!a || s.review) continue;
     a.sessions++; a.tokens += s.tokens;
-    const d0 = day(s.start), d1 = day(s.end);
+    const d0 = dayAt(s.start, tzOf(c)), d1 = dayAt(s.end, tzOf(c));
     if (!a.first || d0 < a.first) a.first = d0;
     if (!a.last || d1 > a.last) a.last = d1;
   }

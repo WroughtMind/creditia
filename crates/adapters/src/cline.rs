@@ -9,7 +9,7 @@
 
 use crate::{added_from_diff, any_ts, vscode_user_dirs, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -170,8 +170,8 @@ pub fn doctor(src: Src) -> Health {
         readable: !rs.is_empty(),
         format: creditia_core::tr!("globalStorage/<扩展>/tasks/<任务>/ui_messages.json", "globalStorage/<extension>/tasks/<task>/ui_messages.json"),
         records: ts.len() as u64,
-        earliest: mt.iter().min().copied().map(date_cn),
-        latest: mt.iter().max().copied().map(date_cn),
+        earliest: mt.iter().min().copied().map(date_local),
+        latest: mt.iter().max().copied().map(date_local),
         note: creditia_core::tr!("{} 个编辑器里装了这个扩展", "installed in {} editors", rs.len()),
         ..Default::default()
     }

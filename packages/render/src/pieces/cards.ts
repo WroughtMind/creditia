@@ -1,7 +1,7 @@
 // 小票、分享图、徽章、署名行、人的部分。
 import { Scene, rect, line, path, circle, el, g, r, ease, measure, rng, hash, mix, alpha } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
-import { fmt, compact, pct, modelName } from '../data.ts';
+import { fmt, compact, pct, modelName, tzOf } from '../data.ts';
 import type { Style } from '../style.ts';
 import { T, zh, colorOf, tip, handFacts, handTip, canvas, range, summary, modelLine, type PieceOpts } from './common.ts';
 import { segsOf, segTip } from './tier.ts';
@@ -434,7 +434,7 @@ function pulse(m: Model): { label: string; vals: number[] } {
   const byWeek = new Map<string, { p: number; s: number }>();
   for (const x of m.timeline) {
     if (x.review) continue;
-    const d = new Date(x.start * 1000);
+    const d = new Date((x.start + tzOf(m.raw)) * 1000);
     const wk = `${d.getUTCFullYear()}-${Math.floor((d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 1)) / 6048e5)}`;
     const e = byWeek.get(wk) ?? { p: 0, s: 0 };
     e.p += x.prompts; e.s += 1;

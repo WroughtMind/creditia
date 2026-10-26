@@ -8,7 +8,7 @@
 
 use crate::{added_lines, open_ro, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -233,8 +233,8 @@ pub fn doctor() -> Health {
         readable: reg.is_file(),
         format: "projects.json + <project>/.crush/crush.db (sessions, messages, files)".into(),
         records: all.iter().map(|s| s.0).sum(),
-        earliest: all.iter().map(|s| s.1).filter(|&t| t > 0).min().map(date_cn),
-        latest: all.iter().map(|s| s.2).max().filter(|&t| t > 0).map(date_cn),
+        earliest: all.iter().map(|s| s.1).filter(|&t| t > 0).min().map(date_local),
+        latest: all.iter().map(|s| s.2).max().filter(|&t| t > 0).map(date_local),
         note: creditia_core::tr!(
             "每个项目一个库；逐版文件内容、每条消息的模型与渠道。尚未用真实日志核对",
             "one database per project; per-version file contents, model and provider per message. Not yet checked against real logs"

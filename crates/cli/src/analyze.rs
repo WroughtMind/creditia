@@ -5,7 +5,7 @@ use creditia_adapters as ad;
 use creditia_core::config::Config;
 use creditia_core::engine::{self, Engine};
 use creditia_core::model::{area, vendor, BlameFile, Commit, CommitAttr, FileGroup, Index, Level, PathMap, PrMeta, Session, Src, Store, STORE_VERSION, UNATTR};
-use creditia_core::util::{date_cn, iso_week, now_iso};
+use creditia_core::util::{date_at, date_local, now_iso, week_at};
 use creditia_store::{cache_dir, load_json, save_json, Library, Project};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -51,7 +51,7 @@ struct CommitCache {
     stamps: HashMap<String, (String, Option<String>)>,
 }
 
-const COMMIT_CACHE_VERSION: u32 = 6;
+const COMMIT_CACHE_VERSION: u32 = 7;
 
 /// 读配置：指定了就用指定的；仓库里有就用仓库的；都没有就现场探测（不落盘）。空着的字段自动补
 pub fn load_config(repo: &Path, override_path: Option<&Path>) -> Config {
@@ -325,6 +325,23 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     }
     cc.stamps.extend(new_stamps);
     cc.head = Some(head.clone());
+    // 时区：你自己的提交里最常见的那个（不看这台电脑：CI 上多半是 UTC）；你没有提交就看全部提交
+    let forced_tz = creditia_core::util::forced_offset();
+    {
+        let mine = cfg.director_emails();
+        let mut n: HashMap<i64, usize> = HashMap::new();
+        for c in cc.commits.iter().filter(|c| mine.contains(&c.email)) {
+            *n.entry(c.tz).or_default() += 1;
+        }
+        if n.is_empty() {
+            for c in &cc.commits {
+                *n.entry(c.tz).or_default() += 1;
+            }
+        }
+        if let Some((tz, _)) = n.into_iter().max_by_key(|&(tz, k)| (k, std::cmp::Reverse(tz))) {
+            creditia_core::util::set_offset(tz);
+        }
+    }
     // 读历史是最慢的几步之一：读完先存下，后面被取消也不用重读
     if n_new > 0 {
         save_json(&cache.join("commits.json"), &cc)?;
@@ -423,10 +440,10 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
                     let unit = units.iter().find(|u| u.commits.iter().any(|x| x == b.commit));
                     blame_out = Some(json!({
                         "file": fpath, "line": ln, "contributor": w.id, "harness": w.harness, "model": w.model, "name": w.name,
-                        "evidence": a.level, "commit": &b.commit[..10.min(b.commit.len())], "date": c.map(|c| date_cn(c.author_ts)),
+                        "evidence": a.level, "commit": &b.commit[..10.min(b.commit.len())], "date": c.map(|c| date_local(c.author_ts)),
                         "subject": c.map(|c| if cfg.privacy.hide_titles { String::new() } else { c.subject.clone() }),
                         "unit": unit.map(|u| u.id.clone()), "unitTitle": unit.map(|u| if cfg.privacy.hide_titles { String::new() } else { u.title.clone() }),
-                        "session": ev.map(|e| e.session.clone()), "sessionTime": ev.map(|e| e.ts),
+                        "session": ev.map(|e| e.session.clone()), "sessionTime": ev.map(|e| e.ts), "tzOffset": creditia_core::util::offset(),
                     }));
                 }
                 break;
@@ -438,7 +455,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     // ---- 汇总
     let reg = &eng.reg;
     let seg_of = |ts: i64| -> String {
-        let d = date_cn(ts);
+        let d = date_local(ts);
         if cfg.segments.is_empty() {
             return d[..7].to_string();
         }
@@ -448,6 +465,8 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     struct Agg {
         long: usize,
         verified: usize,
+        /// 这段里最强的证据等级（多少行是逐行证据看 verifiedShare）
+        best: Option<Level>,
         from: String,
         to: String,
     }
@@ -467,12 +486,15 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         let a = &attrs[&c.hash];
         let (aid, aname, me) = eng.author_of(c);
         let au = &mut authors.entry(aid).or_insert_with(|| (aname, me, BTreeMap::new())).2;
+        // 按天、按周、作息：提交者当地的时间（`CREDITIA_TZ` 指定了就都按它）
+        let off = forced_tz.unwrap_or(c.tz);
         let sg = seg_of(c.author_ts);
-        let d = date_cn(c.author_ts);
+        let d = date_at(c.author_ts, off);
+        let wk = week_at(c.author_ts, off);
         let ver = ver_of.get(&c.hash).cloned().unwrap_or("unreleased".into());
         conflicts += a.conflicts;
         tab_total += a.tab_lines;
-        let t = c.author_ts + 8 * 3600;
+        let t = c.author_ts + off;
         let wd = ((t.div_euclid(86400) + 3).rem_euclid(7)) as usize;
         clock[wd][(t.rem_euclid(86400) / 3600) as usize] += 1;
         let e = seg.entry(sg.clone()).or_default();
@@ -494,13 +516,16 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
                 *au.entry(reg.list[at.who].id.clone()).or_default() += 1;
                 *by_area.entry(at.who).or_default().entry(ar).or_default() += 1;
                 *by_ver.entry(at.who).or_default().entry(ver.clone()).or_default() += 1;
-                *by_week.entry(iso_week(c.author_ts)).or_default().entry(reg.list[at.who].id.clone()).or_default() += 1;
+                *by_week.entry(wk.clone()).or_default().entry(reg.list[at.who].id.clone()).or_default() += 1;
                 *by_day.entry(d.clone()).or_default().entry(reg.fine(at.who)).or_default() += 1;
                 let e = seg.entry(sg.clone()).or_default();
                 if k != 0 {
                     e.long += 1;
                     if at.level == Level::Verified {
                         e.verified += 1;
+                    }
+                    if at.level != Level::Unattributed {
+                        e.best = Some(e.best.map_or(at.level, |b| b.min(at.level)));
                     }
                 }
                 if reg.list[at.who].kind == "human" && ar == "docs" {
@@ -570,7 +595,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         areas.sort();
         let ver = u.commits.iter().find_map(|h| ver_of.get(h)).cloned();
         let title = if hide_t { if u.id.starts_with("pr:") { format!("PR #{}", &u.id[3..]) } else { u.commits.first().map(|h| h.chars().take(7).collect()).unwrap_or_default() } } else { u.title.clone() };
-        unit_json.push(json!({ "id": u.id, "title": title, "date": date_cn(u.ts), "version": ver, "commits": u.commits, "areas": areas, "shares": shares, "lines": total }));
+        unit_json.push(json!({ "id": u.id, "title": title, "date": date_local(u.ts), "version": ver, "commits": u.commits, "areas": areas, "shares": shares, "lines": total }));
     }
 
     // 贡献方
@@ -657,7 +682,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     };
     let total_lines: usize = by_who.values().flat_map(|m| m.values()).sum();
     let tokens: i64 = sessions.iter().map(|s| s.tokens).sum();
-    let days: HashSet<String> = cc.commits.iter().map(|c| date_cn(c.author_ts)).collect();
+    let days: HashSet<String> = cc.commits.iter().map(|c| date_at(c.author_ts, forced_tz.unwrap_or(c.tz))).collect();
     let first = cc.commits.iter().map(|c| c.author_ts).min().unwrap_or(0);
     let last = cc.commits.iter().map(|c| c.author_ts).max().unwrap_or(0);
     let prompts: i64 = sessions.iter().filter(|s| !s.reviewer).map(|s| s.prompts).sum();
@@ -672,7 +697,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let coverage: Vec<Value> = seg
         .iter()
         .map(|(n, s)| {
-            let best = if s.long > 0 && s.verified * 10 >= s.long { "verified" } else { "declared" };
+            let best = s.best.unwrap_or(Level::Unattributed);
             json!({ "name": n, "from": s.from, "to": s.to, "best": best, "verifiedShare": if s.long == 0 { 0.0 } else { (s.verified as f64 / s.long as f64 * 1000.0).round() / 1000.0 } })
         })
         .collect();
@@ -680,11 +705,13 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let credits = json!({
         "$schema": "https://creditia.dev/schema/v0.json",
         "schemaVersion": 0,
-        "project": { "name": cfg.name, "repos": cfg.remotes, "range": { "from": date_cn(first), "to": date_cn(last) } },
+        "project": { "name": cfg.name, "repos": cfg.remotes, "range": { "from": date_local(first), "to": date_local(last) } },
         "generatedAt": generated_at,
+        // 按天、会话时间用的时区（秒）；按天、按周、作息里提交按提交者当地时间
+        "tzOffset": creditia_core::util::offset(),
         "level": cfg.level,
         "head": head,
-        "versions": tags.iter().map(|(t, ts)| json!({ "tag": t, "date": date_cn(*ts) })).collect::<Vec<_>>(),
+        "versions": tags.iter().map(|(t, ts)| json!({ "tag": t, "date": date_local(*ts) })).collect::<Vec<_>>(),
         "coverage": coverage,
         "contributors": contributors,
         "totals": { "commits": cc.commits.len(), "units": unit_json.len(), "linesAdded": total_lines, "linesSurviving": surv.len(), "linesWritten": lines_written, "tokens": tokens, "sessions": sessions.iter().filter(|s| !s.reviewer).count(), "days": days.len(), "binaryFiles": binary_files.values().sum::<usize>() },

@@ -1506,3 +1506,32 @@ fn team_repo_contributors() {
     assert!(!s.contains("Ana Lima") && !s.contains("\"Bo\""), "{s}");
     assert!(v["tier"].as_str().unwrap_or_default().contains("37.5%"), "{v}");
 }
+
+/// 时区不写死：按天、作息按提交者当地时间；档案记下项目的时区；CREDITIA_TZ 可以指定
+#[test]
+fn days_follow_the_committers_timezone() {
+    let mut env = setup();
+    let rs = env.repo.display().to_string();
+    // UTC 8 月 18 日 02:00 = 纽约（-05:00）8 月 17 日 21:00
+    let ts: i64 = 1_787_018_400;
+    fs::write(env.repo.join(".git/info/exclude"), ".creditia/\n").unwrap();
+    fs::write(env.repo.join("a.rs"), "let late_night_value = compute_late(1);\n").unwrap();
+    commit(&env.repo, "late", "me@example.com", &format!("@{ts} -0500"));
+    run(&env, &["init", "--repo", &rs]);
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let c: serde_json::Value = serde_json::from_str(&fs::read_to_string(env.repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    assert_eq!(c["tzOffset"], -18000, "{}", c["tzOffset"]);
+    assert_eq!(c["days"][0]["date"], "2026-08-17", "{}", c["days"]);
+    assert_eq!(c["project"]["range"]["from"], "2026-08-17");
+    assert!(c["generatedAt"].as_str().unwrap().ends_with("-05:00"), "{}", c["generatedAt"]);
+    // 周一 21 点（ISO 周一 = 第 0 行）
+    assert_eq!(c["clock"][0][21], 1, "{}", c["clock"]);
+    // 指定 UTC：同一个提交算到 18 日
+    env.vars.insert("CREDITIA_TZ".into(), "UTC".into());
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs, "--fresh"]);
+    assert!(ok, "{v}");
+    let c: serde_json::Value = serde_json::from_str(&fs::read_to_string(env.repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    assert_eq!(c["tzOffset"], 0);
+    assert_eq!(c["days"][0]["date"], "2026-08-18", "{}", c["days"]);
+}

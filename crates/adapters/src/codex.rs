@@ -2,7 +2,7 @@
 
 use crate::{open_ro, read_maybe_zst, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::{date_cn, parse_iso};
+use creditia_core::util::{date_local, parse_iso};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -193,8 +193,8 @@ pub fn doctor() -> Health {
         Ok(rows) => {
             h.readable = true;
             h.records = rows.len() as u64;
-            h.earliest = rows.iter().map(|t| t.start).min().map(date_cn);
-            h.latest = rows.iter().map(|t| t.end).max().map(date_cn);
+            h.earliest = rows.iter().map(|t| t.start).min().map(date_local);
+            h.latest = rows.iter().map(|t| t.end).max().map(date_local);
             let files = rollout_files(&base);
             let have = rows.iter().filter(|t| files.contains_key(&Path::new(&t.rollout).file_name().map(|s| s.to_string_lossy().replace(".zst", "")).unwrap_or_default())).count();
             h.note = creditia_core::tr!("{} 个线程有内容文件", "{} threads have content files", have);

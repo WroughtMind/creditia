@@ -2,7 +2,7 @@
 
 use crate::{source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::{date_cn, parse_iso};
+use creditia_core::util::{date_local, parse_iso};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -226,8 +226,8 @@ pub fn doctor() -> Health {
         }
     }
     if hi > 0 {
-        h.earliest = Some(date_cn(lo));
-        h.latest = Some(date_cn(hi));
+        h.earliest = Some(date_local(lo));
+        h.latest = Some(date_local(hi));
     }
     h.note = creditia_core::tr!("逐条记录含 cwd、model、Edit/Write 内容", "each record has cwd, model and Edit/Write content");
     h

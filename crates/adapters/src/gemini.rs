@@ -7,7 +7,7 @@
 
 use crate::{any_ts, new_text, path_arg, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -210,8 +210,8 @@ pub fn doctor(src: Src) -> Health {
         readable: base.is_dir(),
         format: creditia_core::tr!("tmp/<项目>/chats/session-*.json(l)", "tmp/<project>/chats/session-*.json(l)"),
         records: files.len() as u64,
-        earliest: mt.iter().min().copied().map(date_cn),
-        latest: mt.iter().max().copied().map(date_cn),
+        earliest: mt.iter().min().copied().map(date_local),
+        latest: mt.iter().max().copied().map(date_local),
         note: creditia_core::tr!("{} 个项目目录（按 .project_root 或项目路径的 SHA-256 对应）", "{} project folders (matched by .project_root or the SHA-256 of the project path)", ps.len()),
         ..Default::default()
     }

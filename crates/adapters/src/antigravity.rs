@@ -10,7 +10,7 @@
 
 use crate::{added_lines, any_ts, file_uri_path, open_ro, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -246,8 +246,8 @@ pub fn doctor() -> Health {
         readable: root.join("brain").is_dir(),
         format: "brain/<id>/.system_generated/logs/transcript_full.jsonl".into(),
         records: ts.len() as u64,
-        earliest: ts.iter().min().copied().map(date_cn),
-        latest: ts.iter().max().copied().map(date_cn),
+        earliest: ts.iter().min().copied().map(date_local),
+        latest: ts.iter().max().copied().map(date_local),
         note: creditia_core::tr!(
             "闭源，格式按第三方观察，尚未用真实日志核对；模型取自对话里的模型设置变更，没换过模型的对话不知道模型",
             "closed source; format based on third-party observation, not yet checked against real logs. The model comes from model-setting changes in the conversation, so conversations that never switched models have none"
