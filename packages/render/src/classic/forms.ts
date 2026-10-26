@@ -73,27 +73,27 @@ function glyphRing(cx: number, cy: number, R0: number, R1: number, segs: { a0: n
 
 const dotline = (t: Theme, color?: string) => ({ height: 2, alignSelf: 'center' as const, backgroundImage: `repeating-linear-gradient(90deg, ${color ?? t.faint} 0px, ${color ?? t.faint} 2px, transparent 2px, transparent 7px)` });
 
-/** 开发者：不和 agent 同级。单独一行小字写名字和占比，不放条形 */
+/** 贡献者：不和 agent 同级。单独一行小字写名字和占比，不放条形 */
 function humanLine(m: Model, t: Theme, s = 1): Node | null {
   if (!m.humans.length) return null;
-  const text = m.humans.slice(0, 4).map((x) => `${x.name} ${pct(x.pct)}`).join('　') + (m.humans.length > 4 ? ` 等 ${m.humans.length} 人` : '');
+  const text = m.humans.slice(0, 4).map((x) => `${x.name} ${pct(x.pct)}`).join('　') + (m.humans.length > 4 ? ` 等 ${m.humans.length} 位` : '');
   switch (t.family) {
     case 'film':
-      return box({ justifyContent: 'center', marginTop: 16 * s }, txt({ fontFamily: t.display, fontSize: 15 * s, color: t.soft }, `— 开发者 · ${text} —`));
+      return box({ justifyContent: 'center', marginTop: 16 * s }, txt({ fontFamily: t.display, fontSize: 15 * s, color: t.soft }, `— 贡献者 · ${text} —`));
     case 'terminal':
-      return txt({ fontFamily: MONO_FONT, fontSize: 11 * s, color: t.faint, marginTop: 10 * s }, `# 开发者手写代码：${text}`);
+      return txt({ fontFamily: MONO_FONT, fontSize: 11 * s, color: t.faint, marginTop: 10 * s }, `# 贡献者：${text}`);
     case 'editorial':
       return box({ marginTop: 14 * s, alignItems: 'flex-start', gap: 10 * s },
-        label(t, '开发者', 10 * s, { marginTop: 2 * s }), txt({ fontSize: 13 * s, color: t.soft }, text));
+        label(t, '贡献者', 10 * s, { marginTop: 2 * s }), txt({ fontSize: 13 * s, color: t.soft }, text));
     case 'mono':
       return box({ marginTop: 12 * s, alignItems: 'center', gap: 8 * s },
         box({ width: 8 * s, height: 8 * s, backgroundColor: t.ink }),
-        txt({ fontSize: 10.5 * s, letterSpacing: 1 * s, textTransform: 'uppercase', color: t.soft }, `开发者 · ${text}`));
+        txt({ fontSize: 10.5 * s, letterSpacing: 1 * s, textTransform: 'uppercase', color: t.soft }, `贡献者 · ${text}`));
     case 'glass':
-      return txt({ fontSize: 12 * s, color: '#5E6472', marginTop: 12 * s }, `开发者 · ${text}`);
+      return txt({ fontSize: 12 * s, color: '#5E6472', marginTop: 12 * s }, `贡献者 · ${text}`);
     default:
       return box({ marginTop: 12 * s, alignItems: 'flex-start', gap: 10 * s },
-        label(t, '开发者', 10 * s, { marginTop: 2 * s }), txt({ fontSize: 12.5 * s, color: t.soft }, text));
+        label(t, '贡献者', 10 * s, { marginTop: 2 * s }), txt({ fontSize: 12.5 * s, color: t.soft }, text));
   }
 }
 
@@ -322,7 +322,7 @@ export function share(m: Model, t: Theme): Out {
         txt({ fontFamily: t.display, fontSize: 112, fontWeight: t.displayWeight, lineHeight: 1, marginTop: 18 }, m.project),
         box({ marginTop: 14, borderTop: `2px solid ${t.ink}`, paddingTop: 8, flex: 1, gap: 60 },
           colOf(ranked.slice(0, half)), colOf(ranked.slice(half))),
-        m.humans.length ? box({ marginTop: 10, alignItems: 'baseline', gap: 8 }, label(t, '开发者', 10), txt({ fontSize: 13, color: t.soft }, m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　'))) : null,
+        m.humans.length ? box({ marginTop: 10, alignItems: 'baseline', gap: 8 }, label(t, '贡献者', 10), txt({ fontSize: 13, color: t.soft }, m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　'))) : null,
         box({ borderTop: `3px solid ${t.ink}`, paddingTop: 10, alignItems: 'baseline', justifyContent: 'space-between' },
           txt({ fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase' }, [m.commits && `${fmt(m.commits)} 次提交`, m.units && `${fmt(m.units)} 项`, m.linesAdded && `+${fmt(m.linesAdded)} 行`].filter(Boolean).join('  ·  ')),
           m.director ? txt({ fontFamily: t.display, fontSize: 16 }, m.director) : null)) };
@@ -342,7 +342,7 @@ export function share(m: Model, t: Theme): Out {
             txt({ color: '#FFFFFF', fontSize: 13, letterSpacing: 1.2 }, [range, m.commits && `${fmt(m.commits)} commits`].filter(Boolean).join('  ·  ')),
             m.director ? txt({ color: '#FFFFFF', fontSize: 15 }, m.director) : null)),
         col({ flex: 1, padding: '46px 44px 30px' },
-          box({ flex: 1 }, col({ width: '100%' }, ...ranked.map(row), m.humans.length ? txt({ marginTop: 10, fontSize: 12, color: '#6B6B6B', letterSpacing: 0.6 }, `开发者 · ${m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　')}`) : null)),
+          box({ flex: 1 }, col({ width: '100%' }, ...ranked.map(row), m.humans.length ? txt({ marginTop: 10, fontSize: 12, color: '#6B6B6B', letterSpacing: 0.6 }, `贡献者 · ${m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　')}`) : null)),
           box({ alignItems: 'center', justifyContent: 'space-between', paddingTop: 14 },
             label(t, 'with creditia', 10, { color: '#6B6B6B' }),
             txt({ fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', color: '#6B6B6B' }, m.linesAdded ? `+${fmt(m.linesAdded)} 行` : '')))) };
@@ -552,7 +552,7 @@ export function byline(m: Model, t: Theme, lang: 'zh' | 'en'): Out {
 
 /** 徽章：原生 SVG（README），不经 Satori。每种家族一种画法 */
 export function badge(m: Model, t: Theme): string {
-  const top = m.rows.filter((r) => r.kind === 'agent' && isAi(r.key) && r.pct >= 1).slice(0, 3);
+  const top = m.rows.filter((r) => r.kind === 'agent' && isAi(r.key) && r.pct > 0).slice(0, 3);
   const names = top.map((r) => r.name);
   const vtext = top.length ? top.map((r) => `${r.name} ${Math.round(r.pct)}%`).join('  ·  ') : `${fmt(m.linesAdded)} 行`;
   const list = (a: string[], and: string, sep: string) => (a.length < 2 ? a.join('') : `${a.slice(0, -1).join(sep)}${and}${a[a.length - 1]}`);
@@ -1286,7 +1286,7 @@ function appIos(m: Model, t: Theme): Out {
     head(m.project),
     col({ backgroundColor: ios.cell, borderRadius: 10 * s, paddingLeft: 16 * s },
       ...rows.map((r, i) => cellRow(r, i < rows.length - 1))),
-    m.humans.length ? box({ margin: `${8 * s}px ${16 * s}px 0`, fontSize: 13 * s, color: t.soft }, `开发者 · ${m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　')}`) : null,
+    m.humans.length ? box({ margin: `${8 * s}px ${16 * s}px 0`, fontSize: 13 * s, color: t.soft }, `贡献者 · ${m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　')}`) : null,
     txt({ fontSize: 13 * s, color: t.soft, margin: `${8 * s}px ${16 * s}px` }, `${fmt(m.commits)} 次提交 · ${fmt(m.linesAdded)} 行`)) };
 }
 

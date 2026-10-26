@@ -72,6 +72,17 @@ impl<'a> Engine<'a> {
         0
     }
 
+    /// 提交是谁提交的（按贡献者看用）：(贡献者 id, git 作者名, 是不是你)。只说提交者，不说代码是谁写的：
+    /// 你的提交里 agent 写的行、别人提交里的盖章，仍按归因结果算在工具名下
+    pub fn author_of(&self, c: &Commit) -> (String, String, bool) {
+        if self.is_director(&c.email) {
+            let d = &self.reg.list[self.director()];
+            return (d.id.clone(), d.name.clone().unwrap_or_default(), true);
+        }
+        let name = if c.name.is_empty() { c.email.clone() } else { c.name.clone() };
+        (person_id(&c.email), self.cfg.display_name(&name), false)
+    }
+
     pub fn attribute(&mut self, c: &Commit) -> CommitAttr {
         let lo = c.author_ts.min(c.commit_ts) - WINDOW_BEFORE;
         let hi = c.commit_ts.max(c.author_ts) + WINDOW_AFTER;

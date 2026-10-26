@@ -461,8 +461,12 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let (mut conflicts, mut tab_total) = (0usize, 0usize);
     let mut doc_lines_director = 0usize;
     let mut clock = vec![vec![0usize; 24]; 7];
+    // 按贡献者看：提交者 id → (git 作者名, 是不是你, 归因 id → 行数)
+    let mut authors: BTreeMap<String, (String, bool, BTreeMap<String, usize>)> = BTreeMap::new();
     for c in &cc.commits {
         let a = &attrs[&c.hash];
+        let (aid, aname, me) = eng.author_of(c);
+        let au = &mut authors.entry(aid).or_insert_with(|| (aname, me, BTreeMap::new())).2;
         let sg = seg_of(c.author_ts);
         let d = date_cn(c.author_ts);
         let ver = ver_of.get(&c.hash).cloned().unwrap_or("unreleased".into());
@@ -487,6 +491,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
             let ar = area(&f.rel, false);
             for (&k, at) in f.keys.iter().zip(fl) {
                 *by_who.entry(at.who).or_default().entry(at.level).or_default() += 1;
+                *au.entry(reg.list[at.who].id.clone()).or_default() += 1;
                 *by_area.entry(at.who).or_default().entry(ar).or_default() += 1;
                 *by_ver.entry(at.who).or_default().entry(ver.clone()).or_default() += 1;
                 *by_week.entry(iso_week(c.author_ts)).or_default().entry(reg.list[at.who].id.clone()).or_default() += 1;
@@ -569,6 +574,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     }
 
     // 贡献方
+    let hide_names = cfg.display.hide_names;
     let reviews = sessions.iter().filter(|s| s.reviewer).count();
     let mut contributors = vec![];
     // 每个 (工具, 模型) 最常见的渠道
@@ -596,7 +602,8 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
                 c["provider"] = json!(p);
             }
         }
-        if let Some(n) = &w.name {
+        // 不写名字时档案里也不留：credits.json 会公开
+        if let Some(n) = w.name.as_ref().filter(|_| !hide_names) {
             c["name"] = json!(cfg.display_name(n));
         }
         contributors.push(c);
@@ -624,6 +631,19 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
             })
         })
         .collect();
+    let mut authors_json: Vec<(usize, Value)> = authors
+        .iter()
+        .map(|(id, (name, me, by))| {
+            let n: usize = by.values().sum();
+            let mut v = json!({ "id": id, "me": me, "linesAdded": n, "by": by });
+            if !hide_names {
+                v["name"] = json!(name);
+            }
+            (n, v)
+        })
+        .filter(|(n, _)| *n > 0)
+        .collect();
+    authors_json.sort_by(|a, b| b.0.cmp(&a.0).then(a.1["id"].as_str().cmp(&b.1["id"].as_str())));
     let timeline: Vec<Value> = by_week.iter().map(|(w, m)| json!({ "week": w, "byContributor": m })).collect();
     let sess_json: Vec<Value> = {
         let mut v: Vec<&Session> = sessions.iter().collect();
@@ -669,6 +689,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         "contributors": contributors,
         "totals": { "commits": cc.commits.len(), "units": unit_json.len(), "linesAdded": total_lines, "linesSurviving": surv.len(), "linesWritten": lines_written, "tokens": tokens, "sessions": sessions.iter().filter(|s| !s.reviewer).count(), "days": days.len(), "binaryFiles": binary_files.values().sum::<usize>() },
         "breakdown": breakdown,
+        "authors": authors_json.into_iter().map(|(_, v)| v).collect::<Vec<_>>(),
         "human": { "prompts": prompts, "plans": doc_lines_director, "reviews": human_reviews, "tabAssistedLines": tab_total, "agentReviews": reviews + bot_reviews },
         "timeline": timeline,
         "days": by_day.iter().map(|(d, m)| json!({ "date": d, "by": m })).collect::<Vec<_>>(),
@@ -692,19 +713,21 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     save_json(&cache.join("blame3.json"), &bc)?;
 
     // 终端里的一行 tier
+    // 分母是全部新增行：工具、贡献者（别人的提交）、未确认加起来 100%（同作品里的份额口径）
     let mut groups: BTreeMap<String, usize> = BTreeMap::new();
     for (w, lv) in &by_who {
-        *groups.entry(reg.group(*w)).or_default() += lv.values().sum::<usize>();
+        let who = &reg.list[*w];
+        let label = match who.kind {
+            "agent" => reg.group(*w),
+            "human" if !hide_names => cfg.display_name(who.name.as_deref().unwrap_or(&who.id)),
+            "human" => creditia_core::tr!("其他贡献者", "other contributors"),
+            _ => creditia_core::tr!("未确认", "unattributed"),
+        };
+        *groups.entry(label).or_default() += lv.values().sum::<usize>();
     }
     let mut gl: Vec<(String, usize)> = groups.into_iter().collect();
     gl.sort_by_key(|g| std::cmp::Reverse(g.1));
-    // 只算 AI 和「未确认」：人的提交不出现在这一行里，也不进分母（同作品里的份额口径）
-    let ai_total: usize = gl.iter().filter(|(k, _)| !k.starts_with("h:")).map(|(_, n)| *n).sum();
-    let tier = gl
-        .iter()
-        .filter(|(k, _)| !k.starts_with("h:"))
-        .map(|(k, n)| format!("{} {:.1}%", if k == UNATTR { creditia_core::tr!("未确认", "unattributed") } else { k.clone() }, *n as f64 / ai_total.max(1) as f64 * 100.0))
-        .collect::<Vec<_>>()
-        .join(" · ");
+    let all: usize = gl.iter().map(|(_, n)| *n).sum();
+    let tier = gl.iter().map(|(k, n)| format!("{k} {:.1}%", *n as f64 / all.max(1) as f64 * 100.0)).collect::<Vec<_>>().join(" · ");
     Ok(Report { name: cfg.name.clone(), head, commits: cc.commits.len(), new_commits: n_new, units: unit_json.len(), lines: total_lines, secs: t0.elapsed().as_secs_f64(), out, tier, notes: st.notes, warnings, blame: blame_out })
 }

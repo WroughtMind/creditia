@@ -3,7 +3,7 @@ import { Scene, rect, line, path, circle, el, g, r, ease, measure, rng, hash, mi
 import type { Model, Agent } from '../data.ts';
 import { fmt, compact, pct, modelName } from '../data.ts';
 import type { Style } from '../style.ts';
-import { T, zh, colorOf, tip, handFacts, handTip, peopleNames, canvas, range, summary, modelLine, type PieceOpts } from './common.ts';
+import { T, zh, colorOf, tip, handFacts, handTip, canvas, range, summary, modelLine, type PieceOpts } from './common.ts';
 import { segsOf, segTip } from './tier.ts';
 
 // ───────────────────────── 精力小票 ─────────────────────────
@@ -370,10 +370,10 @@ const clipName = (s: string, st: Style, size: number, maxW: number) => { const c
 
 // ───────────────────────── 人的部分 ─────────────────────────
 
-/** 人：AI 写的代码提交了多少、留下多少；人发了多少消息、review 多少次、人写了多少 */
+/** 开发者：AI 写的代码提交了多少、留下多少；开发者发了多少消息、审阅多少次 */
 export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
   const h = m.hand;
-  if (!h.prompts && !h.reviews && !h.handLines && !h.written) return null;
+  if (!h.prompts && !h.reviews && !h.written) return null;
   const t = o.t ?? 1;
   const W = 1080;
   const nSteps = [h.written, h.committed, h.surviving].filter((v) => v > 0).length;
@@ -381,7 +381,7 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
   const x0 = c.x + 60, x1 = c.x + c.w - 60, cx = W / 2;
   st.label(s, T(m, '开发者', 'DEVELOPER'), x0, c.y + 70, { size: 15, fill: st.c.accent2 });
   st.title(s, m.project, x0, c.y + 150, 64, 'start', { maxW: x1 - x0 });
-  s.text(T(m, '新增代码留存变化，以及开发者的提示词与手写代码。', 'Code retention progression, prompts, and manual lines.'), x0, c.y + 200, { font: st.f.body, size: 20, fill: st.c.soft, maxW: x1 - x0 });
+  s.text(T(m, '新增代码留存变化，以及开发者的提示词与审阅。', 'Code retention progression, prompts, and reviews.'), x0, c.y + 200, { font: st.f.body, size: 20, fill: st.c.soft, maxW: x1 - x0 });
   // 取舍漏斗：写下 → 提交 → 留下
   let y = c.y + 270;
   const steps = [
@@ -416,7 +416,7 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
   }
   // 事实格
   const facts = [
-    [T(m, '提示词', 'Prompts'), h.prompts], [T(m, '代码审阅', 'Reviews'), h.reviews], [T(m, '手写行', 'Manual lines'), h.handLines], [T(m, 'Tab 补全行', 'Tab lines'), h.tabLines],
+    [T(m, '提示词', 'Prompts'), h.prompts], [T(m, '代码审阅', 'Reviews'), h.reviews], [T(m, 'Tab 补全行', 'Tab lines'), h.tabLines],
   ].filter(([, v]) => (v as number) > 0) as [string, number][];
   const fw = (x1 - x0) / Math.max(1, facts.length);
   facts.forEach(([k, v], i) => {
@@ -426,8 +426,8 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.hit(fx - 6, y, fw - 10, 86, handTip(m));
   });
   y += 120;
-  const names = peopleNames(m, 6);
-  if (names || m.sign) s.text(m.sign ? T(m, `—— ${m.sign}`, `— ${m.sign}`) : names, x1, Math.min(y + 40, c.y + c.h - 40), { font: st.f.script ?? st.f.display, size: 30, fill: st.c.ink, anchor: 'end' });
+  // 这张说的是本机日志里的提示词与审阅：只写用户自己填的署名，其他贡献者在排名和「贡献者」卡片里
+  if (m.sign) s.text(T(m, `—— ${m.sign}`, `— ${m.sign}`), x1, Math.min(y + 40, c.y + c.h - 40), { font: st.f.script ?? st.f.display, size: 30, fill: st.c.ink, anchor: 'end' });
   return s;
 }
 function pulse(m: Model): { label: string; vals: number[] } {

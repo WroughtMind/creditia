@@ -29,4 +29,4 @@ creditia board --style glass --out credits.html     全部作品一页，可交�
 creditia fetch                        终端名片
 ```
 
-所有命令非交互、支持 `--json`。人名默认不出现；`--named` 写出人名，`--sign 名字` 落款（也可以写进配置的 `display`）。
+所有命令非交互、支持 `--json`。其他贡献者默认写 git 名字，`--no-names` 这次不写，配置里 `display.hideNames: true` 一直不写；`--by contributor` 按贡献者看。

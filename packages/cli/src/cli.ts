@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { art, frames as classicFrames, animatedClassic, buildModel, FORMS, themeById, raster, type Model, type Theme } from '../../render/src/classic/index.ts';
 import { ORDERED_THEMES, themeDot, themeName, themeNote, pieceName, pieceQ, variantName } from '../../render/src/classic/catalog.ts';
 import { makeExporter, sized, SIZES, FORMATS, type Art } from '../../render/src/export.ts';
-import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, commitsComment, mergeMarked, fetchSegs, stampedComment, shieldsBadge, badgeShares, stampedBadgeShares, type Stamped } from '../../render/src/text.ts';
+import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, commitsComment, mergeMarked, fetchSegs, stampedComment, shieldsBadge, badgeShares, stampedBadgeShares, type Stamped, type View } from '../../render/src/text.ts';
 import { BRAND } from '../../render/src/style.ts';
 import { check, redact, CATS, CAT_NAMES, RISK_NAMES, type Cat } from './privacy.ts';
 import { mergeCredits } from '../../render/src/merge.ts';
@@ -26,7 +26,7 @@ const ex = makeExporter({ png: (s, w) => pick(s).png(s, w), rgba: (s, w) => pick
 const exV2 = makeExporter(V2.raster, deflate);
 
 // ───────────────────────── 参数 ─────────────────────────
-const SWITCHES = new Set(['json', 'fresh', 'force', 'github', 'all', 'yes', 'list', 'no-color', 'refresh', 'check', 'all-projects']);
+const SWITCHES = new Set(['json', 'fresh', 'force', 'github', 'all', 'yes', 'list', 'no-color', 'refresh', 'check', 'all-projects', 'no-names']);
 const argv = process.argv.slice(2);
 const cmd = argv[0] ?? '';
 const pos: string[] = [];
@@ -46,8 +46,14 @@ const json = on.has('json');
 /** 文案语言：--lang，其次环境变量 CREDITIA_LANG，默认中文。也传给核心 */
 const LANG = (): 'zh' | 'en' => ((flags.lang ?? process.env.CREDITIA_LANG ?? 'zh').toLowerCase().startsWith('en') ? 'en' : 'zh');
 const L = (zh: string, en: string) => (LANG() === 'en' ? en : zh);
-/** 分组方式：--group auto|tool|model，默认 auto（一个工具占九成以上、下面有几个模型时按模型分） */
+/** 分组方式：--group tool|model，默认按工具（模型列在工具下面）；auto 和 tool 一样 */
 const GROUP = (): 'auto' | 'tool' | 'model' => { const g = (flags.group ?? 'auto').toLowerCase(); return g === 'tool' || g === 'model' ? g : 'auto'; };
+/** 按工具（默认）还是按贡献者看：--by tool|contributor。按贡献者要档案里有提交者明细，旧档案提示重新分析，不拿别的数据凑 */
+const VIEW = (m: { authors: unknown[] }): View => {
+  if (!(flags.by ?? 'tool').toLowerCase().startsWith('contrib')) return 'tool';
+  if (!m.authors.length) die(L('档案里没有按贡献者的明细：重新分析一次（creditia analyze）再看', 'the credits have no per-contributor details: run creditia analyze again'));
+  return 'contributor';
+};
 
 const USAGE_ZH = `用法：creditia <命令> [选项]
 
@@ -74,17 +80,19 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   badge-json     [--out badge.json]                     shields.io 动态徽章的数据（没有档案时读提交盖章）
   summary        [--out all.json]                       跨项目汇总：本地已记录的全部项目并成一份；其他命令加 --all-projects 也一样
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
-                 [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group auto|tool|model] [--out FILE]
+                 [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group tool|model] [--out FILE]
   export         --list                                 全部卡片、版式、风格、格式
   board          [--style S] [--out credits.html]       全部卡片放进一个可交互的 HTML 页面
+  fetch                                                 终端名片
   site           [--out 目录] [--style S]               一个小网站：首页展示全部卡片，每种风格一页（给 GitHub Pages）
   publish        [--out credits.json] [--check] [--hide titles,paths,people,hours,repos] [--yes]
                  把档案放到仓库根目录，准备公开。先做隐私检查：列出将公开的内容，在终端里逐类问；
                  --check 只检查不写；看起来像密钥、邮箱、本机路径的内容要 --yes 才写
 
 任何展示命令都可以加 --credits FILE，直接用一份现成的档案（CI 里没有 agent 日志，用的就是仓库里公开的 credits.json）
-任何展示命令都可以加 --group auto|tool|model：按工具还是按模型分行（默认 auto：一个工具占九成以上、下面有几个模型时按模型）
-  fetch                                                 终端名片
+任何展示命令都可以加 --group tool|model：按工具还是按模型分行（默认按工具，模型列在工具下面）
+doc、fetch、summary、export --format md 可以加 --by contributor：按贡献者看（每位提交者的提交里各工具、未确认各多少）
+作品和文字默认写其他贡献者的 git 名字；--no-names 这次不写（一直不写：配置 display.hideNames）
 
 所有命令支持 --json 和 --lang zh|en（也可以设环境变量 CREDITIA_LANG）。`;
 
@@ -113,9 +121,10 @@ Credits and pieces
   badge-json     [--out badge.json]                     data for a shields.io dynamic badge (reads commit stamps when there are no credits)
   summary        [--out all.json]                       cross-project summary: every project in the library in one; other commands take --all-projects too
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
-                 [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group auto|tool|model] [--out FILE]
+                 [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group tool|model] [--out FILE]
   export         --list                                 every piece, layout, style and format
   board          [--style S] [--out credits.html]       every piece on one interactive HTML page
+  fetch                                                 terminal card
   site           [--out DIR] [--style S]                a small site: all pieces on the home page, one page per style (for GitHub Pages)
   publish        [--out credits.json] [--check] [--hide titles,paths,people,hours,repos] [--yes]
                  put the credits file at the repository root for publishing. Runs a privacy check first: lists what
@@ -123,8 +132,9 @@ Credits and pieces
                  secret, email or local path needs --yes
 
 Every display command takes --credits FILE to use an existing credits file (CI has no agent logs; it uses the public credits.json in the repository)
-Every display command takes --group auto|tool|model: one row per tool or per model (default auto: per model when one tool wrote over 90% with several models)
-  fetch                                                 terminal card
+Every display command takes --group tool|model: one row per tool or per model (default per tool, with its models listed under it)
+doc, fetch, summary and export --format md take --by contributor: one row per committer (how much of their commits each tool wrote, and what is unattributed)
+Pieces and text name other contributors by their git name; --no-names hides them this once (always: display.hideNames in the config)
 
 Every command takes --json and --lang zh|en (or set CREDITIA_LANG).`;
 const USAGE = () => L(USAGE_ZH, USAGE_EN);
@@ -273,16 +283,16 @@ const piecesOf = (l: Look) => (l.kind === 'classic' ? PIECE_IDS : V2_PIECES);
 const LOOKS: Look[] = [...ORDERED_THEMES.map((t) => ({ kind: 'classic' as const, t })), ...V2_STYLES.map((s) => ({ kind: 'v2' as const, s }))];
 async function artOf(id: string, raw: any, l: Look, variant?: string): Promise<Art | null> {
   if (l.kind === 'classic') return art(id, buildModel(raw, { director: false, lang: LANG(), group: GROUP() }), l.t, ctxOf(variant));
-  return V2.art(id, V2.buildModel(raw, { lang: LANG(), named: false, sign: '', group: GROUP() }), l.s, { variant });
+  return V2.art(id, V2.buildModel(raw, { lang: LANG(), named: !on.has('no-names'), sign: '', group: GROUP() }), l.s, { variant });
 }
 const ctxOf = (variant?: string) => ({ lang: LANG(), variant });
 /** 动画帧；不会动的作品返回 null */
 async function framesOf(id: string, raw: any, l: Look, variant: string | undefined, n: number): Promise<Art[] | null> {
-  if (l.kind === 'v2') return V2.PIECES[id]?.animated ? V2.frames(id, V2.buildModel(raw, { lang: LANG(), named: false, sign: '', group: GROUP() }), l.s, { variant }, n) : null;
+  if (l.kind === 'v2') return V2.PIECES[id]?.animated ? V2.frames(id, V2.buildModel(raw, { lang: LANG(), named: !on.has('no-names'), sign: '', group: GROUP() }), l.s, { variant }, n) : null;
   return animatedClassic(id) ? classicFrames(id, buildModel(raw, { director: false, lang: LANG(), group: GROUP() }), l.t, ctxOf(variant), n) : null;
 }
 /** 文字类输出（CREDITS.md、发版说明、PR 评论、终端名片）用新模型：带模型名、好读的模型名 */
-const textModel = (raw: any) => V2.buildModel(raw, { lang: LANG(), named: false, sign: '', group: GROUP() });
+const textModel = (raw: any) => V2.buildModel(raw, { lang: LANG(), named: !on.has('no-names'), sign: '', group: GROUP() });
 function modelOf(repo: string, refresh = false): { m: Model; raw: any } {
   const raw = loadCredits(repo, refresh);
   const m = buildModel(raw, { director: false, lang: LANG(), group: GROUP() });
@@ -315,7 +325,8 @@ async function main() {
       const { m, raw } = modelOf(repo, on.has('refresh'));
       const out = flags.out ?? path.join(repo, 'CREDITS.md');
       const existing = existsSync(out) ? readFileSync(out, 'utf8') : null;
-      writeFileSync(out, mergeCreditsMd(existing, creditsBlock(textModel(raw))));
+      const tm = textModel(raw);
+      writeFileSync(out, mergeCreditsMd(existing, creditsBlock(tm, 10, VIEW(tm))));
       console.log(json ? JSON.stringify({ path: out, project: m.project, updated: existing !== null }) : `${existing ? L('已更新', 'Updated') : L('已写入', 'Wrote')} ${out}`);
       return;
     }
@@ -352,7 +363,8 @@ async function main() {
       const raw = allProjects();
       if (flags.out) return write(flags.out, JSON.stringify(raw, null, 1) + '\n');
       if (json) return console.log(JSON.stringify({ projects: raw.projects, totals: raw.totals, contributors: raw.breakdown.map((b: any) => ({ id: b.contributor, linesAdded: b.linesAdded })) }));
-      console.log(ansi(fetchSegs(textModel(raw))));
+      const tm = textModel(raw);
+      console.log(ansi(fetchSegs(tm, VIEW(tm))));
       console.log('\n' + raw.projects.map((p: any) => `  ${p.name}  ${p.range?.from ?? ''} → ${p.range?.to ?? ''}  ${p.linesAdded} ${L('行', 'lines')}`).join('\n'));
       return;
     }
@@ -366,7 +378,7 @@ async function main() {
     case 'board': return boardCmd();
     case 'site': return siteCmd();
     case 'publish': return await publishCmd();
-    case 'fetch': { const { raw } = modelOf(repoOf()); console.log(ansi(fetchSegs(textModel(raw)))); return; }
+    case 'fetch': { const { raw } = modelOf(repoOf()); const tm = textModel(raw); console.log(ansi(fetchSegs(tm, VIEW(tm)))); return; }
     default: die(L(`未知命令：${cmd}\n\n${USAGE()}`, `unknown command: ${cmd}\n\n${USAGE()}`));
   }
 }
@@ -400,7 +412,7 @@ async function exportCmd() {
   const format = flags.format ?? (flags.out ? path.extname(flags.out).slice(1) : 'svg') ?? 'svg';
   const { m, raw } = modelOf(repo, on.has('refresh'));
   if (format === 'json') return write(flags.out, JSON.stringify(raw, null, 2) + '\n');
-  if (format === 'md') return write(flags.out, creditsBlock(textModel(raw)) + '\n');
+  if (format === 'md') { const tm = textModel(raw); return write(flags.out, creditsBlock(tm, 10, VIEW(tm)) + '\n'); }
   if (!piecesOf(look).includes(piece)) die(L(`该风格不支持卡片 ${piece}；可通过 creditia export --list 查看`, `this style has no card ${piece}; see creditia export --list`));
   const a0 = await artOf(piece, raw, look, flags.variant);
   if (!a0) die(L(`${piece} 需要的数据不够（例如没有 tag、没有会话记录），没有出图`, `not enough data for ${piece} (for example no tags or no sessions); nothing rendered`));
@@ -427,8 +439,8 @@ async function exportCmd() {
 }
 
 const boardIds = (l: Look) => (l.kind === 'classic'
-  ? ['share', 'tier', 'asterisk', 'roll', 'receipt', 'donut', 'ribbon', 'stream', 'waffle', 'mosaic', 'versions', 'area', 'lanes', 'clock', 'settle', 'survival', 'evidence', 'areas', 'codemap', 'calendar']
-  : ['share', 'tier', 'asterisk', 'roll', 'receipt', 'donut', 'stream', 'survival', 'evidence', 'versions', 'areas', 'lanes', 'clock', 'mosaic', 'codemap', 'calendar']);
+  ? ['share', 'tier', 'people', 'asterisk', 'roll', 'receipt', 'donut', 'ribbon', 'stream', 'waffle', 'mosaic', 'versions', 'area', 'lanes', 'clock', 'settle', 'survival', 'evidence', 'areas', 'codemap', 'calendar']
+  : ['share', 'tier', 'people', 'asterisk', 'roll', 'receipt', 'donut', 'stream', 'survival', 'evidence', 'versions', 'areas', 'lanes', 'clock', 'mosaic', 'codemap', 'calendar']);
 async function artsOf(ids: string[], raw: any, l: Look): Promise<Art[]> {
   const out: Art[] = [];
   for (const id of ids) if (piecesOf(l).includes(id)) { const a = await artOf(id, raw, l); if (a) out.push(a); }

@@ -4,7 +4,7 @@ import { Scene, rect, line, path, el, g, r, ease, measure, mix } from '../svg.ts
 import type { Model, Agent } from '../data.ts';
 import { fmt, compact, pct, nameOf, hanzi } from '../data.ts';
 import type { Style } from '../style.ts';
-import { T, zh, tip, handFacts, handTip, peopleNames, canvas, range, measureV, type PieceOpts } from './common.ts';
+import { T, zh, tip, handFacts, handTip, canvas, range, measureV, type PieceOpts } from './common.ts';
 import { segsOf, segTip } from './tier.ts';
 import { inkSeal } from '../styles/east.ts';
 
@@ -21,21 +21,19 @@ const AREA: Record<string, [string, string]> = {
 export function creditsOf(m: Model): Section[] {
   const out: Section[] = [];
   const agents = m.agents.filter((a) => a.kind === 'agent');
-  const byKey = new Map(m.agents.map((a) => [a.key, a]));
+  const byKey = new Map([...m.all, ...m.rows].map((a) => [a.key, a]));
   // 主笔：占比 ≥ 15% 的，否则第一名
   const leads = agents.filter((a) => a.pct >= 15);
   const lead = leads.length ? leads : agents.slice(0, 1);
   if (lead.length) out.push({ head: T(m, '主要作者', 'Written by'), credits: lead.map((a) => ({ name: a.name, sub: a.models.slice(0, 2).map((x) => x.name).join(' · '), key: a.key })) });
-  // 各板块：该板块里占 ≥ 8% 的贡献方
+  // 各板块：在这个板块里写过代码的都列上，按行数排
   const order = ['core', 'frontend', 'tests', 'docs', 'build', 'assets'];
   for (const ar of order) {
     const by = m.areas[ar];
     if (!by) continue;
-    const tot = Object.values(by).reduce((s, x) => s + x, 0);
-    if (!tot) continue;
-    const who = Object.entries(by).filter(([k, v]) => k !== 'unattributed' && v / tot >= 0.08).sort((a, b) => b[1] - a[1]);
+    const who = Object.entries(by).filter(([k, v]) => k !== 'unattributed' && v > 0).sort((a, b) => b[1] - a[1]);
     if (!who.length) continue;
-    out.push({ head: T(m, AREA[ar][0], AREA[ar][1]), credits: who.map(([k]) => (k === 'human' ? { name: peopleNames(m, 2) || T(m, '开发者', 'Developer'), key: 'human' } : { name: byKey.get(k)?.name ?? nameOf(k, m.lang), key: k })) });
+    out.push({ head: T(m, AREA[ar][0], AREA[ar][1]), credits: who.map(([k]) => ({ name: byKey.get(k)?.name ?? nameOf(k, m.lang), key: k })) });
   }
   // 相邻板块名单相同就合并成一行职务（核心 · 界面 · 测试）
   for (let i = out.length - 1; i > 0; i--) {
@@ -51,23 +49,26 @@ export function creditsOf(m: Model): Section[] {
   // 其余参与者
   const minor = agents.filter((a) => !lead.includes(a));
   if (minor.length) out.push({ head: T(m, '参与', 'With'), credits: minor.map((a) => ({ name: a.name, sub: a.models[0]?.name, key: a.key })) });
+  // 贡献者：别人的提交（不写名字时是一行「其他贡献者」）
+  const persons = m.all.filter((a) => a.kind === 'person' || a.kind === 'people');
+  if (persons.length) out.push({ head: T(m, '贡献者', 'Contributors'), credits: persons.map((a) => ({ name: a.name, key: a.key })) });
   // 审阅
   const rev: Credit[] = m.reviewers.map((x) => ({ name: x.name, sub: x.reviews ? T(m, `自动 review ${x.reviews} 次`, `${x.reviews} automated reviews`) : x.model, key: x.key }));
-  if (m.showHand && m.hand.reviews) rev.push({ name: peopleNames(m, 2) || T(m, '开发者', 'Developer'), sub: T(m, `审阅 ${m.hand.reviews} 次`, `${m.hand.reviews} reviews`), key: 'human' });
+  if (m.showHand && m.hand.reviews) rev.push({ name: m.sign || T(m, '开发者', 'Developer'), sub: T(m, `审阅 ${m.hand.reviews} 次`, `${m.hand.reviews} reviews`), key: 'human' });
   if (rev.length) out.push({ head: 'Review', credits: rev });
-  // 人的部分
+  // 开发者的部分
   const hf = handFacts(m);
   if (hf.length) out.push({ head: T(m, '开发者', 'Developers'), credits: hf.map((f) => ({ name: f.text, key: 'human' })), key: 'human' });
   // 模型
   const models = [...new Set(agents.flatMap((a) => a.models.map((x) => x.name)))];
   if (models.length) out.push({ head: T(m, '模型', 'Models'), credits: models.map((x) => ({ name: x })) });
-  if (m.unknown && m.unknown.pct >= 0.05) out.push({ head: T(m, '未确认', 'Unattributed'), credits: [{ name: T(m, `${pct(m.unknown.pct)} 无归因记录`, `${pct(m.unknown.pct)} unattributed`), key: 'unattributed' }] });
+  if (m.unknown?.lines) out.push({ head: T(m, '未确认', 'Unattributed'), credits: [{ name: T(m, `${pct(m.unknown.pct)} 无归因记录`, `${pct(m.unknown.pct)} unattributed`), key: 'unattributed' }] });
   return out;
 }
 const closing = (m: Model) => T(m, `${m.sessions ? `${fmt(m.sessions)} 个会话` : ''}${m.tokens ? ` · ${compact(m.tokens)} token` : ''} · ${fmt(m.commits)} 次提交`, `${m.sessions ? `${fmt(m.sessions)} sessions` : ''}${m.tokens ? ` · ${compact(m.tokens)} tokens` : ''} · ${fmt(m.commits)} commits`).replace(/^ · /, '');
 
 const tipFor = (m: Model, c: Credit, head: string) => {
-  const a = c.key ? m.agents.find((x) => x.key === c.key) : undefined;
+  const a = c.key ? [...m.all, ...m.rows].find((x) => x.key === c.key) : undefined;
   if (a) return tip(m, a);
   if (c.key === 'human') return handTip(m);
   return { k: c.key, t: c.name, d: [head] };
@@ -158,7 +159,7 @@ function card(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   }
   const hf = handFacts(m);
   if (hf.length) {
-    st.label(s, T(m, '人', 'PEOPLE'), cx, y, { anchor: 'middle', fill: st.c.accent2 });
+    st.label(s, T(m, '开发者', 'DEVELOPER'), cx, y, { anchor: 'middle', fill: st.c.accent2 });
     s.text(hf.map((f) => f.text).join('  ·  '), cx, y + 40, { font: st.f.body, size: 20, fill: st.c.ink, anchor: 'middle', maxW: c.w - 120 });
     s.hit(c.x + 60, y - 20, c.w - 120, 70, handTip(m));
     y += 100;

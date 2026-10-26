@@ -99,19 +99,20 @@ A repository often lives in several places at once: your main directory, several
   - Cline / Roo / Kilo: `model_provider_id`.
   - Prefixes in the model string itself (`openrouter/`, `bedrock/`, `vertex_ai/`).
 
-## 6. People
+## 6. Contributors
 
-Pieces answer one question only: which AI tools and models wrote how much. People are not ranked against AI tools and appear in no piece: percentages are taken only over AI-written and unattributed lines, and no piece shows names or how much people wrote. The `human` section of your local `credits.json` still records the following, for you alone:
+Team repositories have other people's commits. The rules:
 
-- **Messages to AI**: how many messages people sent in sessions (user messages in each tool's logs);
-- **Reviews**: your own reviews on GitHub PRs (`--github`); bot reviews are counted separately;
-- **Lines by people**: other people's commits go to them, and Tab-completed lines count as people's too; lines in your own commits with no AI evidence are recorded as "unattributed", never inferred as hand-written, because there's no telling whether you wrote them or an AI that left no log did (see section 3);
+- **The denominator is every added line**: AI tools, other contributors and unattributed add up to 100%. There is no separate "AI only" percentage.
+- **Other people's commits go to them**: clues in the commit (stamp, agent email, `Co-authored-by`, `Assisted-by`, bot) still credit that tool and model; lines without clues go to that contributor. A contributor's row means "no AI trace in their commits", not "they didn't use AI".
+- **Your own commits**: lines with no AI evidence are "unattributed", never inferred as hand-written, because there's no telling whether you wrote them or an AI that left no log did (see section 3). You never appear as a row in the tool ranking.
+- **Names**: git names are shown by default (`privacy.aliases` can rewrite a name). To hide them set `display.hideNames: true`; the record and every piece then say only "Other contributors". `--no-names` hides them for one command, and the app's "Show contributor names" setting covers its pieces and exports.
+- **Two views**: by tool / model by default (`--group tool|model`); `--by contributor` (CREDITS.md, the terminal card, `summary`) and the app's "Contributors" card go by committer — one row per committer, followed by how much of their commits each tool wrote, how much has no AI trace, and how much is unattributed. The committer view says who committed, not who typed. In the record this is `authors`.
 - **Web-merged commits**: a commit whose committer is GitHub (`noreply@github.com`) was merged on GitHub's website; its author is just whoever opened or merged the PR, under that account's email rather than the one used while writing the code, so it isn't credited to them: the branch's stamps count as usual and the rest is unattributed;
 - **Same GitHub account**: `123+login@users.noreply.github.com` and `login@users.noreply.github.com` are the same person;
-- **Where the AI's code went**: lines AI wrote in sessions → lines committed → lines still here;
-- **Tab completion**: Cursor's Tab completion counts as assisted typing by a person, not as an agent.
+- **Tab completion**: Cursor's Tab completion counts as assisted typing by the committer, not as an agent.
 
-`display.named` and `display.sign` in the config are kept in the record only; pieces never write names because of them.
+The `human` section of your local `credits.json` also records the developer side, for you alone and never in a piece: messages sent to AI (user messages in each tool's logs), your own reviews on GitHub PRs (`--github`; bot reviews are counted separately), and where the AI's code went (lines written in sessions → committed → still here). `display.sign` is a signature you type yourself.
 
 ## 7. What isn't counted
 

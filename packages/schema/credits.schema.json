@@ -84,6 +84,21 @@
         }
       }
     },
+    "authors": {
+      "type": "array",
+      "description": "按提交者汇总：每位提交者的提交里，各工具、模型、贡献者本人和「未确认」各有多少新增行。只说是谁提交的，不说是谁手写的",
+      "items": {
+        "type": "object",
+        "required": ["id", "me", "linesAdded", "by"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string", "description": "git 作者名；配置了不写名字（display.hideNames）时没有" },
+          "me": { "type": "boolean", "description": "是本机用户自己的提交身份" },
+          "linesAdded": { "type": "integer" },
+          "by": { "type": "object", "additionalProperties": { "type": "integer" } }
+        }
+      }
+    },
     "human": {
       "type": "object",
       "description": "人的参与，只记数字",

@@ -33,14 +33,15 @@ and turns the result into badges, CREDITS.md, end credits and share cards. Runs 
 $ creditia analyze && creditia fetch
 catnap  2026-05-11 → 2026-09-28
 ────────────────────────────────
-Claude Code     █████████████░░░░░░░░░░░░  50.9%  Claude Opus 5.5
-Codex           ████████░░░░░░░░░░░░░░░░░  30.8%  GPT-5.6 Sol
-Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   9.1%  Composer 2
-Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   4.7%  Kimi K3
-Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   2.1%  Grok 5 Code
-Unattributed    █░░░░░░░░░░░░░░░░░░░░░░░░   2.5%
+Claude Code     ████████████░░░░░░░░░░░░░  48.3%  Claude Opus 5.5
+Codex           ███████░░░░░░░░░░░░░░░░░░  29.2%  GPT-5.6 Sol
+Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   8.6%  Composer 2
+Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   4.4%  Kimi K3
+Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   2.0%  Grok 5 Code
+Mara Okafor     █░░░░░░░░░░░░░░░░░░░░░░░░   0.8%
+Unattributed    ██░░░░░░░░░░░░░░░░░░░░░░░   6.8%
 
-commits 734  lines 50,190  tokens 447M
+commits 734  lines 50,190  tokens 448M
 ```
 
 Once analyzed, put the result to use:

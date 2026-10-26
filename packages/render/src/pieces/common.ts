@@ -2,7 +2,7 @@
 import type { Model, Agent } from '../data.ts';
 import { fmt, compact, tipOf, nameOf } from '../data.ts';
 import type { Style } from '../style.ts';
-import { Scene, measure } from '../svg.ts';
+import { Scene, measure, mix } from '../svg.ts';
 import type { Box } from '../style.ts';
 import { markPaths, sharePetals } from '../mark.ts';
 
@@ -16,9 +16,15 @@ export type Piece = (m: Model, st: Style, o: PieceOpts) => Scene | null;
 export const zh = (m: Model) => m.lang === 'zh';
 export const T = (m: Model, z: string, e: string) => (m.lang === 'zh' ? z : e);
 
-/** 排名里的贡献方（不含「人」） */
+/** 排名里的贡献方：工具、贡献者、未确认 */
 export const ranked = (m: Model) => m.rows;
-export const colorOf = (st: Style, a: Agent) => st.color(a.key, a.rank);
+/** 贡献者用风格给「人」的颜色，几位贡献者往墨色、纸色两头依次分深浅；「其他贡献者」最浅 */
+const personColor = (st: Style, a: Agent) => {
+  const base = st.color('human', 0);
+  if (a.kind === 'people') return mix(base, st.c.paper, 0.45);
+  return a.shade === 0 ? base : mix(base, a.shade % 2 ? st.c.ink : st.c.paper, Math.min(0.6, 0.2 * Math.ceil(a.shade / 2)));
+};
+export const colorOf = (st: Style, a: Agent) => (a.kind === 'person' || a.kind === 'people' ? personColor(st, a) : st.color(a.key, a.rank));
 export const fillOf = (s: Scene, st: Style, a: Agent) => (a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a));
 export const tip = tipOf;
 
@@ -33,22 +39,14 @@ export function handFacts(m: Model): { v: string; k: string; text: string }[] {
   const out: { v: string; k: string; text: string }[] = [];
   if (h.prompts) out.push({ v: fmt(h.prompts), k: T(m, '条提示词', 'prompts'), text: T(m, `${fmt(h.prompts)} 条提示词`, `${fmt(h.prompts)} prompts`) });
   if (h.reviews) out.push({ v: fmt(h.reviews), k: T(m, '次审阅', 'reviews'), text: T(m, `审阅 ${fmt(h.reviews)} 次`, `${fmt(h.reviews)} reviews`) });
-  if (h.handLines) out.push({ v: fmt(h.handLines), k: T(m, '行手写代码', 'lines written manually'), text: T(m, `手写 ${fmt(h.handLines)} 行`, `${fmt(h.handLines)} manual lines`) });
   return out;
 }
 export function handLine(m: Model): string {
   return handFacts(m).map((f) => f.text).join(' · ');
 }
-/** 署名：用户主动填写时；named 时列出人名 */
-export function peopleNames(m: Model, n = 4): string {
-  if (!m.named || !m.people.length) return '';
-  const names = m.people.slice(0, n).map((p) => p.name);
-  return names.join(zh(m) ? '、' : ', ') + (m.people.length > n ? T(m, ` 等 ${m.people.length} 人`, ` +${m.people.length - n}`) : '');
-}
 export const handTip = (m: Model) => ({ k: 'human', t: T(m, '开发者', 'Developers'), d: [
   ...handFacts(m).map((f) => f.text),
   ...(m.hand.written && m.hand.committed ? [T(m, `新增 ${fmt(m.hand.written)} 行，提交 ${fmt(m.hand.committed)} 行，留存 ${fmt(m.hand.surviving)} 行`, `${fmt(m.hand.written)} added → ${fmt(m.hand.committed)} committed → ${fmt(m.hand.surviving)} retained`)] : []),
-  ...(peopleNames(m) ? [peopleNames(m)] : []),
 ] });
 
 export const range = (m: Model) => (m.range.from ? `${m.range.from.replaceAll('-', '.')} — ${m.range.to.replaceAll('-', '.')}` : '');

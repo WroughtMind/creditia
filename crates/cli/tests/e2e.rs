@@ -34,11 +34,15 @@ fn git(repo: &Path, args: &[&str]) -> String {
 }
 
 fn commit(repo: &Path, msg: &str, email: &str, date: &str) -> String {
+    commit_as(repo, msg, "X", email, date)
+}
+
+fn commit_as(repo: &Path, msg: &str, name: &str, email: &str, date: &str) -> String {
     git(repo, &["add", "-A"]);
     let o = Command::new("git")
         .arg("-C")
         .arg(repo)
-        .args(["-c", "user.name=X", "-c", &format!("user.email={email}"), "-c", "commit.gpgsign=false", "commit", "-q", "-m", msg, "--date", date])
+        .args(["-c", &format!("user.name={name}"), "-c", &format!("user.email={email}"), "-c", "commit.gpgsign=false", "commit", "-q", "-m", msg, "--date", date])
         .env("GIT_COMMITTER_DATE", date)
         // 装了盖章 hook 的仓库：提交时不去扫这台电脑上真实的 agent 日志
         .env("CREDITIA_HOOK_TIMEOUT", "0")
@@ -1438,4 +1442,67 @@ fn repeated_lines_survive_log_cleanup() {
     let (ok, v) = run(&env, &["analyze", "--repo", &rs, "--fresh"]);
     assert!(ok, "{v}");
     assert_eq!(verified_of(&env, "a:claude-code/claude-test"), 16);
+}
+
+/// 团队仓库：别人的提交算那个人（写 git 名字，可以关），提交里的线索照样认成 agent；
+/// 工具、贡献者、未确认合起来是全部新增行；authors 按提交者分，每位里面再按工具分
+#[test]
+fn team_repo_contributors() {
+    let env = setup();
+    let rs = env.repo.display().to_string();
+    let base: i64 = 1_787_000_000;
+    let d = |t: i64| format!("@{t} +0800");
+    let lines = |tag: &str, n: usize| -> String { (0..n).map(|i| format!("let {tag}_value_{i} = compute_{tag}({i});\n")).collect() };
+    fs::write(env.repo.join(".git/info/exclude"), ".creditia/\n").unwrap();
+    // 我：三个提交（是这个仓库的作者），最后一个没有任何 AI 证据
+    fs::write(env.repo.join("README.md"), lines("readme", 2)).unwrap();
+    commit_as(&env.repo, "init", "Me", "me@example.com", &d(base - 86400));
+    fs::write(env.repo.join("mine.rs"), lines("mine", 3)).unwrap();
+    commit_as(&env.repo, "mine", "Me", "me@example.com", &d(base));
+    fs::write(env.repo.join("mine2.rs"), lines("mine_more", 1)).unwrap();
+    commit_as(&env.repo, "more", "Me", "me@example.com", &d(base + 10));
+    // Ana：没有线索 → 算 Ana
+    fs::write(env.repo.join("ana.rs"), lines("ana", 6)).unwrap();
+    commit_as(&env.repo, "ana's work", "Ana Lima", "ana@team.dev", &d(base + 100));
+    // Bo：提交里写了 Co-authored-by Claude → 算 Claude Code，提交者还是 Bo
+    fs::write(env.repo.join("bo.rs"), lines("bo", 4)).unwrap();
+    commit_as(&env.repo, "bo's work\n\nCo-authored-by: Claude Opus 5.5 <noreply@anthropic.com>", "Bo", "bo@team.dev", &d(base + 200));
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(v["config"]["directors"][0]["emails"][0], "me@example.com");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let read = || -> serde_json::Value { serde_json::from_str(&fs::read_to_string(env.repo.join(".creditia/credits.json")).unwrap()).unwrap() };
+    let c = read();
+    let total = c["totals"]["linesAdded"].as_u64().unwrap();
+    assert_eq!(total, 16);
+    let lines_of = |c: &serde_json::Value, id: &str| c["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+    let sum: u64 = c["breakdown"].as_array().unwrap().iter().map(|b| b["linesAdded"].as_u64().unwrap()).sum();
+    assert_eq!(sum, total, "{}", c["breakdown"]);
+    let ana = c["contributors"].as_array().unwrap().iter().find(|x| x["kind"] == "human" && x["name"] == "Ana Lima").cloned().unwrap_or_else(|| panic!("{}", c["contributors"]));
+    assert_eq!(lines_of(&c, ana["id"].as_str().unwrap()), 6);
+    assert_eq!(lines_of(&c, "a:claude-code/claude-opus-5-5"), 4, "{}", c["breakdown"]);
+    // 我自己没有证据的提交是未确认，不算「我手写」
+    assert_eq!(lines_of(&c, "unattributed"), 6, "{}", c["breakdown"]);
+    // authors：我、Ana、Bo，合计全部新增行；Bo 那一份是 Claude Code
+    let au = c["authors"].as_array().unwrap();
+    assert_eq!(au.iter().map(|a| a["linesAdded"].as_u64().unwrap()).sum::<u64>(), total, "{au:?}");
+    assert!(au.iter().any(|a| a["me"] == true && a["linesAdded"] == 6), "{au:?}");
+    let bo = au.iter().find(|a| a["name"] == "Bo").unwrap_or_else(|| panic!("{au:?}"));
+    assert_eq!(bo["by"]["a:claude-code/claude-opus-5-5"], 4, "{bo}");
+    // 终端那一行：名字和比例，分母是全部
+    let tier = v["tier"].as_str().unwrap_or_default().to_string();
+    assert!(tier.contains("Ana Lima 37.5%") && tier.contains("claude-code 25.0%"), "{tier}");
+
+    // 关掉名字：credits.json 里一个名字都没有
+    let cfg = env.repo.join(".creditia/config.json");
+    let mut j: serde_json::Value = serde_json::from_str(&fs::read_to_string(&cfg).unwrap()).unwrap();
+    j["display"] = serde_json::json!({ "hideNames": true });
+    fs::write(&cfg, j.to_string()).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let s = fs::read_to_string(env.repo.join(".creditia/credits.json")).unwrap();
+    assert!(!s.contains("Ana Lima") && !s.contains("\"Bo\""), "{s}");
+    assert!(v["tier"].as_str().unwrap_or_default().contains("37.5%"), "{v}");
 }

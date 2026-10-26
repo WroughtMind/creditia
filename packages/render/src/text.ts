@@ -1,7 +1,7 @@
 // 文本产物：CREDITS.md 区块、版本说明、PR 评论、终端名片、嵌入代码。都读同一个模型。
 import type { Model } from './data.ts';
-import { fmt, pct, compact, nameOf, modelName } from './data.ts';
-import { handFacts, peopleNames } from './pieces/common.ts';
+import { fmt, pct, pct0, compact, nameOf, modelName } from './data.ts';
+import { handFacts } from './pieces/common.ts';
 import { BRAND } from './style.ts';
 
 export const MARK_START = '<!-- creditia:start -->';
@@ -16,24 +16,36 @@ export function unitLead(m: Model, u: any): string {
   const contribs = m.raw.contributors ?? [];
   for (const s of u.shares ?? []) {
     const c = contribs.find((x: any) => x.id === s.contributor);
-    const k = c?.harness ?? (s.contributor === 'unattributed' ? 'unattributed' : 'human');
-    // 只写 AI：人写的部分不算主要贡献方
-    if (k !== 'human') by.set(k, (by.get(k) ?? 0) + s.share);
+    // 其他贡献者也算：写名字（关掉署名时写「其他贡献者」）
+    const k = c?.harness ?? (s.contributor === 'unattributed' ? 'unattributed' : m.named && c?.name ? `h:${c.name}` : 'people');
+    by.set(k, (by.get(k) ?? 0) + s.share);
   }
   const top = [...by.entries()].sort((a, b) => b[1] - a[1])[0];
-  return top ? nameOf(top[0], m.lang) : '—';
+  return top ? (top[0].startsWith('h:') ? top[0].slice(2) : nameOf(top[0], m.lang)) : '—';
 }
 
-/** CREDITS.md 标记区间里的内容：agent 一张表、版本段落 */
-export function creditsBlock(m: Model, maxPerSection = 10): string {
+/** 按工具 / 模型看（默认），或按贡献者看（要档案里有 authors） */
+export type View = 'tool' | 'contributor';
+/** 按贡献者看的一行说明：Claude Code 44.0% · Codex 14.0% · 未确认 10.0% */
+export const authorParts = (a: Model['authors'][number]) => a.parts.map((p) => `${p.name} ${pct(p.pct)}`).join(' · ');
+
+/** CREDITS.md 标记区间里的内容：一张表（按工具或按贡献者）、版本段落 */
+export function creditsBlock(m: Model, maxPerSection = 10, view: View = 'tool'): string {
   const out: string[] = [];
   out.push([m.project, T(m, `${fmt(m.commits)} 次提交`, `${fmt(m.commits)} commits`), `+${fmt(m.linesAdded)} ${T(m, '行', 'lines')}`, m.spanDays ? T(m, `${m.spanDays} 天`, `${m.spanDays} days`) : ''].filter(Boolean).join(' · '), '');
-  out.push(T(m, '| 工具 | 模型 | 占比 | 新增行 | 留存行 |', '| Tool | Models | Share | Added | Retained |'), '|---|---|---:|---:|---:|');
-  for (const a of m.rows) out.push(`| ${a.name} | ${a.models.map((x) => x.name).join(', ') || '—'} | ${pct(a.pct)} | +${fmt(a.lines)} | ${a.kind === 'other' ? '—' : fmt(a.surviving)} |`);
+  // 文字没有版面限制：全部列出，不折叠
+  if (view === 'contributor') {
+    out.push(T(m, '| 贡献者 | 占比 | 新增行 | 其中 |', '| Contributor | Share | Added | Of which |'), '|---|---:|---:|---|');
+    for (const a of m.authors) out.push(`| ${a.name} | ${pct(a.pct)} | +${fmt(a.lines)} | ${authorParts(a)} |`);
+  } else {
+    const both = m.all.some((a) => a.kind === 'person' || a.kind === 'people');
+    out.push(both ? T(m, '| 工具 / 贡献者 | 模型 | 占比 | 新增行 | 留存行 |', '| Tool / contributor | Models | Share | Added | Retained |') : T(m, '| 工具 | 模型 | 占比 | 新增行 | 留存行 |', '| Tool | Models | Share | Added | Retained |'), '|---|---|---:|---:|---:|');
+    for (const a of m.all) out.push(`| ${a.name} | ${a.models.map((x) => x.name).join(', ') || '—'} | ${pct(a.pct)} | +${fmt(a.lines)} | ${fmt(a.surviving)} |`);
+  }
   out.push('');
   const hf = handFacts(m);
   if (hf.length) {
-    out.push(T(m, `**人**：${hf.map((f) => f.text).join('，')}${peopleNames(m) ? `（${peopleNames(m)}）` : ''}。`, `**People**: ${hf.map((f) => f.text).join(', ')}${peopleNames(m) ? ` (${peopleNames(m)})` : ''}.`), '');
+    out.push(T(m, `**开发者**：${hf.map((f) => f.text).join('，')}。`, `**Developer**: ${hf.map((f) => f.text).join(', ')}.`), '');
   }
   const units: any[] = m.units;
   const groups: [string, string, any[]][] = [];
@@ -66,7 +78,8 @@ export function mergeCreditsMd(existing: string | null, block: string): string {
 export function releaseNotes(m: Model, tag: string): string {
   const v = m.versions.find((x) => x.tag === tag);
   if (!v) return '';
-  const parts = Object.entries(v.by).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${m.agents.find((a) => a.key === k)?.name ?? nameOf(k, m.lang)} ${pct((n / v.total) * 100)}`);
+  const byKey = new Map([...m.all, ...m.rows].map((a) => [a.key, a.name]));
+  const parts = Object.entries(v.by).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${byKey.get(k) ?? nameOf(k, m.lang)} ${pct((n / v.total) * 100)}`);
   return `### Credits\n\n${parts.join(' · ')}\n`;
 }
 
@@ -76,14 +89,18 @@ export function prComment(m: Model, id: string): string {
   return sharesLine(m, (u.shares ?? []).map((s: any) => [s.contributor, s.share] as [string, number]));
 }
 
-/** 只写 AI 和「未确认」：份额 → 一行 `**creditia** · 工具 (模型) 71% · …` */
+/** 份额 → 一行 `**creditia** · 工具 (模型) 71% · 贡献者 9% · 未确认 20%`：分母是全部新增行，加起来 100% */
 function sharesLine(m: Model, shares: [string, number][]): string {
   const contribs = m.raw.contributors ?? [];
-  const parts = shares.filter(([id]) => id === 'unattributed' || contribs.find((x: any) => x.id === id)?.harness).map(([id, share]) => {
+  const by = new Map<string, number>();
+  for (const [id, share] of shares) {
     const c = contribs.find((x: any) => x.id === id);
-    const name = c?.harness ? `${nameOf(c.harness, m.lang)}${c.model ? ` (${modelName(c.model)})` : ''}` : nameOf('unattributed', m.lang);
-    return `${name} ${Math.round(share * 100)}%`;
-  });
+    const name = c?.harness ? `${nameOf(c.harness, m.lang)}${c.model ? ` (${modelName(c.model)})` : ''}`
+      : id === 'unattributed' || c?.kind === 'unattributed' ? nameOf('unattributed', m.lang)
+      : (m.named && c?.name) || nameOf('people', m.lang);
+    by.set(name, (by.get(name) ?? 0) + share);
+  }
+  const parts = [...by].filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]).map(([name, s]) => `${name} ${pct0(s * 100)}`);
   return parts.length ? `**creditia** · ${parts.join(' · ')}\n` : '';
 }
 
@@ -99,7 +116,7 @@ export function commitsComment(m: Model, shas: string[]): string {
     for (const s of u.shares ?? []) { by.set(s.contributor, (by.get(s.contributor) ?? 0) + s.share * lines); total += s.share * lines; }
   }
   if (!total) return '';
-  return sharesLine(m, [...by].sort((a, b) => b[1] - a[1]).map(([id, v]): [string, number] => [id, v / total]).filter(([, x]) => x >= 0.005));
+  return sharesLine(m, [...by].map(([id, v]): [string, number] => [id, v / total]));
 }
 
 /** 一个提交上的盖章：提交盖章 hook 写的 Creditia-Lines（各工具写了几行 / 新增总行数），或者只有 Creditia-Harness / Model；added 是这个提交新增的行数 */
@@ -134,8 +151,10 @@ export function stampedComment(cs: Stamped[], lang: 'zh' | 'en'): string {
     const [tool, model] = k.split('/');
     return `${nameOf(tool, lang)}${model ? ` (${modelName(model)})` : ''}`;
   };
-  const parts = by.filter(([, n]) => n / total >= 0.005).map(([k, n]) => `${name(k)} ${Math.round((n / total) * 100)}%`);
-  if (!parts.length) return '';
+  // 盖章没记到的行：提交时没对上 AI 证据，记「未确认」，让各项加起来是 100%
+  const rest = total - by.reduce((s, [, n]) => s + n, 0);
+  const parts = [...by.map(([k, n]): [string, number] => [name(k), n]), ...(rest > 0 ? [[nameOf('unattributed', lang), rest] as [string, number]] : [])]
+    .map(([k, n]) => `${k} ${pct0((n / total) * 100)}`);
   const note = lang === 'zh' ? `按提交盖章：新增 ${fmt(total)} 行里各工具写的` : `from commit stamps: shares of ${fmt(total)} lines added`;
   return `**creditia** · ${parts.join(' · ')}\n<sub>${note}</sub>\n`;
 }
@@ -143,20 +162,21 @@ export function stampedComment(cs: Stamped[], lang: 'zh' | 'en'): string {
 /** shields.io 的 endpoint 徽章：README 里写 `https://img.shields.io/endpoint?url=<这份 JSON 的地址>`，JSON 更新了徽章就跟着变 */
 const SHIELDS_LOGO: Record<string, string> = { 'claude-code': 'claude', codex: 'openai', cursor: 'cursor', gemini: 'googlegemini', copilot: 'githubcopilot', windsurf: 'windsurf', zed: 'zedindustries' };
 export function shieldsBadge(shares: [string, number][], lang: 'zh' | 'en'): object {
-  const top = shares.filter(([, p]) => p >= 0.5).slice(0, 2);
+  // 徽章就一行字：写占比最高的两个工具
+  const top = shares.filter(([, p]) => p > 0).slice(0, 2);
   const tool = top[0]?.[0].split('/')[0] ?? '';
   const name = (k: string) => { const [t, mdl] = k.split('/'); return mdl ? `${nameOf(t, lang)} (${modelName(mdl)})` : nameOf(t, lang); };
   return {
     schemaVersion: 1,
     label: lang === 'zh' ? 'AI 参与' : 'written with',
-    message: top.length ? top.map(([k, p]) => `${name(k)} ${Math.round(p)}%`).join(' · ') : lang === 'zh' ? '暂无' : 'none yet',
+    message: top.length ? top.map(([k, p]) => `${name(k)} ${pct0(p)}`).join(' · ') : lang === 'zh' ? '暂无' : 'none yet',
     color: (BRAND[tool] ?? '#555555').replace('#', ''),
     ...(SHIELDS_LOGO[tool] ? { namedLogo: SHIELDS_LOGO[tool], logoColor: 'white' } : {}),
     cacheSeconds: 3600,
   };
 }
-/** 从档案：各工具（按当前分组）的占比 */
-export const badgeShares = (m: Model): [string, number][] => m.rows.filter((a) => a.kind === 'agent').map((a) => [a.model ? `${a.tool}/${a.model}` : a.tool, a.pct]);
+/** 从档案：各工具（按当前分组）占全部新增行的比例 */
+export const badgeShares = (m: Model): [string, number][] => m.agents.filter((a) => a.kind === 'agent').map((a) => [a.model ? `${a.tool}/${a.model}` : a.tool, a.pct]);
 /** 从提交盖章 */
 export function stampedBadgeShares(cs: Stamped[]): [string, number][] {
   const { by, total } = stampedShares(cs);
@@ -183,15 +203,18 @@ const padCols = (s: string, n: number) => s + ' '.repeat(Math.max(0, n - cols(s)
 
 export interface Seg { text: string; color?: string; dim?: boolean; bold?: boolean }
 /** 终端名片（neofetch 式） */
-export function fetchSegs(m: Model): Seg[][] {
+export function fetchSegs(m: Model, view: View = 'tool'): Seg[][] {
   const lines: Seg[][] = [];
   // 标题前挂 creditia 的 *，用写得最多的那个工具的颜色
   lines.push([{ text: '* ', bold: true, color: m.rows.find((a) => a.kind === 'agent')?.key }, { text: m.project, bold: true }, { text: `  ${m.range.from} → ${m.range.to}`, dim: true }]);
   lines.push([{ text: '─'.repeat(Math.max(24, m.project.length + 26)), dim: true }]);
-  for (const a of m.rows) {
-    const n = Math.max(a.pct > 0 ? 1 : 0, Math.round(a.pct / 4));
-    lines.push([{ text: padCols(a.name, 16), color: a.key }, { text: '█'.repeat(n), color: a.key }, { text: '░'.repeat(25 - n), dim: true }, { text: ` ${pct(a.pct).padStart(6)}` }, { text: a.models[0] ? `  ${a.models[0].name}` : '', dim: true }]);
-  }
+  const bar = (name: string, p: number, key?: string): Seg[] => {
+    const n = Math.max(p > 0 ? 1 : 0, Math.round(p / 4));
+    return [{ text: padCols(name, 16), color: key }, { text: '█'.repeat(n), color: key }, { text: '░'.repeat(25 - n), dim: true }, { text: ` ${pct(p).padStart(6)}` }];
+  };
+  // 终端里一行一项，不受版面限制：全部列出
+  if (view === 'contributor') for (const a of m.authors) lines.push(bar(a.name, a.pct), [{ text: `  ${authorParts(a)}`, dim: true }]);
+  else for (const a of m.all) lines.push([...bar(a.name, a.pct, a.key), { text: a.models[0] ? `  ${a.models[0].name}` : '', dim: true }]);
   lines.push([]);
   lines.push([{ text: T(m, '提交 ', 'commits '), dim: true }, { text: fmt(m.commits) }, { text: T(m, '  行 ', '  lines '), dim: true }, { text: fmt(m.linesAdded) }, { text: m.tokens ? T(m, '  token ', '  tokens ') : '', dim: true }, { text: m.tokens ? compact(m.tokens) : '' }]);
   const hf = handFacts(m);

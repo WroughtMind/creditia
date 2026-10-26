@@ -17,12 +17,15 @@ test('目录覆盖全部主题和作品', () => {
   for (const id of Object.keys(FORMS)) if (id !== 'profile' && id !== 'blame') assert.ok(PIECE_INFO[id], id);
 });
 
-test('署名只写 AI：没有人这一行、没有主导者，占比加起来是 100%', () => {
+test('署名：工具在榜单里，其他贡献者单列，没有主导者；分母是全部新增行，工具加贡献者合计 100%', () => {
   assert.equal(m.director, '');
-  assert.equal(m.humans.length, 0);
+  assert.deepEqual(m.humans.map((h) => h.name), ['Mara Okafor']);
   assert.ok(!m.rows.some((r) => r.kind === 'human'));
-  const sum = m.rows.reduce((s, r) => s + r.pct, 0);
+  const sum = [...m.rows, ...m.humans].reduce((s, r) => s + r.pct, 0);
   assert.ok(Math.abs(sum - 100) < 0.5, `占比合计 ${sum}`);
+  // 不署名时只写「其他贡献者」
+  const anon = buildModel(raw, { director: false, lang: 'zh', named: false });
+  assert.deepEqual(anon.humans.map((h) => h.name), ['其他贡献者']);
 });
 
 test('全部作品在代表主题下都能出图，滤镜区域收在画布内', async () => {

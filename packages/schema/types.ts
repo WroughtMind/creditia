@@ -14,6 +14,8 @@ export interface Credits {
   contributors: Contributor[];
   totals: Partial<Totals>;
   breakdown: Breakdown[];
+  /** 按提交者汇总（按贡献者看用）；旧档案没有 */
+  authors?: { id: string; name?: string; me: boolean; linesAdded: number; by: Record<string, number> }[];
   human?: Partial<{ prompts: number; plans: number; reviews: number; tabAssistedLines: number; agentReviews: number }>;
   timeline?: { week: string; byContributor: Record<string, number> }[];
   days?: { date: DateStr; by: Record<string, number> }[];
