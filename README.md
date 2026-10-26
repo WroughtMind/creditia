@@ -61,7 +61,7 @@ creditia doc --by contributor                 # 团队仓库：按贡献者看�
 
 **在别的电脑、云端写代码**　分析只读这台电脑上的日志，别处写的代码在这里是「未确认」（分析时会提示有几个提交是这样）。两种补法：
 
-- 在那台电脑上也装 creditia 并打开提交盖章：提交时就按那台电脑的日志算好每个工具写了几行，记在提交里（`Creditia-Lines`），哪台电脑分析都认。云端环境（Codex 云端的 setup script、Codespaces 的 `postCreateCommand`、Claude Code 网页版的环境设置……）在启动脚本里加两行：
+- 在那台电脑上也装 creditia 并打开提交盖章：提交时就按那台电脑的日志算好每个工具写了几行，记在提交里（`Creditia-Lines`），哪台电脑分析都认。云端环境（Codex 云端的 setup script、Codespaces 的 `postCreateCommand`、Claude Code 网页版的环境设置……）在启动脚本里加两行（这个样例还没在真实的云端会话里验证过）：
 
   ```bash
   cargo install --git https://github.com/WroughtMind/creditia creditia-cli

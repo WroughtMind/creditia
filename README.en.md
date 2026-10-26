@@ -61,7 +61,7 @@ One project in several places (worktrees, scratch clones, another machine): `cre
 
 **Code written on another computer or in the cloud** — Analysis reads only this computer's logs, so code written elsewhere is "unattributed" here (analysis tells you how many commits look like that). Two ways to fill it in:
 
-- Install creditia there too and turn on commit stamps: each commit then carries how many lines each tool wrote according to that computer's logs (`Creditia-Lines`), which any machine's analysis accepts. For cloud environments (Codex cloud's setup script, Codespaces' `postCreateCommand`, Claude Code on the web's environment setup…), add two lines to the startup script:
+- Install creditia there too and turn on commit stamps: each commit then carries how many lines each tool wrote according to that computer's logs (`Creditia-Lines`), which any machine's analysis accepts. For cloud environments (Codex cloud's setup script, Codespaces' `postCreateCommand`, Claude Code on the web's environment setup…), add two lines to the startup script (this sample hasn't been tested in a real cloud session yet):
 
   ```bash
   cargo install --git https://github.com/WroughtMind/creditia creditia-cli
