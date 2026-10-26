@@ -2,6 +2,7 @@
 //! 退出码：0 成功，1 失败，2 部分成功（有警告）。
 
 mod analyze;
+mod schedule;
 
 use creditia_adapters as ad;
 use creditia_core::config::{Config, Director, Integrations};
@@ -75,6 +76,7 @@ const USAGE_ZH: &str = "用法：creditia-core <命令> [选项]
   integrations [--repo P]          上面两项的现状
   hook-trailers <msgfile>          （hook 调用）追加 Creditia-* trailer
   evidence  export [--out F] | import <文件>   多台电脑之间合并证据库
+  schedule  install|uninstall|status        每小时把各项目的新记录收进作品库（工具清理旧日志之前）
   projects                         本地已记录的项目
   all-credits                      本地每个项目最新的档案（跨项目汇总用）
   paths     [--repo P]             本项目登记过的全部路径（主仓库、worktree、临时克隆、旧路径）
@@ -103,6 +105,7 @@ const USAGE_EN: &str = "Usage: creditia-core <command> [options]
   integrations [--repo P]          where those two stand
   hook-trailers <msgfile>          (called by the hook) append Creditia-* trailers
   evidence  export [--out F] | import <file>   merge evidence between machines
+  schedule  install|uninstall|status        every hour, collect new records from every project into the library (before tools delete old logs)
   projects                         projects in the library
   all-credits                      the latest credits of every project in the library (for the cross-project summary)
   paths     [--repo P]             every path recorded for this project (main, worktrees, temp clones, old paths)
@@ -140,6 +143,7 @@ fn main() {
         "integrations" => cmd_integrations(&a),
         "hook-trailers" => cmd_hook_trailers(&a),
         "evidence" => cmd_evidence(&a),
+        "schedule" => schedule::cmd(a.pos.first().map(String::as_str)).map(|v| (v, vec![])),
         "projects" => cmd_projects(&a),
         "all-credits" => cmd_all_credits(&a),
         "paths" => cmd_paths(&a),

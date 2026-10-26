@@ -380,6 +380,26 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         attrs.insert(c.hash.clone(), eng.attribute(c));
         creditia_core::progress::tick("attribute", i + 1, n_commits);
     }
+    // 你的提交里有未确认的行、提交前两周这台电脑上又没有这个项目的任何 AI 记录：多半是在别的电脑上写的
+    {
+        use creditia_core::engine::{WINDOW_AFTER, WINDOW_BEFORE};
+        let mine = cfg.director_emails();
+        let (mut n, mut lines) = (0usize, 0usize);
+        for c in cc.commits.iter().filter(|c| mine.contains(&c.email)) {
+            let un = attrs[&c.hash].lines.iter().flatten().filter(|a| a.level == Level::Unattributed).count();
+            let (lo, hi) = (c.author_ts.min(c.commit_ts) - WINDOW_BEFORE, c.commit_ts.max(c.author_ts) + WINDOW_AFTER);
+            if un > 0 && !sessions.iter().any(|s| !s.reviewer && s.end >= lo && s.start <= hi) {
+                n += 1;
+                lines += un;
+            }
+        }
+        if n > 0 {
+            st.notes.push(creditia_core::tr!(
+                "你的 {n} 个提交（{lines} 行未确认）在提交前两周里这台电脑上没有这个项目的 AI 记录。如果是在别的电脑上写的：在那台电脑上运行 creditia evidence export，再在这里 creditia evidence import <文件>",
+                "{n} of your commits ({lines} unattributed lines) have no AI records for this project on this computer in the two weeks before them. If they were written on another computer, run creditia evidence export there, then creditia evidence import <file> here"
+            ));
+        }
+    }
 
     // ---- 存活代码
     // blame.json、blame2.json 是旧格式的缓存

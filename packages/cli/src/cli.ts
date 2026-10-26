@@ -70,6 +70,7 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   stamp     --harness H [--model M] 给下一次提交盖章
   hook      install|uninstall|status   提交盖章：提交时自动加 Creditia-* trailer（工具、模型、各工具行数）
   release   install|uninstall|status   跟着发版：写 .github/workflows/creditia.yml（Release 说明、PR 评论）
+  schedule  install|uninstall|status   每小时把各项目的新记录收进作品库：工具会清理旧日志，收进来的证据不会跟着没
   integrations                      上面两项的现状（init / analyze 在终端里会问一次要不要装）
   projects                          本地已记录的项目
 
@@ -111,6 +112,7 @@ Analysis (Rust core, all local, never calls a model)
   stamp     --harness H [--model M] stamp the next commit
   hook      install|uninstall|status   commit stamps: Creditia-* trailers on commits (tool, model, lines per tool)
   release   install|uninstall|status   release credits: write .github/workflows/creditia.yml (release notes, PR comments)
+  schedule  install|uninstall|status   every hour, collect new records from every project into the library: tools delete old logs, collected evidence stays
   integrations                      where those two stand (init / analyze ask once in a terminal)
   projects                          projects in the library
 
@@ -307,7 +309,7 @@ function write(out: string | undefined, data: string | Uint8Array) {
 }
 
 // ───────────────────────── 命令 ─────────────────────────
-const PASS = new Set(['discover', 'init', 'analyze', 'update', 'collect', 'doctor', 'blame', 'projects', 'stamp', 'hook', 'hook-trailers', 'release', 'integrations', 'paths', 'link', 'unlink', 'whoami', 'evidence']);
+const PASS = new Set(['discover', 'init', 'analyze', 'update', 'collect', 'doctor', 'blame', 'projects', 'stamp', 'hook', 'hook-trailers', 'release', 'integrations', 'paths', 'link', 'unlink', 'whoami', 'evidence', 'schedule']);
 
 async function main() {
   if (!cmd || cmd === 'help' || cmd === '-h' || cmd === '--help') return console.log(USAGE());

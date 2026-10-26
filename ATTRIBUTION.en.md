@@ -26,7 +26,7 @@ The evidence store keeps only "relative path, line hash, tool, model, session, t
 ## 2. How a line is matched
 
 1. Read `git log -p`. Every added line of every commit is normalized (whitespace removed, quotes unified and so on) and hashed; the key is `relative path + normalized line`.
-2. Look up evidence with the same path and hash, timed from 14 days before the commit to 1 hour after it; with several hits, take the closest in time.
+2. Look up evidence with the same path and hash, timed from 14 days before the commit to 1 hour after it; with several hits, take the closest in time. For code committed long after it was written (a branch left for weeks), older evidence no other commit has claimed counts too, but only when two consecutive lines were also next to each other in that write: a single common line matching could be a coincidence and doesn't count.
 3. A match is **line-level evidence**. Lines without a match go down the fallback chain below.
 
 Evidence records only the lines an agent **newly wrote in that edit**, and each line of one edit can be claimed by only one commit:

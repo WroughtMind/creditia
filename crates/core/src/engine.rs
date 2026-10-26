@@ -5,8 +5,8 @@ use crate::hash::short_key;
 use crate::model::{canonical_harness, Attr, BlameFile, Commit, CommitAttr, Index, Level, Registry, Session, Src, Unit, JOIN_WINDOWS};
 use std::collections::{HashMap, HashSet};
 
-const WINDOW_BEFORE: i64 = 14 * 86400;
-const WINDOW_AFTER: i64 = 3600;
+pub const WINDOW_BEFORE: i64 = 14 * 86400;
+pub const WINDOW_AFTER: i64 = 3600;
 
 /// 归因口径
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -165,6 +165,40 @@ impl<'a> Engine<'a> {
                         }
                     }
                     i += took.max(1);
+                }
+            }
+        }
+        // 第一轮补充：两周以前的写入（写完很久才提交、分支放了很久）。只用还没被别的提交认领的证据，
+        // 而且要连着的两行在同一次写入里也是紧挨着的（证据记着下一行是哪行）：单独一行常见代码对上了可能是巧合
+        for (fi, f) in c.files.iter().enumerate() {
+            let mut old: Vec<Option<crate::model::Ev>> = vec![None; f.keys.len()];
+            for (s, e) in hunk_ranges(f) {
+                let long: Vec<usize> = (s..e).filter(|&i| f.keys[i] != 0).collect();
+                for p in long.windows(2) {
+                    let (a, b) = (p[0], p[1]);
+                    let (ka, kb) = (f.keys[a], f.keys[b]);
+                    if lines[fi][b].is_some() {
+                        continue;
+                    }
+                    let got = if let Some(ea) = old[a].clone().filter(|ea| ea.next == kb) {
+                        // 接着上一对：同一次写入的下一行
+                        self.take_old(&f.rel, kb, lo, |x| x.src == ea.src && x.session == ea.session).map(|eb| (None, eb))
+                    } else if lines[fi][a].is_none() {
+                        let bs = self.old_sessions(&f.rel, kb, lo);
+                        self.take_old(&f.rel, ka, lo, |x| x.next == kb && bs.iter().any(|(s, id)| *s == x.src && *id == x.session))
+                            .and_then(|ea| self.take_old(&f.rel, kb, lo, |x| x.src == ea.src && x.session == ea.session).map(|eb| (Some(ea), eb)))
+                    } else {
+                        None
+                    };
+                    let Some((ea, eb)) = got else { continue };
+                    for (i, ev) in [(a, ea), (b, Some(eb))] {
+                        let Some(ev) = ev else { continue };
+                        let who = self.reg.agent(ev.src.harness(), Some(&ev.model));
+                        lines[fi][i] = Some(Attr { who, level: Level::Verified });
+                        ev_of[fi][i] = Some((ev.src.harness(), ev.model.clone()));
+                        *hits.entry(ev.src.harness()).or_default() += 1;
+                        old[i] = Some(ev);
+                    }
                 }
             }
         }
@@ -333,6 +367,26 @@ impl<'a> Engine<'a> {
             used[bi] = true;
         }
         Some((all[bi].clone(), multi))
+    }
+
+    /// `before` 以前、还没被认领的一行证据里，`want` 挑中的最晚的那条，认领掉
+    fn take_old(&mut self, rel: &str, key: u32, before: i64, want: impl Fn(&crate::model::Ev) -> bool) -> Option<crate::model::Ev> {
+        let id = (rel.to_string(), key);
+        let all = self.idx.map.get(&id)?;
+        let used = self.used.entry(id).or_insert_with(|| vec![false; all.len()]);
+        let bi = (0..all.len()).filter(|&i| !used[i] && !all[i].tab && all[i].ts < before && want(&all[i])).max_by_key(|&i| all[i].ts)?;
+        if all[bi].src != Src::Cursor {
+            used[bi] = true;
+        }
+        Some(all[bi].clone())
+    }
+
+    /// `before` 以前、还没被认领的这一行证据出自哪些写入（工具、会话）
+    fn old_sessions(&self, rel: &str, key: u32, before: i64) -> Vec<(Src, String)> {
+        let id = (rel.to_string(), key);
+        let Some(all) = self.idx.map.get(&id) else { return vec![] };
+        let used = self.used.get(&id);
+        (0..all.len()).filter(|&i| !used.is_some_and(|u| u[i]) && !all[i].tab && all[i].ts < before).map(|i| (all[i].src, all[i].session.clone())).collect()
     }
 
     /// 夹在两行逐行证据之间、自己没有证据的行，而那两行在同一个工具的某次写入里本来是紧挨着的：
@@ -553,6 +607,33 @@ mod tests {
 
     fn commit(email: &str, keys: Vec<u32>) -> Commit {
         Commit { hash: "a".repeat(40), email: email.into(), author_ts: 1000, commit_ts: 1000, subject: "s".into(), files: vec![FileAdd { rel: "a.rs".into(), keys, ..Default::default() }], ..Default::default() }
+    }
+
+    /// 两周以前的写入：连着两行在同一次写入里也紧挨着才算；单独一行不算；认领过的不再给别的提交
+    #[test]
+    fn old_writes_need_two_adjacent_lines() {
+        let mut store = Store::default();
+        let g = store.groups.entry("x".into()).or_default();
+        let old = 1000 - 30 * 86400;
+        let ev = |key, next| Ev { rel: "a.rs".into(), key, src: Src::Codex, model: "m".into(), session: "old".into(), ts: old, tab: false, next };
+        // 一次写入：11 → 12 → 13；另一行 21 单独出现
+        g.evs.extend([ev(11, 12), ev(12, 13), ev(13, 0), ev(21, 0)]);
+        let idx = Index::build(&store);
+        let cfg = cfg();
+        let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+        let a = e.attribute(&commit("me@x.com", vec![11, 12, 13]));
+        assert!(a.lines[0].iter().all(|l| l.level == Level::Verified), "{:?}", a.lines[0]);
+        assert_eq!(e.reg.list[a.lines[0][2].who].id, "a:codex/m");
+        // 单独一行（两边都不是那次写入里的邻居）：可能是巧合，不算
+        let mut c = commit("me@x.com", vec![21, 99]);
+        c.hash = "b".repeat(40);
+        let a = e.attribute(&c);
+        assert_eq!(a.lines[0][0].level, Level::Unattributed);
+        // 已经被上面的提交认领了
+        let mut c = commit("me@x.com", vec![11, 12]);
+        c.hash = "c".repeat(40);
+        let a = e.attribute(&c);
+        assert_eq!(a.lines[0][0].level, Level::Unattributed);
     }
 
     #[test]
