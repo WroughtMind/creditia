@@ -173,7 +173,7 @@ fn decrypt_database(
     let salt = &database[..16];
     let mac_key = hmac_key(key, salt);
     let mut plain = Vec::with_capacity(database.len());
-    for (index, page) in database.chunks_exact(PAGE).enumerate() {
+    for (index, page) in database.as_chunks::<PAGE>().0.iter().enumerate() {
         plain.extend(decrypt_page(page, index as u32 + 1, key, &mac_key, salt)?);
     }
     if let Some(wal) = wal.filter(|w| !w.is_empty()) {
@@ -194,7 +194,7 @@ fn be32(bytes: &[u8]) -> u32 {
     u32::from_be_bytes(bytes[..4].try_into().unwrap())
 }
 fn checksum(bytes: &[u8], big_endian: bool, state: &mut [u32; 2]) {
-    for pair in bytes.chunks_exact(8) {
+    for pair in bytes.as_chunks::<8>().0 {
         let word = |v: &[u8]| {
             if big_endian {
                 be32(v)
@@ -241,20 +241,20 @@ fn apply_wal(
     // authentication failure within its committed prefix still fails closed;
     // it is never treated as a reason to fall back to an earlier commit.
     let current_frames = wal[32..]
-        .chunks_exact(FRAME)
+        .as_chunks::<FRAME>().0.iter()
         .take_while(|frame| frame[8..16] == wal[16..24])
         .count();
     let current_end = 32 + current_frames * FRAME;
     if (current_frames == 0 && wal.len() > 32)
         || wal[current_end..]
-            .chunks_exact(FRAME)
+            .as_chunks::<FRAME>().0.iter()
             .any(|frame| frame[8..16] == wal[16..24])
     {
         return Err("SQLCipher WAL page number or salt is invalid".into());
     }
     let current = &wal[32..current_end];
     let committed = current
-        .chunks_exact(FRAME)
+        .as_chunks::<FRAME>().0.iter()
         .enumerate()
         .rev()
         .find_map(|(index, frame)| {
@@ -263,7 +263,7 @@ fn apply_wal(
         });
     let end = committed.map_or(0, |(end, _)| end);
     let mut frames = Vec::new();
-    for frame in current.chunks_exact(FRAME).take(end) {
+    for frame in current.as_chunks::<FRAME>().0.iter().take(end) {
         let number = be32(frame);
         if number == 0 || frame[8..16] != wal[16..24] {
             return Err("SQLCipher WAL page number or salt is invalid".into());
@@ -342,7 +342,7 @@ mod tests {
     fn encrypt_database(plain: &[u8], key: &[u8; 32], salt: &[u8]) -> Vec<u8> {
         let mac_key = hmac_key(key, salt);
         plain
-            .chunks_exact(PAGE)
+            .as_chunks::<PAGE>().0.iter()
             .enumerate()
             .flat_map(|(i, page)| {
                 encrypt_page(page, i as u32 + 1, key, &mac_key, salt, [i as u8 + 1; 16])
@@ -455,7 +455,7 @@ mod tests {
         let database = include_bytes!("../tests/fixtures/sqlcipher-4.5.7/reused.db");
         let wal = include_bytes!("../tests/fixtures/sqlcipher-4.5.7/reused.wal");
         let current = wal[32..]
-            .chunks_exact(FRAME)
+            .as_chunks::<FRAME>().0.iter()
             .take_while(|frame| frame[8..16] == wal[16..24])
             .count();
         assert_eq!(current, 3);
@@ -533,7 +533,7 @@ mod tests {
             corrupt[32 + frame_index * (24 + PAGE) + 24 + 50] ^= 1;
             let mut state = [0; 2];
             checksum(&corrupt[..24], false, &mut state);
-            for frame in corrupt[32..].chunks_exact_mut(24 + PAGE) {
+            for frame in corrupt[32..].as_chunks_mut::<{ 24 + PAGE }>().0 {
                 checksum(&frame[..8], false, &mut state);
                 checksum(&frame[24..], false, &mut state);
                 frame[16..20].copy_from_slice(&state[0].to_be_bytes());
@@ -558,7 +558,7 @@ mod tests {
         // Decrypted pages carry zeros in the reserved area; page 1 replaces
         // the salt with the standard SQLite header.
         let mut expected = plain.clone();
-        for page in expected.chunks_exact_mut(PAGE) {
+        for page in expected.as_chunks_mut::<PAGE>().0 {
             page[DATA_END..].fill(0);
         }
         expected[..16].copy_from_slice(SQLITE_HEADER);
