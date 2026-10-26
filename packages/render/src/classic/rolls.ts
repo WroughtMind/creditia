@@ -8,14 +8,14 @@ import type { Theme } from './themes.ts';
 import type { Model } from './data.ts';
 import { fmt } from './data.ts';
 import { modelName } from '../data.ts';
-import { BRANDS, BOTS } from './brand.ts';
-import { box, col, txt, label, mark, backdrop, ornament, fit, spread, eq, MONO_FONT, type Node, type Out } from './ui.ts';
+import { BOTS } from './brand.ts';
+import { box, col, txt, label, mark, backdrop, ornament, fit, spread, eq, MONO_FONT, BODY_KEY, type Node, type Out } from './ui.ts';
 
 export const ROLL_NEW = ['opening', 'production', 'slate', 'crew'];
 
 const W = 1080, H = 1350;
 // 按模型分组时 key 是「工具/模型」，按工具判断
-const isAi = (k: string) => !!BRANDS[k.split('/')[0]] && !BOTS.has(k);
+const isAi = (k: string) => !BOTS.has(k.split('/')[0]);
 const keysOf = (m: Model) => m.rows.map((r) => r.key);
 const hexA = (hex: string, a: string) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + a : hex);
 const serifOf = (t: Theme) => t.display !== t.sans;
@@ -67,12 +67,16 @@ export function rollNew(m: Model, t: Theme, v: string): Out | null {
         mark(x.p.key, t, x.lead ? 30 : 22),
         txt({ fontFamily: t.display, fontSize: x.lead ? 50 : 36, fontWeight: t.displayWeight, color: t.ink, lineHeight: 1.05, letterSpacing: serif ? 0 : -1, whiteSpace: 'nowrap' }, x.p.name)),
       x.p.model ? txt({ fontFamily: MONO_FONT, fontSize: 11, color: t.faint, marginTop: 2 }, x.p.model) : null);
-    const list = fit(2.4, { alignItems: 'flex-start', transformOrigin: 'left center' }, spread(2.4, col({ gap: 22, alignItems: 'flex-start' }, ...people.map(entry))));
+    const list = fit(2.4, { alignItems: 'flex-start', transformOrigin: 'left center', flexShrink: 0 }, spread(2.4, col({ gap: 22, alignItems: 'flex-start' }, ...people.map(entry))));
+    // Fit the author list inside its real body, after header/footer layout.
+    // Project titles can wrap; fixed vertical padding cannot predict their height.
+    const body = box({ flexGrow: 1, minHeight: 0, alignItems: 'center', margin: '32px 0' }, list);
+    body.key = BODY_KEY;
     return { w: W, h: H, fit: { padX: 110, padY: 220 }, tree: col({ width: W, height: H, padding: '104px 110px 96px', justifyContent: 'space-between', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
       box({ justifyContent: 'space-between', alignItems: 'baseline' },
         label(t, 'creditia presents', 13, { letterSpacing: 6 }),
         txt({ fontFamily: MONO_FONT, fontSize: 13, color: t.faint }, range(m))),
-      box({ flexGrow: 1, alignItems: 'center' }, list),
+      body,
       col({ gap: 16 },
         box({ height: 1, backgroundColor: t.line }),
         box({ justifyContent: 'space-between', alignItems: 'flex-end', gap: 30 },

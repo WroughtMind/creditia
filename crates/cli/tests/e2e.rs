@@ -7,6 +7,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod native31;
+mod native18;
+mod native8;
+mod native6;
+mod native4;
+mod native_hosts;
+
 struct Env {
     root: PathBuf,
     repo: PathBuf,
@@ -85,6 +92,252 @@ fn run(env: &Env, args: &[&str]) -> (bool, serde_json::Value) {
     (o.status.code() != Some(1), v)
 }
 
+#[test]
+fn public_agents_can_be_selected_launched_and_stamped_without_inventing_models() {
+    let env = setup();
+    let rs = env.repo.display().to_string();
+    let (ok, catalogue) = run(&env, &["agents"]);
+    assert!(ok, "{catalogue}");
+    assert_eq!(catalogue["count"], 78);
+    for agent in catalogue["agents"].as_array().unwrap() {
+        let id = agent["id"].as_str().unwrap();
+        let expected = agent["harness"].as_str().unwrap();
+        let (ok, identity) = run(&env, &["run", "--agent", id, "--", env!("CARGO_BIN_EXE_creditia-core"), "whoami"]);
+        assert!(ok, "{id}: {identity}");
+        assert_eq!(identity["agent"], expected, "{id}");
+        assert!(identity["model"].is_null(), "{id}");
+        let (ok, stamp) = run(&env, &["stamp", "--repo", &rs, "--agent", id]);
+        assert!(ok, "{id}: {stamp}");
+        assert_eq!(stamp["stamp"]["harness"], expected, "{id}");
+        assert!(stamp["stamp"]["model"].is_null());
+    }
+    assert!(!env.repo.join(".git/hooks/prepare-commit-msg").exists());
+    assert!(!env.root.join("lib/library.sqlite").exists());
+    assert!(!run(&env, &["stamp", "--repo", &rs, "--agent", "not-registered"]).0);
+    assert!(!run(&env, &["stamp", "--repo", &rs, "--agent", "codex", "--harness", "cursor"]).0);
+    fs::remove_dir_all(env.root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn run_preserves_stdio_arguments_exit_and_explicit_identity_over_parent_agent() {
+    use std::io::Write;
+    use std::process::Stdio;
+    let env = setup();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_creditia-core"))
+        .args(["run", "--agent", "deepagents", "--", "/bin/sh", "-c",
+            "test \"$CREDITIA_HARNESS\" = deepagents && test -z \"$CREDITIA_MODEL\" || exit 99; cat; printf '%s' \"$1\"; printf 'child error' >&2; exit 7", "child", "--model=literal argument"])
+        .env_clear().envs(&env.vars).env("PATH", std::env::var("PATH").unwrap())
+        .env("CLAUDECODE", "1").env("CREDITIA_MODEL", "parent-model")
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    child.stdin.take().unwrap().write_all(b"input bytes\n").unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert_eq!(out.status.code(), Some(7));
+    assert_eq!(out.stdout, b"input bytes\n--model=literal argument");
+    assert_eq!(out.stderr, b"child error");
+    fs::remove_dir_all(env.root).unwrap();
+}
+
+#[test]
+fn hermes_openclaw_and_qoder_cn_native_history_reaches_final_attribution() {
+    use serde_json::json;
+    let mut env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base = 1_789_603_200_i64;
+    let date = |t| format!("@{t} +0000");
+    fs::write(repo.join("README.md"), "# Native history fixture\n").unwrap();
+    commit(&repo, "base", "me@example.com", &date(base - 60));
+    let code = |tag: &str| (0..8).map(|n| format!("export const {tag}_{n} = {n} + 100;\n")).collect::<String>();
+    let patch = |name: &str, text: &str| format!("--- /dev/null\n+++ {name}\n@@ -0,0 +1,8 @@\n{}", text.lines().map(|l| format!("+{l}\n")).collect::<String>());
+    let htext = code("hermes"); let otext = code("openclaw"); let qtext = code("qoder_cn");
+    for (name, text) in [("hermes.ts", &htext), ("openclaw.ts", &otext), ("qoder.ts", &qtext)] { fs::write(repo.join(name), text).unwrap(); }
+    commit(&repo, "agent changes", "me@example.com", &date(base + 60));
+
+    let hd = env.root.join(".hermes"); fs::create_dir_all(&hd).unwrap();
+    let hdb = rusqlite::Connection::open(hd.join("state.db")).unwrap();
+    hdb.execute_batch("create table sessions(id text,cwd text,started_at integer,model text); create table messages(id integer,session_id text,role text,content text,tool_calls text,tool_call_id text,timestamp integer,active integer,effect_disposition text);").unwrap();
+    hdb.execute("insert into sessions values('hs',?1,?2,'mutable-final-model')", rusqlite::params![rs,base]).unwrap();
+    let receipt = json!({"success":true,"resolved_path":format!("{rs}/hermes.ts"),"files_created":[format!("{rs}/hermes.ts")],"diff":patch("hermes.ts",&htext)});
+    hdb.execute("insert into messages values(1,'hs','assistant',null,?1,null,?2,1,null)", rusqlite::params![json!([{"id":"hc","function":{"name":"patch"}}]).to_string(),base+1]).unwrap();
+    hdb.execute("insert into messages values(2,'hs','tool',?1,null,'hc',?2,1,null)", rusqlite::params![receipt.to_string(),base+2]).unwrap();
+
+    let od = env.root.join(".openclaw/agents/main/sessions"); fs::create_dir_all(&od).unwrap();
+    let odb = rusqlite::Connection::open(od.join("openclaw-agent.sqlite")).unwrap();
+    odb.execute_batch("create table transcript_events(session_id text,seq integer,event_json text,event_zstd blob,event_utf8_bytes integer);create table session_windows(session_id text,acp_owned integer);insert into session_windows values('os',0);").unwrap();
+    let mut rows = [json!({"type":"session","id":"os","cwd":rs,"timestamp":base}),json!({"type":"message","id":"oa","timestamp":base+1,"message":{"role":"assistant","model":"actual-openclaw-model","content":[{"type":"toolCall","id":"oc","name":"edit"}]}}),json!({"type":"message","id":"or","timestamp":base+2,"message":{"role":"toolResult","toolCallId":"oc","isError":false,"details":{"changed":true,"patch":patch("openclaw.ts",&otext)}}})];
+    for (seq,row) in rows.iter().enumerate() { odb.execute("insert into transcript_events values('os',?1,?2,null,null)",rusqlite::params![seq,row.to_string()]).unwrap(); }
+    // This archive must not override the current database on a later retraction.
+    fs::write(od.join("archived.jsonl"),rows.iter().map(|v|v.to_string()).collect::<Vec<_>>().join("\n")).unwrap();
+
+    let qd=env.root.join("qoder-cn-custom/projects/demo");fs::create_dir_all(&qd).unwrap();
+    env.vars.insert("QODERCN_CONFIG_DIR".into(),env.root.join("qoder-cn-custom").display().to_string());
+    let qrows=[json!({"sessionId":"qs","cwd":rs,"type":"assistant","timestamp":base+1,"message":{"role":"assistant","model":"qoder-model","content":[{"type":"tool_use","id":"qc","name":"Edit","input":{"file_path":format!("{rs}/qoder.ts"),"old_string":"","new_string":qtext}}]}}),json!({"type":"user","timestamp":base+2,"message":{"content":[{"type":"tool_result","tool_use_id":"qc","is_error":false}]}})];
+    fs::write(qd.join("qs.jsonl"),qrows.iter().map(|r|r.to_string()).collect::<Vec<_>>().join("\n")).unwrap();
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]); assert!(ok,"{v}");
+    let count = |source: &str| { let db=rusqlite::Connection::open(env.root.join("lib/library.sqlite")).unwrap(); db.query_row("select count(*) from evidence where src=?1",[source],|r|r.get::<_,i64>(0)).unwrap() };
+    for round in 0..2 {
+        let (ok,v)=run(&env,&["analyze","--repo",&rs]);assert!(ok,"{round}: {v}");
+        for src in ["hermes-agent","openclaw","qoder"] {assert_eq!(count(src),8,"{src}, round {round}");}
+        let credits:serde_json::Value=serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+        for src in ["hermes-agent","openclaw","qoder"] {
+            let matching:Vec<_>=credits["breakdown"].as_array().unwrap().iter().filter(|b|b["contributor"].as_str().is_some_and(|id|id == format!("a:{src}") || id.starts_with(&format!("a:{src}/")))).collect();
+            assert_eq!(matching.iter().map(|b|b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap_or(0)).sum::<u64>(),8,"{src}: {}",credits["breakdown"]);
+        }
+        assert!(!credits.to_string().contains("mutable-final-model"));
+    }
+    hdb.execute("update messages set active=0 where id=2",[]).unwrap();
+    rows[2]["message"]["isError"]=json!(true);
+    odb.execute("update transcript_events set event_json=?1 where seq=2",[rows[2].to_string()]).unwrap();
+    let (ok,v)=run(&env,&["analyze","--repo",&rs]);assert!(ok,"{v}");
+    assert_eq!(count("hermes-agent"),0);assert_eq!(count("openclaw"),0);assert_eq!(count("qoder"),8);
+    drop(hdb);drop(odb);
+    fs::remove_dir_all(env.root).unwrap();
+}
+
+/// Newly registered readers must produce attribution through the real CLI,
+/// rather than only passing isolated parser tests or appearing in doctor.
+#[test]
+fn tabnine_native_ownership_survives_mapping_and_cache_removal() {
+    use serde_json::json;
+    let mut env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let tn = env.root.join("tabnine-ide");
+    fs::create_dir_all(&tn).unwrap();
+    env.vars.insert("CREDITIA_TABNINE_IDE_DIR".into(), tn.display().to_string());
+    let base = 1_789_603_200_i64;
+    fs::write(repo.join("a.ts"), "// original human line\n").unwrap();
+    commit(&repo, "base", "me@example.com", "2026-09-17T00:00:00Z");
+    let additions = (0..8).map(|i| format!("export const nativeAdded{i} = {i};\n")).collect::<String>();
+    let text = format!("// original human line\n{additions}");
+    fs::write(repo.join("a.ts"), &text).unwrap();
+    commit(&repo, "agent work", "me@example.com", "2026-09-17T00:01:00Z");
+    let storage = env.root.join("opencode/storage");
+    for dir in ["session/p", "message/ses_tabnine", "part/m"] { fs::create_dir_all(storage.join(dir)).unwrap(); }
+    fs::write(storage.join("session/p/ses_tabnine.json"), json!({"id":"ses_tabnine","directory":rs,"time":{"created":base,"updated":base+30}}).to_string()).unwrap();
+    fs::write(storage.join("message/ses_tabnine/m.json"), json!({"id":"m","role":"assistant","modelID":"actual-engine-model","tokens":{"input":100,"output":50},"time":{"created":base+20}}).to_string()).unwrap();
+    fs::write(storage.join("part/m/t.json"), json!({"type":"tool","tool":"edit","state":{"status":"completed","input":{"filePath":"a.ts","oldString":"// original human line\n","newString":text},"time":{"end":base+30}}}).to_string()).unwrap();
+    let (ok, v) = run(&env, &["init", "--repo", &rs]); assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]); assert!(ok, "{v}");
+    fs::write(tn.join("sessions.json"), json!({"conversation":"ses_tabnine"}).to_string()).unwrap();
+    fs::write(tn.join("conversations.json"), json!([{"conversationId":"conversation","conversationType":"agent","rootPath":rs,"modelId":"mutable-selection","messages":[]}]).to_string()).unwrap();
+    for step in 0..3 {
+        if step == 1 { fs::write(tn.join("sessions.json"), "{}").unwrap(); }
+        if step == 2 { fs::remove_dir_all(env.root.join("lib/cache")).unwrap(); }
+        let (ok, v) = run(&env, &["analyze", "--repo", &rs]); assert!(ok, "step {step}: {v}");
+        let c = rusqlite::Connection::open(env.root.join("lib/library.sqlite")).unwrap();
+        assert_eq!(c.query_row("select count(*) from evidence where src='opencode'", [], |r| r.get::<_, i64>(0)).unwrap(), 0, "step {step}");
+        assert_eq!(c.query_row("select count(*) from evidence where src='tabnine'", [], |r| r.get::<_, i64>(0)).unwrap(), 8, "step {step}");
+        let sessions: Vec<_> = c.prepare("select src,model,tokens from sessions").unwrap().query_map([], |r| Ok((r.get::<_, String>(0)?,r.get::<_, String>(1)?,r.get::<_, i64>(2)?))).unwrap().map(Result::unwrap).collect();
+        assert_eq!(sessions, vec![("tabnine".into(), "actual-engine-model".into(), 150)], "step {step}");
+    }
+    fs::remove_dir_all(env.root).unwrap();
+}
+
+#[test]
+fn zcode_and_acp_reach_discover_doctor_and_attribution() {
+    use serde_json::json;
+    let mut env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base:i64 = 1_789_000_000;
+    let date = |t| format!("@{t} +0800");
+    fs::write(repo.join("README.md"), "# Reader integration fixture\n").unwrap();
+    commit(&repo,"init","me@example.com",&date(base-86400));
+    fs::create_dir_all(repo.join("src")).unwrap();
+    let code = |tag:&str| (0..8).map(|n|format!("export const {tag}_{n} = {n} + 100;")).collect::<Vec<_>>().join("\n");
+    let a=code("zcode_a");let b=code("zcode_b");let bad=code("rejected");let acp=code("cortex");
+    fs::write(repo.join("src/zcode.ts"),format!("{a}\n{b}\n{bad}\n")).unwrap();
+    fs::write(repo.join("src/acp.ts"),format!("{acp}\n")).unwrap();
+    commit(&repo,"write source files","me@example.com",&date(base+60));
+
+    let zd=env.root.join("zcode/cli/db");fs::create_dir_all(&zd).unwrap();
+    env.vars.insert("CREDITIA_ZCODE_DIR".into(),env.root.join("zcode").display().to_string());
+    let c=rusqlite::Connection::open(zd.join("db.sqlite")).unwrap();
+    c.execute_batch("CREATE TABLE session(id TEXT,directory TEXT,time_created INTEGER,time_updated INTEGER); CREATE TABLE message(id TEXT,session_id TEXT,data TEXT,time_created INTEGER); CREATE TABLE part(id TEXT,message_id TEXT,session_id TEXT,data TEXT,time_created INTEGER);").unwrap();
+    c.execute("INSERT INTO session VALUES('native-session',?1,?2,?3)",rusqlite::params![rs,base*1000,(base+40)*1000]).unwrap();
+    for (id,model,at) in [("m1","glm-a",base+10),("m2","glm-b",base+20)] {
+        c.execute("INSERT INTO message VALUES(?1,'native-session',?2,?3)",rusqlite::params![id,json!({"role":"assistant","modelId":model,"providerId":"zhipu","tokens":{"total":100}}).to_string(),at*1000]).unwrap();
+    }
+    for (id,mid,status,text) in [("a","m1","completed",&a),("b","m2","completed",&b),("error","m2","error",&bad),("pending","m2","running",&bad)] {
+        let lines: Vec<_> = text.lines().map(|l|format!("+{l}")).collect();
+        c.execute("INSERT INTO part VALUES(?1,?2,'native-session',?3,?4)",rusqlite::params![id,mid,json!({"type":"tool","tool":"Write","state":{"status":status,"input":{"file_path":format!("{rs}/src/zcode.ts"),"content":text},"metadata":{"display":{"kind":"file_diff","filePath":format!("{rs}/src/zcode.ts"),"truncated":false,"structuredPatch":[{"lines":lines}]}}}}).to_string(),(base+30)*1000]).unwrap();
+    }
+    drop(c);
+    let cap=env.root.join("captures");fs::create_dir_all(&cap).unwrap();
+    env.vars.insert("CREDITIA_CAPTURE_DIR".into(),cap.display().to_string());
+    let row=|direction:&str,message:serde_json::Value|json!({"direction":direction,"at":(base+35)*1000,"message":message});
+    let rows=[
+        json!({"type":"creditia-acp","version":1,"harness":"cortex-code","cwd":rs}),
+        row("client",json!({"id":1,"method":"session/new","params":{"cwd":rs}})),
+        row("agent",json!({"id":1,"result":{"sessionId":"acp-session","models":{"currentModelId":"cortex-model"}}})),
+        row("agent",json!({"method":"session/update","params":{"sessionId":"acp-session","update":{"sessionUpdate":"tool_call","toolCallId":"edit-1","status":"in_progress","content":[{"type":"diff","path":format!("{rs}/src/acp.ts"),"oldText":null,"newText":acp}]}}})),
+        row("agent",json!({"method":"session/update","params":{"sessionId":"acp-session","update":{"sessionUpdate":"tool_call_update","toolCallId":"edit-1","status":"completed"}}})),
+    ];
+    fs::write(cap.join("capture.jsonl"),rows.iter().map(|v|v.to_string()).collect::<Vec<_>>().join("\n")+"\n").unwrap();
+    let (ok,discovered)=run(&env,&["discover"]);assert!(ok,"{discovered}");
+    let summary=discovered.to_string();assert!(summary.contains("zcode"),"{discovered}");assert!(summary.contains("cortex-code"),"{discovered}");
+    let (_,doctor)=run(&env,&["doctor"]);
+    assert!(doctor["sources"].as_array().unwrap().iter().any(|s|s["source"]=="zcode"&&s["readable"]==true),"{doctor}");
+    assert!(doctor["sources"].as_array().unwrap().iter().any(|s|s["source"]=="cortex-code-acp"&&s["scope"]=="capture"&&s["readable"]==true),"{doctor}");
+    let (ok,v)=run(&env,&["init","--repo",&rs]);assert!(ok,"{v}");
+    let (ok,v)=run(&env,&["analyze","--repo",&rs]);assert!(ok,"{v}");
+    let read=||->serde_json::Value{serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap()};
+    let credits=read();
+    let verified=|id:&str|credits["breakdown"].as_array().unwrap().iter().find(|b|b["contributor"]==id).and_then(|b|b["byEvidence"]["verified"]["linesAdded"].as_u64()).unwrap_or(0);
+    assert_eq!(verified("a:zcode/glm-a"),8,"{}",credits["breakdown"]);
+    assert_eq!(verified("a:zcode/glm-b"),8,"{}",credits["breakdown"]);
+    assert_eq!(verified("a:cortex-code/cortex-model"),8,"{}",credits["breakdown"]);
+    let (ok,v)=run(&env,&["analyze","--repo",&rs]);assert!(ok,"{v}");
+    assert_eq!(read()["totals"]["sessions"],credits["totals"]["sessions"],"incremental capture must not duplicate sessions");
+    fs::remove_dir_all(env.root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn acp_capture_preserves_stdio_child_flags_exit_code_and_private_fields() {
+    use serde_json::json;
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Stdio;
+    let env=setup();
+    let script=env.root.join("agent.py");
+    fs::write(&script,r#"import sys, json
+assert sys.argv[1:] == ['--json', '--harness', 'child-value']
+for line in sys.stdin:
+    v=json.loads(line)
+    if v.get('method')=='authenticate':
+        print(json.dumps({'jsonrpc':'2.0','id':v['id'],'result':{'echo':'AUTH-SECRET'}}),flush=True)
+    elif v.get('method')=='session/new':
+        print(json.dumps({'jsonrpc':'2.0','id':v['id'],'result':{'sessionId':'s','models':{'currentModelId':'test-model'}}}),flush=True)
+    elif v.get('method')=='session/prompt':
+        print(json.dumps({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':'s','update':{'sessionUpdate':'tool_call','toolCallId':'t','status':'completed','content':[{'type':'diff','path':'/demo/a.rs','oldText':None,'newText':'accepted_line'}]}}}),flush=True)
+        print(json.dumps({'jsonrpc':'2.0','id':v['id'],'result':{'stopReason':'end_turn'}}),flush=True)
+sys.exit(7)
+"#).unwrap();
+    let out=env.root.join("capture.jsonl");
+    let mut child=Command::new(env!("CARGO_BIN_EXE_creditia-core")).args(["capture","--harness","cortex-code","--out",out.to_str().unwrap(),"--","/usr/bin/python3","-u",script.to_str().unwrap(),"--json","--harness","child-value"])
+        .env_clear().envs(&env.vars).env("PATH",std::env::var("PATH").unwrap()).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let requests=[json!({"jsonrpc":"2.0","id":0,"method":"authenticate","params":{"token":"AUTH-SECRET"}}),json!({"jsonrpc":"2.0","id":1,"method":"session/new","params":{"cwd":"/demo","mcpServers":[{"env":[{"name":"KEY","value":"MCP-SECRET"}]}]}}),json!({"jsonrpc":"2.0","id":2,"method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"PRIVATE-PROMPT"}]}})];
+    let input=requests.iter().map(|v|v.to_string()).collect::<Vec<_>>().join("\n")+"\n";
+    child.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+    let result=child.wait_with_output().unwrap();
+    assert_eq!(result.status.code(),Some(7),"{}",String::from_utf8_lossy(&result.stderr));
+    let messages:Vec<serde_json::Value>=String::from_utf8(result.stdout).unwrap().lines().map(|s|serde_json::from_str(s).unwrap()).collect();
+    assert_eq!(messages.len(),4);assert_eq!(messages[0]["result"]["echo"],"AUTH-SECRET");assert_eq!(messages[3]["result"]["stopReason"],"end_turn");
+    let saved=fs::read_to_string(&out).unwrap();
+    assert!(!saved.contains("AUTH-SECRET")&&!saved.contains("MCP-SECRET")&&!saved.contains("PRIVATE-PROMPT"),"capture retained unnecessary private fields");
+    assert!(saved.contains("accepted_line"));
+    assert_eq!(fs::metadata(&out).unwrap().permissions().mode()&0o777,0o600);
+    // A user-chosen existing file is never overwritten, and the agent isn't launched.
+    let second=Command::new(env!("CARGO_BIN_EXE_creditia-core")).args(["capture","--harness","cortex-code","--out",out.to_str().unwrap(),"--","/no/such/agent"])
+        .env_clear().envs(&env.vars).output().unwrap();
+    assert_eq!(second.status.code(),Some(1));assert!(second.stdout.is_empty());assert_eq!(fs::read_to_string(&out).unwrap(),saved);
+    fs::remove_dir_all(env.root).unwrap();
+}
+
 const AGENT_FILE: &str = "src/agent.rs\n";
 
 fn codex_lines() -> Vec<String> {
@@ -142,7 +395,8 @@ fn fake_claude(env: &Env, ts: i64) {
     let doc = (0..12).map(|i| format!("- 第 {i} 条说明，写得足够长以便哈希")).collect::<Vec<_>>().join("\n") + "\n";
     let lines = [
         serde_json::json!({ "type": "user", "cwd": env.repo.display().to_string(), "sessionId": "s1", "timestamp": iso(ts - 100), "message": { "role": "user", "content": "写个文档" } }),
-        serde_json::json!({ "type": "assistant", "cwd": env.repo.display().to_string(), "sessionId": "s1", "timestamp": iso(ts - 50), "message": { "id": "m1", "model": "claude-test", "usage": { "input_tokens": 100, "output_tokens": 50 }, "content": [{ "type": "tool_use", "name": "Write", "input": { "file_path": env.repo.join("docs/plan.md").display().to_string(), "content": doc } }] } }),
+        serde_json::json!({ "type": "assistant", "cwd": env.repo.display().to_string(), "sessionId": "s1", "timestamp": iso(ts - 50), "message": { "id": "m1", "model": "claude-test", "usage": { "input_tokens": 100, "output_tokens": 50 }, "content": [{ "type": "tool_use", "id": "write-doc", "name": "Write", "input": { "file_path": env.repo.join("docs/plan.md").display().to_string(), "content": doc } }] } }),
+        serde_json::json!({ "type": "user", "cwd": env.repo.display().to_string(), "sessionId": "s1", "timestamp": iso(ts - 49), "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "write-doc", "content": "File created successfully", "is_error": false }] }, "toolUseResult": { "type": "create", "filePath": env.repo.join("docs/plan.md").display().to_string(), "content": doc } }),
     ];
     fs::write(dir.join("s1.jsonl"), lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n") + "\n").unwrap();
 }
@@ -272,8 +526,12 @@ fn end_to_end() {
 
     // doctor 能跑
     let (_, v) = run(&env, &["doctor"]);
-    // 11 个老数据源 + Aider、Amp、TRAE CLI、Crush、Goose、Continue、Zed、Amazon Q、Copilot（VS Code、命令行）；没装的 Windsurf、TRAE IDE 不列
-    assert_eq!(v["sources"].as_array().unwrap().len(), 22);
+    // Source registration is shared by discovery, collection and doctor. Check
+    // identities instead of pinning the old source count as adapters are added.
+    let sources=v["sources"].as_array().unwrap();
+    for source in ["codex","cursor","zcode","muse","t3","omp","command-code","dsh","cortex-code"] {
+        assert!(sources.iter().any(|s|s["source"]==source),"missing doctor source {source}: {v}");
+    }
 
     // hook：安装后提交信息自动带 trailer（用盖章文件触发）
     let (ok, _) = run(&env, &["hook", "install", "--repo", &repo.display().to_string()]);
@@ -1366,4 +1624,550 @@ fn empty_repository_cannot_produce_a_successful_analysis() {
     assert!(!ok, "{report}");
     assert!(report["error"].is_string(), "{report}");
     assert!(!env.repo.join(".creditia/credits.json").exists());
+}
+
+/// 官方 SWE-agent 的提交补丁没有可靠墙钟时间：正常提交中只认完整历史里唯一的路径/行，
+/// 不能把同一路径先添加、删除、再添加的相同文本任选一次归给 agent。
+#[test]
+fn swe_agent_submitted_patch_matches_unique_history_and_quoted_unicode_path() {
+    let mut env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let date = |offset: i64| format!("@{} +0800", 1_789_200_000 + offset);
+    fs::write(repo.join("README.md"), "# SWE-agent history fixture\n").unwrap();
+    let base = commit(&repo, "init", "me@example.com", &date(0));
+    let rel = "src/中文.ts";
+    fs::create_dir_all(repo.join("src")).unwrap();
+    let repeated = "export const repeated_swe_a = resolve_a(42);\nexport const repeated_swe_b = resolve_b(73);\n";
+    fs::write(repo.join(rel), repeated).unwrap();
+    commit(&repo, "earlier matching text", "me@example.com", &date(60));
+    fs::remove_file(repo.join(rel)).unwrap();
+    commit(&repo, "remove earlier text", "me@example.com", &date(120));
+    let unique = (0..8)
+        .map(|n| format!("export const swe_unique_{n} = compute_unique_{n}({}, {});", n * 17, n + 501))
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(repo.join(rel), format!("{repeated}{unique}\n")).unwrap();
+    commit(&repo, "submitted SWE-agent work", "me@example.com", &date(180));
+
+    // Let Git produce its actual C-style octal UTF-8 pathname quoting.
+    let patch = git(&repo, &["-c", "core.quotepath=true", "diff", &base, "HEAD", "--", rel]);
+    assert!(patch.contains(r#"+++ "b/src/\344\270\255\346\226\207.ts""#), "{patch}");
+    let fixture = env.root.join("swe-agent");
+    fs::create_dir_all(&fixture).unwrap();
+    env.vars.insert("CREDITIA_SWE_AGENT_DIR".into(), fixture.display().to_string());
+    let trajectory = serde_json::json!({
+        "replay_config": { "env": { "repo": { "path": rs } }, "agent": { "model": { "name": "swe-test" } } },
+        "trajectory": [],
+        "history": [],
+        "info": { "exit_status": "submitted", "submission": patch }
+    });
+    fs::write(fixture.join("submitted.traj"), trajectory.to_string()).unwrap();
+
+    let (ok, result) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{result}");
+    let (ok, result) = run(&env, &["analyze", "--repo", &rs, "--level", "strict"]);
+    assert!(ok, "{result}");
+    let credits: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(repo.join(".creditia/credits.json")).unwrap(),
+    ).unwrap();
+    assert_eq!(credits["level"], "strict");
+    let swe = credits["breakdown"].as_array().unwrap().iter()
+        .find(|b| b["contributor"] == "a:swe-agent/swe-test")
+        .unwrap_or_else(|| panic!("SWE-agent patch did not reach attribution: {}", credits["breakdown"]));
+    assert_eq!(swe["byEvidence"]["verified"]["linesAdded"], 8, "{swe}");
+    assert_eq!(swe["linesAdded"], 8, "repeated untimed lines must remain unclaimed: {swe}");
+    let verified: u64 = credits["breakdown"].as_array().unwrap().iter()
+        .map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap_or(0)).sum();
+    assert_eq!(verified, 8, "{}", credits["breakdown"]);
+    assert_eq!(credits["totals"]["linesAdded"], 13, "both repeated additions must be present in history: {credits}");
+    fs::remove_dir_all(env.root).unwrap();
+}
+
+/// Bolt / Lovable / Devin cloud native imports must reach final attribution
+/// through the real CLI: cross-export duplicates, failures, retained human
+/// context, unknown model/time, project boundaries and import updates.
+#[test]
+fn bolt_lovable_devin_cloud_native_imports_reach_final_attribution() {
+    use serde_json::json;
+    let mut env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base: i64 = 1_789_000_000;
+    let date = |t| format!("@{t} +0800");
+    let lines = |tag: &str, n: usize| (0..n).map(|i| format!("export const {tag}_{i} = {i} + 7;")).collect::<Vec<_>>().join("\n");
+    let bolt_added = lines("bolt", 8);
+    let lov_added = lines("lovable", 8);
+    let devin_added = lines("devin", 8);
+    let failed_added = lines("never", 6);
+    let bolt_base = "// human bolt base";
+    let lov_base = "// human lovable base";
+    let devin_base = "// human devin base";
+    let bolt_full = format!("{bolt_base}\n{bolt_added}\n");
+    let lov_full = format!("{lov_base}\n{lov_added}\n");
+    let devin_full = format!("{devin_base}\n{devin_added}\n");
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join("src/bolt.ts"), format!("{bolt_base}\n")).unwrap();
+    fs::write(repo.join("src/lovable.ts"), format!("{lov_base}\n")).unwrap();
+    fs::write(repo.join("src/devin.ts"), format!("{devin_base}\n")).unwrap();
+    commit(&repo, "base", "me@example.com", &date(base - 86400));
+    fs::write(repo.join("src/bolt.ts"), &bolt_full).unwrap();
+    fs::write(repo.join("src/lovable.ts"), &lov_full).unwrap();
+    fs::write(repo.join("src/devin.ts"), &devin_full).unwrap();
+    fs::write(repo.join("src/failed.ts"), format!("{failed_added}\n")).unwrap();
+    commit(&repo, "agent work", "me@example.com", &date(base + 120));
+
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    // A real Bolt user maps the cloud workspace root through the config markers.
+    let cfg_path = repo.join(".creditia/config.json");
+    let mut cfg: serde_json::Value = serde_json::from_str(&fs::read_to_string(&cfg_path).unwrap()).unwrap();
+    cfg["markers"] = json!(["/home/project/"]);
+    fs::write(&cfg_path, serde_json::to_string(&cfg).unwrap()).unwrap();
+
+    let bolt_dir = env.root.join("bolt");
+    let lov_dir = env.root.join("lovable");
+    let devin_dir = env.root.join("devin");
+    for d in [&bolt_dir, &lov_dir, &devin_dir] {
+        fs::create_dir_all(d).unwrap();
+    }
+    env.vars.insert("CREDITIA_BOLT_DIR".into(), bolt_dir.display().to_string());
+    env.vars.insert("CREDITIA_LOVABLE_DIR".into(), lov_dir.display().to_string());
+    env.vars.insert("CREDITIA_DEVIN_DIR".into(), devin_dir.display().to_string());
+
+    // Bolt: saved Write receipt joined with the turn-start commit and base body.
+    let har_entry = |method: &str, path: String, body: serde_json::Value| json!({"request":{"method":method,"url":format!("https://bolt.new{path}")},"response":{"status":200,"content":{"mimeType":"application/json","text":body.to_string()}}});
+    let mut start = har_entry("POST", "/api/chat".into(), json!({}));
+    start["request"]["postData"] = json!({"mimeType":"application/json","text":json!({"projectId":"project-a","codeStorageRepo":{"sha":"base-sha"},"messages":[{"id":"u1","role":"user","content":"edit"}]}).to_string()});
+    let mut apply = har_entry("POST", "/api/projects/project-a/apply-changes".into(), json!({"sha":"saved-sha","files":[{"state":"modified","path":"src/bolt.ts","content":bolt_full,"isBinary":false}]}));
+    apply["request"]["postData"] = json!({"mimeType":"application/json","text":json!({"baseSha":"base-sha","sha":"saved-sha"}).to_string()});
+    let chat = har_entry("GET", "/api/chats/project-a".into(), json!({"messages":[
+        {"id":"u1","role":"user","content":"edit"},
+        {"id":"a1","role":"assistant","annotations":[{"type":"bolt-merged","mergedSha":"saved-sha"},{"type":"metadata","userMessageId":"u1"}],"parts":[{"type":"tool-invocation","toolInvocation":{"toolCallId":"call-1","toolName":"Write","args":{"file_path":"/home/project/src/bolt.ts","content":bolt_full},"state":"result","result":"opaque"}}]}
+    ]}));
+    let baseline = json!({"request":{"method":"GET","url":"https://bolt.new/api/projects/project-a/files/base-sha/src/bolt~1ts?e"},"response":{"status":200,"content":{"mimeType":"text/plain","text":format!("{bolt_base}\n")}}});
+    let bolt_har = json!({"log":{"version":"1.2","entries":[chat.clone(),apply.clone(),baseline.clone(),start.clone()]}}).to_string();
+
+    // Lovable: successful trajectory events with a parent-bound model, plus a
+    // rejected call whose lines must never count.
+    // Official hunks carry one row per line; multi-line contents are invalid.
+    let inline = |old: &str, new: &str| {
+        use base64::Engine;
+        let rows = old
+            .lines()
+            .map(|l| json!({"type":"remove","content":l}))
+            .chain(new.lines().map(|l| json!({"type":"add","content":l})))
+            .collect::<Vec<_>>();
+        let hunks = json!([{"oldStart":1,"oldCount":old.lines().count(),"newStart":1,"newCount":new.lines().count(),"lines":rows}]);
+        base64::engine::general_purpose::STANDARD.encode(serde_json::to_vec(&hunks).unwrap())
+    };
+    let ts = (base + 30).to_string();
+    let lev = |id: &str, parent: &str, payload: serde_json::Value| json!({"id":{"value":id},"parent":{"value":parent},"timestamp":ts,"payload":payload});
+    let lov_path = format!("{rs}/src/lovable.ts");
+    let fail_path = format!("{rs}/src/failed.ts");
+    let lov_events = vec![
+        lev("iteration", "", json!({"iterationStart":{}})),
+        lev("inference", "iteration", json!({"agentOutputStart":{"model":{"modelName":"mutable-selection"}}})),
+        lev("call", "inference", json!({"agentOutputToolCall":{"toolId":"lov-write","toolUseId":"provider-1","params":format!("{{\"file_path\":\"{lov_path}\"}}")}})),
+        lev("model", "call", json!({"agentOutputEnd":{"model":{"modelName":"lov-model"}}})),
+        lev("validated", "model", json!({"toolParametersValidated":{"toolCall":{"value":"call"},"params":format!("{{\"file_path\":\"{lov_path}\"}}")}})),
+        lev("start", "validated", json!({"toolExecutionStart":{"toolCall":{"value":"call"}}})),
+        lev("end", "start", json!({"toolExecutionEnd":{"toolCall":{"value":"call"},"output":{"changes":[{"edit":{"path":lov_path}}],"diffs":[{"filePath":lov_path,"content":{"inlineData":inline(lov_base, &lov_added)}}]}}})),
+        lev("rej-call", "iteration", json!({"agentOutputToolCall":{"toolId":"lov-write","toolUseId":"provider-2","params":format!("{{\"file_path\":\"{fail_path}\"}}")}})),
+        lev("rej-validated", "rej-call", json!({"toolParametersValidated":{"toolCall":{"value":"rej-call"},"params":format!("{{\"file_path\":\"{fail_path}\"}}")}})),
+        lev("rejected", "rej-validated", json!({"toolRejection":{"toolCall":{"value":"rej-call"}}})),
+    ];
+    fs::write(lov_dir.join("trajectory.json"), json!({"events":lov_events}).to_string()).unwrap();
+
+    // Devin cloud: native ACP loadPage page with a bound model, an own
+    // timestamp, and a failed edit that vetoes its lines.
+    let devin_page = json!({
+        "updates": [
+            {"sessionId":"devin-s","update":{"sessionUpdate":"user_message_chunk","content":[{"type":"text","text":"go"}],"messageId":"m1"}},
+            {"sessionId":"devin-s","update":{"sessionUpdate":"agent_message_chunk","content":[{"type":"text","text":"working"}],"_meta":{"cognition.ai/model":"devin-model"}}},
+            {"sessionId":"devin-s","update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"Edit","kind":"edit","status":"completed","content":[{"type":"diff","path":format!("{rs}/src/devin.ts"),"oldText":format!("{devin_base}\n"),"newText":devin_full}],"_meta":{"cognition.ai/timestamp":(base+40).to_string()}}},
+            {"sessionId":"devin-s","update":{"sessionUpdate":"tool_call","toolCallId":"t2","title":"Edit","kind":"edit","status":"failed","content":[{"type":"diff","path":format!("{rs}/src/failed.ts"),"oldText":"","newText":format!("{failed_added}\n")}],"_meta":{"cognition.ai/timestamp":(base+50).to_string()}}}
+        ],
+        "coveredRange":{"start":null,"end":{"cursor":"c1","sortKey":"1"}},"hasMore":false,"replayFilterVersion":"v1"
+    });
+    fs::write(devin_dir.join("page.json"), devin_page.to_string()).unwrap();
+
+    // Step 0 setup: duplicate Bolt exports across two files must stay one set.
+    fs::write(bolt_dir.join("first.har"), &bolt_har).unwrap();
+    fs::write(bolt_dir.join("copy.har"), &bolt_har).unwrap();
+    let (_, doctor) = run(&env, &["doctor"]);
+    let row = |name: &str| doctor["sources"].as_array().unwrap().iter().find(|s| s["source"] == name).cloned().unwrap_or_else(|| panic!("no {name}: {doctor}"));
+    assert_eq!(row("bolt")["scope"], "edits", "{}", row("bolt"));
+    assert_eq!(row("bolt")["readable"], true);
+    assert_eq!(row("lovable")["scope"], "edits");
+    assert_eq!(row("lovable")["readable"], true);
+    assert_eq!(row("devin-acp")["scope"], "edits");
+    assert_eq!(row("devin-acp")["readable"], true);
+    assert_eq!(row("devin-cloud")["scope"], "sessions");
+
+    let read_counts = || {
+        let c = rusqlite::Connection::open(env.root.join("lib/library.sqlite")).unwrap();
+        let ev = |src: &str| c.query_row("select count(*) from evidence where src=?", [src], |r| r.get::<_, i64>(0)).unwrap();
+        let sessions = |src: &str| c.query_row("select count(*) from sessions where src=?", [src], |r| r.get::<_, i64>(0)).unwrap();
+        (ev("bolt"), ev("lovable"), ev("devin"), sessions("bolt"), sessions("lovable"), sessions("devin"))
+    };
+    let credits = || -> serde_json::Value {
+        serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap()
+    };
+    let verified = |credits: &serde_json::Value, id: &str| {
+        credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).and_then(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64()).unwrap_or(0)
+    };
+    let failed_evidence = || {
+        let c = rusqlite::Connection::open(env.root.join("lib/library.sqlite")).unwrap();
+        c.query_row("select count(*) from evidence where rel='src/failed.ts'", [], |r| r.get::<_, i64>(0)).unwrap()
+    };
+
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let c = credits();
+    assert_eq!(verified(&c, "a:bolt"), 8, "{:?} {}", read_counts(), c["breakdown"]);
+    assert_eq!(verified(&c, "a:lovable/lov-model"), 8, "{}", c["breakdown"]);
+    assert_eq!(verified(&c, "a:devin/devin-model"), 8, "{}", c["breakdown"]);
+    assert_eq!(failed_evidence(), 0, "rejected/failed lines must not be evidence");
+    assert_eq!(read_counts(), (8, 8, 8, 1, 1, 1));
+
+    // Step 1: a second analyze must not duplicate sessions or evidence.
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(read_counts(), (8, 8, 8, 1, 1, 1), "incremental analyze must not duplicate");
+
+    // Step 2: an updated export adds a second turn, while a conflicting stale
+    // copy (its apply response body disagrees) suppresses the whole native set:
+    // Both old and new lines stay unattributed while their receipts conflict.
+    // An earlier successful analysis must not resurrect the rejected evidence.
+    let bolt_next = lines("bolt_next", 6);
+    let bolt_full2 = format!("{bolt_full}{bolt_next}\n");
+    let mut chat2 = chat.clone();
+    chat2["response"]["content"]["text"] = json!(json!({"messages":[
+        {"id":"u1","role":"user","content":"edit"},
+        {"id":"a1","role":"assistant","annotations":[{"type":"bolt-merged","mergedSha":"saved-sha"},{"type":"metadata","userMessageId":"u1"}],"parts":[{"type":"tool-invocation","toolInvocation":{"toolCallId":"call-1","toolName":"Write","args":{"file_path":"/home/project/src/bolt.ts","content":bolt_full},"state":"result","result":"opaque"}}]},
+        {"id":"u2","role":"user","content":"more"},
+        {"id":"a2","role":"assistant","annotations":[{"type":"bolt-merged","mergedSha":"saved-sha-2"},{"type":"metadata","userMessageId":"u2"}],"parts":[{"type":"tool-invocation","toolInvocation":{"toolCallId":"call-2","toolName":"Write","args":{"file_path":"/home/project/src/bolt.ts","content":bolt_full2},"state":"result","result":"opaque"}}]}
+    ]}).to_string());
+    let mut apply2 = apply.clone();
+    apply2["request"]["url"] = json!("https://bolt.new/api/projects/project-a/apply-changes");
+    apply2["request"]["postData"]["text"] = json!(json!({"baseSha":"saved-sha","sha":"saved-sha-2"}).to_string());
+    apply2["response"]["content"]["text"] = json!(json!({"sha":"saved-sha-2","files":[{"state":"modified","path":"src/bolt.ts","content":bolt_full2,"isBinary":false}]}).to_string());
+    let mut start2 = start.clone();
+    start2["request"]["postData"]["text"] = json!(json!({"projectId":"project-a","codeStorageRepo":{"sha":"saved-sha"},"messages":[{"id":"u2","role":"user","content":"more"}]}).to_string());
+    let two_turns = json!({"log":{"version":"1.2","entries":[chat2,apply.clone(),apply2,baseline.clone(),start.clone(),start2]}}).to_string();
+    fs::write(bolt_dir.join("first.har"), &two_turns).unwrap();
+    let mut conflicting: serde_json::Value = serde_json::from_str(&bolt_har).unwrap();
+    let mut body: serde_json::Value = serde_json::from_str(conflicting["log"]["entries"][1]["response"]["content"]["text"].as_str().unwrap()).unwrap();
+    body["files"][0]["content"] = json!("tampered committed body\n");
+    conflicting["log"]["entries"][1]["response"]["content"]["text"] = json!(body.to_string());
+    fs::write(bolt_dir.join("copy.har"), conflicting.to_string()).unwrap();
+    fs::write(repo.join("src/bolt.ts"), &bolt_full2).unwrap();
+    commit(&repo, "more agent work", "me@example.com", &date(base + 240));
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let c = credits();
+    assert_eq!(verified(&c, "a:bolt"), 0, "conflicting copies must retract prior attribution: {:?}", read_counts());
+    assert_eq!(read_counts(), (0, 8, 8, 0, 1, 1));
+    let (ok, v) = run(&env, &["analyze", "--fresh", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(verified(&credits(), "a:bolt"), 0, "a fresh analysis must not restore rejected evidence");
+
+    // Step 3: removing the conflicting copy rebuilds the native set; the second
+    // turn's new lines are now attributed as well.
+    fs::remove_file(bolt_dir.join("copy.har")).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(verified(&credits(), "a:bolt"), 14, "{:?}", read_counts());
+    assert_eq!(read_counts(), (14, 8, 8, 1, 1, 1));
+
+    // Step 4: a failed copy of a previously accepted native call must retract
+    // its stored rows, including when the CLI is asked for a fresh analysis.
+    let mut failed_copy = devin_page.clone();
+    failed_copy["updates"][2]["update"]["status"] = json!("failed");
+    fs::write(devin_dir.join("failed-copy.json"), failed_copy.to_string()).unwrap();
+    for args in [vec!["analyze", "--repo", &rs], vec!["analyze", "--fresh", "--repo", &rs]] {
+        let (ok, v) = run(&env, &args);
+        assert!(ok, "{v}");
+        assert_eq!(verified(&credits(), "a:devin/devin-model"), 0);
+        assert_eq!(read_counts(), (14, 8, 0, 1, 1, 0), "failed calls cannot return from the evidence library");
+    }
+    fs::remove_file(devin_dir.join("failed-copy.json")).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(read_counts(), (14, 8, 8, 1, 1, 1));
+
+    // Correcting conflicting model observations must also remove the old
+    // model's stored rows, rather than saving a second copy of the same write.
+    let mut model_copy = devin_page.clone();
+    model_copy["updates"][1]["update"]["_meta"]["cognition.ai/model"] = json!("other-model");
+    fs::write(devin_dir.join("model-copy.json"), model_copy.to_string()).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(verified(&credits(), "a:devin"), 8, "conflicting models remain unknown");
+    assert_eq!(verified(&credits(), "a:devin/devin-model"), 0);
+    assert_eq!(read_counts(), (14, 8, 8, 1, 1, 1));
+    fs::remove_file(devin_dir.join("model-copy.json")).unwrap();
+
+    // Lovable's explicit revert invalidates the currently captured branch.
+    // It must revoke prior library evidence as well as the reader's cache.
+    let revert = lev("later-revert", "end", json!({"revert":{"oldAgentHead":{"value":"end"}}}));
+    fs::write(lov_dir.join("revert.json"), json!({"events":[revert]}).to_string()).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(read_counts(), (14, 0, 8, 1, 0, 1));
+    assert_eq!(verified(&credits(), "a:lovable/lov-model"), 0);
+    fs::remove_file(lov_dir.join("revert.json")).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(read_counts(), (14, 8, 8, 1, 1, 1));
+
+    // Losing an import is not an explicit failure or revert. Historical
+    // evidence remains usable when the native log itself is no longer present.
+    fs::remove_file(lov_dir.join("trajectory.json")).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--fresh", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(verified(&credits(), "a:lovable/lov-model"), 8);
+    assert_eq!(read_counts(), (14, 8, 8, 1, 1, 1));
+    fs::remove_dir_all(env.root).unwrap();
+}
+
+#[test]
+fn trae_native_encrypted_history_reaches_attribution_and_retracts_failed_results() {
+    use serde_json::json;
+    const SUCCESS: &[u8] = include_bytes!("fixtures/trae-native/success.db");
+    const FAILED: &[u8] = include_bytes!("fixtures/trae-native/failed.db");
+    let mut env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    fs::write(repo.join("a.rs"), "unchanged line\nremoved line\n").unwrap();
+    commit(&repo, "human base", "me@example.com", "@1720000000 +0000");
+    fs::write(repo.join("a.rs"), "unchanged line\nactual native fixture line\n").unwrap();
+    commit(&repo, "native edit", "me@example.com", "@1720000006 +0000");
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let cfg_path = repo.join(".creditia/config.json");
+    let mut cfg: serde_json::Value = serde_json::from_slice(&fs::read(&cfg_path).unwrap()).unwrap();
+    cfg["markers"] = json!(["/private/tmp/creditia-trae-native-project/"]);
+    fs::write(&cfg_path, serde_json::to_vec(&cfg).unwrap()).unwrap();
+    let source = env.root.join("trae/ModularData/ai-agent/database.db");
+    fs::create_dir_all(source.parent().unwrap()).unwrap();
+    fs::write(&source, SUCCESS).unwrap();
+    assert!(!SUCCESS.starts_with(b"SQLite format 3"), "the reference fixture must be encrypted");
+    env.vars.insert("CREDITIA_TRAE_IDE_DIR".into(), env.root.join("trae").display().to_string());
+    let (_, doctor) = run(&env, &["doctor"]);
+    let native = doctor["sources"].as_array().unwrap().iter().find(|r| r["source"] == "trae-ide").unwrap();
+    assert_eq!(native["scope"], "edits", "{native}");
+    assert_eq!(native["readable"], true, "{native}");
+    let verified = || {
+        let credits: serde_json::Value = serde_json::from_slice(&fs::read(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+        credits["breakdown"].as_array().unwrap().iter()
+            .filter(|b| b["contributor"] == "a:trae-ide")
+            .filter_map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64()).sum::<u64>()
+    };
+    let rows = || {
+        let db = rusqlite::Connection::open(env.root.join("lib/library.sqlite")).unwrap();
+        let mut q = db.prepare("select rel,key,model,session,ts from evidence where src='trae-ide'").unwrap();
+        q.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, i64>(4)?)))
+            .unwrap().collect::<Result<Vec<_>, _>>().unwrap()
+    };
+    for _ in 0..2 {
+        let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+        assert!(ok, "{v}");
+        assert_eq!(verified(), 1, "{v}");
+        let saved = rows();
+        assert_eq!(saved.len(), 1, "retained context and tool parameters are not evidence");
+        assert_eq!(saved[0].0, "a.rs");
+        assert_eq!(saved[0].1, line_key("a.rs", &normalize("actual native fixture line", &ext_of("a.rs"))) as i64);
+        assert_eq!(saved[0].2, "", "historical configuration is not a proved execution model");
+        assert_eq!(saved[0].3, "native-s");
+        assert_eq!(saved[0].4, 1720000005, "use the tool's completion time");
+        assert_eq!(fs::read(&source).unwrap(), SUCCESS);
+    }
+    for suffix in ["-wal", "-shm", "-journal"] {
+        assert!(!PathBuf::from(format!("{}{suffix}", source.display())).exists(), "reading must not create a sidecar");
+    }
+    fs::write(&source, FAILED).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--fresh", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(verified(), 0, "a failed native result revokes prior verified attribution");
+    assert!(rows().is_empty());
+    assert_eq!(fs::read(&source).unwrap(), FAILED);
+    fs::write(&source, SUCCESS).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(verified(), 1);
+
+    // The default Trae and Trae CN roots can contain copies of the same history.
+    // They must reconcile together, including a failed copy of an earlier call.
+    env.vars.remove("CREDITIA_TRAE_IDE_DIR");
+    env.vars.insert("APPDATA".into(), env.root.join("AppData").display().to_string());
+    env.vars.insert("XDG_CONFIG_HOME".into(), env.root.join("config").display().to_string());
+    #[cfg(target_os = "macos")]
+    let app_base = env.root.join("Library/Application Support");
+    #[cfg(target_os = "windows")]
+    let app_base = env.root.join("AppData");
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    let app_base = env.root.join("config");
+    let mut default_paths = Vec::new();
+    for name in ["Trae", "Trae CN"] {
+        let path = app_base.join(name).join("ModularData/ai-agent/database.db");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, SUCCESS).unwrap();
+        default_paths.push(path);
+    }
+    let (ok, v) = run(&env, &["analyze", "--fresh", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(verified(), 1);
+    assert_eq!(rows().len(), 1, "copies across default roots are one native call");
+    let (_, doctor) = run(&env, &["doctor"]);
+    let native = doctor["sources"].as_array().unwrap().iter().find(|r| r["source"] == "trae-ide").unwrap();
+    assert_eq!(native["records"], 1, "session metadata also merges across roots");
+    fs::write(&default_paths[1], FAILED).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(verified(), 0, "a conflicting copy in the other root vetoes the call");
+    assert!(rows().is_empty());
+    assert_eq!(fs::read(&default_paths[0]).unwrap(), SUCCESS);
+    assert_eq!(fs::read(&default_paths[1]).unwrap(), FAILED);
+    fs::remove_dir_all(env.root).unwrap();
+}
+
+#[test]
+fn devin_partial_native_capture_preserves_uncovered_cli_edits_and_native_metadata() {
+    use serde_json::json;
+    let mut env = setup();
+    let repo = env.repo.canonicalize().unwrap();
+    let rs = repo.display().to_string();
+    let base = 1720000000_i64;
+    fs::write(repo.join("README.md"), "a neutral test repository\n").unwrap();
+    commit(&repo, "base", "me@example.com", "@1720000000 +0000");
+    let lines: Vec<_> = (0..8).map(|i| format!("export const cli_agent_{i} = {i} + 17;")).collect();
+    fs::write(repo.join("a.ts"), format!("{}\n", lines.join("\n"))).unwrap();
+    commit(&repo, "agent work", "me@example.com", "@1720000020 +0000");
+    let (ok, v) = run(&env, &["init", "--repo", &rs]);
+    assert!(ok, "{v}");
+    let imports = env.root.join("devin");
+    fs::create_dir_all(&imports).unwrap();
+    env.vars.insert("CREDITIA_DEVIN_DIR".into(), imports.display().to_string());
+    let patch = format!("apply_patch <<'PATCH'\n*** Begin Patch\n*** Add File: {rs}/a.ts\n{}\n*** End Patch\nPATCH", lines.iter().map(|l| format!("+{l}")).collect::<Vec<_>>().join("\n"));
+    let hook = json!({"hook_event_name":"PostToolUse","tool_name":"exec","session_id":"partial-s","tool_input":{"command":patch},"tool_response":{"success":true}});
+    fs::write(imports.join("cli.jsonl"), hook.to_string()).unwrap();
+    let page = |user: &str, id: &str, path: &str, text: &str| json!({
+        "updates":[
+            {"sessionId":"partial-s","update":{"sessionUpdate":"user_message_chunk","messageId":user}},
+            {"sessionId":"partial-s","update":{"sessionUpdate":"agent_message_chunk","_meta":{"cognition.ai/model":"native-model"}}},
+            {"sessionId":"partial-s","update":{"sessionUpdate":"tool_call","toolCallId":id,"kind":"edit","status":"completed","content":[{"type":"diff","path":path,"oldText":"","newText":text}],"_meta":{"cognition.ai/timestamp":(base+10).to_string()}}}
+        ],"coveredRange":{"start":null,"end":{"cursor":"end","sortKey":"1"}},"hasMore":false,"replayFilterVersion":"v1"
+    });
+    fs::write(imports.join("foreign.json"), page("u-foreign", "foreign-call", "/other-project/a.ts", "unrelated original native line\n").to_string()).unwrap();
+    let verified = || {
+        let c: serde_json::Value = serde_json::from_slice(&fs::read(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+        c["breakdown"].as_array().unwrap().iter().filter(|b| b["contributor"].as_str().unwrap_or("").starts_with("a:devin"))
+            .filter_map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64()).sum::<u64>()
+    };
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
+    assert_eq!(verified(), 8, "unmapped native history must not erase valid CLI edits: {v}");
+    fs::write(imports.join("native.json"), page("u-native", "mapped-call", &format!("{rs}/a.ts"), &format!("{}\n", lines[..4].join("\n"))).to_string()).unwrap();
+    for _ in 0..2 {
+        let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+        assert!(ok, "{v}");
+        assert_eq!(verified(), 8, "native overlap and CLI-only rows must total eight: {v}");
+        let db = rusqlite::Connection::open(env.root.join("lib/library.sqlite")).unwrap();
+        let count = |model: &str| db.query_row("select count(*) from evidence where src='devin' and model=?1", [model], |r| r.get::<_, i64>(0)).unwrap();
+        assert_eq!(count("native-model"), 4);
+        assert_eq!(count(""), 4, "uncovered CLI edits remain available");
+        let session: (i64, i64, i64) = db.query_row("select count(*),min(start),min(prompts) from sessions where src='devin'", [], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap();
+        assert_eq!(session, (1, base+10, 2), "native metadata must not be overwritten by the CLI's zero values");
+    }
+    fs::remove_dir_all(env.root).unwrap();
+}
+
+#[test]
+fn relative_cloud_repository_conflicts_retract_persisted_attribution() {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use serde_json::{json, Value};
+    for source in ["lovable", "devin"] {
+        let mut env = setup();
+        let repo = env.repo.canonicalize().unwrap();
+        let rs = repo.display().to_string();
+        git(&repo, &["remote", "add", "origin", "https://github.com/acme/demo.git"]);
+        fs::write(repo.join("a.rs"), "human base line\n").unwrap();
+        commit(&repo, "base", "me@example.com", "@1720000000 +0000");
+        let lines: Vec<_> = (0..8).map(|i| format!("pub const ADDED_{i}: i32 = {i} + 17;")).collect();
+        let after = format!("human base line\n{}\n", lines.join("\n"));
+        fs::write(repo.join("a.rs"), &after).unwrap();
+        commit(&repo, "native edits", "me@example.com", "@1720000010 +0000");
+        let (ok, v) = run(&env, &["init", "--repo", &rs]);
+        assert!(ok, "{v}");
+        let imports = env.root.join(source);
+        fs::create_dir_all(&imports).unwrap();
+        env.vars.insert(format!("CREDITIA_{}_DIR", source.to_uppercase()), imports.display().to_string());
+        let har_entry = |path: &str, body: Value| json!({"request":{"method":"GET","url":format!("https://api.lovable.dev/{path}")},"response":{"status":200,"content":{"text":body.to_string()}}});
+        let good = if source == "lovable" {
+            let mut added = vec![json!({"type":"context","content":"human base line"})];
+            added.extend(lines.iter().map(|line| json!({"type":"add","content":line})));
+            let hunks = json!([{"oldStart":1,"oldCount":1,"newStart":1,"newCount":9,"lines":added}]);
+            let event = |id: &str, parent: &str, payload: Value| json!({"id":{"value":id},"parent":{"value":parent},"timestamp":"2024-07-03T09:46:45Z","payload":payload});
+            let params = json!({"file_path":"a.rs"}).to_string();
+            let trace = vec![
+                event("iteration", "", json!({"iterationStart":{}})),
+                event("inference", "iteration", json!({"agentOutputStart":{}})),
+                event("call", "inference", json!({"agentOutputToolCall":{"toolId":"lov-write","params":params}})),
+                event("model", "call", json!({"agentOutputEnd":{"model":{"modelName":"actual-model"}}})),
+                event("validated", "model", json!({"toolParametersValidated":{"toolCall":{"value":"call"},"params":params}})),
+                event("start", "validated", json!({"toolExecutionStart":{"toolCall":{"value":"call"}}})),
+                event("end", "start", json!({"toolExecutionEnd":{"toolCall":{"value":"call"},"output":{"changes":[{"edit":{"path":"a.rs"}}],"diffs":[{"filePath":"a.rs","content":{"inlineData":STANDARD.encode(hunks.to_string())}}]}}})),
+            ];
+            json!({"log":{"version":"1.2","entries":[
+                har_entry("projects/p/trajectory?chain=view&filter=frontend&inclusive=true", json!({"events":trace})),
+                har_entry("workspaces/w/projects/p/gitsync", json!({"synced":true,"config":{"repo_url":"https://github.com/acme/demo"}})),
+            ]}})
+        } else {
+            json!({"updates":[
+                {"sessionId":"relative-s","update":{"sessionUpdate":"user_message_chunk","messageId":"u"}},
+                {"sessionId":"relative-s","update":{"sessionUpdate":"agent_message_chunk","_meta":{"cognition.ai/model":"actual-model","cognition.ai/owner":"acme","cognition.ai/repo":"demo"}}},
+                {"sessionId":"relative-s","update":{"sessionUpdate":"tool_call","toolCallId":"c","kind":"edit","status":"completed","content":[{"type":"diff","path":"a.rs","oldText":"human base line\n","newText":after}],"_meta":{"cognition.ai/timestamp":"1720000005"}}},
+            ],"coveredRange":{},"hasMore":false,"replayFilterVersion":"v1"})
+        };
+        let mut conflict = good.clone();
+        let mut conflicts = Vec::new();
+        if source == "lovable" {
+            conflict["log"]["entries"].as_array_mut().unwrap().push(har_entry("workspaces/w/projects/p/gitsync", json!({"synced":true,"config":{"repo_url":"https://github.com/acme/other"}})));
+            conflicts.push(conflict);
+            let mut conflict = good.clone();
+            let mut other_owner = good["log"]["entries"][0].clone();
+            other_owner["request"]["url"] = json!("https://api.lovable.dev/projects/other/trajectory?chain=view&filter=frontend&inclusive=true");
+            conflict["log"]["entries"].as_array_mut().unwrap().push(other_owner);
+            conflicts.push(conflict);
+        } else {
+            conflict["updates"].as_array_mut().unwrap().push(json!({"sessionId":"relative-s","update":{"sessionUpdate":"agent_message_chunk","_meta":{"cognition.ai/owner":"acme","cognition.ai/repo":"other"}}}));
+            conflicts.push(conflict);
+        }
+        let path = imports.join(if source == "lovable" { "network.har" } else { "page.json" });
+        let verified = || {
+            let c: Value = serde_json::from_slice(&fs::read(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+            c["breakdown"].as_array().unwrap().iter().filter(|b| b["contributor"].as_str().unwrap_or("").starts_with(&format!("a:{source}")))
+                .filter_map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64()).sum::<u64>()
+        };
+        for conflict in conflicts {
+            fs::write(&path, good.to_string()).unwrap();
+            let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+            assert!(ok, "{v}");
+            assert_eq!(verified(), 8, "{source}: the original repository binding is valid");
+            fs::write(&path, conflict.to_string()).unwrap();
+            let (ok, v) = run(&env, &["analyze", "--fresh", "--repo", &rs]);
+            assert!(ok, "{v}");
+            assert_eq!(verified(), 0, "{source}: a known contradictory binding must revoke attribution");
+            let db = rusqlite::Connection::open(env.root.join("lib/library.sqlite")).unwrap();
+            let count: i64 = db.query_row("select count(*) from evidence where src=?1", [source], |r| r.get(0)).unwrap();
+            assert_eq!(count, 0, "{source}: rejected rows must not be restored from the library");
+        }
+        fs::write(&path, good.to_string()).unwrap();
+        let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+        assert!(ok, "{v}");
+        assert_eq!(verified(), 8, "{source}: resolving the conflict restores the original evidence");
+        fs::remove_dir_all(env.root).unwrap();
+    }
 }

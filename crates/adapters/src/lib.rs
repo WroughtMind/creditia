@@ -1,13 +1,72 @@
-//! 各数据源 adapter：git、Codex、Claude Code、Cursor、Grok、Kimi、Gemini CLI、Qwen Code、OpenCode、Cline / Roo / Kilo、
+//! 各数据源 adapter：git、Codex、Claude Code、Cursor、Grok Build、Kimi Code CLI、Gemini CLI、Qwen Code、OpenCode、Cline / Roo / Kilo、
 //! Aider、GitHub Copilot（VS Code 和命令行）、Amp、TRAE CLI、Crush、Goose、Continue、Zed、Amazon Q 命令行。
 //! 只读打开，输出统一的行级证据和会话元数据。只认「成功写进文件」的编辑；路径映射回仓库内相对路径。
 
+pub mod pi;
+mod native_history;
+mod harness_paths;
+pub mod aiderdesk;
+pub mod dexto;
+pub mod pochi;
+pub mod firebender;
+pub mod moxby;
+pub mod rovodev;
+pub mod lingma;
+pub mod eve;
+mod eve_codec;
+pub mod forgecode;
+pub mod kode;
+pub mod mux;
+pub mod reasonix;
+pub mod jazz;
+pub mod deepagents;
+pub mod fx;
+pub mod astrbot;
+pub mod adal;
+pub mod posit;
+pub mod tinycloud;
+pub mod zencoder;
+pub mod terramind;
+pub mod zenflow;
+pub mod sarvam;
+pub mod codestudio;
+pub mod codearts;
+pub mod hermes;
+pub mod openclaw;
+pub mod longtail;
+pub mod remaining_native;
+pub mod muse;
+pub mod t3;
+pub mod tabnine_ide;
+pub mod minimax;
+pub mod vibe;
 pub mod aider;
+pub mod cascade;
+pub mod cloud;
+pub mod cloud_native;
+pub mod bolt;
+pub mod lovable;
+pub mod devin_cloud;
+pub mod editor_history;
+pub mod dsh;
+pub mod traces;
+mod trace_import;
+// Native TRAE storage is decrypted into a read-only in-memory SQLite snapshot.
+mod sqlcipher_pages;
 pub mod amazonq;
 pub mod amp;
 pub mod antigravity;
+pub mod antigravity_ide;
 pub mod claude;
 pub mod cline;
+pub mod cli_agents;
+pub mod codeflicker;
+pub mod comate;
+pub mod cursor_cli;
+pub mod ide_agents;
+pub mod junie;
+pub mod kiro;
+pub mod kiro_sessions;
 pub mod codex;
 pub mod cont;
 pub mod copilot;
@@ -19,10 +78,16 @@ pub mod goose;
 pub mod grok;
 pub mod kimi;
 pub mod opencode;
-pub mod others;
+pub mod acp;
 pub mod qwen;
+pub mod registry;
 pub mod trae;
+pub mod trae_native;
 pub mod zed;
+pub mod zcode;
+pub mod warp;
+
+pub use registry::{discover_all, doctor_all, scan_all};
 
 use creditia_core::hash::{ext_of, line_key, normalize, short_hash, short_key};
 use creditia_core::model::{Ev, PathMap, Src};
@@ -64,10 +129,22 @@ pub fn source_dir(src: Src) -> PathBuf {
         Src::Continue => cont::global_dir(),
         Src::Zed => zed::data_dir(),
         Src::AmazonQ => amazonq::data_dir(),
-        // Antigravity CLI（agy）；Antigravity 编辑器在 ~/.gemini/antigravity，存的是 .pb，读不了
+        // Antigravity CLI（agy）；编辑器的 native trajectory 与摘要独立读取。
         Src::Antigravity => env("CREDITIA_ANTIGRAVITY_DIR").unwrap_or_else(|| home().join(".gemini/antigravity-cli")),
+        Src::AntigravityIde => editor_history::antigravity_dir(),
         // Aider 的记录在每个仓库根目录里（.aider.chat.history.md），没有统一位置
         Src::Aider => home(),
+        Src::Pi | Src::Omp | Src::CommandCode => pi::data_dir(src),
+        Src::Muse => muse::data_dir(),
+        Src::T3 => t3::data_dir(),
+        Src::Vibe => vibe::data_dir(),
+        Src::MiniMax => minimax::data_dir(),
+        Src::GlmAgent | Src::Crow | Src::SiGit | Src::VtCode | Src::MinionCode | Src::Stakpak | Src::Kimchi | Src::Autohand | Src::Dirac | Src::Bob => longtail::data_dir(src),
+        Src::Cortex | Src::Poolside | Src::Nova | Src::DimCode | Src::Corust => remaining_native::data_dir(src),
+        _ => {
+            let key = format!("CREDITIA_{}_DIR", src.harness().to_ascii_uppercase().replace('-', "_"));
+            env(&key).unwrap_or_else(|| home().join(format!(".{}", src.harness())))
+        }
     }
 }
 
@@ -130,10 +207,12 @@ pub fn shell_targets(cmd: &str, cwd: &str, pm: &PathMap) -> Vec<String> {
     use std::sync::OnceLock;
     static CD: OnceLock<regex::Regex> = OnceLock::new();
     let cd = CD.get_or_init(|| regex::Regex::new(r#"(?:^|[;&|(]\s*)cd\s+["']?([^\s;&|)"']+)"#).unwrap());
-    let join = |base: &str, p: &str| if p.starts_with('/') { p.to_string() } else { format!("{}/{}", base.trim_end_matches('/'), p) };
-    let mut dirs = vec![cwd.to_string()];
+    let join = |base: &str, p: &str| harness_paths::target(p, base);
+    // Only the native absolute cwd can bind relative shell targets.
+    let cwd = join("", cwd);
+    let mut dirs = vec![cwd.clone()];
     for c in cd.captures_iter(cmd) {
-        dirs.push(join(cwd, &c[1]));
+        dirs.push(join(&cwd, &c[1]));
     }
     let mut out: Vec<String> = vec![];
     for tok in cmd.split(|c: char| c.is_whitespace() || ";&|<>()=,`'\"{}[]".contains(c)) {
@@ -141,7 +220,7 @@ pub fn shell_targets(cmd: &str, cwd: &str, pm: &PathMap) -> Vec<String> {
         if tok.len() < 3 || tok.starts_with('-') || tok.starts_with('$') || !(tok.contains('/') || tok.contains('.')) {
             continue;
         }
-        let cands: Vec<String> = if tok.starts_with('/') { vec![tok.to_string()] } else { dirs.iter().map(|d| join(d, tok)).collect() };
+        let cands: Vec<String> = if tok.starts_with('/') { vec![join("", tok)] } else { dirs.iter().map(|d| join(d, tok)).collect() };
         for abs in cands {
             if let Some(rel) = pm.to_rel(&abs) {
                 if !out.contains(&rel) {
@@ -157,7 +236,7 @@ pub fn shell_targets(cmd: &str, cwd: &str, pm: &PathMap) -> Vec<String> {
 /// 把一段文本记成某个仓库内相对路径的证据（push_text 的相对路径版）
 pub fn push_rel(out: &mut Vec<Ev>, rel: &str, text: &str, src: Src, model: &str, session: &str, ts: i64) {
     let ext = ext_of(rel);
-    let ev = |key: u32| Ev { rel: rel.to_string(), key, src, model: model.to_string(), session: session.to_string(), ts, tab: false, next: 0 };
+    let ev = |key: u32| Ev { rel: rel.to_string(), key, src, model: model.to_string(), session: session.to_string(), ts, tab: false, next: 0, single_use: true };
     // 每一行：长行的键，或者短行本身的哈希
     let lines: Vec<(bool, u32)> = text
         .lines()
@@ -216,12 +295,17 @@ pub fn added_lines(old: &str, new: &str) -> String {
 pub fn added_from_patch(patch: &serde_json::Value) -> String {
     let mut out = String::new();
     for h in patch.as_array().into_iter().flatten() {
+        let (mut old, mut new) = (String::new(), String::new());
         for l in h["lines"].as_array().into_iter().flatten().filter_map(|l| l.as_str()) {
             if let Some(a) = l.strip_prefix('+') {
-                out.push_str(a);
-                out.push('\n');
+                new.push_str(a);
+                new.push('\n');
+            } else if let Some(a) = l.strip_prefix('-') {
+                old.push_str(a);
+                old.push('\n');
             }
         }
+        out.push_str(&added_lines(&old, &new));
     }
     out
 }
@@ -229,12 +313,12 @@ pub fn added_from_patch(patch: &serde_json::Value) -> String {
 /// apply_patch 格式（Codex 发明，Copilot、Amp、TRAE 也用）里每个文件新增的行：
 /// `*** Add File: p` 下面全是新内容，`*** Update File: p` 下面 `+` 开头的行是新增的；`*** Move to:` 换成新路径
 pub fn apply_patch_files(patch: &str) -> Vec<(String, String)> {
-    let mut out: Vec<(String, String)> = vec![];
+    let mut out: Vec<(String, String, String)> = vec![];
     let mut cur: Option<usize> = None;
     for l in patch.lines() {
         let t = l.trim_end();
         if let Some(p) = t.strip_prefix("*** Add File: ").or(t.strip_prefix("*** Update File: ")) {
-            out.push((p.trim().to_string(), String::new()));
+            out.push((p.trim().to_string(), String::new(), String::new()));
             cur = Some(out.len() - 1);
         } else if let Some(p) = t.strip_prefix("*** Move to: ") {
             if let Some(i) = cur { out[i].0 = p.trim().to_string(); }
@@ -242,12 +326,14 @@ pub fn apply_patch_files(patch: &str) -> Vec<(String, String)> {
             // Delete File、End Patch、End of File
             if !t.starts_with("*** End of File") { cur = None; }
         } else if let (Some(i), Some(a)) = (cur, l.strip_prefix('+')) {
+            out[i].2.push_str(a);
+            out[i].2.push('\n');
+        } else if let (Some(i), Some(a)) = (cur, l.strip_prefix('-')) {
             out[i].1.push_str(a);
             out[i].1.push('\n');
         }
     }
-    out.retain(|(_, t)| !t.is_empty());
-    out
+    out.into_iter().filter_map(|(p, old, new)| { let added = added_lines(&old, &new); (!added.is_empty()).then_some((p, added)) }).collect()
 }
 
 /// `file:///Users/me/x`、`file:///c%3A/work` 这类地址 → 本地路径；不是 file 地址原样返回
@@ -268,16 +354,27 @@ pub fn path_arg(args: &serde_json::Value) -> Option<String> {
 pub fn added_from_diff(diff: &str) -> String {
     if diff.contains(">>>>>>> REPLACE") || diff.contains("+++++++ REPLACE") {
         let mut out = String::new();
-        let mut on = false;
+        let (mut old, mut new, mut phase) = (String::new(), String::new(), 0);
         for l in diff.lines() {
             let t = l.trim();
-            if t == "=======" { on = true; continue; }
-            if t.starts_with(">>>>>>>") || t.starts_with("+++++++") || t.starts_with("<<<<<<<") || t.starts_with("-------") { on = false; continue; }
-            if on { out.push_str(l); out.push('\n'); }
+            if t.starts_with("<<<<<<< SEARCH") || t.starts_with("------- SEARCH") { old.clear(); new.clear(); phase = 1; continue; }
+            if t == "=======" && phase == 1 { phase = 2; continue; }
+            if t.starts_with(">>>>>>> REPLACE") || t.starts_with("+++++++ REPLACE") { if phase == 2 { out.push_str(&added_lines(&old, &new)); } phase = 0; continue; }
+            let target = match phase { 1 => &mut old, 2 => &mut new, _ => continue };
+            target.push_str(l); target.push('\n');
         }
         return out;
     }
-    diff.lines().filter(|l| l.starts_with('+') && !l.starts_with("+++")).map(|l| format!("{}\n", &l[1..])).collect()
+    let (mut out, mut old, mut new) = (String::new(), String::new(), String::new());
+    for l in diff.lines() {
+        if l.starts_with("@@") || l.starts_with("diff --git ") {
+            out.push_str(&added_lines(&old, &new)); old.clear(); new.clear();
+        } else if !l.starts_with("+++ ") && !l.starts_with("--- ") {
+            if let Some(text) = l.strip_prefix('+') { new.push_str(text); new.push('\n'); }
+            else if let Some(text) = l.strip_prefix('-') { old.push_str(text); old.push('\n'); }
+        }
+    }
+    out.push_str(&added_lines(&old, &new)); out
 }
 
 pub fn open_ro(p: &Path) -> rusqlite::Result<Connection> {
@@ -289,7 +386,9 @@ pub fn open_ro(p: &Path) -> rusqlite::Result<Connection> {
 /// 把一段新文本拆成行，生成证据。返回是否映射到了本项目
 #[allow(clippy::too_many_arguments)]
 pub fn push_text(out: &mut Vec<Ev>, pm: &PathMap, abs: &str, text: &str, src: Src, model: &str, session: &str, ts: i64) -> bool {
-    let Some(rel) = pm.to_rel(abs) else { return false };
+    // Normalize before suffix matching; an unbound relative path cannot borrow
+    // this process's cwd, and a live symlink cannot disguise an external file.
+    let Some(rel) = pm.to_rel(&harness_paths::target(abs, "")) else { return false };
     push_rel(out, &rel, text, src, model, session, ts);
     true
 }
@@ -316,7 +415,7 @@ pub struct Health {
     pub earliest: Option<String>,
     pub latest: Option<String>,
     pub note: String,
-    /// 装了、但 creditia 读不了它的编辑记录（Windsurf、TRAE IDE）：只说明，不算警告
+    /// 尚缺可信编辑格式时明确列出限制；不把格式缺口当作读取失败警告。
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub unsupported: bool,
 }
@@ -391,6 +490,74 @@ mod tests {
     }
 
     #[test]
+    fn final_path_binding_rejects_traversal_and_unbound_relative_paths() {
+        let pm = PathMap { known: ["a.rs".into()].into(), markers: vec!["/creditia-path-project/".into()], excludes: vec![] };
+        let mut out = vec![];
+        for path in [
+            "/creditia-missing-history/creditia-path-project/../other/a.rs",
+            "C:\\history\\creditia-path-project\\..\\other\\a.rs",
+            "https://example.test/creditia-path-project/../other/a.rs",
+            "a.rs",
+            "creditia-path-project/a.rs",
+        ] {
+            assert!(!push_text(&mut out, &pm, path, "let generated_line = 42;", Src::Codex, "m", "s", 1), "{path}");
+        }
+        assert!(out.is_empty());
+        let process_dir = std::env::current_dir().unwrap();
+        let process_marker = format!("/{}/", process_dir.file_name().unwrap().to_string_lossy().to_lowercase());
+        let process_pm = PathMap { known: ["a.rs".into()].into(), markers: vec![process_marker], excludes: vec![] };
+        assert!(!push_text(&mut out, &process_pm, "a.rs", "let generated_line = 42;", Src::Codex, "m", "s", 1), "the process cwd must not supply missing native workspace metadata");
+        assert!(shell_targets("echo text > a.rs", "", &process_pm).is_empty());
+        assert!(shell_targets("echo text > a.rs", "relative-workspace", &process_pm).is_empty());
+        // Remote/deleted paths still bind lexically, including Windows exports.
+        for path in [
+            "/creditia-missing-history/creditia-path-project/sub/../a.rs",
+            "C:\\history\\creditia-path-project\\sub\\..\\a.rs",
+            "https://example.test/creditia-path-project/sub/../a.rs",
+            "https:/example.test/creditia-path-project/a.rs",
+        ] {
+            assert!(push_text(&mut out, &pm, path, "let generated_line = 42;", Src::Codex, "m", "s", 1), "{path}");
+        }
+        assert_eq!(out.len(), 4);
+    }
+
+    #[test]
+    fn shell_paths_use_native_cwd_and_reject_traversal() {
+        let pm = PathMap { known: ["a.rs".into()].into(), markers: vec!["/creditia-path-project/".into()], excludes: vec![] };
+        let cwd = "/creditia-missing-history/creditia-path-project";
+        assert!(shell_targets("echo text > ../other/a.rs", cwd, &pm).is_empty());
+        assert!(shell_targets("echo text > a.rs", "", &pm).is_empty());
+        assert!(shell_targets("echo text > a.rs", "creditia-path-project", &pm).is_empty());
+        assert_eq!(shell_targets("echo text > sub/../a.rs", cwd, &pm), vec!["a.rs"]);
+        assert_eq!(shell_targets("echo text > a.rs", "C:\\history\\creditia-path-project", &pm), vec!["a.rs"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn final_path_binding_resolves_workspace_links_and_excludes_external_links() {
+        let root = std::env::temp_dir().join(format!("creditia-final-paths-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup { fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); } }
+        let _cleanup = Cleanup(root.clone());
+        let repo = root.join("creditia-path-project");
+        let outside = root.join("outside");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("a.rs"), "outside file").unwrap();
+        std::os::unix::fs::symlink(&repo, root.join("workspace")).unwrap();
+        std::os::unix::fs::symlink(&outside, repo.join("external")).unwrap();
+        let pm = PathMap { known: ["a.rs".into()].into(), markers: vec!["/creditia-path-project/".into()], excludes: vec![] };
+        let mut out = vec![];
+        for path in ["external/a.rs", "external/deleted/a.rs", "missing/../external/a.rs"] {
+            assert!(!push_text(&mut out, &pm, &repo.join(path).to_string_lossy(), "let generated_line = 42;", Src::Codex, "m", "s", 1), "{path}");
+            assert!(shell_targets(&format!("echo text > {path}"), repo.to_str().unwrap(), &pm).is_empty(), "{path}");
+        }
+        let workspace = root.join("workspace");
+        assert!(push_text(&mut out, &pm, &workspace.join("a.rs").to_string_lossy(), "let generated_line = 42;", Src::Codex, "m", "s", 1));
+        assert_eq!(shell_targets("echo text > a.rs", workspace.to_str().unwrap(), &pm), vec!["a.rs"]);
+    }
+
+    #[test]
     fn added_lines_and_patch() {
         // 按次数相减：旧文本里有一行 x，新文本里两行 x，多出来的那一行算新写的
         assert_eq!(added_lines("x\ny", "x\nx\ny\nz"), "x\nz\n");
@@ -430,6 +597,17 @@ mod tests {
         // Roo 的写法
         let roo = "<<<<<<< SEARCH\n:start_line:3\n-------\nold\n=======\nfresh\n+++++++ REPLACE\n";
         assert_eq!(added_from_diff(roo), "fresh\n");
+    }
+
+    #[test]
+    fn replacement_blocks_do_not_claim_retained_human_lines() {
+        let diff = "@@ -1 +1,2 @@\n-human_original_line\n+human_original_line\n+model_new_line\n";
+        assert_eq!(added_from_diff(diff), "model_new_line\n");
+        let search = "<<<<<<< SEARCH\nhuman_original_line\n=======\nhuman_original_line\nmodel_new_line\n>>>>>>> REPLACE";
+        assert_eq!(added_from_diff(search), "model_new_line\n");
+        let patch = "*** Begin Patch\n*** Update File: a.rs\n@@\n-human_original_line\n+human_original_line\n+model_new_line\n*** End Patch";
+        assert_eq!(apply_patch_files(patch), vec![("a.rs".into(),"model_new_line\n".into())]);
+        assert_eq!(added_from_patch(&json!([{"lines":["-human_original_line","+human_original_line","+model_new_line"]}])), "model_new_line\n");
     }
 
     #[test]

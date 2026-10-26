@@ -2,6 +2,7 @@
 //! 退出码：0 成功，1 失败，2 部分成功（有警告）。
 
 mod analyze;
+mod agents;
 
 use creditia_adapters as ad;
 use creditia_core::config::{Config, Director, Integrations};
@@ -27,6 +28,10 @@ fn parse_args() -> Args {
     let mut i = 1;
     while i < raw.len() {
         let x = &raw[i];
+        if x == "--" {
+            a.pos.extend_from_slice(&raw[i + 1..]);
+            break;
+        }
         if let Some(k) = x.strip_prefix("--") {
             if let Some((k, v)) = k.split_once('=') {
                 a.flags.insert(k.into(), v.into());
@@ -67,7 +72,11 @@ const USAGE_ZH: &str = "用法：creditia-core <命令> [选项]
                                    分析并写 .creditia/credits.json（全程本地，不调用任何大模型）
   update    [--repo P]             增量更新（同 analyze）
   collect   [--repo P | --all]     只采集证据进证据库
+  agents    [--agent ID]           全部 agent 的入口、读取范围与 skill 安装命令
+  run       --agent ID -- <命令>   在指定 agent 身份下启动命令（不自动安装 hook）
   doctor                           检查各数据源
+  capture   --harness H [--out F] -- <ACP agent 命令> [参数]
+                                   在 ACP 客户端中透明采集成功编辑（按需开启）
   blame     <路径>:<行号> [--repo P]  这一行是谁写的
   stamp     --harness H [--model M] [--share S]   给下一次提交盖章
   hook      install|uninstall|status [--repo P]    提交盖章 hook：提交时自动加 Creditia-* trailer（工具、模型、各工具行数）
@@ -95,7 +104,11 @@ const USAGE_EN: &str = "Usage: creditia-core <command> [options]
                                    analyze and write .creditia/credits.json (all local, never calls a model)
   update    [--repo P]             incremental update (same as analyze)
   collect   [--repo P | --all]     only collect evidence into the library
+  agents    [--agent ID]           agent catalogue, history scope and skill installation
+  run       --agent ID -- <cmd>    run with an explicit agent identity (no hook installation)
   doctor                           check every data source
+  capture   --harness H [--out F] -- <ACP agent command> [args]
+                                   opt-in transparent capture of completed ACP edits
   blame     <path>:<line> [--repo P]  which tool and model wrote this line
   stamp     --harness H [--model M] [--share S]   stamp the next commit
   hook      install|uninstall|status [--repo P]    commit stamps: Creditia-* trailers on commits (tool, model, lines per tool)
@@ -124,6 +137,20 @@ fn main() {
     if let Some(l) = a.flags.get("lang") {
         creditia_core::i18n::set(l);
     }
+    if a.cmd == "run" {
+        match agents::run(&a) {
+            Ok(code) => std::process::exit(code),
+            Err(e) => { eprintln!("creditia run: {e}"); std::process::exit(1); }
+        }
+    }
+    if a.cmd == "capture" {
+        let result = agents::source(&a)
+            .and_then(|src| ad::acp::capture(src, &a.pos, a.flags.get("out").map(Path::new)));
+        match result {
+            Ok(code) => std::process::exit(code),
+            Err(e) => { eprintln!("creditia capture: {e}"); std::process::exit(1); }
+        }
+    }
     let json = a.on("json");
     creditia_core::progress::init();
     refresh_shim(false);
@@ -133,6 +160,7 @@ fn main() {
         "analyze" | "update" => cmd_analyze(&a),
         "collect" => cmd_collect(&a),
         "doctor" => cmd_doctor(&a),
+        "agents" => agents::list(&a),
         "blame" => cmd_blame(&a),
         "stamp" => cmd_stamp(&a),
         "hook" => cmd_hook(&a),
@@ -187,25 +215,7 @@ fn main() {
 // ───────────────────────── discover ─────────────────────────
 
 fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
-    let mut acts: Vec<ad::Activity> = vec![];
-    acts.extend(ad::codex::discover());
-    acts.extend(ad::claude::discover());
-    acts.extend(ad::cursor::discover());
-    acts.extend(ad::grok::discover());
-    acts.extend(ad::kimi::discover());
-    acts.extend(ad::gemini::discover());
-    acts.extend(ad::qwen::discover());
-    acts.extend(ad::opencode::discover());
-    acts.extend(ad::cline::discover());
-    acts.extend(ad::copilot::discover());
-    acts.extend(ad::amp::discover());
-    acts.extend(ad::trae::discover());
-    acts.extend(ad::crush::discover());
-    acts.extend(ad::goose::discover());
-    acts.extend(ad::cont::discover());
-    acts.extend(ad::zed::discover());
-    acts.extend(ad::amazonq::discover());
-    acts.extend(ad::antigravity::discover());
+    let acts = ad::discover_all();
     // 把 cwd 归到 git 仓库：存在的目录用根提交；不存在的用远程地址或目录名
     #[derive(Default)]
     struct P {
@@ -537,17 +547,7 @@ fn cmd_collect(a: &Args) -> R<(Value, Vec<String>)> {
 // ───────────────────────── doctor ─────────────────────────
 
 fn cmd_doctor(_a: &Args) -> R<(Value, Vec<String>)> {
-    use creditia_core::model::Src;
-use creditia_core::tr;
-    let mut hs = vec![
-        ad::codex::doctor(), ad::claude::doctor(), ad::cursor::doctor(), ad::grok::doctor(), ad::kimi::doctor(),
-        ad::gemini::doctor(Src::Gemini), ad::qwen::doctor(),
-        ad::cline::doctor(Src::Cline), ad::cline::doctor(Src::Roo), ad::cline::doctor(Src::Kilo),
-        ad::aider::doctor(), ad::amp::doctor(), ad::trae::doctor(), ad::crush::doctor(), ad::goose::doctor(), ad::cont::doctor(), ad::zed::doctor(), ad::amazonq::doctor(), ad::antigravity::doctor(),
-    ];
-    hs.extend(ad::opencode::doctor());
-    hs.extend(ad::copilot::doctor());
-    hs.extend(ad::others::doctor());
+    let hs = ad::doctor_all();
     let git_ok = std::process::Command::new("git").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
     let gh_ok = std::process::Command::new("gh").args(["auth", "status"]).output().map(|o| o.status.success()).unwrap_or(false);
     let lib = Library::open().ok();
@@ -555,6 +555,10 @@ use creditia_core::tr;
     let n_proj = lib.as_ref().and_then(|l| l.projects().ok()).map(|p| p.len()).unwrap_or(0);
     let mut lines = vec![];
     for h in &hs {
+        if matches!(h.scope,ad::registry::ReadScope::Capture)&&!h.readable {
+            lines.push(format!("{:<15} {}",h.source,tr!("需开启采集", "capture required")));
+            continue;
+        }
         // 没装的工具：只说没找到，不列格式说明和打开失败的原文
         if !h.readable && !h.unsupported && !std::path::Path::new(&h.path).exists() {
             lines.push(format!("{:<15} {}", h.source, tr!("未找到", "not found")));
@@ -563,7 +567,8 @@ use creditia_core::tr;
         lines.push(format!(
             "{:<15} {}  {}{}{}",
             h.source,
-            if h.readable { tr!("可读", "readable") } else if h.unsupported { tr!("不支持", "unsupported") } else { tr!("不可读", "unreadable") },
+            if h.readable && matches!(h.scope, ad::registry::ReadScope::Sessions) { tr!("仅会话信息", "sessions only") }
+            else if h.readable { tr!("可读", "readable") } else if h.unsupported { tr!("待接编辑格式", "edit format unconfirmed") } else { tr!("不可读", "unreadable") },
             if h.records > 0 { tr!("{} 条", "{} records", h.records) } else { String::new() },
             match (&h.earliest, &h.latest) {
                 (Some(a), Some(b)) => format!("  {a} → {b}"),
@@ -576,7 +581,7 @@ use creditia_core::tr;
     lines.push(format!("{:<15} {}", "gh", if gh_ok { tr!("已登录", "signed in") } else { tr!("未登录或未安装（PR 元数据会缺少分支名）", "not signed in or not installed (PR metadata will lack branch names)") }));
     lines.push(format!("{:<15} {lib_path}  {}", tr!("本地项目库", "library"), if creditia_core::i18n::en() { format!("{n_proj} project{}", if n_proj == 1 { "" } else { "s" }) } else { format!("{n_proj} 个项目") }));
     // 没装的工具不算问题；装了却读不了才警告
-    let warnings: Vec<String> = hs.iter().filter(|h| !h.readable && !h.unsupported && std::path::Path::new(&h.path).exists()).map(|h| tr!("{} 不可读：{}", "{} unreadable: {}", h.source, h.path)).collect();
+    let warnings: Vec<String> = hs.iter().filter(|h| !h.readable && !h.unsupported && !matches!(h.scope,ad::registry::ReadScope::Capture) && std::path::Path::new(&h.path).exists()).map(|h| tr!("{} 不可读：{}", "{} unreadable: {}", h.source, h.path)).collect();
     Ok((json!({ "sources": hs, "git": git_ok, "gh": gh_ok, "library": { "path": lib_path, "projects": n_proj }, "summary": lines.join("\n") }), warnings))
 }
 
@@ -623,7 +628,13 @@ fn git_dir(repo: &Path) -> R<PathBuf> {
 
 fn cmd_stamp(a: &Args) -> R<(Value, Vec<String>)> {
     let repo = a.flags.get("repo").map(PathBuf::from).unwrap_or(std::env::current_dir().map_err(|e| e.to_string())?);
-    let harness = a.flags.get("harness").ok_or_else(|| tr!("需要 --harness", "--harness is required"))?.to_lowercase();
+    let raw = a.flags.get("harness").map(|s| s.trim().to_lowercase());
+    let harness = if a.flags.contains_key("agent") { agents::source(a)?.harness().to_string() }
+        else { let raw = raw.ok_or_else(|| tr!("需要 --harness 或 --agent", "--harness or --agent is required"))?;
+            creditia_core::agents::canonical_harness(&raw).unwrap_or(&raw).to_string() };
+    if harness.is_empty() || harness.contains(['\n', '\r']) || a.flags.get("model").is_some_and(|m| m.contains(['\n', '\r'])) {
+        return Err("agent and model must be single-line values".into());
+    }
     let v = json!({ "harness": harness, "model": a.flags.get("model"), "share": a.flags.get("share") });
     let p = git_dir(&repo)?.join("creditia-stamp.json");
     std::fs::write(&p, v.to_string()).map_err(|e| e.to_string())?;
@@ -882,6 +893,9 @@ fn ask_integrations(repo: &Path, todo: &[Value]) {
 /// 识别正在运行的 agent：先看盖章文件，再看环境变量
 pub fn detect_agent(env: &HashMap<String, String>) -> Option<(String, Option<String>)> {
     let has = |k: &str| env.get(k).map(|v| !v.is_empty()).unwrap_or(false);
+    if let Some(raw) = env.get("CREDITIA_HARNESS") {
+        return creditia_core::agents::canonical_harness(raw).map(|h| (h.to_string(), env.get("CREDITIA_MODEL").filter(|m| !m.is_empty() && !m.contains(['\n', '\r'])).cloned()));
+    }
     if has("CLAUDECODE") || has("CLAUDE_CODE_ENTRYPOINT") {
         return Some(("claude-code".into(), env.get("ANTHROPIC_MODEL").cloned()));
     }
@@ -1041,7 +1055,7 @@ fn cmd_evidence(a: &Args) -> R<(Value, Vec<String>)> {
             let evs: Vec<creditia_core::model::Ev> = serde_json::from_value(v["evidence"].clone()).map_err(|e| e.to_string())?;
             let sessions: Vec<creditia_core::model::Session> = serde_json::from_value(v["sessions"].clone()).unwrap_or_default();
             let mut store = creditia_core::model::Store { version: creditia_core::model::STORE_VERSION, ..Default::default() };
-            store.groups.insert("import".into(), creditia_core::model::FileGroup { fp: (0, 0), evs, sessions });
+            store.groups.insert("import".into(), creditia_core::model::FileGroup { fp: (0, 0), evs, sessions, ..Default::default() });
             lib.upsert_project(&proj)?;
             let n = lib.save_evidence(&proj.id, &store)?;
             Ok((json!({ "imported": n, "summary": tr!("合并了 {n} 条新证据；下次 analyze 会用上", "merged {n} new pieces of evidence; the next analyze will use them") }), vec![]))

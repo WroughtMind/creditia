@@ -1,4 +1,3 @@
-import { contributionHistory, versionBuckets, type ContributionHistory } from './history.ts';
 // credits.json → 展示模型。所有作品只读这一份。
 //
 // 口径：
@@ -6,6 +5,10 @@ import { contributionHistory, versionBuckets, type ContributionHistory } from '.
 // - 人不和 agent 抢百分比：人的贡献用「做了什么」来呈现（指令、审阅、亲手写的行、取舍），
 //   名字默认不出现，只有用户明确选择署名才写；
 // - 未确认单独一行，永远不并进任何人名下。
+
+import { TOOL_NAMES } from './tool-names.ts';
+import { contributionHistory, versionBuckets, type ContributionHistory } from './history.ts';
+export { TOOL_NAMES } from './tool-names.ts';
 
 export type Lang = 'zh' | 'en';
 
@@ -126,12 +129,6 @@ export const DEFAULTS: Options = { lang: 'zh', named: false, sign: '', group: 'a
 
 // ───────────────────────── 名称 ─────────────────────────
 
-export const TOOL_NAMES: Record<string, string> = {
-  'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor', grok: 'Grok', kimi: 'Kimi', gemini: 'Gemini CLI', qwen: 'Qwen Code',
-  opencode: 'OpenCode', cline: 'Cline', roo: 'Roo Code', kilo: 'Kilo Code', copilot: 'GitHub Copilot', aider: 'Aider', devin: 'Devin',
-  jules: 'Jules', amp: 'Amp', windsurf: 'Windsurf', trae: 'Trae', crush: 'Crush', goose: 'Goose', continue: 'Continue', zed: 'Zed', 'amazon-q': 'Amazon Q', antigravity: 'Antigravity', deepseek: 'DeepSeek', 'github-actions': 'GitHub Actions',
-  dependabot: 'Dependabot', renovate: 'Renovate',
-};
 const BOTS = new Set(['github-actions', 'dependabot', 'renovate']);
 const ZH: Record<string, string> = { other: '其他', unattributed: '未确认', human: '人', hand: '人' };
 const EN: Record<string, string> = { other: 'Others', unattributed: 'Unattributed', human: 'People', hand: 'People' };
