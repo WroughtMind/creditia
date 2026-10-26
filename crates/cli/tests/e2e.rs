@@ -1850,7 +1850,7 @@ fn bolt_lovable_devin_cloud_native_imports_reach_final_attribution() {
         {"id":"a2","role":"assistant","annotations":[{"type":"bolt-merged","mergedSha":"saved-sha-2"},{"type":"metadata","userMessageId":"u2"}],"parts":[{"type":"tool-invocation","toolInvocation":{"toolCallId":"call-2","toolName":"Write","args":{"file_path":"/home/project/src/bolt.ts","content":bolt_full2},"state":"result","result":"opaque"}}]}
     ]}).to_string());
     let mut apply2 = apply.clone();
-    apply2["request"]["url"] = json!(format!("https://bolt.new/api/projects/project-a/apply-changes"));
+    apply2["request"]["url"] = json!("https://bolt.new/api/projects/project-a/apply-changes");
     apply2["request"]["postData"]["text"] = json!(json!({"baseSha":"saved-sha","sha":"saved-sha-2"}).to_string());
     apply2["response"]["content"]["text"] = json!(json!({"sha":"saved-sha-2","files":[{"state":"modified","path":"src/bolt.ts","content":bolt_full2,"isBinary":false}]}).to_string());
     let mut start2 = start.clone();
