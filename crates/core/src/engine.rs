@@ -38,6 +38,9 @@ pub struct Engine<'a> {
     used: HashMap<(String, u32), Vec<bool>>,
     /// 主导者的 GitHub 账号名：同一个账号的几种 noreply 邮箱（`123+login@…`、`login@…`）都是他
     director_logins: HashSet<String>,
+    /// Untimed successful edits can only match keys added exactly once in a
+    /// complete Git history. Staged-only attribution never enables this fallback.
+    untimed_unique: HashSet<(String,u32)>,
 }
 
 impl<'a> Engine<'a> {
@@ -61,11 +64,19 @@ impl<'a> Engine<'a> {
             }
         }
         let director_logins = cfg.director_emails().iter().filter_map(|e| gh_login(e)).map(String::from).collect();
-        Engine { cfg, strictness: Strictness::parse(&cfg.level), idx, sessions, reg, director_emails, director_logins, unit_branch, stamps, used: HashMap::new() }
+        Engine { cfg, strictness: Strictness::parse(&cfg.level), idx, sessions, reg, director_emails, director_logins, unit_branch, stamps, used: HashMap::new(), untimed_unique: HashSet::new() }
     }
 
     fn is_director(&self, email: &str) -> bool {
         self.director_emails.contains(email) || gh_login(email).is_some_and(|l| self.director_logins.contains(l))
+    }
+
+    pub fn set_history(&mut self, commits:&[Commit]) {
+        let mut occurrences:HashMap<(String,u32),usize>=HashMap::new();
+        for f in commits.iter().flat_map(|c|&c.files) {
+            for &key in f.keys.iter().filter(|&&key|key!=0) {*occurrences.entry((f.rel.clone(),key)).or_default()+=1;}
+        }
+        self.untimed_unique=occurrences.into_iter().filter_map(|(id,n)|(n==1).then_some(id)).collect();
     }
 
     fn director(&self) -> usize {
@@ -204,6 +215,7 @@ impl<'a> Engine<'a> {
         // 没有 AI 证据不说明是人写的：creditia 只认 AI 留下的记录，不推断谁手写
         let (fallback, r) = match &declared {
             Some(d) => d.clone(),
+            None if c.lines_stamp.is_some() => (Attr { who: self.reg.unattributed(), level: Level::Unattributed }, crate::tr!("没有证据", "no evidence")),
             None => self.guess(c),
         };
         let reason = reason.unwrap_or(r);
@@ -262,26 +274,33 @@ impl<'a> Engine<'a> {
             // 总数比这个提交实际新增的多，按比例缩
             let actual: usize = out.iter().map(Vec::len).sum();
             let scale = |n: usize| if *stamped > actual { n * actual / stamped } else { n };
-            let mut have: HashMap<String, usize> = HashMap::new();
+            let mut have: HashMap<usize, usize> = HashMap::new();
             for a in out.iter().flatten() {
-                if let Some(h) = self.reg.list[a.who].harness.clone().filter(|_| self.reg.list[a.who].kind == "agent") {
-                    *have.entry(h).or_default() += 1;
+                if self.reg.list[a.who].kind == "agent" {
+                    *have.entry(a.who).or_default() += 1;
                 }
             }
             let mut filled = false;
-            for (id, n) in quota {
+            // Specific model receipts claim their own evidence before tool-only receipts.
+            for (id, n) in quota.iter().filter(|(id, _)| id.contains('/')).chain(quota.iter().filter(|(id, _)| !id.contains('/'))) {
                 let (h, m) = match id.split_once('/') {
                     Some((h, m)) => (canonical_harness(h), Some(m)),
                     None => (canonical_harness(id), None),
                 };
-                let got = have.entry(h.clone()).or_default();
-                let n = scale(*n);
-                let mut deficit = n.saturating_sub(*got);
-                *got = got.saturating_sub(n);
+                let who = self.reg.agent(&h, m);
+                let mut deficit = scale(*n);
+                for (index, contributor) in self.reg.list.iter().enumerate() {
+                    if (m.is_some() && index != who) || (m.is_none() && contributor.harness.as_deref() != Some(h.as_str())) {
+                        continue;
+                    }
+                    let available = have.entry(index).or_default();
+                    let used = deficit.min(*available);
+                    deficit -= used;
+                    *available -= used;
+                }
                 if deficit == 0 {
                     continue;
                 }
-                let who = self.reg.agent(&h, m);
                 for a in out.iter_mut().flatten() {
                     if deficit == 0 {
                         break;
@@ -314,11 +333,18 @@ impl<'a> Engine<'a> {
         let id = (rel.to_string(), key);
         let all = self.idx.map.get(&id)?;
         let used = self.used.entry(id).or_insert_with(|| vec![false; all.len()]);
-        let cands: Vec<usize> = (0..all.len()).filter(|&i| all[i].ts >= lo && all[i].ts <= hi && !used[i]).collect();
+        let mut cands: Vec<usize> = (0..all.len()).filter(|&i| all[i].ts>0 && all[i].ts >= lo && all[i].ts <= hi && !used[i]).collect();
+        if cands.is_empty() && self.untimed_unique.contains(&(rel.to_string(),key)) {
+            cands=(0..all.len()).filter(|&i|all[i].ts==0&&!used[i]).collect();
+            // Missing time cannot resolve competing tools or models. Keep such
+            // lines unattributed instead of choosing by hash-map iteration order.
+            if cands.iter().map(|&i|(all[i].src,all[i].model.as_str())).collect::<HashSet<_>>().len()>1 {return None;}
+        }
         let bi = *cands.iter().min_by_key(|&&i| (at - all[i].ts).abs())?;
         let multi = cands.iter().map(|&i| all[i].src).collect::<HashSet<Src>>().len() > 1;
-        // Cursor 的行哈希表一行只存一次，不按次数消耗
-        if all[bi].src != Src::Cursor {
+        // Only Cursor's static editor line table is reusable. Cursor CLI and
+        // host/protocol tool calls carry individual successful writes.
+        if all[bi].src != Src::Cursor || all[bi].single_use {
             used[bi] = true;
         }
         Some((all[bi].clone(), multi))
@@ -548,7 +574,7 @@ mod tests {
     fn verified_wins_and_short_lines_follow_main() {
         let mut store = Store::default();
         let g = store.groups.entry("x".into()).or_default();
-        g.evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false, next: 0 });
+        g.evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false, next: 0, single_use: true });
         let idx = Index::build(&store);
         let cfg = cfg();
         let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
@@ -557,6 +583,25 @@ mod tests {
         assert_eq!(a.lines[0][1].who, a.lines[0][0].who); // 过短行跟随主力
         assert_eq!(a.lines[0][2].level, Level::Inferred); // 没对上的行跟随同提交的 verified 主力，标为推断
         assert_eq!(e.reg.list[a.lines[0][0].who].id, "a:codex/m");
+    }
+
+    #[test]
+    fn untimed_edits_require_unique_history_and_no_competing_attribution() {
+        let cfg=cfg();
+        let ev=|src,model:&str,ts|Ev{rel:"a.rs".into(),key:1,src,model:model.into(),session:"s".into(),ts,tab:false,next:0,single_use:true};
+        let mut c=commit("me@x.com",vec![1]);c.author_ts=1_780_000_000;c.commit_ts=c.author_ts;
+        let mut idx=Index{map:[(("a.rs".into(),1),vec![ev(Src::SweAgent,"swe-model",0)])].into_iter().collect()};
+        let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());
+        assert!(engine.attribute(&c).hits.is_empty(),"staged-only callers have no complete history");
+        engine.set_history(&[c.clone()]);assert_eq!(engine.attribute(&c).hits.get("swe-agent"),Some(&1));
+        let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());engine.set_history(&[c.clone(),c.clone()]);
+        assert!(engine.attribute(&c).hits.is_empty(),"repeated historical additions need a real timestamp");
+        idx.map.get_mut(&("a.rs".into(),1)).unwrap().push(ev(Src::Devin,"",0));
+        let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());engine.set_history(&[c.clone()]);
+        assert!(engine.attribute(&c).hits.is_empty(),"undated competing tools stay unknown");
+        idx.map.get_mut(&("a.rs".into(),1)).unwrap().push(ev(Src::Codex,"known-time",c.author_ts-1));
+        let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());engine.set_history(&[c.clone()]);
+        assert_eq!(engine.attribute(&c).hits.get("codex"),Some(&1),"dated evidence takes precedence");
     }
 
     #[test]
@@ -606,7 +651,7 @@ mod tests {
         }
         // strict 下，同提交里没对上的行不延伸给有逐行证据的 agent
         let mut store = Store::default();
-        store.groups.entry("x".into()).or_default().evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false, next: 0 });
+        store.groups.entry("x".into()).or_default().evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false, next: 0, single_use: true });
         let idx = Index::build(&store);
         let mut c = cfg();
         c.level = "strict".into();
@@ -617,7 +662,7 @@ mod tests {
     }
 
     fn ev(key: u32, src: Src, model: &str) -> Ev {
-        Ev { rel: "a.rs".into(), key, src, model: model.into(), session: "s".into(), ts: 900, tab: false, next: 0 }
+        Ev { rel: "a.rs".into(), key, src, model: model.into(), session: "s".into(), ts: 900, tab: false, next: 0, single_use: true }
     }
 
     #[test]
@@ -674,6 +719,20 @@ mod tests {
         c.hash = "c".repeat(40);
         let a = e.attribute(&c);
         assert_eq!(a.lines[0][0].level, Level::Unattributed);
+    }
+
+    #[test]
+    fn cursor_tool_calls_are_consumed_while_editor_line_sets_are_reusable() {
+        let cfg = cfg();
+        for single_use in [true, false] {
+            let mut store = Store::default();
+            store.groups.entry("cursor".into()).or_default().evs.push(Ev { single_use, ..ev(5, Src::Cursor, "m") });
+            let idx = Index::build(&store);
+            let mut engine = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+            assert_eq!(engine.attribute(&commit("me@x.com", vec![5])).lines[0][0].level, Level::Verified);
+            let second = engine.attribute(&commit("me@x.com", vec![5]));
+            assert_eq!(second.lines[0][0].level, if single_use { Level::Unattributed } else { Level::Verified });
+        }
     }
 
     #[test]
@@ -764,6 +823,40 @@ mod tests {
         let r = e.attribute(&c);
         assert!(r.lines[0].iter().all(|x| x.level == Level::Verified), "{:?}", r.lines[0]);
         assert_eq!(e.reg.list[r.lines[0][1].who].id, "a:codex/m");
+    }
+
+    #[test]
+    fn model_quotas_do_not_consume_another_models_evidence() {
+        let mut store = Store::default();
+        store.groups.entry("g".into()).or_default().evs.push(ev(2, Src::Codex, "beta"));
+        let idx = Index::build(&store);
+        let mut cfg = cfg();
+        cfg.level = "strict".into();
+        let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+        let mut c = commit("me@x.com", vec![1, 2]);
+        c.lines_stamp = Some((vec![("codex/alpha".into(), 1), ("codex/beta".into(), 1)], 2));
+        let r = e.attribute(&c);
+        assert_eq!(e.reg.list[r.lines[0][0].who].id, "a:codex/alpha");
+        assert_eq!(e.reg.list[r.lines[0][1].who].id, "a:codex/beta");
+    }
+
+    #[test]
+    fn counted_commits_do_not_inherit_branch_guesses() {
+        for level in ["standard", "loose"] {
+            for count in [0, 1] {
+                let store = Store::default();
+                let idx = Index::build(&store);
+                let mut cfg = cfg();
+                cfg.level = level.into();
+                let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+                let mut c = commit("me@x.com", vec![1, 2, 3]);
+                e.unit_branch.insert(c.hash.clone(), "codex/topic".into());
+                c.lines_stamp = Some((if count == 0 { vec![] } else { vec![("kimi/m".into(), count)] }, 3));
+                let r = e.attribute(&c);
+                assert_eq!(r.lines[0].iter().filter(|a| e.reg.list[a.who].kind == "agent").count(), count);
+                assert!(r.lines[0].iter().all(|a| e.reg.list[a.who].harness.as_deref() != Some("codex")));
+            }
+        }
     }
 
     #[test]

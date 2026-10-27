@@ -742,7 +742,7 @@ fn open_path(path: String) -> Res<()> {
 fn doctor() -> Value {
     if let Ok(v) = run_core(&["doctor"]) {
         if let Some(a) = v["sources"].as_array() {
-            return json!(a.iter().map(|h| json!({ "id": h["source"], "path": h["path"], "ok": h["readable"], "records": h["records"], "unsupported": h["unsupported"].as_bool().unwrap_or(false) })).collect::<Vec<_>>());
+            return json!(a.iter().map(|h| json!({ "id": h["source"], "path": h["path"], "ok": h["readable"], "records": h["records"], "scope": h["scope"], "unsupported": h["unsupported"].as_bool().unwrap_or(false) })).collect::<Vec<_>>());
         }
     }
     doctor_local()

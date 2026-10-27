@@ -1,6 +1,6 @@
 // Satori 对象树的最小工具和共用部件。这里不碰文件系统，Node 和浏览器端都能用。
 import type { Theme } from './themes.ts';
-import { BRANDS, famColor, logoUri } from './brand.ts';
+import { famColor, logoUri } from './brand.ts';
 import { NAMES, type Contributor } from './data.ts';
 import { measure, wrap } from '../svg.ts';
 
@@ -74,7 +74,7 @@ export function fill(c: Contributor | { key: string }, t: Theme, rank = 0, strip
   return { backgroundColor: famColor(c.key, t, rank) };
 }
 
-/** logo；未确认是虚线圆；没有 logo 的人或工具不画占位，只留空位对齐 */
+/** logo；未确认是虚线圆；无 logo 的工具显示首字母，人只留空位对齐 */
 export function mark(key: string, t: Theme, size: number, color?: string): Node {
   if (key === 'unattributed')
     return box({ width: size, height: size, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -83,7 +83,7 @@ export function mark(key: string, t: Theme, size: number, color?: string): Node 
   if (uri) return image(uri, size, size, { flexShrink: 0 });
   // 没有 logo 的工具写首字母，人、「其他」只留空位对齐
   const tool = key.split('/')[0];
-  if (!BRANDS[tool]) return box({ width: size, height: size, flexShrink: 0 });
+  if (tool === 'other' || tool === 'human' || tool.startsWith('h:')) return box({ width: size, height: size, flexShrink: 0 });
   const initials = (NAMES[tool] ?? tool).split(/[\s-]+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   return box({ width: size, height: size, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 99, border: `${Math.max(1, size / 16)}px solid ${color ?? t.ink}` },
     txt({ fontFamily: 'Inter, Noto Sans SC', fontWeight: 700, fontSize: size * (initials.length > 1 ? 0.36 : 0.48), color: color ?? t.ink, lineHeight: 1 }, initials));

@@ -1,3 +1,5 @@
+import { AGENT_BRANDS } from '../agent-brands.ts';
+import catalogue from '../../../schema/agents.json' with { type: 'json' };
 // 各家 logo 与熟悉的品牌色；版式家族给贡献方一套家族化的填充。
 import type { Theme } from './themes.ts';
 import { LOGOS } from '../logos.ts';
@@ -33,6 +35,9 @@ export const BRANDS: Record<string, Brand> = {
   jules: { logo: 'googlejules', color: '#7C5CFF' },
   'github-actions': { logo: 'github-actions', color: '#2088FF' },
 };
+Object.assign(BRANDS, AGENT_BRANDS);
+BRANDS['trae-ide'] = BRANDS.trae; BRANDS['antigravity-ide'] = BRANDS.antigravity;
+for (const agent of catalogue.agents) if (BRANDS[agent.harness]) BRANDS[agent.id] ??= BRANDS[agent.harness];
 /** 自动化机器人：不算 AI 作者，不进片尾字幕 */
 export const BOTS = new Set(['github-actions', 'dependabot', 'renovate']);
 

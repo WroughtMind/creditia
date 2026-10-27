@@ -120,6 +120,10 @@ jobs:
 
 ## Supported tools
 
+The development build registers **78 agent entries**, all available for commit attribution, launch identity and skill installation guidance. **72 entries have history readers** (including limited edits, metadata, imports and conditional formats), 5 attribute through the actual executing host, and CodeMaker's native edit format remains unconfirmed. Real Lingma history, Eve's local source sandbox and inference.sh's Codex driver have passed their respective acceptance checks. MCPJam's official local launch chain and real executors passed scripted-model checks; account and cloud modes remain separate. See [native acceptance](SUPPORT_NATIVE_LIVE.md), [MCPJam acceptance](SUPPORT_MCPJAM_LIVE.md) and [remaining work](https://github.com/WroughtMind/creditia/issues/110). These counts do not mean every version or account has passed runtime validation.
+
+Run `creditia agents --json` for the catalogue. The [complete matrix](AGENT_SUPPORT.en.md) lists all 78 entries; [reader boundaries](ADAPTERS.md) explain which edits can be attributed. CLI and App share the same readers. Missing models remain unknown; commit declarations remain distinct from line evidence.
+
 | | Tool | What it reads | Lines | Model |
 |:-:|---|---|:-:|:-:|
 | <img src=".github/readme/logo/claude-code.svg" width="18"> | Claude Code | Write / Edit / MultiEdit in `~/.claude/projects/*/*.jsonl`; providers incl. Bedrock, Vertex, relays | ✓ | ✓ |
@@ -159,11 +163,13 @@ App installers are in preparation. macOS builds use ad-hoc signing, without Appl
 
 See the [release procedure](packaging/RELEASE.md) for packaging and acceptance checks.
 
-Agent skill (Claude Code):
+Agent skill (use `creditia agents` to find an agent ID; this example uses Claude Code):
 
 ```bash
-git clone --depth 1 https://github.com/WroughtMind/creditia /tmp/creditia && cp -r /tmp/creditia/skills/creditia ~/.claude/skills/
+npx skills add WroughtMind/creditia --skill creditia -a claude-code
 ```
+
+For the local development version, replace `WroughtMind/creditia` with this checkout's path. Select another catalogue ID for other agents. Installing a skill does not enable native history reading.
 
 The GitHub Action needs no install: use `WroughtMind/creditia@main`.
 

@@ -177,7 +177,7 @@ fn workspaces() -> Vec<Ws> {
 }
 
 /// 把 chatSessions 的 .jsonl 增量记录重放成一份完整状态
-fn replay(text: &str) -> Option<Value> {
+pub(crate) fn replay(text: &str) -> Option<Value> {
     let mut state: Option<Value> = None;
     for line in text.lines() {
         if line.trim().is_empty() {

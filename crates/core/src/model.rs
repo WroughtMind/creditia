@@ -29,6 +29,88 @@ pub enum Src {
     Zed,
     AmazonQ,
     Antigravity,
+    Zcode,
+    Pi,
+    Omp,
+    CommandCode,
+    Muse,
+    T3,
+    Vibe,
+    MiniMax,
+    Droid,
+    Auggie,
+    Qoder,
+    CodeBuddy,
+    Junie,
+    Kiro,
+    Iflow,
+    Neovate,
+    Costrict,
+    CodeFlicker,
+    Tabnine,
+    Comate,
+    Devin,
+    Jules,
+    OpenHands,
+    SweAgent,
+    MiniSweAgent,
+    Replit,
+    Bolt,
+    Lovable,
+    V0,
+    Warp,
+    Windsurf,
+    TraeIde,
+    AntigravityIde,
+    Dsh,
+    Cortex,
+    Bob,
+    Poolside,
+    Autohand,
+    VtCode,
+    Kimchi,
+    Nova,
+    GlmAgent,
+    Dirac,
+    Corust,
+    Crow,
+    DimCode,
+    MinionCode,
+    SiGit,
+    Stakpak,
+    AiderDesk,
+    Astrbot,
+    Openclaw,
+    CodeartsAgent,
+    Codemaker,
+    Codestudio,
+    Deepagents,
+    Dexto,
+    Eve,
+    Firebender,
+    Forgecode,
+    Fx,
+    HermesAgent,
+    InferenceSh,
+    Jazz,
+    Kode,
+    Lingma,
+    Loaf,
+    Mcpjam,
+    Moxby,
+    Mux,
+    Ona,
+    PositAssistant,
+    Reasonix,
+    Rovodev,
+    SarvamCode,
+    Terramind,
+    Tinycloud,
+    Zencoder,
+    Zenflow,
+    Pochi,
+    Promptscript,
+    Adal,
 }
 
 impl Src {
@@ -55,13 +137,99 @@ impl Src {
             Src::Zed => "zed",
             Src::AmazonQ => "amazon-q",
             Src::Antigravity => "antigravity",
+            Src::Zcode => "zcode",
+            Src::Pi => "pi",
+            Src::Omp => "omp",
+            Src::CommandCode => "command-code",
+            Src::Muse => "muse",
+            Src::T3 => "t3",
+            Src::Vibe => "mistral-vibe",
+            Src::MiniMax => "minimax-code",
+            Src::Droid => "droid",
+            Src::Auggie => "auggie",
+            Src::Qoder => "qoder",
+            Src::CodeBuddy => "codebuddy",
+            Src::Junie => "junie",
+            Src::Kiro => "kiro",
+            Src::Iflow => "iflow",
+            Src::Neovate => "neovate",
+            Src::Costrict => "costrict",
+            Src::CodeFlicker => "codeflicker",
+            Src::Tabnine => "tabnine",
+            Src::Comate => "comate",
+            Src::Devin => "devin",
+            Src::Jules => "jules",
+            Src::OpenHands => "openhands",
+            Src::SweAgent => "swe-agent",
+            Src::MiniSweAgent => "mini-swe-agent",
+            Src::Replit => "replit",
+            Src::Bolt => "bolt",
+            Src::Lovable => "lovable",
+            Src::V0 => "v0",
+            Src::Warp => "warp",
+            Src::Windsurf => "windsurf",
+            Src::TraeIde => "trae-ide",
+            Src::AntigravityIde => "antigravity-ide",
+            Src::Dsh => "dsh",
+            Src::Cortex => "cortex-code",
+            Src::Bob => "bob",
+            Src::Poolside => "poolside",
+            Src::Autohand => "autohand",
+            Src::VtCode => "vtcode",
+            Src::Kimchi => "kimchi",
+            Src::Nova => "nova",
+            Src::GlmAgent => "glm-agent",
+            Src::Dirac => "dirac",
+            Src::Corust => "corust",
+            Src::Crow => "crow-cli",
+            Src::DimCode => "dimcode",
+            Src::MinionCode => "minion-code",
+            Src::SiGit => "sigit",
+            Src::Stakpak => "stakpak",
+            Src::AiderDesk => "aider-desk",
+            Src::Astrbot => "astrbot",
+            Src::Openclaw => "openclaw",
+            Src::CodeartsAgent => "codearts-agent",
+            Src::Codemaker => "codemaker",
+            Src::Codestudio => "codestudio",
+            Src::Deepagents => "deepagents",
+            Src::Dexto => "dexto",
+            Src::Eve => "eve",
+            Src::Firebender => "firebender",
+            Src::Forgecode => "forgecode",
+            Src::Fx => "fx",
+            Src::HermesAgent => "hermes-agent",
+            Src::InferenceSh => "inference-sh",
+            Src::Jazz => "jazz",
+            Src::Kode => "kode",
+            Src::Lingma => "lingma",
+            Src::Loaf => "loaf",
+            Src::Mcpjam => "mcpjam",
+            Src::Moxby => "moxby",
+            Src::Mux => "mux",
+            Src::Ona => "ona",
+            Src::PositAssistant => "posit-assistant",
+            Src::Reasonix => "reasonix",
+            Src::Rovodev => "rovodev",
+            Src::SarvamCode => "sarvam-code",
+            Src::Terramind => "terramind",
+            Src::Tinycloud => "tinycloud",
+            Src::Zencoder => "zencoder",
+            Src::Zenflow => "zenflow",
+            Src::Pochi => "pochi",
+            Src::Promptscript => "promptscript",
+            Src::Adal => "adal",
         }
     }
-    pub fn all() -> [Src; 21] {
-        [Src::Codex, Src::Claude, Src::Cursor, Src::Grok, Src::Kimi, Src::Gemini, Src::Qwen, Src::OpenCode, Src::Cline, Src::Roo, Src::Kilo, Src::Aider, Src::Copilot, Src::Amp, Src::Trae, Src::Crush, Src::Goose, Src::Continue, Src::Zed, Src::AmazonQ, Src::Antigravity]
+    pub fn all() -> &'static [Src] {
+        &[Src::Codex, Src::Claude, Src::Cursor, Src::Grok, Src::Kimi, Src::Gemini, Src::Qwen, Src::OpenCode, Src::Cline, Src::Roo, Src::Kilo, Src::Aider, Src::Copilot, Src::Amp, Src::Trae, Src::Crush, Src::Goose, Src::Continue, Src::Zed, Src::AmazonQ, Src::Antigravity,
+          Src::Zcode, Src::Pi, Src::Omp, Src::CommandCode, Src::Muse, Src::T3, Src::Vibe, Src::MiniMax,
+          Src::Droid, Src::Auggie, Src::Qoder, Src::CodeBuddy, Src::Junie, Src::Kiro, Src::Iflow, Src::Neovate, Src::Costrict, Src::CodeFlicker, Src::Tabnine, Src::Comate,
+          Src::Devin, Src::Jules, Src::OpenHands, Src::SweAgent, Src::MiniSweAgent, Src::Replit, Src::Bolt, Src::Lovable, Src::V0, Src::Warp, Src::Windsurf, Src::TraeIde, Src::AntigravityIde,
+          Src::Dsh, Src::Cortex, Src::Bob, Src::Poolside, Src::Autohand, Src::VtCode, Src::Kimchi, Src::Nova, Src::GlmAgent, Src::Dirac, Src::Corust, Src::Crow, Src::DimCode, Src::MinionCode, Src::SiGit, Src::Stakpak, Src::AiderDesk, Src::Astrbot, Src::Openclaw, Src::CodeartsAgent, Src::Codemaker, Src::Codestudio, Src::Deepagents, Src::Dexto, Src::Eve, Src::Firebender, Src::Forgecode, Src::Fx, Src::HermesAgent, Src::InferenceSh, Src::Jazz, Src::Kode, Src::Lingma, Src::Loaf, Src::Mcpjam, Src::Moxby, Src::Mux, Src::Ona, Src::PositAssistant, Src::Reasonix, Src::Rovodev, Src::SarvamCode, Src::Terramind, Src::Tinycloud, Src::Zencoder, Src::Zenflow, Src::Pochi, Src::Promptscript, Src::Adal]
     }
     pub fn from_harness(h: &str) -> Option<Src> {
-        Src::all().into_iter().find(|s| s.harness() == h)
+        Src::all().iter().copied().find(|s| s.harness() == h)
     }
 }
 
@@ -81,6 +249,10 @@ pub struct Ev {
     /// 证据里本来相邻的两行，提交里中间多出来的行不是这次写入写的
     #[serde(default)]
     pub next: u32,
+    /// A successful tool call records one occurrence. Cursor's editor tracking
+    /// table is a persistent line set instead, so those rows remain reusable.
+    #[serde(default)]
+    pub single_use: bool,
 }
 
 /// 会话元数据（泳道图、作息图、精力小票用）
@@ -108,6 +280,16 @@ pub struct FileGroup {
     pub fp: (u64, u64),
     pub evs: Vec<Ev>,
     pub sessions: Vec<Session>,
+    /// The available native records authoritatively rebuild these edit sessions,
+    /// including an empty result after a failed, conflicting or reverted edit.
+    /// Missing/unreadable history does not assert reconciliation. The library
+    /// synchronizes only these sessions and preserves other historical evidence.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reconciled_sessions: Vec<(Src, String)>,
+    /// Native snapshot progress also survives an empty/retracted session, which
+    /// need not appear in this project's user-facing session list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub session_revisions: Vec<(Src, String, i64)>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -118,6 +300,10 @@ pub struct Store {
     /// 之前因为认不出而跳过的日志要重新读，不能因为文件没变就一直用空结果
     #[serde(default)]
     pub markers: Vec<String>,
+    /// Confirmed host ownership outlives a host's mutable session index.
+    /// Keys retain the engine namespace, e.g. `opencode:ses_…`.
+    #[serde(default)]
+    pub session_owners: HashMap<String, Src>,
 }
 
 impl Store {
@@ -138,7 +324,7 @@ impl Store {
 }
 
 /// 日志缓存的格式版本：adapter 的读法变了就加一，升级后整份重新解析（2：编辑只记新增的行）
-pub const STORE_VERSION: u32 = 3;
+pub const STORE_VERSION: u32 = 5;
 
 pub fn fingerprint(path: &std::path::Path) -> (u64, u64) {
     match std::fs::metadata(path) {
@@ -472,13 +658,15 @@ fn claude_id(m: &str) -> String {
 /// 工具名的别名：盖章、`Assisted-by`、命令行参数里写法五花八门，统一成 creditia 的工具 id
 pub fn canonical_harness(h: &str) -> String {
     let k = h.trim().to_lowercase().split(|c: char| c.is_whitespace() || c == '_').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("-");
-    let k = k.trim_end_matches("-agent").trim_end_matches("-cli").to_string();
+    if let Some(harness) = crate::agents::canonical_harness(&k) {
+        return harness.to_string();
+    }
     let k = k.as_str();
     match k {
         "claude" | "claude-code" | "claudecode" | "anthropic-claude" | "anthropic-claude-code" | "claude-code-cli" => "claude-code",
         "codex" | "openai-codex" | "codex-cli" | "chatgpt-codex" => "codex",
-        "cursor" | "cursoragent" | "cursor-composer" | "composer" => "cursor",
-        "copilot" | "github-copilot" | "gh-copilot" | "copilot-chat" | "github-copilot-chat" | "copilot-coding" => "copilot",
+        "cursor" | "cursor-agent" | "cursoragent" | "cursor-composer" | "composer" => "cursor",
+        "copilot" | "copilot-cli" | "github-copilot" | "gh-copilot" | "copilot-chat" | "github-copilot-chat" | "copilot-coding" => "copilot",
         "gemini" | "gemini-cli" | "google-gemini" | "google-gemini-cli" => "gemini",
         "qwen" | "qwen-code" | "qwencode" => "qwen",
         "roo" | "roo-code" | "roocode" | "roo-cline" => "roo",
@@ -767,6 +955,19 @@ mod tests {
         assert_eq!(normalize_model("gpt-5.6-sol"), "gpt-5.6-sol");
         assert_eq!(normalize_model("auto"), "auto");
         assert_eq!(normalize_model(""), "");
+    }
+
+    #[test]
+    fn canonical_agent_ids_keep_session_and_registry_identity() {
+        for src in Src::all() {
+            let harness = src.harness();
+            assert_eq!(canonical_harness(harness), harness);
+            let mut reg = Registry::default();
+            let who = reg.agent(harness, Some("m"));
+            assert_eq!(reg.list[who].id, format!("a:{harness}/m"));
+        }
+        assert_eq!(canonical_harness("my-own-agent"), "my-own-agent");
+        assert_eq!(canonical_harness("my-own-cli"), "my-own-cli");
     }
 
     #[test]

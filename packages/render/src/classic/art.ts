@@ -112,23 +112,27 @@ async function fitted(out: { tree: any; w: number; h: number; fit?: { padX: numb
   if (out.grow) await grow(out, satori, fonts);
   const node = out.fit ? findFit(out.tree) : null;
   let box: { width: number; height: number } | null = null;
+  let body: Seen | null = null;
   const pass: Seen[] = [];
   const done = (svg: string, nodes: Seen[]) => { seen?.push(...nodes); return svg; };
-  const first = await satori(out.tree, { width: out.w, height: out.h, fonts, onNodeDetected: node || seen ? (x) => { if (x.key === FIT_KEY) box = x; if (seen) pass.push(x); } : undefined });
+  const first = await satori(out.tree, { width: out.w, height: out.h, fonts, onNodeDetected: node || seen ? (x) => { if (x.key === FIT_KEY) box = x; if (x.key === BODY_KEY) body = x; if (seen) pass.push(x); } : undefined });
   if (!node || !box) return done(first, pass);
   const b = box as { width: number; height: number };
-  const k = Math.min((out.w - 2 * out.fit!.padX) / b.width, (out.h - 2 * out.fit!.padY) / b.height, node.fitMax ?? 1.6);
-  const kk = Math.max(1, k);
+  const bounds = body as Seen | null;
+  const width = bounds?.width ?? out.w - 2 * out.fit!.padX;
+  const height = bounds?.height ?? out.h - 2 * out.fit!.padY;
+  const k = Math.min(width / b.width, height / b.height, node.fitMax ?? 1.6);
+  const kk = bounds ? k : Math.max(1, k);
   // 宽度先到顶时，竖向剩下的空间分给标了 spread 的节点里各项之间的间距
   const sp = findSpread(node);
   const kids = sp ? (Array.isArray(sp.props.children) ? sp.props.children.filter(Boolean) : [sp.props.children]) : [];
-  const spare = (out.h - 2 * out.fit!.padY) / kk - b.height;
+  const spare = height / kk - b.height;
   if (sp && kids.length > 1 && spare > 8) {
     const gap = Number(sp.props.style.gap ?? 0);
     const add = Math.min(spare / (kids.length - 1), Math.max(gap, 24) * (sp.fitSpread - 1));
     sp.props.style = { ...sp.props.style, gap: Math.round(gap + add) };
-  } else if (k < 1.04) return done(first, pass);
-  if (k >= 1.04) node.props.style = { ...node.props.style, transform: `scale(${Math.round(k * 1000) / 1000})` };
+  } else if (Math.abs(kk - 1) < 0.04) return done(first, pass);
+  if (Math.abs(kk - 1) >= 0.04) node.props.style = { ...node.props.style, transform: `scale(${Math.round(kk * 1000) / 1000})` };
   const last: Seen[] = [];
   return done(await satori(out.tree, { width: out.w, height: out.h, fonts, onNodeDetected: seen ? (x) => last.push(x) : undefined }), last);
 }
