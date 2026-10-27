@@ -1,4 +1,3 @@
-import { contributionHistory, versionBuckets, type ContributionHistory } from './history.ts';
 // credits.json → 展示模型。所有作品只读这一份。
 //
 // 口径：
@@ -7,6 +6,10 @@ import { contributionHistory, versionBuckets, type ContributionHistory } from '.
 // - 别人的提交算那位贡献者，写作者名（档案里没有名字时合成「其他贡献者」）。不说是谁手写的：
 //   他的提交里没有 AI 线索，不等于他没用 AI；
 // - 未确认单独一行，永远不并进任何人名下。
+
+import { TOOL_NAMES } from './tool-names.ts';
+import { contributionHistory, versionBuckets, type ContributionHistory } from './history.ts';
+export { TOOL_NAMES } from './tool-names.ts';
 
 export type Lang = 'zh' | 'en';
 
@@ -139,12 +142,6 @@ export const ROW_SLOTS = 6;
 
 // ───────────────────────── 名称 ─────────────────────────
 
-export const TOOL_NAMES: Record<string, string> = {
-  'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor', grok: 'Grok', kimi: 'Kimi', gemini: 'Gemini CLI', qwen: 'Qwen Code',
-  opencode: 'OpenCode', cline: 'Cline', roo: 'Roo Code', kilo: 'Kilo Code', copilot: 'GitHub Copilot', aider: 'Aider', devin: 'Devin',
-  jules: 'Jules', amp: 'Amp', windsurf: 'Windsurf', trae: 'Trae', crush: 'Crush', goose: 'Goose', continue: 'Continue', zed: 'Zed', 'amazon-q': 'Amazon Q', antigravity: 'Antigravity', deepseek: 'DeepSeek', 'github-actions': 'GitHub Actions',
-  dependabot: 'Dependabot', renovate: 'Renovate',
-};
 const BOTS = new Set(['github-actions', 'dependabot', 'renovate']);
 const ZH: Record<string, string> = { other: '其他', unattributed: '未确认', human: '贡献者', hand: '贡献者', people: '其他贡献者', me: '项目作者', noai: '没有 AI 记录' };
 const EN: Record<string, string> = { other: 'Others', unattributed: 'Unattributed', human: 'Contributors', hand: 'Contributors', people: 'Other contributors', me: 'Maintainer', noai: 'No AI trace' };

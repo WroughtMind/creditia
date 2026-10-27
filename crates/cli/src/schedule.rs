@@ -146,7 +146,7 @@ pub fn cmd(act: Option<&str>) -> R<Value> {
         Some("status") | None => {
             let (on, path) = installed();
             let l = last();
-            let when = l["at"].as_i64().map(|t| creditia_core::util::date_local(t)).unwrap_or_default();
+            let when = l["at"].as_i64().map(creditia_core::util::date_local).unwrap_or_default();
             let summary = match (on, when.is_empty()) {
                 (true, false) => tr!("已开启，每小时收一次；上次 {when}", "on, every hour; last run {when}"),
                 (true, true) => tr!("已开启，每小时收一次；还没跑过", "on, every hour; hasn't run yet"),

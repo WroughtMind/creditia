@@ -34,6 +34,7 @@ const flags: Record<string, string> = {};
 const on = new Set<string>();
 for (let i = 1; i < argv.length; i++) {
   const x = argv[i];
+  if (x === '--') { pos.push(...argv.slice(i + 1)); break; }
   if (x.startsWith('--')) {
     const k = x.slice(2);
     const eq = k.indexOf('=');
@@ -63,7 +64,10 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   analyze   [--repo P] [--github] [--level strict|standard|loose]
   update    [--repo P]              增量更新
   collect   [--repo P | --all]      只采集证据
+  agents    [--agent ID]            全部 agent 的入口与支持范围
+  run       --agent ID -- <命令>    在指定 agent 身份下启动命令
   doctor                            检查各数据源
+  capture   --harness H -- <ACP agent 命令> [参数]   按需采集 ACP 成功编辑
   blame     <路径>:<行号>           这一行是谁写的
   paths | link <路径> | unlink <路径>   一个项目的多处路径
   whoami                            当前在哪个 agent 里运行
@@ -105,7 +109,10 @@ Analysis (Rust core, all local, never calls a model)
   analyze   [--repo P] [--github] [--level strict|standard|loose]
   update    [--repo P]              incremental update
   collect   [--repo P | --all]      only collect evidence
+  agents    [--agent ID]            all agent entry points and support scope
+  run       --agent ID -- <command> run with an explicit agent identity
   doctor                            check every data source
+  capture   --harness H -- <ACP agent command> [args]   opt-in capture of completed ACP edits
   blame     <path>:<line>           which tool and model wrote this line
   paths | link <path> | unlink <path>   one project in several places
   whoami                            which agent this is running in
@@ -284,20 +291,20 @@ const V2_PIECES = Object.keys(V2.PIECES).filter((id) => id !== 'hand');
 const piecesOf = (l: Look) => (l.kind === 'classic' ? PIECE_IDS : V2_PIECES);
 const LOOKS: Look[] = [...ORDERED_THEMES.map((t) => ({ kind: 'classic' as const, t })), ...V2_STYLES.map((s) => ({ kind: 'v2' as const, s }))];
 async function artOf(id: string, raw: any, l: Look, variant?: string): Promise<Art | null> {
-  if (l.kind === 'classic') return art(id, buildModel(raw, { director: false, lang: LANG(), group: GROUP() }), l.t, ctxOf(variant));
+  if (l.kind === 'classic') return art(id, buildModel(raw, { director: false, lang: LANG(), named: !on.has('no-names'), group: GROUP() }), l.t, ctxOf(variant));
   return V2.art(id, V2.buildModel(raw, { lang: LANG(), named: !on.has('no-names'), sign: '', group: GROUP() }), l.s, { variant });
 }
 const ctxOf = (variant?: string) => ({ lang: LANG(), variant });
 /** 动画帧；不会动的作品返回 null */
 async function framesOf(id: string, raw: any, l: Look, variant: string | undefined, n: number): Promise<Art[] | null> {
   if (l.kind === 'v2') return V2.PIECES[id]?.animated ? V2.frames(id, V2.buildModel(raw, { lang: LANG(), named: !on.has('no-names'), sign: '', group: GROUP() }), l.s, { variant }, n) : null;
-  return animatedClassic(id) ? classicFrames(id, buildModel(raw, { director: false, lang: LANG(), group: GROUP() }), l.t, ctxOf(variant), n) : null;
+  return animatedClassic(id) ? classicFrames(id, buildModel(raw, { director: false, lang: LANG(), named: !on.has('no-names'), group: GROUP() }), l.t, ctxOf(variant), n) : null;
 }
 /** 文字类输出（CREDITS.md、发版说明、PR 评论、终端名片）用新模型：带模型名、好读的模型名 */
 const textModel = (raw: any) => V2.buildModel(raw, { lang: LANG(), named: !on.has('no-names'), sign: '', group: GROUP() });
 function modelOf(repo: string, refresh = false): { m: Model; raw: any } {
   const raw = loadCredits(repo, refresh);
-  const m = buildModel(raw, { director: false, lang: LANG(), group: GROUP() });
+  const m = buildModel(raw, { director: false, lang: LANG(), named: !on.has('no-names'), group: GROUP() });
   return { m, raw };
 }
 function write(out: string | undefined, data: string | Uint8Array) {
@@ -309,11 +316,12 @@ function write(out: string | undefined, data: string | Uint8Array) {
 }
 
 // ───────────────────────── 命令 ─────────────────────────
-const PASS = new Set(['discover', 'init', 'analyze', 'update', 'collect', 'doctor', 'blame', 'projects', 'stamp', 'hook', 'hook-trailers', 'release', 'integrations', 'paths', 'link', 'unlink', 'whoami', 'evidence', 'schedule']);
+const PASS = new Set(['discover', 'init', 'analyze', 'update', 'collect', 'doctor', 'agents', 'run', 'capture', 'blame', 'projects', 'stamp', 'hook', 'hook-trailers', 'release', 'integrations', 'paths', 'link', 'unlink', 'whoami', 'evidence', 'schedule']);
 
 async function main() {
   if (!cmd || cmd === 'help' || cmd === '-h' || cmd === '--help') return console.log(USAGE());
   if (cmd === '--version' || cmd === 'version') return console.log(VERSION);
+  if (cmd === 'capture' || cmd === 'run') { coreBin = await ensureCore(); process.exit(core(argv).code); }
   // 只有要做分析时才需要核心：透传给核心的命令、--refresh、或者仓库里还没有任何档案
   const top = sh(path.resolve(flags.repo ?? process.cwd()), ['rev-parse', '--show-toplevel']);
   const hasCredits = !!flags.credits || (!!top && (existsSync(path.join(top, '.creditia/credits.json')) || existsSync(path.join(top, 'credits.json'))));

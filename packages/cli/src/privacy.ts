@@ -27,7 +27,7 @@ const isPlaceholder = (u: any) => /^PR #\d+$/.test(u.title ?? '') || /^[0-9a-f]{
 export function check(raw: any): Report {
   const titles = (raw.units ?? []).filter((u: any) => u.title && !isPlaceholder(u)).map((u: any) => String(u.title));
   const paths = (raw.files ?? []).filter((f: any) => f.path).map((f: any) => String(f.path));
-  const people = [...new Set((raw.contributors ?? []).filter((c: any) => c.kind === 'human' && c.name).map((c: any) => String(c.name)))] as string[];
+  const people = [...new Set([...(raw.contributors ?? []).filter((c: any) => c.kind === 'human'), ...(raw.authors ?? [])].filter((c: any) => c.name).map((c: any) => String(c.name)))] as string[];
   const hours = (raw.sessions ?? []).length + ((raw.clock ?? []).flat().some((x: number) => x > 0) ? 1 : 0);
   const repos = (raw.project?.repos ?? []).map(String);
   const cats: Report['cats'] = {
@@ -56,7 +56,10 @@ export function redact(raw: any, hide: Set<Cat>): any {
   const out = structuredClone(raw);
   if (hide.has('titles')) for (const u of out.units ?? []) u.title = String(u.id ?? '').startsWith('pr:') ? `PR #${String(u.id).slice(3)}` : String(u.commits?.[0] ?? '').slice(0, 7);
   if (hide.has('paths')) for (const f of out.files ?? []) delete f.path;
-  if (hide.has('people')) for (const c of out.contributors ?? []) if (c.kind === 'human') delete c.name;
+  if (hide.has('people')) {
+    for (const c of out.contributors ?? []) if (c.kind === 'human') delete c.name;
+    for (const a of out.authors ?? []) delete a.name;
+  }
   if (hide.has('hours')) { delete out.sessions; delete out.clock; }
   if (out.project) {
     if (hide.has('repos')) delete out.project.repos;

@@ -6,7 +6,7 @@
 import type { Theme } from './themes.ts';
 import type { Model, Contributor } from './data.ts';
 import { fmt, pct, compact, nameOf } from './data.ts';
-import { BRANDS, BOTS, colorOf, famColor, logoSvg } from './brand.ts';
+import { BOTS, colorOf, famColor, logoSvg } from './brand.ts';
 import { h, box, col, txt, label, mark, bar, fill, neonTube, backdrop, surface, svgImage, stripes, blocks, plate, plateMetrics, ornament, fit, spread, eq, oneLine, MONO_FONT, BODY_KEY, CONTENT_KEY, nameFit, nameFitH, nameFitNode, type Node, type Out } from './ui.ts';
 import { measure } from '../svg.ts';
 import { markSvg, sharePetals } from '../mark.ts';
@@ -14,12 +14,12 @@ import { historyLabels, historyEmpty } from '../history.ts';
 import { tzOf } from '../data.ts';
 
 const keysOf = (m: Model) => m.rows.map((r) => r.key);
-/** 主演名单：有 logo 的 AI 工具按名次排 */
+/** 主演名单：按贡献者身份选 AI 工具，与是否有品牌图无关 */
 const castOf = (m: Model, n: number) => m.rows.filter((r) => r.kind === 'agent' && isAi(r.key)).slice(0, n).map((r) => r.name);
 const rankOf = (m: Model, key: string) => Math.max(0, m.rows.findIndex((r) => r.key === key));
 /** 真正的 AI 工具（CI 机器人不算）*/
 // 按模型分组时 key 是「工具/模型」，按工具判断
-const isAi = (k: string) => !!BRANDS[k.split('/')[0]] && !BOTS.has(k);
+const isAi = (k: string) => !BOTS.has(k.split('/')[0]);
 /** 细线：杂志和单色风格的 line 是纯黑，只适合描边，分隔线要调淡 */
 const hair = (t: Theme) => (t.family === 'editorial' ? 'rgba(18,17,16,0.28)' : t.family === 'mono' ? 'rgba(0,0,0,0.18)' : t.line);
 const hexA = (hex: string, a: string) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + a : hex);

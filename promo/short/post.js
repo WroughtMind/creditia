@@ -128,7 +128,7 @@ export class Post {
   // main: 不透明场景；glow: 发光层（加法混合，深度测试用 main 的深度）；cam: 镜头参数
   render(main, glow, camera, lens, look) {
     const r = this.r;
-    r.setRenderTarget(this.scene); r.setClearColor(0x000000, 1); r.clear(); r.render(main, camera);
+    r.setRenderTarget(this.scene); r.setClearColor(this.clear ?? 0x000000, 1); r.clear(); r.render(main, camera);
 
     const dof = lens.aperture > 0.01;
     const setDepth = (m) => { m.uniforms.near.value = camera.near; m.uniforms.far.value = camera.far; m.uniforms.focus.value = lens.focus; m.uniforms.aperture.value = lens.aperture; m.uniforms.maxCoc.value = lens.maxCoc ?? 24; };

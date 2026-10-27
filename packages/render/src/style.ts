@@ -1,3 +1,5 @@
+import { AGENT_BRANDS } from './agent-brands.ts';
+import catalogue from '../../schema/agents.json' with { type: 'json' };
 // 风格：不是换色，是一套视觉语言。每个风格提供同一组钩子（底、标题、条、标记、分隔、斜纹……），
 // 作品只调用钩子，所以任何作品 × 任何风格都成立；风格还可以指定某个作品的默认版式。
 import { Scene, el, g, rect, path, circle, line, r, esc, measure, mix, alpha, lum, type FontSpec, type Attrs } from './svg.ts';
@@ -74,6 +76,14 @@ export const BRAND: Record<string, string> = {
   opencode: '#E8A33D', cline: '#5B8DEF', roo: '#C2410C', kilo: '#E5484D', copilot: '#6E40C9', aider: '#14B014', amp: '#F34E3F',
   windsurf: '#0FBF8F', trae: '#FF4D4F', crush: '#6B50FF', goose: '#1A1A1A', continue: '#3B3B3B', zed: '#084CCF', 'amazon-q': '#8C4FFF', antigravity: '#3279F9', deepseek: '#4D6BFE', 'github-actions': '#2088FF', devin: '#1F2937', jules: '#7C5CFF',
 };
+
+for (const [id, brand] of Object.entries(AGENT_BRANDS)) { LOGO_OF[id] = brand.logo; BRAND[id] = brand.color; }
+LOGO_OF['trae-ide'] = LOGO_OF.trae; LOGO_OF['antigravity-ide'] = LOGO_OF.antigravity;
+BRAND['trae-ide'] = BRAND.trae; BRAND['antigravity-ide'] = BRAND.antigravity;
+for (const agent of catalogue.agents) {
+  if (LOGO_OF[agent.harness]) LOGO_OF[agent.id] ??= LOGO_OF[agent.harness];
+  if (BRAND[agent.harness]) BRAND[agent.id] ??= BRAND[agent.harness];
+}
 
 /** 品牌色：按模型分组时 key 是「工具/模型」，同一工具的第二、三个模型在品牌色上依次调深、调浅 */
 export function brandOf(key: string): string | undefined {

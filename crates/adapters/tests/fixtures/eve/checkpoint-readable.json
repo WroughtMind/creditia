@@ -1,0 +1,54 @@
+{
+  "input": {
+    "args": [
+      {
+        "sessionState": {
+          "version": 2,
+          "sessionId": "eve-session"
+        },
+        "serializedContext": {
+          "eve.channel": {
+            "kind": "channel:github",
+            "state": {
+              "owner": "creditia-fixtures",
+              "repo": "native-eve",
+              "repositoryId": 178,
+              "checkoutPath": null
+            }
+          },
+          "eve.bundle": {
+            "source": {
+              "kind": "disk",
+              "appRoot": "__EVE_BUNDLE_ROOT__"
+            }
+          }
+        },
+        "history": []
+      }
+    ]
+  },
+  "output": {
+    "action": "continue",
+    "stateDelta": {
+      "serializedContext": {
+        "set": {
+          "eve.sessionDynamicToolRuntimeRevision": "disk:__EVE_BUNDLE_ROOT__:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:mtime-mghq0000"
+        },
+        "patch": {
+          "eve.channel": {
+            "patch": {
+              "state": {
+                "set": {
+                  "checkoutPath": "/app/repository"
+                },
+                "kind": "object"
+              }
+            },
+            "kind": "object"
+          }
+        },
+        "kind": "object"
+      }
+    }
+  }
+}

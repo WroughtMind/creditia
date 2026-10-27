@@ -1,0 +1,15 @@
+{
+  "runId": "wrun_fixture",
+  "stepId": "step_fixture",
+  "status": "completed",
+  "stepName": "step//node_modules/eve/dist/src/execution/session/turn-step.js//turnStep",
+  "input": {
+    "__type": "Uint8Array",
+    "data": "ZGV2bFt7ImFyZ3MiOjEsImNsb3N1cmVWYXJzIjotMSwidGhpc1ZhbCI6LTF9LFsyXSx7InNlc3Npb25TdGF0ZSI6Mywic2VyaWFsaXplZENvbnRleHQiOjYsImhpc3RvcnkiOjE4fSx7InZlcnNpb24iOjQsInNlc3Npb25JZCI6NX0sMiwiZXZlLXNlc3Npb24iLHsiZXZlLmNoYW5uZWwiOjcsImV2ZS5idW5kbGUiOjE0fSx7ImtpbmQiOjgsInN0YXRlIjo5fSwiY2hhbm5lbDpnaXRodWIiLHsib3duZXIiOjEwLCJyZXBvIjoxMSwicmVwb3NpdG9yeUlkIjoxMiwiY2hlY2tvdXRQYXRoIjoxM30sImNyZWRpdGlhLWZpeHR1cmVzIiwibmF0aXZlLWV2ZSIsMTc4LG51bGwseyJzb3VyY2UiOjE1fSx7ImtpbmQiOjE2LCJhcHBSb290IjoxN30sImRpc2siLCJfX0VWRV9CVU5ETEVfUk9PVF9fIixbXV0="
+  },
+  "output": {
+    "__type": "Uint8Array",
+    "data": "ZGV2bFt7ImFjdGlvbiI6MSwic3RhdGVEZWx0YSI6Mn0sImNvbnRpbnVlIix7InNlcmlhbGl6ZWRDb250ZXh0IjozfSx7InNldCI6NCwicGF0Y2giOjYsImtpbmQiOjEyfSx7ImV2ZS5zZXNzaW9uRHluYW1pY1Rvb2xSdW50aW1lUmV2aXNpb24iOjV9LCJkaXNrOl9fRVZFX0JVTkRMRV9ST09UX186YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYjptdGltZS1tZ2hxMDAwMCIseyJldmUuY2hhbm5lbCI6N30seyJwYXRjaCI6OCwia2luZCI6MTJ9LHsic3RhdGUiOjl9LHsic2V0IjoxMCwia2luZCI6MTJ9LHsiY2hlY2tvdXRQYXRoIjoxMX0sIi9hcHAvcmVwb3NpdG9yeSIsIm9iamVjdCJd"
+  },
+  "completedAt": "2026-09-17T00:00:02.000Z"
+}

@@ -10,15 +10,13 @@ import { makeExporter } from '../packages/render/src/export.ts';
 import { creditsBlock, fetchSegs } from '../packages/render/src/text.ts';
 import { deflateSync } from 'node:zlib';
 import type { Art } from '../packages/render/src/export.ts';
-import { LOGOS } from '../packages/render/src/logos.ts';
 import { markSvg, sharePetals, toolColor, MARK_GREY } from '../packages/render/src/mark.ts';
 /** 同一个工具的第 k 个模型：往白里调浅一点，第二个浅 40%，之后每个再浅一些 */
 const mix = (hex: string, k: number) => { const t = Math.min(0.7, 0.4 + 0.12 * (k - 1)), c = (i: number) => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - t) + 255 * t).toString(16).padStart(2, '0'); return `#${c(1)}${c(3)}${c(5)}`; };
-import { LOGO_OF } from '../packages/render/src/style.ts';
-import { TOOL_NAMES } from '../packages/render/src/data.ts';
 import * as C from '../packages/render/src/classic/index.ts';
 import { ICONS } from './icons.ts';
 import { downloads } from './downloads.mjs';
+import { heroIcons } from './hero-icons.ts';
 const channels = await downloads();
 import { ORDERED_THEMES, themeName, themeNote, themeDot, pieceName, variantName } from '../packages/render/src/classic/catalog.ts';
 
@@ -246,11 +244,8 @@ console.log('✓ usage');
 // 社交预览图
 for (const lang of LANGS) writeFileSync(path.join(OUT, `assets/og-${lang}.png`), exporter.png(art('share', buildModel(sample, { lang }), styleById('cinema')!)!, 1));
 
-// creditia 认得的全部 agent：21 个读本机日志，Devin、Jules、Windsurf 从 git 里认
-const tools = ['claude-code', 'codex', 'cursor', 'gemini', 'qwen', 'copilot', 'windsurf', 'trae', 'antigravity', 'opencode', 'cline', 'roo', 'kilo', 'kimi', 'grok', 'amp', 'zed', 'amazon-q', 'continue', 'goose', 'crush', 'aider', 'devin', 'jules'].map((k) => {
-  const lg = LOGOS[LOGO_OF[k] ?? ''];
-  return { name: TOOL_NAMES[k] ?? k, svg: lg ? `<svg viewBox="${lg.vb}" aria-hidden="true"><path d="${lg.d}"${lg.rule ? ` fill-rule="${lg.rule}"` : ''}/></svg>` : '' };
-});
+const tools = heroIcons();
+console.log(`✓ Hero: ${tools.length} monochrome marks`);
 // 风格墙缩略图另存一份 WebP（同样清晰，体积约十分之一）；本机没有 Pillow 就照旧用 PNG
 const webp = spawnSync('python3', ['-c', `
 import sys, glob

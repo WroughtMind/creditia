@@ -16,6 +16,17 @@ const raw = {
   clock: [[0, 1]],
 };
 
+test('作者独有的名字也检查、隐藏，原始档案保持不变', () => {
+  const source = { authors: [{ id: 'h:42', name: 'private@example.com', linesAdded: 4, by: { 'a:codex': 4 } }] };
+  assert.equal(check(source).cats.people.n, 1);
+  assert.equal(check(source).risks[0]?.kind, 'email');
+  const hidden = redact(source, new Set(['people']));
+  assert.equal(hidden.authors[0].name, undefined);
+  assert.equal(hidden.authors[0].by['a:codex'], 4);
+  assert.equal(check(hidden).cats.people.n, 0);
+  assert.equal(source.authors[0].name, 'private@example.com');
+});
+
 test('检查：各类有几条、样例；可疑的内容标出来，密钥不原样印', () => {
   const r = check(raw);
   assert.equal(r.cats.titles.n, 2);

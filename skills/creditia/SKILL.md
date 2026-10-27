@@ -20,7 +20,7 @@ description: 分析一个仓库的代码是哪些 AI 工具和模型写的：读
 1. **找项目**：`creditia discover --json`。用户没指定就把列表给用户选。
 2. **初始化**（还没有 `.creditia/config.json` 时）：`creditia init --json`。把识别出的「你的提交身份」（邮箱）念给用户确认——它只用来区分「用户自己的提交」和「别人的提交」。
 3. **多处路径**：项目如果在别的目录、别的电脑上也做过（worktree、临时克隆、旧路径），`creditia paths --json` 看已登记的，`creditia link <路径> --json` 补上。别的电脑、云端会话里写的代码，日志不在这台电脑上：在那台电脑上 `creditia evidence export --out ev.json`，拿过来 `creditia evidence import ev.json --json` 再分析；或者在那台电脑上也开提交盖章（见第 5 步）。`analyze` 提示有提交是在别处写的时，把这两种办法告诉用户。
-4. **分析**：`creditia analyze --github --json`。汇报各工具占比、未确认比例、逐行证据覆盖。有未确认的行时说明可能的原因（日志被清理、在别的电脑上写的、工具不在支持范围、提交里没有声明），问用户要不要补证据、换口径，或接受现状。
+4. **分析**：`creditia analyze --github --json`。汇报各工具占比、未确认比例、逐行证据覆盖。有未确认贡献时，用 `creditia doctor --json` 和 `creditia agents --json` 核对实际来源与读取范围；只说明有证据的原因，不把缺失记录猜成日志被清理，也不靠切换口径掩盖证据不足。
 5. **问两项接入**（`init` / `analyze` 的返回里有 `ask` 时必须做，不能替用户决定，也不能跳过）：`ask` 里列的是这个项目还没决定的项。逐项用一两句话讲清楚它会改什么，问用户要不要：
    - `hook`（提交盖章）：在仓库的 git `prepare-commit-msg` hook 里加一行。之后在 agent 里提交时，提交信息末尾自动加 `Creditia-Harness` / `Creditia-Model`；有 AI 代码时再加 `Creditia-Lines`（各工具行数，不含代码）。写入 Git 提交，无需依赖本地日志，PR 评论和 Release 说明也读它。只影响这个仓库。要：`creditia hook install --json`；不要：`creditia hook uninstall --json`
    - `release`（跟着发版）：写 `.github/workflows/creditia.yml`，需要用户自己提交。发 Release 时把这一版的署名写进说明，PR 上评论这个 PR 的署名；读的是提交盖章记下的行数，仓库里有 `credits.json` 时优先用它，所以最好和提交盖章一起开。要：`creditia release install --json`；不要：`creditia release uninstall --json`
@@ -44,11 +44,14 @@ description: 分析一个仓库的代码是哪些 AI 工具和模型写的：读
 你作为 agent 提交代码前：
 
 ```
-creditia whoami --json                      # 确认自己是哪个工具
-creditia stamp --harness <工具> --model <模型>
+creditia agents --json                     # 查工具 ID 与历史读取状态
+creditia whoami --json                     # 确认当前工具身份
+creditia stamp --agent <工具 ID>             # 模型没有明确记录时不填写
 ```
 
-这样这次提交会带上 `Creditia-Harness` / `Creditia-Model`，以后即使日志被清理也能确认是你写的。
+提交盖章 hook 已安装时，下一次提交会带上 `Creditia-Harness`；只有明确知道本次执行模型时才附加 `--model <模型>`。这是提交声明，不能冒充逐行编辑证据，也不能反推出过去使用的模型。`stamp` 本身不安装 hook。
+
+未被环境自动识别的命令行 agent，可用 `creditia run --agent <工具 ID> -- <原启动命令>` 启动，子进程会继承明确身份。该命令不调用模型、不安装 hook，不为历史补造贡献。支持 ACP 的工具还可使用 `creditia capture --agent <工具 ID> -- <原 ACP 启动命令>` 接入客户端；仅有成功编辑差分的后续会话才产生逐行证据。
 
 ## 常用命令
 

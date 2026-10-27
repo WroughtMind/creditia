@@ -128,25 +128,7 @@ fn path_map(repo: &Path, head: &str, cfg: &Config, roots: &[String]) -> PathMap 
 }
 
 fn scan_all(store: &mut Store, pm: &PathMap, roots: &[String], st: &mut ad::Stats) {
-    ad::codex::scan(store, pm, st);
-    ad::claude::scan(store, pm, st);
-    ad::cursor::scan(store, pm, st);
-    ad::grok::scan(store, pm, st);
-    ad::kimi::scan(store, pm, st);
-    ad::gemini::scan(store, pm, roots, st);
-    ad::qwen::scan(store, pm, st);
-    ad::opencode::scan(store, pm, st);
-    ad::cline::scan(store, pm, st);
-    ad::aider::scan(store, pm, roots, st);
-    ad::copilot::scan(store, pm, st);
-    ad::amp::scan(store, pm, st);
-    ad::trae::scan(store, pm, st);
-    ad::crush::scan(store, pm, roots, st);
-    ad::goose::scan(store, pm, st);
-    ad::cont::scan(store, pm, st);
-    ad::zed::scan(store, pm, st);
-    ad::amazonq::scan(store, pm, st);
-    ad::antigravity::scan(store, pm, st);
+    ad::scan_all(store, pm, roots, st);
 }
 
 /// 把这次见到的路径登记进作品库：以后这些目录删了、日志里还留着它们，也能认出是本项目
@@ -178,10 +160,22 @@ pub fn collect(repo: &Path, lib: &mut Library, config: Option<&Path>) -> Result<
     }
     store.rescan_if_markers_changed(&pm.markers);
     let mut st = ad::Stats::default();
+    remember_session_owners(&mut store, lib, &proj.id)?;
     scan_all(&mut store, &pm, &roots, &mut st);
     save_json(&cache.join("store.json"), &store)?;
-    let n = lib.save_evidence(&proj.id, &store)?;
+    lib.reassign_sessions(&proj.id, Src::OpenCode, Src::Tabnine, &tabnine_owners(&store))?;
+    let n = lib.save_evidence_with_claude_sessions(&proj.id, &store, &ad::claude::legacy_sessions(&store))?;
     Ok((n, st.warnings, proj.id))
+}
+
+fn remember_session_owners(store: &mut Store, lib: &Library, project: &str) -> Result<(), String> {
+    for id in lib.session_ids(project, Src::Tabnine)? {
+        store.session_owners.insert(format!("opencode:{id}"), Src::Tabnine);
+    }
+    Ok(())
+}
+fn tabnine_owners(store: &Store) -> HashSet<String> {
+    store.session_owners.iter().filter(|(_, owner)| **owner == Src::Tabnine).filter_map(|(key, _)| key.strip_prefix("opencode:").map(String::from)).collect()
 }
 
 /// 证据：日志（增量扫描）+ 证据库（日志被清理后仍在）
@@ -195,11 +189,13 @@ fn evidence(repo: &Path, cfg: &Config, lib: &mut Library, project: &str, head: &
     }
     store.rescan_if_markers_changed(&pm.markers);
     let mut st = ad::Stats::default();
+    remember_session_owners(&mut store, lib, project)?;
     creditia_core::progress::tick("logs", 0, 0);
     scan_all(&mut store, &pm, &roots, &mut st);
     save_json(&cache.join("store.json"), &store)?;
-    lib.save_evidence(project, &store)?;
-    let (db_evs, db_sessions) = lib.load_evidence(project)?;
+    lib.reassign_sessions(project, Src::OpenCode, Src::Tabnine, &tabnine_owners(&store))?;
+    lib.save_evidence_with_claude_sessions(project, &store, &ad::claude::legacy_sessions(&store))?;
+    let creditia_store::LoadedEvidence { events: db_evs, sessions: db_sessions, legacy_claude } = lib.load_evidence_for_analysis(project)?;
     // 合并：证据库里有、当前日志里没有的（已清理）补进来
     // 日志还在的会话以这次解析为准（读法可能改进过，比如不再把编辑的上下文行记成证据），只补日志已经没了的会话；
     // Cursor 的行哈希表会单行清理，仍按行补
@@ -210,20 +206,23 @@ fn evidence(repo: &Path, cfg: &Config, lib: &mut Library, project: &str, head: &
             have.insert((e.rel.clone(), e.key, e.src.harness().into(), e.session.clone()));
         }
         for s in &g.sessions {
-            if s.has_content && s.src != Src::Cursor {
+            if s.has_content {
                 live.insert((s.src.harness().into(), s.id.clone()));
             }
         }
     }
     let mut extra = FileGroup::default();
     for e in db_evs {
-        if live.contains(&(e.src.harness().to_string(), e.session.clone())) {
+        if live.contains(&(e.src.harness().to_string(), e.session.clone())) && (e.src != Src::Cursor || e.single_use) {
             continue;
         }
         if !have.contains(&(e.rel.clone(), e.key, e.src.harness().into(), e.session.clone())) {
             extra.evs.push(e);
         }
     }
+    // These old parent-ID rows have no readable transcript owner yet. A live
+    // main transcript cannot establish that a missing child's edit was revoked.
+    extra.evs.extend(legacy_claude);
     let have_s: HashSet<(String, String)> = store.groups.values().flat_map(|g| g.sessions.iter().map(|s| (s.src.harness().to_string(), s.id.clone()))).collect();
     for s in db_sessions {
         if !have_s.contains(&(s.src.harness().to_string(), s.id.clone())) {
@@ -231,8 +230,9 @@ fn evidence(repo: &Path, cfg: &Config, lib: &mut Library, project: &str, head: &
         }
     }
     let restored = extra.evs.len();
-    if restored > 0 {
-        st.notes.push(creditia_core::tr!("证据库补回 {restored} 条已不在日志里的证据", "restored {restored} pieces of evidence from the library that are no longer in the logs"));
+    let restored_sessions = extra.sessions.len();
+    if restored > 0 || restored_sessions > 0 {
+        st.notes.push(creditia_core::tr!("证据库补回 {restored} 条证据与 {restored_sessions} 个已不在日志里的会话", "restored {restored} pieces of evidence and {restored_sessions} sessions from the library that are no longer in the logs"));
         store.groups.insert("library".into(), extra);
     }
     Ok((store, st))
@@ -371,6 +371,9 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
 
     // ---- 归因
     let mut eng = Engine::new(&cfg, &idx, &sessions, &units, cc.stamps.clone());
+    if ad::git::git(repo,&["rev-parse","--is-shallow-repository"]).trim()=="false" {
+        eng.set_history(&cc.commits);
+    }
     let mut attrs: HashMap<String, CommitAttr> = HashMap::new();
     // 按时间先后归因：一条证据只认领一次，先提交的先用
     let mut order: Vec<&Commit> = cc.commits.iter().collect();
