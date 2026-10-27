@@ -97,6 +97,59 @@ fn run(env: &Env, args: &[&str]) -> (bool, serde_json::Value) {
 }
 
 #[test]
+fn worktree_links_cannot_claim_to_unlink_an_automatic_path() {
+    let env = setup();
+    fs::write(env.repo.join("README.md"), "# worktree fixture\n").unwrap();
+    commit(&env.repo, "init", "me@example.com", "2026-10-01T12:00:00+0800");
+    let rs = env.repo.to_str().unwrap();
+    let wt = env.root.join("linked-worktree");
+    git(&env.repo, &["worktree", "add", "-b", "fixture", wt.to_str().unwrap()]);
+    run(&env, &["init", "--repo", rs]);
+    let (ok, v) = run(&env, &["analyze", "--repo", rs]);
+    assert!(ok, "{v}");
+    let (ok, v) = run(&env, &["link", wt.to_str().unwrap(), "--repo", rs]);
+    assert!(ok, "{v}");
+    let (_, v) = run(&env, &["paths", "--repo", rs]);
+    assert!(v["paths"].as_array().unwrap().iter().any(|p| p["path"] == wt.canonicalize().unwrap().to_str().unwrap() && p["kind"] == "worktree"), "{v}");
+    let (ok, v) = run(&env, &["unlink", wt.to_str().unwrap(), "--repo", rs]);
+    assert!(!ok && v["error"].is_string(), "{v}");
+}
+
+#[test]
+fn removed_forks_rejoin_their_own_project_identity() {
+    let env = setup();
+    fs::write(env.repo.join("README.md"), "# identity fixture\n").unwrap();
+    commit(&env.repo, "init", "me@example.com", "2026-10-01T12:00:00+0800");
+    git(&env.repo, &["remote", "add", "origin", "https://github.com/example/original.git"]);
+    let fork = env.root.join("fork");
+    git(&env.root, &["clone", env.repo.to_str().unwrap(), fork.to_str().unwrap()]);
+    git(&fork, &["remote", "set-url", "origin", "https://github.com/example/fork.git"]);
+    let analyze = |repo: &Path| {
+        let (ok, v) = run(&env, &["analyze", "--repo", repo.to_str().unwrap()]);
+        assert!(ok, "{v}");
+    };
+    for repo in [&env.repo, &fork] {
+        let (ok, v) = run(&env, &["init", "--repo", repo.to_str().unwrap()]);
+        assert!(ok, "{v}");
+        analyze(repo);
+    }
+    let db = rusqlite::Connection::open(env.root.join("lib/library.sqlite")).unwrap();
+    let id = |repo: &Path| -> String { db.query_row("select id from projects where path=?1 and hidden=0", [repo.canonicalize().unwrap().to_str().unwrap()], |r| r.get(0)).unwrap() };
+    let original_id = id(&env.repo);
+    let fork_id = id(&fork);
+    assert_ne!(original_id, fork_id);
+    // Store unit tests exercise removal itself. Here run the real CLI/project_of restoration path.
+    db.execute("update projects set hidden=1 where id=?1", [&original_id]).unwrap();
+    analyze(&env.repo);
+    assert_eq!(id(&env.repo), original_id);
+    db.execute("update projects set hidden=1", []).unwrap();
+    analyze(&fork);
+    assert_eq!(id(&fork), fork_id);
+    analyze(&env.repo);
+    assert_eq!(id(&env.repo), original_id);
+}
+
+#[test]
 fn public_agents_can_be_selected_launched_and_stamped_without_inventing_models() {
     let env = setup();
     let rs = env.repo.display().to_string();

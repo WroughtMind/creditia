@@ -197,6 +197,7 @@ test('changing the aggregate language sends its updated project name to the work
   ctx.state = {current: {all:true}, raw: original, lang:'zh'};
   ctx.L = (zh,en) => ctx.state.lang === 'zh' ? zh : en;
   ctx.groupPref = () => 'auto'; ctx.namesOn = () => true;
+  ctx.petalsOf = () => []; ctx.mark = { set() {} };
   ctx.buildModel = raw => ({project:raw.project.name, commits:0, linesAdded:0});
   ctx.$ = () => ({}); ctx.fmt = String; ctx.renderGroup = ctx.renderPlugs = () => {};
   const rebuild = main.slice(main.indexOf('function rebuildModel()'), main.indexOf('// ───────────────────────── 接入'));
@@ -304,6 +305,8 @@ test('starting a slow project switch releases old roaming cards before its data 
   ctx.state.openSeq = 0;ctx.state.token = 0;ctx.state.arts = new Map();
   ctx.store.set = () => {};
   ctx.renderPlugs = ctx.slotWall = ctx.cancelAnimationFrame = () => {};
+  ctx.mark = { set() {} }; ctx.markOf = () => null; ctx.UNREAD = [];
+  ctx.syncStatus = () => {}; ctx.setTimeout = () => {}; ctx.closeFocus = null;
   ctx.readStamp = async () => '';
   ctx.creditsOf = () => new Promise(() => {});
   ctx.releaseRoamPreview = () => released++;

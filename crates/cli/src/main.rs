@@ -1129,6 +1129,14 @@ fn cmd_link(a: &Args) -> R<(Value, Vec<String>)> {
     let lib = Library::open()?;
     let proj = analyze::project_of(&repo, &cfg, Some(&lib));
     lib.upsert_project(&proj)?;
+    let path = |s: &str| PathBuf::from(s).canonicalize().unwrap_or_else(|_| PathBuf::from(s.trim_end_matches('/')));
+    let automatic = ad::git::worktrees(&repo).into_iter().chain(cfg.paths.iter().cloned()).any(|p| path(&p) == path(target));
+    if automatic {
+        if a.cmd == "unlink" {
+            return Err(tr!("{target} 由 Git 工作树或项目配置自动关联；请在来源处移除后再分析", "{target} is linked by Git worktrees or project configuration; remove it at its source before analyzing again"));
+        }
+        return Ok((json!({ "linked": target, "project": proj.id, "summary": tr!("{target} 已自动关联，无需重复关联", "{target} is already linked automatically") }), vec![]));
+    }
     if a.cmd == "unlink" {
         let n = lib.remove_path(&proj.id, target)?;
         return Ok((json!({ "removed": n, "summary": if n > 0 { tr!("已取消关联 {target}", "unlinked {target}") } else { tr!("{target} 本来就没有关联", "{target} was not linked") } }), vec![]));

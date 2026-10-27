@@ -90,7 +90,7 @@ pub fn project_of(repo: &Path, cfg: &Config, lib: Option<&Library>) -> Project {
     let base = if root.is_empty() { cfg.name.clone() } else { root[..12.min(root.len())].to_string() };
     let mut id = base.clone();
     if !root.is_empty() {
-        let same: Vec<Project> = lib.and_then(|l| l.projects().ok()).unwrap_or_default().into_iter().filter(|p| p.root_commit == root).collect();
+        let same: Vec<Project> = lib.and_then(|l| l.project_identities().ok()).unwrap_or_default().into_iter().filter(|p| p.root_commit == root).collect();
         let fits = |p: &Project| p.remotes.is_empty() || remotes.is_empty() || p.remotes.iter().any(|r| remotes.contains(r));
         if let Some(p) = same.iter().find(|p| fits(p)) {
             id = p.id.clone();

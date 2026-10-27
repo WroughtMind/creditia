@@ -7,7 +7,7 @@ import { mergeCredits } from '../../../packages/render/src/merge.ts';
 // CREDITS.md 和命令行 creditia doc 用同一份生成代码
 import { creditsBlock, mergeCreditsMd } from '../../../packages/render/src/text.ts';
 import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts';
-import { INTERACT_CSS, mountHits } from '../../../packages/render/src/interact.ts';
+import { INTERACT_CSS, mountHits, placeTip } from '../../../packages/render/src/interact.ts';
 import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, setNamed, groupOf, hasModels, type Kit } from './kits.ts';
 import { exportArt, type Format } from './engine.ts';
 import { mountRoamPreview, releaseRoamPreview } from './roam-preview.ts';
@@ -15,6 +15,8 @@ import { RoamViewport } from './roam-viewport.ts';
 import { wallTiles, tileKey as keyOf, wallVariant, selectWallVariant } from './wall.ts';
 import { LOGOS, DEFAULT_LOGO, logoSvg } from './logo.ts';
 import { markPaths, sharePetals, type Petal } from '../../../packages/render/src/mark.ts';
+import { icon } from './icons.ts';
+import { LiveMark, fly, BRAND, GHOST as UNREAD } from './live-mark.ts';
 
 // ───────────────────────── 桥：Tauri 或浏览器调试 ─────────────────────────
 const native = (window as any).__TAURI__?.core?.invoke as ((cmd: string, args?: any) => Promise<any>) | undefined;
@@ -27,18 +29,32 @@ const devPlugs: Plugs = {
 };
 /** 开发时加 ?fresh：作品库是空的，从第一次打开走起 */
 const devFresh = { on: !demo && new URLSearchParams(location.search).has('fresh'), added: false };
+/** 浏览器里移除、关联的项目和路径只记在内存里 */
+const devLib = { removed: new Set<string>(), linked: new Map<string, string[]>() };
 async function api(cmd: string, args: any = {}): Promise<any> {
   if (native) return native(cmd, args);
   const get = (u: string) => fetch(u).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
   switch (cmd) {
-    case 'projects': return demo ? demo.projects : devFresh.on && !devFresh.added ? [] : get('/__dev/projects');
+    case 'projects': {
+      const list: any[] = demo ? demo.projects : devFresh.on && !devFresh.added ? [] : await get('/__dev/projects');
+      return list.filter((p) => !devLib.removed.has(p.id)).map((p) => ({ ...p, paths: [...(p.paths ?? [p.path]), ...(devLib.linked.get(p.id) ?? [])], pathKinds: { ...(p.pathKinds ?? {}), ...Object.fromEntries((devLib.linked.get(p.id) ?? []).map((x) => [x, 'manual'])) } }));
+    }
+    case 'remove_project': devLib.removed.add(args.projectId); return null;
+    case 'link_path': {
+      const l = devLib.linked.get(args.projectId) ?? [];
+      devLib.linked.set(args.projectId, args.unlink ? l.filter((x) => x !== args.path) : [...l, args.path]);
+      return { summary: args.unlink ? L(`已取消关联 ${args.path}`, `Unlinked ${args.path}`) : L(`已关联 ${args.path}`, `Linked ${args.path}`) };
+    }
+    case 'pick_folder': if (demo) throw new Error(L('这一步要在 App 里运行', 'Only available in the desktop app')); return '/Users/me/code/catnap-wt';
     case 'discover': if (demo) throw new Error('demo'); await new Promise((r) => setTimeout(r, 900)); return { projects: [
       { name: 'catnap', path: '/Users/me/code/catnap', tools: { 'claude-code': 42, codex: 12 }, lastActive: '2026-10-20', exists: true, inLibrary: !devFresh.on },
       { name: 'atlas', path: '/Users/me/code/atlas', tools: { cursor: 30 }, lastActive: '2026-10-12', exists: true, inLibrary: false },
       { name: 'dotfiles', path: '/Users/me/dotfiles', tools: { 'claude-code': 4 }, lastActive: '2026-09-02', exists: true, inLibrary: false },
       { name: 'scratch', path: '/Users/me/tmp/scratch', tools: { codex: 3 }, lastActive: '2026-08-30', exists: true, inLibrary: false },
     ] };
-    case 'add_project': if (demo) throw new Error('demo'); await new Promise((r) => setTimeout(r, 2500)); devFresh.added = true; return { id: (await get('/__dev/projects'))[0]?.id, result: {} };
+    case 'add_project': if (demo) throw new Error('demo'); await devAnalyze(); devFresh.added = true; return { id: (await get('/__dev/projects'))[0]?.id, result: {} };
+    case 'analyze': if (demo) throw new Error(L('这一步要在 App 里运行', 'Only available in the desktop app')); await devAnalyze(); return { newCommits: 0 };
+    case 'cancel_analyze': devCancel = true; return null;
     case 'credits': if (demo) { const c = demo.credits[args.projectId]; if (!c) throw new Error('not found'); return c; } return get(`/__dev/credits?id=${encodeURIComponent(args.projectId)}`);
     case 'config_of': return {};
     case 'doctor': return demo ? demo.doctor : get('/__dev/doctor');
@@ -50,6 +66,7 @@ async function api(cmd: string, args: any = {}): Promise<any> {
       return `~/Downloads/${args.name}`;
     }
     case 'set_display': return null;
+    case 'open_folder': return null;
     // 浏览器里（开发、官网演示）没有仓库可写：开关只在内存里拨
     case 'integrations': return structuredClone(devPlugs);
     // 后台采集：开发时给一份样子；官网演示里没有，设置里不出这一行
@@ -90,8 +107,6 @@ const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&
 // 星号 *：标志本身，也是每个项目自己的 *（瓣长是各工具的份额）。等待时五瓣轮流亮，出结果时一瓣瓣长出来
 const markEl = (petals?: Petal[] | null, cls = '') => `<svg class="mk${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${markPaths({ petals: petals ?? undefined })}</svg>`;
 const SPIN = () => markEl(null, 'spin');
-/** 还没分析过的项目：五瓣淡淡的短瓣 */
-const GHOST: Petal[] = Array.from({ length: 5 }, () => ({ color: 'currentColor', len: 0.5, opacity: 0.35 }));
 const petalsOf = (m: Model) => sharePetals(m.agents.filter((a) => a.kind === 'agent').map((a) => ({ tool: a.key.split('/')[0], lines: a.lines })));
 /** 每个项目的 * 记在本机，菜单里不用每次都读档案 */
 const markOf = (id: string): Petal[] | null => { try { return JSON.parse(store.get('mark.' + id) ?? 'null'); } catch { return null; } };
@@ -132,9 +147,111 @@ function errText(e: any): string {
 /** 家目录缩成 ~ */
 const short = (path: string) => path.replace(/^(\/Users|\/home)\/[^/]+/, '~').replace(/^[A-Za-z]:\\Users\\[^\\]+/, '~');
 const OS = /Mac/.test(navigator.userAgent) ? 'mac' : /Windows/.test(navigator.userAgent) ? 'win' : 'linux';
+/** 快捷键提示里的修饰键 */
+const MOD = OS === 'mac' ? '⌘' : 'Ctrl+';
 const revealLabel = () => (OS === 'mac' ? L('在访达中显示', 'Show in Finder') : OS === 'win' ? L('在资源管理器中显示', 'Show in Explorer') : L('打开所在文件夹', 'Open folder'));
 
 const tiles = () => wallTiles(state.style);
+
+// ───────────────────────── 星号 *：App 的状态都由它来表达 ─────────────────────────
+// 一颗 * 两个位置：平时在左上角项目名前面，是这个项目自己的份额；屏幕上没有别的可看时（读第一屏、挡在前面的分析）
+// 放到中间。出了结果，先在中间停一会儿让人看清，再飞回左上角——看过这一下，之后它在角落动，人才知道往那儿看。
+// 等待按时长分档：300ms 内不打扰；到 2 秒只让 * 动；再久加一句话（中间、第一次打开页，或者项目名后面展开的一段）。
+const mark = new LiveMark({ optical: true });
+/** 正在跑的分析。blocking：用户在等它（没有墙可看）；auto：后台跟上新提交 */
+type Job = { name: string; auto: boolean; blocking: boolean; t0: number; stage: string; p: number | null; cancelling?: boolean };
+let job: Job | null = null;
+/** 正在读一个项目的档案、画第一屏 */
+let loading: { name: string; t0: number } | null = null;
+let markErr = false, flashText = '', flashTimer = 0, errTimer = 0, centerHold = 0, statusTick = 0;
+/** 第一次打开页在扫描本机的仓库 */
+let scanning = false;
+const painted = () => !!document.querySelector('#board .tile:not(.slot), #roam .rt');
+/** * 现在该在哪：第一次打开页、空状态、中间，否则左上角 */
+function markHome(): HTMLElement {
+  if (!$('#welcome').hidden) { const w = document.querySelector<HTMLElement>('#welcome .logo'); if (w) return w; }
+  if (!$('#empty').hidden) { const e = document.querySelector<HTMLElement>('#empty .mslot'); if (e) return e; }
+  if (!$('#center').hidden) return $('#center .mslot');
+  return $('#pmark');
+}
+function settleMark() { const to = markHome(); if (mark.el.parentElement !== to) fly(mark.el, to); }
+function jobText(j: Job) {
+  const s = Math.round((Date.now() - j.t0) / 1000), secs = s ? L(` · ${s} 秒`, ` · ${s}s`) : '';
+  if (j.cancelling) return L('正在取消…', 'Cancelling…');
+  if (j.auto) return L(`有新提交，正在跟上…${secs}`, `New commits — catching up…${secs}`);
+  // 左上角已经写着这个项目的名字，就不再重复
+  const who = $('#center').hidden && $('#welcome').hidden && j.name === state.current?.name ? '' : L(`分析 ${j.name}`, `Analyzing ${j.name}`);
+  return [who, j.stage || (who ? '' : L('正在分析', 'Analyzing'))].filter(Boolean).join(' · ') + secs;
+}
+let lastBar = '';
+/** 程序坞（任务栏）上的进度，和 * 同步 */
+function dockBar() {
+  const win = (window as any).__TAURI__?.window?.getCurrentWindow?.();
+  if (!win) return;
+  const v = job && !job.auto ? (job.p == null ? { status: 'indeterminate' } : { status: 'normal', progress: Math.round(job.p * 100) }) : { status: 'none' };
+  const key = JSON.stringify(v);
+  if (key !== lastBar) { lastBar = key; void win.setProgressBar(v).catch(() => null); }
+}
+function syncStatus() {
+  const since = job ? Date.now() - job.t0 : loading ? Date.now() - loading.t0 : 0;
+  if (scanning && $('#welcome').hidden) scanning = false;
+  mark.setMode(markErr ? 'error' : job && !job.auto ? 'progress' : job || loading || scanning ? 'loading' : 'idle');
+  if (job && !job.auto) mark.progress(job.p);
+  // 挡在前面、而且没有墙可看：到中间
+  const wantCenter = $('#welcome').hidden && $('#empty').hidden && !painted() && (!!job?.blocking || (!!loading && since >= 300));
+  if (wantCenter) { clearTimeout(centerHold); centerHold = 0; $('#center').hidden = false; }
+  else if (!$('#center').hidden && !centerHold) centerHold = window.setTimeout(() => { centerHold = 0; $('#center').hidden = true; settleMark(); syncStatus(); }, 650);
+  settleMark();
+  // 一句话：超过 2 秒才说；刚做完的结果（flash）立刻说
+  const text = job ? jobText(job) : loading ? L(`正在读取 ${loading.name}…`, `Opening ${loading.name}…`) : flashText;
+  const show = (job || loading) ? since >= 2000 : !!flashText;
+  const cancel = !!job && !job.auto && !job.cancelling;
+  const html = show && text ? `<span class="txt">${esc(text)}</span>${cancel ? `<button data-act="cancel">${L('取消', 'Cancel')}</button>` : ''}` : '';
+  const center = !$('#center').hidden, wel = !$('#welcome').hidden;
+  const put = (el: HTMLElement | null, on: boolean) => { if (!el) return; const h = on ? html : ''; if (el.innerHTML !== h) el.innerHTML = h; el.classList.toggle('on', on && !!html); };
+  put($('#center .lbl'), center);
+  put(document.querySelector<HTMLElement>('#welcome .wstat'), wel && !center);
+  put($('#pstat .in'), !center && !wel);
+  $('#pstat').classList.toggle('on', !center && !wel && !!html);
+  dockBar();
+  // 等待中每半秒刷一次（秒数、分档）；都结束了就停
+  if ((job || loading) && !statusTick) statusTick = window.setInterval(syncStatus, 500);
+  if (!job && !loading && statusTick) { clearInterval(statusTick); statusTick = 0; }
+}
+/** 刚做完的一句结果，写在项目名后面，过一会儿收起 */
+function flash(text: string, ms = 2400) {
+  flashText = text; clearTimeout(flashTimer);
+  flashTimer = window.setTimeout(() => { flashText = ''; syncStatus(); }, ms);
+  syncStatus();
+}
+/** 出错：* 收短、变灰、抖两下，过一会儿恢复；文字交给提示条 */
+function markError(ms = 2400) {
+  markErr = true; clearTimeout(errTimer); syncStatus();
+  if (ms) errTimer = window.setTimeout(() => { markErr = false; syncStatus(); }, ms);
+}
+/** 第一屏有作品了：读取结束，* 回左上角 */
+function loaded() { if (loading && painted()) { loading = null; syncStatus(); } }
+/** 悬停左上角的 *：各工具的份额 */
+function wireMarkTip() {
+  const host = $('#pmark');
+  const tip = () => document.querySelector<HTMLElement>('.ct-tip') ?? document.body.appendChild(Object.assign(document.createElement('div'), { className: 'ct-tip' }));
+  host.addEventListener('mouseenter', (e) => {
+    const m = state.model; if (!m || job || loading) return;
+    const rows = m.rows.filter((r) => r.kind === 'agent' || r.kind === 'unknown' || r.kind === 'other');
+    const t = tip();
+    t.innerHTML = `<b>${esc(m.project || state.current?.name || '')}</b>${rows.map((r) => `<span>${esc(r.name)} · ${r.pct.toFixed(1)}%</span>`).join('')}`;
+    placeTip(t, e.clientX, e.clientY); t.classList.add('on');
+  });
+  host.addEventListener('mousemove', (e) => { const t = document.querySelector<HTMLElement>('.ct-tip'); if (t) placeTip(t, e.clientX, e.clientY); });
+  host.addEventListener('mouseleave', () => document.querySelector('.ct-tip')?.classList.remove('on'));
+  // 取消按钮可能在项目名后面、中间或者第一次打开页里
+  document.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('[data-act="cancel"]'); if (!b || !job) return;
+    e.stopPropagation();
+    job.cancelling = true; syncStatus();
+    api('cancel_analyze').catch(() => null);
+  }, true);
+}
 
 // ───────────────────────── 启动 ─────────────────────────
 async function boot() {
@@ -142,11 +259,13 @@ async function boot() {
   const st = document.createElement('style'); st.textContent = INTERACT_CSS; document.head.appendChild(st);
   if (native && OS === 'mac') document.body.classList.add('mac');
   if (native) void api('logo').then((id) => store.set('logo', String(id))).catch(() => null);
-  applyLang(); renderDots(); renderDock(); wireTop(); wireRoam();
+  document.querySelectorAll<HTMLElement>('[data-icon]').forEach((el) => (el.innerHTML = icon(el.dataset.icon!, el.closest('.pill') ? 14 : 16)));
+  $('#pmark').appendChild(mark.el); mark.set(BRAND, { grow: true });
+  applyLang(); renderDots(); renderDock(); wireTop(); wireRoam(); wireMarkTip(); wireKeys(); void installMenu();
   // 滚动之后顶栏垫一层渐隐的玻璃，作品不再直接透到项目名和按钮后面
   const stageEl = $('#stage');
   stageEl.addEventListener('scroll', () => document.body.classList.toggle('scrolled', stageEl.scrollTop > 8), { passive: true });
-  try { state.projects = await api('projects'); } catch (e: any) { return empty(() => [L('无法读取本地项目记录', 'Cannot read local projects'), errText(e)]); }
+  try { state.projects = await api('projects'); } catch (e: any) { return empty(() => [L('无法读取本地项目记录', 'Cannot read local projects'), errText(e)], false, true); }
   if (!state.projects.length) return welcome();
   const last = (store.get('project') === ALL_ID && state.projects.length > 1 ? allProject() : null) ?? state.projects.find((p) => p.id === store.get('project')) ?? state.projects[0];
   await openProject(last);
@@ -163,33 +282,46 @@ async function boot() {
 }
 /** 空状态。传进来的是函数：换语言时按新语言重写一遍 */
 type EmptyView = () => [title: string, detail?: string, cmd?: string, act?: Act];
-let emptyView: EmptyView | null = null;
-function empty(view: EmptyView, keepName = false) {
-  emptyView = view;
+let emptyView: EmptyView | null = null, emptyErr = false;
+/** error：读不到、出了错（* 变灰）；否则是还没分析过（* 是淡淡的短瓣） */
+function empty(view: EmptyView, keepName = false, error = false) {
+  emptyView = view; emptyErr = error;
   const [title, detail = '', cmd = '', act] = view();
   $('#board').innerHTML = ''; document.body.classList.remove('busy');
   const el = $('#empty'); el.hidden = false;
   applyView();
-  el.innerHTML = `<div><b>${esc(title)}</b>${esc(detail)}${act ? `<br><button class="go">${esc(act.label)}</button>` : cmd ? `<br><code>${esc(cmd)}</code>` : ''}</div>`;
+  el.innerHTML = `<div><span class="mslot"></span><b>${esc(title)}</b>${esc(detail)}${act ? `<br><button class="go">${esc(act.label)}</button>` : cmd ? `<br><code>${esc(cmd)}</code>` : ''}</div>`;
   if (act) (el.querySelector('.go') as HTMLElement).onclick = act.run;
   if (!keepName) $('#pname').textContent = 'creditia';
+  loading = null;
+  if (error) markError(0); else { markErr = false; mark.set(UNREAD); }
+  syncStatus();
 }
 
 async function openProject(p: any) {
+  closeFocus?.();
   const seq = ++state.openSeq;
+  const prev = state.current;
   state.current = p; store.set('project', p.id);
   state.raw = null; state.model = null; state.arts.clear(); state.variants = {};
   roamReset(); // 读新档案前释放旧漫游，旧项目排队的预览不再占用绘图队列
-  $('#group').hidden = true; plugs = null; renderPlugs();
+  $('#group').hidden = true;
   ++state.token; // 让正在画的旧项目停下
+  $('#empty').hidden = true;
   $('#board').innerHTML = ''; slotWall(); // 档案还在读，先把墙的样子摆出来
   $('#pname').textContent = p.name;
+  // * 先换成这个项目上次记下的样子（换项目时转一瓣），读档案期间呼吸；读太久、墙上又什么都没有，就到中间
+  markErr = false;
+  mark.set(markOf(p.id) ?? UNREAD, { turn: prev && prev.id !== p.id ? -1 : 0 });
+  loading = { name: p.name, t0: Date.now() };
+  syncStatus();
+  setTimeout(syncStatus, 320);
   let raw: any;
   const st = readStamp(p); // 先记下版本再读档案：读的过程中又变了，下次比对还能发现
   try { raw = await creditsOf(p); }
   catch (e: any) {
     if (seq !== state.openSeq) return;
-    if (e?.code && e.code !== 'no_credits') return empty(() => [L('读不到这个项目', 'Cannot read this project'), errText(e)], true);
+    if (e?.code && e.code !== 'no_credits') return empty(() => [L('读不到这个项目', 'Cannot read this project'), errText(e)], true, true);
     const can = native && p.exists !== false;
     return empty(() => [L('这个项目还没分析过', 'Not analyzed yet'), '', `cd ${p.path} && creditia analyze`, can ? { label: L('现在分析', 'Analyze now'), run: () => reanalyze(p) } : undefined], true);
   }
@@ -199,7 +331,6 @@ async function openProject(p: any) {
   $('#empty').hidden = true; emptyView = null;
   setGroup(groupPref()); setNamed(namesOn());
   rebuildModel();
-  if (!p.all) loadPlugs(p);
   await paint();
   void refreshIfChanged(); // 打开时就看一眼有没有新提交
 }
@@ -237,15 +368,18 @@ async function refreshIfChanged() {
     stampOf = st;
     await swapRaw(raw);
     state.projects = await api('projects').catch(() => state.projects);
-    toast(L('已更新到最新提交', 'Updated to the latest commits'));
+    flash(L('已更新到最新提交', 'Updated to the latest commits'));
   } catch { /* 读不到就等下一次 */ } finally { refreshing = false; }
 }
 /** 跟上新提交：仓库里有了档案之后的新提交，就在后台增量分析一次（只处理新的提交，通常几秒）。
  *  同一个提交只试一次，失败了不反复跑；项目菜单里能关 */
-const autoFresh = () => store.get('autofresh') !== 'off';
+/** 全局默认在设置里；每个项目可以单独开、关，没单独设就跟着默认 */
+const autoDefault = () => store.get('autofresh') !== 'off';
+const autoOwn = (id: string) => { const v = store.get('autofresh.' + id); return v === 'on' || v === 'off' ? v : null; };
+const autoFresh = (p: any) => { const v = p?.id ? autoOwn(p.id) : null; return v ? v === 'on' : autoDefault(); };
 let triedHead = '';
 async function keepUp(p: any) {
-  if (!autoFresh() || p.all || p.exists === false || !state.raw?.head) return;
+  if (!autoFresh(p) || p.all || p.exists === false || !state.raw?.head) return;
   const h: string = await api('head', { projectId: p.id }).catch(() => '');
   if (!h || h === state.raw.head || h === triedHead || p !== state.current) return;
   triedHead = h;
@@ -270,19 +404,21 @@ function rebuildModel() {
   state.model = buildModel(state.raw, { director: false, lang: state.lang, group: groupPref(), named: namesOn() });
   const m = state.model;
   $('#pname').textContent = m.project || state.current?.name;
-  if (state.current?.id) store.set('mark.' + state.current.id, JSON.stringify(petalsOf(m)));
+  const petals = petalsOf(m);
+  if (state.current?.id) store.set('mark.' + state.current.id, JSON.stringify(petals));
+  mark.set(petals);
   renderGroup();
   renderPlugs();
 }
 
 // ───────────────────────── 接入：提交盖章、跟着发版 ─────────────────────────
-// 两项都会改用户的仓库，只在项目菜单里摆两个开关，不在墙上问。开关交给核心的 hook / release install|uninstall
+// 两项都会改用户的仓库，只在项目设置里摆两个开关，不在墙上问。开关交给核心的 hook / release install|uninstall
 type Plug = { installed: boolean; decided: boolean | null; path: string; github?: boolean; published?: boolean };
 type Plugs = { hook: Plug; release: Plug };
-let plugs: Plugs | null = null, plugBusy = '';
+let plugs: Plugs | null = null, plugBusy = '', plugProject: any = null;
 async function loadPlugs(p: any) {
-  try { const r = await api('integrations', { projectId: p.id }); if (p === state.current) plugs = r; }
-  catch { if (p === state.current) plugs = null; }
+  try { const r = await api('integrations', { projectId: p.id }); if (p === plugProject) plugs = r; }
+  catch { if (p === plugProject) plugs = null; }
   renderPlugs();
 }
 /** 名字说清楚它做什么，下面一行说会改到哪里 */
@@ -300,11 +436,12 @@ function plugRow(k: 'hook' | 'release') {
 function renderPlugs() {
   const m = document.querySelector<HTMLElement>('#mplugs'); if (!m) return;
   m.hidden = !plugs; if (!plugs) return;
+  document.querySelector('#plugwait')?.remove();
   m.innerHTML = plugRow('hook') + plugRow('release');
   m.querySelectorAll<HTMLElement>('button[data-k]').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); const k = b.dataset.k as 'hook' | 'release'; setPlug(k, !plugs![k].installed); }));
 }
 async function setPlug(k: 'hook' | 'release', on: boolean, quiet = false) {
-  const p = state.current; if (!p || plugBusy) return;
+  const p = plugProject; if (!p || plugBusy) return;
   plugBusy = k; renderPlugs();
   try {
     const r = await api('set_integration', { projectId: p.id, which: k, on, lang: state.lang });
@@ -410,7 +547,15 @@ async function paint() {
   const slots = batch ? [] : slotWall();
   const fresh: HTMLElement[] = [];
   const keep = new Set<string>();
-  for (const [i, b] of tiles().entries()) {
+  const list = tiles();
+  // 空墙按占位离视口的远近排队：看得见的先画；换风格是整批换，按原来的顺序
+  const sc = $('#stage').scrollTop, vh = innerHeight;
+  const far = (i: number) => { const g = slots[i]; if (!g) return i; const y = parseFloat(g.style.top) || 0, h = g.offsetHeight; return Math.max(0, y - (sc + vh), sc - y - h) * 1e3 + i; };
+  const order = list.map((_, i) => i).sort((a, b) => far(a) - far(b));
+  let done = 0;
+  ring(0);
+  for (const i of order) {
+    const b = list[i];
     const k = keyOf(b);
     let variant: string | undefined;
     let a: Art | null = null, preview: Blob | null = null;
@@ -422,6 +567,7 @@ async function paint() {
       } while (token === state.token && variant !== curVariant(k));
     } catch (e) { console.error(b.id, e); }
     if (token !== state.token) return;
+    ring(++done / list.length);
     if (!a || !preview) { slots[i]?.remove(); continue; }
     dims[dimKey(b.id, variant)] = [a.w, a.h];
     state.arts.set(k, a); keep.add(k);
@@ -444,6 +590,7 @@ async function paint() {
     tile.classList.add('placed');
     g.replaceWith(tile);
     layout();
+    loaded();
   }
   store.set('dims', JSON.stringify(dims));
   for (const tile of fresh) {
@@ -456,18 +603,37 @@ async function paint() {
     } else board.appendChild(tile);
   }
   old.forEach((t) => t.remove());
+  if (batch) styleDone();
   document.body.classList.remove('busy');
   for (const k of [...state.arts.keys()]) if (!keep.has(k)) state.arts.delete(k);
   layout();
+  // 一张都没画出来也算读完，* 不能一直呼吸
+  if (loading) { loading = null; syncStatus(); }
+}
+/** 风格按钮外圈：已画完的占全部的比例 */
+function ring(f: number) {
+  const c = document.querySelector<SVGCircleElement>('#dots .ring circle');
+  if (c) c.style.strokeDashoffset = String(1 - Math.max(0, Math.min(1, f)));
+}
+/** 换完风格：外圈淡出，圆点轻弹一下 */
+function styleDone() {
+  const d = document.querySelector('#dots .cur .d'); if (!d) return;
+  d.classList.remove('done'); void (d as HTMLElement).offsetWidth; d.classList.add('done');
+}
+/** 标签：作品名 · 版式名（和漫游一致），悬停时下面多一行这件作品适合放在哪 */
+function labelHtml(id: string, vs: string[], cur?: string, kit = state.style) {
+  const q = kit.pieceQ(id, state.lang);
+  return `${esc(kit.pieceName(id, state.lang, state.raw))}${vs.length > 1 && cur ? `<span class="vn">${esc(kit.variantName(cur, state.lang))}</span>` : ''}${q ? `<span class="q">${esc(q)}</span>` : ''}`;
 }
 function tileHtml(id: string, vs: string[], cur?: string) {
-  return `<div class="name">${esc(state.style.pieceName(id, state.lang, state.raw))}</div>
-      <div class="bar glass">${vs.length > 1 ? `<button data-act="prev" title="${L('上一种版式', 'Previous layout')}">‹</button><span class="vname">${esc(state.style.variantName(cur ?? '', state.lang))}</span><button data-act="next" title="${L('下一种版式', 'Next layout')}">›</button>` : ''}<button data-act="export">${L('导出', 'Export')}</button></div>
+  return `<div class="name">${labelHtml(id, vs, cur)}</div>
+      <div class="bar glass">${vs.length > 1 ? `<button data-act="prev" title="${L('上一种版式', 'Previous layout')}" aria-label="${L('上一种版式', 'Previous layout')}">${icon('prev', 14)}</button><button data-act="next" title="${L('下一种版式', 'Next layout')}" aria-label="${L('下一种版式', 'Next layout')}">${icon('next', 14)}</button>` : ''}<button data-act="export">${L('导出', 'Export')}</button></div>
       <div class="art"></div>`;
 }
 
 /** 瀑布流：先确定缩略图尺寸，再排能容纳的栏数；减栏时不能反过来放大作品。
- *  跨栏的作品会在矮的那栏下面留洞，所以每次往后看几张，挑放下去最高、留洞最少的那张先放 */
+ *  跨栏的作品会在矮的那栏下面留洞：它挑底下最平的几栏放；几栏高低差超过 40px 就先往后放别的（最多往后看 8 张），
+ *  让单栏的作品把矮的那栏垫平再放它。一张跨栏的最多让 6 次，免得宽幅作品全沉到墙底 */
 function layout() {
   const board = $('#board');
   const tiles = [...board.querySelectorAll('.tile')] as HTMLElement[];
@@ -482,9 +648,12 @@ function layout() {
     const a = { w: Number(t.dataset.w), h: Number(t.dataset.h) };
     const full = cw * span + gap * (span - 1);
     const w = Math.min(full, a.w * (a.w < 500 ? 1.15 : 1));
-    let best = 0, y = Infinity;
-    for (let c = 0; c + span <= cols; c++) { const v = Math.max(...hs.slice(c, c + span)); if (v < y - 1) { y = v; best = c; } }
-    let hole = 0; for (let c = best; c < best + span; c++) hole += y - hs[c];
+    let best = 0, y = Infinity, hole = Infinity;
+    for (let c = 0; c + span <= cols; c++) {
+      const v = Math.max(...hs.slice(c, c + span));
+      let gap = 0; for (let j = c; j < c + span; j++) gap = Math.max(gap, v - hs[j]);
+      if (v + gap < y + hole - 1) { y = v; best = c; hole = gap; }
+    }
     return { span, full, w, h: (w / a.w) * a.h, best, y, hole };
   };
   const fit = (t: HTMLElement) => {
@@ -495,12 +664,17 @@ function layout() {
     return at(t, Math.min(cols, span));
   };
   const queue = tiles.slice();
+  const waited = new Map<HTMLElement, number>();
+  const cost = (t: HTMLElement, g: ReturnType<typeof fit>, j: number) => g.y + g.hole + j * 60 // 越往后越不愿意提前，尽量保持原来的顺序
+    + (g.span > 1 && g.hole > 40 && (waited.get(t) ?? 0) < 6 ? 2000 : 0);
   while (queue.length) {
-    let pick = 0, f = fit(queue[0]), score = f.y + f.hole;
-    for (let j = 1; j < Math.min(4, queue.length); j++) {
-      const g = fit(queue[j]), sc = g.y + g.hole + j * 80; // 越往后越不愿意提前，尽量保持原来的顺序
-      if (sc < score - 1) { pick = j; f = g; score = sc; }
+    const fits = queue.slice(0, 8).map(fit);
+    let pick = 0, f = fits[0], score = cost(queue[0], f, 0);
+    for (let j = 1; j < fits.length; j++) {
+      const sc = cost(queue[j], fits[j], j);
+      if (sc < score - 1) { pick = j; f = fits[j]; score = sc; }
     }
+    for (let j = 0; j < pick; j++) if (fits[j].span > 1) waited.set(queue[j], (waited.get(queue[j]) ?? 0) + 1);
     const t = queue.splice(pick, 1)[0];
     const x = f.best * (cw + gap) + (f.full - f.w) / 2;
     t.style.left = `${x}px`; t.style.top = `${f.y}px`; t.style.width = `${f.w}px`;
@@ -580,7 +754,7 @@ async function repaintPiece(id: string) {
       tile.dataset.variant = variant ?? '';
       tile.dataset.w = String(a.w); tile.dataset.h = String(a.h);
       tile.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : ''));
-      const name = tile.querySelector('.vname'); if (name) name.textContent = kit.variantName(variant ?? '', state.lang);
+      const name = tile.querySelector('.name'); if (name) name.innerHTML = labelHtml(id, kit.variants(id), variant, kit);
       const artEl = tile.querySelector('.art') as HTMLElement;
       releasePreview(artEl); artEl.replaceChildren();
       mountPreview(artEl, a, preview); mountRoamHits(artEl, a);
@@ -590,7 +764,8 @@ async function repaintPiece(id: string) {
 }
 
 // ───────────────────────── 导出 ─────────────────────────
-// 墙上、漫游、放大视图用同一个导出菜单：格式一列，下面一排尺寸；记住上次用的格式和尺寸
+// 墙上、漫游、放大视图用同一个导出菜单：最上面是「复制 CREDITS.md 区块」（不是文件，是个动作），
+// 下面格式一列，最底下尺寸三列；记住上次用的格式和尺寸
 const closeFormats = () => document.querySelectorAll('.fmts').forEach((x) => { x.parentElement!.classList.remove('menuopen'); x.remove(); });
 function toggleFormats(host: HTMLElement, id: string, run: (fmt: string) => void, kit = state.style) {
   const open = host.querySelector(':scope > .fmts');
@@ -599,13 +774,14 @@ function toggleFormats(host: HTMLElement, id: string, run: (fmt: string) => void
   const box = document.createElement('div');
   box.className = 'fmts glass';
   const last = store.get('fmt');
-  box.innerHTML = exportsFor(id, kit).map((f) => `<button data-f="${f.id}" class="${f.id === last ? 'last' : ''}">${f.name}</button>`).join('')
+  box.innerHTML = `<button class="act" data-f="md">${icon('copy', 14)}${L('复制 CREDITS.md 区块', 'Copy CREDITS.md block')}</button><i class="rule"></i>`
+    + exportsFor(id, kit).filter((f) => f.id !== 'md').map((f) => `<button data-f="${f.id}" class="${f.id === last ? 'last' : ''}">${f.name}</button>`).join('')
     + `<div class="szs" role="group" aria-label="${L('尺寸', 'Size')}">${sizeButtons()}</div>`;
   box.onclick = (e) => {
     e.stopPropagation();
     const b = (e.target as HTMLElement).closest('button'); if (!b) return;
     if (b.dataset.s) { setSize(b.dataset.s); return; }
-    closeFormats(); store.set('fmt', b.dataset.f!); run(b.dataset.f!);
+    closeFormats(); if (b.dataset.f !== 'md') store.set('fmt', b.dataset.f!); run(b.dataset.f!);
   };
   host.appendChild(box); host.classList.add('menuopen');
   setTimeout(() => document.addEventListener('click', function off() { box.remove(); host.classList.remove('menuopen'); document.removeEventListener('click', off); }), 0);
@@ -650,7 +826,7 @@ async function saveBytes(name: string, bytes: Uint8Array, mime: string) {
 
 function renderDock() {
   const dock = $('#targets');
-  dock.innerHTML = EXPORTS.filter((f) => f.id !== 'gif').map((f) => `<button data-f="${f.id}">${f.name}</button>`).join('');
+  dock.innerHTML = EXPORTS.filter((f) => f.id !== 'gif' && f.id !== 'md').map((f) => `<button data-f="${f.id}">${f.name}</button>`).join('');
   $('#hint').textContent = L('松手导出', 'Drop to export');
   const sizes = $('#sizes');
   sizes.innerHTML = sizeButtons();
@@ -727,7 +903,7 @@ function closeTop() {
   if ($('#dots').querySelector('.styles')) return closeStyles();
   closeFormats();
 }
-const closeBtn = () => `<button class="closer glass" data-act="close" aria-label="${L('关闭', 'Close')}" title="${L('关闭', 'Close')} (Esc)"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>`;
+const closeBtn = () => `<button class="closer glass" data-act="close" aria-label="${L('关闭', 'Close')}" title="${L('关闭', 'Close')} (Esc)">${icon('close', 14)}</button>`;
 
 function openFocus(id: string, k: string) {
   const el = $('#focus');
@@ -751,8 +927,8 @@ function openFocus(id: string, k: string) {
     const multiModel = !!state.raw && resolveGroup(state.raw, 'auto') === 'model';
     el.innerHTML = `${closeBtn()}
       <div class="fhead"><b>${esc(kit.pieceName(id, state.lang, state.raw))}</b></div>
-      <button class="nav prev glass" data-act="prev" ${at <= 0 ? 'disabled' : ''} title="${L('上一张', 'Previous')} (↑)" aria-label="${L('上一张', 'Previous')}"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M8.5 3 4.5 7l4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      <button class="nav next glass" data-act="next" ${at < 0 || at >= all.length - 1 ? 'disabled' : ''} title="${L('下一张', 'Next')} (↓)" aria-label="${L('下一张', 'Next')}"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M5.5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="nav prev glass" data-act="prev" ${at <= 0 ? 'disabled' : ''} title="${L('上一张', 'Previous')} (↑)" aria-label="${L('上一张', 'Previous')}">${icon('prev')}</button>
+      <button class="nav next glass" data-act="next" ${at < 0 || at >= all.length - 1 ? 'disabled' : ''} title="${L('下一张', 'Next')} (↓)" aria-label="${L('下一张', 'Next')}">${icon('next')}</button>
       <div class="big"><div class="art"></div></div>
       <div class="strip glass">
         ${vs.length > 1 ? `<div class="vs" title="${L('版式', 'Layout')} (← →)">${vs.map((x) => { const mm = multiModel && MODEL_VARIANTS[id]?.includes(x); return `<button data-v="${x}" class="${x === v ? 'on' : ''}${mm ? ' mm' : ''}">${esc(kit.variantName(x, state.lang))}</button>`; }).join('')}</div><span class="sep"></span>` : ''}
@@ -796,6 +972,7 @@ function openFocus(id: string, k: string) {
   };
   chrome(); draw();
   el.hidden = false;
+  document.body.classList.add('focusing');
   el.onclick = (e) => {
     const b = (e.target as HTMLElement).closest('button') as HTMLElement | null;
     if (!b) { el.querySelector('.kits')?.remove(); closeFormats(); if (e.target === el) close(); return; }
@@ -819,6 +996,7 @@ function openFocus(id: string, k: string) {
   // 版式已同步到墙上；关闭后键盘焦点回到刚才的位置。
   const close = (refocus = true) => {
     open = false; el.hidden = true; el.innerHTML = ''; closeFocus = null; focusKeys = null;
+    document.body.classList.remove('focusing');
     document.querySelector('.ct-tip')?.classList.remove('on');
     if (refocus) (document.querySelector(`.tile[data-k="${k}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
   };
@@ -963,7 +1141,7 @@ function placeNow() {
       const el = document.createElement('div');
       el.className = 'tile rt';
       el.style.left = `${X * P + (cw - t.w) / 2}px`; el.style.top = `${t.y}px`; el.style.width = `${t.w}px`;
-      el.innerHTML = `<div class="name">${esc(state.style.pieceName(t.id, state.lang, state.raw))}${t.v && state.style.variants(t.id).length > 1 ? `<span class="vn">${esc(state.style.variantName(t.v, state.lang))}</span>` : ''}</div>
+      el.innerHTML = `<div class="name">${labelHtml(t.id, state.style.variants(t.id), t.v)}</div>
         <div class="bar glass"><button data-act="export">${L('导出', 'Export')}</button></div><div class="art"></div>`;
       const artEl = el.querySelector('.art') as HTMLElement;
       mountRoamPreview(artEl, t.a, t.p, Math.ceil(t.w * devicePixelRatio), previewPriority(el, t));
@@ -971,6 +1149,7 @@ function placeNow() {
       (el as any)._item = t;
       plane.appendChild(el);
       roam.els.set(key, el);
+      loaded();
     }
   }
   for (const [key, el] of roam.els) if (!want.has(key)) { releaseRoamPreview(el.querySelector('.art') as HTMLElement); el.remove(); roam.els.delete(key); }
@@ -1092,8 +1271,7 @@ function wireRoam() {
   $('#home').onclick = () => glide(...home());
   $('#view').onclick = (e) => {
     const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
-    store.set('view', b.dataset.v!); applyView();
-    if (view() === 'wall' && wallStale) void paint();
+    setView(b.dataset.v as 'wall' | 'roam');
   };
   addEventListener('keydown', (e) => {
     if (view() !== 'roam' || !document.body.classList.contains('roam') || closeFocus || !$('#sheet').hidden || !$('#menu').hidden) return;
@@ -1119,18 +1297,17 @@ function applyView() {
 
 // ───────────────────────── 风格 ─────────────────────────
 // 左下一颗按钮写着现在的风格；‹ › 一步一换，点名字列出全部（原版主题和新风格之间一道细线）
-const STEP_SVG = (d: string) => `<svg width="12" height="12" viewBox="0 0 12 12"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 function renderDots() {
   const nav = $('#dots'), t = state.style;
-  nav.innerHTML = `<button class="step" data-d="-1">${STEP_SVG('M7.5 2.5 4 6l3.5 3.5')}</button>`
-    + `<button class="cur" id="curstyle" aria-haspopup="listbox"><span class="d"><svg viewBox="0 0 24 24">${t.dot}</svg></span>${esc(t.name(state.lang))}<svg class="chev" width="8" height="12" viewBox="0 0 8 12" aria-hidden="true"><path d="M1.5 4.5 4 2l2.5 2.5M1.5 7.5 4 10l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
-    + `<button class="step" data-d="1">${STEP_SVG('M4.5 2.5 8 6l-3.5 3.5')}</button>`;
+  nav.innerHTML = `<button class="step" data-d="-1">${icon('prev', 14)}</button>`
+    + `<button class="cur" id="curstyle" aria-haspopup="listbox"><span class="d"><svg viewBox="0 0 24 24">${t.dot}</svg><svg class="ring" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="12" pathLength="1"/></svg></span>${esc(t.name(state.lang))}${icon('updown', 12, 'chev')}</button>`
+    + `<button class="step" data-d="1">${icon('next', 14)}</button>`;
   const [prev, next] = nav.querySelectorAll<HTMLElement>('.step');
   prev.title = L('上一种风格', 'Previous style'); next.title = L('下一种风格', 'Next style');
   prev.setAttribute('aria-label', prev.title); next.setAttribute('aria-label', next.title);
   nav.onclick = (e) => {
     const b = (e.target as HTMLElement).closest('button') as HTMLElement | null; if (!b) return;
-    if (b.dataset.d) { const i = KITS.indexOf(state.style); return void useStyle(KITS[(i + Number(b.dataset.d) + KITS.length) % KITS.length]); }
+    if (b.dataset.d) return void stepStyle(Number(b.dataset.d));
     if (b.dataset.s) { closeStyles(); return void useStyle(kitById(b.dataset.s)!); }
     if (b.id === 'curstyle') toggleStyles();
   };
@@ -1152,36 +1329,36 @@ function closeStyles() {
   document.querySelector('#curstyle')?.setAttribute('aria-expanded', 'false');
   document.removeEventListener('pointerdown', outsideStyles, true);
 }
-async function useStyle(t: Kit) {
+async function useStyle(t: Kit, turn = 1) {
   if (t.id === state.style.id) return;
   state.style = t; store.set('theme', t.id);
   state.variants = {};
   renderDots();
+  mark.turn(turn); // 和风格按钮呼应：* 跟着转一瓣
   await paint();
 }
+const stepStyle = (d: number) => { const i = KITS.indexOf(state.style); return useStyle(KITS[(i + d + KITS.length) % KITS.length], d); };
 
-// ───────────────────────── 顶栏：项目、语言、设置 ─────────────────────────
+// ───────────────────────── 顶栏：项目、视图、设置 ─────────────────────────
 /** 页面里写死的字、无障碍标签、<html lang> */
 function applyLang() {
   document.documentElement.lang = state.lang === 'zh' ? 'zh-CN' : 'en';
-  const lang = $('#lang'), gear = $('#gear');
-  lang.textContent = state.lang === 'zh' ? '中' : 'EN';
-  lang.title = L('切换到英文', 'Switch to Chinese');
-  lang.setAttribute('aria-label', lang.title);
-  gear.title = L('设置', 'Settings'); gear.setAttribute('aria-label', gear.title);
+  const gear = $('#gear');
+  gear.title = `${L('设置', 'Settings')} (${MOD},)`; gear.setAttribute('aria-label', L('设置', 'Settings'));
   $('#project').setAttribute('aria-label', L('切换项目', 'Switch project'));
+  $('#project').title = `${L('切换项目', 'Switch project')} (${MOD}K)`;
   $('#dots').setAttribute('aria-label', L('风格', 'Styles'));
   $('#dock').setAttribute('aria-label', L('导出', 'Export'));
   const [w, r] = document.querySelectorAll<HTMLElement>('#view button');
-  w.title = L('墙', 'Wall'); r.title = L('漫游', 'Roam');
-  w.setAttribute('aria-label', w.title); r.setAttribute('aria-label', r.title);
+  w.setAttribute('aria-label', L('墙', 'Wall')); r.setAttribute('aria-label', L('漫游', 'Roam'));
+  w.title = `${L('墙', 'Wall')} (${MOD}1)`; r.title = `${L('漫游', 'Roam')} (${MOD}2)`;
   $('#view').setAttribute('aria-label', L('视图', 'View'));
-  $('#home').innerHTML = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="2.2"/><path d="M7 1v2.2M7 10.8V13M1 7h2.2M10.8 7H13"/></svg>${L('回到起点', 'Back to start')}`;
+  $('#home').innerHTML = `${icon('home', 14)}${L('回到起点', 'Back to start')}`;
 }
 function wireTop() {
   const pill = $('#project');
   pill.onclick = () => toggleMenu();
-  pill.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') toggleMenu(); };
+  pill.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleMenu(); } };
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape') return closeTop();
     if (focusKeys && $('#sheet').hidden && focusKeys(e)) e.preventDefault();
@@ -1189,14 +1366,80 @@ function wireTop() {
   const t = $('#toast');
   t.onmouseenter = () => clearTimeout(toastTimer);
   t.onmouseleave = () => { if (toastMs > 0) toastTimer = setTimeout(() => (t.hidden = true), 1500); };
-  $('#lang').onclick = async () => {
-    state.lang = state.lang === 'zh' ? 'en' : 'zh'; store.set('lang', state.lang);
-    applyLang(); renderDock(); renderDots(); closeMenu();
-    if (state.raw) { rebuildModel(); await paint(); }
-    else if (emptyView && !$('#empty').hidden) empty(emptyView, !!state.current);
-  };
   $('#gear').onclick = () => settings();
 }
+/** 换界面语言：顶栏、风格条、导出坞、菜单栏、墙上的字一起换 */
+async function setLang(l: 'zh' | 'en') {
+  if (l === state.lang) return;
+  state.lang = l; store.set('lang', l);
+  applyLang(); renderDock(); renderDots(); closeMenu(); void installMenu();
+  if (!$('#sheet').hidden && sheetRedraw) sheetRedraw();
+  welcomeDraw?.();
+  syncStatus();
+  if (state.raw) { rebuildModel(); await paint(); }
+  else if (emptyView && !$('#empty').hidden) empty(emptyView, !!state.current, emptyErr);
+}
+function setView(v: 'wall' | 'roam') {
+  store.set('view', v); applyView();
+  if (view() === 'wall' && wallStale) void paint();
+}
+
+// ───────────────────────── 快捷键、菜单栏 ─────────────────────────
+// 同一张表：macOS 上装进系统菜单栏（菜单里看得到快捷键），别的系统直接听键盘，不在窗口上加一条菜单栏
+type Cmd = { id: string; key: string; label: () => string; run: () => unknown };
+const canAnalyze = (p: any) => !!p && !p.all && p.exists !== false && !analyzing;
+const CMDS: Cmd[] = [
+  { id: 'switch', key: 'K', label: () => L('切换项目…', 'Switch Project…'), run: () => toggleMenu() },
+  { id: 'add', key: 'O', label: () => L('添加文件夹…', 'Add Folder…'), run: () => { closeMenu(); return addProject(); } },
+  { id: 'reanalyze', key: 'R', label: () => L('重新分析', 'Re-analyze'), run: () => { if (canAnalyze(state.current)) return reanalyze(state.current); } },
+  { id: 'project', key: 'I', label: () => L('项目设置…', 'Project Settings…'), run: () => { if (state.current && !state.current.all) projectSettings(state.current); } },
+  { id: 'settings', key: ',', label: () => L('设置…', 'Settings…'), run: () => settings() },
+  { id: 'wall', key: '1', label: () => L('墙', 'Wall'), run: () => setView('wall') },
+  { id: 'roam', key: '2', label: () => L('漫游', 'Roam'), run: () => setView('roam') },
+  { id: 'prevstyle', key: '[', label: () => L('上一种风格', 'Previous Style'), run: () => stepStyle(-1) },
+  { id: 'nextstyle', key: ']', label: () => L('下一种风格', 'Next Style'), run: () => stepStyle(1) },
+  { id: 'export', key: 'E', label: () => L('导出…', 'Export…'), run: () => exportHere() },
+];
+/** ⌘E：放大视图里导出那一张；墙上导出键盘停着或鼠标指着的那一张 */
+function exportHere() {
+  const fb = document.querySelector<HTMLElement>('#focus:not([hidden]) [data-act="export"]');
+  if (fb) return fb.click();
+  const tile = document.querySelector<HTMLElement>('#board .tile:not(.slot):focus, #board .tile:not(.slot):hover, #roam .rt:hover');
+  tile?.querySelector<HTMLElement>('.bar [data-act="export"]')?.click();
+}
+let menuKeys = false;
+function wireKeys() {
+  addEventListener('keydown', (e) => {
+    if (menuKeys || e.altKey || e.shiftKey || !(OS === 'mac' ? e.metaKey : e.ctrlKey)) return;
+    const c = CMDS.find((x) => x.key === e.key.toUpperCase());
+    if (!c || !$('#welcome').hidden && c.id !== 'add' && c.id !== 'settings') return;
+    e.preventDefault(); e.stopPropagation();
+    void c.run();
+  }, true);
+}
+/** macOS 的菜单栏：应用、编辑（输入框要用复制粘贴）、项目、显示、窗口。换语言时重建 */
+async function installMenu() {
+  const T = (window as any).__TAURI__?.menu;
+  if (!T || OS !== 'mac') return;
+  try {
+    const { Menu, Submenu, MenuItem, PredefinedMenuItem } = T;
+    const sep = () => PredefinedMenuItem.new({ item: 'Separator' });
+    const pre = (item: string) => PredefinedMenuItem.new({ item });
+    const cmd = (id: string) => { const c = CMDS.find((x) => x.id === id)!; return MenuItem.new({ id, text: c.label(), accelerator: `CmdOrCtrl+${c.key}`, action: () => void c.run() }); };
+    const sub = async (text: string, items: Promise<unknown>[]) => Submenu.new({ text, items: await Promise.all(items) });
+    const menu = await Menu.new({ items: await Promise.all([
+      sub('creditia', [PredefinedMenuItem.new({ item: { About: null } }), sep(), cmd('settings'), sep(), pre('Services'), sep(), pre('Hide'), pre('HideOthers'), pre('ShowAll'), sep(), pre('Quit')]),
+      sub(L('编辑', 'Edit'), [pre('Undo'), pre('Redo'), sep(), pre('Cut'), pre('Copy'), pre('Paste'), pre('SelectAll')]),
+      sub(L('项目', 'Project'), [cmd('switch'), cmd('add'), sep(), cmd('reanalyze'), cmd('project')]),
+      sub(L('显示', 'View'), [cmd('wall'), cmd('roam'), sep(), cmd('prevstyle'), cmd('nextstyle'), sep(), cmd('export'), sep(), pre('Fullscreen')]),
+      sub(L('窗口', 'Window'), [pre('Minimize'), pre('Maximize'), sep(), pre('CloseWindow'), pre('BringAllToFront')]),
+    ]) });
+    await menu.setAsAppMenu();
+    menuKeys = true;
+  } catch (e) { console.warn('menu', e); menuKeys = false; }
+}
+
+// ───────────────────────── 项目切换 ─────────────────────────
 /** 菜单里还没有 * 的项目：在后台一个个读档案，算出来就换上 */
 let filling = false;
 async function fillMarks(redraw: () => void) {
@@ -1212,52 +1455,57 @@ async function fillMarks(redraw: () => void) {
   } finally { filling = false; }
 }
 function closeMenu() { $('#menu').hidden = true; $('#project').setAttribute('aria-expanded', 'false'); }
+/** 项目菜单只管挑项目：搜索、全部项目、各项目（右边「…」是这个项目能做的事）、还没添加的；底下只有添加文件夹 */
 function toggleMenu() {
   const menu = $('#menu'), pill = $('#project');
   if (!menu.hidden) return closeMenu();
+  closeFocus?.(); closeSheet();
   pill.setAttribute('aria-expanded', 'true');
+  menu.style.left = `${Math.max(16, Math.round(pill.getBoundingClientRect().left))}px`; // 对齐项目名，Mac 上让开红绿灯
   menu.hidden = false;
-  menu.innerHTML = `<input id="q" placeholder="${L('搜索项目', 'Search projects')}" autocomplete="off"><div class="list" id="plist" role="listbox" aria-label="${L('项目', 'Projects')}"></div>
-    <div class="foot"><button id="add">${L('添加文件夹…', 'Add folder…')}</button><button id="re">${L('重新分析', 'Re-analyze')}</button></div>
-    <div class="mplugs" id="mplugs" hidden></div>`;
+  menu.innerHTML = `<label class="q">${icon('search', 14)}<input id="q" placeholder="${L('搜索项目', 'Search projects')}" autocomplete="off" spellcheck="false"></label>
+    <div class="list" id="plist" role="listbox" aria-label="${L('项目', 'Projects')}"></div>
+    <div class="foot"><button id="add" ${analyzing ? 'disabled' : ''}>${icon('addFolder')}${L('添加文件夹…', 'Add folder…')}<kbd>${MOD}O</kbd></button></div>`;
   const day = (t: number) => new Date(t * 1000).toLocaleDateString(state.lang === 'zh' ? 'zh-CN' : 'en-US');
+  const more = (id: string) => `<button class="more" data-more="${esc(id)}" aria-haspopup="menu" aria-expanded="false" aria-label="${L('更多', 'More')}" title="${L('更多', 'More')}">${icon('more')}</button>`;
   const draw = () => {
     const q = ($('#q') as HTMLInputElement).value.trim().toLowerCase();
     const hit = (s: string) => !q || s.toLowerCase().includes(q);
     const all = state.projects.length > 1 && (hit(L('全部项目', 'All projects')) || 'all'.includes(q))
-      ? `<div class="item all ${state.current?.all ? 'on' : ''}" data-id="${ALL_ID}" role="option" aria-selected="${!!state.current?.all}">${markEl(markOf(ALL_ID) ?? GHOST)}<b>${L('全部项目', 'All projects')}</b><span class="r">${L(`${state.projects.length} 个`, `${state.projects.length}`)}</span></div>` : '';
+      ? `<div class="item all ${state.current?.all ? 'on' : ''}" data-id="${ALL_ID}" role="option" aria-selected="${!!state.current?.all}">${markEl(markOf(ALL_ID) ?? UNREAD)}<b>${L('全部项目', 'All projects')}</b><span class="r">${L(`${state.projects.length} 个`, `${state.projects.length}`)}</span></div>` : '';
     const mine = state.projects.filter((p) => hit(`${p.name} ${p.path}`)).map((p) => `
       <div class="item ${p.id === state.current?.id ? 'on' : ''} ${p.exists === false ? 'gone' : ''}" data-id="${esc(p.id)}" role="option" aria-selected="${p.id === state.current?.id}">
-        ${markEl(markOf(p.id) ?? GHOST)}<b>${esc(p.name)}</b><span class="r">${p.exists === false ? L('目录不在了', 'folder missing') : p.lastAnalyzed ? day(p.lastAnalyzed) : ''}</span>
+        ${markEl(markOf(p.id) ?? UNREAD)}<b>${esc(p.name)}</b><span class="r">${p.exists === false ? L('目录不在了', 'folder missing') : p.lastAnalyzed ? day(p.lastAnalyzed) : ''}</span>${more(p.id)}
         <span class="path" title="${esc(p.path)}">${esc(short(p.path))}</span>
       </div>`).join('');
     // 本机用过 AI 工具、还没加进来的项目：点一下就分析
-    const more = (found ?? []).filter((d) => hit(`${d.name} ${d.path}`)).map((d) => `
+    const fresh = (found ?? []).filter((d) => hit(`${d.name} ${d.path}`)).map((d) => `
       <div class="item new" data-path="${esc(d.path)}" role="option" aria-selected="false">
-        ${markEl(GHOST)}<b>${esc(d.name)}</b><span class="r">${esc(toolsOf(d))}</span>
+        ${markEl(UNREAD)}<b>${esc(d.name)}</b><span class="r">${esc(toolsOf(d))}</span>
         <span class="path" title="${esc(d.path)}">${esc(short(d.path))}</span>
       </div>`).join('');
-    $('#plist').innerHTML = all + mine + (more ? `<div class="sec">${L('还没添加', 'Not added yet')}</div>${more}` : '')
+    $('#plist').innerHTML = all + mine + (fresh ? `<div class="sec">${L('还没添加', 'Not added yet')}</div>${fresh}` : '')
       || `<div class="item"><span>${L('没有匹配的项目', 'No match')}</span></div>`;
   };
   // ↑ ↓ 选，回车打开（没选就开第一个）
   let kb = -1;
   const items = () => [...$('#plist').querySelectorAll<HTMLElement>('.item[data-id], .item[data-path]')];
-  const mark = () => items().forEach((x, j) => { x.classList.toggle('kb', j === kb); if (j === kb) x.scrollIntoView({ block: 'nearest' }); });
+  const markKb = () => items().forEach((x, j) => { x.classList.toggle('kb', j === kb); if (j === kb) x.scrollIntoView({ block: 'nearest' }); });
   draw();
   if (!demo && found === null) void discover().then(() => { if (!menu.hidden) draw(); });
   void fillMarks(() => { if (!menu.hidden) draw(); });
-  renderPlugs();
   const q = $('#q') as HTMLInputElement;
-  q.oninput = () => { kb = -1; draw(); };
+  q.oninput = () => { kb = -1; closeRowMenu(); draw(); };
   q.onkeydown = (e) => {
     const n = items().length;
-    if (e.key === 'ArrowDown' && n) { kb = (kb + 1) % n; mark(); e.preventDefault(); }
-    else if (e.key === 'ArrowUp' && n) { kb = (kb - 1 + n) % n; mark(); e.preventDefault(); }
+    if (e.key === 'ArrowDown' && n) { kb = (kb + 1) % n; markKb(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp' && n) { kb = (kb - 1 + n) % n; markKb(); e.preventDefault(); }
     else if (e.key === 'Enter' && n) { items()[Math.max(kb, 0)].click(); e.preventDefault(); }
   };
   q.focus();
   $('#plist').onclick = (e) => {
+    const m = (e.target as HTMLElement).closest<HTMLElement>('[data-more]');
+    if (m) { e.stopPropagation(); return rowMenu(m); }
     const it = (e.target as HTMLElement).closest('.item') as HTMLElement | null; if (!it) return;
     if (it.dataset.path) { closeMenu(); return void addProjects([it.dataset.path]); }
     if (!it.dataset.id) return;
@@ -1266,12 +1514,57 @@ function toggleMenu() {
     const p = state.projects.find((x) => x.id === it.dataset.id);
     if (p && p !== state.current) openProject(p);
   };
-  const re = $('#re') as HTMLButtonElement;
-  if (!state.current || state.current.all || state.current.exists === false || analyzing) { re.disabled = true; re.title = state.current?.exists === false ? L('项目目录已经不在了', 'The project folder is gone') : ''; }
-  ($('#add') as HTMLButtonElement).disabled = analyzing;
+  $('#plist').onscroll = closeRowMenu;
   $('#add').onclick = () => { closeMenu(); addProject(); };
-  re.onclick = () => { closeMenu(); if (state.current) reanalyze(state.current); };
   setTimeout(() => document.addEventListener('click', function off(e) { if (!menu.contains(e.target as Node) && !pill.contains(e.target as Node)) { closeMenu(); document.removeEventListener('click', off); } }), 0);
+}
+function closeRowMenu() {
+  document.querySelector('.rowmenu')?.remove();
+  document.querySelectorAll('[data-more][aria-expanded="true"]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+}
+/** 一行的「…」：重新分析、在访达中显示、项目设置、移除。挂在菜单上而不是列表里，列表滚动不会把它裁掉 */
+function rowMenu(btn: HTMLElement) {
+  const open = btn.getAttribute('aria-expanded') === 'true';
+  closeRowMenu();
+  if (open) return;
+  const p = state.projects.find((x) => x.id === btn.dataset.more); if (!p) return;
+  const menu = $('#menu'), box = document.createElement('div');
+  box.className = 'rowmenu glass'; box.setAttribute('role', 'menu');
+  const gone = p.exists === false;
+  box.innerHTML = `<button data-r="re" role="menuitem" ${canAnalyze(p) ? '' : 'disabled'}>${icon('refresh')}${L('重新分析', 'Re-analyze')}${p === state.current ? `<kbd>${MOD}R</kbd>` : ''}</button>
+    <button data-r="open" role="menuitem" ${gone || !native ? 'disabled' : ''}>${icon('folder')}${esc(revealLabel())}</button>
+    <button data-r="settings" role="menuitem">${icon('info')}${L('项目设置…', 'Project settings…')}${p === state.current ? `<kbd>${MOD}I</kbd>` : ''}</button>
+    <i class="sep"></i>
+    <button data-r="remove" role="menuitem">${icon('remove')}${L('从作品库移除…', 'Remove from library…')}</button>`;
+  menu.appendChild(box);
+  const mr = menu.getBoundingClientRect(), br = btn.getBoundingClientRect();
+  const below = br.bottom - mr.top + 2;
+  box.style.top = below + box.offsetHeight > innerHeight - mr.top - 8 ? `${br.top - mr.top - box.offsetHeight - 2}px` : `${below}px`;
+  box.style.right = `${Math.round(mr.right - br.right)}px`;
+  btn.setAttribute('aria-expanded', 'true');
+  box.onclick = (e) => {
+    e.stopPropagation();
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-r]'); if (!b || b.disabled) return;
+    closeRowMenu(); closeMenu();
+    const r = b.dataset.r;
+    if (r === 're') void reanalyze(p);
+    else if (r === 'open') api('open_folder', { which: 'project', projectId: p.id }).catch((err) => toast(errText(err), 5000));
+    else projectSettings(p, r === 'remove');
+  };
+}
+/** 从作品库里拿掉：只删列表里这一项，分析记录和缓存都留着，加回来不用从头分析 */
+async function removeProject(p: any) {
+  try { await api('remove_project', { projectId: p.id }); }
+  catch (e) { markError(); return toast(errText(e), 6000); }
+  state.projects = await api('projects').catch(() => state.projects.filter((x) => x.id !== p.id));
+  found = null; finding = null; // 它又是「还没添加」的了
+  const acts = p.exists !== false && native ? [{ label: L('加回来', 'Add back'), run: () => void addProjects([p.path]) }] : [];
+  toast(L(`已移除 ${p.name}，分析记录仍留在本机`, `Removed ${p.name} — its analysis stays on this computer`), 8000, { acts });
+  if (state.current?.id === p.id || state.current?.all) {
+    const next = state.projects[0];
+    if (next) await openProject(next);
+    else { state.current = null; state.raw = null; state.model = null; $('#board').innerHTML = ''; $('#pname').textContent = 'creditia'; welcome(); }
+  }
 }
 
 // ───────────────────────── 本机的项目 ─────────────────────────
@@ -1279,33 +1572,58 @@ function toggleMenu() {
 type Found = { name: string; path: string; tools: Record<string, number>; lastActive: string; exists: boolean; inLibrary: boolean };
 let found: Found[] | null = null, finding: Promise<Found[]> | null = null;
 function discover(): Promise<Found[]> {
-  finding ??= api('discover').then((r: any) => (found = ((r?.projects ?? []) as Found[]).filter((d) => d.exists && !d.inLibrary && !state.projects.some((p) => p.path === d.path))), () => (found = []));
+  finding ??= api('discover').then((r: any) => (found = ((r?.projects ?? []) as Found[]).filter((d) => d.exists && !state.projects.some((p) => p.path === d.path))), () => (found = []));
   return finding;
 }
 const toolsOf = (d: Found) => Object.entries(d.tools).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([t]) => nameOf(t, state.lang)).join(' · ');
 
 // ───────────────────────── 分析：进度、取消 ─────────────────────────
+// 进度交给 *：灰的五瓣按进度一瓣瓣长满（核心报来的四步各占一段），程序坞上同步一条进度条；
+// 挡在前面（没有墙可看）时 * 在中间，否则在左上角。取消按钮跟着那一句话
 let analyzing = false;
-/** 跑一次分析：一直挂着进度提示（秒数、取消），跑完或出错再换成结果 */
-async function withProgress<T>(name: string, job: () => Promise<T>, auto = false): Promise<T> {
+/** 核心的四步：名字和在整条进度里占的一段 */
+const STAGES: Record<string, [string, string, number, number]> = {
+  history: ['读提交历史', 'Reading history', 0, 0.1], logs: ['读各工具的日志', 'Reading tool logs', 0.1, 0.3],
+  attribute: ['逐个提交归因', 'Attributing commits', 0.3, 0.85], blame: ['追溯现在的每个文件', 'Tracing current files', 0.85, 1],
+};
+/** 浏览器里没有核心：开发时按同样的四步假装跑一遍，看得到进度的样子 */
+let devProgress: ((p: any) => void) | null = null, devCancel = false;
+async function devAnalyze() {
+  devCancel = false;
+  for (const [stage, total, ms] of [['history', 0, 500], ['logs', 6, 160], ['attribute', 40, 70], ['blame', 12, 90]] as const) {
+    for (let done = 0; done <= Math.max(1, total); done++) {
+      if (devCancel) throw { code: 'cancelled' };
+      devProgress?.({ stage, done, total });
+      await new Promise((r) => setTimeout(r, ms));
+    }
+  }
+}
+async function withProgress<T>(name: string, run: () => Promise<T>, o: { auto?: boolean; blocking?: boolean } = {}): Promise<T> {
   if (analyzing) throw { code: 'busy' };
   analyzing = true;
-  const t0 = Date.now();
-  // 核心报来的进度：大仓库第一次分析要很久，让人看到走到哪一步了
-  let stage = '';
-  const STAGES: Record<string, [string, string]> = { history: ['读提交历史', 'Reading history'], logs: ['读各工具的日志', 'Reading tool logs'], attribute: ['逐个提交归因', 'Attributing commits'], blame: ['追溯现在的每个文件', 'Tracing current files'] };
-  const unlisten: (() => void) | null = await (window as any).__TAURI__?.event?.listen('analyze-progress', (e: any) => {
-    const p = e.payload ?? {}, n = STAGES[p.stage];
-    if (n) stage = `${L(...n)}${p.total ? ` ${fmt(p.done)}/${fmt(p.total)}` : ''}`;
-  }).catch(() => null) ?? null;
-  const text = () => { const s = Math.round((Date.now() - t0) / 1000); const st = stage ? ` · ${stage}` : ''; return auto ? L(`有新提交，正在跟上…${s ? ` ${s} 秒` : ''}${st}`, `New commits — catching up…${s ? ` ${s}s` : ''}${st}`) : L(`正在分析 ${name}…${s ? ` ${s} 秒` : ''}${st}`, `Analyzing ${name}…${s ? ` ${s}s` : ''}${st}`); };
-  toast(text(), 0, { spin: true, acts: [{ label: L('取消', 'Cancel'), run: () => { toast(L('正在取消…', 'Cancelling…'), 0, { spin: true }); api('cancel_analyze').catch(() => null); } }] });
-  const tick = setInterval(() => { const m = document.querySelector('#toast .msg'); if (m && document.querySelector('#toast button')) m.textContent = text(); }, 1000);
-  try { return await job(); } finally { clearInterval(tick); unlisten?.(); analyzing = false; }
+  const my: Job = { name, auto: !!o.auto, blocking: !!o.blocking, t0: Date.now(), stage: '', p: null };
+  job = my; markErr = false;
+  mark.progress(0);
+  if (my.auto) mark.kick(0); // 后台跟上：只轻跳一下，不变灰
+  syncStatus();
+  const onProgress = (p: any) => {
+    const n = STAGES[p?.stage]; if (!n || job !== my) return;
+    my.stage = `${L(n[0], n[1])}${p.total ? ` ${fmt(p.done)}/${fmt(p.total)}` : ''}`;
+    my.p = n[2] + (n[3] - n[2]) * (p.total ? Math.min(1, p.done / p.total) : 0);
+    syncStatus();
+  };
+  devProgress = native ? null : onProgress;
+  const unlisten: (() => void) | null = await (window as any).__TAURI__?.event?.listen('analyze-progress', (e: any) => onProgress(e.payload)).catch(() => null) ?? null;
+  try { return await run(); }
+  finally { unlisten?.(); devProgress = null; analyzing = false; if (job === my) job = null; syncStatus(); }
 }
 async function reanalyze(p: any, auto = false) {
+  // 没有墙可看（空状态里点「现在分析」）：空状态让开，* 到中间
+  const blocking = !auto && !painted();
+  const wasEmpty = blocking && !$('#empty').hidden && emptyView;
+  if (wasEmpty) $('#empty').hidden = true;
   try {
-    const v: any = await withProgress(p.name, () => api('analyze', { projectId: p.id, lang: state.lang }), auto);
+    const v: any = await withProgress(p.name, () => api('analyze', { projectId: p.id, lang: state.lang }), { auto, blocking });
     state.projects = await api('projects');
     const fresh = state.projects.find((x) => x.id === p.id) ?? p;
     // 正看着这个项目：原地换，不清空墙
@@ -1316,17 +1634,21 @@ async function reanalyze(p: any, auto = false) {
       await swapRaw(raw);
     } else await openProject(fresh);
     const n = Number(v?.newCommits) || 0;
-    const mk = markOf(p.id);
-    if (auto) toast(n ? L(`已跟上 ${n} 个新提交`, `Caught up with ${n} new commit${n > 1 ? 's' : ''}`) : L('已更新', 'Updated'), 2600, { mark: mk });
-    else done(L('已更新', 'Updated'), v?.warnings, mk);
-  } catch (e) { if (!auto || (e as any)?.code !== 'busy') toast(errText(e), 6000); }
+    if (auto) flash(n ? L(`已跟上 ${n} 个新提交`, `Caught up with ${n} new commit${n > 1 ? 's' : ''}`) : L('已更新', 'Updated'));
+    else done(L('已更新', 'Updated'), v?.warnings);
+  } catch (e: any) {
+    if (wasEmpty && !state.raw) empty(wasEmpty, true, emptyErr);
+    if (e?.code === 'cancelled') return flash(errText(e));
+    if (auto && e?.code === 'busy') return;
+    markError(); toast(errText(e), 6000);
+  }
 }
 async function addProject() {
   let dir: string | null;
   try { dir = await api('pick_folder'); } catch (e) { return toast(errText(e), 5000); }
   if (dir) await addProjects([dir]);
 }
-/** 一个接一个分析、加进作品库。第一个分析完就打开它，其余的在后台接着跑（提示条里看进度、能取消） */
+/** 一个接一个分析、加进作品库。第一个分析完就打开它，其余的在后台接着跑（* 上看进度、能取消） */
 async function addProjects(paths: string[], each?: (path: string, st: 'run' | 'done' | 'fail') => void) {
   let opened = false, ok = 0;
   const notes: string[] = [];
@@ -1334,16 +1656,17 @@ async function addProjects(paths: string[], each?: (path: string, st: 'run' | 'd
     const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
     each?.(path, 'run');
     try {
-      const r = await withProgress(paths.length > 1 ? L(`${name}（${i + 1}/${paths.length}）`, `${name} (${i + 1}/${paths.length})`) : name, () => api('add_project', { path, lang: state.lang }));
+      const r = await withProgress(paths.length > 1 ? L(`${name}（${i + 1}/${paths.length}）`, `${name} (${i + 1}/${paths.length})`) : name, () => api('add_project', { path, lang: state.lang }), { blocking: !painted() });
       state.projects = await api('projects'); ok++;
       if (found) found = found.filter((d) => d.path !== path);
       notes.push(...(r?.result?.warnings ?? []));
       each?.(path, 'done');
       const p = state.projects.find((x) => x.id === r?.id);
-      if (p && !opened) { opened = true; $('#welcome').hidden = true; void openProject(p); }
+      if (p && !opened) { opened = true; $('#welcome').hidden = true; welcomeDraw = null; void openProject(p); }
     } catch (e: any) {
       each?.(path, 'fail');
-      if (e?.code === 'cancelled') { toast(errText(e)); return; }
+      if (e?.code === 'cancelled') { flash(errText(e)); return; }
+      markError();
       toast(L(`${name}：${errText(e)}`, `${name}: ${errText(e)}`), 6000);
     }
   }
@@ -1351,7 +1674,9 @@ async function addProjects(paths: string[], each?: (path: string, st: 'run' | 'd
 }
 
 // ───────────────────────── 第一次打开 ─────────────────────────
-// 作品库是空的：列出本机用过 AI 工具的仓库，勾几个就开始分析；没找到就选文件夹
+// 作品库是空的：列出本机用过 AI 工具的仓库，勾几个就开始分析；没找到就选文件夹。
+// * 在标题上面：扫描时呼吸，分析时一瓣瓣长满，下面一行写着走到哪一步
+let welcomeDraw: (() => void) | null = null;
 function welcome() {
   const el = $('#welcome');
   el.hidden = false; $('#empty').hidden = true; $('#board').innerHTML = '';
@@ -1359,23 +1684,25 @@ function welcome() {
   const picked = new Set<string>();
   let list: Found[] | null = null;
   const status = new Map<string, string>();
-  let first = true; // 标志只在第一次画出来时长一遍
+  const ST: Record<string, string> = { run: SPIN(), done: icon('check', 14), fail: icon('close', 14) };
   const draw = () => {
     if (el.hidden) return;
     const running = [...status.values()].includes('run');
     el.innerHTML = `<div class="box">
-      <span class="logo${first && logoNow().startsWith('star') ? ' bloom' : ''}">${logoSvg(store.get('logo'))}</span>
+      <span class="logo"></span>
       <h1>${L('选择要分析的项目', 'Select projects to start')}</h1>
-      <div class="found">${list === null ? `<p class="wait">${SPIN()}${L('正在扫描本地包含 AI 工具记录的 Git 仓库…', 'Looking for repos where you used AI tools…')}</p>`
+      <p class="wstat" aria-live="polite"></p>
+      <div class="found">${list === null ? `<p class="wait">${L('正在扫描本地包含 AI 工具记录的 Git 仓库…', 'Looking for repos where you used AI tools…')}</p>`
         : list.length ? list.map((d) => `<label class="row ${status.get(d.path) ?? ''}" data-path="${esc(d.path)}">
             <input type="checkbox" ${picked.has(d.path) ? 'checked' : ''} ${running || status.has(d.path) ? 'disabled' : ''}>
             <b>${esc(d.name)}</b><span class="path" title="${esc(d.path)}">${esc(short(d.path))}</span><span class="tools">${esc(toolsOf(d))}</span>
-            <i class="st">${status.get(d.path) === 'run' ? SPIN() : ''}</i></label>`).join('')
+            <i class="st">${ST[status.get(d.path) ?? ''] ?? ''}</i></label>`).join('')
         : `<p class="wait">${L('未发现包含 AI 工具记录的 Git 仓库', 'No git repos with AI tool activity found')}</p>`}</div>
-      <div class="acts"><button class="pick" ${running ? 'disabled' : ''}>${L('选择文件夹…', 'Choose folder…')}</button>${list?.length ? `<button class="go" ${!picked.size || running ? 'disabled' : ''}>${running ? L('分析中…', 'Analyzing…') : picked.size > 1 ? L(`分析这 ${picked.size} 个`, `Analyze ${picked.size}`) : L('开始分析', 'Analyze')}</button>` : ''}</div>
+      <div class="acts"><button class="pick" ${running ? 'disabled' : ''}>${icon('folder')}${L('选择文件夹…', 'Choose folder…')}</button>${list?.length ? `<button class="go" ${!picked.size || running ? 'disabled' : ''}>${running ? L('分析中…', 'Analyzing…') : picked.size > 1 ? L(`分析这 ${picked.size} 个`, `Analyze ${picked.size}`) : L('开始分析', 'Analyze')}</button>` : ''}</div>
     </div>`;
-    first = false;
+    settleMark(); syncStatus();
   };
+  welcomeDraw = draw;
   el.onchange = (e) => {
     const box = e.target as HTMLInputElement, path = box.closest<HTMLElement>('.row')?.dataset.path;
     if (!path) return;
@@ -1388,18 +1715,22 @@ function welcome() {
     const paths = list!.map((d) => d.path).filter((p) => picked.has(p));
     await addProjects(paths, (path, st) => { status.set(path, st); draw(); });
   };
+  mark.set(BRAND, { grow: true });
+  scanning = true;
   draw();
-  void discover().then((r) => { list = r; r.slice(0, 3).forEach((d) => picked.add(d.path)); draw(); });
+  void discover().then((r) => { scanning = false; list = r; r.slice(0, 3).forEach((d) => picked.add(d.path)); draw(); });
 }
 
-/** 分析跑完：核心有提醒（某个数据源读不了之类）就在提示里给个「查看」 */
-function done(msg: string, warnings?: string[], mark?: Petal[] | null) {
-  if (!warnings?.length) return toast(msg, 2600, { mark });
-  toast(L(`${msg} · ${warnings.length} 条提醒`, `${msg} · ${warnings.length} ${warnings.length > 1 ? 'notes' : 'note'}`), 10000, { mark, acts: [{ label: L('查看', 'View'), run: () => showWarnings(warnings) }] });
+/** 分析跑完：一句结果写在项目名后面；核心有提醒（某个数据源读不了之类）就再给个能点「查看」的提示 */
+function done(msg: string, warnings?: string[]) {
+  if (!warnings?.length) return flash(msg);
+  const text = L(`${msg} · ${warnings.length} 条提醒`, `${msg} · ${warnings.length} ${warnings.length > 1 ? 'notes' : 'note'}`);
+  flash(text, 5000);
+  toast(text, 10000, { acts: [{ label: L('查看', 'View'), run: () => showWarnings(warnings) }] });
 }
 function showWarnings(list: string[]) {
   const el = $('#sheet');
-  el.hidden = false;
+  el.hidden = false; sheetRedraw = null;
   el.innerHTML = `<div class="panel glass">
     <div class="head"><h2>${L('分析时遇到的问题', 'Issues during analysis')}</h2>${closeBtn()}</div>
     <ul class="warn">${list.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>
@@ -1407,100 +1738,207 @@ function showWarnings(list: string[]) {
   el.onclick = (e) => { if (e.target === el || (e.target as HTMLElement).closest('[data-act="close"]')) closeSheet(); };
 }
 
-function closeSheet() { const el = $('#sheet'); el.hidden = true; el.innerHTML = ''; }
+function closeSheet() { const el = $('#sheet'); el.hidden = true; el.innerHTML = ''; sheetRedraw = null; plugProject = null; }
+/** 开着的设置页换语言时按新语言重画 */
+let sheetRedraw: (() => void) | null = null;
 const logoNow = () => (store.get('logo') && LOGOS[store.get('logo')!] ? store.get('logo')! : DEFAULT_LOGO);
-async function settings() {
+const dayOf = (t: number) => new Date(t * 1000).toLocaleString(state.lang === 'zh' ? 'zh-CN' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' });
+
+// ───────────────────────── 项目设置 ─────────────────────────
+// 一个项目自己的事都在这里：分析、有新提交时要不要自动跟上、两项接入、关联的路径、从作品库移除
+function projectSettings(p0: any, armRemove = false) {
+  closeMenu();
   const el = $('#sheet');
   el.hidden = false;
-  const info = native ? await api('app_info').catch(() => null) : null;
-  const coll = await api('collect_info').catch(() => null);
-  el.innerHTML = `<div class="panel glass">
-    <div class="head"><h2>${L('设置', 'Settings')}</h2>${closeBtn()}</div>
-    <div class="row kv"><span class="k">${L('标志', 'Logo')}</span><span class="v grow"></span><div class="logos" role="radiogroup" aria-label="${L('标志', 'Logo')}">${Object.entries(LOGOS).map(([id, g]) => `<button data-x="logo" data-id="${id}" role="radio" aria-checked="${id === logoNow()}" title="${esc(L(...g.name))}" aria-label="${esc(L(...g.name))}">${g.svg}</button>`).join('')}</div></div>
-    <h3>${L('导出', 'Export')}</h3>
-    ${info ? `<div class="row kv" id="xrow"></div>` : ''}
-    <div class="row kv"><span class="k">${L('默认尺寸', 'Default size')}</span><div class="seg" id="defsize">${sizeButtons()}</div></div>
-    <div class="row kv"><span class="k" title="${L('关掉后只写「其他贡献者」', 'When off, only “Other contributors” is shown')}">${L('写其他贡献者的名字', 'Show contributor names')}</span><span class="v grow"></span><button class="switch" role="switch" aria-checked="${namesOn()}" aria-label="${L('写其他贡献者的名字', 'Show contributor names')}" data-x="names"><i></i></button></div>
-    <h3>${L('本地项目库', 'Library')}</h3>
-    ${info ? `<div class="row kv"><span class="k">${L('位置', 'Location')}</span><span class="v path" title="${esc(info.library)}">${esc(short(info.library))}</span><button class="mini" data-x="open-library">${L('打开', 'Open')}</button></div>` : ''}
-    <div class="row kv"><span class="k">${L('有新提交时自动更新', 'Update on new commits')}</span><span class="v grow"></span><button class="switch" role="switch" aria-checked="${autoFresh()}" aria-label="${L('有新提交时自动更新', 'Update on new commits')}" data-x="fresh"><i></i></button></div>
-    ${coll ? `<div class="row kv" id="crow"></div>` : ''}
-    <h3>${L('AI 工具', 'AI tools')}</h3><div id="doc"><p>${L('检查中…', 'Checking…')}</p></div>
-    <p class="about">${info ? `creditia ${esc(info.version)} · ` : ''}${L('只在本机运行', 'Runs only on this computer')}</p>
-  </div>`;
-  const xrow = (x: any) => {
-    const r = el.querySelector('#xrow'); if (!r) return;
-    r.innerHTML = `<span class="k">${L('保存到', 'Save to')}</span><span class="v path" title="${esc(x.exportDir)}">${esc(short(x.exportDir))}</span><button class="mini" data-x="choose">${L('更改…', 'Change…')}</button>${x.exportDefault ? '' : `<button class="mini" data-x="reset">${L('恢复默认', 'Reset')}</button>`}<button class="mini" data-x="open-exports">${L('打开', 'Open')}</button>`;
+  let p = p0, armed = armRemove, busy = '', plugFailed = false;
+  plugProject = p; plugs = null;
+  const draw = () => {
+    const own = autoOwn(p.id), paths: string[] = [...new Set([p.path, ...(p.paths ?? [])])];
+    const seg = ([['', L(`跟随默认（${autoDefault() ? '开' : '关'}）`, `Default (${autoDefault() ? 'on' : 'off'})`)], ['on', L('自动跟上', 'Catch up')], ['off', L('不自动', 'Off')]] as const)
+      .map(([v, n]) => `<button data-x="auto" data-v="${v}" role="radio" aria-checked="${(own ?? '') === v}" class="${(own ?? '') === v ? 'on' : ''}">${esc(n)}</button>`).join('');
+    el.innerHTML = `<div class="panel glass" role="dialog" aria-label="${L('项目设置', 'Project settings')}">
+      <div class="head"><span class="pm">${markEl(markOf(p.id) ?? UNREAD)}</span><div class="who"><h2>${esc(p.name)}</h2><small title="${esc(p.path)}">${esc(short(p.path))}</small></div>${closeBtn()}</div>
+      <h3>${L('分析', 'Analysis')}</h3>
+      <div class="row kv"><span class="k">${L('上次分析', 'Last analyzed')}</span><span class="v grow">${p.exists === false ? L('项目目录已经不在了', 'The project folder is gone') : p.lastAnalyzed ? esc(dayOf(p.lastAnalyzed)) : L('还没分析过', 'Not analyzed yet')}</span><button class="mini" data-x="re" ${canAnalyze(p) ? '' : 'disabled'}>${icon('refresh', 14)}${L('重新分析', 'Re-analyze')}</button></div>
+      <div class="row kv"><span class="k">${L('有新提交时', 'On new commits')}</span><span class="v grow"></span><div class="seg" role="radiogroup" aria-label="${L('有新提交时', 'On new commits')}">${seg}</div></div>
+      <h3>${L('接入', 'Integrations')}</h3>
+      <div class="mplugs" id="mplugs" hidden></div>
+      <p class="note" id="plugwait">${p.exists === false ? L('项目目录不在了，接入暂时改不了', "The folder is gone, so integrations can't be changed") : plugFailed ? `${L('读不到接入的状态', "Couldn't read the integrations")} <button class="mini" data-x="plugs-retry">${L('重试', 'Retry')}</button>` : L('读取中…', 'Loading…')}</p>
+      <h3>${L('路径', 'Paths')}</h3>
+      <p>${L('日志里这些路径下的改动也算这个项目：worktree、搬家前的旧目录、别处的克隆。', 'Changes under these paths in tool logs count for this project: worktrees, old locations, other clones.')}</p>
+      ${paths.map((x) => `<div class="row"><span class="v path" title="${esc(x)}">${esc(short(x))}</span>${x === p.path ? `<span class="tag">${L('主目录', 'Main')}</span>` : p.pathKinds?.[x] === 'manual' ? `<button class="mini" data-x="unlink" data-path="${esc(x)}" ${busy ? 'disabled' : ''}>${L('取消关联', 'Unlink')}</button>` : `<span class="tag">${L('自动发现', 'Auto-detected')}</span>`}</div>`).join('')}
+      <div class="row"><button class="mini" data-x="link" ${busy || p.exists === false ? 'disabled' : ''}>${icon('link', 14)}${L('关联一个文件夹…', 'Link a folder…')}</button></div>
+      <h3>${L('作品库', 'Library')}</h3>
+      <div class="row"><span class="k">${L('从作品库移除', 'Remove from library')}</span><button class="mini danger${armed ? ' armed' : ''}" data-x="remove">${icon('remove', 14)}${armed ? L('确认移除', 'Confirm remove') : L('移除', 'Remove')}</button></div>
+      <p class="note">${L('只从列表里拿掉。分析记录和缓存都留在本机，再加回来不用从头分析；仓库里的文件不会动。', "Only takes it off the list. Its analysis and caches stay on this computer, so adding it back is quick; nothing in the repo changes.")}</p>
+    </div>`;
+    renderPlugs();
+    if (plugs) el.querySelector('#plugwait')?.remove();
   };
-  if (info) xrow(info);
-  const ago = (t: number) => {
-    const m = Math.floor((Date.now() / 1000 - t) / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
-    return m < 1 ? L('刚刚', 'just now') : m < 60 ? L(`${m} 分钟前`, `${m} min ago`) : h < 24 ? L(`${h} 小时前`, `${h} h ago`) : L(`${d} 天前`, `${d} d ago`);
+  sheetRedraw = draw;
+  draw();
+  const readPlugs = async () => {
+    plugFailed = false; draw();
+    await loadPlugs(p);
+    if (plugProject === p && sheetRedraw === draw) { plugFailed = !plugs; draw(); }
   };
-  const crow = (c: any) => {
-    const r = el.querySelector('#crow'); if (!r || !c) return;
-    // 定时把新记录同步至本地项目库。三档：不备份 / App 开着时 / 一直（macOS 的后台任务）
-    const mode = c.agent?.on ? 'always' : c.on ? 'open' : 'off';
-    const modes: [string, string][] = [['off', L('关', 'Off')], ['open', L('App 开着时', 'While open')], ...(c.agent?.supported ? [['always', L('一直', 'Always')]] as [string, string][] : [])];
-    const st = c.running ? L('正在备份…', 'Backing up…') : mode !== 'off' && c.last?.at ? L(`上次 ${ago(c.last.at)}`, `Last ${ago(c.last.at)}`) : '';
-    r.innerHTML = `<span class="k" title="${L('将本地编程工具记录同步至本地存档，防止历史记录遗失', 'Sync local tool logs to the local project archive')}">${L('备份 AI 工具记录', 'Back up AI tool logs')}</span><span class="v grow">${esc(st)}</span>`
-      + `<div class="seg" role="radiogroup">${modes.map(([m, n]) => `<button data-x="collect-mode" data-m="${m}" role="radio" aria-checked="${m === mode}" class="${m === mode ? 'on' : ''}">${esc(n)}</button>`).join('')}</div>`;
-    // 一轮正在跑（定时的那轮）：跑完换成结果
-    if (c.running) setTimeout(() => { if (el.querySelector('#crow')) api('collect_info').then(crow).catch(() => null); }, 2000);
-  };
-  crow(coll);
+  if (p.exists !== false && !p.all) void readPlugs();
+  const refresh = async () => { state.projects = await api('projects').catch(() => state.projects); p = state.projects.find((x) => x.id === p.id) ?? p; if (sheetRedraw === draw) plugProject = p; if (state.current?.id === p.id) state.current = p; };
   el.onclick = async (e) => {
     const t = e.target as HTMLElement;
     if (e.target === el || t.closest('[data-act="close"]')) return closeSheet();
-    const sz = t.closest('#defsize button') as HTMLElement | null;
-    if (sz) return setSize(sz.dataset.s!);
-    const x = (t.closest('[data-x]') as HTMLElement | null)?.dataset.x;
+    const b = t.closest<HTMLButtonElement>('[data-x]'); if (!b || b.disabled) return;
+    const x = b.dataset.x;
+    if (x === 'plugs-retry') return void readPlugs();
+    if (x !== 'remove' && armed) { armed = false; draw(); }
     try {
-      if (x === 'choose') { if (await api('choose_export_dir')) xrow(await api('app_info')); }
-      else if (x === 'reset') { await api('reset_export_dir'); xrow(await api('app_info')); }
-      else if (x === 'open-exports') await api('open_folder', { which: 'exports' });
-      else if (x === 'open-library') await api('open_folder', { which: 'library' });
-      else if (x === 'fresh') {
-        store.set('autofresh', autoFresh() ? 'off' : 'on');
-        el.querySelector('[data-x="fresh"]')!.setAttribute('aria-checked', String(autoFresh()));
-        if (autoFresh()) refreshIfChanged();
+      if (x === 're') { closeSheet(); return void reanalyze(p); }
+      if (x === 'auto') {
+        store.set('autofresh.' + p.id, b.dataset.v!);
+        draw();
+        if (autoFresh(p) && state.current?.id === p.id) void refreshIfChanged();
+      } else if (x === 'remove') {
+        if (!armed) { armed = true; return draw(); }
+        closeSheet(); return void removeProject(p);
+      } else if (x === 'link' || x === 'unlink') {
+        const path = x === 'link' ? await api('pick_folder') : b.dataset.path;
+        if (!path) return;
+        busy = x; draw();
+        const r = await api('link_path', { projectId: p.id, path, unlink: x === 'unlink', lang: state.lang });
+        await refresh();
+        if (r?.summary) toast(String(r.summary), 6000);
       }
-      else if (x === 'names') {
-        store.set('names', namesOn() ? 'off' : 'on');
-        setNamed(namesOn());
-        el.querySelector('[data-x="names"]')!.setAttribute('aria-checked', String(namesOn()));
-        if (state.raw) { rebuildModel(); await paint(); }
-      }
-      else if (x === 'logo') {
-        const id = (t.closest('[data-id]') as HTMLElement).dataset.id!;
-        await api('set_logo', { id });
-        store.set('logo', id);
-        el.querySelectorAll('.logos button').forEach((b) => b.setAttribute('aria-checked', String((b as HTMLElement).dataset.id === id)));
-      }
-      else if (x === 'collect-mode') {
-        const m = (t.closest('[data-m]') as HTMLElement).dataset.m!;
-        let c = await api('set_collect', { on: m !== 'off' });
-        if (c.agent?.supported && !!c.agent.on !== (m === 'always')) c = await api('set_collect_agent', { on: m === 'always' });
-        crow(c);
-      }
-    } catch (err) { toast(errText(err), 5000); }
+    } catch (err) { markError(); toast(errText(err), 6000); }
+    finally { if (busy) { busy = ''; if (sheetRedraw === draw) draw(); } }
   };
-  /** doctor 的数据源名：一个工具有两处记录时分开写 */
-  const SOURCES: Record<string, [string, string]> = { 'copilot-vscode': ['Copilot（VS Code）', 'Copilot (VS Code)'], 'copilot-cli': ['Copilot 命令行', 'Copilot CLI'], 'cursor-cli': ['Cursor 命令行', 'Cursor CLI'], 'cline-cli': ['Cline 命令行', 'Cline CLI'], 'amazon-q-ide': ['Amazon Q（编辑器）', 'Amazon Q (IDE)'], 'costrict-ide': ['CoStrict（编辑器）', 'CoStrict (IDE)'], 'trae-cli': ['TRAE 命令行', 'TRAE CLI'], 'trae-ide': ['TRAE IDE', 'TRAE IDE'], 'kilo-cli': ['Kilo 命令行', 'Kilo CLI'], antigravity: ['Antigravity 命令行', 'Antigravity CLI'], windsurf: ['Windsurf Cascade', 'Windsurf Cascade'] };
-  Object.assign(SOURCES, { 'kiro-cli-classic': ['Kiro CLI（classic）', 'Kiro CLI (classic)'], 'tabnine-ide': ['Tabnine（编辑器）', 'Tabnine (IDE)'], 'devin-cloud': ['Devin 云端', 'Devin Cloud'], 'devin-cli': ['Devin CLI', 'Devin CLI'] });
-  Object.assign(SOURCES, { 'warp-oz': ['Warp Oz 运行信息', 'Warp Oz run information'] });
-  Object.assign(SOURCES, { 'kiro-kas-v3': ['Kiro CLI（V3 会话）', 'Kiro CLI (V3 sessions)'], 'kiro-cli-v2': ['Kiro CLI（V2 会话）', 'Kiro CLI (V2 sessions)'] });
-  Object.assign(SOURCES, { 'trae-native': ['TRAE（编辑器历史）', 'TRAE (editor history)'] });
-  const sourceName = (id: string) => id.endsWith('-acp') ? `${nameOf(id.slice(0, -4), state.lang)} ${L('采集', 'capture')}` : (SOURCES[id] ? L(...SOURCES[id]) : nameOf(id.replace(/-cli$/, ''), state.lang));
-  const doc = await api('doctor').catch(() => []);
-  const detail = (d: any) => d.scope === 'sessions' && d.ok ? L('仅会话信息', 'Session information only')
-    : d.scope === 'capture' && !d.ok ? L('需开启采集', 'Capture required')
-    : d.unsupported ? L('编辑格式待接', 'Edit format unconfirmed')
-    : !d.ok ? L('没有找到', 'Not found')
-    : d.records != null ? L(`${fmt(d.records)} 条记录`, `${fmt(d.records)} records`)
-    : d.entries != null ? L(`${fmt(d.entries)} 个条目`, `${fmt(d.entries)} entries`)
-    : L('已就绪', 'Ready');
-  $('#doc').innerHTML = doc.length ? doc.map((d: any) => `<div class="row" title="${esc(d.path ?? '')}"><i class="dot ${d.ok && !d.unsupported ? 'ok' : ''}"></i><span class="k">${esc(sourceName(d.id))}</span><span class="v">${esc(detail(d))}</span></div>`).join('') : `<p>${L('没有可用的数据源', 'No data sources found')}</p>`;
+}
+
+// ───────────────────────── 设置 ─────────────────────────
+// 左边四栏：通用（语言、标志、自动跟上的默认）、导出、数据（项目库、备份、AI 工具）、关于
+type Tab = 'general' | 'export' | 'data' | 'about';
+let settingsTab: Tab = 'general';
+async function settings(tab: Tab = settingsTab) {
+  closeMenu();
+  settingsTab = tab;
+  const el = $('#sheet');
+  el.hidden = false; plugProject = null;
+  sheetRedraw = () => void settings(settingsTab);
+  const tabs: [Tab, string, string][] = [['general', 'gear', L('通用', 'General')], ['export', 'export', L('导出', 'Export')], ['data', 'folder', L('数据', 'Data')], ['about', 'info', L('关于', 'About')]];
+  el.innerHTML = `<div class="panel glass wide" role="dialog" aria-label="${L('设置', 'Settings')}">
+    <nav class="nav"><h2>${L('设置', 'Settings')}</h2>${tabs.map(([id, ic, n]) => `<button data-tab="${id}" class="${id === tab ? 'on' : ''}" aria-current="${id === tab}">${icon(ic)}${esc(n)}</button>`).join('')}</nav>
+    <div class="body">${closeBtn()}<div class="sec"></div></div>
+  </div>`;
+  const sec = el.querySelector('.sec') as HTMLElement;
+  const live = () => sec.isConnected; // 换了一栏，慢的请求回来就不写了
+  el.onclick = (e) => {
+    const t = e.target as HTMLElement;
+    if (e.target === el || t.closest('[data-act="close"]')) return closeSheet();
+    const tb = t.closest<HTMLElement>('[data-tab]'); if (tb) return void settings(tb.dataset.tab as Tab);
+  };
+  if (tab === 'general') {
+    sec.innerHTML = `<h3>${L('通用', 'General')}</h3>
+      <div class="row kv"><span class="k">${L('语言', 'Language')}</span><span class="v grow"></span><div class="seg" role="radiogroup" aria-label="${L('语言', 'Language')}">${([['zh', '中文'], ['en', 'English']] as const).map(([v, n]) => `<button data-lang="${v}" role="radio" aria-checked="${state.lang === v}" class="${state.lang === v ? 'on' : ''}">${n}</button>`).join('')}</div></div>
+      <div class="row kv"><span class="k">${L('程序坞图标', 'App icon')}</span><span class="v grow"></span><div class="logos" role="radiogroup" aria-label="${L('程序坞图标', 'App icon')}">${Object.entries(LOGOS).map(([id, g]) => `<button data-logo="${id}" role="radio" aria-checked="${id === logoNow()}" title="${esc(L(...g.name))}" aria-label="${esc(L(...g.name))}">${g.svg}</button>`).join('')}</div></div>
+      <div class="sw${autoDefault() ? ' on' : ''}"><span class="t"><b>${L('有新提交时自动跟上', 'Catch up on new commits')}</b><small>${L('仓库里有了新提交，就在后台增量分析一次。每个项目可以在项目设置里单独改。', 'Analyze new commits in the background. Each project can override this in its settings.')}</small></span><button role="switch" aria-checked="${autoDefault()}" aria-label="${L('有新提交时自动跟上', 'Catch up on new commits')}" data-fresh><i></i></button></div>`;
+    sec.onclick = async (e) => {
+      const t = e.target as HTMLElement;
+      const lb = t.closest<HTMLElement>('[data-lang]'); if (lb) return void setLang(lb.dataset.lang as 'zh' | 'en');
+      if (t.closest('[data-fresh]')) {
+        store.set('autofresh', autoDefault() ? 'off' : 'on');
+        void settings('general');
+        if (autoFresh(state.current)) void refreshIfChanged();
+        return;
+      }
+      const lg = t.closest<HTMLElement>('[data-logo]');
+      if (lg) {
+        try { await api('set_logo', { id: lg.dataset.logo }); } catch (err) { return toast(errText(err), 5000); }
+        store.set('logo', lg.dataset.logo!);
+        sec.querySelectorAll<HTMLElement>('[data-logo]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.logo === lg.dataset.logo)));
+      }
+    };
+  } else if (tab === 'export') {
+    sec.innerHTML = `<h3>${L('导出', 'Export')}</h3><div class="row kv" id="xrow">${native ? '' : `<span class="k">${L('保存到', 'Save to')}</span><span class="v grow">${L('浏览器的下载文件夹', "The browser's downloads")}</span>`}</div>
+      <div class="row kv"><span class="k">${L('写其他贡献者的名字', 'Show contributor names')}</span><span class="v grow"></span><button class="switch" role="switch" aria-checked="${namesOn()}" aria-label="${L('写其他贡献者的名字', 'Show contributor names')}" data-x="names"><i></i></button></div>
+      <p class="note">${L('格式和尺寸在每张作品的「导出」里挑，App 会记住上次用的。也可以把作品拖到下面的导出坞上。', 'Pick format and size from each card’s Export menu; the app remembers your last choice. You can also drag a card onto the export dock.')}</p>`;
+    const xrow = (x: any) => {
+      const r = sec.querySelector('#xrow'); if (!r || !x) return;
+      r.innerHTML = `<span class="k">${L('保存到', 'Save to')}</span><span class="v path" title="${esc(x.exportDir)}">${esc(short(x.exportDir))}</span><button class="mini" data-x="choose">${L('更改…', 'Change…')}</button>${x.exportDefault ? '' : `<button class="mini" data-x="reset">${L('恢复默认', 'Reset')}</button>`}<button class="mini" data-x="open-exports">${L('打开', 'Open')}</button>`;
+    };
+    if (native) void api('app_info').then((x) => { if (live()) xrow(x); }).catch(() => null);
+    sec.onclick = async (e) => {
+      const x = (e.target as HTMLElement).closest<HTMLElement>('[data-x]')?.dataset.x;
+      try {
+        if (x === 'choose') { if (await api('choose_export_dir')) xrow(await api('app_info')); }
+        else if (x === 'reset') { await api('reset_export_dir'); xrow(await api('app_info')); }
+        else if (x === 'open-exports') await api('open_folder', { which: 'exports' });
+        else if (x === 'names') {
+          store.set('names', namesOn() ? 'off' : 'on');
+          setNamed(namesOn());
+          sec.querySelector('[data-x="names"]')?.setAttribute('aria-checked', String(namesOn()));
+          state.arts.clear(); roamReset();
+          if (state.raw) { rebuildModel(); await paint(); }
+        }
+      } catch (err) { toast(errText(err), 5000); }
+    };
+  } else if (tab === 'data') {
+    sec.innerHTML = `<h3>${L('本地项目库', 'Library')}</h3><div id="lrow"></div><div class="row kv" id="crow" hidden></div>
+      <h3>${L('AI 工具', 'AI tools')}</h3><div id="doc"><p>${L('检查中…', 'Checking…')}</p></div>`;
+    const ago = (t: number) => {
+      const m = Math.floor((Date.now() / 1000 - t) / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
+      return m < 1 ? L('刚刚', 'just now') : m < 60 ? L(`${m} 分钟前`, `${m} min ago`) : h < 24 ? L(`${h} 小时前`, `${h} h ago`) : L(`${d} 天前`, `${d} d ago`);
+    };
+    const crow = (c: any) => {
+      const r = sec.querySelector<HTMLElement>('#crow'); if (!r || !c) return;
+      r.hidden = false;
+      // 定时把新记录同步至本地项目库。三档：不备份 / App 开着时 / 一直（macOS 的后台任务）
+      const mode = c.agent?.on ? 'always' : c.on ? 'open' : 'off';
+      const modes: [string, string][] = [['off', L('关', 'Off')], ['open', L('App 开着时', 'While open')], ...(c.agent?.supported ? [['always', L('一直', 'Always')]] as [string, string][] : [])];
+      const st = c.running ? L('正在备份…', 'Backing up…') : mode !== 'off' && c.last?.at ? L(`上次 ${ago(c.last.at)}`, `Last ${ago(c.last.at)}`) : '';
+      r.innerHTML = `<span class="k" title="${L('将本地编程工具记录同步至本地存档，防止历史记录遗失', 'Sync local tool logs to the local project archive')}">${L('备份 AI 工具记录', 'Back up AI tool logs')}</span><span class="v grow">${esc(st)}</span>`
+        + `<div class="seg" role="radiogroup">${modes.map(([m, n]) => `<button data-x="collect-mode" data-m="${m}" role="radio" aria-checked="${m === mode}" class="${m === mode ? 'on' : ''}">${esc(n)}</button>`).join('')}</div>`;
+      // 一轮正在跑（定时的那轮）：跑完换成结果
+      if (c.running) setTimeout(() => { if (live()) api('collect_info').then(crow).catch(() => null); }, 2000);
+    };
+    if (native) void api('app_info').then((info) => {
+      const r = sec.querySelector('#lrow'); if (!r || !live()) return;
+      r.innerHTML = `<div class="row kv"><span class="k">${L('位置', 'Location')}</span><span class="v path" title="${esc(info.library)}">${esc(short(info.library))}</span><button class="mini" data-x="open-library">${L('打开', 'Open')}</button></div>`;
+    }).catch(() => null);
+    void api('collect_info').then((c) => { if (live()) crow(c); }).catch(() => null);
+    sec.onclick = async (e) => {
+      const t = e.target as HTMLElement, x = t.closest<HTMLElement>('[data-x]')?.dataset.x;
+      try {
+        if (x === 'open-library') await api('open_folder', { which: 'library' });
+        else if (x === 'collect-mode') {
+          const m = (t.closest('[data-m]') as HTMLElement).dataset.m!;
+          let c = await api('set_collect', { on: m !== 'off' });
+          if (c.agent?.supported && !!c.agent.on !== (m === 'always')) c = await api('set_collect_agent', { on: m === 'always' });
+          crow(c);
+        }
+      } catch (err) { toast(errText(err), 5000); }
+    };
+    /** doctor 的数据源名：一个工具有两处记录时分开写 */
+    const SOURCES: Record<string, [string, string]> = { 'copilot-vscode': ['Copilot（VS Code）', 'Copilot (VS Code)'], 'copilot-cli': ['Copilot 命令行', 'Copilot CLI'], 'cursor-cli': ['Cursor 命令行', 'Cursor CLI'], 'cline-cli': ['Cline 命令行', 'Cline CLI'], 'amazon-q-ide': ['Amazon Q（编辑器）', 'Amazon Q (IDE)'], 'costrict-ide': ['CoStrict（编辑器）', 'CoStrict (IDE)'], 'trae-cli': ['TRAE 命令行', 'TRAE CLI'], 'trae-ide': ['TRAE IDE', 'TRAE IDE'], 'kilo-cli': ['Kilo 命令行', 'Kilo CLI'], antigravity: ['Antigravity 命令行', 'Antigravity CLI'], windsurf: ['Windsurf Cascade', 'Windsurf Cascade'] };
+    Object.assign(SOURCES, { 'kiro-cli-classic': ['Kiro CLI（classic）', 'Kiro CLI (classic)'], 'tabnine-ide': ['Tabnine（编辑器）', 'Tabnine (IDE)'], 'devin-cloud': ['Devin 云端', 'Devin Cloud'], 'devin-cli': ['Devin CLI', 'Devin CLI'] });
+    Object.assign(SOURCES, { 'warp-oz': ['Warp Oz 运行信息', 'Warp Oz run information'] });
+    Object.assign(SOURCES, { 'kiro-kas-v3': ['Kiro CLI（V3 会话）', 'Kiro CLI (V3 sessions)'], 'kiro-cli-v2': ['Kiro CLI（V2 会话）', 'Kiro CLI (V2 sessions)'] });
+    Object.assign(SOURCES, { 'trae-native': ['TRAE（编辑器历史）', 'TRAE (editor history)'] });
+    const sourceName = (id: string) => id.endsWith('-acp') ? `${nameOf(id.slice(0, -4), state.lang)} ${L('采集', 'capture')}` : (SOURCES[id] ? L(...SOURCES[id]) : nameOf(id.replace(/-cli$/, ''), state.lang));
+    const doc = await api('doctor').catch(() => []);
+    const detail = (d: any) => d.scope === 'sessions' && d.ok ? L('仅会话信息', 'Session information only')
+      : d.scope === 'capture' && !d.ok ? L('需开启采集', 'Capture required')
+      : d.unsupported ? L('编辑格式待接', 'Edit format unconfirmed')
+      : !d.ok ? L('没有找到', 'Not found')
+      : d.records != null ? L(`${fmt(d.records)} 条记录`, `${fmt(d.records)} records`)
+      : d.entries != null ? L(`${fmt(d.entries)} 个条目`, `${fmt(d.entries)} entries`)
+      : L('已就绪', 'Ready');
+    const box = sec.querySelector('#doc'); if (!box || !live()) return;
+    box.innerHTML = doc.length ? doc.map((d: any) => `<div class="row" title="${esc(d.path ?? '')}"><i class="dot ${d.ok && !d.unsupported ? 'ok' : ''}"></i><span class="k">${esc(sourceName(d.id))}</span><span class="v">${esc(detail(d))}</span></div>`).join('') : `<p>${L('没有可用的数据源', 'No data sources found')}</p>`;
+  } else {
+    sec.innerHTML = `<div class="aboutbox"><span class="am">${markEl(BRAND)}</span><b>creditia</b><small id="ver"></small>
+      <p>${L('看清每个 AI 工具在你的仓库里写了多少，再把它做成能放进 README、发版说明和作品集的署名。', 'See how much each AI tool wrote in your repos, then turn it into credits for your README, releases and portfolio.')}</p>
+      <p class="about">${L('只在本机运行，不上传任何代码或记录。', 'Runs only on this computer. No code or logs are uploaded.')}</p></div>`;
+    if (native) void api('app_info').then((info) => { const v = sec.querySelector('#ver'); if (v && live()) v.textContent = `${L('版本', 'Version')} ${info.version}`; }).catch(() => null);
+  }
 }
 
 boot();

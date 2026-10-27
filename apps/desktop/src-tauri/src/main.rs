@@ -36,6 +36,29 @@ fn project(lib: &Library, project_id: &str) -> Res<creditia_store::Project> {
     lib.projects()?.into_iter().find(|p| p.id == project_id).ok_or(Fail::new("not_in_library"))
 }
 
+fn path_kinds(lib: &Library, p: &creditia_store::Project) -> std::collections::BTreeMap<String, String> {
+    let mut kinds: std::collections::BTreeMap<String, String> = lib.paths(&p.id).unwrap_or_default().into_iter().collect();
+    let mut cmd = Command::new("git");
+    cmd.arg("-C").arg(&p.path).args(["-c", "core.quotepath=false", "worktree", "list", "--porcelain"]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    if let Ok(out) = cmd.output() {
+        if out.status.success() {
+            for path in String::from_utf8_lossy(&out.stdout).lines().filter_map(|l| l.strip_prefix("worktree ")) {
+                kinds.insert(path.to_string(), "worktree".into());
+            }
+        }
+    }
+    let cfg: Value = std::fs::read_to_string(PathBuf::from(&p.path).join(".creditia/config.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    for path in cfg["paths"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+        kinds.insert(path.to_string(), "config".into());
+    }
+    kinds
+}
+
 #[tauri::command]
 fn projects() -> Res<Value> {
     let lib = Library::open()?;
@@ -44,9 +67,10 @@ fn projects() -> Res<Value> {
         .into_iter()
         .map(|p| {
             let credits = PathBuf::from(&p.path).join(".creditia/credits.json");
-            let paths: Vec<String> = lib.paths(&p.id).unwrap_or_default().into_iter().map(|(x, _)| x).collect();
+            let path_kinds = path_kinds(&lib, &p);
+            let paths: Vec<&String> = path_kinds.keys().collect();
             json!({
-                "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "paths": paths,
+                "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "paths": paths, "pathKinds": path_kinds,
                 "lastHead": p.last_head,
                 "lastAnalyzed": p.last_analyzed,
                 "evidence": lib.evidence_count(&p.id),
@@ -339,6 +363,23 @@ fn set_integration(project_id: String, which: String, on: bool, lang: Option<Str
     let p = project(&lib, &project_id)?;
     let lang = lang.unwrap_or_else(|| "zh".into());
     run_core(&[which.as_str(), if on { "install" } else { "uninstall" }, "--repo", p.path.as_str(), "--lang", lang.as_str()]).map_err(|e| Fail { code: "switch_failed", detail: e.detail })
+}
+
+/// 从作品库里移除一个项目。只删项目这一行：证据、会话、路径、快照和缓存都留着，以后加回同一个仓库就直接接上
+#[tauri::command]
+fn remove_project(project_id: String) -> Res<()> {
+    Library::open()?.remove_project(&project_id)?;
+    Ok(())
+}
+
+/// 关联或取消关联一个路径（搬过家的旧目录、别处的克隆）：交给核心的 link / unlink，它会确认是同一个仓库
+#[tauri::command]
+fn link_path(project_id: String, path: String, unlink: Option<bool>, lang: Option<String>) -> Res<Value> {
+    let lib = Library::open()?;
+    let p = project(&lib, &project_id)?;
+    let lang = lang.unwrap_or_else(|| "zh".into());
+    let cmd = if unlink.unwrap_or(false) { "unlink" } else { "link" };
+    run_core(&[cmd, path.as_str(), "--repo", p.path.as_str(), "--lang", lang.as_str()])
 }
 
 #[tauri::command]
@@ -663,12 +704,20 @@ fn set_collect_agent(on: bool) -> Res<Value> {
     }
 }
 
-/// 打开导出目录或作品库目录（只认这两个名字）
+/// 打开导出目录、作品库目录，或者作品库里一个项目的仓库目录（只认这三种）
 #[tauri::command]
-fn open_folder(which: String) -> Res<()> {
+fn open_folder(which: String, project_id: Option<String>) -> Res<()> {
     let dir = match which.as_str() {
         "exports" => export_dir()?,
         "library" => creditia_store::data_dir(),
+        "project" => {
+            let p = project(&Library::open()?, project_id.as_deref().unwrap_or_default())?;
+            let dir = PathBuf::from(&p.path);
+            if !dir.is_dir() {
+                return Err(Fail::with("dir_missing", p.path));
+            }
+            return open_path(dir.display().to_string());
+        }
         _ => return Err(Fail::new("io")),
     };
     std::fs::create_dir_all(&dir).map_err(|e| Fail::with("io", e))?;
@@ -837,7 +886,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            projects, credits, stamp, head, config_of, set_display, analyze, cancel_analyze, discover, pick_folder, add_project, integrations, set_integration, embed_snippet,
+            projects, credits, stamp, head, config_of, set_display, analyze, cancel_analyze, discover, pick_folder, add_project, integrations, set_integration, remove_project, link_path, embed_snippet,
             library_path, app_info, choose_export_dir, reset_export_dir, open_folder, save_file, reveal, doctor, collect_info, set_collect, collect_now, set_collect_agent, logo, set_logo, preview::render_preview
         ])
         .run(tauri::generate_context!())

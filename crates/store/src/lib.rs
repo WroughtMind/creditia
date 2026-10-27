@@ -75,7 +75,7 @@ impl Library {
         conn.execute_batch(
             "create table if not exists projects(
                id text primary key, name text not null, path text not null, root_commit text not null,
-               remotes text not null default '[]', last_head text, last_analyzed integer);
+               remotes text not null default '[]', last_head text, last_analyzed integer, hidden integer not null default 0);
              create table if not exists evidence(
                project text not null, rel text not null, key integer not null, src text not null, model text not null,
                session text not null, ts integer not null, tab integer not null default 0,
@@ -134,6 +134,14 @@ impl Library {
             }
             tx.commit().map_err(|e| e.to_string())?;
         }
+        let has_hidden = |db: &Connection| db.query_row("select count(*) from pragma_table_info('projects') where name='hidden'", [], |r| r.get::<_, i64>(0));
+        if has_hidden(&conn).map_err(|e| e.to_string())? == 0 {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(|e| e.to_string())?;
+            if has_hidden(&tx).map_err(|e| e.to_string())? == 0 {
+                tx.execute("alter table projects add column hidden integer not null default 0", []).map_err(|e| e.to_string())?;
+            }
+            tx.commit().map_err(|e| e.to_string())?;
+        }
         Ok(Library { conn })
     }
 
@@ -141,7 +149,7 @@ impl Library {
         self.conn
             .execute(
                 "insert into projects(id,name,path,root_commit,remotes,last_head,last_analyzed) values(?1,?2,?3,?4,?5,?6,?7)
-                 on conflict(id) do update set name=excluded.name, path=excluded.path, remotes=excluded.remotes,
+                 on conflict(id) do update set name=excluded.name, path=excluded.path, remotes=excluded.remotes, hidden=0,
                  last_head=coalesce(excluded.last_head, projects.last_head), last_analyzed=coalesce(excluded.last_analyzed, projects.last_analyzed)",
                 params![p.id, p.name, p.path, p.root_commit, serde_json::to_string(&p.remotes).unwrap(), p.last_head, p.last_analyzed],
             )
@@ -150,9 +158,18 @@ impl Library {
     }
 
     pub fn projects(&self) -> Result<Vec<Project>, String> {
-        let mut st = self.conn.prepare("select id,name,path,root_commit,remotes,last_head,last_analyzed from projects order by last_analyzed desc").map_err(|e| e.to_string())?;
+        self.project_rows(false)
+    }
+
+    /// 身份匹配包括已从作品库隐藏的项目，避免 fork 重新添加时接错档案。
+    pub fn project_identities(&self) -> Result<Vec<Project>, String> {
+        self.project_rows(true)
+    }
+
+    fn project_rows(&self, include_hidden: bool) -> Result<Vec<Project>, String> {
+        let mut st = self.conn.prepare("select id,name,path,root_commit,remotes,last_head,last_analyzed from projects where hidden=0 or ?1 order by last_analyzed desc").map_err(|e| e.to_string())?;
         let rows = st
-            .query_map([], |r| {
+            .query_map([include_hidden], |r| {
                 Ok(Project {
                     id: r.get(0)?,
                     name: r.get(1)?,
@@ -352,6 +369,10 @@ impl Library {
             .execute("insert into paths(project,path,kind,last_seen) values(?1,?2,?3,?4) on conflict(project,path) do update set last_seen=excluded.last_seen, kind=case when paths.kind='manual' then 'manual' else excluded.kind end", params![project, path, kind, now])
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+    /// 从作品库隐藏项目，保留身份、证据和缓存；重新添加时复用原身份。
+    pub fn remove_project(&self, project: &str) -> Result<usize, String> {
+        self.conn.execute("update projects set hidden=1 where id=?1 and hidden=0", [project]).map_err(|e| e.to_string())
     }
     pub fn remove_path(&self, project: &str, path: &str) -> Result<usize, String> {
         self.conn.execute("delete from paths where project=?1 and path=?2", params![project, path]).map_err(|e| e.to_string())
@@ -613,6 +634,29 @@ mod tests {
         assert_eq!(l.remove_path("p-path", "/tmp/clone").unwrap(), 1);
         assert_eq!(l.remove_path("p-path", "/tmp/clone").unwrap(), 0);
         assert_eq!(l.paths("p-path").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn removing_a_project_keeps_its_evidence() {
+        let mut l = lib();
+        let p = Project { id: "p-rm".into(), name: "gone".into(), path: "/tmp/gone".into(), root_commit: "r".into(), remotes: vec![], last_head: Some("h".into()), last_analyzed: Some(1) };
+        l.upsert_project(&p).unwrap();
+        let mut store = Store::default();
+        store.groups.insert("g".into(), FileGroup { fp: (1, 1), evs: vec![ev("a.rs", 1, "s")], ..Default::default() });
+        l.save_evidence("p-rm", &store).unwrap();
+        l.add_path("p-rm", "/tmp/gone-wt", "worktree").unwrap();
+        l.save_snapshot("p-rm", "h", "2026-01-01T00:00:00Z", "{}").unwrap();
+        assert_eq!(l.remove_project("p-rm").unwrap(), 1);
+        assert!(!l.projects().unwrap().iter().any(|x| x.id == "p-rm"));
+        assert!(l.project_identities().unwrap().iter().any(|x| x.id == "p-rm"));
+        assert_eq!(l.remove_project("p-rm").unwrap(), 0);
+        // 证据、路径、快照都还在；加回来之后照旧
+        assert_eq!(l.evidence_count("p-rm"), 1);
+        assert_eq!(l.paths("p-rm").unwrap().len(), 1);
+        assert!(l.snapshot_json("p-rm").unwrap().is_some());
+        l.upsert_project(&p).unwrap();
+        assert!(l.projects().unwrap().iter().any(|x| x.id == "p-rm"));
+        assert_eq!(l.remove_project("p-none").unwrap(), 0);
     }
 
     #[test]

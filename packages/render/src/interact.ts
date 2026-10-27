@@ -19,6 +19,15 @@ export const INTERACT_CSS = `
 .ct-tip span{display:block;color:rgba(245,245,244,.72)}
 `;
 
+/** 提示框跟着指针，靠近窗口边缘时翻到另一侧 */
+export function placeTip(tip: HTMLElement, x: number, y: number) {
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let tx = x + 16, ty = y + 18;
+  if (tx + tw > innerWidth - 8) tx = x - tw - 16;
+  if (ty + th > innerHeight - 8) ty = y - th - 18;
+  tip.style.left = tx + 'px'; tip.style.top = ty + 'px';
+}
+
 /** 在 root（包着 SVG 的元素）上挂交互层。w、h 是作品的原始尺寸，区域按比例摆放 */
 export function mountHits(root: HTMLElement, hits: HitLike[], w: number, h: number): () => void {
   const layer = document.createElement('div');
@@ -34,19 +43,15 @@ export function mountHits(root: HTMLElement, hits: HitLike[], w: number, h: numb
     e.style.top = (x.y / h) * 100 + '%';
     e.style.width = (x.w / w) * 100 + '%';
     e.style.height = (x.h / h) * 100 + '%';
-    e.onmouseenter = () => {
+    // 进入时先定好位置再显示：热区可能是在静止的指针下面才挂上的，等不到下一次 mousemove
+    e.onmouseenter = (ev) => {
       for (const o of els) o.classList.toggle('kin', !!x.k && (o as any)._k === x.k && o !== e);
       e.classList.add('on');
       tip!.innerHTML = `<b>${esc(x.t)}</b>${(x.d ?? []).map((l) => `<span>${esc(l)}</span>`).join('')}`;
+      placeTip(tip!, ev.clientX, ev.clientY);
       tip!.classList.add('on');
     };
-    e.onmousemove = (ev) => {
-      const tw = tip!.offsetWidth, th = tip!.offsetHeight;
-      let tx = ev.clientX + 16, ty = ev.clientY + 18;
-      if (tx + tw > innerWidth - 8) tx = ev.clientX - tw - 16;
-      if (ty + th > innerHeight - 8) ty = ev.clientY - th - 18;
-      tip!.style.left = tx + 'px'; tip!.style.top = ty + 'px';
-    };
+    e.onmousemove = (ev) => placeTip(tip!, ev.clientX, ev.clientY);
     e.onmouseleave = () => { e.classList.remove('on'); for (const o of els) o.classList.remove('kin'); tip!.classList.remove('on'); };
     (e as any)._k = x.k;
     els.push(e);
