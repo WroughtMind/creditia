@@ -161,15 +161,26 @@ Run `creditia agents --json` for the catalogue. The [complete matrix](AGENT_SUPP
 
 ## Install
 
-The npm package and app installers are not published yet. Install from source with Git, Rust and Node 22.18+:
+The CLI is currently available from source. The npm package and app installers are not published yet; official installation channels will be announced on the [website](https://wroughtmind.github.io/creditia/) and [Releases](https://github.com/WroughtMind/creditia/releases).
+
+Source installation requires Git, Rust and Node 22.18+:
 
 ```bash
 git clone https://github.com/WroughtMind/creditia
 cd creditia
 cargo build --release -p creditia-cli
 npm ci --prefix packages/render
-cd packages/cli && npm ci && npm link
-# or just the Rust analysis core
+cd packages/cli
+npm ci
+npm run build
+npm link
+```
+
+After installation, run `creditia --help` for commands and `creditia export --list` for the available artwork.
+
+To install only the analysis core, use the command below. Its executable is named `creditia-core` and does not include artwork export:
+
+```bash
 cargo install --git https://github.com/WroughtMind/creditia creditia-cli
 ```
 

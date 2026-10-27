@@ -163,15 +163,26 @@ jobs:
 
 ## 安装
 
-npm 和 App 安装包尚未发布。当前可从源码安装，需要 Git、Rust 和 Node 22.18+：
+当前可用的是源码版 CLI；npm 包和 App 安装包尚未发布。正式安装渠道开放后会在[官网](https://wroughtmind.github.io/creditia/)和 [Releases](https://github.com/WroughtMind/creditia/releases) 公布。
+
+源码安装需要 Git、Rust 和 Node 22.18+：
 
 ```bash
 git clone https://github.com/WroughtMind/creditia
 cd creditia
 cargo build --release -p creditia-cli
 npm ci --prefix packages/render
-cd packages/cli && npm ci && npm link
-# 或者只要 Rust 分析核心
+cd packages/cli
+npm ci
+npm run build
+npm link
+```
+
+安装后运行 `creditia --help` 查看命令，`creditia export --list` 查看可导出的作品。
+
+如果只需要分析核心，可单独安装；它的命令名是 `creditia-core`，不包含图形导出：
+
+```bash
 cargo install --git https://github.com/WroughtMind/creditia creditia-cli
 ```
 
