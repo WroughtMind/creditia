@@ -18,6 +18,7 @@ export function mergeCredits(parts: Part[], lang: 'zh' | 'en' = 'zh'): any {
   const ps = parts.filter((p) => p.raw && typeof p.raw === 'object');
   const contributors = new Map<string, any>();
   const breakdown = new Map<string, any>();
+  const authors = new Map<string, any>();
   const weeks = new Map<string, any>(), days = new Map<string, any>();
   const coverage = new Map<string, any>();
   const clock: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
@@ -33,6 +34,12 @@ export function mergeCredits(parts: Part[], lang: 'zh' | 'en' = 'zh'): any {
     for (const b of raw.breakdown ?? []) {
       const { contributor, byVersion: _v, ...rest } = b;
       addInto((breakdown.get(contributor) ?? breakdown.set(contributor, { contributor }).get(contributor)), rest);
+    }
+    // 提交者按 id 相加；「你」在各项目里 id 可能不同，渲染时都归到「你」那一行
+    for (const a of raw.authors ?? []) {
+      const e = authors.get(a.id) ?? authors.set(a.id, { id: a.id, me: !!a.me, linesAdded: 0, by: {}, ...(a.name ? { name: a.name } : {}) }).get(a.id);
+      e.linesAdded += num(a.linesAdded);
+      addInto(e.by, a.by);
     }
     for (const w of raw.timeline ?? []) addInto((weeks.get(w.week) ?? weeks.set(w.week, { week: w.week, byContributor: {} }).get(w.week)).byContributor, w.byContributor);
     for (const d of raw.days ?? []) addInto((days.get(d.date) ?? days.set(d.date, { date: d.date, by: {} }).get(d.date)).by, d.by);
@@ -75,6 +82,7 @@ export function mergeCredits(parts: Part[], lang: 'zh' | 'en' = 'zh'): any {
     contributors: [...contributors.values()],
     totals,
     breakdown: [...breakdown.values()].sort((a, b) => num(b.linesAdded) - num(a.linesAdded)),
+    authors: [...authors.values()].sort((a, b) => b.linesAdded - a.linesAdded),
     human,
     timeline: [...weeks.values()].sort((a, b) => a.week.localeCompare(b.week, 'en', { numeric: true })),
     days: dayList,

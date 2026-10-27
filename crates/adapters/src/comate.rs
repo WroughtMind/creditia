@@ -7,7 +7,7 @@
 
 use crate::{added_lines, any_ts, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -173,7 +173,7 @@ pub fn discover() -> Vec<Activity> {
 }
 pub fn doctor() -> Health {
     let all=files();let parsed:Vec<_>=all.iter().filter_map(|f|load(f).ok().flatten()).collect();
-    Health{source:"comate".into(),path:root().display().to_string(),readable:!parsed.is_empty(),format:"chat_session_<id> JSON; V2 blobs/manifest.json + SHA-256 BlobRef".into(),records:parsed.len()as u64,earliest:parsed.iter().map(|p|p.start).filter(|&t|t>0).min().map(date_cn),latest:parsed.iter().map(|p|p.end).filter(|&t|t>0).max().map(date_cn),note:creditia_core::tr!("官方 VS Code 4.14.1/Zulu engine 已只读核对。只读取 executed 且未拒绝的原生保存回执，校验外置正文哈希；导入其他 agent 的历史不归为 Comate。未持久化逐调用执行模型，保留未知；时间采用响应完成/请求时间。已通过构造记录验证，尚无真实会话验收。", "Official VS Code 4.14.1/Zulu engine inspected read-only. Native executed, non-rejected save receipts only; external text blobs are checksum-verified. Imported agent histories keep their own source. Per-call execution models are not persisted and remain unknown; response/request times are used. Fixture validated, not yet validated with real sessions."),..Default::default()}
+    Health{source:"comate".into(),path:root().display().to_string(),readable:!parsed.is_empty(),format:"chat_session_<id> JSON; V2 blobs/manifest.json + SHA-256 BlobRef".into(),records:parsed.len()as u64,earliest:parsed.iter().map(|p|p.start).filter(|&t|t>0).min().map(date_local),latest:parsed.iter().map(|p|p.end).filter(|&t|t>0).max().map(date_local),note:creditia_core::tr!("官方 VS Code 4.14.1/Zulu engine 已只读核对。只读取 executed 且未拒绝的原生保存回执，校验外置正文哈希；导入其他 agent 的历史不归为 Comate。未持久化逐调用执行模型，保留未知；时间采用响应完成/请求时间。已通过构造记录验证，尚无真实会话验收。", "Official VS Code 4.14.1/Zulu engine inspected read-only. Native executed, non-rejected save receipts only; external text blobs are checksum-verified. Imported agent histories keep their own source. Per-call execution models are not persisted and remain unknown; response/request times are used. Fixture validated, not yet validated with real sessions."),..Default::default()}
 }
 
 #[cfg(test)]

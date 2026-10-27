@@ -8,7 +8,7 @@
 
 use crate::{added_lines, open_ro, Activity, Health, Stats};
 use creditia_core::model::{FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::{date_cn, parse_iso};
+use creditia_core::util::{date_local, parse_iso};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -242,8 +242,8 @@ pub fn doctor() -> Health {
         readable: db.is_file(),
         format: "threads.db (zstd JSON, version 0.3.0)".into(),
         records: rs.len() as u64,
-        earliest: rs.iter().map(|r| r.created).filter(|&t| t > 0).min().map(date_cn),
-        latest: rs.iter().map(|r| r.updated).max().filter(|&t| t > 0).map(date_cn),
+        earliest: rs.iter().map(|r| r.created).filter(|&t| t > 0).min().map(date_local),
+        latest: rs.iter().map(|r| r.updated).max().filter(|&t| t > 0).map(date_local),
         note: creditia_core::tr!(
             "编辑结果带改前改后的完整内容；线程级的模型。尚未用真实日志核对",
             "edit results carry full before / after contents; model per thread. Not yet checked against real logs"

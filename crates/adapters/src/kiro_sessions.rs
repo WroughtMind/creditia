@@ -9,7 +9,7 @@
 
 use crate::{added_lines, any_ts, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -369,7 +369,7 @@ pub fn doctor() -> Health {
     let parsed: Vec<_> = all.iter().filter_map(|f| load(f).ok()).collect();
     Health { source:"kiro-kas-v3".into(),path:root().display().to_string(),readable:!parsed.is_empty(),
         format:"KAS session.json 1.0.0 + messages.jsonl + sub-executions; immutable snapshots".into(),records:parsed.len()as u64,
-        earliest:parsed.iter().map(|p|p.start).filter(|&t|t>0).min().map(date_cn),latest:parsed.iter().map(|p|p.end).filter(|&t|t>0).max().map(date_cn),
+        earliest:parsed.iter().map(|p|p.start).filter(|&t|t>0).min().map(date_local),latest:parsed.iter().map(|p|p.end).filter(|&t|t>0).max().map(date_local),
         note:creditia_core::tr!("官方 2.32.0 内嵌 KAS 服务已静态核对。成功回执按调用/执行 ID 关联；拒绝、失败、未完成、撤销和 fork 继承部分不计。替换/追加读取实际新增；整文件写入要求完整且哈希一致的前后快照。当前选择模型不回填，逐编辑模型未知。构造记录验证，尚无真实会话验收。", "Official 2.32.0 embedded KAS service inspected statically. Successful receipts match call/execution IDs; denied, failed, pending, reverted and inherited fork edits are excluded. Replacements/appends use added text; whole-file writes require immutable checksum-verified snapshots. Mutable selected models are not backfilled; per-edit models remain unknown. Fixture validated; no real-session acceptance yet."),..Default::default() }
 }
 

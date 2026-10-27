@@ -9,7 +9,7 @@
 
 use crate::{added_lines, any_ts, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -242,7 +242,7 @@ pub fn doctor() -> Health {
         .iter()
         .filter_map(|f| load(f, &summaries).ok())
         .collect();
-    Health{source:"junie-cli".into(),path:home().join("sessions").display().to_string(),readable:!parsed.is_empty(),format:"index.jsonl + <session>/events.jsonl; A2UX completed FileChangesBlockUpdatedEvent".into(),records:parsed.len()as u64,earliest:parsed.iter().map(|(_,p)|p.start).filter(|&t|t>0).min().map(date_cn),latest:parsed.iter().map(|(_,p)|p.end).filter(|&t|t>0).max().map(date_cn),note:creditia_core::tr!("已核对官方 888.12 序列化格式；实现已通过构造记录测试，尚未用真实会话验收。逐响应唯一模型关联随后完成的编辑；缺失或歧义时保留未知。事件没有逐编辑时间，采用会话创建时间。JetBrains IDE 历史是其他入口。", "Official release 888.12 serializer verified; implementation validated with fixtures, not yet with real sessions. Per-response unique model usage attaches to subsequent completed edits; absent or ambiguous models stay unknown. Event codec does not store edit timestamps; session creation time is used. JetBrains IDE history is a separate entrance."),..Default::default()}
+    Health{source:"junie-cli".into(),path:home().join("sessions").display().to_string(),readable:!parsed.is_empty(),format:"index.jsonl + <session>/events.jsonl; A2UX completed FileChangesBlockUpdatedEvent".into(),records:parsed.len()as u64,earliest:parsed.iter().map(|(_,p)|p.start).filter(|&t|t>0).min().map(date_local),latest:parsed.iter().map(|(_,p)|p.end).filter(|&t|t>0).max().map(date_local),note:creditia_core::tr!("已核对官方 888.12 序列化格式；实现已通过构造记录测试，尚未用真实会话验收。逐响应唯一模型关联随后完成的编辑；缺失或歧义时保留未知。事件没有逐编辑时间，采用会话创建时间。JetBrains IDE 历史是其他入口。", "Official release 888.12 serializer verified; implementation validated with fixtures, not yet with real sessions. Per-response unique model usage attaches to subsequent completed edits; absent or ambiguous models stay unknown. Event codec does not store edit timestamps; session creation time is used. JetBrains IDE history is a separate entrance."),..Default::default()}
 }
 
 #[cfg(test)]

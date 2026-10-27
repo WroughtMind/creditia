@@ -5,7 +5,7 @@ import { pct, fmt, hanzi } from '../data.ts';
 import type { Style } from '../style.ts';
 import { chamfer } from '../style.ts';
 import { measureV } from './common.ts';
-import { T, zh, colorOf, sign, fillOf, tip, modelLine, handLine, handTip, peopleNames, summary, range, canvas, type PieceOpts } from './common.ts';
+import { T, zh, colorOf, sign, fillOf, tip, modelLine, handLine, handTip, summary, range, canvas, type PieceOpts } from './common.ts';
 import { inkSeal } from '../styles/east.ts';
 
 export const TIER_VARIANTS = ['rows', 'center', 'podium', 'vertical', 'hud', 'stats', 'split', 'grouped'];
@@ -27,8 +27,8 @@ function rows(m: Model, st: Style, o: PieceOpts): Scene {
   const t = o.t ?? 1;
   const W = 880, M = 34, P = 50;
   const rowH = 96;
-  const hl = handLine(m), names = peopleNames(m);
-  const handH = hl ? 112 + (names ? 30 : 0) : 0;
+  const hl = handLine(m);
+  const handH = hl ? 112 : 0;
   const { s, c } = canvas(m, st, W, P + 132 + m.rows.length * rowH + 24 + handH + 70, M);
   const x0 = c.x + P, x1 = c.x + c.w - P;
   let y = c.y + P;
@@ -58,10 +58,9 @@ function rows(m: Model, st: Style, o: PieceOpts): Scene {
     y += 18;
     st.rule(s, x0, y, x1 - x0, 'thin');
     y += 40;
-    st.label(s, T(m, '人', 'PEOPLE'), x0, y, { size: 13, fill: st.c.accent2 });
+    st.label(s, T(m, '开发者', 'DEVELOPER'), x0, y, { size: 13, fill: st.c.accent2 });
     s.text(hl, x0, y + 34, { font: st.f.body, size: 18, fill: st.c.ink, maxW: x1 - x0 });
-    if (names) s.text(names, x0, y + 64, { font: st.f.body, size: 15, fill: st.c.soft, maxW: x1 - x0 });
-    s.hit(x0 - 8, y - 22, x1 - x0 + 16, names ? 96 : 66, handTip(m));
+    s.hit(x0 - 8, y - 22, x1 - x0 + 16, 66, handTip(m));
     y += handH - 58;
   }
   y += 40;
@@ -199,7 +198,7 @@ function podium(m: Model, st: Style, o: PieceOpts): Scene {
     if (x > c.x + c.w - 160) break;
   }
   const hl = handLine(m);
-  if (hl) { st.label(s, T(m, '人', 'PEOPLE'), W / 2, y + 78, { anchor: 'middle', fill: st.c.accent2 }); s.text(hl, W / 2, y + 112, { font: st.f.body, size: 18, fill: st.c.ink, anchor: 'middle', maxW: c.w - 100 }); s.hit(c.x + 50, y + 56, c.w - 100, 70, handTip(m)); }
+  if (hl) { st.label(s, T(m, '开发者', 'DEVELOPER'), W / 2, y + 78, { anchor: 'middle', fill: st.c.accent2 }); s.text(hl, W / 2, y + 112, { font: st.f.body, size: 18, fill: st.c.ink, anchor: 'middle', maxW: c.w - 100 }); s.hit(c.x + 50, y + 56, c.w - 100, 70, handTip(m)); }
   return s;
 }
 
@@ -236,7 +235,7 @@ function center(m: Model, st: Style, o: PieceOpts): Scene {
   });
   if (hl) {
     st.rule(s, c.x + 160, y + 10, c.w - 320, 'thin');
-    st.label(s, T(m, '人', 'PEOPLE'), cx, y + 52, { anchor: 'middle', fill: st.c.accent2 });
+    st.label(s, T(m, '开发者', 'DEVELOPER'), cx, y + 52, { anchor: 'middle', fill: st.c.accent2 });
     s.text(hl, cx, y + 84, { font: st.f.body, size: 17, fill: st.c.ink, anchor: 'middle', maxW: c.w - 100 });
     s.hit(c.x + 60, y + 30, c.w - 120, 70, handTip(m));
     y += 120;

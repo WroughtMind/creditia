@@ -3,7 +3,7 @@
 
 use crate::{any_ts, new_text, open_ro, path_arg, Activity, Health, Stats};
 use creditia_core::model::{FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use rusqlite::Connection;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -267,13 +267,13 @@ pub fn doctor() -> Health {
                 .map(|s| s.start)
                 .filter(|t| *t > 0)
                 .min()
-                .map(date_cn);
+                .map(date_local);
             h.latest = all
                 .iter()
                 .map(|s| s.end)
                 .filter(|t| *t > 0)
                 .max()
-                .map(date_cn);
+                .map(date_local);
             h.note = creditia_core::tr!(
                 "读取完成的 Edit 与 Write 实际差分，保留消息模型；没有实际差分的覆盖写与缺执行码/文件结果的 shell 不产生新增行；用量表不重复计数",
                 "reads completed Edit and actual Write diffs with message models; overwrites without diffs and shell calls without execution/file receipts do not produce added lines; usage tables are not counted twice"

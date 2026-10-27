@@ -17,12 +17,12 @@ const raw = {
   totals: { linesAdded: 80 }, versions: [],
 };
 
-test('没有版本时按真实日期合并到月份，不叠加周明细或 unreleased 总数', () => {
+test('没有版本时按真实日期合并到月份，不叠加周明细或 unreleased 总数；贡献者单独成段', () => {
   const h = buildModel(raw).history;
   assert.equal(h.basis, 'months');
-  assert.deepEqual(h.buckets.map((b) => [b.tag, b.total, b.by]), [['2026-01', 10, { codex: 10 }], ['2026-02', 20, { codex: 20 }]]);
+  assert.deepEqual(h.buckets.map((b) => [b.tag, b.total, b.by]), [['2026-01', 10, { codex: 10 }], ['2026-02', 70, { codex: 20, 'h:one': 50 }]]);
   assert.deepEqual(classicModel(raw).history, h);
-  assert.equal(buildModel(raw, { group: 'model' }).history.buckets.reduce((s, b) => s + b.total, 0), 30);
+  assert.equal(buildModel(raw, { group: 'model' }).history.buckets.reduce((s, b) => s + b.total, 0), 80);
   assert.deepEqual(raw.versions, [], '展示不能把月份写回版本');
   assert.equal(historyLabels(h.basis).name, '开发历程');
 });
@@ -47,16 +47,16 @@ test('只有周明细的档案保留真实周粒度，支持旧工具名键，�
   const r = { ...raw, days: [], timeline: [{ week: '2026-W05', byContributor: { codex: 30, 'h:one': 50 } }] };
   const h = buildModel(r).history;
   assert.equal(h.basis, 'weeks');
-  assert.deepEqual(h.buckets.map((b) => [b.tag, b.total]), [['2026-W05', 30]]);
+  assert.deepEqual(h.buckets.map((b) => [b.tag, b.total]), [['2026-W05', 80]]);
   assert.deepEqual(classicModel(r).history, h);
   assert.equal(historyLabels(h.basis, 'en').caption, 'Lines added per week');
 });
 
-test('明确区分明细缺失与没有非人类贡献，不用总数伪造时间统计', () => {
+test('明确区分明细缺失与没有贡献，不用总数伪造时间统计', () => {
   const missing = contributionHistory({ ...raw, days: [], timeline: [] }, (s) => s);
   assert.equal(missing.buckets.length, 0);
   assert.match(historyEmpty(missing), /时间明细/);
-  const empty = contributionHistory({ ...raw, days: [{ date: '2026-01-01', by: { 'h:one': 50 } }] }, (s) => s);
+  const empty = contributionHistory({ ...raw, days: [{ date: '2026-01-01', by: { 'h:one': 0 } }] }, (s) => s);
   assert.equal(empty.buckets.length, 0);
   assert.match(historyEmpty(empty), /暂无可展示/);
 });

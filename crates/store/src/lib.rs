@@ -333,11 +333,11 @@ impl Library {
             .or_else(|e| if matches!(e, rusqlite::Error::QueryReturnedNoRows) { Ok(None) } else { Err(e.to_string()) })
     }
 
-    /// 改仓库配置里的展示选项（App 设置页用）：是否写出人名、落款。只动 display 段，其他原样保留。
-    pub fn set_display(repo: &Path, named: bool, sign: &str) -> Result<(), String> {
+    /// 改仓库配置里的展示选项（App 设置页用）：写不写贡献者的名字、落款。只动 display 段，其他原样保留。
+    pub fn set_display(repo: &Path, hide_names: bool, sign: &str) -> Result<(), String> {
         let p = repo.join(".creditia/config.json");
         let mut v: serde_json::Value = std::fs::read_to_string(&p).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
-        v["display"] = serde_json::json!({ "named": named, "sign": sign });
+        v["display"] = serde_json::json!({ "hideNames": hide_names, "sign": sign });
         if let Some(d) = p.parent() {
             std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
         }
@@ -624,7 +624,7 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(repo.join(".creditia/config.json")).unwrap()).unwrap();
         assert_eq!(v["name"], "demo");
         assert_eq!(v["level"], "strict");
-        assert_eq!(v["display"]["named"], true);
+        assert_eq!(v["display"]["hideNames"], true);
         assert_eq!(v["display"]["sign"], "— demo");
         // 没有配置文件也能写
         let fresh = repo.join("fresh");

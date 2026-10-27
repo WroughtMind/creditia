@@ -30,9 +30,10 @@ pub struct Privacy {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Display {
-    /// 是否在展示里写出人名（默认不写：人的贡献用做了什么来呈现）
+    /// 不写贡献者的名字：别人的提交合成「其他贡献者」，档案里也不留名字。默认写 git 作者名。
+    /// 旧配置里的 `named` 是那时的默认值（不写人名），不代表用户的选择，不再读
     #[serde(default)]
-    pub named: bool,
+    pub hide_names: bool,
     /// 落款：用户主动填写才有
     #[serde(default)]
     pub sign: String,
@@ -202,7 +203,10 @@ mod tests {
         assert_eq!(c.level, "standard");
         assert_eq!(c.version, 1);
         assert_eq!(c.ignore_tags, ["archive/**"]);
-        assert!(!c.display.named);
+        assert!(!c.display.hide_names);
+        // 旧配置的 named:false 是当时的默认值，不当成「不写名字」
+        let old: Config = serde_json::from_str(r#"{"name":"d","repo":"/d","branch":"main","display":{"named":false}}"#).unwrap();
+        assert!(!old.display.hide_names);
         assert!(c.directors.is_empty());
     }
 

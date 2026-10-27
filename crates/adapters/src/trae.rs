@@ -9,7 +9,7 @@
 use crate::codex::{call_failed, shell_call};
 use crate::{any_ts, apply_patch_files, read_maybe_zst, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -192,8 +192,8 @@ pub fn doctor() -> Health {
         readable: base.is_dir(),
         format: "sessions/YYYY/MM/DD/rollout-*.jsonl".into(),
         records: fs.len() as u64,
-        earliest: mt.iter().min().copied().map(date_cn),
-        latest: mt.iter().max().copied().map(date_cn),
+        earliest: mt.iter().min().copied().map(date_local),
+        latest: mt.iter().max().copied().map(date_local),
         note: String::new(),
         ..Default::default()
     }

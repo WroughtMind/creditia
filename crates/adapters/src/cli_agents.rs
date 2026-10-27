@@ -9,7 +9,7 @@
 
 use crate::{added_lines, any_ts, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -643,7 +643,7 @@ pub fn doctor() -> Vec<Health> {
         let parsed: Vec<_> = files(s).iter().filter_map(|f| parse_file(s, f).ok()).collect();
         Health { source: format!("{}-cli", s.src.harness()), path: s.root.display().to_string(), readable: !parsed.is_empty(),
             format: match s.format { Format::Auggie => "sessions/*.json exchange tool_use/tool_result_node", Format::Droid => "sessions/**/*.jsonl session_start + FactoryDroidMessage tool_use/tool_result", _ => "projects/**/*.jsonl native tool calls/results" }.into(),
-            records: parsed.len() as u64, earliest: parsed.iter().map(|p| p.start).filter(|&t| t > 0).min().map(date_cn), latest: parsed.iter().map(|p| p.end).filter(|&t| t > 0).max().map(date_cn),
+            records: parsed.len() as u64, earliest: parsed.iter().map(|p| p.start).filter(|&t| t > 0).min().map(date_local), latest: parsed.iter().map(|p| p.end).filter(|&t| t > 0).max().map(date_local),
             note: creditia_core::tr!("已核对官方格式；仅通过构造记录测试，尚无本机真实会话核验。未记录模型时保留未知；缺少覆盖前原文或明确新建回执的整文件写入不计新增行。", "Official format verified; fixture tests only, no local real-session validation. Unrecorded models remain unknown; whole-file writes without prior content or explicit creation receipts do not produce added-line evidence."), ..Default::default() }
     }).collect();
     let cline = cline_sessions();

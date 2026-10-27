@@ -11,7 +11,7 @@
 
 use crate::{added_lines, any_ts, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -138,7 +138,7 @@ pub fn discover()->Vec<Activity>{
 }
 pub fn doctor()->Health{
     let parsed:Vec<_>=dirs().iter().flat_map(|d|sessions(d).unwrap_or_default()).collect();
-    Health{source:"codeflicker".into(),path:dirs().iter().map(|p|p.display().to_string()).collect::<Vec<_>>().join("; "),readable:!parsed.is_empty(),format:"{session_data,composer_data,api_history}.sqlite / KwaipilotKV native tool-response receipts".into(),records:parsed.len()as u64,earliest:parsed.iter().map(|p|p.start).filter(|&t|t>0).min().map(date_cn),latest:parsed.iter().map(|p|p.end).filter(|&t|t>0).max().map(date_cn),note:creditia_core::tr!("已只读核对官方 1.0.29 ZIP 和内嵌 agent JS。只接受 isError=false 且匹配写入后固定成功回执；拒绝、失败、仅工具请求不计。项目根取编辑器 workspace.json 或真实 worktree；模型字段会被重写，保留未知。时间取同 toolCallId 的原生消息，没有则取会话开始。已通过构造记录验证，尚无真实会话验收。", "Official 1.0.29 ZIP and embedded agent JS inspected read-only. Requires isError=false plus the exact post-save success receipt; rejected, failed and request-only calls do not count. Projects use editor workspace.json or recorded worktree paths. Mutable model fields remain unknown. Native toolCallId message times are used, otherwise session start. Fixture validated, not yet validated with real sessions."),..Default::default()}
+    Health{source:"codeflicker".into(),path:dirs().iter().map(|p|p.display().to_string()).collect::<Vec<_>>().join("; "),readable:!parsed.is_empty(),format:"{session_data,composer_data,api_history}.sqlite / KwaipilotKV native tool-response receipts".into(),records:parsed.len()as u64,earliest:parsed.iter().map(|p|p.start).filter(|&t|t>0).min().map(date_local),latest:parsed.iter().map(|p|p.end).filter(|&t|t>0).max().map(date_local),note:creditia_core::tr!("已只读核对官方 1.0.29 ZIP 和内嵌 agent JS。只接受 isError=false 且匹配写入后固定成功回执；拒绝、失败、仅工具请求不计。项目根取编辑器 workspace.json 或真实 worktree；模型字段会被重写，保留未知。时间取同 toolCallId 的原生消息，没有则取会话开始。已通过构造记录验证，尚无真实会话验收。", "Official 1.0.29 ZIP and embedded agent JS inspected read-only. Requires isError=false plus the exact post-save success receipt; rejected, failed and request-only calls do not count. Projects use editor workspace.json or recorded worktree paths. Mutable model fields remain unknown. Native toolCallId message times are used, otherwise session start. Fixture validated, not yet validated with real sessions."),..Default::default()}
 }
 
 #[cfg(test)]

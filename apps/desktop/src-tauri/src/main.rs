@@ -123,10 +123,10 @@ fn config_of(project_id: String) -> Res<Value> {
 }
 
 #[tauri::command]
-fn set_display(project_id: String, named: bool, sign: String) -> Res<()> {
+fn set_display(project_id: String, hide_names: bool, sign: String) -> Res<()> {
     let lib = Library::open()?;
     let p = project(&lib, &project_id)?;
-    Ok(creditia_store::Library::set_display(std::path::Path::new(&p.path), named, &sign)?)
+    Ok(creditia_store::Library::set_display(std::path::Path::new(&p.path), hide_names, &sign)?)
 }
 
 /// 核心二进制：和 App 一起打包（sidecar 同目录），开发时用 PATH 里的

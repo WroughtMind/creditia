@@ -15,7 +15,7 @@
 
 use crate::{added_lines, any_ts, apply_patch_files, file_uri_path, home, source_dir, vscode_user_dirs, Activity, Health, Stats};
 use creditia_core::model::{FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -485,8 +485,8 @@ pub fn doctor() -> Vec<Health> {
         readable: !dirs.is_empty(),
         format: "workspaceStorage/<ws>/chatSessions/*.jsonl · GitHub.copilot-chat/transcripts/*.jsonl".into(),
         records: files.len() as u64,
-        earliest: mt.iter().min().copied().map(date_cn),
-        latest: mt.iter().max().copied().map(date_cn),
+        earliest: mt.iter().min().copied().map(date_local),
+        latest: mt.iter().max().copied().map(date_local),
         note: creditia_core::tr!("{} 个工作区有 Copilot Chat 记录", "{} workspaces with Copilot Chat sessions", ws.len()),
         ..Default::default()
     };
@@ -499,8 +499,8 @@ pub fn doctor() -> Vec<Health> {
         readable: base.is_dir(),
         format: "session-state/<id>/events.jsonl".into(),
         records: cs.len() as u64,
-        earliest: mt.iter().min().copied().map(date_cn),
-        latest: mt.iter().max().copied().map(date_cn),
+        earliest: mt.iter().min().copied().map(date_local),
+        latest: mt.iter().max().copied().map(date_local),
         note: String::new(),
         ..Default::default()
     };

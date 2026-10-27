@@ -5,7 +5,7 @@
 mod codec;
 use crate::{Activity, Health, Stats};
 use creditia_core::model::{FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use rusqlite::{types::ValueRef, Connection};
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -674,13 +674,13 @@ pub fn doctor() -> Health {
             .map(|p| p.start)
             .filter(|&t| t > 0)
             .min()
-            .map(date_cn),
+            .map(date_local),
         latest: parsed
             .iter()
             .map(|p| p.end)
             .filter(|&t| t > 0)
             .max()
-            .map(date_cn),
+            .map(date_local),
         note,
         ..Default::default()
     }

@@ -1,5 +1,5 @@
 // credits.json → 展示用模型。所有形式只读这一份模型。
-import { resolveGroup, modelGroups, type Group, type GroupOpt } from '../data.ts';
+import { resolveGroup, modelGroups, ROW_SLOTS, type Group, type GroupOpt } from '../data.ts';
 import { TOOL_NAMES } from '../tool-names.ts';
 import { contributionHistory, type ContributionHistory } from '../history.ts';
 
@@ -19,6 +19,8 @@ export interface Options {
   /** 在各形式里写出主导者（默认 false） */
   director: boolean;
   lang: 'zh' | 'en';
+  /** 写出贡献者的名字（档案里有才有；默认写）。false 时合成「其他贡献者」 */
+  named?: boolean;
   /** 分组方式，默认 auto（和新风格同一套规则） */
   group?: GroupOpt;
 }
@@ -26,6 +28,7 @@ export const DEFAULTS: Options = { director: false, lang: 'zh', group: 'auto' };
 
 export interface Model {
   project: string;
+  named: boolean;
   lang: Options['lang'];
   history: ContributionHistory;
   director: string;
@@ -33,9 +36,9 @@ export interface Model {
   /** 贡献者 id（或旧档案里的工具名）→ 当前分组 key */
   keyOf: (id: string) => string;
   range: { from: string; to: string };
-  /** 排行榜：agent（含「其他」）+ 合并的「人」+「未确认」。人不单独参与 agent 排名 */
+  /** 排行榜：agent（版面放得下的具名项，其余并成「其他」）+「未确认」 */
   rows: Contributor[];
-  /** 每个非主导的人，用来在署名处单独写（不与 agent 同级） */
+  /** 贡献者（别人的提交）：和 agent 同一个分母，各版式在榜单下面单独写一行 */
   humans: Contributor[];
   agents: Contributor[];
   unknown: Contributor | null;
@@ -52,9 +55,9 @@ export interface Model {
 }
 
 export const NAMES: Record<string, string> = {
-  ...TOOL_NAMES, other: '其他', unattributed: '未确认',
+  ...TOOL_NAMES, other: '其他', unattributed: '未确认', people: '其他贡献者',
 };
-const EN: Record<string, string> = { other: 'Others', unattributed: 'Unattributed' };
+const EN: Record<string, string> = { other: 'Others', unattributed: 'Unattributed', people: 'Other contributors' };
 export const nameOf = (k: string, lang: 'zh' | 'en' = 'zh') => (lang === 'en' && EN[k]) || NAMES[k] || k;
 
 const n = (x: unknown) => (typeof x === 'number' && isFinite(x) && x > 0 ? x : 0);
@@ -68,9 +71,9 @@ export function buildModel(c: any, opt: Options = DEFAULTS): Model {
     const x = byId.get(id);
     if (x?.harness) return { key: (mg?.keyOf(id) ?? x.harness) as string, kind: 'agent' as const };
     if (id === 'unattributed') return { key: 'unattributed', kind: 'unknown' as const };
-    // 人按显示名归并：同一个人用了多个邮箱时只出一行
-    const name = x?.name ?? id.replace(/^h:/, '');
-    return { key: `h:${name.toLowerCase().trim()}`, kind: 'human' as const, name };
+    // 贡献者按名字归并：同一个人用了多个邮箱时只出一行；没有名字、或选了不写名字，合成「其他贡献者」
+    const name = opt.named !== false ? x?.name : undefined;
+    return name ? { key: `h:${name.toLowerCase().trim()}`, kind: 'human' as const, name } : { key: 'people', kind: 'human' as const, name: nameOf('people', opt.lang) };
   };
   const directors = new Set((c.directors ?? []).map((d: any) => d.id));
   const acc = new Map<string, Contributor>();
@@ -88,8 +91,8 @@ export function buildModel(c: any, opt: Options = DEFAULTS): Model {
       modelLines.set(g.key, mm);
     }
   }
-  // 署名只写 AI：人写的行不进分母，也不单独成行
-  const total = [...acc.values()].filter((x) => x.kind !== 'human').reduce((s, x) => s + x.lines, 0);
+  // 分母是全部新增行：工具、贡献者、未确认加起来 100%（和新风格同一口径）
+  const total = [...acc.values()].reduce((s, x) => s + x.lines, 0);
   for (const e of acc.values()) {
     e.pct = total ? (e.lines / total) * 100 : 0;
     // 按模型分组时一行就是一个模型：模型那一栏写它用的工具
@@ -97,13 +100,14 @@ export function buildModel(c: any, opt: Options = DEFAULTS): Model {
   }
   const unknown = acc.get('unattributed') ?? null;
   const agentsAll = [...acc.values()].filter((x) => x.kind === 'agent').sort((a, b) => b.pct - a.pct);
-  // agent 排百分比：最多 6 个具名，其余并入「其他」
-  const shown = agentsAll.filter((x) => x.pct >= 0.1).slice(0, 6);
+  // 榜单版面放得下 ROW_SLOTS 个具名 agent，其余并入「其他」
+  const shown = agentsAll.slice(0, ROW_SLOTS);
   const rest = agentsAll.filter((x) => !shown.includes(x));
   const rows: Contributor[] = [...shown];
-  const restPct = rest.reduce((s, x) => s + x.pct, 0);
-  if (restPct >= 0.1) rows.push({ key: 'other', name: nameOf('other', opt.lang), pct: restPct, lines: rest.reduce((s, x) => s + x.lines, 0), models: [], kind: 'other' });
-  if (unknown && unknown.pct >= 0.05) rows.push({ ...unknown, name: nameOf('unattributed', opt.lang) });
+  if (rest.length === 1) rows.push(rest[0]);
+  else if (rest.length) rows.push({ key: 'other', name: nameOf('other', opt.lang), pct: rest.reduce((s, x) => s + x.pct, 0), lines: rest.reduce((s, x) => s + x.lines, 0), models: [], kind: 'other' });
+  if (unknown?.lines) rows.push({ ...unknown, name: nameOf('unattributed', opt.lang) });
+  const humans = [...acc.values()].filter((x) => x.kind === 'human').sort((a, b) => b.lines - a.lines);
 
   const range = c.project?.range ?? {};
   const span = range.from && range.to ? Math.round((Date.parse(range.to) - Date.parse(range.from)) / 86400000) + 1 : 0;
@@ -116,12 +120,12 @@ export function buildModel(c: any, opt: Options = DEFAULTS): Model {
     return id;
   };
   return {
-    project: c.project?.name ?? '', lang: opt.lang, history: contributionHistory(c, keyOf), group, keyOf,
-    // 不写任何人的名字：主导者和个人名单都不出现，人写的行数只作为一行合计
+    project: c.project?.name ?? '', named: opt.named !== false, lang: opt.lang, history: contributionHistory(c, keyOf), group, keyOf,
+    // 主导者不写；贡献者（别人的提交）写作者名，档案里没有名字时是「其他贡献者」
     director: '',
     range: { from: range.from ?? '', to: range.to ?? '' },
     rows,
-    humans: [],
+    humans,
     agents: agentsAll,
     unknown,
     commits: n(t.commits), units: n(t.units), linesAdded: n(t.linesAdded), linesSurviving: n(t.linesSurviving),

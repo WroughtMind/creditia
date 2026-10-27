@@ -36,4 +36,4 @@ creditia fetch                        终端名片
 
 查询与分析命令支持 `--json`。`run`、`capture` 透传子进程输入输出及退出码，`--` 后的参数原样交给子进程。`run` 的工具身份和 `stamp` 是声明，不把它们算成逐行编辑证据；未知模型不填。原生历史、官方导入与协议采集的边界见仓库的 `AGENT_SUPPORT.md` 和 `ADAPTERS.md`。
 
-人名默认不出现；`--named` 写出人名，`--sign 名字` 落款（也可以写进配置的 `display`）。
+其他贡献者默认写 git 名字，`--no-names` 这次不写，配置里 `display.hideNames: true` 一直不写；`--by contributor` 按贡献者看。

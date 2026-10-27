@@ -2,7 +2,7 @@
 
 use crate::{open_ro, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::{date_cn, parse_iso};
+use creditia_core::util::{date_local, parse_iso};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -363,8 +363,8 @@ pub fn doctor() -> Health {
         format: "native rollout JSONL (optional state_5.sqlite); MCPJam local Codex homes".into(),
         readable: !rows.is_empty(),
         records: rows.len() as u64,
-        earliest: rows.iter().map(|(t, _)| t.start).min().map(date_cn),
-        latest: rows.iter().map(|(t, _)| t.end).max().map(date_cn),
+        earliest: rows.iter().map(|(t, _)| t.start).min().map(date_local),
+        latest: rows.iter().map(|(t, _)| t.end).max().map(date_local),
         note: format!(
             "{have} native transcripts; duplicate thread IDs counted once. {}",
             warnings.join("; ")

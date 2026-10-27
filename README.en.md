@@ -33,14 +33,15 @@ and turns the result into badges, CREDITS.md, end credits and share cards. Runs 
 $ creditia analyze && creditia fetch
 catnap  2026-05-11 → 2026-09-28
 ────────────────────────────────
-Claude Code     █████████████░░░░░░░░░░░░  50.9%  Claude Opus 5.5
-Codex           ████████░░░░░░░░░░░░░░░░░  30.8%  GPT-5.6 Sol
-Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   9.1%  Composer 2
-Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   4.7%  Kimi K3
-Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   2.1%  Grok 5 Code
-Unattributed    █░░░░░░░░░░░░░░░░░░░░░░░░   2.5%
+Claude Code     ████████████░░░░░░░░░░░░░  48.3%  Claude Opus 5.5
+Codex           ███████░░░░░░░░░░░░░░░░░░  29.2%  GPT-5.6 Sol
+Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   8.6%  Composer 2
+Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   4.4%  Kimi K3
+Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   2.0%  Grok 5 Code
+Mara Okafor     █░░░░░░░░░░░░░░░░░░░░░░░░   0.8%
+Unattributed    ██░░░░░░░░░░░░░░░░░░░░░░░   6.8%
 
-commits 734  lines 50,190  tokens 447M
+commits 734  lines 50,190  tokens 448M
 ```
 
 Once analyzed, put the result to use:
@@ -51,12 +52,25 @@ creditia export --piece roll --out roll.png   # end credits
 creditia export --list                        # every piece, layout, style and format
 creditia hook install                         # stamp future commits, so they count even after logs are gone
 creditia release install                      # release credits: credits in release notes and PR comments
+creditia schedule install                     # every hour, collect new records into the library, so evidence outlives the tools' log cleanup
 creditia blame src/core/analyze.ts:12         # which tool and model wrote this line
+creditia doc --by contributor                 # team repos: one row per committer, with what each tool wrote of their commits
 ```
 
 One project in several places (worktrees, scratch clones, another machine): `creditia paths` lists the registered paths, `creditia link <path>` adds one.
 
-Pieces list one row per tool by default. When one tool wrote nearly everything and switched models along the way, they switch to one row per model on their own. Pick with `--group tool` / `--group model`, or flip it in the App's top bar and go back to automatic any time. When one tool used several models, its model rows sit next to each other in shades of the same brand color. Each kind of piece also has a layout that draws every tool with its models underneath: "split" and "grouped" bars, the "nested" donut, the "troupe" credits roll, the "itemized" receipt, "blocks" waffle, "split" badge and the "with models" byline (marked with a small dot in the App).
+**Code written on another computer or in the cloud** — Analysis reads only this computer's logs, so code written elsewhere is "unattributed" here (analysis tells you how many commits look like that). Two ways to fill it in:
+
+- Install creditia there too and turn on commit stamps: each commit then carries how many lines each tool wrote according to that computer's logs (`Creditia-Lines`), which any machine's analysis accepts. For cloud environments (Codex cloud's setup script, Codespaces' `postCreateCommand`, Claude Code on the web's environment setup…), add two lines to the startup script (this sample hasn't been tested in a real cloud session yet):
+
+  ```bash
+  cargo install --git https://github.com/WroughtMind/creditia creditia-cli
+  creditia-core hook install --repo .
+  ```
+
+- Run `creditia evidence export --out ev.json` on that computer, bring the file over, `creditia evidence import ev.json`, and analyze again.
+
+Pieces list one row per tool by default; `--group model` gives one row per model (also in the App's top bar, remembered per project). When one tool used several models, its model rows sit next to each other in shades of the same brand color. Each kind of piece also has a layout that draws every tool with its models underneath: "split" and "grouped" bars, the "nested" donut, the "troupe" credits roll, the "itemized" receipt, "blocks" waffle, "split" badge and the "with models" byline (marked with a small dot in the App).
 
 Commit stamps and release credits both change your repository, so they are your call, per project: `init` / `analyze` ask once in a terminal (the answer goes into `.creditia/config.json` and isn't asked again), and the App shows both switches at the top of each project's wall, ready to flip back any time. `creditia integrations` shows where they stand.
 
@@ -67,7 +81,7 @@ Commit stamps and release credits both change your repository, so they are your 
 - **Inferred** — When most of a contiguous change has line-level evidence from one tool, the rest of that change follows it; branches tools create themselves, like `codex/`. Kept separate; turn off with `--level strict`
 - **Unattributed** — Anything that matches none of the above. Counted toward no tool
 
-creditia answers one question — which AI tools and models wrote how much. No names appear in any piece, and percentages are taken over AI and unattributed lines only. Full rules and known limits: [ATTRIBUTION.en.md](ATTRIBUTION.en.md).
+Percentages are taken over every added line: AI tools, other contributors (other people's commits in a team repo, shown by git name unless you turn names off) and unattributed lines add up to 100%. Lines in your own commits with no AI evidence are unattributed, not counted as hand-written. Full rules and known limits: [ATTRIBUTION.en.md](ATTRIBUTION.en.md).
 
 ## Twenty-six looks
 
@@ -174,6 +188,8 @@ For the local development version, replace `WroughtMind/creditia` with this chec
 The GitHub Action needs no install: use `WroughtMind/creditia@main`.
 
 The command line speaks Chinese by default; add `--lang en` or set `CREDITIA_LANG=en` for English.
+
+Days, weeks and the punch card use each commit author's local time; session times and the generation time use the most common timezone in your own commits (not the machine's, so CI gives the same result). To force one timezone, set `CREDITIA_TZ=+08:00` (or `UTC`).
 
 The first analysis of a large repository traces every current line back to its commit, which takes a while: a repo with 12,000 commits and 9,000 files takes tens of minutes on a single core, much less on more. The terminal and the app show which step it is on; cancel midway and the next run picks up where it stopped. After that, only new commits are analyzed.
 

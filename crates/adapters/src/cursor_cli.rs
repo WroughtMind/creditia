@@ -10,7 +10,7 @@
 
 use crate::{added_lines, any_ts, open_ro, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -231,7 +231,7 @@ pub fn discover() -> Vec<Activity> {
 pub fn doctor() -> Health {
     let files = dbs();
     let parsed: Vec<_> = files.iter().filter_map(|p| read_db(p).ok()).collect();
-    Health{source:"cursor-cli".into(),path:roots().iter().map(|p|p.display().to_string()).collect::<Vec<_>>().join("; "),readable:!parsed.is_empty(),format:"store.db blobs + hex-JSON meta; successful highLevelToolCallResult before/after receipts".into(),records:parsed.len() as u64,earliest:parsed.iter().map(|p|p.start).filter(|&t|t>0).min().map(date_cn),latest:parsed.iter().map(|p|p.start).filter(|&t|t>0).max().map(date_cn),note:creditia_core::tr!("发现 {} 个库，{} 个可读。已用官方 CLI 2026.08.11-e8db854 与本机真实格式核对。历史模型已加密，不使用可变 lastUsedModel 回填。缺少逐编辑时间，采用会话创建时间。", "{} databases found, {} readable. Real local format verified against official CLI 2026.08.11-e8db854. Historical models encrypted; mutable lastUsedModel ignored. Individual edit times unavailable; session creation time is used.",files.len(),parsed.len()),..Default::default()}
+    Health{source:"cursor-cli".into(),path:roots().iter().map(|p|p.display().to_string()).collect::<Vec<_>>().join("; "),readable:!parsed.is_empty(),format:"store.db blobs + hex-JSON meta; successful highLevelToolCallResult before/after receipts".into(),records:parsed.len() as u64,earliest:parsed.iter().map(|p|p.start).filter(|&t|t>0).min().map(date_local),latest:parsed.iter().map(|p|p.start).filter(|&t|t>0).max().map(date_local),note:creditia_core::tr!("发现 {} 个库，{} 个可读。已用官方 CLI 2026.08.11-e8db854 与本机真实格式核对。历史模型已加密，不使用可变 lastUsedModel 回填。缺少逐编辑时间，采用会话创建时间。", "{} databases found, {} readable. Real local format verified against official CLI 2026.08.11-e8db854. Historical models encrypted; mutable lastUsedModel ignored. Individual edit times unavailable; session creation time is used.",files.len(),parsed.len()),..Default::default()}
 }
 
 #[cfg(test)]

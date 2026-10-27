@@ -6,7 +6,7 @@
 
 use crate::{added_lines, any_ts, apply_patch_files, file_uri_path, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -145,8 +145,8 @@ pub fn doctor() -> Health {
         readable: base.is_dir(),
         format: "threads/T-*.json".into(),
         records: ts.len() as u64,
-        earliest: created.iter().min().copied().map(date_cn),
-        latest: created.iter().max().copied().map(date_cn),
+        earliest: created.iter().min().copied().map(date_local),
+        latest: created.iter().max().copied().map(date_local),
         note: if base.is_dir() && ts.is_empty() {
             creditia_core::tr!("本地没有线程文件：新版 Amp 把线程存在 ampcode.com 上，读不到", "no local thread files: newer Amp keeps threads on ampcode.com, which creditia does not read")
         } else {

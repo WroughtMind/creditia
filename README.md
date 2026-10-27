@@ -33,14 +33,15 @@
 $ creditia analyze && creditia fetch
 catnap  2026-05-11 → 2026-09-28
 ────────────────────────────────
-Claude Code     █████████████░░░░░░░░░░░░  50.9%  Claude Opus 5.5
-Codex           ████████░░░░░░░░░░░░░░░░░  30.8%  GPT-5.6 Sol
-Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   9.1%  Composer 2
-Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   4.7%  Kimi K3
-Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   2.1%  Grok 5 Code
-未确认          █░░░░░░░░░░░░░░░░░░░░░░░░   2.5%
+Claude Code     ████████████░░░░░░░░░░░░░  48.3%  Claude Opus 5.5
+Codex           ███████░░░░░░░░░░░░░░░░░░  29.2%  GPT-5.6 Sol
+Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   8.6%  Composer 2
+Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   4.4%  Kimi K3
+Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   2.0%  Grok 5 Code
+Mara Okafor     █░░░░░░░░░░░░░░░░░░░░░░░░   0.8%
+未确认          ██░░░░░░░░░░░░░░░░░░░░░░░   6.8%
 
-提交 734  行 50,190  token 447M
+提交 734  行 50,190  token 448M
 ```
 
 分析完，结果可以拿去用：
@@ -51,12 +52,25 @@ creditia export --piece roll --out roll.png   # 片尾字幕
 creditia export --list                        # 全部卡片、版式、风格、格式
 creditia hook install                         # 以后每次提交自动盖章：写入 Git 提交，无需依赖本地日志
 creditia release install                      # 跟着发版：Release 说明、PR 评论里写上署名
+creditia schedule install                     # 每小时把各项目的新记录收进作品库：工具清理旧日志以后证据还在
 creditia blame src/core/analyze.ts:12         # 这一行是哪个工具、哪个模型写的
+creditia doc --by contributor                 # 团队仓库：按贡献者看，每位提交者的提交里各工具占多少
 ```
 
 一个项目在好几个地方（worktree、临时克隆、换过电脑）：`creditia paths` 看登记过的路径，`creditia link <路径>` 补上。
 
-作品默认按工具分行；一个工具写了绝大部分、下面又换过几个模型时，自动改成按模型分。`--group tool` / `--group model` 指定，App 顶栏也能切换、随时切回自动。一个工具里有几个模型时，按模型分的那几行会挨在一起、用同一品牌色的深浅区分；另外每类作品都有把工具和它的模型分层画出来的版式：条形图「分段」「分组」、环形图「内外环」、片尾字幕「分部」、小票「明细」、华夫饼「分块」、徽章「分段」、署名行「带模型」（App 里这些版式旁边有个小点）。
+**在别的电脑、云端写代码**　分析只读这台电脑上的日志，别处写的代码在这里是「未确认」（分析时会提示有几个提交是这样）。两种补法：
+
+- 在那台电脑上也装 creditia 并打开提交盖章：提交时就按那台电脑的日志算好每个工具写了几行，记在提交里（`Creditia-Lines`），哪台电脑分析都认。云端环境（Codex 云端的 setup script、Codespaces 的 `postCreateCommand`、Claude Code 网页版的环境设置……）在启动脚本里加两行（这个样例还没在真实的云端会话里验证过）：
+
+  ```bash
+  cargo install --git https://github.com/WroughtMind/creditia creditia-cli
+  creditia-core hook install --repo .
+  ```
+
+- 那台电脑上 `creditia evidence export --out ev.json`，拿过来 `creditia evidence import ev.json`，再分析。
+
+作品默认按工具分行；`--group model` 按模型分（App 顶栏也能切换，每个项目各记各的）。一个工具里有几个模型时，按模型分的那几行会挨在一起、用同一品牌色的深浅区分；另外每类作品都有把工具和它的模型分层画出来的版式：条形图「分段」「分组」、环形图「内外环」、片尾字幕「分部」、小票「明细」、华夫饼「分块」、徽章「分段」、署名行「带模型」（App 里这些版式旁边有个小点）。
 
 提交盖章和跟着发版都会改你的仓库，所以每个项目由你决定：`init` / `analyze` 在终端里会问一次（答案记进 `.creditia/config.json`，不再问），App 里每个项目的作品墙最上面也有这两个开关，随时能拨回去。`creditia integrations` 看现状。
 
@@ -67,7 +81,7 @@ creditia blame src/core/analyze.ts:12         # 这一行是哪个工具、哪�
 - **推断**　同一段改动里大半有某个工具的逐行证据，其余的行跟着它走；`codex/` 这类工具自动建的分支。单独记，`--level strict` 关掉
 - **未确认**　以上都对不上的行。不算给任何工具
 
-creditia 只回答「哪些 AI 工具和模型写了多少」：作品里不出现任何名字，百分比只在 AI 和「未确认」的行之间算。完整规则和已知的边界在 [ATTRIBUTION.md](ATTRIBUTION.md)。
+百分比的分母是全部新增行：AI 工具、其他贡献者（团队仓库里别人的提交，默认写 git 名字，可以关）、未确认合起来是 100%。你自己的提交没有 AI 证据就是未确认，不算你手写。完整规则和已知的边界在 [ATTRIBUTION.md](ATTRIBUTION.md)。
 
 ## 二十六种样子
 
@@ -176,6 +190,8 @@ npx skills add WroughtMind/creditia --skill creditia -a claude-code
 GitHub Action 直接用 `WroughtMind/creditia@main`，不用装。
 
 命令行默认说中文；加 `--lang en` 或设 `CREDITIA_LANG=en` 改说英文。
+
+按天、按周、作息按每个提交作者当地的时间算；会话时间和生成时间按你自己提交里最常见的时区（不看运行的机器，CI 上也一样）。要统一按某个时区，设 `CREDITIA_TZ=+08:00`（或 `UTC`）。
 
 大仓库第一次分析要逐个文件追溯现在的每一行，比较慢：一万多个提交、九千个文件的仓库，单核机器上要几十分钟，多核快得多。终端和 App 里都能看到走到哪一步；中途取消，下次接着跑；之后每次只算新提交。
 

@@ -103,8 +103,10 @@ export function logo(key: string, cx: number, cy: number, size: number, fill: st
     const k = size / Math.max(vw, vh);
     return el('path', { d: lg.d, fill, fillRule: lg.rule, transform: `translate(${r(cx - (vw * k) / 2)} ${r(cy - (vh * k) / 2)}) scale(${r(k * 1000) / 1000})` });
   }
-  if (key === 'unattributed' || key === 'other') return '';
-  const initials = key.replace(/[^a-z0-9]/gi, ' ').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+  if (key === 'unattributed' || key === 'other' || key === 'people') return '';
+  // 贡献者（h:名字）画名字的首字母，中文名取第一个字
+  const nm = key.startsWith('h:') ? key.slice(2).trim() : '';
+  const initials = (/^[⺀-鿿]/.test(nm) ? [...nm][0] : (nm || key).replace(/[^a-z0-9]/gi, ' ').trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()) || '?';
   const fs = size * (initials.length > 1 ? 0.5 : 0.66);
   return el('text', { x: cx, y: cy + fs * 0.36, fontFamily: font.family, fontWeight: font.weight ?? 700, fontSize: fs, textAnchor: 'middle', fill }, esc(initials));
 }

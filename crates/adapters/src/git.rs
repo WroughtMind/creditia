@@ -113,7 +113,7 @@ pub fn worktrees(repo: &Path) -> Vec<String> {
 }
 
 // trailer 都指定 separator，这样 git 不会在值后面补换行，一条提交始终占一行
-const FMT: &str = "@@@C%x00%H%x00%ae%x00%an%x00%at%x00%ct%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Harness,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Model,valueonly,separator=%x7C)%x00%(trailers:key=Assisted-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Lines,valueonly,separator=%x7C)%x00%ce";
+const FMT: &str = "@@@C%x00%H%x00%ae%x00%an%x00%at%x00%ct%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Harness,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Model,valueonly,separator=%x7C)%x00%(trailers:key=Assisted-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Lines,valueonly,separator=%x7C)%x00%ce%x00%ai";
 
 /// `Creditia-Lines: claude-code/claude-opus-5-5 30, codex 4 / 120` → ([(工具/模型, 行数)], 总行数)。没有 AI 行时写成 `/ 120`
 pub fn parse_lines_stamp(v: &str) -> Option<(Vec<(String, usize)>, usize)> {
@@ -303,6 +303,8 @@ fn parse_log(rd: impl BufRead, total: usize) -> (Vec<Commit>, Stamps) {
                 assisted: p.get(9).map(|s| s.split('|').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
                 lines_stamp,
                 web: p.get(11).is_some_and(|e| e.trim().eq_ignore_ascii_case("noreply@github.com")),
+                // `%ai`：2026-10-02 22:55:10 +0800
+                tz: p.get(12).and_then(|s| s.trim().rsplit(' ').next()).and_then(creditia_core::util::parse_offset).unwrap_or(0),
                 files: vec![],
             });
         } else if line.starts_with("diff --git ") {

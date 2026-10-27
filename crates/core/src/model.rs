@@ -401,6 +401,9 @@ pub struct Commit {
     /// 在 GitHub 网页上合并（提交者是 GitHub）：作者只是点了合并、或者开 PR 的人，不说明代码是谁写的
     #[serde(default)]
     pub web: bool,
+    /// 作者写提交时的时区偏移（秒，git 的 `%ai`）：按天、按周、作息按提交者当地的时间算
+    #[serde(default)]
+    pub tz: i64,
     #[serde(default)]
     pub files: Vec<FileAdd>,
 }

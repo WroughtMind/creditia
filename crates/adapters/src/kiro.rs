@@ -8,7 +8,7 @@
 
 use crate::{Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -188,7 +188,7 @@ pub fn doctor() -> Vec<Health> {
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file() && e.file_name() == "conversation_log.jsonl")
         .count();
-    vec![Health{source:"kiro-cli-classic".into(),path:db.display().to_string(),readable:crate::open_ro(&db).is_ok_and(|c|recognizable_db(&c)),format:"data.sqlite3 conversations_v2 / legacy conversations; classic ConversationState JSON".into(),records:parsed.len()as u64,earliest:parsed.iter().map(|p|p.start).filter(|&t|t>0).min().map(date_cn),latest:parsed.iter().map(|p|p.end).filter(|&t|t>0).max().map(date_cn),note:creditia_core::tr!("已用官方 stable 2.32.0 发行包和公开前身源码核对 SQL 与 classic 格式。fs_write 必须匹配 Success 结果，模型取逐请求 model_id。实现已通过构造记录测试，尚未用真实会话验收。", "Official stable 2.32.0 SQL and classic schema verified against distribution and public predecessor source. Uses fs_write only after matching Success results and per-request model_id. Implementation validated with fixtures, not yet with real sessions."),..Default::default()},
+    vec![Health{source:"kiro-cli-classic".into(),path:db.display().to_string(),readable:crate::open_ro(&db).is_ok_and(|c|recognizable_db(&c)),format:"data.sqlite3 conversations_v2 / legacy conversations; classic ConversationState JSON".into(),records:parsed.len()as u64,earliest:parsed.iter().map(|p|p.start).filter(|&t|t>0).min().map(date_local),latest:parsed.iter().map(|p|p.end).filter(|&t|t>0).max().map(date_local),note:creditia_core::tr!("已用官方 stable 2.32.0 发行包和公开前身源码核对 SQL 与 classic 格式。fs_write 必须匹配 Success 结果，模型取逐请求 model_id。实现已通过构造记录测试，尚未用真实会话验收。", "Official stable 2.32.0 SQL and classic schema verified against distribution and public predecessor source. Uses fs_write only after matching Success results and per-request model_id. Implementation validated with fixtures, not yet with real sessions."),..Default::default()},
     Health{source:"kiro-cli-v2".into(),path:v2.display().to_string(),readable:false,format:"Rust V2 session_metadata.json + conversation_log.jsonl (LogEntryV1)".into(),records:records as u64,note:creditia_core::tr!("官方 2.32.0 Rust 引擎确认使用 session_metadata.json 与 conversation_log.jsonl，独立于 classic SQLite 和已实现的 KAS V3 messages.jsonl。V2 的 LogEntryV1 成功回执序列化尚未完整复核，当前不解析；可用官方 ACP 采集后续运行。", "Official 2.32.0 Rust engine uses session_metadata.json and conversation_log.jsonl, separately from classic SQLite and the implemented KAS V3 messages.jsonl. V2 LogEntryV1 successful-result serialization is not fully verified and is not parsed; official ACP capture is available for future runs."),unsupported:true,..Default::default()}]
 }
 

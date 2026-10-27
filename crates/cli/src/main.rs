@@ -2,6 +2,7 @@
 //! 退出码：0 成功，1 失败，2 部分成功（有警告）。
 
 mod analyze;
+mod schedule;
 mod agents;
 
 use creditia_adapters as ad;
@@ -84,6 +85,7 @@ const USAGE_ZH: &str = "用法：creditia-core <命令> [选项]
   integrations [--repo P]          上面两项的现状
   hook-trailers <msgfile>          （hook 调用）追加 Creditia-* trailer
   evidence  export [--out F] | import <文件>   多台电脑之间合并证据库
+  schedule  install|uninstall|status        每小时把各项目的新记录收进作品库（工具清理旧日志之前）
   projects                         本地已记录的项目
   all-credits                      本地每个项目最新的档案（跨项目汇总用）
   paths     [--repo P]             本项目登记过的全部路径（主仓库、worktree、临时克隆、旧路径）
@@ -116,6 +118,7 @@ const USAGE_EN: &str = "Usage: creditia-core <command> [options]
   integrations [--repo P]          where those two stand
   hook-trailers <msgfile>          (called by the hook) append Creditia-* trailers
   evidence  export [--out F] | import <file>   merge evidence between machines
+  schedule  install|uninstall|status        every hour, collect new records from every project into the library (before tools delete old logs)
   projects                         projects in the library
   all-credits                      the latest credits of every project in the library (for the cross-project summary)
   paths     [--repo P]             every path recorded for this project (main, worktrees, temp clones, old paths)
@@ -168,6 +171,7 @@ fn main() {
         "integrations" => cmd_integrations(&a),
         "hook-trailers" => cmd_hook_trailers(&a),
         "evidence" => cmd_evidence(&a),
+        "schedule" => schedule::cmd(a.pos.first().map(String::as_str)).map(|v| (v, vec![])),
         "projects" => cmd_projects(&a),
         "all-credits" => cmd_all_credits(&a),
         "paths" => cmd_paths(&a),
@@ -280,14 +284,14 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
         .map(|p| {
             json!({
                 "name": p.name, "path": p.path, "rootCommit": p.root, "remotes": p.remotes, "exists": p.exists,
-                "tools": p.tools, "lastActive": creditia_core::util::date_cn(p.last),
+                "tools": p.tools, "lastActive": creditia_core::util::date_local(p.last),
                 "inLibrary": known.contains_key(&p.root),
             })
         })
         .collect();
     let summary = merged
         .iter()
-        .map(|p| format!("{:<28} {}  {}  {}", p.name, creditia_core::util::date_cn(p.last), p.tools.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>().join(" · "), status(p)))
+        .map(|p| format!("{:<28} {}  {}  {}", p.name, creditia_core::util::date_local(p.last), p.tools.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>().join(" · "), status(p)))
         .collect::<Vec<_>>()
         .join("\n");
     Ok((json!({ "projects": list, "summary": summary }), vec![]))
@@ -1079,9 +1083,9 @@ fn cmd_projects(_a: &Args) -> R<(Value, Vec<String>)> {
     let ps = lib.projects()?;
     let list: Vec<Value> = ps
         .iter()
-        .map(|p| json!({ "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "lastHead": p.last_head, "lastAnalyzed": p.last_analyzed.map(creditia_core::util::date_cn), "evidence": lib.evidence_count(&p.id) }))
+        .map(|p| json!({ "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "lastHead": p.last_head, "lastAnalyzed": p.last_analyzed.map(creditia_core::util::date_local), "evidence": lib.evidence_count(&p.id) }))
         .collect();
-    let summary = ps.iter().map(|p| format!("{:<28} {}  {}", p.name, p.last_analyzed.map(creditia_core::util::date_cn).unwrap_or_else(|| tr!("未分析", "not analyzed")), p.path)).collect::<Vec<_>>().join("\n");
+    let summary = ps.iter().map(|p| format!("{:<28} {}  {}", p.name, p.last_analyzed.map(creditia_core::util::date_local).unwrap_or_else(|| tr!("未分析", "not analyzed")), p.path)).collect::<Vec<_>>().join("\n");
     Ok((json!({ "projects": list, "summary": if summary.is_empty() { tr!("本地项目记录为空；先 creditia-core analyze", "the library is empty; run creditia-core analyze first") } else { summary } }), vec![]))
 }
 

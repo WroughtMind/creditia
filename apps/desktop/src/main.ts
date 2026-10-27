@@ -1,13 +1,14 @@
 // creditia App：一面展墙。顶部切换项目，左下角圆点切换风格，所有作品直接摆出来；
 // 悬停看细节、换版式、选格式导出；拖起作品时下面浮出导出坞，松手就导出。
 import { buildModel, type Model } from '../../../packages/render/src/classic/data.ts';
-import { nameOf, resolveGroup } from '../../../packages/render/src/data.ts';
+import { nameOf, resolveGroup, buildModel as buildText } from '../../../packages/render/src/data.ts';
 import { MODEL_VARIANTS } from '../../../packages/render/src/registry.ts';
 import { mergeCredits } from '../../../packages/render/src/merge.ts';
-import { creditsBlock, mergeCreditsMd } from '../../../packages/render/src/classic/text.ts';
+// CREDITS.md 和命令行 creditia doc 用同一份生成代码
+import { creditsBlock, mergeCreditsMd } from '../../../packages/render/src/text.ts';
 import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts';
 import { INTERACT_CSS, mountHits } from '../../../packages/render/src/interact.ts';
-import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, groupOf, hasModels, type Kit } from './kits.ts';
+import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, setNamed, groupOf, hasModels, type Kit } from './kits.ts';
 import { exportArt, type Format } from './engine.ts';
 import { mountRoamPreview, releaseRoamPreview } from './roam-preview.ts';
 import { RoamViewport } from './roam-viewport.ts';
@@ -196,7 +197,7 @@ async function openProject(p: any) {
   stampOf = await st;
   state.raw = raw;
   $('#empty').hidden = true; emptyView = null;
-  setGroup(groupPref());
+  setGroup(groupPref()); setNamed(namesOn());
   rebuildModel();
   if (!p.all) loadPlugs(p);
   await paint();
@@ -266,7 +267,7 @@ function rebuildModel() {
   if (state.current?.all && state.raw?.project && state.raw.project.name !== name) {
     state.raw = { ...state.raw, project: { ...state.raw.project, name } };
   }
-  state.model = buildModel(state.raw, { director: false, lang: state.lang, group: groupPref() });
+  state.model = buildModel(state.raw, { director: false, lang: state.lang, group: groupPref(), named: namesOn() });
   const m = state.model;
   $('#pname').textContent = m.project || state.current?.name;
   if (state.current?.id) store.set('mark.' + state.current.id, JSON.stringify(petalsOf(m)));
@@ -314,9 +315,10 @@ async function setPlug(k: 'hook' | 'release', on: boolean, quiet = false) {
 }
 
 // ───────────────────────── 分组：按工具 / 按模型 ─────────────────────────
-// 没点过就自动挑：一个工具占了绝大部分、下面又有几个模型时按模型分，否则按工具。
-// 点了就钉住这个项目的选择。档案里一个模型都没记下就不显示。
+// 没点过就按工具；点了就钉住这个项目的选择。档案里一个模型都没记下就不显示。
 type GroupPref = 'auto' | 'tool' | 'model';
+/** 写不写其他贡献者的名字：设置里的开关，默认写 */
+const namesOn = () => store.get('names') !== 'off';
 const groupPref = (): GroupPref => { const g = state.current ? store.get('group.' + state.current.id) : null; return g === 'tool' || g === 'model' ? g : 'auto'; };
 function renderGroup() {
   const el = $('#group');
@@ -348,7 +350,7 @@ let cacheRaw: any = null, cacheTotal = 0;
 const CACHE_MAX = 32e6; // SVG 字符数
 function drawArt(id: string, variant?: string, kit = state.style): Promise<Art | null> {
   if (cacheRaw !== state.raw) { cache.clear(); cacheLen.clear(); cacheTotal = 0; cacheRaw = state.raw; }
-  const key = `${kit.id}|${state.lang}|${groupPref()}|${id}|${variant ?? ''}`;
+  const key = `${kit.id}|${state.lang}|${groupPref()}|${namesOn()}|${id}|${variant ?? ''}`;
   let hit = cache.get(key);
   if (hit) { cache.delete(key); cache.set(key, hit); return hit; } // 挪到最近用过
   hit = kit.render(state.raw, state.lang, id, variant);
@@ -626,7 +628,7 @@ async function doExport(fmtId: string, id: string, k: string, o: { kit?: Kit; ar
   const base = `${m.project || 'credits'}-${id}${variant && variant !== 'original' ? '-' + variant : ''}-${kit.id}`;
   try {
     if (fmtId === 'md') {
-      const text = mergeCreditsMd(null, creditsBlock(m));
+      const text = mergeCreditsMd(null, creditsBlock(buildText(state.raw, { lang: state.lang, group: groupPref(), named: namesOn() })));
       try { await navigator.clipboard.writeText(text); return toast(L('CREDITS.md 区块已复制', 'CREDITS.md block copied')); }
       catch { return toast(L('没能写进剪贴板', 'Could not copy to the clipboard'), 8000, { acts: [{ label: L('存成文件', 'Save as a file'), run: () => saveBytes('CREDITS.md', new TextEncoder().encode(text), 'text/markdown').catch((e) => toast(errText(e), 5000)) }] }); }
     }
@@ -1418,6 +1420,7 @@ async function settings() {
     <h3>${L('导出', 'Export')}</h3>
     ${info ? `<div class="row kv" id="xrow"></div>` : ''}
     <div class="row kv"><span class="k">${L('默认尺寸', 'Default size')}</span><div class="seg" id="defsize">${sizeButtons()}</div></div>
+    <div class="row kv"><span class="k" title="${L('关掉后只写「其他贡献者」', 'When off, only “Other contributors” is shown')}">${L('写其他贡献者的名字', 'Show contributor names')}</span><span class="v grow"></span><button class="switch" role="switch" aria-checked="${namesOn()}" aria-label="${L('写其他贡献者的名字', 'Show contributor names')}" data-x="names"><i></i></button></div>
     <h3>${L('本地项目库', 'Library')}</h3>
     ${info ? `<div class="row kv"><span class="k">${L('位置', 'Location')}</span><span class="v path" title="${esc(info.library)}">${esc(short(info.library))}</span><button class="mini" data-x="open-library">${L('打开', 'Open')}</button></div>` : ''}
     <div class="row kv"><span class="k">${L('有新提交时自动更新', 'Update on new commits')}</span><span class="v grow"></span><button class="switch" role="switch" aria-checked="${autoFresh()}" aria-label="${L('有新提交时自动更新', 'Update on new commits')}" data-x="fresh"><i></i></button></div>
@@ -1461,6 +1464,12 @@ async function settings() {
         store.set('autofresh', autoFresh() ? 'off' : 'on');
         el.querySelector('[data-x="fresh"]')!.setAttribute('aria-checked', String(autoFresh()));
         if (autoFresh()) refreshIfChanged();
+      }
+      else if (x === 'names') {
+        store.set('names', namesOn() ? 'off' : 'on');
+        setNamed(namesOn());
+        el.querySelector('[data-x="names"]')!.setAttribute('aria-checked', String(namesOn()));
+        if (state.raw) { rebuildModel(); await paint(); }
       }
       else if (x === 'logo') {
         const id = (t.closest('[data-id]') as HTMLElement).dataset.id!;

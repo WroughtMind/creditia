@@ -10,6 +10,7 @@ import { DONUT_VARIANTS, WAFFLE_VARIANTS, donut, waffle, stream, lanes, clock, v
 import { receipt, RECEIPT_VARIANTS, share, badge, BADGE_VARIANTS, byline, BYLINE_VARIANTS, hand } from './pieces/cards.ts';
 import { codemap } from './pieces/map.ts';
 import { asterisk } from './pieces/asterisk.ts';
+import { people } from './pieces/people.ts';
 import { historyLabels } from './history.ts';
 
 export interface PieceDef {
@@ -28,7 +29,8 @@ export const PIECES: Record<string, PieceDef> = {
   tier: { name: '署名榜', en: 'Credits', q: '工具与模型占比', qEn: 'Contribution shares by tool and model', variants: TIER_VARIANTS, animated: true, render: tier },
   asterisk: { name: '星号', en: 'Asterisk', q: '各家份额长成的 *', qEn: 'Shares grown into an asterisk', animated: true, render: asterisk },
   share: { name: '分享图', en: 'Share Card', q: '链接预览、社交媒体', qEn: 'Link previews, social posts', animated: true, render: share },
-  hand: { name: '开发者', en: 'Developers', q: '提示词、审阅与手写代码', qEn: 'Prompts, reviews, and hand-written code', animated: true, render: hand },
+  hand: { name: '开发者', en: 'Developers', q: '提示词与审阅', qEn: 'Prompts and reviews', animated: true, render: hand },
+  people: { name: '贡献者', en: 'Contributors', q: '每位提交者的提交里各工具占多少', qEn: 'What each committer\'s commits were written with', animated: true, render: people },
   receipt: { name: '小票', en: 'Receipt', q: '工期、会话与 Token', qEn: 'Time, sessions, and tokens spent', variants: RECEIPT_VARIANTS, render: receipt },
   badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', qEn: 'README, profile page', variants: BADGE_VARIANTS, render: badge },
   byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', variants: BYLINE_VARIANTS, render: byline },

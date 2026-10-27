@@ -26,7 +26,7 @@ The evidence store keeps only "relative path, line hash, tool, model, session, t
 ## 2. How a line is matched
 
 1. Read `git log -p`. Every added line of every commit is normalized (whitespace removed, quotes unified and so on) and hashed; the key is `relative path + normalized line`.
-2. Look up evidence with the same path and hash, timed from 14 days before the commit to 1 hour after it; with several hits, take the closest in time.
+2. Look up evidence with the same path and hash, timed from 14 days before the commit to 1 hour after it; with several hits, take the closest in time. For code committed long after it was written (a branch left for weeks), older evidence no other commit has claimed counts too, but only when two consecutive lines were also next to each other in that write: a single common line matching could be a coincidence and doesn't count.
 3. A match is **line-level evidence**. Lines without a match go down the fallback chain below.
 
 Evidence records only the lines an agent **newly wrote in that edit**, and each line of one edit can be claimed by only one commit:
@@ -99,19 +99,20 @@ A repository often lives in several places at once: your main directory, several
   - Cline / Roo / Kilo: `model_provider_id`.
   - Prefixes in the model string itself (`openrouter/`, `bedrock/`, `vertex_ai/`).
 
-## 6. People
+## 6. Contributors
 
-Pieces answer one question only: which AI tools and models wrote how much. People are not ranked against AI tools and appear in no piece: percentages are taken only over AI-written and unattributed lines, and no piece shows names or how much people wrote. The `human` section of your local `credits.json` still records the following, for you alone:
+Team repositories have other people's commits. The rules:
 
-- **Messages to AI**: how many messages people sent in sessions (user messages in each tool's logs);
-- **Reviews**: your own reviews on GitHub PRs (`--github`); bot reviews are counted separately;
-- **Lines by people**: other people's commits go to them, and Tab-completed lines count as people's too; lines in your own commits with no AI evidence are recorded as "unattributed", never inferred as hand-written, because there's no telling whether you wrote them or an AI that left no log did (see section 3);
+- **The denominator is every added line**: AI tools, other contributors and unattributed add up to 100%. There is no separate "AI only" percentage.
+- **Other people's commits go to them**: clues in the commit (stamp, agent email, `Co-authored-by`, `Assisted-by`, bot) still credit that tool and model; lines without clues go to that contributor. A contributor's row means "no AI trace in their commits", not "they didn't use AI".
+- **Your own commits**: lines with no AI evidence are "unattributed", never inferred as hand-written, because there's no telling whether you wrote them or an AI that left no log did (see section 3). You never appear as a row in the tool ranking.
+- **Names**: git names are shown by default (`privacy.aliases` can rewrite a name). To hide them set `display.hideNames: true`; the record and every piece then say only "Other contributors". `--no-names` hides them for one command, and the app's "Show contributor names" setting covers its pieces and exports.
+- **Two views**: by tool / model by default (`--group tool|model`); `--by contributor` (CREDITS.md, the terminal card, `summary`) and the app's "Contributors" card go by committer — one row per committer, followed by how much of their commits each tool wrote, how much has no AI trace, and how much is unattributed. The committer view says who committed, not who typed. In the record this is `authors`.
 - **Web-merged commits**: a commit whose committer is GitHub (`noreply@github.com`) was merged on GitHub's website; its author is just whoever opened or merged the PR, under that account's email rather than the one used while writing the code, so it isn't credited to them: the branch's stamps count as usual and the rest is unattributed;
 - **Same GitHub account**: `123+login@users.noreply.github.com` and `login@users.noreply.github.com` are the same person;
-- **Where the AI's code went**: lines AI wrote in sessions → lines committed → lines still here;
-- **Tab completion**: Cursor's Tab completion counts as assisted typing by a person, not as an agent.
+- **Tab completion**: Cursor's Tab completion counts as assisted typing by the committer, not as an agent.
 
-`display.named` and `display.sign` in the config are kept in the record only; pieces never write names because of them.
+The `human` section of your local `credits.json` also records the developer side, for you alone and never in a piece: messages sent to AI (user messages in each tool's logs), your own reviews on GitHub PRs (`--github`; bot reviews are counted separately), and where the AI's code went (lines written in sessions → committed → still here). `display.sign` is a signature you type yourself.
 
 ## 7. What isn't counted
 
@@ -125,7 +126,7 @@ Pieces answer one question only: which AI tools and models wrote how much. Peopl
 - An agent's line that you changed by a few characters, or that a formatter split or merged, hashes differently and is not line-level evidence. When most of what surrounds it is the agent's line-level evidence, the change-block inference credits it to the agent; when the whole passage was rewritten, it's recorded as unattributed.
 - A few lines you insert into the middle of an agent's code are recorded as unattributed if they sit exactly between two lines that were adjacent in one of the agent's edits; if you also changed the agent's lines next to them, they can't be told apart and follow the passage's inference to the agent.
 - When an agent writes a file through a shell command, content written in the command itself (`cat > file <<EOF`, `printf`, new text inside a python script) counts as line-level evidence: a line of the command text counts only if it really appears among that file's added lines in a commit, so commands that only read files (`cat`, `grep`) can't cause false matches. Content produced by a program (scaffolding, codegen scripts, `curl > file`) is recorded as unattributed: a model didn't write it, and like generated files it isn't credited to AI.
-- Once a tool cleans up its own logs, the evidence store still has them as long as `analyze` / `collect` (or the commit hook) ran once before, with every line of every edit stored separately, so results after rebuilding the cache match those while the logs were there; if they were never collected, only the commit metadata is left.
+- Once a tool cleans up its own logs, the evidence store still has them as long as `analyze` / `collect` (or the commit hook) ran once before (`creditia schedule install` collects every hour, so you needn't remember to), with every line of every edit stored separately, so results after rebuilding the cache match those while the logs were there; if they were never collected, only the commit metadata is left.
 - Lines a formatter merged (two of an agent's lines joined into one) still don't match line-level evidence and rely on the change-block inference.
 - For a relay that passes official responses through, the provider can't be determined and isn't recorded.
 - Sources are read according to confirmed formats. Windsurf Cascade supports existing hooks/transcripts; Antigravity editor summaries are readable but do not establish edit evidence. Native history, official imports, ACP capture for new sessions, session-only sources and unconfirmed edit contracts are listed separately in [the adapter matrix](ADAPTERS.md). File extensions alone do not establish encryption or stamp-only support. Without a per-call model, the model remains unknown; a mutable final model is not applied to earlier edits.

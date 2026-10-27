@@ -8,7 +8,7 @@
 
 use crate::{added_lines, open_ro, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -200,8 +200,8 @@ pub fn doctor() -> Health {
         readable: db.is_file(),
         format: "data.sqlite3 conversations (JSON per directory)".into(),
         records: cs.len() as u64,
-        earliest: cs.iter().map(|p| p.start).filter(|&t| t > 0).min().map(date_cn),
-        latest: cs.iter().map(|p| p.end).max().filter(|&t| t > 0).map(date_cn),
+        earliest: cs.iter().map(|p| p.start).filter(|&t| t > 0).min().map(date_local),
+        latest: cs.iter().map(|p| p.end).max().filter(|&t| t > 0).map(date_local),
         note: creditia_core::tr!(
             "每个目录只存最近一次对话；逐条时间与模型。尚未用真实日志核对",
             "only the latest conversation per directory is kept; time and model per request. Not yet checked against real logs"

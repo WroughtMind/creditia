@@ -179,8 +179,8 @@ export function bridgeStyle(t: Theme): Style {
 
 // ───────────────────────── 新作品 ─────────────────────────
 
-/** 原版没有、借新风格的作品画出来的：河流、留存、出处、板块、代码地图、日历、星号 */
-export const BRIDGED = ['stream', 'survival', 'evidence', 'areas', 'codemap', 'calendar', 'asterisk'];
+/** 原版没有、借新风格的作品画出来的：河流、留存、出处、板块、代码地图、日历、星号、贡献者 */
+export const BRIDGED = ['stream', 'survival', 'evidence', 'areas', 'codemap', 'calendar', 'asterisk', 'people'];
 /** 原版作品追加的新风格版式（和原版版式重名的不追加）；原版自己的画法叫 original，仍是默认 */
 export const BRIDGED_LAYOUTS: Record<string, string[]> = {
   tier: TIER_VARIANTS,
@@ -196,16 +196,16 @@ export const isBridged = (id: string, variant?: string) => BRIDGED.includes(id) 
 
 /** 新作品读新模型；同一份档案、同一种语言、同一种分组只建一次 */
 const models = new WeakMap<object, Record<string, V2Model>>();
-export function v2ModelOf(raw: any, lang: 'zh' | 'en', group: Group = 'tool'): V2Model {
+export function v2ModelOf(raw: any, lang: 'zh' | 'en', group: Group = 'tool', named = true): V2Model {
   const k = raw && typeof raw === 'object' ? raw : {};
   const hit = models.get(k) ?? {};
-  const key = `${lang}|${group}`;
-  if (!hit[key]) { hit[key] = buildV2(raw, { lang, named: false, sign: '', group }); models.set(k, hit); }
+  const key = `${lang}|${group}|${named}`;
+  if (!hit[key]) { hit[key] = buildV2(raw, { lang, sign: '', group, named }); models.set(k, hit); }
   return hit[key];
 }
 
 // 分组方式跟着原版模型走（它已经按 auto 选好了），两套渲染器的数字一致
-export const bridgeArt = (id: string, m: { raw: any; group?: Group }, t: Theme, o: { lang: 'zh' | 'en'; variant?: string }): Art | null =>
-  v2Art(id, v2ModelOf(m.raw, o.lang, m.group), bridgeStyle(t), { variant: o.variant });
-export const bridgeFrames = (id: string, m: { raw: any; group?: Group }, t: Theme, o: { lang: 'zh' | 'en'; variant?: string }, n = 24): Art[] =>
-  v2Frames(id, v2ModelOf(m.raw, o.lang, m.group), bridgeStyle(t), { variant: o.variant }, n);
+export const bridgeArt = (id: string, m: { raw: any; group?: Group; named?: boolean }, t: Theme, o: { lang: 'zh' | 'en'; variant?: string }): Art | null =>
+  v2Art(id, v2ModelOf(m.raw, o.lang, m.group, m.named), bridgeStyle(t), { variant: o.variant });
+export const bridgeFrames = (id: string, m: { raw: any; group?: Group; named?: boolean }, t: Theme, o: { lang: 'zh' | 'en'; variant?: string }, n = 24): Art[] =>
+  v2Frames(id, v2ModelOf(m.raw, o.lang, m.group, m.named), bridgeStyle(t), { variant: o.variant }, n);

@@ -4,12 +4,35 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { art, frames, animatedClassic, buildModel, FORMS, themeById, THEMES } from '../src/classic/index.ts';
-import { BRIDGED, BRIDGED_LAYOUTS } from '../src/classic/bridge.ts';
+import { BRIDGED, BRIDGED_LAYOUTS, v2ModelOf, bridgeFrames } from '../src/classic/bridge.ts';
 import { variantsOf, defaultVariant } from '../src/classic/art.ts';
 import { ORDERED_THEMES, THEME_INFO, PIECE_INFO } from '../src/classic/catalog.ts';
 
 const raw = JSON.parse(readFileSync(path.join(import.meta.dirname, '../fixtures/catnap.json'), 'utf8'));
 const m = buildModel(raw, { director: false, lang: 'zh' });
+
+test('隐藏姓名传到借用版式和动画，缓存不会重新带回名字', async () => {
+  const source = structuredClone(raw);
+  source.authors = [
+    { id: 'h:private', name: 'Private Person', linesAdded: 10, by: { unattributed: 10 } },
+    { id: 'h:owner', name: 'Private Owner', me: true, linesAdded: 10, by: { unattributed: 10 } },
+  ];
+  const shown = buildModel(source, { director: false, lang: 'en', named: true });
+  const hidden = buildModel(source, { director: false, lang: 'en', named: false });
+  const theme = themeById('minimal-light')!;
+  const visible = await art('people', shown, theme, { lang: 'en' });
+  assert.ok(JSON.stringify(visible).includes('Private Person'));
+  for (const [id, variant] of [['people', undefined], ['tier', 'rows'], ['tier', 'original']] as const) {
+    const result = await art(id, hidden, theme, { lang: 'en', variant });
+    assert.ok(result);
+    assert.ok(!JSON.stringify(result).includes('Private Person'));
+    assert.ok(!JSON.stringify(result).includes('Mara Okafor'));
+  }
+  const frames = bridgeFrames('people', hidden, theme, { lang: 'en' }, 3);
+  assert.ok(frames.length > 0);
+  assert.ok(!JSON.stringify(frames).includes('Private Person'));
+  assert.notEqual(v2ModelOf(source, 'en', 'tool', true), v2ModelOf(source, 'en', 'tool', false));
+});
 
 test('目录覆盖全部主题和作品', () => {
   assert.equal(ORDERED_THEMES.length, THEMES.length);
@@ -17,12 +40,15 @@ test('目录覆盖全部主题和作品', () => {
   for (const id of Object.keys(FORMS)) if (id !== 'profile' && id !== 'blame') assert.ok(PIECE_INFO[id], id);
 });
 
-test('署名只写 AI：没有人这一行、没有主导者，占比加起来是 100%', () => {
+test('署名：工具在榜单里，其他贡献者单列，没有主导者；分母是全部新增行，工具加贡献者合计 100%', () => {
   assert.equal(m.director, '');
-  assert.equal(m.humans.length, 0);
+  assert.deepEqual(m.humans.map((h) => h.name), ['Mara Okafor']);
   assert.ok(!m.rows.some((r) => r.kind === 'human'));
-  const sum = m.rows.reduce((s, r) => s + r.pct, 0);
+  const sum = [...m.rows, ...m.humans].reduce((s, r) => s + r.pct, 0);
   assert.ok(Math.abs(sum - 100) < 0.5, `占比合计 ${sum}`);
+  // 不署名时只写「其他贡献者」
+  const anon = buildModel(raw, { director: false, lang: 'zh', named: false });
+  assert.deepEqual(anon.humans.map((h) => h.name), ['其他贡献者']);
 });
 
 test('全部作品在代表主题下都能出图，滤镜区域收在画布内', async () => {

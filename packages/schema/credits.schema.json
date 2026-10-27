@@ -18,6 +18,7 @@
       }
     },
     "generatedAt": { "type": "string", "format": "date-time" },
+    "tzOffset": { "type": "integer", "description": "按天、会话时间用的时区偏移（秒）；按天、按周、作息里的提交按提交者当地时间。没有这个字段的旧档案按 +08:00" },
     "level": { "type": "string", "enum": ["strict", "standard", "loose"], "description": "归因口径：strict 只认逐行证据与明确声明；standard 再加同提交延伸与分支前缀（标为推断）；loose 再加同时间窗口的会话（推断）" },
     "head": { "type": "string", "description": "分析时的 HEAD" },
     "versions": { "type": "array", "items": { "type": "object", "required": ["tag", "date"], "properties": { "tag": { "type": "string" }, "date": { "$ref": "#/$defs/date" } } } },
@@ -81,6 +82,21 @@
           "byEvidence": { "type": "object", "additionalProperties": { "type": "object", "properties": { "linesAdded": { "type": "integer" }, "units": { "type": "integer" } } } },
           "byArea": { "type": "object", "additionalProperties": { "type": "integer" } },
           "byVersion": { "type": "object", "additionalProperties": { "type": "integer" } }
+        }
+      }
+    },
+    "authors": {
+      "type": "array",
+      "description": "按提交者汇总：每位提交者的提交里，各工具、模型、贡献者本人和「未确认」各有多少新增行。只说是谁提交的，不说是谁手写的",
+      "items": {
+        "type": "object",
+        "required": ["id", "me", "linesAdded", "by"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string", "description": "git 作者名；配置了不写名字（display.hideNames）时没有" },
+          "me": { "type": "boolean", "description": "是本机用户自己的提交身份" },
+          "linesAdded": { "type": "integer" },
+          "by": { "type": "object", "additionalProperties": { "type": "integer" } }
         }
       }
     },
