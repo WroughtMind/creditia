@@ -10,6 +10,7 @@ import * as V from '../../../packages/render/src/data.ts';
 import { PIECES, frames as v2Frames, variantName as v2Variant } from '../../../packages/render/src/registry.ts';
 import type { Style } from '../../../packages/render/src/style.ts';
 import type { Art } from '../../../packages/render/src/export.ts';
+import { historyBasis, historyLabels } from '../../../packages/render/src/history.ts';
 import { fontFiles, registerFonts, ready } from './fonts.ts';
 
 type Lang = 'zh' | 'en';
@@ -28,7 +29,7 @@ export interface Kit {
   variants(id: string): string[];
   current(id: string, variant?: string): string | undefined;
   animated(id: string): boolean;
-  pieceName(id: string, lang: Lang): string;
+  pieceName(id: string, lang: Lang, raw?: any): string;
   pieceQ(id: string, lang: Lang): string;
   variantName(v: string, lang: Lang): string;
   /** 文字转路径的独立预览图片；展墙、漫游、放大共用，第一次要时才生成 */
@@ -45,20 +46,23 @@ export function bootKits() {
 /** 分组方式（按工具 / 按模型 / 自动），每个项目各记各的，由 main 在打开项目时设好 */
 let group: V.GroupOpt = 'auto';
 export function setGroup(g: V.GroupOpt) { group = g; }
+/** 写不写其他贡献者的名字（设置里的开关，全部项目共用） */
+let named = true;
+export function setNamed(v: boolean) { named = v; }
 export const groupOf = (raw: any) => V.resolveGroup(raw, group);
 /** 档案里有没有记下模型：一个都没有就不用给分组开关 */
 export const hasModels = (raw: any) => (raw?.contributors ?? []).some((c: any) => !!V.agentOf(raw, c.id)?.model);
 
 /** 同一份档案、同一种语言、同一种分组只建一次模型 */
 function memo<M>(build: (raw: any, lang: Lang) => M) {
-  let k: [any, Lang, V.GroupOpt] | null = null, v: M;
-  return (raw: any, lang: Lang) => { if (!k || k[0] !== raw || k[1] !== lang || k[2] !== group) { v = build(raw, lang); k = [raw, lang, group]; } return v; };
+  let k: [any, Lang, V.GroupOpt, boolean] | null = null, v: M;
+  return (raw: any, lang: Lang) => { if (!k || k[0] !== raw || k[1] !== lang || k[2] !== group || k[3] !== named) { v = build(raw, lang); k = [raw, lang, group, named]; } return v; };
 }
-const classicModel = memo((raw, lang) => C.buildModel(raw, { director: false, lang, group }));
-const v2Model = memo((raw, lang) => V.buildModel(raw, { lang, named: false, sign: '', group }));
+const classicModel = memo((raw, lang) => C.buildModel(raw, { director: false, lang, group, named }));
+const v2Model = memo((raw, lang) => V.buildModel(raw, { lang, named, sign: '', group }));
 
 const CLASSIC_BOARD: Tile[] = [
-  { id: 'share', span: 2 }, { id: 'tier' }, { id: 'roll' }, { id: 'receipt' }, { id: 'donut' },
+  { id: 'share', span: 2 }, { id: 'tier' }, { id: 'people' }, { id: 'roll' }, { id: 'receipt' }, { id: 'donut' },
   { id: 'asterisk' }, { id: 'ribbon', span: 2 }, { id: 'waffle' }, { id: 'mosaic' }, { id: 'versions' }, { id: 'area' },
   { id: 'stream', span: 2 }, { id: 'survival' }, { id: 'evidence' }, { id: 'areas' },
   { id: 'lanes' }, { id: 'clock' }, { id: 'settle' }, { id: 'app' }, { id: 'fetch' },
@@ -66,7 +70,7 @@ const CLASSIC_BOARD: Tile[] = [
   { id: 'byline', span: 2 }, { id: 'badge' }, { id: 'badge', variant: 'emblem' }, { id: 'badge', variant: 'stack' },
 ];
 const V2_BOARD: Tile[] = [
-  { id: 'share', span: 2 }, { id: 'tier' }, { id: 'roll' }, { id: 'receipt' }, { id: 'donut' }, { id: 'asterisk' },
+  { id: 'share', span: 2 }, { id: 'tier' }, { id: 'people' }, { id: 'roll' }, { id: 'receipt' }, { id: 'donut' }, { id: 'asterisk' },
   { id: 'stream', span: 2 }, { id: 'waffle' }, { id: 'survival' }, { id: 'evidence' }, { id: 'versions' }, { id: 'areas' }, { id: 'lanes', span: 2 }, { id: 'clock', span: 2 },
   { id: 'mosaic' }, { id: 'codemap', span: 2 }, { id: 'calendar', span: 2 }, { id: 'badge', variant: 'emblem' }, { id: 'badge', variant: 'stack' }, { id: 'badge', variant: 'flat' }, { id: 'byline', span: 2 },
 ];
@@ -99,7 +103,7 @@ function ask<T>(message: any): Promise<T> {
 }
 function renderAway(raw: any, style: string, lang: Lang, id: string, variant: string | undefined, classic: boolean, grouping = group): Promise<Art | null> {
   wakeRenderer();
-  const message: any = { style, lang, id, variant, group: grouping, classic };
+  const message: any = { style, lang, id, variant, group: grouping, named, classic };
   if (sentRaw !== raw) { message.raw = raw; sentRaw = raw; }
   return ask(message);
 }
@@ -150,7 +154,7 @@ const v2Kits: Kit[] = STYLES.filter((s) => !SKIP.has(s.id)).map((s) => ({
   variants: (id) => PIECES[id]?.variants ?? [],
   current: (id, variant) => variant ?? s.prefer[id] ?? PIECES[id]?.variants?.[0],
   animated: (id) => !!PIECES[id]?.animated,
-  pieceName: (id, lang) => (lang === 'zh' ? PIECES[id]?.name : PIECES[id]?.en) ?? id,
+  pieceName: (id, lang, raw) => id === 'versions' && raw ? historyLabels(historyBasis(raw), lang).name : (lang === 'zh' ? PIECES[id]?.name : PIECES[id]?.en) ?? id,
   pieceQ: (id, lang) => (lang === 'zh' ? PIECES[id]?.q : PIECES[id]?.qEn) ?? '',
   variantName: v2Variant,
   preview: (art) => previewAway(art, s.id, false),

@@ -136,6 +136,7 @@ impl Sim {
             ("CREDITIA_QWEN_DIR", "qwen"),
             ("CREDITIA_OPENCODE_DIR", "opencode"),
             ("CREDITIA_VSCODE_STORAGE", "vscode"),
+            ("APPDATA", "AppData/Roaming"),
         ] {
             vars.insert(k.to_string(), root.join(v).display().to_string());
         }
@@ -440,6 +441,26 @@ impl Sim {
         self.write_disk(path);
     }
 
+    /// 格式化把相邻的两行并成一行（短的对象字面量、链式调用收回一行）。并出来的行仍记原作者，但逐行证据对不上了
+    fn join(&mut self, path: &str) {
+        self.t += 30;
+        let v = self.files.remove(path).unwrap();
+        let mut out: Vec<L> = vec![];
+        let mut i = 0;
+        while i < v.len() {
+            let long = |l: &L| l.text.trim().len() > 3;
+            if i + 1 < v.len() && long(&v[i]) && long(&v[i + 1]) {
+                out.push(L { text: format!("{} {}", v[i].text.trim_end(), v[i + 1].text.trim()), who: v[i].who });
+                i += 2;
+            } else {
+                out.push(v[i].clone());
+                i += 1;
+            }
+        }
+        self.files.insert(path.to_string(), out);
+        self.write_disk(path);
+    }
+
     fn commit_as(&mut self, msg: &str, email: &str) -> String {
         self.t += 600;
         git_in(&self.repo, &["add", "-A"]);
@@ -449,6 +470,26 @@ impl Sim {
             .arg(&self.repo)
             .args(["-c", "user.name=X", "-c", &format!("user.email={email}"), "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", msg, "--date", &date])
             .env("GIT_COMMITTER_DATE", &date)
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        let h = git_in(&self.repo, &["rev-parse", "HEAD"]).trim().to_string();
+        self.snaps.insert(h.clone(), (self.scenario, self.files.clone()));
+        h
+    }
+
+    /// 在 GitHub 网页上合并：作者是 GitHub 账号的邮箱，提交者是 GitHub
+    fn commit_web(&mut self, msg: &str, author: &str) -> String {
+        self.t += 600;
+        git_in(&self.repo, &["add", "-A"]);
+        let date = format!("@{} +0000", self.t);
+        let o = Command::new("git")
+            .arg("-C")
+            .arg(&self.repo)
+            .args(["-c", "user.name=X", "-c", &format!("user.email={author}"), "-c", "commit.gpgsign=false", "commit", "-q", "-m", msg, "--date", &date])
+            .env("GIT_COMMITTER_DATE", &date)
+            .env("GIT_COMMITTER_NAME", "GitHub")
+            .env("GIT_COMMITTER_EMAIL", "noreply@github.com")
             .output()
             .unwrap();
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -471,7 +512,8 @@ impl Sim {
     fn flush_logs(&self) {
         fs::write(self.repo.join(".aider.chat.history.md"), &self.aider).unwrap();
         fs::write(self.repo.join(".git/info/exclude"), ".aider*\n").unwrap();
-        let ws = self.root.join(".config/Code/User/workspaceStorage/bench");
+        let config_dir = if cfg!(target_os = "macos") { "Library/Application Support" } else if cfg!(target_os = "windows") { "AppData/Roaming" } else { ".config" };
+        let ws = self.root.join(config_dir).join("Code/User/workspaceStorage/bench");
         fs::create_dir_all(ws.join("chatSessions")).unwrap();
         fs::write(ws.join("workspace.json"), json!({ "folder": format!("file://{}", self.repo.display()) }).to_string()).unwrap();
         fs::write(ws.join("chatSessions/b1.json"), json!({ "version": 3, "sessionId": "b1", "creationDate": 1_780_000_000_000i64, "requests": self.copilot }).to_string()).unwrap();
@@ -539,6 +581,8 @@ struct Tally {
     missed: usize,
     human: usize,
     claimed: usize,
+    /// AI 写的行被算给了人
+    as_human: usize,
 }
 impl Tally {
     fn add(&mut self, truth: &str, pred: &str) {
@@ -563,6 +607,7 @@ impl Tally {
             self.wrong_tool += 1;
         } else {
             self.missed += 1;
+            self.as_human += pred.starts_with("h:") as usize;
         }
     }
     fn merge(&mut self, o: &Tally) {
@@ -573,10 +618,11 @@ impl Tally {
         self.missed += o.missed;
         self.human += o.human;
         self.claimed += o.claimed;
+        self.as_human += o.as_human;
     }
     fn json(&self) -> Value {
         let p = |a: usize, b: usize| if b == 0 { Value::Null } else { json!((a as f64 / b as f64 * 1000.0).round() / 10.0) };
-        json!({ "aiLines": self.ai, "toolCorrect": p(self.exact + self.tool_only, self.ai), "modelCorrect": p(self.exact, self.ai), "wrongTool": p(self.wrong_tool, self.ai), "missed": p(self.missed, self.ai), "humanLines": self.human, "falseClaims": p(self.claimed, self.human) })
+        json!({ "aiLines": self.ai, "toolCorrect": p(self.exact + self.tool_only, self.ai), "modelCorrect": p(self.exact, self.ai), "wrongTool": p(self.wrong_tool, self.ai), "missed": p(self.missed, self.ai), "humanLines": self.human, "falseClaims": p(self.claimed, self.human), "aiToPeople": p(self.as_human, self.ai) })
     }
 }
 
@@ -772,6 +818,30 @@ fn accuracy_bench() {
     s.copilot_failed_then_human("gpt-c", "web/failed.ts", 30);
     s.commit("written by hand after copilot failed");
 
+    s.scene("22 在 agent 里提交的手写");
+    s.agent_new(GPT, "web/stamped_ai.ts", 20);
+    s.human_edit("src/stamped_me.rs", 0, 40);
+    s.commit("committed from inside an agent\n\nCreditia-Harness: claude-code\nCreditia-Model: opus-x\nCreditia-Lines: codex/gpt-a 20 / 60");
+
+    // 格式化把 agent 的行两两并成一行，逐行证据全对不上：记未确认，不能算给人
+    s.scene("23 格式化合并的行");
+    s.agent_new(SONNET, "web/joined.ts", 40);
+    s.join("web/joined.ts");
+    s.human_edit("src/joined_me.rs", 0, 30);
+    s.commit("agent file reformatted onto fewer lines + hand file");
+
+    // 在云端写、在 GitHub 网页上 squash 合并：本机没有日志，提交作者是 GitHub 账号的邮箱、提交者是 GitHub。
+    // 原分支各提交的盖章被并进正文中间，只有最后一段算 trailer
+    s.scene("24 GitHub 网页 squash 合并");
+    s.t += 300;
+    let v: Vec<L> = s.gen("src/web.rs", 30).into_iter().map(|text| L { text, who: GPT }).collect();
+    s.files.insert("src/web.rs".into(), v);
+    s.write_disk("src/web.rs");
+    s.commit_web(
+        "cloud work (#7)\n\n* first part\n\nCreditia-Harness: codex\nCreditia-Lines: codex/gpt-a 20 / 20\n\n* second part\n\nCreditia-Harness: codex\nCreditia-Lines: codex/gpt-a 10 / 10\n\nCo-authored-by: me <me@example.com>",
+        "account@gmail.com",
+    );
+
     s.flush_logs();
     let rs = s.repo.display().to_string();
     s.run(&["init", "--repo", &rs]);
@@ -821,13 +891,13 @@ fn accuracy_bench() {
     }
 
     let mut all = Tally::default();
-    println!("\n场景                         AI行  工具对%  模型对%  错给别的AI%  漏掉%   非AI行  误认%");
+    println!("\n场景                         AI行  工具对%  模型对%  错给别的AI%  漏掉%   非AI行  误认%  AI算给人%");
     for (k, t) in &by_scene {
         all.merge(t);
-        println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}", k, t.ai, pct(t.exact + t.tool_only, t.ai), pct(t.exact, t.ai), pct(t.wrong_tool, t.ai), pct(t.missed, t.ai), t.human, pct(t.claimed, t.human));
+        println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}", k, t.ai, pct(t.exact + t.tool_only, t.ai), pct(t.exact, t.ai), pct(t.wrong_tool, t.ai), pct(t.missed, t.ai), t.human, pct(t.claimed, t.human), pct(t.as_human, t.ai));
     }
-    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}", "历史合计", all.ai, pct(all.exact + all.tool_only, all.ai), pct(all.exact, all.ai), pct(all.wrong_tool, all.ai), pct(all.missed, all.ai), all.human, pct(all.claimed, all.human));
-    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}", "当前代码（存活）", surv.ai, pct(surv.exact + surv.tool_only, surv.ai), pct(surv.exact, surv.ai), pct(surv.wrong_tool, surv.ai), pct(surv.missed, surv.ai), surv.human, pct(surv.claimed, surv.human));
+    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}", "历史合计", all.ai, pct(all.exact + all.tool_only, all.ai), pct(all.exact, all.ai), pct(all.wrong_tool, all.ai), pct(all.missed, all.ai), all.human, pct(all.claimed, all.human), pct(all.as_human, all.ai));
+    println!("{:<26} {:>6} {}  {}  {}       {}  {:>6}  {}  {}", "当前代码（存活）", surv.ai, pct(surv.exact + surv.tool_only, surv.ai), pct(surv.exact, surv.ai), pct(surv.wrong_tool, surv.ai), pct(surv.missed, surv.ai), surv.human, pct(surv.claimed, surv.human), pct(surv.as_human, surv.ai));
     let tot: usize = share_t.values().sum();
     println!("\n份额（历史，非空行）  真实    算出");
     let mut keys: Vec<&String> = share_t.keys().chain(share_p.keys()).collect();
@@ -855,4 +925,12 @@ fn accuracy_bench() {
     assert!(all.wrong_tool * 100 <= all.ai, "错给别的 AI：{}/{}", all.wrong_tool, all.ai);
     assert!((all.exact + all.tool_only) * 100 >= all.ai * 95, "工具对的比例：{}/{}", all.exact + all.tool_only, all.ai);
     assert!(l1 / 2.0 <= 0.04, "份额总偏差 {:.1} 个百分点", l1 / 2.0 * 100.0);
+    // 在 agent 里提交的手写不能被章整个算给 agent
+    let t = &by_scene["22 在 agent 里提交的手写"];
+    assert_eq!(t.claimed, 0, "22：人写的行被算给 AI");
+    assert!((t.exact + t.tool_only) * 100 >= t.ai * 95, "22：AI 行 {}/{}", t.exact + t.tool_only, t.ai);
+    // AI 写的行一行都不能算给人（网页合并的作者、找不到记录的行）
+    assert_eq!(all.as_human, 0, "AI 写的行被算给了人");
+    let t = &by_scene["24 GitHub 网页 squash 合并"];
+    assert!((t.exact + t.tool_only) * 100 >= t.ai * 95, "24：AI 行 {}/{}", t.exact + t.tool_only, t.ai);
 }

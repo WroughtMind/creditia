@@ -2,11 +2,11 @@
 
 use crate::config::Config;
 use crate::hash::short_key;
-use crate::model::{Attr, BlameFile, Commit, CommitAttr, Index, Level, Registry, Session, Src, Unit};
+use crate::model::{canonical_harness, Attr, BlameFile, Commit, CommitAttr, Index, Level, Registry, Session, Src, Unit, JOIN_WINDOWS};
 use std::collections::{HashMap, HashSet};
 
-const WINDOW_BEFORE: i64 = 14 * 86400;
-const WINDOW_AFTER: i64 = 3600;
+pub const WINDOW_BEFORE: i64 = 14 * 86400;
+pub const WINDOW_AFTER: i64 = 3600;
 
 /// 归因口径
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -36,6 +36,11 @@ pub struct Engine<'a> {
     pub stamps: HashMap<String, (String, Option<String>)>,
     /// 已被提交认领过的证据（与 idx.map 里的 Vec 一一对应）
     used: HashMap<(String, u32), Vec<bool>>,
+    /// 主导者的 GitHub 账号名：同一个账号的几种 noreply 邮箱（`123+login@…`、`login@…`）都是他
+    director_logins: HashSet<String>,
+    /// Untimed successful edits can only match keys added exactly once in a
+    /// complete Git history. Staged-only attribution never enables this fallback.
+    untimed_unique: HashSet<(String,u32)>,
 }
 
 impl<'a> Engine<'a> {
@@ -58,11 +63,35 @@ impl<'a> Engine<'a> {
                 }
             }
         }
-        Engine { cfg, strictness: Strictness::parse(&cfg.level), idx, sessions, reg, director_emails, unit_branch, stamps, used: HashMap::new() }
+        let director_logins = cfg.director_emails().iter().filter_map(|e| gh_login(e)).map(String::from).collect();
+        Engine { cfg, strictness: Strictness::parse(&cfg.level), idx, sessions, reg, director_emails, director_logins, unit_branch, stamps, used: HashMap::new(), untimed_unique: HashSet::new() }
+    }
+
+    fn is_director(&self, email: &str) -> bool {
+        self.director_emails.contains(email) || gh_login(email).is_some_and(|l| self.director_logins.contains(l))
+    }
+
+    pub fn set_history(&mut self, commits:&[Commit]) {
+        let mut occurrences:HashMap<(String,u32),usize>=HashMap::new();
+        for f in commits.iter().flat_map(|c|&c.files) {
+            for &key in f.keys.iter().filter(|&&key|key!=0) {*occurrences.entry((f.rel.clone(),key)).or_default()+=1;}
+        }
+        self.untimed_unique=occurrences.into_iter().filter_map(|(id,n)|(n==1).then_some(id)).collect();
     }
 
     fn director(&self) -> usize {
         0
+    }
+
+    /// 提交是谁提交的（按贡献者看用）：(贡献者 id, git 作者名, 是不是你)。只说提交者，不说代码是谁写的：
+    /// 你的提交里 agent 写的行、别人提交里的盖章，仍按归因结果算在工具名下
+    pub fn author_of(&self, c: &Commit) -> (String, String, bool) {
+        if self.is_director(&c.email) {
+            let d = &self.reg.list[self.director()];
+            return (person_id(&d.id), self.cfg.display_name(d.name.as_deref().unwrap_or_default()), true);
+        }
+        let name = if c.name.is_empty() { c.email.clone() } else { c.name.clone() };
+        (person_id(&c.email), self.cfg.display_name(&name), false)
     }
 
     pub fn attribute(&mut self, c: &Commit) -> CommitAttr {
@@ -89,7 +118,7 @@ impl<'a> Engine<'a> {
                     let up = (s..i).rev().find(|&j| f.keys[j] != 0).map(|j| (j, 'v', (j + 1..=i).filter(|&x| f.keys[x] == 0).count()));
                     let down = (i + 1..e).find(|&j| f.keys[j] != 0).map(|j| (j, '^', (i..j).filter(|&x| f.keys[x] == 0).count()));
                     let hit = if sh == 0 { None } else { [up, down].into_iter().flatten().find_map(|(j, d, ord)| self.take(&f.rel, short_key(&f.rel, f.keys[j], d, ord, sh), lo, hi, c.author_ts).map(|(b, _)| b)) };
-                    fl.push(hit.filter(|b| !b.tab).map(|b| Attr { who: self.reg.agent(b.src.harness(), Some(&b.model)), level: Level::Declared }));
+                    fl.push(hit.filter(|b| !b.tab).map(|b| Attr { who: self.reg.agent(b.src.harness(), Some(&b.model)), level: Level::Verified }));
                     continue;
                 }
                 let Some((best, multi)) = self.take(&f.rel, k, lo, hi, c.author_ts) else {
@@ -112,8 +141,81 @@ impl<'a> Engine<'a> {
             lines.push(fl);
             ev_of.push(el);
         }
-        // 第二轮：提交本身的声明（盖章、agent 邮箱、Co-authored-by、bot、别人的提交），覆盖所有没对上的行
-        let declared = self.declared(c);
+        // 第一轮补充：格式化拆行。没对上的连续 2~4 行拼回一行，正好是 agent 一次写入里的一行，就是那次写的
+        for (fi, f) in c.files.iter().enumerate() {
+            if f.joins.len() != f.keys.len() * JOIN_WINDOWS {
+                continue;
+            }
+            for (s, e) in hunk_ranges(f) {
+                let mut i = s;
+                while i < e {
+                    let mut took = 0;
+                    for w in (2..=JOIN_WINDOWS + 1).rev() {
+                        if i + w > e || (i..i + w).any(|j| lines[fi][j].is_some()) || (i..i + w).all(|j| f.keys[j] == 0) {
+                            continue;
+                        }
+                        let key = f.joins[i * JOIN_WINDOWS + (w - 2)];
+                        if key == 0 {
+                            continue;
+                        }
+                        if let Some((b, multi)) = self.take(&f.rel, key, lo, hi, c.author_ts) {
+                            if b.tab {
+                                continue;
+                            }
+                            conflicts += multi as usize;
+                            let who = self.reg.agent(b.src.harness(), Some(&b.model));
+                            for j in i..i + w {
+                                lines[fi][j] = Some(Attr { who, level: Level::Verified });
+                                if f.keys[j] != 0 {
+                                    ev_of[fi][j] = Some((b.src.harness(), b.model.clone()));
+                                    *hits.entry(b.src.harness()).or_default() += 1;
+                                }
+                            }
+                            took = w;
+                            break;
+                        }
+                    }
+                    i += took.max(1);
+                }
+            }
+        }
+        // 第一轮补充：两周以前的写入（写完很久才提交、分支放了很久）。只用还没被别的提交认领的证据，
+        // 而且要连着的两行在同一次写入里也是紧挨着的（证据记着下一行是哪行）：单独一行常见代码对上了可能是巧合
+        for (fi, f) in c.files.iter().enumerate() {
+            let mut old: Vec<Option<crate::model::Ev>> = vec![None; f.keys.len()];
+            for (s, e) in hunk_ranges(f) {
+                let long: Vec<usize> = (s..e).filter(|&i| f.keys[i] != 0).collect();
+                for p in long.windows(2) {
+                    let (a, b) = (p[0], p[1]);
+                    let (ka, kb) = (f.keys[a], f.keys[b]);
+                    if lines[fi][b].is_some() {
+                        continue;
+                    }
+                    let got = if let Some(ea) = old[a].clone().filter(|ea| ea.next == kb) {
+                        // 接着上一对：同一次写入的下一行
+                        self.take_old(&f.rel, kb, lo, |x| x.src == ea.src && x.session == ea.session).map(|eb| (None, eb))
+                    } else if lines[fi][a].is_none() {
+                        let bs = self.old_sessions(&f.rel, kb, lo);
+                        self.take_old(&f.rel, ka, lo, |x| x.next == kb && bs.iter().any(|(s, id)| *s == x.src && *id == x.session))
+                            .and_then(|ea| self.take_old(&f.rel, kb, lo, |x| x.src == ea.src && x.session == ea.session).map(|eb| (Some(ea), eb)))
+                    } else {
+                        None
+                    };
+                    let Some((ea, eb)) = got else { continue };
+                    for (i, ev) in [(a, ea), (b, Some(eb))] {
+                        let Some(ev) = ev else { continue };
+                        let who = self.reg.agent(ev.src.harness(), Some(&ev.model));
+                        lines[fi][i] = Some(Attr { who, level: Level::Verified });
+                        ev_of[fi][i] = Some((ev.src.harness(), ev.model.clone()));
+                        *hits.entry(ev.src.harness()).or_default() += 1;
+                        old[i] = Some(ev);
+                    }
+                }
+            }
+        }
+        // 第二轮：提交本身的声明（盖章、agent 邮箱、Co-authored-by、bot、别人的提交），覆盖所有没对上的行。
+        // 带 Creditia-Lines 的提交，工具的声明只按它记下的行数算（见最后的配额），不再整个提交算给工具
+        let declared = self.declared(c, c.lines_stamp.is_some());
         let mut reason = declared.as_ref().map(|d| d.1.clone());
         // 第三轮：同一改动块里的推断。块里一半以上的行有逐行证据、其中八成以上是同一个工具，
         // 才把块里其余的行推给它；推断出来的行不再当证据。模型分不清时只记工具。
@@ -154,9 +256,11 @@ impl<'a> Engine<'a> {
                 }
             }
         }
-        // 第四轮：还没着落的行走提交级的降级（会话、分支前缀、未确认）
-        let (fallback, r) = match declared {
-            Some(d) => d,
+        // 第四轮：还没着落的行走提交级的降级（会话、分支前缀、未确认）。
+        // 没有 AI 证据不说明是人写的：creditia 只认 AI 留下的记录，不推断谁手写
+        let (fallback, r) = match &declared {
+            Some(d) => d.clone(),
+            None if c.lines_stamp.is_some() => (Attr { who: self.reg.unattributed(), level: Level::Unattributed }, crate::tr!("没有证据", "no evidence")),
             None => self.guess(c),
         };
         let reason = reason.unwrap_or(r);
@@ -190,20 +294,81 @@ impl<'a> Engine<'a> {
                     x.0 += 1;
                     x.1 = x.1.max(res[i].level);
                 }
+                // 跟随别人的短行是推断：逐行证据说的是那一行，不是它旁边的 `}`
                 let follow = cnt
                     .iter()
                     .max_by_key(|(w, (n, _))| (*n, std::cmp::Reverse(**w)))
-                    .map(|(&w, &(_, lv))| Attr { who: w, level: if lv == Level::Verified { Level::Declared } else { lv } })
+                    .map(|(&w, &(_, lv))| Attr { who: w, level: if lv == Level::Verified { Level::Inferred } else { lv } })
                     .unwrap_or(main_attr);
                 let near = |i: usize| (s..i).rev().chain(i + 1..e).find(|&j| f.keys[j] != 0);
                 for i in (s..e).filter(|&i| f.keys[i] == 0 && !placed[i]) {
                     res[i] = match near(i) {
-                        Some(j) => Attr { who: res[j].who, level: if res[j].level == Level::Verified { Level::Declared } else { res[j].level } },
+                        Some(j) => Attr { who: res[j].who, level: if res[j].level == Level::Verified { Level::Inferred } else { res[j].level } },
                         None => follow,
                     };
                 }
             }
             out.push(res);
+        }
+        // 配额：Creditia-Lines 记着提交时各工具写了几行。现在少算了的（日志后来被清理了）从不是 agent 的行里按顺序补足；
+        // 多出来的不动——那是提交以后才读到的证据
+        let mut reason = reason;
+        let mut main = main;
+        if let Some((quota, stamped)) = &c.lines_stamp {
+            // 网页 squash 合并把原分支各提交的 Creditia-Lines 加在一起：后面的提交改写过前面的行时，
+            // 总数比这个提交实际新增的多，按比例缩
+            let actual: usize = out.iter().map(Vec::len).sum();
+            let scale = |n: usize| if *stamped > actual { n * actual / stamped } else { n };
+            let mut have: HashMap<usize, usize> = HashMap::new();
+            for a in out.iter().flatten() {
+                if self.reg.list[a.who].kind == "agent" {
+                    *have.entry(a.who).or_default() += 1;
+                }
+            }
+            let mut filled = false;
+            // Specific model receipts claim their own evidence before tool-only receipts.
+            for (id, n) in quota.iter().filter(|(id, _)| id.contains('/')).chain(quota.iter().filter(|(id, _)| !id.contains('/'))) {
+                let (h, m) = match id.split_once('/') {
+                    Some((h, m)) => (canonical_harness(h), Some(m)),
+                    None => (canonical_harness(id), None),
+                };
+                let who = self.reg.agent(&h, m);
+                let mut deficit = scale(*n);
+                for (index, contributor) in self.reg.list.iter().enumerate() {
+                    if (m.is_some() && index != who) || (m.is_none() && contributor.harness.as_deref() != Some(h.as_str())) {
+                        continue;
+                    }
+                    let available = have.entry(index).or_default();
+                    let used = deficit.min(*available);
+                    deficit -= used;
+                    *available -= used;
+                }
+                if deficit == 0 {
+                    continue;
+                }
+                for a in out.iter_mut().flatten() {
+                    if deficit == 0 {
+                        break;
+                    }
+                    if self.reg.list[a.who].kind != "agent" {
+                        *a = Attr { who, level: Level::Declared };
+                        deficit -= 1;
+                        filled = true;
+                    }
+                }
+            }
+            if filled {
+                reason = crate::tr!("Creditia-Lines 盖章", "Creditia-Lines stamp");
+                let mut counts: HashMap<usize, usize> = HashMap::new();
+                for (fi, f) in c.files.iter().enumerate() {
+                    for (i, a) in out[fi].iter().enumerate() {
+                        if f.keys[i] != 0 {
+                            *counts.entry(a.who).or_default() += 1;
+                        }
+                    }
+                }
+                main = counts.iter().max_by_key(|(w, n)| (**n, std::cmp::Reverse(**w))).map(|(w, _)| *w);
+            }
         }
         CommitAttr { lines: out, hits, conflicts, main, tab_lines, reason }
     }
@@ -213,14 +378,41 @@ impl<'a> Engine<'a> {
         let id = (rel.to_string(), key);
         let all = self.idx.map.get(&id)?;
         let used = self.used.entry(id).or_insert_with(|| vec![false; all.len()]);
-        let cands: Vec<usize> = (0..all.len()).filter(|&i| all[i].ts >= lo && all[i].ts <= hi && !used[i]).collect();
+        let mut cands: Vec<usize> = (0..all.len()).filter(|&i| all[i].ts>0 && all[i].ts >= lo && all[i].ts <= hi && !used[i]).collect();
+        if cands.is_empty() && self.untimed_unique.contains(&(rel.to_string(),key)) {
+            cands=(0..all.len()).filter(|&i|all[i].ts==0&&!used[i]).collect();
+            // Missing time cannot resolve competing tools or models. Keep such
+            // lines unattributed instead of choosing by hash-map iteration order.
+            if cands.iter().map(|&i|(all[i].src,all[i].model.as_str())).collect::<HashSet<_>>().len()>1 {return None;}
+        }
         let bi = *cands.iter().min_by_key(|&&i| (at - all[i].ts).abs())?;
         let multi = cands.iter().map(|&i| all[i].src).collect::<HashSet<Src>>().len() > 1;
-        // Cursor 的行哈希表一行只存一次，不按次数消耗
-        if all[bi].src != Src::Cursor {
+        // Only Cursor's static editor line table is reusable. Cursor CLI and
+        // host/protocol tool calls carry individual successful writes.
+        if all[bi].src != Src::Cursor || all[bi].single_use {
             used[bi] = true;
         }
         Some((all[bi].clone(), multi))
+    }
+
+    /// `before` 以前、还没被认领的一行证据里，`want` 挑中的最晚的那条，认领掉
+    fn take_old(&mut self, rel: &str, key: u32, before: i64, want: impl Fn(&crate::model::Ev) -> bool) -> Option<crate::model::Ev> {
+        let id = (rel.to_string(), key);
+        let all = self.idx.map.get(&id)?;
+        let used = self.used.entry(id).or_insert_with(|| vec![false; all.len()]);
+        let bi = (0..all.len()).filter(|&i| !used[i] && !all[i].tab && all[i].ts > 0 && all[i].ts < before && want(&all[i])).max_by_key(|&i| all[i].ts)?;
+        if all[bi].src != Src::Cursor || all[bi].single_use {
+            used[bi] = true;
+        }
+        Some(all[bi].clone())
+    }
+
+    /// `before` 以前、还没被认领的这一行证据出自哪些写入（工具、会话）
+    fn old_sessions(&self, rel: &str, key: u32, before: i64) -> Vec<(Src, String)> {
+        let id = (rel.to_string(), key);
+        let Some(all) = self.idx.map.get(&id) else { return vec![] };
+        let used = self.used.get(&id);
+        (0..all.len()).filter(|&i| !used.is_some_and(|u| u[i]) && !all[i].tab && all[i].ts > 0 && all[i].ts < before).map(|i| (all[i].src, all[i].session.clone())).collect()
     }
 
     /// 夹在两行逐行证据之间、自己没有证据的行，而那两行在同一个工具的某次写入里本来是紧挨着的：
@@ -253,22 +445,23 @@ impl<'a> Engine<'a> {
         out
     }
 
-    /// 提交本身写明的来源。按优先级：盖章 trailer → agent 提交邮箱 → Co-authored-by → Assisted-by → bot → aider 的作者名 → 别人的提交（算那个人）
-    fn declared(&mut self, c: &Commit) -> Option<(Attr, String)> {
-        if let Some((h, m)) = self.stamps.get(&c.hash).cloned() {
+    /// 提交本身写明的来源。按优先级：盖章 trailer → agent 提交邮箱 → Co-authored-by → Assisted-by → bot → aider 的作者名 → 别人的提交（算那个人）。
+    /// `counted`：提交带 Creditia-Lines（提交时逐行算过），盖章、Co-authored-by、Assisted-by 就不再代表整个提交
+    fn declared(&mut self, c: &Commit, counted: bool) -> Option<(Attr, String)> {
+        if let Some((h, m)) = self.stamps.get(&c.hash).cloned().filter(|_| !counted) {
             return Some((Attr { who: self.reg.agent(&h, m.as_deref()), level: Level::Declared }, crate::tr!("Creditia 盖章", "Creditia stamp")));
         }
         if let Some(h) = self.cfg.agent_emails.get(&c.email).cloned() {
             return Some((Attr { who: self.reg.agent(&h, None), level: Level::Declared }, crate::tr!("agent 提交邮箱 {}", "agent commit email {}", c.email)));
         }
-        for co in &c.coauthors {
+        for co in c.coauthors.iter().filter(|_| !counted) {
             if let Some((_, h)) = self.cfg.agent_emails.iter().find(|(e, _)| co.contains(e.as_str())) {
                 let h = h.clone();
                 let m = coauthor_model(co);
                 return Some((Attr { who: self.reg.agent(&h, m.as_deref()), level: Level::Declared }, format!("Co-authored-by {co}")));
             }
         }
-        for a in &c.assisted {
+        for a in c.assisted.iter().filter(|_| !counted) {
             if let Some((h, m)) = assisted_by(a) {
                 return Some((Attr { who: self.reg.agent(&h, m.as_deref()), level: Level::Declared }, format!("Assisted-by {a}")));
             }
@@ -280,7 +473,8 @@ impl<'a> Engine<'a> {
         if c.name.trim_end().ends_with("(aider)") {
             return Some((Attr { who: self.reg.agent("aider", None), level: Level::Declared }, crate::tr!("aider 署名的作者", "author marked (aider)")));
         }
-        if !self.director_emails.contains(&c.email) {
+        // 在 GitHub 网页上合并的提交，作者只是开 PR、点合并的人（还是那个账号的邮箱，不是写代码时用的），不算他写的
+        if !c.web && !self.is_director(&c.email) {
             // 以邮箱为身份，显示 git 作者名
             let name = if c.name.is_empty() { c.email.clone() } else { c.name.clone() };
             let name = self.cfg.display_name(&name);
@@ -319,6 +513,12 @@ impl<'a> Engine<'a> {
             .filter(|s| harness.map(|h| s.src.harness() == h).unwrap_or(true))
             .max_by_key(|s| (br.is_some() && s.branch.as_ref() == br, s.start))
     }
+}
+
+/// GitHub noreply 邮箱里的账号名：`123+login@users.noreply.github.com` 和 `login@users.noreply.github.com` 是同一个账号
+fn gh_login(email: &str) -> Option<&str> {
+    let local = email.strip_suffix("@users.noreply.github.com")?;
+    Some(local.rsplit_once('+').map_or(local, |(_, l)| l)).filter(|l| !l.is_empty())
 }
 
 /// Co-authored-by 的名字里写了模型（Claude Code 会写 `Claude Opus 5.5 <noreply@anthropic.com>`）就取出来；
@@ -432,14 +632,63 @@ mod tests {
     }
 
     fn commit(email: &str, keys: Vec<u32>) -> Commit {
-        Commit { hash: "a".repeat(40), email: email.into(), name: "".into(), author_ts: 1000, commit_ts: 1000, subject: "s".into(), coauthors: vec![], assisted: vec![], files: vec![FileAdd { rel: "a.rs".into(), keys, ..Default::default() }] }
+        Commit { hash: "a".repeat(40), email: email.into(), author_ts: 1000, commit_ts: 1000, subject: "s".into(), files: vec![FileAdd { rel: "a.rs".into(), keys, ..Default::default() }], ..Default::default() }
+    }
+
+    /// 两周以前的写入：连着两行在同一次写入里也紧挨着才算；单独一行不算；认领过的不再给别的提交
+    #[test]
+    fn old_writes_need_two_adjacent_lines() {
+        let mut store = Store::default();
+        let g = store.groups.entry("x".into()).or_default();
+        let old = 1_780_000_000 - 30 * 86400;
+        let ev = |key, next| Ev { rel: "a.rs".into(), key, src: Src::Codex, model: "m".into(), session: "old".into(), ts: old, tab: false, next, single_use: true };
+        // 一次写入：11 → 12 → 13；另一行 21 单独出现
+        g.evs.extend([ev(11, 12), ev(12, 13), ev(13, 0), ev(21, 0)]);
+        let idx = Index::build(&store);
+        let cfg = cfg();
+        let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+        let dated = |keys| { let mut c = commit("me@x.com", keys); c.author_ts = 1_780_000_000; c.commit_ts = c.author_ts; c };
+        let a = e.attribute(&dated(vec![11, 12, 13]));
+        assert!(a.lines[0].iter().all(|l| l.level == Level::Verified), "{:?}", a.lines[0]);
+        assert_eq!(e.reg.list[a.lines[0][2].who].id, "a:codex/m");
+        // 单独一行（两边都不是那次写入里的邻居）：可能是巧合，不算
+        let mut c = dated(vec![21, 99]);
+        c.hash = "b".repeat(40);
+        let a = e.attribute(&c);
+        assert_eq!(a.lines[0][0].level, Level::Unattributed);
+        // 已经被上面的提交认领了
+        let mut c = dated(vec![11, 12]);
+        c.hash = "c".repeat(40);
+        let a = e.attribute(&c);
+        assert_eq!(a.lines[0][0].level, Level::Unattributed);
+    }
+
+    #[test]
+    fn old_evidence_keeps_untimed_and_single_use_guards() {
+        for (src, ts) in [(Src::SweAgent, 0), (Src::Cursor, 1_775_000_000)] {
+            let mut store = Store::default();
+            store.groups.entry("old".into()).or_default().evs = vec![
+                Ev { rel: "a.rs".into(), key: 11, next: 12, src, model: "m".into(), session: "s".into(), ts, tab: false, single_use: true },
+                Ev { rel: "a.rs".into(), key: 12, next: 0, src, model: "m".into(), session: "s".into(), ts, tab: false, single_use: true },
+            ];
+            let idx = Index::build(&store);
+            let cfg = cfg();
+            let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+            let mut c = commit("me@x.com", vec![11, 12]);
+            c.author_ts = 1_780_000_000; c.commit_ts = c.author_ts;
+            let first = e.attribute(&c);
+            assert!(first.lines[0].iter().all(|a| a.level == if ts == 0 { Level::Unattributed } else { Level::Verified }));
+            c.hash = "b".repeat(40);
+            let second = e.attribute(&c);
+            assert!(second.lines[0].iter().all(|a| a.level == Level::Unattributed));
+        }
     }
 
     #[test]
     fn verified_wins_and_short_lines_follow_main() {
         let mut store = Store::default();
         let g = store.groups.entry("x".into()).or_default();
-        g.evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false, next: 0 });
+        g.evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false, next: 0, single_use: true });
         let idx = Index::build(&store);
         let cfg = cfg();
         let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
@@ -448,6 +697,25 @@ mod tests {
         assert_eq!(a.lines[0][1].who, a.lines[0][0].who); // 过短行跟随主力
         assert_eq!(a.lines[0][2].level, Level::Inferred); // 没对上的行跟随同提交的 verified 主力，标为推断
         assert_eq!(e.reg.list[a.lines[0][0].who].id, "a:codex/m");
+    }
+
+    #[test]
+    fn untimed_edits_require_unique_history_and_no_competing_attribution() {
+        let cfg=cfg();
+        let ev=|src,model:&str,ts|Ev{rel:"a.rs".into(),key:1,src,model:model.into(),session:"s".into(),ts,tab:false,next:0,single_use:true};
+        let mut c=commit("me@x.com",vec![1]);c.author_ts=1_780_000_000;c.commit_ts=c.author_ts;
+        let mut idx=Index{map:[(("a.rs".into(),1),vec![ev(Src::SweAgent,"swe-model",0)])].into_iter().collect()};
+        let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());
+        assert!(engine.attribute(&c).hits.is_empty(),"staged-only callers have no complete history");
+        engine.set_history(&[c.clone()]);assert_eq!(engine.attribute(&c).hits.get("swe-agent"),Some(&1));
+        let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());engine.set_history(&[c.clone(),c.clone()]);
+        assert!(engine.attribute(&c).hits.is_empty(),"repeated historical additions need a real timestamp");
+        idx.map.get_mut(&("a.rs".into(),1)).unwrap().push(ev(Src::Devin,"",0));
+        let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());engine.set_history(&[c.clone()]);
+        assert!(engine.attribute(&c).hits.is_empty(),"undated competing tools stay unknown");
+        idx.map.get_mut(&("a.rs".into(),1)).unwrap().push(ev(Src::Codex,"known-time",c.author_ts-1));
+        let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());engine.set_history(&[c.clone()]);
+        assert_eq!(engine.attribute(&c).hits.get("codex"),Some(&1),"dated evidence takes precedence");
     }
 
     #[test]
@@ -497,7 +765,7 @@ mod tests {
         }
         // strict 下，同提交里没对上的行不延伸给有逐行证据的 agent
         let mut store = Store::default();
-        store.groups.entry("x".into()).or_default().evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false, next: 0 });
+        store.groups.entry("x".into()).or_default().evs.push(Ev { rel: "a.rs".into(), key: 7, src: Src::Codex, model: "m".into(), session: "s".into(), ts: 900, tab: false, next: 0, single_use: true });
         let idx = Index::build(&store);
         let mut c = cfg();
         c.level = "strict".into();
@@ -508,7 +776,7 @@ mod tests {
     }
 
     fn ev(key: u32, src: Src, model: &str) -> Ev {
-        Ev { rel: "a.rs".into(), key, src, model: model.into(), session: "s".into(), ts: 900, tab: false, next: 0 }
+        Ev { rel: "a.rs".into(), key, src, model: model.into(), session: "s".into(), ts: 900, tab: false, next: 0, single_use: true }
     }
 
     #[test]
@@ -565,6 +833,20 @@ mod tests {
         c.hash = "c".repeat(40);
         let a = e.attribute(&c);
         assert_eq!(a.lines[0][0].level, Level::Unattributed);
+    }
+
+    #[test]
+    fn cursor_tool_calls_are_consumed_while_editor_line_sets_are_reusable() {
+        let cfg = cfg();
+        for single_use in [true, false] {
+            let mut store = Store::default();
+            store.groups.entry("cursor".into()).or_default().evs.push(Ev { single_use, ..ev(5, Src::Cursor, "m") });
+            let idx = Index::build(&store);
+            let mut engine = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+            assert_eq!(engine.attribute(&commit("me@x.com", vec![5])).lines[0][0].level, Level::Verified);
+            let second = engine.attribute(&commit("me@x.com", vec![5]));
+            assert_eq!(second.lines[0][0].level, if single_use { Level::Unattributed } else { Level::Verified });
+        }
     }
 
     #[test]
@@ -635,6 +917,120 @@ mod tests {
         assert_eq!(e.reg.list[l[1].who].id, "a:claude-code/c");
         // 没有自己证据的短行跟随它上面最近的长行
         assert_eq!(e.reg.list[l[3].who].id, "a:codex/m");
+    }
+
+    #[test]
+    fn reflowed_lines_join_back() {
+        // agent 写了一长行，格式化工具拆成两行（逗号、分号、空白不参与比较）
+        use crate::hash::{line_key, normalize};
+        let n = |l: &str| normalize(l, ".rs");
+        let mut store = Store::default();
+        store.groups.entry("x".into()).or_default().evs.push(ev(line_key("a.rs", &n("let total = compute(alpha, beta);")), Src::Codex, "m"));
+        let idx = Index::build(&store);
+        let cfg = cfg();
+        let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+        let (a, b) = (n("    let total = compute(alpha,"), n("        beta);"));
+        let mut c = commit("me@x.com", vec![line_key("a.rs", &a), line_key("a.rs", &b)]);
+        let mut joins = vec![0u32; 2 * JOIN_WINDOWS];
+        joins[0] = line_key("a.rs", &(a.clone() + &b));
+        c.files[0].joins = joins;
+        let r = e.attribute(&c);
+        assert!(r.lines[0].iter().all(|x| x.level == Level::Verified), "{:?}", r.lines[0]);
+        assert_eq!(e.reg.list[r.lines[0][1].who].id, "a:codex/m");
+    }
+
+    #[test]
+    fn model_quotas_do_not_consume_another_models_evidence() {
+        let mut store = Store::default();
+        store.groups.entry("g".into()).or_default().evs.push(ev(2, Src::Codex, "beta"));
+        let idx = Index::build(&store);
+        let mut cfg = cfg();
+        cfg.level = "strict".into();
+        let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+        let mut c = commit("me@x.com", vec![1, 2]);
+        c.lines_stamp = Some((vec![("codex/alpha".into(), 1), ("codex/beta".into(), 1)], 2));
+        let r = e.attribute(&c);
+        assert_eq!(e.reg.list[r.lines[0][0].who].id, "a:codex/alpha");
+        assert_eq!(e.reg.list[r.lines[0][1].who].id, "a:codex/beta");
+    }
+
+    #[test]
+    fn counted_commits_do_not_inherit_branch_guesses() {
+        for level in ["standard", "loose"] {
+            for count in [0, 1] {
+                let store = Store::default();
+                let idx = Index::build(&store);
+                let mut cfg = cfg();
+                cfg.level = level.into();
+                let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+                let mut c = commit("me@x.com", vec![1, 2, 3]);
+                e.unit_branch.insert(c.hash.clone(), "codex/topic".into());
+                c.lines_stamp = Some((if count == 0 { vec![] } else { vec![("kimi/m".into(), count)] }, 3));
+                let r = e.attribute(&c);
+                assert_eq!(r.lines[0].iter().filter(|a| e.reg.list[a.who].kind == "agent").count(), count);
+                assert!(r.lines[0].iter().all(|a| e.reg.list[a.who].harness.as_deref() != Some("codex")));
+            }
+        }
+    }
+
+    #[test]
+    fn lines_stamp_is_a_quota_not_the_whole_commit() {
+        // 在 Kimi 里提交：hook 记下 Kimi 写了 2 行、共 3 行。日志后来没了：2 行按章补给 Kimi，另 1 行未确认（不推断是谁手写）
+        let store = Store::default();
+        let idx = Index::build(&store);
+        let cfg = cfg();
+        let mut stamps = HashMap::new();
+        stamps.insert("a".repeat(40), ("kimi".to_string(), Some("k3".to_string())));
+        let mut e = Engine::new(&cfg, &idx, &[], &[], stamps);
+        let mut c = commit("me@x.com", vec![1, 2, 3]);
+        c.lines_stamp = Some((vec![("kimi/k3".into(), 2)], 3));
+        let r = e.attribute(&c);
+        let ids: Vec<&str> = r.lines[0].iter().map(|x| e.reg.list[x.who].id.as_str()).collect();
+        assert_eq!(ids.iter().filter(|i| **i == "a:kimi/k3").count(), 2, "{ids:?}");
+        assert_eq!(ids.iter().filter(|i| **i == "unattributed").count(), 1, "{ids:?}");
+        // 章写着 0 行：整个提交都不算给 Kimi
+        let mut c = commit("me@x.com", vec![4, 5]);
+        c.lines_stamp = Some((vec![], 2));
+        c.coauthors = vec!["claude opus 5.5 <noreply@anthropic.com>".into()];
+        let r = e.attribute(&c);
+        assert!(r.lines[0].iter().all(|x| x.level == Level::Unattributed), "{:?}", r.lines[0]);
+    }
+
+    #[test]
+    fn web_merge_is_not_the_mergers_code() {
+        // GitHub 网页上合并的提交：作者是别的邮箱也不算那个人写的；找不到记录就是未确认
+        let store = Store::default();
+        let idx = Index::build(&store);
+        let cfg = cfg();
+        let mut e = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+        let mut c = commit("someone@gmail.com", vec![1, 2, 3, 4]);
+        c.web = true;
+        let r = e.attribute(&c);
+        assert!(r.lines[0].iter().all(|x| x.level == Level::Unattributed), "{:?}", r.lines[0]);
+        // 正文里各提交的 Creditia-Lines 加起来是 6 / 8，提交实际只新增 4 行：按比例 3 行给 Codex
+        c.hash = "b".repeat(40);
+        c.lines_stamp = Some((vec![("codex/gpt-a".into(), 6)], 8));
+        let r = e.attribute(&c);
+        let ids: Vec<&str> = r.lines[0].iter().map(|x| e.reg.list[x.who].id.as_str()).collect();
+        assert_eq!(ids.iter().filter(|i| **i == "a:codex/gpt-a").count(), 3, "{ids:?}");
+        assert_eq!(ids.iter().filter(|i| **i == "unattributed").count(), 1, "{ids:?}");
+        // 不是网页合并的、别人的提交：照旧算那个人
+        let r = e.attribute(&commit("someone@gmail.com", vec![5]));
+        assert_eq!(e.reg.list[r.lines[0][0].who].kind, "human");
+    }
+
+    #[test]
+    fn same_github_account_is_the_same_person() {
+        let store = Store::default();
+        let idx = Index::build(&store);
+        let mut c = Config::default();
+        c.directors.push(crate::config::Director { id: "h:me".into(), name: "me".into(), emails: vec!["123+me@users.noreply.github.com".into()] });
+        let mut e = Engine::new(&c, &idx, &[], &[], HashMap::new());
+        let r = e.attribute(&commit("me@users.noreply.github.com", vec![1]));
+        assert_eq!(r.lines[0][0].level, Level::Unattributed);
+        let r = e.attribute(&commit("456+you@users.noreply.github.com", vec![1]));
+        assert_eq!(e.reg.list[r.lines[0][0].who].kind, "human");
+        assert_eq!(gh_login("me@x.com"), None);
     }
 
     #[test]

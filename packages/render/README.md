@@ -15,7 +15,7 @@ node src/gallery.ts my/credits.json out ink,cinema   # 指定档案、输出目�
 
 ```ts
 import { buildModel, styleById, art, frames, exporter } from '@creditia/render/src/index.ts';
-const m = buildModel(credits, { lang: 'zh', named: false, sign: '' });
+const m = buildModel(credits, { lang: 'zh' });   // named: false 不写其他贡献者的名字
 const a = art('roll', m, styleById('ukiyoe')!, { variant: 'vertical' });   // { w, h, svg, hits, bg, title }
 writeFileSync('roll.png', exporter.png(a, 2));
 writeFileSync('roll.svg', exporter.svg(a));                              // 文字已转成路径

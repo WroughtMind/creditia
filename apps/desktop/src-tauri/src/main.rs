@@ -123,10 +123,10 @@ fn config_of(project_id: String) -> Res<Value> {
 }
 
 #[tauri::command]
-fn set_display(project_id: String, named: bool, sign: String) -> Res<()> {
+fn set_display(project_id: String, hide_names: bool, sign: String) -> Res<()> {
     let lib = Library::open()?;
     let p = project(&lib, &project_id)?;
-    Ok(creditia_store::Library::set_display(std::path::Path::new(&p.path), named, &sign)?)
+    Ok(creditia_store::Library::set_display(std::path::Path::new(&p.path), hide_names, &sign)?)
 }
 
 /// 核心二进制：和 App 一起打包（sidecar 同目录），开发时用 PATH 里的
@@ -742,7 +742,7 @@ fn open_path(path: String) -> Res<()> {
 fn doctor() -> Value {
     if let Ok(v) = run_core(&["doctor"]) {
         if let Some(a) = v["sources"].as_array() {
-            return json!(a.iter().map(|h| json!({ "id": h["source"], "path": h["path"], "ok": h["readable"], "records": h["records"], "unsupported": h["unsupported"].as_bool().unwrap_or(false) })).collect::<Vec<_>>());
+            return json!(a.iter().map(|h| json!({ "id": h["source"], "path": h["path"], "ok": h["readable"], "records": h["records"], "scope": h["scope"], "unsupported": h["unsupported"].as_bool().unwrap_or(false) })).collect::<Vec<_>>());
         }
     }
     doctor_local()

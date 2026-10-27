@@ -2,7 +2,7 @@
 
 use crate::{any_ts, percent_decode, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -138,8 +138,8 @@ pub fn doctor() -> Health {
         readable: base.is_dir(),
         format: "sessions/<cwd>/<uuid>/summary.json + chat_history.jsonl".into(),
         records: ss.len() as u64,
-        earliest: ss.iter().map(|s| s.start).filter(|&t| t > 0).min().map(date_cn),
-        latest: ss.iter().map(|s| s.end).max().filter(|&t| t > 0).map(date_cn),
+        earliest: ss.iter().map(|s| s.start).filter(|&t| t > 0).min().map(date_local),
+        latest: ss.iter().map(|s| s.end).max().filter(|&t| t > 0).map(date_local),
         note: creditia_core::tr!("无逐请求 token", "no per-request tokens"),
         ..Default::default()
     }

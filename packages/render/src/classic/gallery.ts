@@ -3,7 +3,8 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, existsSync
 import path from 'node:path';
 import { FORMS, renderSvg, svgToPng, buildModel, THEMES, type Ctx } from './index.ts';
 import { badge, ROLL_VARIANTS, RECEIPT_VARIANTS } from './forms.ts';
-import { creditsBlock, mergeCreditsMd, releaseNotes, prComment } from './text.ts';
+import { creditsBlock, mergeCreditsMd, releaseNotes, prComment } from '../text.ts';
+import { buildModel as buildText } from '../data.ts';
 
 const [, , dataDir = '../../spike/out', outDir = 'gallery'] = process.argv;
 const load = (p: string) => JSON.parse(readFileSync(path.join(dataDir, p), 'utf8'));
@@ -50,9 +51,10 @@ for (const [id, th, v] of variants) {
 console.log('✓ variants');
 
 for (const t of THEMES) writeFileSync(path.join(outDir, `badge-${t.id}.svg`), badge(m, t));
-writeFileSync(path.join(outDir, 'CREDITS.md'), mergeCreditsMd(null, creditsBlock(m)));
-writeFileSync(path.join(outDir, 'release-notes.md'), releaseNotes(m, 'v1.0.0'));
-writeFileSync(path.join(outDir, 'pr-comment.md'), prComment(m, 'pr:519'));
+const tm = buildText(m.raw, { lang: 'zh' });
+writeFileSync(path.join(outDir, 'CREDITS.md'), mergeCreditsMd(null, creditsBlock(tm)));
+writeFileSync(path.join(outDir, 'release-notes.md'), releaseNotes(tm, 'v1.0.0'));
+writeFileSync(path.join(outDir, 'pr-comment.md'), prComment(tm, 'pr:519'));
 
 // 总览页：上方切换风格，下方按清单顺序排列
 const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);

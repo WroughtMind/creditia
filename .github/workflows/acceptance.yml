@@ -1,0 +1,163 @@
+# Installs an existing candidate; never builds or publishes a Release.
+name: installer-acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run:
+        description: Successful release workflow run containing release-candidate
+        required: true
+  workflow_call:
+    inputs:
+      candidate_run:
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    env:
+      CANDIDATE_RUN: ${{ inputs.candidate_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-candidate
+          run-id: ${{ env.CANDIDATE_RUN }}
+          github-token: ${{ github.token }}
+          path: candidate
+      - run: node packaging/acceptance.mjs verify candidate
+      - name: Install and start Windows candidate
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $v = (Get-Content packages/cli/package.json | ConvertFrom-Json).version
+          $dest = Join-Path $env:RUNNER_TEMP 'creditia-installed'
+          $installer = (Resolve-Path "candidate/creditia_${v}_x64-setup.exe").Path
+          $p = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$dest") -PassThru -Wait
+          if ($p.ExitCode -ne 0) { throw "Installer exit $($p.ExitCode)" }
+          $core = Get-ChildItem $dest -Recurse -Filter creditia-core.exe
+          if (@($core).Count -ne 1) { throw 'Installed core missing or ambiguous' }
+          node packaging/acceptance.mjs analyze $core.FullName evidence
+          if ($LASTEXITCODE -ne 0) { throw 'Installed core analysis failed' }
+          $app = Get-ChildItem $dest -Recurse -Filter *.exe | Where-Object { $_.Name -notmatch 'core|uninstall' }
+          if (@($app).Count -ne 1) { throw 'Installed app missing or ambiguous' }
+          $env:CREDITIA_HOME = Join-Path (Get-Location) 'evidence/library'
+          Remove-Item Env:CREDITIA_CORE -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath $app.FullName -PassThru
+          try {
+            Start-Sleep -Seconds 12
+            $p.Refresh()
+            if ($p.HasExited -or $p.MainWindowHandle -eq 0) { throw 'App did not retain a native window' }
+            "$($p.MainWindowTitle) | $($p.MainWindowHandle)" | Set-Content evidence/window.txt
+          } finally { if (-not $p.HasExited) { Stop-Process -Id $p.Id } }
+      - name: Install and start Linux deb and AppImage
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y xvfb x11-utils imagemagick openbox dbus-x11 libwebkit2gtk-4.1-0 libayatana-appindicator3-1
+          sudo apt-get install -y "$PWD"/candidate/*.deb
+          package=$(dpkg-deb -f candidate/*.deb Package)
+          core=$(dpkg -L "$package" | grep '/creditia-core$')
+          app=$(dpkg -L "$package" | grep '/creditia-app$')
+          node packaging/acceptance.mjs analyze "$core" evidence/deb
+          mkdir -p "$RUNNER_TEMP/creditia-appimage"
+          chmod +x candidate/*.AppImage
+          (cd "$RUNNER_TEMP/creditia-appimage"; "$GITHUB_WORKSPACE"/candidate/*.AppImage --appimage-extract >/dev/null)
+          image="$RUNNER_TEMP/creditia-appimage/squashfs-root"
+          node packaging/acceptance.mjs analyze "$image/usr/bin/creditia-core" evidence/appimage
+          for kind in deb appimage; do
+            export EVIDENCE="$PWD/evidence/$kind"
+            export CREDITIA_HOME="$EVIDENCE/library"
+            unset CREDITIA_CORE
+            if [[ "$kind" == deb ]]; then export APP="$app"; else export APP="$image/AppRun"; fi
+            dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" bash -c '
+              set -euo pipefail
+              openbox >"$EVIDENCE/window-manager.log" 2>&1 &
+              "$APP" >"$EVIDENCE/app.log" 2>&1 & pid=$!
+              trap "kill $pid 2>/dev/null || true" EXIT
+              for attempt in $(seq 1 30); do
+                kill -0 "$pid"
+                if xwininfo -name creditia -stats >"$EVIDENCE/main-window.txt" 2>/dev/null && grep -q "Map State: IsViewable" "$EVIDENCE/main-window.txt"; then break; fi
+                sleep 2
+              done
+              sleep 12
+              kill -0 "$pid"
+              xwininfo -name creditia -stats >"$EVIDENCE/main-window.txt"
+              xwininfo -root -tree >"$EVIDENCE/windows.txt"
+              import -window root "$EVIDENCE/window.png"
+              grep -q "Map State: IsViewable" "$EVIDENCE/main-window.txt"
+              awk "/Width:/ { w=\$2 } /Height:/ { h=\$2 } END { exit !(w >= 760 && h >= 560) }" "$EVIDENCE/main-window.txt"
+            '
+          done
+      - name: Install and start Intel Mac candidate
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence "$RUNNER_TEMP/creditia-mount" "$RUNNER_TEMP/creditia-installed"
+          hdiutil attach -readonly -nobrowse -mountpoint "$RUNNER_TEMP/creditia-mount" candidate/*_x64.dmg
+          trap 'hdiutil detach "$RUNNER_TEMP/creditia-mount"' EXIT
+          app="$RUNNER_TEMP/creditia-installed/creditia.app"
+          ditto "$RUNNER_TEMP/creditia-mount/creditia.app" "$app"
+          codesign --verify --deep --strict "$app"
+          node packaging/acceptance.mjs analyze "$app/Contents/MacOS/creditia-core" evidence
+          executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          open -n -g "$app" --env CREDITIA_HOME="$PWD/evidence/library"
+          sleep 12
+          pgrep -f "$app/Contents/MacOS/$executable" > evidence/app-pids.txt
+          xargs kill < evidence/app-pids.txt
+      - name: Install native UI test drivers
+        if: runner.os == 'Linux'
+        shell: bash
+        run: cargo install tauri-driver --version 2.1.0 --locked
+      - name: Exercise installed Windows app through native controls
+        if: runner.os == 'Windows'
+        timeout-minutes: 12
+        shell: pwsh
+        run: |
+          $env:CREDITIA_HOME = Join-Path (Get-Location) 'evidence/library'
+          Remove-Item Env:CREDITIA_CORE -ErrorAction SilentlyContinue
+          $app = Get-ChildItem "$env:RUNNER_TEMP/creditia-installed" -Recurse -Filter *.exe | Where-Object { $_.Name -notmatch 'core|uninstall' }
+          ./packaging/windows-acceptance.ps1 -App $app.FullName
+      - name: Exercise Linux deb and direct AppImage
+        timeout-minutes: 12
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y webkit2gtk-driver libfuse2
+          for kind in deb appimage; do
+            export CREDITIA_HOME="$PWD/evidence/$kind/library"
+            export EVIDENCE="$PWD/evidence/$kind/ui"
+            unset CREDITIA_CORE
+            if [[ "$kind" == deb ]]; then
+              package=$(dpkg-deb -f candidate/*.deb Package)
+              export APP=$(dpkg -L "$package" | grep '/creditia-app$')
+            else
+              export APP=$(realpath candidate/*.AppImage)
+            fi
+            dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" bash -c '
+              set -euo pipefail
+              openbox >/tmp/creditia-ui-openbox.log 2>&1 &
+              node packaging/desktop-acceptance.mjs "$APP" "$EVIDENCE"
+            '
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: acceptance-${{ matrix.os }}
+          path: evidence/
+          if-no-files-found: warn

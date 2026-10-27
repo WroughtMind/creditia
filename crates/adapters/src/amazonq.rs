@@ -8,7 +8,7 @@
 
 use crate::{added_lines, open_ro, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -59,18 +59,28 @@ fn edits(name: &str, a: &Value) -> Vec<(String, String)> {
     out.into_iter().filter(|(_, t)| !t.trim().is_empty()).collect()
 }
 
-struct Parsed {
-    id: String,
-    edits: Vec<(String, String, String, i64)>,
-    start: i64,
-    end: i64,
-    prompts: i64,
-    models: HashMap<String, usize>,
+pub(crate) struct Parsed {
+    pub(crate) id: String,
+    pub(crate) edits: Vec<(String, String, String, i64)>,
+    pub(crate) start: i64,
+    pub(crate) end: i64,
+    pub(crate) prompts: i64,
+    pub(crate) models: HashMap<String, usize>,
 }
 
-fn parse(v: &Value) -> Parsed {
-    let hist: Vec<&Value> = v["history"].as_array().map(|h| h.iter().collect()).unwrap_or_default();
+pub(crate) fn parse(v: &Value) -> Parsed {
     let fallback = v["model"].as_str().or(v["model_info"]["model_id"].as_str()).unwrap_or("").to_string();
+    parse_with_fallback(v, &fallback, true)
+}
+
+/// Kiro has mutable selected-model metadata; only historical request IDs can
+/// label its edits. Keep the legacy Amazon Q entry point's behavior separate.
+pub(crate) fn parse_request_models(v: &Value) -> Parsed {
+    parse_with_fallback(v, "", false)
+}
+
+fn parse_with_fallback(v: &Value, fallback: &str, allow_whole_write: bool) -> Parsed {
+    let hist: Vec<&Value> = v["history"].as_array().map(|h| h.iter().collect()).unwrap_or_default();
     let mut p = Parsed { id: v["conversation_id"].as_str().unwrap_or("").to_string(), edits: vec![], start: 0, end: 0, prompts: 0, models: HashMap::new() };
     // 成功的工具结果：在下一项 user 里
     let mut ok: std::collections::HashSet<&str> = std::collections::HashSet::new();
@@ -80,7 +90,7 @@ fn parse(v: &Value) -> Parsed {
             "Prompt" => p.prompts += 1,
             "ToolUseResults" => {
                 for r in c["tool_use_results"].as_array().into_iter().flatten().filter(|r| r["status"] == "Success") {
-                    ok.insert(r["tool_use_id"].as_str().unwrap_or(""));
+                    if let Some(id) = r["tool_use_id"].as_str().filter(|s| !s.is_empty()) { ok.insert(id); }
                 }
             }
             _ => {}
@@ -92,7 +102,7 @@ fn parse(v: &Value) -> Parsed {
             p.start = if p.start == 0 { ts } else { p.start.min(ts) };
             p.end = p.end.max(ts);
         }
-        let model = e["request_metadata"]["model_id"].as_str().filter(|m| !m.is_empty()).map(String::from).unwrap_or_else(|| fallback.clone());
+        let model = e["request_metadata"]["model_id"].as_str().filter(|m| !m.is_empty()).map(String::from).unwrap_or_else(|| fallback.to_string());
         if !model.is_empty() {
             *p.models.entry(model.clone()).or_default() += 1;
         }
@@ -101,11 +111,13 @@ fn parse(v: &Value) -> Parsed {
             continue;
         }
         for u in a["tool_uses"].as_array().into_iter().flatten() {
-            if !ok.contains(u["id"].as_str().unwrap_or("")) {
+            let Some(id) = u["id"].as_str().filter(|s| !s.is_empty()) else { continue };
+            if !ok.contains(id) {
                 continue;
             }
             let name = u["name"].as_str().unwrap_or("");
             let args = if u["args"].is_object() { &u["args"] } else { &u["orig_args"] };
+            if !allow_whole_write && name == "fs_write" && args["command"] == "create" { continue; }
             for (path, text) in edits(name, args) {
                 p.edits.push((path, text, model.clone(), ts));
             }
@@ -188,8 +200,8 @@ pub fn doctor() -> Health {
         readable: db.is_file(),
         format: "data.sqlite3 conversations (JSON per directory)".into(),
         records: cs.len() as u64,
-        earliest: cs.iter().map(|p| p.start).filter(|&t| t > 0).min().map(date_cn),
-        latest: cs.iter().map(|p| p.end).max().filter(|&t| t > 0).map(date_cn),
+        earliest: cs.iter().map(|p| p.start).filter(|&t| t > 0).min().map(date_local),
+        latest: cs.iter().map(|p| p.end).max().filter(|&t| t > 0).map(date_local),
         note: creditia_core::tr!(
             "每个目录只存最近一次对话；逐条时间与模型。尚未用真实日志核对",
             "only the latest conversation per directory is kept; time and model per request. Not yet checked against real logs"

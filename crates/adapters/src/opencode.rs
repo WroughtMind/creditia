@@ -12,7 +12,7 @@
 
 use crate::{any_ts, apply_patch_files, new_text, open_ro, path_arg, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, Ev, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -35,6 +35,10 @@ pub fn kilo_dir() -> PathBuf {
 }
 
 /// 各个库：(文件, 记成哪个工具)。OpenCode 的 opencode*.db，Kilo 命令行的 kilo*.db（它也可能沿用 opencode-<渠道>.db）
+pub fn costrict_dir() -> PathBuf {
+    std::env::var("CREDITIA_COSTRICT_CLI_DIR").ok().filter(|s| !s.is_empty()).map(PathBuf::from).unwrap_or_else(|| crate::xdg_data().join("costrict"))
+}
+
 fn dbs() -> Vec<(PathBuf, Src)> {
     let mut out: Vec<(PathBuf, Src)> = vec![];
     let mut add = |dir: PathBuf, prefixes: &[&str], src: Src| {
@@ -53,6 +57,7 @@ fn dbs() -> Vec<(PathBuf, Src)> {
     };
     add(source_dir(Src::OpenCode), &["opencode"], Src::OpenCode);
     add(kilo_dir(), &["kilo", "opencode"], Src::Kilo);
+    add(costrict_dir(), &["costrict", "opencode"], Src::Costrict);
     if let Some(p) = std::env::var("OPENCODE_DB").ok().filter(|s| s.ends_with(".db")).map(PathBuf::from).filter(|p| p.is_absolute() && p.is_file()) {
         if !out.iter().any(|(q, _)| q == &p) {
             out.push((p, Src::OpenCode));
@@ -81,12 +86,30 @@ impl Acc {
             *self.providers.entry(provider.to_string()).or_default() += 1;
         }
     }
+    /// Tabnine's engine records preserve the historical model/time and actual
+    /// completed diff; its UI selection is mutable and cannot replace them.
+    #[allow(clippy::too_many_arguments)]
+    fn completed_tool(&mut self, pm: &PathMap, src: Src, name: &str, state: &Value, cwd: &str, model: &str, sid: &str, ts: i64) {
+        if src != Src::Tabnine {
+            self.tool(pm, src, name, &state["input"], cwd, model, sid, ts);
+            return;
+        }
+        if !matches!(name, "edit" | "write" | "patch" | "apply_patch") { return; }
+        if let Some(diff) = state["metadata"]["diff"].as_str().filter(|_| matches!(name, "edit" | "write")).and_then(crate::tabnine_ide::diff_added) {
+            if let Some(p) = path_arg(&state["input"]) {
+                crate::trace_import::push_scoped_events(&mut self.evs, pm, cwd, &p, &diff, src, model, sid, ts);
+            }
+            return;
+        }
+        self.tool(pm, src, name, &state["input"], cwd, model, sid, ts);
+    }
     /// 一次完成的工具调用
     #[allow(clippy::too_many_arguments)]
     fn tool(&mut self, pm: &PathMap, src: Src, name: &str, input: &Value, cwd: &str, model: &str, sid: &str, ts: i64) {
         let abs = |p: &str| if Path::new(p).is_absolute() || p.get(1..2) == Some(":") { p.to_string() } else { format!("{}/{}", cwd.trim_end_matches('/'), p) };
         match name {
             "bash" | "shell" => {
+                if src == Src::Tabnine { return; }
                 let Some(cmd) = input["command"].as_str() else { return };
                 let wd = input["workdir"].as_str().map(abs).unwrap_or_else(|| cwd.to_string());
                 for rel in crate::shell_targets(cmd, &wd, pm) {
@@ -99,6 +122,12 @@ impl Acc {
                 }
             }
             _ => {
+                if matches!(src, Src::Costrict | Src::Tabnine) {
+                    let n = name.to_lowercase();
+                    let old = ["old_string", "oldString", "old_str"].iter().any(|k| input[*k].is_string());
+                    let edits = input["edits"].as_array().is_some_and(|a| !a.is_empty() && a.iter().all(|e| ["old_string", "oldString", "old_str"].iter().any(|k| e[*k].is_string())));
+                    if n.contains("write") || n.contains("create") || (!old && !edits) { return; }
+                }
                 if let (Some(p), Some(text)) = (path_arg(input), new_text(name, input)) {
                     crate::push_text(&mut self.evs, pm, &abs(&p), &text, src, model, sid, ts);
                 }
@@ -155,14 +184,15 @@ fn sessions() -> Vec<Sess> {
     out
 }
 
-fn scan_files(store: &mut Store, pm: &PathMap, seen: &mut HashSet<String>) -> usize {
+fn scan_files(store: &mut Store, pm: &PathMap, seen: &mut HashSet<(Src, String)>, tabnine: &HashSet<String>) -> usize {
     let mut n = 0;
     for s in sessions().into_iter().filter(|s| pm.in_project(&s.dir)) {
-        if !seen.insert(s.id.clone()) {
+        let src = engine_source(Src::OpenCode, &s.id, tabnine);
+        if !seen.insert((src, s.id.clone())) {
             continue;
         }
         let msg_dir = storage().join("message").join(&s.id);
-        let gk = format!("opencode:{}", s.id);
+        let gk = format!("{}:{}", src.harness(), s.id);
         // 指纹：会话文件 + 消息目录的修改时间
         let fp = { let a = fingerprint(&s.file); let b = fingerprint(&msg_dir); (a.0.max(b.0), a.1 + b.1) };
         if store.groups.get(&gk).map(|g| g.fp == fp).unwrap_or(false) {
@@ -183,10 +213,10 @@ fn scan_files(store: &mut Store, pm: &PathMap, seen: &mut HashSet<String>) -> us
                 if p["type"] != "tool" || p["state"]["status"] != "completed" {
                     continue;
                 }
-                acc.tool(pm, Src::OpenCode, p["tool"].as_str().unwrap_or(""), &p["state"]["input"], &cwd, &model, &s.id, any_ts(&p["state"]["time"]["end"]).unwrap_or(ts));
+                acc.completed_tool(pm, src, p["tool"].as_str().unwrap_or(""), &p["state"], &cwd, &model, &s.id, any_ts(&p["state"]["time"]["end"]).unwrap_or(ts));
             }
         }
-        let mut g = acc.session(Src::OpenCode, &s.id, s.created, s.updated, None);
+        let mut g = acc.session(src, &s.id, s.created, s.updated, None);
         g.fp = fp;
         store.groups.insert(gk, g);
         n += 1;
@@ -253,7 +283,7 @@ fn v1_db(acc: &mut Acc, c: &rusqlite::Connection, pm: &PathMap, src: Src, sid: &
             if p["type"] != "tool" || p["state"]["status"] != "completed" {
                 continue;
             }
-            acc.tool(pm, src, p["tool"].as_str().unwrap_or(""), &p["state"]["input"], &cwd, &model, sid, any_ts(&p["state"]["time"]["end"]).unwrap_or(ts));
+            acc.completed_tool(pm, src, p["tool"].as_str().unwrap_or(""), &p["state"], &cwd, &model, sid, any_ts(&p["state"]["time"]["end"]).unwrap_or(ts));
         }
     }
 }
@@ -271,7 +301,7 @@ fn v2_db(acc: &mut Acc, c: &rusqlite::Connection, pm: &PathMap, src: Src, sid: &
                 acc.end = acc.end.max(any_ts(&m["time"]["completed"]).unwrap_or(ts));
                 for t in m["content"].as_array().into_iter().flatten().filter(|t| t["type"] == "tool" && t["state"]["status"] == "completed") {
                     let at = any_ts(&t["time"]["completed"]).unwrap_or(ts);
-                    acc.tool(pm, src, t["name"].as_str().unwrap_or(""), &t["state"]["input"], dir, &model, sid, at);
+                    acc.completed_tool(pm, src, t["name"].as_str().unwrap_or(""), &t["state"], dir, &model, sid, at);
                 }
             }
             _ => {}
@@ -279,7 +309,11 @@ fn v2_db(acc: &mut Acc, c: &rusqlite::Connection, pm: &PathMap, src: Src, sid: &
     }
 }
 
-fn scan_dbs(store: &mut Store, pm: &PathMap, st: &mut Stats, seen: &mut HashSet<String>) -> HashMap<Src, usize> {
+fn engine_source(src: Src, id: &str, tabnine: &HashSet<String>) -> Src {
+    if src == Src::OpenCode && tabnine.contains(id) { Src::Tabnine } else { src }
+}
+
+fn scan_dbs(store: &mut Store, pm: &PathMap, st: &mut Stats, seen: &mut HashSet<(Src, String)>, tabnine: &HashSet<String>) -> HashMap<Src, usize> {
     let mut n: HashMap<Src, usize> = HashMap::new();
     for (db, src) in dbs() {
         let c = match open_ro(&db) {
@@ -295,12 +329,13 @@ fn scan_dbs(store: &mut Store, pm: &PathMap, st: &mut Stats, seen: &mut HashSet<
             (a.0.max(b.0), a.1 + b.1)
         };
         for (sid, dir, created, updated, tokens, v2) in db_sessions(&c) {
-            if !pm.in_project(&dir) || seen.contains(&sid) {
+            let src = engine_source(src, &sid, tabnine);
+            if !pm.in_project(&dir) || seen.contains(&(src, sid.clone())) {
                 continue;
             }
-            seen.insert(sid.clone());
+            seen.insert((src, sid.clone()));
             *n.entry(src).or_default() += 1;
-            let gk = format!("opencode:{sid}");
+            let gk = format!("{}:{sid}", src.harness());
             if store.groups.get(&gk).is_some_and(|g| g.fp == fp) {
                 continue;
             }
@@ -319,35 +354,65 @@ fn scan_dbs(store: &mut Store, pm: &PathMap, st: &mut Stats, seen: &mut HashSet<
 }
 
 pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
+    let mut tabnine = crate::tabnine_ide::session_ids();
+    tabnine.extend(store.session_owners.iter().filter(|(_, owner)| **owner == Src::Tabnine).filter_map(|(key, _)| key.strip_prefix("opencode:").map(String::from)));
+    tabnine.extend(store.groups.values().flat_map(|g| &g.sessions).filter(|s| s.src == Src::Tabnine).map(|s| s.id.clone()));
+    for sid in &tabnine { store.session_owners.insert(format!("opencode:{sid}"), Src::Tabnine); }
+    // Ownership may become known after a previous scan cached generic OpenCode.
+    for sid in &tabnine { store.groups.remove(&format!("opencode:{sid}")); }
     let mut seen = HashSet::new();
-    let by = scan_dbs(store, pm, st, &mut seen);
-    let n = by.get(&Src::OpenCode).copied().unwrap_or(0) + scan_files(store, pm, &mut seen);
+    let by = scan_dbs(store, pm, st, &mut seen, &tabnine);
+    let n = by.get(&Src::OpenCode).copied().unwrap_or(0) + scan_files(store, pm, &mut seen, &tabnine);
     if n > 0 {
         st.notes.push(creditia_core::tr!("opencode: 项目相关会话 {n} 个", "opencode: {n} sessions for this project"));
     }
+    if let Some(n) = by.get(&Src::Costrict).filter(|&&n| n > 0) {
+        st.notes.push(format!("costrict-cli: {n} sessions for this project"));
+    }
     if let Some(k) = by.get(&Src::Kilo).filter(|&&k| k > 0) {
         st.notes.push(creditia_core::tr!("kilo 命令行: 项目相关会话 {k} 个", "kilo cli: {k} sessions for this project"));
+    }
+    if let Some(n) = by.get(&Src::Tabnine).filter(|&&n| n > 0) {
+        st.notes.push(format!("tabnine-ide: {n} native engine sessions for this project"));
     }
 }
 
 /// 所有会话的（工具, 目录, 创建, 更新），discover / doctor 用
 fn all_sessions() -> Vec<(Src, String, i64, i64)> {
+    let tabnine = crate::tabnine_ide::session_ids();
     let mut seen = HashSet::new();
     let mut out = vec![];
     for (db, src) in dbs() {
         let Ok(c) = open_ro(&db) else { continue };
         for (id, dir, created, updated, _, _) in db_sessions(&c) {
-            if seen.insert(id) {
+            let src = engine_source(src, &id, &tabnine);
+            if seen.insert((src, id)) {
                 out.push((src, dir, created, updated));
             }
         }
     }
     for s in sessions() {
-        if seen.insert(s.id) {
-            out.push((Src::OpenCode, s.dir, s.created, s.updated));
+        let src = engine_source(Src::OpenCode, &s.id, &tabnine);
+        if seen.insert((src, s.id)) {
+            out.push((src, s.dir, s.created, s.updated));
         }
     }
     out
+}
+
+pub(crate) fn tabnine_native_session_ids() -> HashSet<String> {
+    let mapped = crate::tabnine_ide::session_ids();
+    let mut found = HashSet::new();
+    for (db, src) in dbs().into_iter().filter(|(_, src)| *src == Src::OpenCode) {
+        let Ok(c) = open_ro(&db) else { continue };
+        for (id, _, _, _, _, _) in db_sessions(&c) {
+            if engine_source(src, &id, &mapped) == Src::Tabnine { found.insert(id); }
+        }
+    }
+    for s in sessions() {
+        if mapped.contains(&s.id) { found.insert(s.id); }
+    }
+    found
 }
 
 pub fn discover() -> Vec<Activity> {
@@ -370,8 +435,8 @@ pub fn doctor() -> Vec<Health> {
             readable,
             format: "opencode.db (session / message / part, session_v2 / session_message) + storage/*.json".into(),
             records: ss.len() as u64,
-            earliest: ss.iter().map(|s| s.2).filter(|&t| t > 0).min().map(date_cn),
-            latest: ss.iter().map(|s| s.3).max().filter(|&t| t > 0).map(date_cn),
+            earliest: ss.iter().map(|s| s.2).filter(|&t| t > 0).min().map(date_local),
+            latest: ss.iter().map(|s| s.3).max().filter(|&t| t > 0).map(date_local),
             note,
             ..Default::default()
         }
@@ -382,6 +447,11 @@ pub fn doctor() -> Vec<Health> {
     if dbs().iter().any(|d| d.1 == Src::Kilo) {
         out.push(health(Src::Kilo, "kilo-cli", kilo_dir(), true, creditia_core::tr!("OpenCode 的分支，同样的表。尚未用真实日志核对", "a fork of OpenCode with the same tables. Not yet checked against real logs")));
     }
+    if dbs().iter().any(|d| d.1 == Src::Costrict) {
+        let mut h = health(Src::Costrict, "costrict-cli", costrict_dir(), true, creditia_core::tr!("官方 CoStrict SQLite session/message/part 格式；只读取已完成工具；已通过构造记录测试，尚无本机真实会话核验", "Official CoStrict SQLite session/message/part; completed tools only; fixture validated, no local real-session validation"));
+        h.format = "costrict/opencode*.db (session / message / part)".into();
+        out.push(h);
+    }
     out
 }
 
@@ -389,6 +459,26 @@ pub fn doctor() -> Vec<Health> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn tabnine_engine_ownership_preserves_model_time_and_actual_diff() {
+        let pm = PathMap { known: ["src/a.ts".to_string()].into_iter().collect(), markers: vec!["/demo/".into()], excludes: vec![] };
+        let ids = ["ses-native".to_string()].into_iter().collect();
+        assert_eq!(engine_source(Src::OpenCode, "ses-native", &ids), Src::Tabnine);
+        assert_eq!(engine_source(Src::Kilo, "ses-native", &ids), Src::Kilo);
+        let mut acc = Acc::default();
+        let state = json!({"input":{"filePath":"src/a.ts","content":"unproven whole text"}});
+        acc.completed_tool(&pm, Src::Tabnine, "write", &state, "/w/demo", "native-model", "ses-native", 10);
+        assert!(acc.evs.is_empty());
+        let state = json!({"input":{"filePath":"src/a.ts"},"metadata":{"diff":"--- a\n+++ a\n@@ -1 +1,2 @@\n-keep\n+keep\n+const actualAdded = 1;\n"}});
+        acc.completed_tool(&pm, Src::Tabnine, "read", &state, "/w/demo", "native-model", "ses-native", 10);
+        assert!(acc.evs.is_empty());
+        acc.completed_tool(&pm, Src::Tabnine, "write", &state, "/w/demo", "native-model", "ses-native", 10);
+        assert_eq!(acc.evs.len(), 1);
+        assert_eq!(acc.evs[0].model, "native-model");
+        assert_eq!(acc.evs[0].ts, 10);
+        assert_eq!(acc.evs[0].src, Src::Tabnine);
+    }
 
     #[test]
     fn tool_kinds() {
@@ -402,5 +492,9 @@ mod tests {
         let files: HashSet<&str> = acc.evs.iter().map(|e| e.rel.as_str()).collect();
         assert_eq!(files, ["src/a.ts", "src/b.ts"].into_iter().collect());
         assert_eq!(acc.evs.len(), 3);
+        let mut strict = Acc::default();
+        strict.tool(&pm, Src::Costrict, "write", &json!({"filePath":"/w/demo/src/a.ts","content":"human retained context"}), "/w/demo", "m", "s", 1);
+        strict.tool(&pm, Src::Costrict, "edit", &json!({"filePath":"/w/demo/src/a.ts","oldString":"human context","newString":"human context\nactual added line"}), "/w/demo", "m", "s", 1);
+        assert_eq!(strict.evs.len(), 1);
     }
 }

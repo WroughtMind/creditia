@@ -2,10 +2,11 @@
 // 颜色、条形、标记都走风格钩子，所以每张图在每个风格里都是那个风格的样子。
 import { Scene, rect, line, path, circle, el, g, r, ease, arc, mix, alpha } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
-import { fmt, pct, compact } from '../data.ts';
+import { fmt, pct, compact, nameOf } from '../data.ts';
 import type { Style, Box } from '../style.ts';
 import { T, colorOf, tip, canvas, plateCorner, handTip, keyRank, legendRows, type PieceOpts } from './common.ts';
 import { segsOf, segTip } from './tier.ts';
+import { historyLabels, historyEmpty } from '../history.ts';
 
 /** 图的外框：标签 + 标题 + 图例，返回绘图区 */
 function frame(m: Model, st: Style, W: number, plotH: number, kicker: string, title: string, legend = true): { s: Scene; p: Box } {
@@ -277,7 +278,7 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
   }
   // 每周的悬停区
   m.weeks.forEach((w, i) => {
-    const lines = keys.filter((k) => w.by[k]).sort((a, b) => w.by[b] - w.by[a]).slice(0, 4).map((k) => `${agentOf(m, k)?.name ?? (k === 'human' ? T(m, '开发者', 'Developer') : k)} ${fmt(w.by[k])}`);
+    const lines = keys.filter((k) => w.by[k]).sort((a, b) => w.by[b] - w.by[a]).slice(0, 4).map((k) => `${agentOf(m, k)?.name ?? (k === 'human' ? nameOf('people', m.lang) : k)} ${fmt(w.by[k])}`);
     s.hit(X(i) - p.w / n / 2, p.y, p.w / n, p.h, { t: w.week, d: [T(m, `${fmt(tot[i])} 行`, `${fmt(tot[i])} lines`), ...lines] });
   });
   s.text(m.weeks[0].week, p.x, p.y + p.h + 26, { font: st.f.label, size: 13, fill: st.c.faint });
@@ -344,13 +345,18 @@ export function clock(m: Model, st: Style, o: PieceOpts): Scene | null {
 // ───────────────────────── 版本 ─────────────────────────
 
 export function versions(m: Model, st: Style, o: PieceOpts): Scene | null {
-  if (m.versions.length < 2) return null;
+  const { buckets, basis } = m.history;
+  const labels = historyLabels(basis, m.lang);
   const t = o.t ?? 1;
-  const { s, p } = frame(m, st, 1200, 520, T(m, '版本', 'RELEASES'), T(m, '各版本贡献', 'Contributions per release'));
-  const keys = orderKeys(m, m.versions.flatMap((v) => Object.keys(v.by)));
-  const max = Math.max(...m.versions.map((v) => v.total), 1);
-  const n = m.versions.length, bw = Math.min(120, (p.w / n) * 0.55);
-  m.versions.forEach((v, i) => {
+  const { s, p } = frame(m, st, Math.max(1200, buckets.length * 170 + 168), 520, labels.kicker, labels.caption, buckets.length > 0);
+  if (!buckets.length) {
+    s.text(historyEmpty(m.history, m.lang), p.x + p.w / 2, p.y + p.h / 2, { font: st.f.body, size: 22, fill: st.c.soft, anchor: 'middle', maxW: p.w });
+    return s;
+  }
+  const keys = orderKeys(m, buckets.flatMap((v) => Object.keys(v.by)));
+  const max = Math.max(...buckets.map((v) => v.total), 1);
+  const n = buckets.length, bw = Math.min(120, (p.w / n) * 0.55);
+  buckets.forEach((v, i) => {
     const x = p.x + (i + 0.5) * (p.w / n) - bw / 2;
     let y = p.y + p.h;
     const k = ease(t, i, n);
@@ -360,9 +366,10 @@ export function versions(m: Model, st: Style, o: PieceOpts): Scene | null {
       y -= h;
       s.add(rect(x, y, bw, Math.max(0, h - 1.5), { fill: fillKey(s, st, m, key) }));
     }
-    s.text(v.tag === 'unreleased' ? T(m, '未发布', 'unreleased') : v.tag, x + bw / 2, p.y + p.h + 28, { font: st.f.label, size: 14, fill: st.c.soft, anchor: 'middle' });
+    const label = v.tag === 'unreleased' ? T(m, '未发布', 'Unreleased') : v.tag;
+    s.text(label, x + bw / 2, p.y + p.h + 28, { font: st.f.label, size: 14, fill: st.c.soft, anchor: 'middle', maxW: p.w / n - 16 });
     st.num(s, compact(v.total), x + bw / 2, y - 12, 16, 'middle', { fill: st.c.soft });
-    s.hit(x - 10, p.y, bw + 20, p.h + 40, { t: v.tag, d: [v.date, T(m, `${fmt(v.total)} 行`, `${fmt(v.total)} lines`), ...keys.filter((q) => v.by[q]).slice(0, 4).map((q) => `${agentOf(m, q)?.name ?? q} ${Math.round((v.by[q] / v.total) * 100)}%`)] });
+    s.hit(x - 10, p.y, bw + 20, p.h + 40, { t: label, d: [v.date, T(m, `${fmt(v.total)} 行`, `${fmt(v.total)} lines`), ...keys.filter((q) => v.by[q]).slice(0, 4).map((q) => `${agentOf(m, q)?.name ?? q} ${Math.round((v.by[q] / v.total) * 100)}%`)].filter(Boolean) });
   });
   st.rule(s, p.x, p.y + p.h, p.w, 'thin');
   return s;
@@ -397,7 +404,7 @@ export function survival(m: Model, st: Style, o: PieceOpts): Scene | null {
 // ───────────────────────── 文件马赛克（矩形树图） ─────────────────────────
 
 export function mosaic(m: Model, st: Style, o: PieceOpts): Scene | null {
-  const files = m.files.filter((f) => f.lines > 0).sort((a, b) => b.lines - a.lines).slice(0, 60);
+  const files = m.files.filter((f) => f.lines > 0).sort((a, b) => b.lines - a.lines);
   if (files.length < 3) return null;
   const t = o.t ?? 1;
   const { s, p } = frame(m, st, 1200, 640, T(m, '文件', 'FILES'), T(m, '各文件代码归属', 'Code by file'));
@@ -415,9 +422,10 @@ export function mosaic(m: Model, st: Style, o: PieceOpts): Scene | null {
       if (w > 0) s.add(rect(x, b.y, w, b.h, { fill: fillKey(s, st, m, key), opacity: 0.35 + 0.6 * k }));
       x += w;
     }
-    s.add(rect(b.x, b.y, b.w, b.h, { fill: 'none', stroke: st.c.bg, strokeWidth: 2 }));
+    // 文件全画：很小的格子描边跟着变细，不然整格被边线盖住
+    s.add(rect(b.x, b.y, b.w, b.h, { fill: 'none', stroke: st.c.bg, strokeWidth: Math.min(2, b.w / 4, b.h / 4) }));
     if (b.w > 120 && b.h > 34 && f.path) s.text(f.path.split('/').pop()!, b.x + 10, b.y + 22, { font: st.f.mono, size: 13, fill: st.on(fillKey(s, st, m, keys[0])), maxW: b.w - 20, overflow: 'clip' });
-    s.hit(b.x, b.y, b.w, b.h, { t: f.path || T(m, '文件', 'file'), d: [T(m, `${fmt(f.lines)} 行`, `${fmt(f.lines)} lines`), ...keys.filter((q) => f.by[q]).slice(0, 4).map((q) => `${agentOf(m, q)?.name ?? (q === 'human' ? T(m, '开发者', 'Developer') : q)} ${Math.round((f.by[q] / f.lines) * 100)}%`)] });
+    s.hit(b.x, b.y, b.w, b.h, { t: f.path || T(m, '文件', 'file'), d: [T(m, `${fmt(f.lines)} 行`, `${fmt(f.lines)} lines`), ...keys.filter((q) => f.by[q]).slice(0, 4).map((q) => `${agentOf(m, q)?.name ?? (q === 'human' ? nameOf('people', m.lang) : q)} ${Math.round((f.by[q] / f.lines) * 100)}%`)] });
   });
   return s;
 }
@@ -469,7 +477,7 @@ export function calendar(m: Model, st: Style, o: PieceOpts): Scene | null {
     const top = Object.entries(by!).sort((a, b) => b[1] - a[1])[0][0];
     const k = ease(t, w, weeks);
     s.add(rect(x, y, cell, cell, { fill: fillKey(s, st, m, top), opacity: (0.3 + 0.7 * Math.sqrt(tot / max)) * k, rx: Math.min(st.radius, 4) }));
-    s.hit(x, y, cell, cell, { k: top, t: day, d: [T(m, `${fmt(tot)} 行`, `${fmt(tot)} lines`), ...Object.entries(by!).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([q, v]) => `${agentOf(m, q)?.name ?? (q === 'human' ? T(m, '开发者', 'Developer') : q === 'unattributed' ? T(m, '未确认', 'Unattributed') : q)} ${fmt(v)}`)] });
+    s.hit(x, y, cell, cell, { k: top, t: day, d: [T(m, `${fmt(tot)} 行`, `${fmt(tot)} lines`), ...Object.entries(by!).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([q, v]) => `${agentOf(m, q)?.name ?? (q === 'human' ? nameOf('people', m.lang) : q === 'unattributed' ? T(m, '未确认', 'Unattributed') : q)} ${fmt(v)}`)] });
   }
   return s;
 }

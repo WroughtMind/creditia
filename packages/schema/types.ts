@@ -7,6 +7,8 @@ export interface Credits {
   schemaVersion: 0;
   project: { name: string; repos?: string[]; range?: { from?: DateStr; to?: DateStr } };
   generatedAt: string;
+  /** 按天、会话时间用的时区偏移（秒）；旧档案没有，按 +08:00 */
+  tzOffset?: number;
   level?: 'strict' | 'standard' | 'loose';
   head?: string;
   versions?: { tag: string; date: DateStr }[];
@@ -14,6 +16,8 @@ export interface Credits {
   contributors: Contributor[];
   totals: Partial<Totals>;
   breakdown: Breakdown[];
+  /** 按提交者汇总（按贡献者看用）；旧档案没有 */
+  authors?: { id: string; name?: string; me: boolean; linesAdded: number; by: Record<string, number> }[];
   human?: Partial<{ prompts: number; plans: number; reviews: number; tabAssistedLines: number; agentReviews: number }>;
   timeline?: { week: string; byContributor: Record<string, number> }[];
   days?: { date: DateStr; by: Record<string, number> }[];

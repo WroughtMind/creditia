@@ -115,7 +115,6 @@
    "kind": "human",
    "name": "Lin",
    "roles": [
-    "author",
     "reviewer"
    ]
   },
@@ -149,9 +148,9 @@
   "linesAdded": 50190,
   "linesSurviving": 32122,
   "linesWritten": 95361,
-  "tokens": 447160264,
+  "tokens": 447845678,
   "sessions": 140,
-  "days": 99,
+  "days": 101,
   "binaryFiles": 31
  },
  "breakdown": [
@@ -324,31 +323,9 @@
    }
   },
   {
-   "contributor": "h:lin",
-   "linesAdded": 2240,
-   "linesSurviving": 1525,
-   "byEvidence": {
-    "declared": {
-     "linesAdded": 2240
-    }
-   },
-   "byArea": {
-    "core": 1120,
-    "frontend": 560,
-    "tests": 336,
-    "docs": 224
-   },
-   "byVersion": {
-    "v0.1.0": 450,
-    "v0.2.0": 773,
-    "v0.3.0": 874,
-    "unreleased": 143
-   }
-  },
-  {
    "contributor": "h:mara",
    "linesAdded": 380,
-   "linesSurviving": 222,
+   "linesSurviving": 259,
    "byEvidence": {
     "declared": {
      "linesAdded": 380
@@ -362,31 +339,57 @@
    },
    "byVersion": {
     "v0.1.0": 76,
-    "v0.2.0": 151,
-    "v0.3.0": 119,
-    "unreleased": 34
+    "v0.2.0": 131,
+    "v0.3.0": 148,
+    "unreleased": 25
    }
   },
   {
    "contributor": "unattributed",
-   "linesAdded": 1180,
-   "linesSurviving": 671,
+   "linesAdded": 3420,
+   "linesSurviving": 1998,
    "byEvidence": {
     "unattributed": {
-     "linesAdded": 1180
+     "linesAdded": 3420
     }
    },
    "byArea": {
-    "core": 590,
-    "frontend": 295,
-    "tests": 177,
-    "docs": 118
+    "core": 1710,
+    "frontend": 855,
+    "tests": 513,
+    "docs": 342
    },
    "byVersion": {
-    "v0.1.0": 225,
-    "v0.2.0": 306,
-    "v0.3.0": 298,
-    "unreleased": 351
+    "v0.1.0": 682,
+    "v0.2.0": 1361,
+    "v0.3.0": 1075,
+    "unreleased": 302
+   }
+  }
+ ],
+ "authors": [
+  {
+   "id": "h:lin",
+   "name": "Lin",
+   "me": true,
+   "linesAdded": 49810,
+   "by": {
+    "a:claude-code/claude-opus-5-5": 16240,
+    "a:claude-code/claude-fable-5-1": 7980,
+    "a:codex/gpt-5.6-sol": 14650,
+    "a:cursor/composer-2": 4310,
+    "a:kimi/kimi-k3": 2230,
+    "a:grok/grok-5-code": 980,
+    "unattributed": 3420
+   }
+  },
+  {
+   "id": "h:mara",
+   "name": "Mara Okafor",
+   "me": false,
+   "linesAdded": 380,
+   "by": {
+    "h:mara": 380
    }
   }
  ],
@@ -401,117 +404,83 @@
   {
    "week": "2026-W20",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 1207,
-    "a:claude-code/claude-fable-5-1": 11,
-    "a:codex/gpt-5.6-sol": 247,
-    "a:cursor/composer-2": 468,
-    "a:kimi/kimi-k3": 148,
-    "a:grok/grok-5-code": 19,
-    "h:lin": 166,
-    "h:mara": 30,
-    "unattributed": 1
+    "a:claude-code/claude-opus-5-5": 1957,
+    "a:claude-code/claude-fable-5-1": 100,
+    "a:codex/gpt-5.6-sol": 1462,
+    "a:cursor/composer-2": 208,
+    "a:kimi/kimi-k3": 57,
+    "a:grok/grok-5-code": 70,
+    "h:mara": 26,
+    "unattributed": 56
    }
   },
   {
    "week": "2026-W21",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 1131,
-    "a:claude-code/claude-fable-5-1": 266,
-    "a:codex/gpt-5.6-sol": 591,
-    "a:cursor/composer-2": 198,
-    "a:kimi/kimi-k3": 161,
-    "a:grok/grok-5-code": 63,
-    "h:lin": 228,
-    "h:mara": 9,
-    "unattributed": 73
+    "a:claude-code/claude-opus-5-5": 192,
+    "a:claude-code/claude-fable-5-1": 889,
+    "a:codex/gpt-5.6-sol": 716,
+    "a:cursor/composer-2": 429,
+    "a:kimi/kimi-k3": 221,
+    "a:grok/grok-5-code": 85,
+    "h:mara": 28,
+    "unattributed": 70
    }
   },
   {
    "week": "2026-W22",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 922,
-    "a:claude-code/claude-fable-5-1": 495,
-    "a:codex/gpt-5.6-sol": 1689,
-    "a:cursor/composer-2": 344,
-    "a:kimi/kimi-k3": 235,
-    "a:grok/grok-5-code": 18,
-    "h:lin": 270,
-    "h:mara": 5,
-    "unattributed": 64
+    "a:claude-code/claude-opus-5-5": 286,
+    "a:claude-code/claude-fable-5-1": 493,
+    "a:codex/gpt-5.6-sol": 1570,
+    "a:cursor/composer-2": 383,
+    "a:kimi/kimi-k3": 77,
+    "a:grok/grok-5-code": 44,
+    "h:mara": 39,
+    "unattributed": 41
    }
   },
   {
    "week": "2026-W23",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 782,
-    "a:claude-code/claude-fable-5-1": 206,
-    "a:codex/gpt-5.6-sol": 1046,
-    "a:cursor/composer-2": 290,
-    "a:kimi/kimi-k3": 197,
-    "a:grok/grok-5-code": 12,
-    "h:lin": 250,
-    "h:mara": 19,
-    "unattributed": 64
+    "a:claude-code/claude-opus-5-5": 549,
+    "a:claude-code/claude-fable-5-1": 647,
+    "a:codex/gpt-5.6-sol": 1141,
+    "a:cursor/composer-2": 320,
+    "a:kimi/kimi-k3": 82,
+    "a:grok/grok-5-code": 110,
+    "h:mara": 46,
+    "unattributed": 17
    }
   },
   {
    "week": "2026-W24",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 1608,
-    "a:claude-code/claude-fable-5-1": 691,
-    "a:codex/gpt-5.6-sol": 1071,
-    "a:cursor/composer-2": 473,
-    "a:kimi/kimi-k3": 39,
-    "a:grok/grok-5-code": 61,
-    "h:lin": 240,
-    "h:mara": 34,
-    "unattributed": 22
+    "a:claude-code/claude-opus-5-5": 1673,
+    "a:claude-code/claude-fable-5-1": 951,
+    "a:codex/gpt-5.6-sol": 1584,
+    "a:cursor/composer-2": 97,
+    "a:kimi/kimi-k3": 61,
+    "a:grok/grok-5-code": 16,
+    "h:mara": 17,
+    "unattributed": 55
    }
   },
   {
    "week": "2026-W25",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 722,
-    "a:claude-code/claude-fable-5-1": 809,
-    "a:codex/gpt-5.6-sol": 942,
-    "a:cursor/composer-2": 146,
-    "a:kimi/kimi-k3": 181,
-    "a:grok/grok-5-code": 76,
-    "h:lin": 166,
-    "h:mara": 14,
-    "unattributed": 72
-   }
-  },
-  {
-   "week": "2026-W26",
-   "byContributor": {
-    "a:claude-code/claude-opus-5-5": 1947,
-    "a:claude-code/claude-fable-5-1": 209,
-    "a:codex/gpt-5.6-sol": 1509,
-    "a:cursor/composer-2": 513,
-    "a:kimi/kimi-k3": 241,
-    "a:grok/grok-5-code": 22,
-    "h:lin": 61,
-    "h:mara": 6,
-    "unattributed": 28
-   }
-  },
-  {
-   "week": "2026-W27",
-   "byContributor": {
-    "a:claude-code/claude-opus-5-5": 1405,
-    "a:claude-code/claude-fable-5-1": 922,
-    "a:codex/gpt-5.6-sol": 45,
-    "a:cursor/composer-2": 464,
-    "a:kimi/kimi-k3": 138,
-    "a:grok/grok-5-code": 7,
-    "h:lin": 11,
+    "a:claude-code/claude-opus-5-5": 1876,
+    "a:claude-code/claude-fable-5-1": 24,
+    "a:codex/gpt-5.6-sol": 1576,
+    "a:cursor/composer-2": 267,
+    "a:kimi/kimi-k3": 16,
+    "a:grok/grok-5-code": 5,
     "h:mara": 20,
     "unattributed": 47
    }
   },
   {
-   "week": "2026-W28",
+   "week": "2026-W26",
    "byContributor": {
     "a:claude-code/claude-opus-5-5": 4,
     "a:claude-code/claude-fable-5-1": 394,
@@ -519,111 +488,116 @@
     "a:cursor/composer-2": 163,
     "a:kimi/kimi-k3": 124,
     "a:grok/grok-5-code": 87,
-    "h:lin": 64,
-    "h:mara": 0,
-    "unattributed": 77
+    "h:mara": 11,
+    "unattributed": 0
+   }
+  },
+  {
+   "week": "2026-W27",
+   "byContributor": {
+    "a:claude-code/claude-opus-5-5": 1961,
+    "a:claude-code/claude-fable-5-1": 792,
+    "a:codex/gpt-5.6-sol": 1297,
+    "a:cursor/composer-2": 498,
+    "a:kimi/kimi-k3": 110,
+    "a:grok/grok-5-code": 24,
+    "h:mara": 17,
+    "unattributed": 4
+   }
+  },
+  {
+   "week": "2026-W28",
+   "byContributor": {
+    "a:claude-code/claude-opus-5-5": 1489,
+    "a:claude-code/claude-fable-5-1": 997,
+    "a:codex/gpt-5.6-sol": 1820,
+    "a:cursor/composer-2": 103,
+    "a:kimi/kimi-k3": 125,
+    "a:grok/grok-5-code": 71,
+    "h:mara": 19,
+    "unattributed": 16
    }
   },
   {
    "week": "2026-W29",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 1612,
-    "a:claude-code/claude-fable-5-1": 707,
-    "a:codex/gpt-5.6-sol": 1694,
-    "a:cursor/composer-2": 212,
-    "a:kimi/kimi-k3": 55,
-    "a:grok/grok-5-code": 44,
-    "h:lin": 13,
-    "h:mara": 35,
-    "unattributed": 80
+    "a:claude-code/claude-opus-5-5": 1624,
+    "a:claude-code/claude-fable-5-1": 760,
+    "a:codex/gpt-5.6-sol": 753,
+    "a:cursor/composer-2": 16,
+    "a:kimi/kimi-k3": 166,
+    "a:grok/grok-5-code": 29,
+    "h:mara": 12,
+    "unattributed": 74
    }
   },
   {
    "week": "2026-W30",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 2017,
-    "a:claude-code/claude-fable-5-1": 191,
-    "a:codex/gpt-5.6-sol": 821,
-    "a:cursor/composer-2": 310,
-    "a:kimi/kimi-k3": 110,
-    "a:grok/grok-5-code": 25,
-    "h:lin": 224,
-    "h:mara": 36,
-    "unattributed": 33
+    "a:claude-code/claude-opus-5-5": 1196,
+    "a:claude-code/claude-fable-5-1": 881,
+    "a:codex/gpt-5.6-sol": 49,
+    "a:cursor/composer-2": 404,
+    "a:kimi/kimi-k3": 186,
+    "a:grok/grok-5-code": 89,
+    "h:mara": 0,
+    "unattributed": 27
    }
   },
   {
    "week": "2026-W31",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 60,
-    "a:claude-code/claude-fable-5-1": 595,
-    "a:codex/gpt-5.6-sol": 428,
-    "a:cursor/composer-2": 138,
-    "a:kimi/kimi-k3": 259,
-    "a:grok/grok-5-code": 72,
-    "h:lin": 247,
-    "h:mara": 1,
-    "unattributed": 60
+    "a:claude-code/claude-opus-5-5": 1524,
+    "a:claude-code/claude-fable-5-1": 484,
+    "a:codex/gpt-5.6-sol": 1671,
+    "a:cursor/composer-2": 72,
+    "a:kimi/kimi-k3": 90,
+    "a:grok/grok-5-code": 2,
+    "h:mara": 10,
+    "unattributed": 51
    }
   },
   {
    "week": "2026-W32",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 1353,
-    "a:claude-code/claude-fable-5-1": 722,
-    "a:codex/gpt-5.6-sol": 3,
-    "a:cursor/composer-2": 183,
-    "a:kimi/kimi-k3": 209,
-    "a:grok/grok-5-code": 59,
-    "h:lin": 255,
-    "h:mara": 6,
-    "unattributed": 26
+    "a:claude-code/claude-opus-5-5": 1664,
+    "a:claude-code/claude-fable-5-1": 95,
+    "a:codex/gpt-5.6-sol": 1626,
+    "a:cursor/composer-2": 247,
+    "a:kimi/kimi-k3": 84,
+    "a:grok/grok-5-code": 58,
+    "h:mara": 14,
+    "unattributed": 64
    }
   },
   {
    "week": "2026-W33",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 36,
-    "a:claude-code/claude-fable-5-1": 208,
-    "a:codex/gpt-5.6-sol": 1160,
-    "a:cursor/composer-2": 441,
-    "a:kimi/kimi-k3": 27,
-    "a:grok/grok-5-code": 109,
-    "h:lin": 128,
-    "h:mara": 14,
-    "unattributed": 38
+    "a:claude-code/claude-opus-5-5": 564,
+    "a:claude-code/claude-fable-5-1": 344,
+    "a:codex/gpt-5.6-sol": 741,
+    "a:cursor/composer-2": 91,
+    "a:kimi/kimi-k3": 56,
+    "a:grok/grok-5-code": 34,
+    "h:mara": 46,
+    "unattributed": 78
    }
   },
   {
    "week": "2026-W34",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 604,
-    "a:claude-code/claude-fable-5-1": 793,
-    "a:codex/gpt-5.6-sol": 508,
-    "a:cursor/composer-2": 186,
-    "a:kimi/kimi-k3": 113,
-    "a:grok/grok-5-code": 21,
-    "h:lin": 56,
-    "h:mara": 13,
-    "unattributed": 77
-   }
-  },
-  {
-   "week": "2026-W35",
-   "byContributor": {
-    "a:claude-code/claude-opus-5-5": 1987,
-    "a:claude-code/claude-fable-5-1": 112,
-    "a:codex/gpt-5.6-sol": 1131,
-    "a:cursor/composer-2": 301,
-    "a:kimi/kimi-k3": 177,
-    "a:grok/grok-5-code": 74,
-    "h:lin": 23,
+    "a:claude-code/claude-opus-5-5": 229,
+    "a:claude-code/claude-fable-5-1": 616,
+    "a:codex/gpt-5.6-sol": 1025,
+    "a:cursor/composer-2": 342,
+    "a:kimi/kimi-k3": 169,
+    "a:grok/grok-5-code": 10,
     "h:mara": 44,
     "unattributed": 62
    }
   },
   {
-   "week": "2026-W36",
+   "week": "2026-W35",
    "byContributor": {
     "a:claude-code/claude-opus-5-5": 562,
     "a:claude-code/claude-fable-5-1": 794,
@@ -631,51 +605,60 @@
     "a:cursor/composer-2": 56,
     "a:kimi/kimi-k3": 202,
     "a:grok/grok-5-code": 101,
-    "h:lin": 118,
-    "h:mara": 16,
-    "unattributed": 62
+    "h:mara": 20,
+    "unattributed": 26
+   }
+  },
+  {
+   "week": "2026-W36",
+   "byContributor": {
+    "a:claude-code/claude-opus-5-5": 1565,
+    "a:claude-code/claude-fable-5-1": 943,
+    "a:codex/gpt-5.6-sol": 1550,
+    "a:cursor/composer-2": 480,
+    "a:kimi/kimi-k3": 248,
+    "a:grok/grok-5-code": 40,
+    "h:mara": 20,
+    "unattributed": 9
    }
   },
   {
    "week": "2026-W37",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 1919,
-    "a:claude-code/claude-fable-5-1": 844,
-    "a:codex/gpt-5.6-sol": 1632,
-    "a:cursor/composer-2": 480,
-    "a:kimi/kimi-k3": 91,
-    "a:grok/grok-5-code": 51,
-    "h:lin": 32,
-    "h:mara": 20,
-    "unattributed": 6
+    "a:claude-code/claude-opus-5-5": 864,
+    "a:claude-code/claude-fable-5-1": 76,
+    "a:codex/gpt-5.6-sol": 18,
+    "a:cursor/composer-2": 528,
+    "a:kimi/kimi-k3": 236,
+    "a:grok/grok-5-code": 107,
+    "h:mara": 44,
+    "unattributed": 27
    }
   },
   {
    "week": "2026-W38",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 19,
-    "a:claude-code/claude-fable-5-1": 978,
-    "a:codex/gpt-5.6-sol": 1548,
-    "a:cursor/composer-2": 469,
-    "a:kimi/kimi-k3": 258,
-    "a:grok/grok-5-code": 41,
-    "h:lin": 182,
-    "h:mara": 28,
+    "a:claude-code/claude-opus-5-5": 1320,
+    "a:claude-code/claude-fable-5-1": 592,
+    "a:codex/gpt-5.6-sol": 1488,
+    "a:cursor/composer-2": 110,
+    "a:kimi/kimi-k3": 32,
+    "a:grok/grok-5-code": 119,
+    "h:mara": 47,
     "unattributed": 65
    }
   },
   {
    "week": "2026-W39",
    "byContributor": {
-    "a:claude-code/claude-opus-5-5": 413,
-    "a:claude-code/claude-fable-5-1": 115,
-    "a:codex/gpt-5.6-sol": 1784,
-    "a:cursor/composer-2": 530,
-    "a:kimi/kimi-k3": 226,
-    "a:grok/grok-5-code": 23,
-    "h:lin": 270,
-    "h:mara": 21,
-    "unattributed": 38
+    "a:claude-code/claude-opus-5-5": 377,
+    "a:claude-code/claude-fable-5-1": 963,
+    "a:codex/gpt-5.6-sol": 806,
+    "a:cursor/composer-2": 258,
+    "a:kimi/kimi-k3": 180,
+    "a:grok/grok-5-code": 33,
+    "h:mara": 46,
+    "unattributed": 18
    }
   }
  ],
@@ -683,134 +666,141 @@
   {
    "date": "2026-05-11",
    "by": {
-    "claude-code": 1125,
-    "grok": 164,
-    "unattributed": 253
+    "claude-code": 183,
+    "codex": 257,
+    "cursor": 562,
+    "unattributed": 164
+   }
+  },
+  {
+   "date": "2026-05-12",
+   "by": {
+    "claude-code": 506,
+    "codex": 545,
+    "cursor": 219,
+    "kimi": 399,
+    "h:mara": 99,
+    "unattributed": 170
    }
   },
   {
    "date": "2026-05-13",
    "by": {
-    "claude-code": 439,
-    "codex": 399,
-    "kimi": 99,
-    "grok": 170,
-    "h:lin": 254,
-    "unattributed": 319
+    "claude-code": 399,
+    "codex": 368,
+    "cursor": 544,
+    "kimi": 518,
+    "unattributed": 303
    }
   },
   {
    "date": "2026-05-14",
    "by": {
-    "claude-code": 1088,
-    "codex": 518,
-    "grok": 303
+    "codex": 425,
+    "cursor": 352,
+    "kimi": 198,
+    "grok": 477,
+    "unattributed": 492
    }
   },
   {
-   "date": "2026-05-15",
+   "date": "2026-05-16",
    "by": {
-    "codex": 352,
-    "cursor": 198,
-    "kimi": 477,
-    "h:lin": 492,
-    "unattributed": 244
+    "claude-code": 93,
+    "cursor": 379,
+    "kimi": 274,
+    "h:mara": 553
+   }
+  },
+  {
+   "date": "2026-05-17",
+   "by": {
+    "kimi": 6,
+    "grok": 46,
+    "h:mara": 370,
+    "unattributed": 445
    }
   },
   {
    "date": "2026-05-18",
    "by": {
-    "claude-code": 759,
-    "codex": 274,
-    "kimi": 553
+    "codex": 529,
+    "cursor": 224,
+    "grok": 294,
+    "h:mara": 548
    }
   },
   {
    "date": "2026-05-19",
    "by": {
-    "codex": 6,
-    "cursor": 46,
-    "kimi": 370,
-    "grok": 445,
-    "h:lin": 413,
-    "unattributed": 529
+    "claude-code": 1080,
+    "codex": 581,
+    "grok": 134,
+    "h:mara": 339,
+    "unattributed": 462
+   }
+  },
+  {
+   "date": "2026-05-20",
+   "by": {
+    "codex": 20,
+    "cursor": 551,
+    "kimi": 413,
+    "h:mara": 530
    }
   },
   {
    "date": "2026-05-21",
    "by": {
-    "codex": 294,
-    "cursor": 548,
-    "h:lin": 540,
-    "unattributed": 581
+    "cursor": 149,
+    "h:mara": 141,
+    "unattributed": 532
    }
   },
   {
    "date": "2026-05-22",
    "by": {
-    "codex": 134,
-    "cursor": 339,
-    "kimi": 462,
-    "unattributed": 20
+    "claude-code": 746,
+    "cursor": 435,
+    "kimi": 119,
+    "grok": 591
+   }
+  },
+  {
+   "date": "2026-05-23",
+   "by": {
+    "codex": 387,
+    "cursor": 298,
+    "unattributed": 112
    }
   },
   {
    "date": "2026-05-24",
    "by": {
-    "claude-code": 825,
-    "cursor": 530
+    "claude-code": 795,
+    "codex": 337,
+    "cursor": 454,
+    "kimi": 451,
+    "grok": 179,
+    "h:mara": 122
    }
   },
   {
-   "date": "2026-05-25",
-   "by": {
-    "claude-code": 873,
-    "cursor": 141,
-    "kimi": 532,
-    "h:lin": 373
-   }
-  },
-  {
-   "date": "2026-05-26",
-   "by": {
-    "codex": 119,
-    "cursor": 591
-   }
-  },
-  {
-   "date": "2026-05-28",
-   "by": {
-    "claude-code": 597,
-    "grok": 112,
-    "h:lin": 100
-   }
-  },
-  {
-   "date": "2026-05-29",
-   "by": {
-    "codex": 454,
-    "cursor": 451,
-    "kimi": 179,
-    "grok": 122,
-    "unattributed": 141
-   }
-  },
-  {
-   "date": "2026-05-30",
+   "date": "2026-05-27",
    "by": {
     "claude-code": 90
    }
   },
   {
-   "date": "2026-06-01",
+   "date": "2026-05-29",
    "by": {
     "kimi": 82,
     "grok": 65,
-    "h:lin": 6
+    "h:mara": 6
    }
   },
   {
-   "date": "2026-06-02",
+   "date": "2026-05-30",
    "by": {
     "claude-code": 160,
     "codex": 405,
@@ -820,17 +810,17 @@
    }
   },
   {
-   "date": "2026-06-05",
+   "date": "2026-06-02",
    "by": {
     "codex": 555,
     "cursor": 73,
     "kimi": 362,
     "grok": 47,
-    "h:lin": 388
+    "h:mara": 388
    }
   },
   {
-   "date": "2026-06-06",
+   "date": "2026-06-03",
    "by": {
     "codex": 248,
     "cursor": 2,
@@ -839,19 +829,19 @@
    }
   },
   {
-   "date": "2026-06-07",
+   "date": "2026-06-04",
    "by": {
     "claude-code": 1026,
-    "h:lin": 244,
+    "h:mara": 244,
     "unattributed": 297
    }
   },
   {
-   "date": "2026-06-08",
+   "date": "2026-06-05",
    "by": {}
   },
   {
-   "date": "2026-06-09",
+   "date": "2026-06-06",
    "by": {
     "claude-code": 1149,
     "cursor": 48,
@@ -859,7 +849,7 @@
    }
   },
   {
-   "date": "2026-06-10",
+   "date": "2026-06-07",
    "by": {
     "claude-code": 286,
     "cursor": 549,
@@ -867,39 +857,39 @@
    }
   },
   {
-   "date": "2026-06-11",
+   "date": "2026-06-08",
    "by": {
     "cursor": 412,
     "kimi": 237,
     "grok": 353,
-    "h:lin": 539
+    "h:mara": 539
    }
   },
   {
-   "date": "2026-06-12",
+   "date": "2026-06-09",
    "by": {
     "cursor": 185,
     "grok": 79,
-    "h:lin": 13
+    "h:mara": 13
    }
   },
   {
-   "date": "2026-06-13",
+   "date": "2026-06-10",
    "by": {
     "claude-code": 254,
     "kimi": 70,
-    "h:lin": 487
+    "h:mara": 487
    }
   },
   {
-   "date": "2026-06-14",
+   "date": "2026-06-11",
    "by": {
     "claude-code": 398,
     "kimi": 353
    }
   },
   {
-   "date": "2026-06-15",
+   "date": "2026-06-12",
    "by": {
     "claude-code": 54,
     "cursor": 349,
@@ -907,33 +897,33 @@
    }
   },
   {
-   "date": "2026-06-17",
+   "date": "2026-06-14",
    "by": {
     "claude-code": 829,
     "codex": 475,
     "grok": 552,
-    "h:lin": 494,
+    "h:mara": 494,
     "unattributed": 520
    }
   },
   {
-   "date": "2026-06-18",
+   "date": "2026-06-15",
    "by": {
     "kimi": 432,
     "grok": 75
    }
   },
   {
-   "date": "2026-06-22",
+   "date": "2026-06-19",
    "by": {
     "cursor": 119,
     "kimi": 282,
-    "h:lin": 194,
+    "h:mara": 194,
     "unattributed": 136
    }
   },
   {
-   "date": "2026-06-26",
+   "date": "2026-06-23",
    "by": {
     "claude-code": 970,
     "cursor": 420,
@@ -941,25 +931,25 @@
    }
   },
   {
-   "date": "2026-06-27",
+   "date": "2026-06-24",
    "by": {
     "cursor": 39,
-    "h:lin": 327,
+    "h:mara": 327,
     "unattributed": 297
    }
   },
   {
-   "date": "2026-07-01",
+   "date": "2026-06-28",
    "by": {
     "claude-code": 240,
     "cursor": 31,
     "kimi": 501,
-    "h:lin": 461,
+    "h:mara": 461,
     "unattributed": 241
    }
   },
   {
-   "date": "2026-07-02",
+   "date": "2026-06-29",
    "by": {
     "codex": 596,
     "cursor": 386,
@@ -969,23 +959,23 @@
    }
   },
   {
-   "date": "2026-07-03",
+   "date": "2026-06-30",
    "by": {
     "claude-code": 551,
     "codex": 152,
-    "h:lin": 520
+    "h:mara": 520
    }
   },
   {
-   "date": "2026-07-04",
+   "date": "2026-07-01",
    "by": {
     "kimi": 427,
     "grok": 518,
-    "h:lin": 507
+    "h:mara": 507
    }
   },
   {
-   "date": "2026-07-05",
+   "date": "2026-07-02",
    "by": {
     "claude-code": 955,
     "cursor": 139,
@@ -993,42 +983,42 @@
    }
   },
   {
-   "date": "2026-07-06",
+   "date": "2026-07-03",
    "by": {
     "cursor": 337,
     "kimi": 232,
     "grok": 451,
-    "h:lin": 230,
+    "h:mara": 230,
     "unattributed": 147
    }
   },
   {
-   "date": "2026-07-07",
+   "date": "2026-07-04",
    "by": {
     "codex": 153,
     "unattributed": 360
    }
   },
   {
-   "date": "2026-07-08",
+   "date": "2026-07-05",
    "by": {
     "cursor": 125,
     "kimi": 200
    }
   },
   {
-   "date": "2026-07-09",
+   "date": "2026-07-06",
    "by": {
     "claude-code": 478,
     "codex": 93,
     "cursor": 286,
     "kimi": 55,
-    "h:lin": 274,
+    "h:mara": 274,
     "unattributed": 504
    }
   },
   {
-   "date": "2026-07-11",
+   "date": "2026-07-08",
    "by": {
     "claude-code": 244,
     "codex": 120,
@@ -1036,23 +1026,23 @@
    }
   },
   {
-   "date": "2026-07-12",
+   "date": "2026-07-09",
    "by": {
     "claude-code": 749,
-    "h:lin": 597,
+    "h:mara": 597,
     "unattributed": 62
    }
   },
   {
-   "date": "2026-07-13",
+   "date": "2026-07-10",
    "by": {
     "kimi": 144,
     "grok": 466,
-    "h:lin": 487
+    "h:mara": 487
    }
   },
   {
-   "date": "2026-07-14",
+   "date": "2026-07-11",
    "by": {
     "codex": 17,
     "kimi": 368,
@@ -1060,31 +1050,31 @@
    }
   },
   {
-   "date": "2026-07-15",
+   "date": "2026-07-12",
    "by": {
     "kimi": 378,
-    "h:lin": 14
+    "h:mara": 14
+   }
+  },
+  {
+   "date": "2026-07-13",
+   "by": {
+    "codex": 447,
+    "h:mara": 145,
+    "unattributed": 259
+   }
+  },
+  {
+   "date": "2026-07-15",
+   "by": {
+    "cursor": 184,
+    "grok": 190,
+    "h:mara": 44,
+    "unattributed": 259
    }
   },
   {
    "date": "2026-07-16",
-   "by": {
-    "codex": 447,
-    "h:lin": 145,
-    "unattributed": 259
-   }
-  },
-  {
-   "date": "2026-07-18",
-   "by": {
-    "cursor": 184,
-    "grok": 190,
-    "h:lin": 44,
-    "unattributed": 259
-   }
-  },
-  {
-   "date": "2026-07-19",
    "by": {
     "claude-code": 652,
     "codex": 374,
@@ -1092,24 +1082,24 @@
    }
   },
   {
-   "date": "2026-07-20",
+   "date": "2026-07-17",
    "by": {
     "codex": 172,
     "cursor": 504,
     "kimi": 144,
-    "h:lin": 163,
+    "h:mara": 163,
     "unattributed": 456
    }
   },
   {
-   "date": "2026-07-21",
+   "date": "2026-07-18",
    "by": {
     "cursor": 495,
     "unattributed": 109
    }
   },
   {
-   "date": "2026-07-23",
+   "date": "2026-07-20",
    "by": {
     "claude-code": 332,
     "codex": 501,
@@ -1117,13 +1107,13 @@
    }
   },
   {
-   "date": "2026-07-26",
+   "date": "2026-07-23",
    "by": {
     "kimi": 558
    }
   },
   {
-   "date": "2026-07-28",
+   "date": "2026-07-25",
    "by": {
     "claude-code": 413,
     "cursor": 278,
@@ -1132,146 +1122,146 @@
    }
   },
   {
-   "date": "2026-07-30",
+   "date": "2026-07-27",
    "by": {
     "claude-code": 1195,
     "codex": 77,
     "cursor": 305,
     "kimi": 325,
-    "h:lin": 127,
+    "h:mara": 127,
     "unattributed": 381
    }
   },
   {
-   "date": "2026-07-31",
+   "date": "2026-07-28",
    "by": {
     "claude-code": 999,
     "codex": 548
    }
   },
   {
-   "date": "2026-08-02",
+   "date": "2026-07-30",
    "by": {
     "claude-code": 1,
     "codex": 54,
     "cursor": 310,
     "kimi": 133,
     "grok": 393,
-    "h:lin": 147
+    "h:mara": 147
    }
   },
   {
-   "date": "2026-08-03",
+   "date": "2026-07-31",
    "by": {
     "cursor": 167,
     "kimi": 243,
-    "h:lin": 331
+    "h:mara": 331
    }
   },
   {
-   "date": "2026-08-04",
+   "date": "2026-08-01",
    "by": {
     "claude-code": 430,
     "grok": 576
    }
   },
   {
-   "date": "2026-08-05",
+   "date": "2026-08-02",
    "by": {
     "cursor": 289,
     "kimi": 462
    }
   },
   {
-   "date": "2026-08-08",
+   "date": "2026-08-05",
    "by": {
     "codex": 331,
     "kimi": 571,
-    "h:lin": 516
+    "h:mara": 516
    }
   },
   {
-   "date": "2026-08-09",
+   "date": "2026-08-06",
    "by": {
     "claude-code": 905,
     "codex": 419,
     "cursor": 247,
     "kimi": 182,
     "grok": 189,
-    "h:lin": 7,
+    "h:mara": 7,
     "unattributed": 250
    }
   },
   {
-   "date": "2026-08-10",
+   "date": "2026-08-07",
    "by": {
     "codex": 266,
     "grok": 70,
-    "h:lin": 27,
+    "h:mara": 27,
     "unattributed": 399
    }
   },
   {
-   "date": "2026-08-12",
+   "date": "2026-08-09",
    "by": {
     "cursor": 253,
     "grok": 262,
-    "h:lin": 234,
+    "h:mara": 234,
     "unattributed": 4
    }
   },
   {
-   "date": "2026-08-14",
+   "date": "2026-08-11",
    "by": {
     "codex": 564,
     "cursor": 65
    }
   },
   {
-   "date": "2026-08-15",
+   "date": "2026-08-12",
    "by": {
     "claude-code": 293,
     "codex": 220,
     "cursor": 121,
     "kimi": 92,
     "grok": 582,
-    "h:lin": 309
+    "h:mara": 309
    }
   },
   {
-   "date": "2026-08-17",
+   "date": "2026-08-14",
    "by": {
     "grok": 231,
-    "h:lin": 165,
+    "h:mara": 165,
     "unattributed": 243
    }
   },
   {
-   "date": "2026-08-18",
+   "date": "2026-08-15",
    "by": {
     "grok": 2,
-    "h:lin": 576
+    "h:mara": 576
    }
   },
   {
-   "date": "2026-08-19",
+   "date": "2026-08-16",
    "by": {
     "codex": 461,
     "cursor": 322,
     "kimi": 336,
     "grok": 309,
-    "h:lin": 232,
+    "h:mara": 232,
     "unattributed": 299
    }
   },
   {
-   "date": "2026-08-21",
+   "date": "2026-08-18",
    "by": {
     "claude-code": 28
    }
   },
   {
-   "date": "2026-08-22",
+   "date": "2026-08-19",
    "by": {
     "claude-code": 1088,
     "codex": 224,
@@ -1281,31 +1271,31 @@
    }
   },
   {
-   "date": "2026-08-24",
+   "date": "2026-08-21",
    "by": {}
   },
   {
-   "date": "2026-08-26",
+   "date": "2026-08-23",
    "by": {
     "claude-code": 631,
     "codex": 356,
     "kimi": 436,
     "grok": 513,
-    "h:lin": 24
+    "h:mara": 24
    }
   },
   {
-   "date": "2026-08-27",
+   "date": "2026-08-24",
    "by": {
     "claude-code": 11,
     "codex": 23,
     "cursor": 404,
     "grok": 509,
-    "h:lin": 501
+    "h:mara": 501
    }
   },
   {
-   "date": "2026-08-28",
+   "date": "2026-08-25",
    "by": {
     "claude-code": 248,
     "cursor": 175,
@@ -1314,7 +1304,7 @@
    }
   },
   {
-   "date": "2026-08-30",
+   "date": "2026-08-27",
    "by": {
     "claude-code": 1073,
     "cursor": 368,
@@ -1323,7 +1313,7 @@
    }
   },
   {
-   "date": "2026-08-31",
+   "date": "2026-08-28",
    "by": {
     "claude-code": 322,
     "codex": 323,
@@ -1333,30 +1323,30 @@
    }
   },
   {
-   "date": "2026-09-04",
+   "date": "2026-09-01",
    "by": {
     "kimi": 366,
-    "h:lin": 270,
+    "h:mara": 270,
     "unattributed": 464
    }
   },
   {
-   "date": "2026-09-05",
+   "date": "2026-09-02",
    "by": {
     "codex": 80,
-    "h:lin": 301,
+    "h:mara": 301,
     "unattributed": 446
    }
   },
   {
-   "date": "2026-09-06",
+   "date": "2026-09-03",
    "by": {
     "claude-code": 101,
     "codex": 255
    }
   },
   {
-   "date": "2026-09-07",
+   "date": "2026-09-04",
    "by": {
     "claude-code": 820,
     "kimi": 384,
@@ -1364,7 +1354,7 @@
    }
   },
   {
-   "date": "2026-09-08",
+   "date": "2026-09-05",
    "by": {
     "claude-code": 448,
     "codex": 511,
@@ -1373,7 +1363,7 @@
    }
   },
   {
-   "date": "2026-09-09",
+   "date": "2026-09-06",
    "by": {
     "claude-code": 879,
     "codex": 109,
@@ -1383,24 +1373,24 @@
    }
   },
   {
-   "date": "2026-09-11",
+   "date": "2026-09-08",
    "by": {
     "claude-code": 282,
     "cursor": 568,
     "kimi": 139,
-    "h:lin": 591,
+    "h:mara": 591,
     "unattributed": 25
    }
   },
   {
-   "date": "2026-09-12",
+   "date": "2026-09-09",
    "by": {
     "claude-code": 446,
-    "h:lin": 534
+    "h:mara": 534
    }
   },
   {
-   "date": "2026-09-14",
+   "date": "2026-09-11",
    "by": {
     "claude-code": 573,
     "codex": 432,
@@ -1409,42 +1399,42 @@
    }
   },
   {
-   "date": "2026-09-15",
+   "date": "2026-09-12",
    "by": {
     "cursor": 409
    }
   },
   {
-   "date": "2026-09-16",
+   "date": "2026-09-13",
    "by": {
     "codex": 322,
     "cursor": 565,
     "kimi": 443,
     "grok": 316,
-    "h:lin": 21
+    "h:mara": 21
    }
   },
   {
-   "date": "2026-09-18",
+   "date": "2026-09-15",
    "by": {
     "claude-code": 54,
     "codex": 340,
     "grok": 33,
-    "h:lin": 36
+    "h:mara": 36
    }
   },
   {
-   "date": "2026-09-19",
+   "date": "2026-09-16",
    "by": {
     "claude-code": 1132,
     "kimi": 441,
     "grok": 595,
-    "h:lin": 513,
+    "h:mara": 513,
     "unattributed": 585
    }
   },
   {
-   "date": "2026-09-20",
+   "date": "2026-09-17",
    "by": {
     "claude-code": 45,
     "codex": 303,
@@ -1453,93 +1443,106 @@
    }
   },
   {
-   "date": "2026-09-21",
+   "date": "2026-09-18",
    "by": {
     "claude-code": 600,
     "codex": 190,
     "cursor": 297,
     "kimi": 231,
-    "h:lin": 532,
+    "h:mara": 532,
     "unattributed": 141
    }
   },
   {
-   "date": "2026-09-22",
+   "date": "2026-09-19",
    "by": {
     "claude-code": 699,
     "codex": 406,
     "cursor": 191,
     "kimi": 240,
     "grok": 452,
-    "h:lin": 493,
+    "h:mara": 493,
     "unattributed": 544
    }
   },
   {
-   "date": "2026-09-23",
+   "date": "2026-09-20",
    "by": {
     "codex": 279,
     "kimi": 261,
-    "h:lin": 433,
+    "h:mara": 433,
     "unattributed": 29
    }
   },
   {
-   "date": "2026-09-24",
+   "date": "2026-09-21",
    "by": {
     "claude-code": 1165,
     "codex": 230,
     "cursor": 62,
     "kimi": 458,
     "grok": 589,
-    "h:lin": 155
+    "h:mara": 155
    }
   },
   {
-   "date": "2026-09-25",
+   "date": "2026-09-22",
    "by": {
     "kimi": 152,
     "grok": 127
    }
   },
   {
-   "date": "2026-09-26",
+   "date": "2026-09-23",
    "by": {
     "kimi": 505,
     "unattributed": 253
    }
   },
   {
-   "date": "2026-09-27",
+   "date": "2026-09-24",
    "by": {
     "grok": 352,
-    "h:lin": 543
+    "h:mara": 543
    }
   },
   {
-   "date": "2026-09-28",
+   "date": "2026-09-25",
    "by": {
     "claude-code": 908,
     "cursor": 419,
-    "h:lin": 77
+    "h:mara": 77
+   }
+  },
+  {
+   "date": "2026-09-26",
+   "by": {
+    "claude-code": 162,
+    "cursor": 94,
+    "h:mara": 334,
+    "unattributed": 194
+   }
+  },
+  {
+   "date": "2026-09-27",
+   "by": {
+    "codex": 488,
+    "cursor": 546,
+    "kimi": 298
    }
   }
  ],
  "clock": [
   [
-   2,
+   0,
+   0,
    1,
-   3,
    0,
    0,
    0,
    0,
    0,
    0,
-   4,
-   4,
-   0,
-   5,
    1,
    1,
    5,
@@ -1549,23 +1552,23 @@
    1,
    1,
    2,
-   8,
-   4
+   4,
+   4,
+   4,
+   2,
+   6,
+   1
   ],
   [
    2,
-   1,
-   1,
    0,
    0,
    0,
    0,
    0,
    0,
-   4,
-   1,
-   4,
-   3,
+   0,
+   0,
    1,
    1,
    1,
@@ -1575,65 +1578,17 @@
    4,
    4,
    1,
-   5,
-   1
-  ],
-  [
-   1,
-   1,
-   2,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   2,
-   2,
-   2,
-   1,
-   4,
-   4,
-   5,
-   5,
-   0,
    1,
    1,
    1,
-   5,
-   9,
-   1
-  ],
-  [
-   3,
-   3,
-   3,
-   0,
-   0,
-   0,
-   0,
-   0,
-   0,
-   5,
-   1,
    2,
-   2,
-   2,
-   3,
-   2,
-   0,
-   2,
-   1,
-   4,
-   1,
-   3,
    9,
    1
   ],
   [
    1,
-   3,
-   3,
+   2,
+   2,
    0,
    0,
    0,
@@ -1641,22 +1596,48 @@
    0,
    0,
    4,
-   3,
+   4,
+   5,
+   5,
+   0,
    1,
-   2,
-   2,
-   3,
+   1,
+   1,
    5,
-   3,
-   0,
    5,
-   0,
-   4,
-   2,
-   4,
+   1,
+   5,
+   6,
+   10,
    5
   ],
   [
+   2,
+   2,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   2,
+   3,
+   2,
+   0,
+   2,
+   1,
+   4,
+   1,
+   3,
+   5,
+   1,
+   1,
+   6,
+   9,
+   6
+  ],
+  [
    1,
    0,
    1,
@@ -1667,9 +1648,31 @@
    0,
    0,
    2,
+   3,
+   5,
+   3,
+   0,
+   5,
+   0,
+   4,
    2,
-   3,
-   3,
+   0,
+   5,
+   4,
+   1,
+   8,
+   3
+  ],
+  [
+   0,
+   2,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
    0,
    3,
    4,
@@ -1679,13 +1682,15 @@
    2,
    3,
    1,
-   5,
-   4
+   1,
+   4,
+   1,
+   2,
+   8,
+   3
   ],
   [
    1,
-   1,
-   2,
    0,
    0,
    0,
@@ -1693,9 +1698,7 @@
    0,
    0,
    0,
-   2,
-   1,
-   3,
+   0,
    1,
    0,
    2,
@@ -1705,976 +1708,966 @@
    1,
    3,
    3,
-   7,
-   1
+   3,
+   1,
+   1,
+   3,
+   5,
+   0
   ]
  ],
  "files": [
   {
    "path": "src/spots/pick.ts",
-   "lines": 558,
-   "by": {
-    "claude-code": 279,
-    "codex": 167,
-    "cursor": 44,
-    "h:lin": 39,
-    "unattributed": 29
-   }
-  },
-  {
-   "path": "crates/catnap-core/src/sunbeam.rs",
-   "lines": 178,
-   "by": {
-    "claude-code": 89,
-    "codex": 53,
-    "cursor": 14,
-    "h:lin": 12,
-    "unattributed": 10
-   }
-  },
-  {
-   "path": "src/zoomies.ts",
-   "lines": 1490,
-   "by": {
-    "claude-code": 745,
-    "codex": 447,
-    "cursor": 119,
-    "h:lin": 104,
-    "unattributed": 75
-   }
-  },
-  {
-   "path": "apps/web/src/Purr.tsx",
-   "lines": 1203,
-   "by": {
-    "claude-code": 601,
-    "codex": 360,
-    "cursor": 96,
-    "h:lin": 84,
-    "unattributed": 62
-   }
-  },
-  {
-   "path": "README.md",
    "lines": 904,
    "by": {
     "claude-code": 452,
     "codex": 271,
     "cursor": 72,
-    "h:lin": 63,
-    "unattributed": 46
+    "h:mara": 9,
+    "unattributed": 100
    }
   },
   {
-   "path": "crates/catnap-cli/src/main.rs",
+   "path": "crates/catnap-core/src/sunbeam.rs",
    "lines": 727,
    "by": {
     "claude-code": 363,
     "codex": 218,
     "cursor": 58,
-    "h:lin": 50,
-    "unattributed": 38
+    "h:mara": 7,
+    "unattributed": 81
    }
   },
   {
-   "path": "src/treats/api.ts",
+   "path": "src/zoomies.ts",
    "lines": 643,
    "by": {
     "claude-code": 321,
     "codex": 192,
     "cursor": 51,
-    "h:lin": 45,
-    "unattributed": 34
+    "h:mara": 6,
+    "unattributed": 73
    }
   },
   {
-   "path": "src/grudges.ts",
+   "path": "apps/web/src/Purr.tsx",
    "lines": 1694,
    "by": {
     "claude-code": 847,
     "codex": 508,
     "cursor": 135,
-    "h:lin": 118,
-    "unattributed": 86
+    "h:mara": 16,
+    "unattributed": 188
    }
   },
   {
-   "path": "apps/web/src/style.css",
+   "path": "README.md",
    "lines": 423,
    "by": {
     "claude-code": 211,
     "codex": 126,
     "cursor": 33,
-    "h:lin": 29,
-    "unattributed": 24
+    "h:mara": 4,
+    "unattributed": 49
    }
   },
   {
-   "path": "tests/keyboard.test.ts",
+   "path": "crates/catnap-cli/src/main.rs",
    "lines": 268,
    "by": {
     "claude-code": 134,
     "codex": 80,
     "cursor": 21,
-    "h:lin": 18,
-    "unattributed": 15
+    "h:mara": 2,
+    "unattributed": 31
+   }
+  },
+  {
+   "path": "src/treats/api.ts",
+   "lines": 902,
+   "by": {
+    "claude-code": 451,
+    "codex": 270,
+    "cursor": 72,
+    "h:mara": 9,
+    "unattributed": 100
+   }
+  },
+  {
+   "path": "src/grudges.ts",
+   "lines": 114,
+   "by": {
+    "claude-code": 57,
+    "codex": 34,
+    "cursor": 9,
+    "h:mara": 1,
+    "unattributed": 13
+   }
+  },
+  {
+   "path": "apps/web/src/style.css",
+   "lines": 1351,
+   "by": {
+    "claude-code": 675,
+    "codex": 405,
+    "cursor": 108,
+    "h:mara": 13,
+    "unattributed": 150
+   }
+  },
+  {
+   "path": "tests/keyboard.test.ts",
+   "lines": 271,
+   "by": {
+    "claude-code": 135,
+    "codex": 81,
+    "cursor": 21,
+    "h:mara": 2,
+    "unattributed": 32
    }
   }
  ],
  "sessions": [
   {
-   "contributor": "a:kimi/kimi-k3",
-   "start": 1778483656,
-   "end": 1778487464,
-   "tokens": 734858
-  },
-  {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1778503895,
-   "end": 1778510147,
+   "start": 1778477839,
+   "end": 1778484092,
    "tokens": 4926014
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1778531372,
-   "end": 1778533579,
+   "start": 1778505316,
+   "end": 1778507524,
    "tokens": 1853185
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1778587321,
-   "end": 1778591871,
+   "start": 1778561266,
+   "end": 1778565816,
    "tokens": 2585777
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1778649748,
-   "end": 1778652012,
+   "start": 1778623692,
+   "end": 1778625957,
    "tokens": 3208733
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1778712395,
-   "end": 1778717481,
+   "start": 1778686339,
+   "end": 1778691425,
    "tokens": 5067343
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1778733364,
-   "end": 1778741415,
+   "start": 1778707308,
+   "end": 1778715360,
    "tokens": 2494472
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1778752003,
-   "end": 1778761421,
+   "start": 1778725947,
+   "end": 1778735365,
    "tokens": 2438844
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1778780859,
-   "end": 1778788615,
+   "start": 1778754803,
+   "end": 1778762559,
    "tokens": 1274309
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1778806344,
-   "end": 1778814491,
+   "start": 1778780288,
+   "end": 1778788435,
    "tokens": 3856634
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1778862047,
-   "end": 1778868505,
+   "start": 1778835992,
+   "end": 1778842449,
    "tokens": 3874308
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1778889363,
-   "end": 1778891495,
+   "start": 1778863308,
+   "end": 1778865439,
    "tokens": 1688548
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1778935140,
-   "end": 1778942350,
+   "start": 1778909084,
+   "end": 1778916294,
    "tokens": 4047251
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1778987992,
-   "end": 1778990608,
+   "start": 1778961936,
+   "end": 1778964552,
    "tokens": 3518014
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1779013099,
-   "end": 1779021325,
+   "start": 1778987044,
+   "end": 1778995269,
    "tokens": 4457482
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1779073059,
-   "end": 1779079313,
+   "start": 1779047003,
+   "end": 1779053257,
    "tokens": 5296068
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1779134100,
-   "end": 1779135692,
+   "start": 1779108045,
+   "end": 1779109637,
    "tokens": 5112839
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1779180471,
-   "end": 1779183916,
+   "start": 1779154415,
+   "end": 1779157860,
    "tokens": 1109557
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1779234884,
-   "end": 1779243312,
+   "start": 1779208829,
+   "end": 1779217256,
    "tokens": 1069128
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1779275047,
-   "end": 1779277573,
+   "start": 1779248991,
+   "end": 1779251518,
    "tokens": 2901649
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1779326569,
-   "end": 1779331771,
+   "start": 1779300514,
+   "end": 1779305715,
    "tokens": 5573719
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1779373149,
-   "end": 1779380377,
+   "start": 1779347093,
+   "end": 1779354322,
    "tokens": 5364246
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1779432981,
-   "end": 1779441620,
+   "start": 1779406926,
+   "end": 1779415565,
    "tokens": 964709
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1779444674,
-   "end": 1779451679,
+   "start": 1779418619,
+   "end": 1779425624,
    "tokens": 1523363
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1779507160,
-   "end": 1779515681,
+   "start": 1779481105,
+   "end": 1779489626,
    "tokens": 5120854
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1779521926,
-   "end": 1779528449,
+   "start": 1779495870,
+   "end": 1779502394,
    "tokens": 5360829
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1779548808,
-   "end": 1779554241,
+   "start": 1779522752,
+   "end": 1779528186,
    "tokens": 4445913
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1779585383,
-   "end": 1779591857,
+   "start": 1779559327,
+   "end": 1779565801,
    "tokens": 4352003
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1779618663,
-   "end": 1779623886,
+   "start": 1779592607,
+   "end": 1779597831,
    "tokens": 608213
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1779653043,
-   "end": 1779655849,
+   "start": 1779626988,
+   "end": 1779629793,
    "tokens": 2897474
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1779664509,
-   "end": 1779672985,
+   "start": 1779638453,
+   "end": 1779646930,
    "tokens": 851170
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1779673809,
-   "end": 1779674434,
+   "start": 1779647754,
+   "end": 1779648378,
    "tokens": 3474885
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1779709743,
-   "end": 1779715546,
+   "start": 1779683687,
+   "end": 1779689491,
    "tokens": 3316634
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1779729067,
-   "end": 1779735268,
+   "start": 1779703011,
+   "end": 1779709213,
    "tokens": 5303285
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1779745068,
-   "end": 1779752130,
+   "start": 1779719012,
+   "end": 1779726074,
    "tokens": 1721344
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1779783262,
-   "end": 1779790659,
+   "start": 1779757207,
+   "end": 1779764604,
    "tokens": 6131403
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1779839347,
-   "end": 1779845410,
+   "start": 1779813291,
+   "end": 1779819355,
    "tokens": 2632366
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1779873220,
-   "end": 1779881790,
+   "start": 1779847165,
+   "end": 1779855734,
    "tokens": 1056932
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1779904026,
-   "end": 1779913449,
+   "start": 1779877970,
+   "end": 1779887394,
    "tokens": 6111038
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1779957516,
-   "end": 1779963917,
+   "start": 1779931461,
+   "end": 1779937861,
    "tokens": 5345465
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1779982218,
-   "end": 1779991015,
+   "start": 1779956163,
+   "end": 1779964959,
    "tokens": 337366
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1780034608,
-   "end": 1780039262,
+   "start": 1780008552,
+   "end": 1780013206,
    "tokens": 5882209
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1780088739,
-   "end": 1780090621,
+   "start": 1780062684,
+   "end": 1780064566,
    "tokens": 5275348
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1780147460,
-   "end": 1780151031,
+   "start": 1780121404,
+   "end": 1780124975,
    "tokens": 4106078
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1780187881,
-   "end": 1780195426,
+   "start": 1780161826,
+   "end": 1780169370,
    "tokens": 1180102
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1780219796,
-   "end": 1780221724,
+   "start": 1780193740,
+   "end": 1780195668,
    "tokens": 5993080
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1780249014,
-   "end": 1780250539,
+   "start": 1780222958,
+   "end": 1780224483,
    "tokens": 3346416
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1780292802,
-   "end": 1780299965,
+   "start": 1780266747,
+   "end": 1780273909,
    "tokens": 2180467
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1780335685,
-   "end": 1780336968,
+   "start": 1780309629,
+   "end": 1780310913,
    "tokens": 2173170
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1780353075,
-   "end": 1780361839,
+   "start": 1780327020,
+   "end": 1780335784,
    "tokens": 4282856
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1780404028,
-   "end": 1780411873,
+   "start": 1780377972,
+   "end": 1780385817,
    "tokens": 5561836
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1780434037,
-   "end": 1780441626,
+   "start": 1780407981,
+   "end": 1780415570,
    "tokens": 780808
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1780495401,
-   "end": 1780499100,
+   "start": 1780469346,
+   "end": 1780473045,
    "tokens": 5212446
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1780542654,
-   "end": 1780543826,
+   "start": 1780516598,
+   "end": 1780517770,
    "tokens": 853414
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1780568300,
-   "end": 1780568942,
+   "start": 1780542244,
+   "end": 1780542886,
    "tokens": 5116611
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1780589798,
-   "end": 1780595856,
+   "start": 1780563742,
+   "end": 1780569800,
    "tokens": 4057299
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1780650920,
-   "end": 1780657580,
+   "start": 1780624864,
+   "end": 1780631524,
    "tokens": 1501089
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1780690794,
-   "end": 1780700014,
+   "start": 1780664738,
+   "end": 1780673959,
    "tokens": 3076314
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1780700083,
-   "end": 1780704412,
+   "start": 1780674027,
+   "end": 1780678357,
    "tokens": 3124318
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1780736234,
-   "end": 1780743814,
+   "start": 1780710178,
+   "end": 1780717759,
    "tokens": 236830
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1780753061,
-   "end": 1780756472,
+   "start": 1780727005,
+   "end": 1780730416,
    "tokens": 2418883
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1780786839,
-   "end": 1780794230,
+   "start": 1780760783,
+   "end": 1780768175,
    "tokens": 1801043
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1780839391,
-   "end": 1780842848,
+   "start": 1780813336,
+   "end": 1780816793,
    "tokens": 2967613
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1780877968,
-   "end": 1780886177,
+   "start": 1780851912,
+   "end": 1780860121,
    "tokens": 4465655
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1780931922,
-   "end": 1780932891,
+   "start": 1780905867,
+   "end": 1780906835,
    "tokens": 5241391
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1780983786,
-   "end": 1780987935,
+   "start": 1780957731,
+   "end": 1780961880,
    "tokens": 2780061
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1781001432,
-   "end": 1781006120,
+   "start": 1780975376,
+   "end": 1780980065,
    "tokens": 3378031
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1781019807,
-   "end": 1781028552,
+   "start": 1780993752,
+   "end": 1781002496,
    "tokens": 2969297
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1781042148,
-   "end": 1781047373,
+   "start": 1781016092,
+   "end": 1781021318,
    "tokens": 5857836
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1781080497,
-   "end": 1781089087,
+   "start": 1781054441,
+   "end": 1781063032,
    "tokens": 2808775
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1781123045,
-   "end": 1781129240,
+   "start": 1781096989,
+   "end": 1781103185,
    "tokens": 3739468
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1781167123,
-   "end": 1781174931,
+   "start": 1781141068,
+   "end": 1781148876,
    "tokens": 1947343
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1781208895,
-   "end": 1781209765,
+   "start": 1781182839,
+   "end": 1781183709,
    "tokens": 2026626
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1781255410,
-   "end": 1781256758,
+   "start": 1781229355,
+   "end": 1781230703,
    "tokens": 3702916
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1781277052,
-   "end": 1781285952,
+   "start": 1781250997,
+   "end": 1781259897,
    "tokens": 3087306
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1781331827,
-   "end": 1781337237,
+   "start": 1781305772,
+   "end": 1781311181,
    "tokens": 4268814
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1781363650,
-   "end": 1781371136,
+   "start": 1781337595,
+   "end": 1781345080,
    "tokens": 1966678
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1781414675,
-   "end": 1781423536,
+   "start": 1781388620,
+   "end": 1781397481,
    "tokens": 4532507
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1781426181,
-   "end": 1781434932,
+   "start": 1781400125,
+   "end": 1781408876,
    "tokens": 1093636
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1781446255,
-   "end": 1781455063,
+   "start": 1781420200,
+   "end": 1781429008,
    "tokens": 1242076
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1781455150,
-   "end": 1781463951,
+   "start": 1781429094,
+   "end": 1781437895,
    "tokens": 1836013
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1781505252,
-   "end": 1781511772,
+   "start": 1781479196,
+   "end": 1781485717,
    "tokens": 1161301
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1781556527,
-   "end": 1781557325,
+   "start": 1781530472,
+   "end": 1781531269,
    "tokens": 5761680
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1781574755,
-   "end": 1781579999,
+   "start": 1781548700,
+   "end": 1781553944,
    "tokens": 1145114
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1781606191,
-   "end": 1781607944,
+   "start": 1781580135,
+   "end": 1781581889,
    "tokens": 3196147
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1781654143,
-   "end": 1781656393,
+   "start": 1781628087,
+   "end": 1781630337,
    "tokens": 2399622
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1781690611,
-   "end": 1781699078,
+   "start": 1781664556,
+   "end": 1781673023,
    "tokens": 2154732
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1781728360,
-   "end": 1781737015,
+   "start": 1781702305,
+   "end": 1781710959,
    "tokens": 4627745
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1781784573,
-   "end": 1781788410,
+   "start": 1781758518,
+   "end": 1781762355,
    "tokens": 2815055
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1781803531,
-   "end": 1781804821,
+   "start": 1781777475,
+   "end": 1781778765,
    "tokens": 935726
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1781861986,
-   "end": 1781869029,
+   "start": 1781835931,
+   "end": 1781842973,
    "tokens": 3094883
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1781872090,
-   "end": 1781878966,
+   "start": 1781846034,
+   "end": 1781852911,
    "tokens": 2055806
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1781903649,
-   "end": 1781911561,
+   "start": 1781877593,
+   "end": 1781885506,
    "tokens": 2491742
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1781942678,
-   "end": 1781946319,
+   "start": 1781916622,
+   "end": 1781920263,
    "tokens": 1952945
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1781966715,
-   "end": 1781970637,
+   "start": 1781940659,
+   "end": 1781944582,
    "tokens": 3670688
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1782030166,
-   "end": 1782039316,
+   "start": 1782004111,
+   "end": 1782013260,
    "tokens": 4442491
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1782090550,
-   "end": 1782091984,
+   "start": 1782064494,
+   "end": 1782065928,
    "tokens": 5538231
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1782113525,
-   "end": 1782120573,
+   "start": 1782087469,
+   "end": 1782094518,
    "tokens": 2940671
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1782125162,
-   "end": 1782131588,
+   "start": 1782099106,
+   "end": 1782105532,
    "tokens": 6115630
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1782170621,
-   "end": 1782178026,
+   "start": 1782144566,
+   "end": 1782151971,
    "tokens": 5042652
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1782182154,
-   "end": 1782185190,
+   "start": 1782156098,
+   "end": 1782159134,
    "tokens": 1915504
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1782213200,
-   "end": 1782218180,
+   "start": 1782187144,
+   "end": 1782192125,
    "tokens": 855140
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1782229345,
-   "end": 1782231496,
+   "start": 1782203289,
+   "end": 1782205440,
    "tokens": 4658518
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1782239575,
-   "end": 1782243297,
+   "start": 1782213519,
+   "end": 1782217242,
    "tokens": 1131091
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1782254954,
-   "end": 1782262802,
+   "start": 1782228898,
+   "end": 1782236746,
    "tokens": 6060586
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1782289767,
-   "end": 1782291040,
+   "start": 1782263711,
+   "end": 1782264985,
    "tokens": 3149159
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1782301887,
-   "end": 1782303861,
+   "start": 1782275831,
+   "end": 1782277805,
    "tokens": 320871
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1782342510,
-   "end": 1782345313,
+   "start": 1782316454,
+   "end": 1782319257,
    "tokens": 1991916
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1782376009,
-   "end": 1782380157,
+   "start": 1782349954,
+   "end": 1782354101,
    "tokens": 3916709
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1782390127,
-   "end": 1782397664,
+   "start": 1782364071,
+   "end": 1782371608,
    "tokens": 2335855
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1782448290,
-   "end": 1782449619,
+   "start": 1782422235,
+   "end": 1782423564,
    "tokens": 3872383
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1782510684,
-   "end": 1782518690,
+   "start": 1782484628,
+   "end": 1782492634,
    "tokens": 4122013
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1782530088,
-   "end": 1782531882,
+   "start": 1782504033,
+   "end": 1782505826,
    "tokens": 1969294
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1782542313,
-   "end": 1782548659,
+   "start": 1782516257,
+   "end": 1782522603,
    "tokens": 3390080
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1782603912,
-   "end": 1782604778,
+   "start": 1782577856,
+   "end": 1782578722,
    "tokens": 5687035
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1782616824,
-   "end": 1782622606,
+   "start": 1782590769,
+   "end": 1782596551,
    "tokens": 868408
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1782642653,
-   "end": 1782644120,
+   "start": 1782616598,
+   "end": 1782618064,
    "tokens": 436715
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1782654424,
-   "end": 1782658771,
+   "start": 1782628369,
+   "end": 1782632715,
    "tokens": 887296
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1782674912,
-   "end": 1782678239,
+   "start": 1782648857,
+   "end": 1782652184,
    "tokens": 3534633
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1782731879,
-   "end": 1782733718,
+   "start": 1782705823,
+   "end": 1782707663,
    "tokens": 5317954
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1782753058,
-   "end": 1782755476,
+   "start": 1782727002,
+   "end": 1782729421,
    "tokens": 4730480
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1782796500,
-   "end": 1782803766,
+   "start": 1782770445,
+   "end": 1782777711,
    "tokens": 325779
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1782822620,
-   "end": 1782830827,
+   "start": 1782796565,
+   "end": 1782804772,
    "tokens": 6021178
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1782834988,
-   "end": 1782839308,
+   "start": 1782808933,
+   "end": 1782813253,
    "tokens": 4292406
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1782871565,
-   "end": 1782876324,
+   "start": 1782845509,
+   "end": 1782850269,
    "tokens": 1188810
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1782926109,
-   "end": 1782931831,
+   "start": 1782900054,
+   "end": 1782905776,
    "tokens": 3296519
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1782983194,
-   "end": 1782990028,
+   "start": 1782957139,
+   "end": 1782963973,
    "tokens": 1423342
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1783035546,
-   "end": 1783037318,
+   "start": 1783009491,
+   "end": 1783011263,
    "tokens": 2745314
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1783091578,
-   "end": 1783100708,
+   "start": 1783065523,
+   "end": 1783074652,
    "tokens": 3707841
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1783101465,
-   "end": 1783110498,
+   "start": 1783075409,
+   "end": 1783084443,
    "tokens": 3951892
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1783147567,
-   "end": 1783150782,
+   "start": 1783121512,
+   "end": 1783124726,
    "tokens": 2727207
   },
   {
    "contributor": "a:kimi/kimi-k3",
-   "start": 1783162197,
-   "end": 1783170912,
+   "start": 1783136141,
+   "end": 1783144856,
    "tokens": 5876360
   },
   {
    "contributor": "a:codex/gpt-5.6-sol",
-   "start": 1783194270,
-   "end": 1783197162,
+   "start": 1783168214,
+   "end": 1783171106,
    "tokens": 1092713
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1783238223,
-   "end": 1783245067,
+   "start": 1783212167,
+   "end": 1783219012,
    "tokens": 815591
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1783266881,
-   "end": 1783273981,
+   "start": 1783240825,
+   "end": 1783247926,
    "tokens": 2080708
   },
   {
    "contributor": "a:claude-code/claude-fable-5-1",
-   "start": 1783284285,
-   "end": 1783291604,
+   "start": 1783258230,
+   "end": 1783265549,
    "tokens": 5970225
   },
   {
    "contributor": "a:grok/grok-5-code",
-   "start": 1783312401,
-   "end": 1783321738,
+   "start": 1783286345,
+   "end": 1783295683,
    "tokens": 3008470
   },
   {
    "contributor": "a:cursor/composer-2",
-   "start": 1783376765,
-   "end": 1783378767,
+   "start": 1783350709,
+   "end": 1783352711,
    "tokens": 5146128
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1783437480,
-   "end": 1783444328,
+   "start": 1783411425,
+   "end": 1783418273,
    "tokens": 5019947
   },
   {
    "contributor": "a:claude-code/claude-opus-5-5",
-   "start": 1783472053,
-   "end": 1783477888,
+   "start": 1783445997,
+   "end": 1783451833,
    "tokens": 1624450
   },
   {
-   "contributor": "a:codex/codex-auto-review",
-   "start": 1779542950,
-   "end": 1785930887,
-   "tokens": 90000,
-   "review": true
-  },
-  {
-   "contributor": "a:codex/codex-auto-review",
-   "start": 1781947505,
-   "end": 1780288307,
-   "tokens": 90000,
-   "review": true
+   "contributor": "a:kimi/kimi-k3",
+   "start": 1783460144,
+   "end": 1783464234,
+   "tokens": 1420272
   },
   {
    "contributor": "a:codex/codex-auto-review",
@@ -2822,6 +2815,20 @@
    "end": 1781060208,
    "tokens": 90000,
    "review": true
+  },
+  {
+   "contributor": "a:codex/codex-auto-review",
+   "start": 1784442666,
+   "end": 1785464453,
+   "tokens": 90000,
+   "review": true
+  },
+  {
+   "contributor": "a:codex/codex-auto-review",
+   "start": 1781601233,
+   "end": 1783497092,
+   "tokens": 90000,
+   "review": true
   }
  ],
  "units": [
@@ -2829,31 +2836,6 @@
    "id": "c:1a2b3c4d",
    "title": "Sunbeam tracker",
    "date": "2026-05-11",
-   "version": "v0.1.0",
-   "commits": [
-    "x"
-   ],
-   "areas": [
-    "core"
-   ],
-   "lines": 1880,
-   "shares": [
-    {
-     "contributor": "a:cursor/composer-2",
-     "share": 0.657,
-     "evidence": "verified"
-    },
-    {
-     "contributor": "a:grok/grok-5-code",
-     "share": 0.343,
-     "evidence": "declared"
-    }
-   ]
-  },
-  {
-   "id": "pr:4",
-   "title": "Keyboard always wins",
-   "date": "2026-05-16",
    "version": "v0.1.0",
    "commits": [
     "x"
@@ -2869,16 +2851,16 @@
      "evidence": "verified"
     },
     {
-     "contributor": "h:lin",
+     "contributor": "h:mara",
      "share": 0.401,
      "evidence": "declared"
     }
    ]
   },
   {
-   "id": "pr:5",
-   "title": "Grudge ledger",
-   "date": "2026-05-21",
+   "id": "pr:4",
+   "title": "Keyboard always wins",
+   "date": "2026-05-16",
    "version": "v0.1.0",
    "commits": [
     "x"
@@ -2901,9 +2883,9 @@
    ]
   },
   {
-   "id": "c:1a2b991a",
-   "title": "3am zoomies",
-   "date": "2026-05-26",
+   "id": "pr:5",
+   "title": "Grudge ledger",
+   "date": "2026-05-21",
    "version": "v0.1.0",
    "commits": [
     "x"
@@ -2921,9 +2903,9 @@
    ]
   },
   {
-   "id": "pr:7",
-   "title": "Knock things off tables",
-   "date": "2026-05-31",
+   "id": "c:1a2b991a",
+   "title": "3am zoomies",
+   "date": "2026-05-26",
    "version": "v0.1.0",
    "commits": [
     "x"
@@ -2946,10 +2928,10 @@
    ]
   },
   {
-   "id": "pr:8",
-   "title": "If it fits, it sits",
-   "date": "2026-06-06",
-   "version": "v0.2.0",
+   "id": "pr:7",
+   "title": "Knock things off tables",
+   "date": "2026-05-31",
+   "version": "v0.1.0",
    "commits": [
     "x"
    ],
@@ -2971,9 +2953,9 @@
    ]
   },
   {
-   "id": "c:1a2bf5e7",
-   "title": "Purr-o-meter",
-   "date": "2026-06-11",
+   "id": "pr:8",
+   "title": "If it fits, it sits",
+   "date": "2026-06-06",
    "version": "v0.2.0",
    "commits": [
     "x"
@@ -2996,9 +2978,9 @@
    ]
   },
   {
-   "id": "pr:10",
-   "title": "Laptop warmth sensor",
-   "date": "2026-06-16",
+   "id": "c:1a2bf5e7",
+   "title": "Purr-o-meter",
+   "date": "2026-06-11",
    "version": "v0.2.0",
    "commits": [
     "x"
@@ -3021,9 +3003,9 @@
    ]
   },
   {
-   "id": "pr:11",
-   "title": "Treat API v2",
-   "date": "2026-06-21",
+   "id": "pr:10",
+   "title": "Laptop warmth sensor",
+   "date": "2026-06-16",
    "version": "v0.2.0",
    "commits": [
     "x"
@@ -3046,9 +3028,9 @@
    ]
   },
   {
-   "id": "c:1a2c52b4",
-   "title": "Red dot mode",
-   "date": "2026-06-26",
+   "id": "pr:11",
+   "title": "Treat API v2",
+   "date": "2026-06-21",
    "version": "v0.2.0",
    "commits": [
     "x"
@@ -3071,10 +3053,10 @@
    ]
   },
   {
-   "id": "pr:13",
-   "title": "Hairball telemetry",
-   "date": "2026-07-02",
-   "version": "v0.3.0",
+   "id": "c:1a2c52b4",
+   "title": "Red dot mode",
+   "date": "2026-06-26",
+   "version": "v0.2.0",
    "commits": [
     "x"
    ],
@@ -3096,9 +3078,9 @@
    ]
   },
   {
-   "id": "pr:14",
-   "title": "Vet day hiding spots",
-   "date": "2026-07-07",
+   "id": "pr:13",
+   "title": "Hairball telemetry",
+   "date": "2026-07-02",
    "version": "v0.3.0",
    "commits": [
     "x"
@@ -3114,16 +3096,16 @@
      "evidence": "verified"
     },
     {
-     "contributor": "h:lin",
+     "contributor": "h:mara",
      "share": 0.292,
      "evidence": "declared"
     }
    ]
   },
   {
-   "id": "c:1a2caf81",
-   "title": "Docs: feeding times",
-   "date": "2026-07-12",
+   "id": "pr:14",
+   "title": "Vet day hiding spots",
+   "date": "2026-07-07",
    "version": "v0.3.0",
    "commits": [
     "x"
@@ -3146,9 +3128,9 @@
    ]
   },
   {
-   "id": "pr:16",
-   "title": "Multi-cat support",
-   "date": "2026-07-17",
+   "id": "c:1a2caf81",
+   "title": "Docs: feeding times",
+   "date": "2026-07-12",
    "version": "v0.3.0",
    "commits": [
     "x"
@@ -3171,9 +3153,9 @@
    ]
   },
   {
-   "id": "pr:17",
-   "title": "Ignore owner calls",
-   "date": "2026-07-22",
+   "id": "pr:16",
+   "title": "Multi-cat support",
+   "date": "2026-07-17",
    "version": "v0.3.0",
    "commits": [
     "x"
@@ -3196,10 +3178,10 @@
    ]
   },
   {
-   "id": "c:1a2d0c4e",
-   "title": "Slow blink handshake",
-   "date": "2026-07-28",
-   "version": null,
+   "id": "pr:17",
+   "title": "Ignore owner calls",
+   "date": "2026-07-22",
+   "version": "v0.3.0",
    "commits": [
     "x"
    ],
@@ -3216,9 +3198,9 @@
    ]
   },
   {
-   "id": "pr:19",
-   "title": "Catnip feature flag",
-   "date": "2026-08-02",
+   "id": "c:1a2d0c4e",
+   "title": "Slow blink handshake",
+   "date": "2026-07-28",
    "version": null,
    "commits": [
     "x"
@@ -3241,9 +3223,9 @@
    ]
   },
   {
-   "id": "pr:20",
-   "title": "Window bird TV",
-   "date": "2026-08-07",
+   "id": "pr:19",
+   "title": "Catnip feature flag",
+   "date": "2026-08-02",
    "version": null,
    "commits": [
     "x"
@@ -3261,9 +3243,9 @@
    ]
   },
   {
-   "id": "c:1a2d691b",
-   "title": "Nap streaks",
-   "date": "2026-08-12",
+   "id": "pr:20",
+   "title": "Window bird TV",
+   "date": "2026-08-07",
    "version": null,
    "commits": [
     "x"
@@ -3286,9 +3268,9 @@
    ]
   },
   {
-   "id": "pr:22",
-   "title": "Blanket fort detection",
-   "date": "2026-08-17",
+   "id": "c:1a2d691b",
+   "title": "Nap streaks",
+   "date": "2026-08-12",
    "version": null,
    "commits": [
     "x"
@@ -3306,6 +3288,31 @@
     {
      "contributor": "a:claude-code/claude-fable-5-1",
      "share": 0.139,
+     "evidence": "declared"
+    }
+   ]
+  },
+  {
+   "id": "pr:22",
+   "title": "Blanket fort detection",
+   "date": "2026-08-17",
+   "version": null,
+   "commits": [
+    "x"
+   ],
+   "areas": [
+    "core"
+   ],
+   "lines": 2267,
+   "shares": [
+    {
+     "contributor": "a:claude-code/claude-fable-5-1",
+     "share": 0.891,
+     "evidence": "verified"
+    },
+    {
+     "contributor": "a:claude-code/claude-opus-5-5",
+     "share": 0.109,
      "evidence": "declared"
     }
    ]

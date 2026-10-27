@@ -2,28 +2,33 @@
 
 <!-- creditia:start -->
 
-creditia · 42 次提交 · +34,062 行 · 4 天
+creditia · 140 次提交 · +71,278 行 · 15 天
 
 | 工具 | 模型 | 占比 | 新增行 | 留存行 |
 |---|---|---:|---:|---:|
-| Claude Code | Claude Opus 5.5, Claude Fable 5.1 | 99.6% | +33,926 | 25,322 |
-| 未确认 | — | 0.4% | +136 | 100 |
+| Claude Opus 5.5 | — | 84.3% | +54,375 | 40,533 |
+| Claude Fable 5.1 | — | 13.6% | +8,797 | 4,529 |
+| GPT-6 Astra | — | 0.9% | +577 | 575 |
+| Codex（未记录模型） | — | 0.6% | +376 | 311 |
+| Claude Code（未记录模型） | — | 0.3% | +185 | 179 |
+| 其他 | — | 0.2% | +126 | — |
+| 未确认 | — | 0.1% | +95 | 47 |
 
 ## 未发布
 
-- #7 官网重新设计：先讲清楚它回答什么、为什么可信、拿到什么 — Claude Code
-- #8 片尾字幕内容少时放大铺开；原版作品有了英文 — Claude Code
-- #9 片尾字幕：原来的十一种恢复原样；新增片头、出品、场记板、部门四种 — Claude Code
-- #10 官网换成安静的四屏；补齐工具标志 — Claude Code
-- #11 官网：风格一眼看全、真实的导出文件、四种用法、亮暗切换 — Claude Code
-- #12 官网：风格胶片带、导出格式一行、四种用法同时展示 — Claude Code
-- #13 官网：风格墙、全站动效、安装入口、交互修整 — Claude Code
-- #14 官网：首屏署名卡逐张显影、安装区一眼看全、导出改成小样 — Claude Code
-- #15 官网：首屏逐行署名编辑器；四种用法做成会动的小样 — Claude Code
-- #16 site: real app on a desktop, Action explained, style-switcher hero — Claude Code
-- 另有 11 个 PR
+- #102 test: verify installed Windows and Linux app interactions — —
+- #100 Prepare installers and correct download channels — Claude Code
+- #101 修复无分支检出的分析结果，并验收同批候选安装包 — Codex
+- #83 site: install inside the usage cards; creditia's own credits close the page; logos for every agent — Claude Code
+- #84 credits: republish creditia's own credits — Claude Code
+- #85 site: install inside each demo's own UI — Claude Code
+- #86 site: one continuous shot from the code map to the style wall — Claude Code
+- #87 render: asterisk piece in every style — Claude Code
+- #88 site: looks as a light table; usage as one big demo with install below — Claude Code
+- #89 Sample project lumen → catnap; unsigned-app notes; soft edge on the looks table — Claude Code
+- 另有 80 个 PR
 - 11 个直接提交
 
-<sub>creditia · 2026-10-13</sub>
+<sub>creditia · 2026-10-24</sub>
 
 <!-- creditia:end -->

@@ -2,6 +2,8 @@
 //! 退出码：0 成功，1 失败，2 部分成功（有警告）。
 
 mod analyze;
+mod schedule;
+mod agents;
 
 use creditia_adapters as ad;
 use creditia_core::config::{Config, Director, Integrations};
@@ -27,6 +29,10 @@ fn parse_args() -> Args {
     let mut i = 1;
     while i < raw.len() {
         let x = &raw[i];
+        if x == "--" {
+            a.pos.extend_from_slice(&raw[i + 1..]);
+            break;
+        }
         if let Some(k) = x.strip_prefix("--") {
             if let Some((k, v)) = k.split_once('=') {
                 a.flags.insert(k.into(), v.into());
@@ -67,7 +73,11 @@ const USAGE_ZH: &str = "用法：creditia-core <命令> [选项]
                                    分析并写 .creditia/credits.json（全程本地，不调用任何大模型）
   update    [--repo P]             增量更新（同 analyze）
   collect   [--repo P | --all]     只采集证据进证据库
+  agents    [--agent ID]           全部 agent 的入口、读取范围与 skill 安装命令
+  run       --agent ID -- <命令>   在指定 agent 身份下启动命令（不自动安装 hook）
   doctor                           检查各数据源
+  capture   --harness H [--out F] -- <ACP agent 命令> [参数]
+                                   在 ACP 客户端中透明采集成功编辑（按需开启）
   blame     <路径>:<行号> [--repo P]  这一行是谁写的
   stamp     --harness H [--model M] [--share S]   给下一次提交盖章
   hook      install|uninstall|status [--repo P]    提交盖章 hook：提交时自动加 Creditia-* trailer（工具、模型、各工具行数）
@@ -75,6 +85,7 @@ const USAGE_ZH: &str = "用法：creditia-core <命令> [选项]
   integrations [--repo P]          上面两项的现状
   hook-trailers <msgfile>          （hook 调用）追加 Creditia-* trailer
   evidence  export [--out F] | import <文件>   多台电脑之间合并证据库
+  schedule  install|uninstall|status        每小时把各项目的新记录收进作品库（工具清理旧日志之前）
   projects                         本地已记录的项目
   all-credits                      本地每个项目最新的档案（跨项目汇总用）
   paths     [--repo P]             本项目登记过的全部路径（主仓库、worktree、临时克隆、旧路径）
@@ -95,7 +106,11 @@ const USAGE_EN: &str = "Usage: creditia-core <command> [options]
                                    analyze and write .creditia/credits.json (all local, never calls a model)
   update    [--repo P]             incremental update (same as analyze)
   collect   [--repo P | --all]     only collect evidence into the library
+  agents    [--agent ID]           agent catalogue, history scope and skill installation
+  run       --agent ID -- <cmd>    run with an explicit agent identity (no hook installation)
   doctor                           check every data source
+  capture   --harness H [--out F] -- <ACP agent command> [args]
+                                   opt-in transparent capture of completed ACP edits
   blame     <path>:<line> [--repo P]  which tool and model wrote this line
   stamp     --harness H [--model M] [--share S]   stamp the next commit
   hook      install|uninstall|status [--repo P]    commit stamps: Creditia-* trailers on commits (tool, model, lines per tool)
@@ -103,6 +118,7 @@ const USAGE_EN: &str = "Usage: creditia-core <command> [options]
   integrations [--repo P]          where those two stand
   hook-trailers <msgfile>          (called by the hook) append Creditia-* trailers
   evidence  export [--out F] | import <file>   merge evidence between machines
+  schedule  install|uninstall|status        every hour, collect new records from every project into the library (before tools delete old logs)
   projects                         projects in the library
   all-credits                      the latest credits of every project in the library (for the cross-project summary)
   paths     [--repo P]             every path recorded for this project (main, worktrees, temp clones, old paths)
@@ -124,6 +140,20 @@ fn main() {
     if let Some(l) = a.flags.get("lang") {
         creditia_core::i18n::set(l);
     }
+    if a.cmd == "run" {
+        match agents::run(&a) {
+            Ok(code) => std::process::exit(code),
+            Err(e) => { eprintln!("creditia run: {e}"); std::process::exit(1); }
+        }
+    }
+    if a.cmd == "capture" {
+        let result = agents::source(&a)
+            .and_then(|src| ad::acp::capture(src, &a.pos, a.flags.get("out").map(Path::new)));
+        match result {
+            Ok(code) => std::process::exit(code),
+            Err(e) => { eprintln!("creditia capture: {e}"); std::process::exit(1); }
+        }
+    }
     let json = a.on("json");
     creditia_core::progress::init();
     refresh_shim(false);
@@ -133,6 +163,7 @@ fn main() {
         "analyze" | "update" => cmd_analyze(&a),
         "collect" => cmd_collect(&a),
         "doctor" => cmd_doctor(&a),
+        "agents" => agents::list(&a),
         "blame" => cmd_blame(&a),
         "stamp" => cmd_stamp(&a),
         "hook" => cmd_hook(&a),
@@ -140,6 +171,7 @@ fn main() {
         "integrations" => cmd_integrations(&a),
         "hook-trailers" => cmd_hook_trailers(&a),
         "evidence" => cmd_evidence(&a),
+        "schedule" => schedule::cmd(a.pos.first().map(String::as_str)).map(|v| (v, vec![])),
         "projects" => cmd_projects(&a),
         "all-credits" => cmd_all_credits(&a),
         "paths" => cmd_paths(&a),
@@ -187,25 +219,7 @@ fn main() {
 // ───────────────────────── discover ─────────────────────────
 
 fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
-    let mut acts: Vec<ad::Activity> = vec![];
-    acts.extend(ad::codex::discover());
-    acts.extend(ad::claude::discover());
-    acts.extend(ad::cursor::discover());
-    acts.extend(ad::grok::discover());
-    acts.extend(ad::kimi::discover());
-    acts.extend(ad::gemini::discover());
-    acts.extend(ad::qwen::discover());
-    acts.extend(ad::opencode::discover());
-    acts.extend(ad::cline::discover());
-    acts.extend(ad::copilot::discover());
-    acts.extend(ad::amp::discover());
-    acts.extend(ad::trae::discover());
-    acts.extend(ad::crush::discover());
-    acts.extend(ad::goose::discover());
-    acts.extend(ad::cont::discover());
-    acts.extend(ad::zed::discover());
-    acts.extend(ad::amazonq::discover());
-    acts.extend(ad::antigravity::discover());
+    let acts = ad::discover_all();
     // 把 cwd 归到 git 仓库：存在的目录用根提交；不存在的用远程地址或目录名
     #[derive(Default)]
     struct P {
@@ -270,14 +284,14 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
         .map(|p| {
             json!({
                 "name": p.name, "path": p.path, "rootCommit": p.root, "remotes": p.remotes, "exists": p.exists,
-                "tools": p.tools, "lastActive": creditia_core::util::date_cn(p.last),
+                "tools": p.tools, "lastActive": creditia_core::util::date_local(p.last),
                 "inLibrary": known.contains_key(&p.root),
             })
         })
         .collect();
     let summary = merged
         .iter()
-        .map(|p| format!("{:<28} {}  {}  {}", p.name, creditia_core::util::date_cn(p.last), p.tools.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>().join(" · "), status(p)))
+        .map(|p| format!("{:<28} {}  {}  {}", p.name, creditia_core::util::date_local(p.last), p.tools.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>().join(" · "), status(p)))
         .collect::<Vec<_>>()
         .join("\n");
     Ok((json!({ "projects": list, "summary": summary }), vec![]))
@@ -289,13 +303,9 @@ fn cmd_discover(a: &Args) -> R<(Value, Vec<String>)> {
 pub fn detect_config(repo: &Path) -> Config {
     let mut c = Config { repo: repo.display().to_string(), name: project_name(repo), ..Default::default() };
     let cur = ad::git::git(repo, &["rev-parse", "--abbrev-ref", "HEAD"]).trim().to_string();
-    c.branch = if !cur.is_empty() && cur != "HEAD" {
-        cur
-    } else if ad::git::git_ok(repo, &["rev-parse", "--verify", "main"]) {
-        "main".into()
-    } else {
-        "master".into()
-    };
+    // A detached checkout (CI, a tag, or a specific commit) must analyze that
+    // commit, rather than inventing a local main/master branch.
+    c.branch = if cur.is_empty() || cur == "HEAD" { "HEAD".into() } else { cur };
     let (_, remotes) = ad::git::identity(repo);
     c.remotes = remotes.clone();
     // 主导者：把 (名字, 邮箱) 聚成"同一个人"——同名、同邮箱、同 GitHub 登录名（123+login@users.noreply）、
@@ -541,17 +551,7 @@ fn cmd_collect(a: &Args) -> R<(Value, Vec<String>)> {
 // ───────────────────────── doctor ─────────────────────────
 
 fn cmd_doctor(_a: &Args) -> R<(Value, Vec<String>)> {
-    use creditia_core::model::Src;
-use creditia_core::tr;
-    let mut hs = vec![
-        ad::codex::doctor(), ad::claude::doctor(), ad::cursor::doctor(), ad::grok::doctor(), ad::kimi::doctor(),
-        ad::gemini::doctor(Src::Gemini), ad::qwen::doctor(),
-        ad::cline::doctor(Src::Cline), ad::cline::doctor(Src::Roo), ad::cline::doctor(Src::Kilo),
-        ad::aider::doctor(), ad::amp::doctor(), ad::trae::doctor(), ad::crush::doctor(), ad::goose::doctor(), ad::cont::doctor(), ad::zed::doctor(), ad::amazonq::doctor(), ad::antigravity::doctor(),
-    ];
-    hs.extend(ad::opencode::doctor());
-    hs.extend(ad::copilot::doctor());
-    hs.extend(ad::others::doctor());
+    let hs = ad::doctor_all();
     let git_ok = std::process::Command::new("git").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
     let gh_ok = std::process::Command::new("gh").args(["auth", "status"]).output().map(|o| o.status.success()).unwrap_or(false);
     let lib = Library::open().ok();
@@ -559,6 +559,10 @@ use creditia_core::tr;
     let n_proj = lib.as_ref().and_then(|l| l.projects().ok()).map(|p| p.len()).unwrap_or(0);
     let mut lines = vec![];
     for h in &hs {
+        if matches!(h.scope,ad::registry::ReadScope::Capture)&&!h.readable {
+            lines.push(format!("{:<15} {}",h.source,tr!("需开启采集", "capture required")));
+            continue;
+        }
         // 没装的工具：只说没找到，不列格式说明和打开失败的原文
         if !h.readable && !h.unsupported && !std::path::Path::new(&h.path).exists() {
             lines.push(format!("{:<15} {}", h.source, tr!("未找到", "not found")));
@@ -567,7 +571,8 @@ use creditia_core::tr;
         lines.push(format!(
             "{:<15} {}  {}{}{}",
             h.source,
-            if h.readable { tr!("可读", "readable") } else if h.unsupported { tr!("不支持", "unsupported") } else { tr!("不可读", "unreadable") },
+            if h.readable && matches!(h.scope, ad::registry::ReadScope::Sessions) { tr!("仅会话信息", "sessions only") }
+            else if h.readable { tr!("可读", "readable") } else if h.unsupported { tr!("待接编辑格式", "edit format unconfirmed") } else { tr!("不可读", "unreadable") },
             if h.records > 0 { tr!("{} 条", "{} records", h.records) } else { String::new() },
             match (&h.earliest, &h.latest) {
                 (Some(a), Some(b)) => format!("  {a} → {b}"),
@@ -580,7 +585,7 @@ use creditia_core::tr;
     lines.push(format!("{:<15} {}", "gh", if gh_ok { tr!("已登录", "signed in") } else { tr!("未登录或未安装（PR 元数据会缺少分支名）", "not signed in or not installed (PR metadata will lack branch names)") }));
     lines.push(format!("{:<15} {lib_path}  {}", tr!("本地项目库", "library"), if creditia_core::i18n::en() { format!("{n_proj} project{}", if n_proj == 1 { "" } else { "s" }) } else { format!("{n_proj} 个项目") }));
     // 没装的工具不算问题；装了却读不了才警告
-    let warnings: Vec<String> = hs.iter().filter(|h| !h.readable && !h.unsupported && std::path::Path::new(&h.path).exists()).map(|h| tr!("{} 不可读：{}", "{} unreadable: {}", h.source, h.path)).collect();
+    let warnings: Vec<String> = hs.iter().filter(|h| !h.readable && !h.unsupported && !matches!(h.scope,ad::registry::ReadScope::Capture) && std::path::Path::new(&h.path).exists()).map(|h| tr!("{} 不可读：{}", "{} unreadable: {}", h.source, h.path)).collect();
     Ok((json!({ "sources": hs, "git": git_ok, "gh": gh_ok, "library": { "path": lib_path, "projects": n_proj }, "summary": lines.join("\n") }), warnings))
 }
 
@@ -627,7 +632,13 @@ fn git_dir(repo: &Path) -> R<PathBuf> {
 
 fn cmd_stamp(a: &Args) -> R<(Value, Vec<String>)> {
     let repo = a.flags.get("repo").map(PathBuf::from).unwrap_or(std::env::current_dir().map_err(|e| e.to_string())?);
-    let harness = a.flags.get("harness").ok_or_else(|| tr!("需要 --harness", "--harness is required"))?.to_lowercase();
+    let raw = a.flags.get("harness").map(|s| s.trim().to_lowercase());
+    let harness = if a.flags.contains_key("agent") { agents::source(a)?.harness().to_string() }
+        else { let raw = raw.ok_or_else(|| tr!("需要 --harness 或 --agent", "--harness or --agent is required"))?;
+            creditia_core::agents::canonical_harness(&raw).unwrap_or(&raw).to_string() };
+    if harness.is_empty() || harness.contains(['\n', '\r']) || a.flags.get("model").is_some_and(|m| m.contains(['\n', '\r'])) {
+        return Err("agent and model must be single-line values".into());
+    }
     let v = json!({ "harness": harness, "model": a.flags.get("model"), "share": a.flags.get("share") });
     let p = git_dir(&repo)?.join("creditia-stamp.json");
     std::fs::write(&p, v.to_string()).map_err(|e| e.to_string())?;
@@ -886,10 +897,16 @@ fn ask_integrations(repo: &Path, todo: &[Value]) {
 /// 识别正在运行的 agent：先看盖章文件，再看环境变量
 pub fn detect_agent(env: &HashMap<String, String>) -> Option<(String, Option<String>)> {
     let has = |k: &str| env.get(k).map(|v| !v.is_empty()).unwrap_or(false);
+    if let Some(raw) = env.get("CREDITIA_HARNESS") {
+        return creditia_core::agents::canonical_harness(raw).map(|h| (h.to_string(), env.get("CREDITIA_MODEL").filter(|m| !m.is_empty() && !m.contains(['\n', '\r'])).cloned()));
+    }
     if has("CLAUDECODE") || has("CLAUDE_CODE_ENTRYPOINT") {
         return Some(("claude-code".into(), env.get("ANTHROPIC_MODEL").cloned()));
     }
-    if has("CODEX_SANDBOX") || has("CODEX_THREAD_ID") || env.keys().any(|k| k.starts_with("CODEX_") && k != "CODEX_HOME") {
+    // Codex 给它跑的命令带上 CODEX_SANDBOX*、CODEX_THREAD_ID、npm 包装器的 CODEX_MANAGED_BY_*；
+    // 用户自己在 shell 配置里设的（CODEX_HOME、API key、证书）不算，不然人在终端里的每次提交都会被盖成 Codex
+    let user_set = |k: &str| matches!(k, "CODEX_HOME" | "CODEX_API_KEY" | "CODEX_CA_CERTIFICATE" | "CODEX_QUIET_MODE") || k.ends_with("_KEY") || k.ends_with("_TOKEN");
+    if has("CODEX_SANDBOX") || has("CODEX_THREAD_ID") || env.keys().any(|k| k.starts_with("CODEX_") && !user_set(k)) {
         return Some(("codex".into(), None));
     }
     if has("CURSOR_AGENT") || has("CURSOR_TRACE_ID") {
@@ -942,8 +959,9 @@ fn cmd_hook_trailers(a: &Args) -> R<(Value, Vec<String>)> {
     let msg = std::fs::read_to_string(msgfile).map_err(|e| e.to_string())?;
     // 这次提交里各工具写了几行：本机日志里有证据的才算。CI 里没有日志，PR 评论和 Release 说明读这一行。
     // 扫日志最多等几秒，等不到就不写，不耽误提交
-    let lines = if msg.contains("Creditia-Lines:") { None } else { staged_lines(&repo) };
     let harness = harness.filter(|_| !msg.contains("Creditia-Harness:"));
+    // 在 agent 里提交、这次却没有 AI 写的行：也写上 `Creditia-Lines: / N`，不然章会把整个提交都算给 agent
+    let lines = if msg.contains("Creditia-Lines:") { None } else { staged_lines(&repo, harness.is_some()) };
     if harness.is_none() && lines.is_none() {
         return Ok((json!({ "added": false, "summary": "" }), vec![]));
     }
@@ -971,8 +989,9 @@ fn cmd_hook_trailers(a: &Args) -> R<(Value, Vec<String>)> {
     Ok((json!({ "added": true, "harness": harness, "model": model, "lines": lines, "summary": "" }), vec![]))
 }
 
-/// `Creditia-Lines` 的值：`工具/模型 行数, 工具 行数 / 暂存区新增总行数`。没有 AI 写的行、或超时，返回 None
-fn staged_lines(repo: &Path) -> Option<String> {
+/// `Creditia-Lines` 的值：`工具/模型 行数, 工具 行数 / 暂存区新增总行数`。超时返回 None；
+/// 没有 AI 写的行时，`keep_empty` 才返回 `/ 总行数`
+fn staged_lines(repo: &Path, keep_empty: bool) -> Option<String> {
     let secs = std::env::var("CREDITIA_HOOK_TIMEOUT").ok().and_then(|v| v.parse().ok()).unwrap_or(8u64);
     if secs == 0 {
         return None;
@@ -983,13 +1002,16 @@ fn staged_lines(repo: &Path) -> Option<String> {
         let _ = tx.send(analyze::staged(&repo));
     });
     let (by, total) = rx.recv_timeout(std::time::Duration::from_secs(secs)).ok()?.ok()?;
-    if by.is_empty() {
+    if total == 0 || (by.is_empty() && !keep_empty) {
         return None;
     }
     Some(lines_value(&by, total))
 }
 
 fn lines_value(by: &[(String, usize)], total: usize) -> String {
+    if by.is_empty() {
+        return format!("/ {total}");
+    }
     format!("{} / {total}", by.iter().map(|(k, n)| format!("{k} {n}")).collect::<Vec<_>>().join(", "))
 }
 
@@ -1045,7 +1067,7 @@ fn cmd_evidence(a: &Args) -> R<(Value, Vec<String>)> {
             let evs: Vec<creditia_core::model::Ev> = serde_json::from_value(v["evidence"].clone()).map_err(|e| e.to_string())?;
             let sessions: Vec<creditia_core::model::Session> = serde_json::from_value(v["sessions"].clone()).unwrap_or_default();
             let mut store = creditia_core::model::Store { version: creditia_core::model::STORE_VERSION, ..Default::default() };
-            store.groups.insert("import".into(), creditia_core::model::FileGroup { fp: (0, 0), evs, sessions });
+            store.groups.insert("import".into(), creditia_core::model::FileGroup { fp: (0, 0), evs, sessions, ..Default::default() });
             lib.upsert_project(&proj)?;
             let n = lib.save_evidence(&proj.id, &store)?;
             Ok((json!({ "imported": n, "summary": tr!("合并了 {n} 条新证据；下次 analyze 会用上", "merged {n} new pieces of evidence; the next analyze will use them") }), vec![]))
@@ -1061,9 +1083,9 @@ fn cmd_projects(_a: &Args) -> R<(Value, Vec<String>)> {
     let ps = lib.projects()?;
     let list: Vec<Value> = ps
         .iter()
-        .map(|p| json!({ "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "lastHead": p.last_head, "lastAnalyzed": p.last_analyzed.map(creditia_core::util::date_cn), "evidence": lib.evidence_count(&p.id) }))
+        .map(|p| json!({ "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "lastHead": p.last_head, "lastAnalyzed": p.last_analyzed.map(creditia_core::util::date_local), "evidence": lib.evidence_count(&p.id) }))
         .collect();
-    let summary = ps.iter().map(|p| format!("{:<28} {}  {}", p.name, p.last_analyzed.map(creditia_core::util::date_cn).unwrap_or_else(|| tr!("未分析", "not analyzed")), p.path)).collect::<Vec<_>>().join("\n");
+    let summary = ps.iter().map(|p| format!("{:<28} {}  {}", p.name, p.last_analyzed.map(creditia_core::util::date_local).unwrap_or_else(|| tr!("未分析", "not analyzed")), p.path)).collect::<Vec<_>>().join("\n");
     Ok((json!({ "projects": list, "summary": if summary.is_empty() { tr!("本地项目记录为空；先 creditia-core analyze", "the library is empty; run creditia-core analyze first") } else { summary } }), vec![]))
 }
 
@@ -1146,6 +1168,22 @@ mod hook_tests {
         assert_eq!(detect_agent(&env), Some(("antigravity".to_string(), None)));
         let env: HashMap<String, String> = [("ANTIGRAVITY_TRAJECTORY_ID".to_string(), "t1".to_string()), ("GEMINI_CLI".to_string(), "1".to_string())].into();
         assert_eq!(detect_agent(&env).map(|(h, _)| h), Some("antigravity".to_string()));
+    }
+
+    #[test]
+    fn user_codex_config_is_not_an_agent() {
+        let env: HashMap<String, String> = [("CODEX_HOME".to_string(), "/x".to_string()), ("CODEX_API_KEY".to_string(), "k".to_string())].into();
+        assert_eq!(detect_agent(&env), None);
+        let env: HashMap<String, String> = [("CODEX_MANAGED_BY_NPM".to_string(), "1".to_string())].into();
+        assert_eq!(detect_agent(&env).map(|(h, _)| h), Some("codex".to_string()));
+    }
+
+    #[test]
+    fn empty_lines_stamp() {
+        assert_eq!(super::lines_value(&[], 12), "/ 12");
+        assert_eq!(super::lines_value(&[("codex/gpt-5".into(), 3)], 12), "codex/gpt-5 3 / 12");
+        assert_eq!(creditia_adapters::git::parse_lines_stamp("/ 12"), Some((vec![], 12)));
+        assert_eq!(creditia_adapters::git::parse_lines_stamp("claude-code/claude-opus-5-5 30, codex 4 / 120"), Some((vec![("claude-code/claude-opus-5-5".into(), 30), ("codex".into(), 4)], 120)));
     }
 
     #[test]

@@ -1,0 +1,9 @@
+{
+  "name": "creditia-promo",
+  "private": true,
+  "type": "module",
+  "description": "creditia 宣传片：画面（three.js）与配乐都由代码生成",
+  "devDependencies": {
+    "three": "0.170.0"
+  }
+}

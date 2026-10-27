@@ -1,0 +1,27 @@
+# Generated from verified release assets by packaging/release.mjs.
+cask "creditia" do
+  arch arm: "aarch64", intel: "x64"
+  version "@VERSION@"
+  sha256 arm: "@ARM_SHA256@", intel: "@INTEL_SHA256@"
+
+  url "https://github.com/WroughtMind/creditia/releases/download/v#{version}/creditia_#{version}_#{arch}.dmg"
+  name "creditia"
+  desc "Credits for work made with agents"
+  homepage "https://wroughtmind.github.io/creditia/"
+  app "creditia.app"
+
+  caveats <<~EOS
+    creditia is ad-hoc signed, without Apple Developer ID signing or notarization.
+    Verify the download source and SHA-256 before opening it. If macOS blocks
+    an unidentified developer, use System Settings > Privacy & Security > Open Anyway.
+    If macOS reports damage, check the download again before proceeding.
+    Installation does not remove quarantine or change Gatekeeper settings.
+  EOS
+
+  zap trash: [
+    "~/Library/Caches/dev.creditia.app",
+    "~/Library/Preferences/dev.creditia.app.plist",
+    "~/Library/Saved Application State/dev.creditia.app.savedState",
+    "~/Library/WebKit/dev.creditia.app",
+  ]
+end

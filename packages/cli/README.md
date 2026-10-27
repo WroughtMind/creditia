@@ -16,6 +16,11 @@ alias creditia='node ~/projects/creditia/packages/cli/bin/creditia.mjs'
 
 ```
 creditia discover                     本机有 agent 活动的项目
+creditia agents --json                78 个入口及历史读取状态、skill 安装命令
+creditia agents --agent openclaw --json  单个入口
+creditia run --agent pi -- pi         给子进程明确工具身份，保留原参数和输入输出
+creditia stamp --agent pi             下一次提交声明（需要已安装提交 hook）
+creditia capture --agent <ID> -- <ACP 命令>  在 ACP 客户端中采集后续成功编辑
 creditia init                         写 .creditia/config.json（你的提交身份、口径、路径、隐私）
 creditia analyze --github             分析，写 .creditia/credits.json（--level strict|standard|loose）
 creditia paths | link <路径> | unlink  一个项目的多处路径
@@ -29,4 +34,6 @@ creditia board --style glass --out credits.html     全部作品一页，可交�
 creditia fetch                        终端名片
 ```
 
-所有命令非交互、支持 `--json`。人名默认不出现；`--named` 写出人名，`--sign 名字` 落款（也可以写进配置的 `display`）。
+查询与分析命令支持 `--json`。`run`、`capture` 透传子进程输入输出及退出码，`--` 后的参数原样交给子进程。`run` 的工具身份和 `stamp` 是声明，不把它们算成逐行编辑证据；未知模型不填。原生历史、官方导入与协议采集的边界见仓库的 `AGENT_SUPPORT.md` 和 `ADAPTERS.md`。
+
+其他贡献者默认写 git 名字，`--no-names` 这次不写，配置里 `display.hideNames: true` 一直不写；`--by contributor` 按贡献者看。

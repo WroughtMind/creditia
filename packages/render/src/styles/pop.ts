@@ -1,6 +1,6 @@
 // 流行两套：漫画（网点、集中线、拟声字）、终端（磷光、代码雨、ASCII 条）。
 import { defineStyle, grain, linear, radial, blur, logo, type Style } from '../style.ts';
-import { Scene, el, g, rect, circle, line, path, r, rng, hash, measure } from '../svg.ts';
+import { Scene, el, g, rect, circle, line, path, r, rng, hash, measure, esc } from '../svg.ts';
 
 // ───────────────────────── 漫画 ─────────────────────────
 
@@ -114,7 +114,7 @@ export const terminal: Style = defineStyle({
     for (let x = b.x + 10; x < b.x + b.w; x += 22) {
       if (rnd() < 0.45) continue;
       const len = 4 + Math.floor(rnd() * 14), y0 = b.y + rnd() * b.h * 0.7;
-      for (let k = 0; k < len; k++) cols.push(el('text', { x, y: y0 + k * 20, fontFamily: 'DotGothic16, JetBrains Mono', fontSize: 16, fill: PH, opacity: r(0.04 + 0.16 * (k / len)) }, glyphs[Math.floor(rnd() * glyphs.length)]));
+      for (let k = 0; k < len; k++) cols.push(el('text', { x, y: y0 + k * 20, fontFamily: 'DotGothic16, JetBrains Mono', fontSize: 16, fill: PH, opacity: r(0.04 + 0.16 * (k / len)) }, esc(glyphs[Math.floor(rnd() * glyphs.length)])));
     }
     s.add(g({}, ...cols));
     s.add(rect(b.x, b.y, b.w, b.h, { fill: radial(s, 'tm-glow', [[0, '#123A22', 0.55], [1, TBG, 0]], { cx: 0.5, cy: 0.4, r: 0.7 }) }));

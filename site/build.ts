@@ -10,14 +10,14 @@ import { makeExporter } from '../packages/render/src/export.ts';
 import { creditsBlock, fetchSegs } from '../packages/render/src/text.ts';
 import { deflateSync } from 'node:zlib';
 import type { Art } from '../packages/render/src/export.ts';
-import { LOGOS } from '../packages/render/src/logos.ts';
 import { markSvg, sharePetals, toolColor, MARK_GREY } from '../packages/render/src/mark.ts';
 /** 同一个工具的第 k 个模型：往白里调浅一点，第二个浅 40%，之后每个再浅一些 */
 const mix = (hex: string, k: number) => { const t = Math.min(0.7, 0.4 + 0.12 * (k - 1)), c = (i: number) => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - t) + 255 * t).toString(16).padStart(2, '0'); return `#${c(1)}${c(3)}${c(5)}`; };
-import { LOGO_OF } from '../packages/render/src/style.ts';
-import { TOOL_NAMES } from '../packages/render/src/data.ts';
 import * as C from '../packages/render/src/classic/index.ts';
 import { ICONS } from './icons.ts';
+import { downloads } from './downloads.mjs';
+import { heroIcons } from './hero-icons.ts';
+const channels = await downloads();
 import { ORDERED_THEMES, themeName, themeNote, themeDot, pieceName, variantName } from '../packages/render/src/classic/catalog.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -244,11 +244,8 @@ console.log('✓ usage');
 // 社交预览图
 for (const lang of LANGS) writeFileSync(path.join(OUT, `assets/og-${lang}.png`), exporter.png(art('share', buildModel(sample, { lang }), styleById('cinema')!)!, 1));
 
-// creditia 认得的全部 agent：21 个读本机日志，Devin、Jules、Windsurf 从 git 里认
-const tools = ['claude-code', 'codex', 'cursor', 'gemini', 'qwen', 'copilot', 'windsurf', 'trae', 'antigravity', 'opencode', 'cline', 'roo', 'kilo', 'kimi', 'grok', 'amp', 'zed', 'amazon-q', 'continue', 'goose', 'crush', 'aider', 'devin', 'jules'].map((k) => {
-  const lg = LOGOS[LOGO_OF[k] ?? ''];
-  return { name: TOOL_NAMES[k] ?? k, svg: lg ? `<svg viewBox="${lg.vb}" aria-hidden="true"><path d="${lg.d}"${lg.rule ? ` fill-rule="${lg.rule}"` : ''}/></svg>` : '' };
-});
+const tools = heroIcons();
+console.log(`✓ Hero: ${tools.length} monochrome marks`);
 // 风格墙缩略图另存一份 WebP（同样清晰，体积约十分之一）；本机没有 Pillow 就照旧用 PNG
 const webp = spawnSync('python3', ['-c', `
 import sys, glob
@@ -267,19 +264,19 @@ const logo = readFileSync(path.join(ROOT, 'packages/render/assets/creditia/logo-
 
 let html = readFileSync(path.join(import.meta.dirname, 'index.html'), 'utf8');
 html = html
-  .replace('/*__DATA__*/', `const DATA = ${JSON.stringify({ ...meta, styles, tools, hasSelf: !!own, hasApp, icons: ICONS, version: JSON.parse(readFileSync(path.join(ROOT, 'packages/cli/package.json'), 'utf8')).version })};`)
+  .replace('/*__DATA__*/', `const DATA = ${JSON.stringify({ ...meta, channels, styles, tools, hasSelf: !!own, hasApp, icons: ICONS, version: JSON.parse(readFileSync(path.join(ROOT, 'packages/cli/package.json'), 'utf8')).version })};`)
   .replaceAll('<!--__LOGO__-->', logo);
 // 字体放在自己站上：按页面里实际出现的字截出 woff2（衬线中文只用在几个大标题上，截出来只有几 KB），
 // 不再等 Google Fonts。本机没有 fontTools 就照旧用 Google Fonts
 html = selfHostFonts(html);
 writeFileSync(path.join(OUT, 'index.html'), html);
 // 英文版：同一页，默认英文，分享出去的标题、描述、预览图也是英文（和 index.html 在同一目录，相对路径不用改）
-const EN_DESC = 'Matches your AI coding agents’ logs against git history line by line, works out how much each tool and each model wrote, and rolls it as end credits. Open source, runs locally.';
+const EN_DESC = 'See who writes your code. Line-by-line attribution from local agent logs and Git history. Open source, 100% local.';
 writeFileSync(path.join(OUT, 'en.html'), html
   .replace('<html lang="zh"', '<html lang="en" data-lang="en"')
-  .replace(/<title>[^<]*<\/title>/, '<title>creditia — which AI wrote your code</title>')
+  .replace(/<title>[^<]*<\/title>/, '<title>creditia — See who writes your code</title>')
   .replace(/(<meta name="description" content=")[^"]*/, `$1${EN_DESC}`)
-  .replace(/(<meta property="og:description" content=")[^"]*/, '$1Which AI wrote your code.')
+  .replace(/(<meta property="og:description" content=")[^"]*/, '$1See who writes your code.')
   .replace('assets/og-zh.png', 'assets/og-en.png')
   .replace(/(<meta property="og:url" content=")[^"]*/, '$1https://wroughtmind.github.io/creditia/en.html')
   .replace(/(<link rel="canonical" href=")[^"]*/, '$1https://wroughtmind.github.io/creditia/en.html'));
@@ -296,7 +293,7 @@ function selfHostFonts(page: string): string {
   const latin = all.filter((c) => c.codePointAt(0)! < 0x2e80).join('');
   // 大标题：class="serif" 的元素里的字（中文版在模板里，英文版在 EN 里，拉丁部分已经在 latin 里）
   const ASCII = Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)).join('');
-  const heads = [...page.matchAll(/class="serif"[^>]*>([^]*?)<\/h[12]>/g)].map((m) => m[1].replace(/<[^>]+>/g, '')).join('');
+  const heads = [...page.matchAll(/class="serif"[^>]*>([^]*?)<\/h[12]>/g)].map((m) => m[1].replace(/<[^>]+>/g, '')).join('') + '字里行间皆有其名致每一位写下代码的协作者';
   const faces = [
     { family: 'Instrument Serif', w: 400, pkg: 'instrument-serif', dir: '400Regular', text: latin },
     { family: 'Inter', w: 400, pkg: 'inter', dir: '400Regular', text: latin },

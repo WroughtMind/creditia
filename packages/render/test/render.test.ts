@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
+import { Resvg } from '@resvg/resvg-js';
 import { buildModel, STYLES, PIECES, MODEL_VARIANTS, art, frames, raster } from '../src/index.ts';
 import { makeExporter, sized } from '../src/export.ts';
 import { creditsBlock, fetchSegs, commitsComment, mergeMarked } from '../src/text.ts';
@@ -14,10 +15,19 @@ const raw = JSON.parse(readFileSync(new URL('../fixtures/catnap.json', import.me
 const m = buildModel(raw);
 const ex = makeExporter(raster, (d) => new Uint8Array(deflateSync(d)));
 
-test('模型：agent 按工具归组，人不进排名，没有主导者', () => {
-  assert.deepEqual(m.rows.map((r) => r.key), ['claude-code', 'codex', 'cursor', 'kimi', 'grok', 'unattributed']);
-  assert.ok(!m.rows.some((r) => r.key.startsWith('h:')));
-  assert.equal(m.people.length, 2);
+test('模型：agent 按工具归组，其他贡献者按名字进排名，合计 100%，没有主导者', () => {
+  assert.deepEqual(m.rows.map((r) => r.key), ['claude-code', 'codex', 'cursor', 'kimi', 'grok', 'h:mara okafor', 'unattributed']);
+  assert.equal(m.rows.find((r) => r.kind === 'person')!.name, 'Mara Okafor');
+  const sum = m.rows.reduce((s, r) => s + r.pct, 0);
+  assert.ok(Math.abs(sum - 100) < 0.05, `占比合计 ${sum}`);
+  // 「你」不是贡献者行：自己的提交没有 AI 证据就是未确认
+  assert.ok(!m.rows.some((r) => r.name === 'Lin'));
+  assert.deepEqual(m.authors.map((a) => [a.name, a.me]), [['Lin', true], ['Mara Okafor', false]]);
+  assert.ok(Math.abs(m.authors.reduce((s, a) => s + a.pct, 0) - 100) < 0.05);
+  // 不署名：名字换成「其他贡献者」
+  const anon = buildModel(raw, { named: false });
+  assert.ok(anon.rows.some((r) => r.key === 'people' && r.name === '其他贡献者'));
+  assert.ok(!JSON.stringify(anon.rows).includes('Mara'));
   assert.equal(m.agents[0].models.map((x) => x.name).join(','), 'Claude Opus 5.5,Claude Fable 5.1');
   assert.ok(m.hand.prompts > 0 && m.hand.written > m.hand.committed);
 });
@@ -51,11 +61,19 @@ test('每种作品在每种风格下都能出图，交互区域都在画面里',
   }
 });
 
-test('不写「主导」；人名默认不出现，选择署名才出现', () => {
+test('赛博英文标题中的特殊字符不会让环形图预览消失', () => {
+  const a = art('donut', buildModel(raw, { lang: 'en' }), STYLES.find((s) => s.id === 'cyber')!, { variant: 'ring' })!;
+  assert.doesNotThrow(() => new Resvg(a.svg, { font: { loadSystemFonts: false } }));
+});
+
+test('不写「主导」；其他贡献者默认写 git 名字，关掉署名后一个名字都不出现', () => {
   const all = STYLES.flatMap((st) => Object.keys(PIECES).map((id) => art(id, m, st)?.svg ?? '')).join('');
   assert.ok(!all.includes('主导'));
-  assert.ok(!all.includes('Mara Okafor'));
-  const named = buildModel(raw, { named: true, sign: 'Lin' });
+  assert.ok(all.includes('Mara Okafor'));
+  const anon = buildModel(raw, { named: false });
+  const hidden = STYLES.flatMap((st) => Object.keys(PIECES).map((id) => art(id, anon, st)?.svg ?? '')).join('') + creditsBlock(anon) + creditsBlock(anon, 10, 'contributor');
+  assert.ok(!hidden.includes('Mara'), '关掉署名后还有名字');
+  const named = buildModel(raw, { sign: 'Lin' });
   const svg = art('hand', named, STYLES[0])!.svg + art('roll', named, STYLES[0])!.svg;
   assert.ok(svg.includes('Lin'));
   assert.ok(!creditsBlock(m).includes('主导'));
@@ -116,15 +134,14 @@ const single = (() => {
   return one;
 })();
 
-test('分组：多个工具时 auto 按工具；一个工具占九成以上、下面有两个模型时按模型；指定的照办', () => {
+test('分组：默认按工具（不按占比自动切换）；指定按模型才按模型', () => {
   assert.equal(resolveGroup(raw), 'tool');
   assert.equal(m.group, 'tool');
-  assert.equal(resolveGroup(single), 'model');
-  const ms = buildModel(single);
+  assert.equal(resolveGroup(single), 'tool');
+  const ms = buildModel(single, { group: 'model' });
   assert.equal(ms.group, 'model');
-  assert.ok(ms.groupAuto);
   assert.deepEqual(ms.rows.filter((r) => r.kind === 'agent').map((r) => r.name), ['Claude Opus 5.5', 'Claude Fable 5.1']);
-  assert.equal(buildModel(single, { group: 'tool' }).group, 'tool');
+  assert.equal(buildModel(single).group, 'tool');
   assert.equal(buildModel(raw, { group: 'model' }).group, 'model');
 });
 
@@ -138,14 +155,15 @@ test('按模型分组：key 是「工具/模型」，占比合计不变，按工
   assert.ok(mm.weeks.some((w) => 'claude-code/claude-fable-5-1' in w.by));
   const cm = C.buildModel(raw, { director: false, lang: 'zh', group: 'model' });
   for (const r of mm.rows) {
-    const c = cm.rows.find((x) => x.key === r.key);
+    // 原版渲染器把贡献者单列在 humans 里
+    const c = [...cm.rows, ...cm.humans].find((x) => x.key === r.key);
     assert.ok(c, r.key);
     assert.ok(Math.abs(c!.pct - r.pct) < 0.05, `${r.key}: ${c!.pct} vs ${r.pct}`);
   }
 });
 
 test('按模型分组：每种作品在每种风格下都能出图；英文里没有中日文；分层画模型的版式（分段、分组、内外环、分部、明细、分块……）也能画按工具的', () => {
-  const mm = buildModel(single, { lang: 'en' });
+  const mm = buildModel(single, { lang: 'en', group: 'model' });
   for (const st of STYLES) {
     for (const [id, p] of Object.entries(PIECES)) {
       for (const v of p.variants ?? [undefined]) {
@@ -165,7 +183,7 @@ test('按模型分组：每种作品在每种风格下都能出图；英文里�
 test('旧档案：按天、按文件的 key 是工具名时，按模型分组也能画', () => {
   const old = structuredClone(single);
   for (const d of old.days ?? []) d.by = Object.fromEntries(Object.entries(d.by).map(([k, v]) => [k.startsWith('a:') ? k.slice(2).split('/')[0] : k, v]));
-  const mm = buildModel(old);
+  const mm = buildModel(old, { group: 'model' });
   for (const id of ['calendar', 'mosaic', 'codemap']) assert.ok(art(id, mm, STYLES[0], {}), id);
 });
 
@@ -177,13 +195,28 @@ test('PR 评论按分支上的提交汇总；Release 说明只换掉上次放的
   ];
   const mm = { ...m, units, lang: 'en' as const };
   const s = commitsComment(mm, ['aaaaaaa1111111111', 'bbbbbbb']);
-  assert.equal(s, '**creditia** · Claude Code (Claude Opus 5.5) 75% · Codex (GPT-5.6 Sol) 25%\n');
+  // 不设门槛：0.2% 的未确认也写出来（<1%）
+  assert.equal(s, '**creditia** · Claude Code (Claude Opus 5.5) 75% · Codex (GPT-5.6 Sol) 25% · Unattributed <1%\n');
   assert.equal(commitsComment(mm, ['0000000deadbeef']), '');
   const once = mergeMarked('My notes', '### Credits\n\nA 60%');
   assert.ok(once.startsWith('My notes\n\n<!-- creditia:release -->'), once);
   const twice = mergeMarked(once, '### Credits\n\nB 40%');
   assert.equal(twice.split("<!-- creditia:release -->").length, 2);
   assert.ok(twice.includes('B 40%') && !twice.includes('A 60%') && twice.startsWith('My notes'), twice);
+});
+
+test('按贡献者看：每位提交者一行，合计 100%；只说是谁提交的，不说谁手写的', () => {
+  const s = creditsBlock(m, 10, 'contributor');
+  assert.ok(s.includes('| 贡献者 | 占比 | 新增行 | 其中 |'), s);
+  assert.ok(/\| Lin \| 99\.2% \|/.test(s) && /\| Mara Okafor \| 0\.8% \| \+380 \| 没有 AI 记录 0\.8% \|/.test(s), s);
+  assert.ok(!s.includes('手写'));
+  const tool = creditsBlock(m);
+  assert.ok(tool.includes('| 工具 / 贡献者 |') && tool.includes('| Mara Okafor |'));
+  const lines = fetchSegs(m, 'contributor').map((l) => l.map((x) => x.text).join(''));
+  assert.ok(lines.some((l) => l.startsWith('Lin')) && lines.some((l) => l.startsWith('Mara Okafor')));
+  // 贡献者卡片：只有一位提交者时没有
+  assert.ok(art('people', m, STYLES[0]));
+  assert.equal(art('people', buildModel({ ...raw, authors: raw.authors.slice(0, 1) }), STYLES[0]), null);
 });
 
 test('星号：每个风格都画得出，瓣跟着动画长出来', () => {
