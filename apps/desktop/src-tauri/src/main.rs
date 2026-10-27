@@ -36,6 +36,29 @@ fn project(lib: &Library, project_id: &str) -> Res<creditia_store::Project> {
     lib.projects()?.into_iter().find(|p| p.id == project_id).ok_or(Fail::new("not_in_library"))
 }
 
+fn path_kinds(lib: &Library, p: &creditia_store::Project) -> std::collections::BTreeMap<String, String> {
+    let mut kinds: std::collections::BTreeMap<String, String> = lib.paths(&p.id).unwrap_or_default().into_iter().collect();
+    let mut cmd = Command::new("git");
+    cmd.arg("-C").arg(&p.path).args(["-c", "core.quotepath=false", "worktree", "list", "--porcelain"]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    if let Ok(out) = cmd.output() {
+        if out.status.success() {
+            for path in String::from_utf8_lossy(&out.stdout).lines().filter_map(|l| l.strip_prefix("worktree ")) {
+                kinds.insert(path.to_string(), "worktree".into());
+            }
+        }
+    }
+    let cfg: Value = std::fs::read_to_string(PathBuf::from(&p.path).join(".creditia/config.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    for path in cfg["paths"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+        kinds.insert(path.to_string(), "config".into());
+    }
+    kinds
+}
+
 #[tauri::command]
 fn projects() -> Res<Value> {
     let lib = Library::open()?;
@@ -44,9 +67,10 @@ fn projects() -> Res<Value> {
         .into_iter()
         .map(|p| {
             let credits = PathBuf::from(&p.path).join(".creditia/credits.json");
-            let paths: Vec<String> = lib.paths(&p.id).unwrap_or_default().into_iter().map(|(x, _)| x).collect();
+            let path_kinds = path_kinds(&lib, &p);
+            let paths: Vec<&String> = path_kinds.keys().collect();
             json!({
-                "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "paths": paths,
+                "id": p.id, "name": p.name, "path": p.path, "remotes": p.remotes, "paths": paths, "pathKinds": path_kinds,
                 "lastHead": p.last_head,
                 "lastAnalyzed": p.last_analyzed,
                 "evidence": lib.evidence_count(&p.id),
@@ -123,10 +147,10 @@ fn config_of(project_id: String) -> Res<Value> {
 }
 
 #[tauri::command]
-fn set_display(project_id: String, named: bool, sign: String) -> Res<()> {
+fn set_display(project_id: String, hide_names: bool, sign: String) -> Res<()> {
     let lib = Library::open()?;
     let p = project(&lib, &project_id)?;
-    Ok(creditia_store::Library::set_display(std::path::Path::new(&p.path), named, &sign)?)
+    Ok(creditia_store::Library::set_display(std::path::Path::new(&p.path), hide_names, &sign)?)
 }
 
 /// 核心二进制：和 App 一起打包（sidecar 同目录），开发时用 PATH 里的
@@ -767,7 +791,7 @@ fn open_path(path: String) -> Res<()> {
 fn doctor() -> Value {
     if let Ok(v) = run_core(&["doctor"]) {
         if let Some(a) = v["sources"].as_array() {
-            return json!(a.iter().map(|h| json!({ "id": h["source"], "path": h["path"], "ok": h["readable"], "records": h["records"], "unsupported": h["unsupported"].as_bool().unwrap_or(false) })).collect::<Vec<_>>());
+            return json!(a.iter().map(|h| json!({ "id": h["source"], "path": h["path"], "ok": h["readable"], "records": h["records"], "scope": h["scope"], "unsupported": h["unsupported"].as_bool().unwrap_or(false) })).collect::<Vec<_>>());
         }
     }
     doctor_local()

@@ -1,7 +1,7 @@
 //! git adapter：提交、逐行新增内容（只取哈希）、PR 划分、版本、存活代码、盖章 trailer
 
 use creditia_core::hash::{ext_of, line_key, normalize};
-use creditia_core::model::{excluded, BlameFile, Commit, FileAdd, PrMeta, Unit};
+use creditia_core::model::{excluded, BlameFile, Commit, FileAdd, PrMeta, Unit, JOIN_WINDOWS};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
@@ -113,10 +113,111 @@ pub fn worktrees(repo: &Path) -> Vec<String> {
 }
 
 // trailer 都指定 separator，这样 git 不会在值后面补换行，一条提交始终占一行
-const FMT: &str = "@@@C%x00%H%x00%ae%x00%an%x00%at%x00%ct%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Harness,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Model,valueonly,separator=%x7C)%x00%(trailers:key=Assisted-by,valueonly,separator=%x7C)";
+const FMT: &str = "@@@C%x00%H%x00%ae%x00%an%x00%at%x00%ct%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Harness,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Model,valueonly,separator=%x7C)%x00%(trailers:key=Assisted-by,valueonly,separator=%x7C)%x00%(trailers:key=Creditia-Lines,valueonly,separator=%x7C)%x00%ce%x00%ai";
+
+/// `Creditia-Lines: claude-code/claude-opus-5-5 30, codex 4 / 120` → ([(工具/模型, 行数)], 总行数)。没有 AI 行时写成 `/ 120`
+pub fn parse_lines_stamp(v: &str) -> Option<(Vec<(String, usize)>, usize)> {
+    let (parts, total) = v.trim().rsplit_once('/')?;
+    let total: usize = total.trim().parse().ok()?;
+    let mut by = vec![];
+    for p in parts.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+        let (k, n) = p.rsplit_once(char::is_whitespace)?;
+        by.push((k.trim().to_string(), n.trim().parse().ok()?));
+    }
+    Some((by, total))
+}
 
 /// 盖章表：提交哈希 → (工具, 模型)
 pub type Stamps = HashMap<String, (String, Option<String>)>;
+
+/// 正文里找到的盖章和署名
+#[derive(Default, Debug, PartialEq)]
+pub struct BodyStamps {
+    /// 各条 `Creditia-Lines` 加起来
+    pub lines: Option<(Vec<(String, usize)>, usize)>,
+    /// 出现最多的 `Creditia-Harness`（和它后面的 `Creditia-Model`）
+    pub harness: Option<(String, Option<String>)>,
+    pub coauthors: Vec<String>,
+    pub assisted: Vec<String>,
+}
+
+/// GitHub 网页上 squash 合并时，原分支每个提交的说明连同它们的盖章、`Co-authored-by` 都被并进正文，
+/// 只有最后一段还算 trailer。读整个正文（也认 `* ` / `- ` 开头的列表行），把它们都找回来
+pub fn body_stamps(body: &str) -> BodyStamps {
+    let mut out = BodyStamps::default();
+    let mut by: Vec<(String, usize)> = vec![];
+    let mut total = 0;
+    let mut found = false;
+    let mut hs: Vec<(String, Option<String>)> = vec![];
+    for l in body.lines() {
+        let l = l.trim().trim_start_matches(['*', '-']).trim();
+        let Some((k, v)) = l.split_once(':') else { continue };
+        let v = v.trim();
+        match k.trim().to_ascii_lowercase().as_str() {
+            "creditia-lines" => {
+                if let Some((parts, t)) = parse_lines_stamp(v) {
+                    found = true;
+                    total += t;
+                    for (id, n) in parts {
+                        match by.iter_mut().find(|(x, _)| *x == id) {
+                            Some(e) => e.1 += n,
+                            None => by.push((id, n)),
+                        }
+                    }
+                }
+            }
+            "creditia-harness" if !v.is_empty() => hs.push((creditia_core::model::canonical_harness(v), None)),
+            "creditia-model" if !v.is_empty() => {
+                if let Some(h) = hs.last_mut().filter(|h| h.1.is_none()) {
+                    h.1 = Some(v.to_string());
+                }
+            }
+            "co-authored-by" if !v.is_empty() => {
+                let v = v.to_lowercase();
+                if !out.coauthors.contains(&v) {
+                    out.coauthors.push(v);
+                }
+            }
+            "assisted-by" if !v.is_empty() && !out.assisted.iter().any(|a| a == v) => out.assisted.push(v.to_string()),
+            _ => {}
+        }
+    }
+    if found {
+        out.lines = Some((by, total));
+    }
+    let count = |h: &str| hs.iter().filter(|x| x.0 == h).count();
+    out.harness = hs.iter().max_by_key(|x| (count(&x.0), x.1.is_some())).cloned();
+    out
+}
+
+/// 网页合并的提交（提交者是 GitHub）：正文里原分支提交的盖章和署名补进来
+fn web_bodies(repo: &Path, spec: &str, commits: &mut [Commit], stamps: &mut Stamps) {
+    if !commits.iter().any(|c| c.web) {
+        return;
+    }
+    let log = git(repo, &["log", "--no-merges", "--committer=noreply@github.com", "--format=%H%x00%B%x1e", spec]);
+    let bodies: HashMap<&str, &str> = log.split('\x1e').filter_map(|r| r.trim_start().split_once('\0')).collect();
+    for c in commits.iter_mut().filter(|c| c.web) {
+        let Some(b) = bodies.get(c.hash.as_str()) else { continue };
+        let bs = body_stamps(b);
+        if bs.lines.is_some() {
+            c.lines_stamp = bs.lines;
+        }
+        for co in bs.coauthors {
+            if !c.coauthors.contains(&co) {
+                c.coauthors.push(co);
+            }
+        }
+        for a in bs.assisted {
+            if !c.assisted.contains(&a) {
+                c.assisted.push(a);
+            }
+        }
+        if let Some(h) = bs.harness {
+            stamps.entry(c.hash.clone()).or_insert(h);
+        }
+    }
+}
 
 /// 解析 `git log -p` 输出。`range` 为空表示全量到 `rev`。返回提交和盖章表
 pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>, Stamps) {
@@ -136,9 +237,10 @@ pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>
         return (vec![], HashMap::new());
     };
     let rd = BufReader::with_capacity(1 << 20, child.stdout.take().unwrap());
-    let r = parse_log(rd, total);
+    let (mut commits, mut stamps) = parse_log(rd, total);
     let _ = child.wait();
-    r
+    web_bodies(repo, &spec, &mut commits, &mut stamps);
+    (commits, stamps)
 }
 
 /// 暂存区（`git diff --cached`）当成一个还没提交的提交：提交盖章 hook 用它算这次提交里各工具写了几行
@@ -153,7 +255,7 @@ pub fn staged_commit(repo: &Path, email: &str, ts: i64) -> Commit {
         .unwrap_or_default();
     let head = format!("@@@C\0staged\0{email}\0\0{ts}\0{ts}\0\0\0\0\0\n");
     let (mut out, _) = parse_log(head.as_bytes().chain(&diff[..]), 0);
-    out.pop().unwrap_or(Commit { hash: "staged".into(), email: email.into(), name: String::new(), author_ts: ts, commit_ts: ts, subject: String::new(), coauthors: vec![], assisted: vec![], files: vec![] })
+    out.pop().unwrap_or(Commit { hash: "staged".into(), email: email.into(), author_ts: ts, commit_ts: ts, ..Default::default() })
 }
 
 fn parse_log(rd: impl BufRead, total: usize) -> (Vec<Commit>, Stamps) {
@@ -162,6 +264,10 @@ fn parse_log(rd: impl BufRead, total: usize) -> (Vec<Commit>, Stamps) {
     let mut cur: Option<FileAdd> = None;
     let mut ext = String::new();
     let mut newline: u32 = 0;
+    // 文件头（diff --git 到第一个 @@）里才认 `+++ ` / `Binary files`：新增的内容行本身以 `++ ` 开头时，diff 里也是 `+++ `
+    let mut in_header = false;
+    // 同一改动块里最近几行规范化后的文本，拆行识别用
+    let mut win: Vec<String> = vec![];
     let flush = |out: &mut Vec<Commit>, cur: &mut Option<FileAdd>| {
         if let (Some(f), Some(c)) = (cur.take(), out.last_mut()) {
             if !f.keys.is_empty() || f.binary {
@@ -182,8 +288,9 @@ fn parse_log(rd: impl BufRead, total: usize) -> (Vec<Commit>, Stamps) {
             let harness = p.get(7).and_then(|s| s.split('|').next()).map(|s| s.trim()).filter(|s| !s.is_empty());
             if let Some(h) = harness {
                 let model = p.get(8).and_then(|s| s.split('|').next()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-                stamps.insert(hash.clone(), (h.to_lowercase(), model));
+                stamps.insert(hash.clone(), (creditia_core::model::canonical_harness(h), model));
             }
+            let lines_stamp = p.get(10).and_then(|s| s.split('|').next()).and_then(parse_lines_stamp);
             creditia_core::progress::tick("history", out.len() + 1, total);
             out.push(Commit {
                 hash,
@@ -194,17 +301,22 @@ fn parse_log(rd: impl BufRead, total: usize) -> (Vec<Commit>, Stamps) {
                 subject: p[5].into(),
                 coauthors: p[6].split('|').filter(|x| !x.is_empty()).map(|x| x.to_lowercase()).collect(),
                 assisted: p.get(9).map(|s| s.split('|').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
+                lines_stamp,
+                web: p.get(11).is_some_and(|e| e.trim().eq_ignore_ascii_case("noreply@github.com")),
+                // `%ai`：2026-10-02 22:55:10 +0800
+                tz: p.get(12).and_then(|s| s.trim().rsplit(' ').next()).and_then(creditia_core::util::parse_offset).unwrap_or(0),
                 files: vec![],
             });
         } else if line.starts_with("diff --git ") {
             flush(&mut out, &mut cur);
-        } else if let Some(p) = line.strip_prefix("+++ ") {
+            in_header = true;
+        } else if let Some(p) = line.strip_prefix("+++ ").filter(|_| in_header) {
             let rel = p.strip_prefix("b/").unwrap_or(p).trim_matches('"').to_string();
             if rel != "/dev/null" && !excluded(&rel) {
                 ext = ext_of(&rel);
                 cur = Some(FileAdd { rel, ..Default::default() });
             }
-        } else if line.starts_with("Binary files ") {
+        } else if line.starts_with("Binary files ") && in_header {
             if let Some(b) = line.split(" and ").nth(1) {
                 let rel = b.trim_end_matches(" differ").trim_start_matches("b/").to_string();
                 if rel != "/dev/null" && !excluded(&rel) {
@@ -212,6 +324,8 @@ fn parse_log(rd: impl BufRead, total: usize) -> (Vec<Commit>, Stamps) {
                 }
             }
         } else if line.starts_with("@@ ") {
+            in_header = false;
+            win.clear();
             if let Some(f) = cur.as_mut() {
                 f.hunks.push(f.keys.len() as u32);
                 // `@@ -a,b +c,d @@`：新文件从第 c 行起
@@ -225,6 +339,17 @@ fn parse_log(rd: impl BufRead, total: usize) -> (Vec<Commit>, Stamps) {
                 f.short.push(if long { 0 } else { creditia_core::hash::short_hash(&n) });
                 f.at.push(newline);
                 newline += 1;
+                // 以前面 1~3 行开头、到这一行结束的拼接：记在窗口第一行的位置上
+                let i = f.keys.len() - 1;
+                f.joins.extend([0u32; JOIN_WINDOWS]);
+                for w in 1..=JOIN_WINDOWS.min(win.len()) {
+                    let joined: String = win[win.len() - w..].concat() + &n;
+                    f.joins[(i - w) * JOIN_WINDOWS + (w - 1)] = line_key(&f.rel, &joined);
+                }
+                win.push(n);
+                if win.len() > JOIN_WINDOWS {
+                    win.remove(0);
+                }
             }
         }
     }
@@ -535,10 +660,12 @@ fn blame_file(repo: &Path, rev: &str, path: &str) -> BlameFile {
     res
 }
 
-/// 历史里出现过的全部路径 + 当前树，供日志路径映射
+/// 历史里出现过的全部路径 + 当前树 + 暂存区和工作区里还没提交的文件，供日志路径映射。
+/// 只认历史的话，agent 新建的文件在提交之前读到的日志里映射不上，日志又按指纹缓存，提交以后也补不回来
 pub fn known_paths(repo: &Path, rev: &str) -> HashSet<String> {
     let mut known: HashSet<String> = git(repo, &["log", "--format=", "--name-only", rev]).lines().filter(|l| !l.is_empty()).map(String::from).collect();
     known.extend(git(repo, &["ls-tree", "-r", "--name-only", rev]).lines().map(String::from));
+    known.extend(git(repo, &["-c", "core.quotepath=false", "ls-files", "--cached", "--others", "--exclude-standard"]).lines().filter(|l| !l.is_empty()).map(String::from));
     known
 }
 
@@ -591,6 +718,16 @@ pub fn mailmap_emails(repo: &Path, canonical: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn squash_body_stamps() {
+        // GitHub 网页 squash 合并的正文：每个原提交一段，盖章在中间，最后一段才是 trailer
+        let body = "* add parser\n\nCreditia-Harness: codex\nCreditia-Lines: codex/gpt-6 20, claude-code/claude-opus-5-5 5 / 40\n\n* fix\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n\n* docs\n\nCreditia-Harness: Codex CLI\nCreditia-Model: gpt-6\nCreditia-Lines: codex/gpt-6 3 / 10\n\nCo-authored-by: me <me@users.noreply.github.com>";
+        let b = body_stamps(body);
+        assert_eq!(b.lines, Some((vec![("codex/gpt-6".into(), 23), ("claude-code/claude-opus-5-5".into(), 5)], 50)));
+        assert_eq!(b.harness, Some(("codex".into(), Some("gpt-6".into()))));
+        assert_eq!(b.coauthors, vec!["claude opus 5.5 <noreply@anthropic.com>".to_string(), "me <me@users.noreply.github.com>".to_string()]);
+        assert_eq!(body_stamps("just a message"), BodyStamps::default());
+    }
     #[test]
     fn globs() {
         let m = |p: &str, f: &str| regex::Regex::new(&glob_re(p)).unwrap().is_match(f);

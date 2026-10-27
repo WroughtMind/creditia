@@ -7,7 +7,7 @@
 
 use crate::{any_ts, new_text, path_arg, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -168,8 +168,8 @@ pub fn doctor() -> Health {
     h.readable = true;
     h.format = format!("projects/<dir>/chats/*.jsonl + {}", h.format);
     h.records += files.len() as u64;
-    h.earliest = mt.iter().min().copied().map(date_cn).into_iter().chain(h.earliest.take()).min();
-    h.latest = mt.iter().max().copied().map(date_cn).into_iter().chain(h.latest.take()).max();
+    h.earliest = mt.iter().min().copied().map(date_local).into_iter().chain(h.earliest.take()).min();
+    h.latest = mt.iter().max().copied().map(date_local).into_iter().chain(h.latest.take()).max();
     h
 }
 

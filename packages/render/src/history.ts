@@ -1,5 +1,5 @@
 // 贡献柱状图的共同口径：有版本节点按版本，没有则按月；旧档案只有周明细时保留周粒度。
-// 时间分组不写入 versions，也不冒充发布版本。人的署名不参与代码占比。
+// 时间分组不写入 versions，也不冒充发布版本。别人的提交算那位贡献者，和工具、未确认一起占满一根柱子。
 export type HistoryBasis = 'versions' | 'months' | 'weeks';
 export interface HistoryBucket { tag: string; date: string; by: Record<string, number>; total: number }
 export interface ContributionHistory { basis: HistoryBasis; buckets: HistoryBucket[]; missing: boolean }
@@ -19,13 +19,10 @@ export function historyBasis(raw: any): HistoryBasis {
 
 function aggregate(raw: any, keyOf: (id: string) => string) {
   const known = new Set<string>((raw?.contributors ?? []).map((c: any) => c.id));
-  const people = new Set<string>((raw?.contributors ?? []).filter((c: any) => c.kind === 'human').map((c: any) => c.id));
-  for (const d of raw?.directors ?? []) people.add(d.id);
   return (into: Record<string, number>, id: string, value: unknown) => {
     const v = positive(value);
-    if (!v || people.has(id) || id.startsWith('h:')) return;
+    if (!v) return;
     const key = known.has(id) || id.includes(':') ? keyOf(id) : id;
-    if (key === 'human' || key.startsWith('h:')) return;
     into[key] = (into[key] ?? 0) + v;
   };
 }

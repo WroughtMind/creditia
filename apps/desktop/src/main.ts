@@ -1,13 +1,14 @@
 // creditia App：一面展墙。顶部切换项目，左下角圆点切换风格，所有作品直接摆出来；
 // 悬停看细节、换版式、选格式导出；拖起作品时下面浮出导出坞，松手就导出。
 import { buildModel, type Model } from '../../../packages/render/src/classic/data.ts';
-import { nameOf, resolveGroup } from '../../../packages/render/src/data.ts';
+import { nameOf, resolveGroup, buildModel as buildText } from '../../../packages/render/src/data.ts';
 import { MODEL_VARIANTS } from '../../../packages/render/src/registry.ts';
 import { mergeCredits } from '../../../packages/render/src/merge.ts';
-import { creditsBlock, mergeCreditsMd } from '../../../packages/render/src/classic/text.ts';
+// CREDITS.md 和命令行 creditia doc 用同一份生成代码
+import { creditsBlock, mergeCreditsMd } from '../../../packages/render/src/text.ts';
 import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts';
 import { INTERACT_CSS, mountHits, placeTip } from '../../../packages/render/src/interact.ts';
-import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, groupOf, hasModels, type Kit } from './kits.ts';
+import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, setNamed, groupOf, hasModels, type Kit } from './kits.ts';
 import { exportArt, type Format } from './engine.ts';
 import { mountRoamPreview, releaseRoamPreview } from './roam-preview.ts';
 import { RoamViewport } from './roam-viewport.ts';
@@ -36,7 +37,7 @@ async function api(cmd: string, args: any = {}): Promise<any> {
   switch (cmd) {
     case 'projects': {
       const list: any[] = demo ? demo.projects : devFresh.on && !devFresh.added ? [] : await get('/__dev/projects');
-      return list.filter((p) => !devLib.removed.has(p.id)).map((p) => ({ ...p, paths: [...(p.paths ?? [p.path]), ...(devLib.linked.get(p.id) ?? [])] }));
+      return list.filter((p) => !devLib.removed.has(p.id)).map((p) => ({ ...p, paths: [...(p.paths ?? [p.path]), ...(devLib.linked.get(p.id) ?? [])], pathKinds: { ...(p.pathKinds ?? {}), ...Object.fromEntries((devLib.linked.get(p.id) ?? []).map((x) => [x, 'manual'])) } }));
     }
     case 'remove_project': devLib.removed.add(args.projectId); return null;
     case 'link_path': {
@@ -298,6 +299,7 @@ function empty(view: EmptyView, keepName = false, error = false) {
 }
 
 async function openProject(p: any) {
+  closeFocus?.();
   const seq = ++state.openSeq;
   const prev = state.current;
   state.current = p; store.set('project', p.id);
@@ -327,7 +329,7 @@ async function openProject(p: any) {
   stampOf = await st;
   state.raw = raw;
   $('#empty').hidden = true; emptyView = null;
-  setGroup(groupPref());
+  setGroup(groupPref()); setNamed(namesOn());
   rebuildModel();
   await paint();
   void refreshIfChanged(); // 打开时就看一眼有没有新提交
@@ -399,7 +401,7 @@ function rebuildModel() {
   if (state.current?.all && state.raw?.project && state.raw.project.name !== name) {
     state.raw = { ...state.raw, project: { ...state.raw.project, name } };
   }
-  state.model = buildModel(state.raw, { director: false, lang: state.lang, group: groupPref() });
+  state.model = buildModel(state.raw, { director: false, lang: state.lang, group: groupPref(), named: namesOn() });
   const m = state.model;
   $('#pname').textContent = m.project || state.current?.name;
   const petals = petalsOf(m);
@@ -450,9 +452,10 @@ async function setPlug(k: 'hook' | 'release', on: boolean, quiet = false) {
 }
 
 // ───────────────────────── 分组：按工具 / 按模型 ─────────────────────────
-// 没点过就自动挑：一个工具占了绝大部分、下面又有几个模型时按模型分，否则按工具。
-// 点了就钉住这个项目的选择。档案里一个模型都没记下就不显示。
+// 没点过就按工具；点了就钉住这个项目的选择。档案里一个模型都没记下就不显示。
 type GroupPref = 'auto' | 'tool' | 'model';
+/** 写不写其他贡献者的名字：设置里的开关，默认写 */
+const namesOn = () => store.get('names') !== 'off';
 const groupPref = (): GroupPref => { const g = state.current ? store.get('group.' + state.current.id) : null; return g === 'tool' || g === 'model' ? g : 'auto'; };
 function renderGroup() {
   const el = $('#group');
@@ -484,7 +487,7 @@ let cacheRaw: any = null, cacheTotal = 0;
 const CACHE_MAX = 32e6; // SVG 字符数
 function drawArt(id: string, variant?: string, kit = state.style): Promise<Art | null> {
   if (cacheRaw !== state.raw) { cache.clear(); cacheLen.clear(); cacheTotal = 0; cacheRaw = state.raw; }
-  const key = `${kit.id}|${state.lang}|${groupPref()}|${id}|${variant ?? ''}`;
+  const key = `${kit.id}|${state.lang}|${groupPref()}|${namesOn()}|${id}|${variant ?? ''}`;
   let hit = cache.get(key);
   if (hit) { cache.delete(key); cache.set(key, hit); return hit; } // 挪到最近用过
   hit = kit.render(state.raw, state.lang, id, variant);
@@ -801,7 +804,7 @@ async function doExport(fmtId: string, id: string, k: string, o: { kit?: Kit; ar
   const base = `${m.project || 'credits'}-${id}${variant && variant !== 'original' ? '-' + variant : ''}-${kit.id}`;
   try {
     if (fmtId === 'md') {
-      const text = mergeCreditsMd(null, creditsBlock(m));
+      const text = mergeCreditsMd(null, creditsBlock(buildText(state.raw, { lang: state.lang, group: groupPref(), named: namesOn() })));
       try { await navigator.clipboard.writeText(text); return toast(L('CREDITS.md 区块已复制', 'CREDITS.md block copied')); }
       catch { return toast(L('没能写进剪贴板', 'Could not copy to the clipboard'), 8000, { acts: [{ label: L('存成文件', 'Save as a file'), run: () => saveBytes('CREDITS.md', new TextEncoder().encode(text), 'text/markdown').catch((e) => toast(errText(e), 5000)) }] }); }
     }
@@ -1456,7 +1459,7 @@ function closeMenu() { $('#menu').hidden = true; $('#project').setAttribute('ari
 function toggleMenu() {
   const menu = $('#menu'), pill = $('#project');
   if (!menu.hidden) return closeMenu();
-  closeSheet();
+  closeFocus?.(); closeSheet();
   pill.setAttribute('aria-expanded', 'true');
   menu.style.left = `${Math.max(16, Math.round(pill.getBoundingClientRect().left))}px`; // 对齐项目名，Mac 上让开红绿灯
   menu.hidden = false;
@@ -1747,7 +1750,7 @@ function projectSettings(p0: any, armRemove = false) {
   closeMenu();
   const el = $('#sheet');
   el.hidden = false;
-  let p = p0, armed = armRemove, busy = '';
+  let p = p0, armed = armRemove, busy = '', plugFailed = false;
   plugProject = p; plugs = null;
   const draw = () => {
     const own = autoOwn(p.id), paths: string[] = [...new Set([p.path, ...(p.paths ?? [])])];
@@ -1760,10 +1763,10 @@ function projectSettings(p0: any, armRemove = false) {
       <div class="row kv"><span class="k">${L('有新提交时', 'On new commits')}</span><span class="v grow"></span><div class="seg" role="radiogroup" aria-label="${L('有新提交时', 'On new commits')}">${seg}</div></div>
       <h3>${L('接入', 'Integrations')}</h3>
       <div class="mplugs" id="mplugs" hidden></div>
-      <p class="note" id="plugwait">${p.exists === false ? L('项目目录不在了，接入暂时改不了', "The folder is gone, so integrations can't be changed") : L('读取中…', 'Loading…')}</p>
+      <p class="note" id="plugwait">${p.exists === false ? L('项目目录不在了，接入暂时改不了', "The folder is gone, so integrations can't be changed") : plugFailed ? `${L('读不到接入的状态', "Couldn't read the integrations")} <button class="mini" data-x="plugs-retry">${L('重试', 'Retry')}</button>` : L('读取中…', 'Loading…')}</p>
       <h3>${L('路径', 'Paths')}</h3>
       <p>${L('日志里这些路径下的改动也算这个项目：worktree、搬家前的旧目录、别处的克隆。', 'Changes under these paths in tool logs count for this project: worktrees, old locations, other clones.')}</p>
-      ${paths.map((x) => `<div class="row"><span class="v path" title="${esc(x)}">${esc(short(x))}</span>${x === p.path ? `<span class="tag">${L('主目录', 'Main')}</span>` : `<button class="mini" data-x="unlink" data-path="${esc(x)}" ${busy ? 'disabled' : ''}>${L('取消关联', 'Unlink')}</button>`}</div>`).join('')}
+      ${paths.map((x) => `<div class="row"><span class="v path" title="${esc(x)}">${esc(short(x))}</span>${x === p.path ? `<span class="tag">${L('主目录', 'Main')}</span>` : p.pathKinds?.[x] === 'manual' ? `<button class="mini" data-x="unlink" data-path="${esc(x)}" ${busy ? 'disabled' : ''}>${L('取消关联', 'Unlink')}</button>` : `<span class="tag">${L('自动发现', 'Auto-detected')}</span>`}</div>`).join('')}
       <div class="row"><button class="mini" data-x="link" ${busy || p.exists === false ? 'disabled' : ''}>${icon('link', 14)}${L('关联一个文件夹…', 'Link a folder…')}</button></div>
       <h3>${L('作品库', 'Library')}</h3>
       <div class="row"><span class="k">${L('从作品库移除', 'Remove from library')}</span><button class="mini danger${armed ? ' armed' : ''}" data-x="remove">${icon('remove', 14)}${armed ? L('确认移除', 'Confirm remove') : L('移除', 'Remove')}</button></div>
@@ -1774,13 +1777,19 @@ function projectSettings(p0: any, armRemove = false) {
   };
   sheetRedraw = draw;
   draw();
-  if (p.exists !== false && !p.all) void loadPlugs(p).then(() => { if (plugProject === p) el.querySelector('#plugwait')?.remove(); if (!plugs && plugProject === p) { const w = el.querySelector('#plugwait'); if (w) w.textContent = L('读不到接入的状态', "Couldn't read the integrations"); } });
-  const refresh = async () => { state.projects = await api('projects').catch(() => state.projects); p = state.projects.find((x) => x.id === p.id) ?? p; if (state.current?.id === p.id) state.current = p; };
+  const readPlugs = async () => {
+    plugFailed = false; draw();
+    await loadPlugs(p);
+    if (plugProject === p && sheetRedraw === draw) { plugFailed = !plugs; draw(); }
+  };
+  if (p.exists !== false && !p.all) void readPlugs();
+  const refresh = async () => { state.projects = await api('projects').catch(() => state.projects); p = state.projects.find((x) => x.id === p.id) ?? p; if (sheetRedraw === draw) plugProject = p; if (state.current?.id === p.id) state.current = p; };
   el.onclick = async (e) => {
     const t = e.target as HTMLElement;
     if (e.target === el || t.closest('[data-act="close"]')) return closeSheet();
     const b = t.closest<HTMLButtonElement>('[data-x]'); if (!b || b.disabled) return;
     const x = b.dataset.x;
+    if (x === 'plugs-retry') return void readPlugs();
     if (x !== 'remove' && armed) { armed = false; draw(); }
     try {
       if (x === 're') { closeSheet(); return void reanalyze(p); }
@@ -1849,6 +1858,7 @@ async function settings(tab: Tab = settingsTab) {
     };
   } else if (tab === 'export') {
     sec.innerHTML = `<h3>${L('导出', 'Export')}</h3><div class="row kv" id="xrow">${native ? '' : `<span class="k">${L('保存到', 'Save to')}</span><span class="v grow">${L('浏览器的下载文件夹', "The browser's downloads")}</span>`}</div>
+      <div class="row kv"><span class="k">${L('写其他贡献者的名字', 'Show contributor names')}</span><span class="v grow"></span><button class="switch" role="switch" aria-checked="${namesOn()}" aria-label="${L('写其他贡献者的名字', 'Show contributor names')}" data-x="names"><i></i></button></div>
       <p class="note">${L('格式和尺寸在每张作品的「导出」里挑，App 会记住上次用的。也可以把作品拖到下面的导出坞上。', 'Pick format and size from each card’s Export menu; the app remembers your last choice. You can also drag a card onto the export dock.')}</p>`;
     const xrow = (x: any) => {
       const r = sec.querySelector('#xrow'); if (!r || !x) return;
@@ -1861,6 +1871,13 @@ async function settings(tab: Tab = settingsTab) {
         if (x === 'choose') { if (await api('choose_export_dir')) xrow(await api('app_info')); }
         else if (x === 'reset') { await api('reset_export_dir'); xrow(await api('app_info')); }
         else if (x === 'open-exports') await api('open_folder', { which: 'exports' });
+        else if (x === 'names') {
+          store.set('names', namesOn() ? 'off' : 'on');
+          setNamed(namesOn());
+          sec.querySelector('[data-x="names"]')?.setAttribute('aria-checked', String(namesOn()));
+          state.arts.clear(); roamReset();
+          if (state.raw) { rebuildModel(); await paint(); }
+        }
       } catch (err) { toast(errText(err), 5000); }
     };
   } else if (tab === 'data') {
@@ -1900,10 +1917,16 @@ async function settings(tab: Tab = settingsTab) {
       } catch (err) { toast(errText(err), 5000); }
     };
     /** doctor 的数据源名：一个工具有两处记录时分开写 */
-    const SOURCES: Record<string, [string, string]> = { 'copilot-vscode': ['Copilot（VS Code）', 'Copilot (VS Code)'], 'copilot-cli': ['Copilot 命令行', 'Copilot CLI'], 'trae-cli': ['TRAE 命令行', 'TRAE CLI'], 'trae-ide': ['TRAE IDE', 'TRAE IDE'], 'kilo-cli': ['Kilo 命令行', 'Kilo CLI'], antigravity: ['Antigravity 命令行', 'Antigravity CLI'], windsurf: ['Windsurf', 'Windsurf'] };
-    const sourceName = (id: string) => (SOURCES[id] ? L(...SOURCES[id]) : nameOf(id, state.lang));
+    const SOURCES: Record<string, [string, string]> = { 'copilot-vscode': ['Copilot（VS Code）', 'Copilot (VS Code)'], 'copilot-cli': ['Copilot 命令行', 'Copilot CLI'], 'cursor-cli': ['Cursor 命令行', 'Cursor CLI'], 'cline-cli': ['Cline 命令行', 'Cline CLI'], 'amazon-q-ide': ['Amazon Q（编辑器）', 'Amazon Q (IDE)'], 'costrict-ide': ['CoStrict（编辑器）', 'CoStrict (IDE)'], 'trae-cli': ['TRAE 命令行', 'TRAE CLI'], 'trae-ide': ['TRAE IDE', 'TRAE IDE'], 'kilo-cli': ['Kilo 命令行', 'Kilo CLI'], antigravity: ['Antigravity 命令行', 'Antigravity CLI'], windsurf: ['Windsurf Cascade', 'Windsurf Cascade'] };
+    Object.assign(SOURCES, { 'kiro-cli-classic': ['Kiro CLI（classic）', 'Kiro CLI (classic)'], 'tabnine-ide': ['Tabnine（编辑器）', 'Tabnine (IDE)'], 'devin-cloud': ['Devin 云端', 'Devin Cloud'], 'devin-cli': ['Devin CLI', 'Devin CLI'] });
+    Object.assign(SOURCES, { 'warp-oz': ['Warp Oz 运行信息', 'Warp Oz run information'] });
+    Object.assign(SOURCES, { 'kiro-kas-v3': ['Kiro CLI（V3 会话）', 'Kiro CLI (V3 sessions)'], 'kiro-cli-v2': ['Kiro CLI（V2 会话）', 'Kiro CLI (V2 sessions)'] });
+    Object.assign(SOURCES, { 'trae-native': ['TRAE（编辑器历史）', 'TRAE (editor history)'] });
+    const sourceName = (id: string) => id.endsWith('-acp') ? `${nameOf(id.slice(0, -4), state.lang)} ${L('采集', 'capture')}` : (SOURCES[id] ? L(...SOURCES[id]) : nameOf(id.replace(/-cli$/, ''), state.lang));
     const doc = await api('doctor').catch(() => []);
-    const detail = (d: any) => d.unsupported ? L('读不到改动', 'Edits not readable')
+    const detail = (d: any) => d.scope === 'sessions' && d.ok ? L('仅会话信息', 'Session information only')
+      : d.scope === 'capture' && !d.ok ? L('需开启采集', 'Capture required')
+      : d.unsupported ? L('编辑格式待接', 'Edit format unconfirmed')
       : !d.ok ? L('没有找到', 'Not found')
       : d.records != null ? L(`${fmt(d.records)} 条记录`, `${fmt(d.records)} records`)
       : d.entries != null ? L(`${fmt(d.entries)} 个条目`, `${fmt(d.entries)} entries`)

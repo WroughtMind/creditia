@@ -33,14 +33,15 @@
 $ creditia analyze && creditia fetch
 catnap  2026-05-11 → 2026-09-28
 ────────────────────────────────
-Claude Code     █████████████░░░░░░░░░░░░  50.9%  Claude Opus 5.5
-Codex           ████████░░░░░░░░░░░░░░░░░  30.8%  GPT-5.6 Sol
-Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   9.1%  Composer 2
-Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   4.7%  Kimi K3
-Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   2.1%  Grok 5 Code
-未确认          █░░░░░░░░░░░░░░░░░░░░░░░░   2.5%
+Claude Code     ████████████░░░░░░░░░░░░░  48.3%  Claude Opus 5.5
+Codex           ███████░░░░░░░░░░░░░░░░░░  29.2%  GPT-5.6 Sol
+Cursor          ██░░░░░░░░░░░░░░░░░░░░░░░   8.6%  Composer 2
+Kimi            █░░░░░░░░░░░░░░░░░░░░░░░░   4.4%  Kimi K3
+Grok            █░░░░░░░░░░░░░░░░░░░░░░░░   2.0%  Grok 5 Code
+Mara Okafor     █░░░░░░░░░░░░░░░░░░░░░░░░   0.8%
+未确认          ██░░░░░░░░░░░░░░░░░░░░░░░   6.8%
 
-提交 734  行 50,190  token 447M
+提交 734  行 50,190  token 448M
 ```
 
 分析完，结果可以拿去用：
@@ -51,12 +52,25 @@ creditia export --piece roll --out roll.png   # 片尾字幕
 creditia export --list                        # 全部卡片、版式、风格、格式
 creditia hook install                         # 以后每次提交自动盖章：写入 Git 提交，无需依赖本地日志
 creditia release install                      # 跟着发版：Release 说明、PR 评论里写上署名
+creditia schedule install                     # 每小时把各项目的新记录收进作品库：工具清理旧日志以后证据还在
 creditia blame src/core/analyze.ts:12         # 这一行是哪个工具、哪个模型写的
+creditia doc --by contributor                 # 团队仓库：按贡献者看，每位提交者的提交里各工具占多少
 ```
 
 一个项目在好几个地方（worktree、临时克隆、换过电脑）：`creditia paths` 看登记过的路径，`creditia link <路径>` 补上。
 
-作品默认按工具分行；一个工具写了绝大部分、下面又换过几个模型时，自动改成按模型分。`--group tool` / `--group model` 指定，App 顶栏也能切换、随时切回自动。一个工具里有几个模型时，按模型分的那几行会挨在一起、用同一品牌色的深浅区分；另外每类作品都有把工具和它的模型分层画出来的版式：条形图「分段」「分组」、环形图「内外环」、片尾字幕「分部」、小票「明细」、华夫饼「分块」、徽章「分段」、署名行「带模型」（App 里这些版式旁边有个小点）。
+**在别的电脑、云端写代码**　分析只读这台电脑上的日志，别处写的代码在这里是「未确认」（分析时会提示有几个提交是这样）。两种补法：
+
+- 在那台电脑上也装 creditia 并打开提交盖章：提交时就按那台电脑的日志算好每个工具写了几行，记在提交里（`Creditia-Lines`），哪台电脑分析都认。云端环境（Codex 云端的 setup script、Codespaces 的 `postCreateCommand`、Claude Code 网页版的环境设置……）在启动脚本里加两行（这个样例还没在真实的云端会话里验证过）：
+
+  ```bash
+  cargo install --git https://github.com/WroughtMind/creditia creditia-cli
+  creditia-core hook install --repo .
+  ```
+
+- 那台电脑上 `creditia evidence export --out ev.json`，拿过来 `creditia evidence import ev.json`，再分析。
+
+作品默认按工具分行；`--group model` 按模型分（App 顶栏也能切换，每个项目各记各的）。一个工具里有几个模型时，按模型分的那几行会挨在一起、用同一品牌色的深浅区分；另外每类作品都有把工具和它的模型分层画出来的版式：条形图「分段」「分组」、环形图「内外环」、片尾字幕「分部」、小票「明细」、华夫饼「分块」、徽章「分段」、署名行「带模型」（App 里这些版式旁边有个小点）。
 
 提交盖章和跟着发版都会改你的仓库，所以每个项目由你决定：`init` / `analyze` 在终端里会问一次（答案记进 `.creditia/config.json`，不再问），App 里在每个项目的「项目设置」（项目菜单里那一行的「…」，或 ⌘I）也有这两个开关，随时能拨回去。`creditia integrations` 看现状。
 
@@ -67,7 +81,7 @@ creditia blame src/core/analyze.ts:12         # 这一行是哪个工具、哪�
 - **推断**　同一段改动里大半有某个工具的逐行证据，其余的行跟着它走；`codex/` 这类工具自动建的分支。单独记，`--level strict` 关掉
 - **未确认**　以上都对不上的行。不算给任何工具
 
-creditia 只回答「哪些 AI 工具和模型写了多少」：作品里不出现任何名字，百分比只在 AI 和「未确认」的行之间算。完整规则和已知的边界在 [ATTRIBUTION.md](ATTRIBUTION.md)。
+百分比的分母是全部新增行：AI 工具、其他贡献者（团队仓库里别人的提交，默认写 git 名字，可以关）、未确认合起来是 100%。你自己的提交没有 AI 证据就是未确认，不算你手写。完整规则和已知的边界在 [ATTRIBUTION.md](ATTRIBUTION.md)。
 
 ## 二十六种样子
 
@@ -120,6 +134,10 @@ jobs:
 
 ## 支持的工具
 
+开发版已登记 **78 个 agent 入口**，全部可按名称使用提交署名、启动身份和 skill 安装指引。其中 **72 个入口已有历史读取实现**（包含有限编辑、会话、导入和条件读取），5 个从实际执行宿主归因，CodeMaker 的原生编辑格式仍未确认。灵码真实历史、Eve 本地源码沙箱及 inference.sh 的 Codex 驱动已完成相应验收；MCPJam 的官方本地启动链与真实执行器已通过脚本模型验收，账户和云端模式另行跟踪。详见 [原生实测](SUPPORT_NATIVE_LIVE.md)、[MCPJam 验收](SUPPORT_MCPJAM_LIVE.md)及[剩余事项](https://github.com/WroughtMind/creditia/issues/110)。这些数字不表示所有版本或账号均已验收。
+
+运行 `creditia agents --json` 查看完整目录；[逐项覆盖表](AGENT_SUPPORT.md)列出全部 78 项，[读取边界](ADAPTERS.md)说明能计算哪些编辑。CLI 和 App 使用同一组读取器。未记录的模型保持未知，提交声明与逐行证据分开计算。
+
 | | 工具 | 读什么 | 逐行 | 模型 |
 |:-:|---|---|:-:|:-:|
 | <img src=".github/readme/logo/claude-code.svg" width="18"> | Claude Code | `~/.claude/projects/*/*.jsonl` 的 Write / Edit / MultiEdit；渠道含 Bedrock、Vertex、中转站 | ✓ | ✓ |
@@ -141,6 +159,8 @@ jobs:
 | <img src=".github/readme/logo/devin.svg" width="18"> <img src=".github/readme/logo/jules.svg" width="18"> | Copilot 云端 · Devin · Jules · Cursor 云端 · bot | 提交邮箱、`Co-authored-by`、`Assisted-by`、作者名 | 声明 | — |
 | | 任何工具 | `creditia stamp` / 提交 hook 盖章（`Creditia-Harness` trailer） | 声明 | ✓ |
 
+此外已接入 Pi / Oh My Pi、Command Code、ZCode、Mistral Vibe、MiniMax Code、Droid、Qoder（含 CN）、CodeBuddy、Auggie、Junie、Kiro、iFlow、Neovate、TRAE 编辑器、Windsurf、Antigravity 编辑器等历史；Hermes Agent 读取 `state.db`，OpenClaw 读取当前 SQLite 与旧 JSONL。云端导入及其他来源的格式、限制和核验记录均在[读取边界](ADAPTERS.md)。
+
 ## 安装
 
 npm 和 App 安装包尚未发布。当前可从源码安装，需要 Git、Rust 和 Node 22.18+：
@@ -159,15 +179,19 @@ App 安装包准备中。macOS 产物使用本地签名（ad-hoc），未经 App
 
 发布流程与验收步骤见 [发布说明](packaging/RELEASE.md)。
 
-Agent skill（Claude Code）：
+Agent skill（用 `creditia agents` 查询工具 ID，示例为 Claude Code）：
 
 ```bash
-git clone --depth 1 https://github.com/WroughtMind/creditia /tmp/creditia && cp -r /tmp/creditia/skills/creditia ~/.claude/skills/
+npx skills add WroughtMind/creditia --skill creditia -a claude-code
 ```
+
+本地开发版可把 `WroughtMind/creditia` 换成此仓库的路径。其他工具换用目录中的 ID，例如 `codex`、`cursor`、`openclaw`；安装 skill 不等于开启了历史读取。
 
 GitHub Action 直接用 `WroughtMind/creditia@main`，不用装。
 
 命令行默认说中文；加 `--lang en` 或设 `CREDITIA_LANG=en` 改说英文。
+
+按天、按周、作息按每个提交作者当地的时间算；会话时间和生成时间按你自己提交里最常见的时区（不看运行的机器，CI 上也一样）。要统一按某个时区，设 `CREDITIA_TZ=+08:00`（或 `UTC`）。
 
 大仓库第一次分析要逐个文件追溯现在的每一行，比较慢：一万多个提交、九千个文件的仓库，单核机器上要几十分钟，多核快得多。终端和 App 里都能看到走到哪一步；中途取消，下次接着跑；之后每次只算新提交。
 

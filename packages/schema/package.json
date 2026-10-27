@@ -5,9 +5,14 @@
   "license": "MIT",
   "type": "module",
   "main": "types.ts",
-  "files": ["credits.schema.json", "types.ts"],
+  "files": [
+    "credits.schema.json",
+    "types.ts",
+    "agents.json"
+  ],
   "exports": {
     ".": "./types.ts",
-    "./schema": "./credits.schema.json"
+    "./schema": "./credits.schema.json",
+    "./agents": "./agents.json"
   }
 }

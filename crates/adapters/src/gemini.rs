@@ -7,7 +7,7 @@
 
 use crate::{any_ts, new_text, path_arg, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -98,7 +98,7 @@ fn chat_files(dir: &Path) -> Vec<PathBuf> {
 }
 
 /// 读一个会话文件，统一成老的整份 JSON 的样子（messages 数组）
-fn load(path: &Path) -> Value {
+pub(crate) fn load(path: &Path) -> Value {
     let text = std::fs::read_to_string(path).unwrap_or_default();
     if path.extension().is_some_and(|x| x == "json") {
         return serde_json::from_str(&text).unwrap_or_default();
@@ -141,7 +141,7 @@ fn load(path: &Path) -> Value {
     Value::Object(meta)
 }
 
-fn parse(src: Src, v: &Value, root: &str, pm: &PathMap, g: &mut FileGroup) {
+pub(crate) fn parse(src: Src, v: &Value, root: &str, pm: &PathMap, g: &mut FileGroup) {
     let sid = v["sessionId"].as_str().unwrap_or("").to_string();
     let start = any_ts(&v["startTime"]).unwrap_or(0);
     let mut end = any_ts(&v["lastUpdated"]).unwrap_or(start);
@@ -152,18 +152,25 @@ fn parse(src: Src, v: &Value, root: &str, pm: &PathMap, g: &mut FileGroup) {
         end = end.max(ts);
         match msg["type"].as_str() {
             Some("user") => prompts += 1,
-            Some("gemini") | Some("qwen") | Some("assistant") | Some("model") => {
+            Some("gemini") | Some("qwen") | Some("assistant") | Some("model") | Some("tabnine") => {
                 let model = msg["model"].as_str().unwrap_or("").to_string();
                 if !model.is_empty() {
                     *models.entry(model.clone()).or_default() += 1;
                 }
                 tokens += msg["tokens"]["total"].as_i64().unwrap_or_else(|| ["input", "output", "cached", "thoughts", "tool"].iter().map(|k| msg["tokens"][*k].as_i64().unwrap_or(0)).sum());
                 for tc in msg["toolCalls"].as_array().into_iter().flatten() {
+                    if src == Src::Tabnine && tc["status"] != "success" { continue; }
                     if tc["status"].as_str().map(|s| s != "success").unwrap_or(false) {
                         continue;
                     }
                     let name = tc["name"].as_str().unwrap_or("");
                     let args = &tc["args"];
+                    if src == Src::Tabnine {
+                        let n = name.to_lowercase();
+                        let old = ["old_string", "oldString", "old_str"].iter().any(|k| args[*k].is_string());
+                        let edits = args["edits"].as_array().is_some_and(|a| !a.is_empty() && a.iter().all(|e| ["old_string", "oldString", "old_str"].iter().any(|k| e[*k].is_string())));
+                        if n.contains("write") || n.contains("create") || (!old && !edits) { continue; }
+                    }
                     let (Some(p), Some(text)) = (path_arg(args), new_text(name, args)) else { continue };
                     let abs = if Path::new(&p).is_absolute() || root.is_empty() { p } else { format!("{}/{}", root.trim_end_matches('/'), p) };
                     let m = if model.is_empty() { models.iter().max_by_key(|(_, n)| **n).map(|(m, _)| m.clone()).unwrap_or_default() } else { model.clone() };
@@ -210,8 +217,8 @@ pub fn doctor(src: Src) -> Health {
         readable: base.is_dir(),
         format: creditia_core::tr!("tmp/<项目>/chats/session-*.json(l)", "tmp/<project>/chats/session-*.json(l)"),
         records: files.len() as u64,
-        earliest: mt.iter().min().copied().map(date_cn),
-        latest: mt.iter().max().copied().map(date_cn),
+        earliest: mt.iter().min().copied().map(date_local),
+        latest: mt.iter().max().copied().map(date_local),
         note: creditia_core::tr!("{} 个项目目录（按 .project_root 或项目路径的 SHA-256 对应）", "{} project folders (matched by .project_root or the SHA-256 of the project path)", ps.len()),
         ..Default::default()
     }

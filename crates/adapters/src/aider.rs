@@ -6,7 +6,7 @@
 
 use crate::{added_lines, apply_patch_files, Health, Stats};
 use creditia_core::model::{fingerprint, provider_hint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::{date_cn, days_from_civil};
+use creditia_core::util::{date_local, days_from_civil};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -379,8 +379,8 @@ pub fn doctor() -> Health {
         readable: f.is_file(),
         format: creditia_core::tr!("<仓库>/{FILE}", "<repo>/{FILE}"),
         records: ss.len() as u64,
-        earliest: days.iter().min().copied().map(date_cn),
-        latest: days.iter().max().copied().map(date_cn),
+        earliest: days.iter().min().copied().map(date_local),
+        latest: days.iter().max().copied().map(date_local),
         note: creditia_core::tr!("记录在每个仓库的根目录里；这里只看当前仓库", "kept in each repository's root; this only checks the current one"),
         ..Default::default()
     }

@@ -8,7 +8,7 @@
 
 use crate::{file_uri_path, new_text, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
-use creditia_core::util::date_cn;
+use creditia_core::util::date_local;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -193,8 +193,8 @@ pub fn doctor() -> Health {
         readable: sessions_dir().is_dir(),
         format: "sessions/<id>.json (history + toolCallStates)".into(),
         records: fs.len() as u64,
-        earliest: fs.iter().map(|f| if f.1 > 0 { f.1 } else { mtime(&f.0) }).filter(|&t| t > 0).min().map(date_cn),
-        latest: fs.iter().map(|f| mtime(&f.0)).max().filter(|&t| t > 0).map(date_cn),
+        earliest: fs.iter().map(|f| if f.1 > 0 { f.1 } else { mtime(&f.0) }).filter(|&t| t > 0).min().map(date_local),
+        latest: fs.iter().map(|f| mtime(&f.0)).max().filter(|&t| t > 0).map(date_local),
         note: creditia_core::tr!(
             "扩展和命令行共用；工具调用带状态，模型是用户起的标题。尚未用真实日志核对",
             "shared by the editor extensions and the CLI; tool calls carry a status, models are user-given titles. Not yet checked against real logs"

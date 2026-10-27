@@ -1,0 +1,616 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-23",
+  "source": "https://github.com/vercel-labs/skills/blob/main/src/agents.ts",
+  "sourceBlob": "c4af0e54d6f0c87d7d6863315be5c7acb4ed62fe",
+  "agents": [
+    {
+      "id": "aider-desk",
+      "name": "AiderDesk",
+      "harness": "aider-desk",
+      "skillsDir": ".aider-desk/skills",
+      "history": "reader",
+      "historyNote": "原生 context v2：成功 Power 编辑和已提交 Aider 差分",
+      "historyNoteEn": "Native context v2: successful Power edits and committed Aider diffs"
+    },
+    {
+      "id": "amp",
+      "name": "Amp",
+      "harness": "amp",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "antigravity",
+      "name": "Antigravity",
+      "harness": "antigravity-ide",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "antigravity-cli",
+      "name": "Antigravity CLI",
+      "harness": "antigravity",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "astrbot",
+      "name": "AstrBot",
+      "harness": "astrbot",
+      "skillsDir": "data/skills",
+      "history": "reader",
+      "historyNote": "原生 SQLite：成功文件工具；仅能映射的绝对路径，模型未知",
+      "historyNoteEn": "Native SQLite file-tool receipts; mapped absolute paths only, model unknown"
+    },
+    {
+      "id": "autohand-code",
+      "name": "Autohand Code CLI",
+      "harness": "autohand",
+      "skillsDir": ".autohand/skills",
+      "history": "reader"
+    },
+    {
+      "id": "augment",
+      "name": "Augment",
+      "harness": "auggie",
+      "skillsDir": ".augment/skills",
+      "history": "reader"
+    },
+    {
+      "id": "bob",
+      "name": "IBM Bob",
+      "harness": "bob",
+      "skillsDir": ".bob/skills",
+      "history": "reader"
+    },
+    {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "harness": "claude-code",
+      "skillsDir": ".claude/skills",
+      "history": "reader"
+    },
+    {
+      "id": "openclaw",
+      "name": "OpenClaw",
+      "harness": "openclaw",
+      "skillsDir": "skills",
+      "history": "reader"
+    },
+    {
+      "id": "cline",
+      "name": "Cline",
+      "harness": "cline",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "codearts-agent",
+      "name": "CodeArts Agent",
+      "harness": "codearts-agent",
+      "skillsDir": ".codeartsdoer/skills",
+      "history": "reader",
+      "historyNote": "条件读取：已知 OpenCode v1 表结构与成功差分；厂商实录待验",
+      "historyNoteEn": "Conditional: known OpenCode v1 schema and saved successful diffs; vendor logs unverified"
+    },
+    {
+      "id": "codebuddy",
+      "name": "CodeBuddy",
+      "harness": "codebuddy",
+      "skillsDir": ".codebuddy/skills",
+      "history": "reader"
+    },
+    {
+      "id": "codemaker",
+      "name": "Codemaker",
+      "harness": "codemaker",
+      "skillsDir": ".codemaker/skills",
+      "history": "unconfirmed",
+      "historyNote": "官方 CodeMaker AI CLI 1.6.0 已实测，因无 API key 停在认证；Y3 移植版产品对应和落盘回执仍未确认",
+      "historyNoteEn": "Official CodeMaker AI CLI 1.6.0 executed but requires an unavailable API key; Y3 port identity and durable edit receipts remain unverified"
+    },
+    {
+      "id": "codestudio",
+      "name": "Code Studio",
+      "harness": "codestudio",
+      "skillsDir": ".codestudio/skills",
+      "history": "reader",
+      "historyNote": "原生已接受编辑时间线与文本快照；逐请求模型",
+      "historyNoteEn": "Native accepted editing timelines and text snapshots; per-request model"
+    },
+    {
+      "id": "codex",
+      "name": "Codex",
+      "harness": "codex",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "command-code",
+      "name": "Command Code",
+      "harness": "command-code",
+      "skillsDir": ".commandcode/skills",
+      "history": "reader"
+    },
+    {
+      "id": "continue",
+      "name": "Continue",
+      "harness": "continue",
+      "skillsDir": ".continue/skills",
+      "history": "reader"
+    },
+    {
+      "id": "cortex",
+      "name": "Cortex Code",
+      "harness": "cortex-code",
+      "skillsDir": ".cortex/skills",
+      "history": "reader"
+    },
+    {
+      "id": "crush",
+      "name": "Crush",
+      "harness": "crush",
+      "skillsDir": ".crush/skills",
+      "history": "reader"
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "harness": "cursor",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "deepagents",
+      "name": "Deep Agents",
+      "harness": "deepagents",
+      "skillsDir": ".agents/skills",
+      "history": "reader",
+      "historyNote": "原生 LangGraph SQLite：安全解码 JSON/MessagePack、CLI 本地文件回执",
+      "historyNoteEn": "Native LangGraph SQLite: data-only JSON/MessagePack and CLI local-file receipts"
+    },
+    {
+      "id": "devin",
+      "name": "Devin for Terminal",
+      "harness": "devin",
+      "skillsDir": ".devin/skills",
+      "history": "reader"
+    },
+    {
+      "id": "dexto",
+      "name": "Dexto",
+      "harness": "dexto",
+      "skillsDir": ".agents/skills",
+      "history": "reader",
+      "historyNote": "原生 SQLite kv/list：配对成功写入与编辑；工作区路径映射",
+      "historyNoteEn": "Native SQLite kv/list: paired successful writes/edits and workspace path mapping"
+    },
+    {
+      "id": "droid",
+      "name": "Droid",
+      "harness": "droid",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "eve",
+      "name": "Eve",
+      "harness": "eve",
+      "skillsDir": "agent/skills",
+      "history": "reader",
+      "historyNote": "Eve 0.83.0 本地官方源码沙箱已真实验收：写入回执、固定版本挂载和仓库归因；GitHub 绑定/eve-code 另有条件读取，覆盖写及 shell 编辑仍排除，模型未知",
+      "historyNoteEn": "Eve 0.83.0 official local source sandbox verified end to end: write receipts, pinned mount and repository attribution; GitHub/eve-code paths remain conditional; overwrites and shell edits excluded, model unknown"
+    },
+    {
+      "id": "firebender",
+      "name": "Firebender",
+      "harness": "firebender",
+      "skillsDir": ".agents/skills",
+      "history": "reader",
+      "historyNote": "原生项目 SQLite：完成 Write 回执及子 agent；模型未知，排除 IDE 自动改写",
+      "historyNoteEn": "Native project SQLite: completed Write receipts and subagents; unknown model, IDE rewrites excluded"
+    },
+    {
+      "id": "forgecode",
+      "name": "ForgeCode",
+      "harness": "forgecode",
+      "skillsDir": ".forge/skills",
+      "history": "reader",
+      "historyNote": "原生 .forge.db：逐消息模型、成功 fs 工具实际差分",
+      "historyNoteEn": "Native .forge.db: message-level model and successful fs tool diffs"
+    },
+    {
+      "id": "fx",
+      "name": "fx",
+      "harness": "fx",
+      "skillsDir": ".agents/skills",
+      "history": "reader",
+      "historyNote": "原生 v2：CRC32C 日志、SHA-256 数据块和保存后的文件结果",
+      "historyNoteEn": "Native v2: CRC32C journal, SHA-256 pieces and committed file presentations"
+    },
+    {
+      "id": "gemini-cli",
+      "name": "Gemini CLI",
+      "harness": "gemini",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "github-copilot",
+      "name": "GitHub Copilot",
+      "harness": "copilot",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "goose",
+      "name": "Goose",
+      "harness": "goose",
+      "skillsDir": ".goose/skills",
+      "history": "reader"
+    },
+    {
+      "id": "grok",
+      "name": "Grok Build",
+      "harness": "grok",
+      "skillsDir": ".grok/skills",
+      "history": "reader"
+    },
+    {
+      "id": "hermes-agent",
+      "name": "Hermes Agent",
+      "harness": "hermes-agent",
+      "skillsDir": ".hermes/skills",
+      "history": "reader"
+    },
+    {
+      "id": "inference-sh",
+      "name": "inference.sh",
+      "harness": "inference-sh",
+      "skillsDir": ".inferencesh/skills",
+      "history": "host",
+      "historyNote": "Codex 模式已用官方 agentprotocol 驱动与导出真实验收：支持无 SQLite 索引的原生历史，贡献归实际执行器；独立云端工具仍未确认",
+      "historyNoteEn": "Codex mode verified with the official agentprotocol driver and native export, including index-free histories; credit belongs to the executor; standalone cloud tools remain unverified"
+    },
+    {
+      "id": "jazz",
+      "name": "Jazz",
+      "harness": "jazz",
+      "skillsDir": ".jazz/skills",
+      "history": "reader",
+      "historyNote": "原生 JSONL/gzip：完整成功差分，历史模型未知",
+      "historyNoteEn": "Native JSONL/gzip: complete successful diffs; historical model unknown"
+    },
+    {
+      "id": "junie",
+      "name": "Junie",
+      "harness": "junie",
+      "skillsDir": ".junie/skills",
+      "history": "reader"
+    },
+    {
+      "id": "iflow-cli",
+      "name": "iFlow CLI",
+      "harness": "iflow",
+      "skillsDir": ".iflow/skills",
+      "history": "reader"
+    },
+    {
+      "id": "kilo",
+      "name": "Kilo Code",
+      "harness": "kilo",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "kimchi",
+      "name": "Kimchi",
+      "harness": "kimchi",
+      "skillsDir": ".kimchi/skills",
+      "history": "reader"
+    },
+    {
+      "id": "kimi-code-cli",
+      "name": "Kimi Code CLI",
+      "harness": "kimi",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "kiro-cli",
+      "name": "Kiro CLI",
+      "harness": "kiro",
+      "skillsDir": ".kiro/skills",
+      "history": "reader"
+    },
+    {
+      "id": "kode",
+      "name": "Kode",
+      "harness": "kode",
+      "skillsDir": ".kode/skills",
+      "history": "reader",
+      "historyNote": "原生 projects JSONL：成功 Write/Edit structuredPatch；子 agent 分开",
+      "historyNoteEn": "Native projects JSONL: successful Write/Edit structuredPatch, separate subagents"
+    },
+    {
+      "id": "lingma",
+      "name": "Lingma",
+      "harness": "lingma",
+      "skillsDir": ".lingma/skills",
+      "history": "reader",
+      "historyNote": "原生 local.db + workingSpace：已接受且前后 MD5 匹配；已用公开真实库验证，支持迁移的 Windows 快照，模型未知",
+      "historyNoteEn": "Native local.db + workingSpace: accepted snapshots with matching MD5; public real database validated, relocated Windows snapshots supported, model unknown"
+    },
+    {
+      "id": "loaf",
+      "name": "Loaf",
+      "harness": "loaf",
+      "skillsDir": ".agents/skills",
+      "history": "host",
+      "historyNote": "已查原生工作日志；代码贡献从实际执行的宿主 agent 读取",
+      "historyNoteEn": "Native work journal inspected; code credit belongs to the executing host agent"
+    },
+    {
+      "id": "mcpjam",
+      "name": "MCPJam",
+      "harness": "mcpjam",
+      "skillsDir": ".mcpjam/skills",
+      "history": "host",
+      "historyNote": "自动读取本地 Codex 和 Claude 执行器历史，解析项目链接并按原生会话去重；官方桥与真实执行器的脚本模型验收通过，贡献归执行器；账户模型代理、完整受管启动及云端 RPC 未验收",
+      "historyNoteEn": "Reads local Codex and Claude executor histories, resolves workspace links and deduplicates native sessions; official bridges and real executors tested with scripted models; credit belongs to the executor; account model proxy, full managed launch and cloud RPC remain unverified"
+    },
+    {
+      "id": "minimax-code",
+      "name": "MiniMax Code",
+      "harness": "minimax-code",
+      "skillsDir": ".minimax/skills",
+      "history": "reader"
+    },
+    {
+      "id": "mistral-vibe",
+      "name": "Mistral Vibe",
+      "harness": "mistral-vibe",
+      "skillsDir": ".vibe/skills",
+      "history": "reader"
+    },
+    {
+      "id": "moxby",
+      "name": "Moxby",
+      "harness": "moxby",
+      "skillsDir": ".moxby/skills",
+      "history": "reader",
+      "historyNote": "Desktop 3.2.0 原生 SQLite：最终成功 file_edit 回执、绝对路径及逐轮模型",
+      "historyNoteEn": "Desktop 3.2.0 native SQLite: terminal successful file_edit receipts, absolute paths and per-turn model"
+    },
+    {
+      "id": "mux",
+      "name": "Mux",
+      "harness": "mux",
+      "skillsDir": ".mux/skills",
+      "history": "reader",
+      "historyNote": "原生 active/archive JSONL：成功编辑差分，排除 fork 复制前缀",
+      "historyNoteEn": "Native active/archive JSONL: successful diffs, inherited fork prefix excluded"
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "harness": "opencode",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "openhands",
+      "name": "OpenHands",
+      "harness": "openhands",
+      "skillsDir": ".openhands/skills",
+      "history": "reader"
+    },
+    {
+      "id": "ona",
+      "name": "Ona",
+      "harness": "ona",
+      "skillsDir": ".ona/skills",
+      "history": "host",
+      "historyNote": "当前官方 Codex Agent 使用 Codex 执行器；在执行环境读取其原生日志",
+      "historyNoteEn": "Current official Codex Agent uses the Codex harness; read its native logs in the execution environment"
+    },
+    {
+      "id": "pi",
+      "name": "Pi",
+      "harness": "pi",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "posit-assistant",
+      "name": "Posit Assistant",
+      "harness": "posit-assistant",
+      "skillsDir": ".posit/assistant/skills",
+      "history": "reader",
+      "historyNote": "原生 V2/V3 活动分支；成功编辑回执与逐消息模型",
+      "historyNoteEn": "Native V2/V3 active branches, completed edit receipts and per-message models"
+    },
+    {
+      "id": "qoder",
+      "name": "Qoder",
+      "harness": "qoder",
+      "skillsDir": ".qoder/skills",
+      "history": "reader"
+    },
+    {
+      "id": "qoder-cn",
+      "name": "Qoder CN",
+      "harness": "qoder",
+      "skillsDir": ".qoder/skills",
+      "history": "reader"
+    },
+    {
+      "id": "qwen-code",
+      "name": "Qwen Code",
+      "harness": "qwen",
+      "skillsDir": ".qwen/skills",
+      "history": "reader"
+    },
+    {
+      "id": "replit",
+      "name": "Replit",
+      "harness": "replit",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "reasonix",
+      "name": "Reasonix",
+      "harness": "reasonix",
+      "skillsDir": ".reasonix/skills",
+      "history": "reader",
+      "historyNote": "原生 flat/append/replace/schema-2 DAG：当前分支、成功写后回执",
+      "historyNoteEn": "Native flat/append/replace/schema-2 DAG: selected branch and successful post-write receipts"
+    },
+    {
+      "id": "rovodev",
+      "name": "Rovo Dev",
+      "harness": "rovodev",
+      "skillsDir": ".rovodev/skills",
+      "history": "reader",
+      "historyNote": "原生 session_context：成功创建和实际编辑差分、逐响应模型；保留已裁剪历史证据",
+      "historyNoteEn": "Native session_context: successful creation and actual edit diffs, per-response model; preserves pruned evidence"
+    },
+    {
+      "id": "roo",
+      "name": "Roo Code",
+      "harness": "roo",
+      "skillsDir": ".roo/skills",
+      "history": "reader"
+    },
+    {
+      "id": "sarvam-code",
+      "name": "Sarvam Code",
+      "harness": "sarvam-code",
+      "skillsDir": ".agents/skills",
+      "history": "reader",
+      "historyNote": "原生 rollout；成功 patch_apply_end、逐轮模型",
+      "historyNoteEn": "Native rollouts; successful patch_apply_end and per-turn model"
+    },
+    {
+      "id": "tabnine-cli",
+      "name": "Tabnine CLI",
+      "harness": "tabnine",
+      "skillsDir": ".tabnine/agent/skills",
+      "history": "reader"
+    },
+    {
+      "id": "terramind",
+      "name": "Terramind",
+      "harness": "terramind",
+      "skillsDir": ".terramind/skills",
+      "history": "reader",
+      "historyNote": "Nucleus 原生本地工具执行流水；成功 Write/Edit 与逐步骤模型",
+      "historyNoteEn": "Nucleus native local execution journal; completed Write/Edit and per-step models"
+    },
+    {
+      "id": "tinycloud",
+      "name": "Tinycloud",
+      "harness": "tinycloud",
+      "skillsDir": ".tinycloud/skills",
+      "history": "reader",
+      "historyNote": "原生 SessionStore JSONL；绝对路径、实际写入文本与模型",
+      "historyNoteEn": "Native SessionStore JSONL; absolute paths, actual written text and model"
+    },
+    {
+      "id": "trae",
+      "name": "Trae",
+      "harness": "trae-ide",
+      "skillsDir": ".trae/skills",
+      "history": "reader"
+    },
+    {
+      "id": "trae-cn",
+      "name": "Trae CN",
+      "harness": "trae-ide",
+      "skillsDir": ".trae/skills",
+      "history": "reader"
+    },
+    {
+      "id": "warp",
+      "name": "Warp",
+      "harness": "warp",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "windsurf",
+      "name": "Windsurf",
+      "harness": "windsurf",
+      "skillsDir": ".windsurf/skills",
+      "history": "reader"
+    },
+    {
+      "id": "zed",
+      "name": "Zed",
+      "harness": "zed",
+      "skillsDir": ".agents/skills",
+      "history": "reader"
+    },
+    {
+      "id": "zcode",
+      "name": "ZCode",
+      "harness": "zcode",
+      "skillsDir": ".zcode/skills",
+      "history": "reader"
+    },
+    {
+      "id": "zencoder",
+      "name": "Zencoder",
+      "harness": "zencoder",
+      "skillsDir": ".zencoder/skills",
+      "history": "reader",
+      "historyNote": "CLI 原生历史与 IDE 执行后差分；CLI 逐消息模型",
+      "historyNoteEn": "Native CLI history and IDE post-execution diffs; per-message CLI model"
+    },
+    {
+      "id": "zenflow",
+      "name": "Zenflow",
+      "harness": "zenflow",
+      "skillsDir": ".zencoder/skills",
+      "history": "reader",
+      "historyNote": "原生标准化日志数据库；最终成功编辑，模型未知",
+      "historyNoteEn": "Native normalized-log database; final successful edits, model unknown"
+    },
+    {
+      "id": "neovate",
+      "name": "Neovate",
+      "harness": "neovate",
+      "skillsDir": ".neovate/skills",
+      "history": "reader"
+    },
+    {
+      "id": "pochi",
+      "name": "Pochi",
+      "harness": "pochi",
+      "skillsDir": ".pochi/skills",
+      "history": "reader",
+      "historyNote": "原生 LiveStore SQLite：成功编辑结果；内存/OPFS 需持久化导出",
+      "historyNoteEn": "Native LiveStore SQLite: successful edit results; memory/OPFS require persistent export"
+    },
+    {
+      "id": "promptscript",
+      "name": "PromptScript",
+      "harness": "promptscript",
+      "skillsDir": ".agents/skills",
+      "history": "host",
+      "historyNote": "已查指令编译与遥测：无代码编辑回执；从执行宿主归因",
+      "historyNoteEn": "Instruction compiler/telemetry inspected: no code-edit receipts; attribute executing host"
+    },
+    {
+      "id": "adal",
+      "name": "AdaL",
+      "harness": "adal",
+      "skillsDir": ".adal/skills",
+      "history": "reader",
+      "historyNote": "官方 JSON/NDJSON 导入：成功 replace_by_string；HTML 历史未解码",
+      "historyNoteEn": "Official JSON/NDJSON import: successful replace_by_string; HTML history not decoded"
+    }
+  ]
+}

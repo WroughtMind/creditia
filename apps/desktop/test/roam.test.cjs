@@ -157,7 +157,7 @@ function renderClient() {
   }
   const kits = fs.readFileSync(require.resolve('../src/kits.ts'), 'utf8');
   const snippet = kits.slice(kits.indexOf('let renderer: Worker'), kits.indexOf('const classicKits: Kit[]')).replaceAll('import.meta.url', "'file:///kits.ts'");
-  const ctx = vm.createContext({ Worker, URL, group: 'auto', devicePixelRatio: 2 });
+  const ctx = vm.createContext({ Worker, URL, group: 'auto', named: true, devicePixelRatio: 2 });
   vm.runInContext(ts.transpile(snippet.replace('export function wakeRenderer', 'function wakeRenderer'), {target:ts.ScriptTarget.ES2022}) + '\nglobalThis.renderAway = renderAway; globalThis.previewAway = previewAway;', ctx);
   return {ctx, workers};
 }
@@ -169,6 +169,8 @@ test('worker jobs share the raw snapshot and match out-of-order replies by reque
   const worker = workers[0], [a,b] = worker.messages;
   assert.deepEqual(a.raw, raw);
   assert.equal('raw' in b, false);
+  // 设置里「写其他贡献者的名字」跟着每张作品传给排版线程
+  assert.equal(a.named, true);
   worker.onmessage({data:{seq:b.seq,art:{title:'tier'}}});
   worker.onmessage({data:{seq:a.seq,art:{title:'share'}}});
   assert.equal((await first).title,'share');
@@ -194,7 +196,8 @@ test('changing the aggregate language sends its updated project name to the work
   const original = { project: {name:'全部项目'}, contributors: [] };
   ctx.state = {current: {all:true}, raw: original, lang:'zh'};
   ctx.L = (zh,en) => ctx.state.lang === 'zh' ? zh : en;
-  ctx.groupPref = () => 'auto';
+  ctx.groupPref = () => 'auto'; ctx.namesOn = () => true;
+  ctx.petalsOf = () => []; ctx.mark = { set() {} };
   ctx.buildModel = raw => ({project:raw.project.name, commits:0, linesAdded:0});
   ctx.$ = () => ({}); ctx.fmt = String; ctx.renderGroup = ctx.renderPlugs = () => {};
   const rebuild = main.slice(main.indexOf('function rebuildModel()'), main.indexOf('// ───────────────────────── 接入'));
@@ -302,6 +305,8 @@ test('starting a slow project switch releases old roaming cards before its data 
   ctx.state.openSeq = 0;ctx.state.token = 0;ctx.state.arts = new Map();
   ctx.store.set = () => {};
   ctx.renderPlugs = ctx.slotWall = ctx.cancelAnimationFrame = () => {};
+  ctx.mark = { set() {} }; ctx.markOf = () => null; ctx.UNREAD = [];
+  ctx.syncStatus = () => {}; ctx.setTimeout = () => {}; ctx.closeFocus = null;
   ctx.readStamp = async () => '';
   ctx.creditsOf = () => new Promise(() => {});
   ctx.releaseRoamPreview = () => released++;

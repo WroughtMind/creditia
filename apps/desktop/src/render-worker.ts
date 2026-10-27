@@ -13,7 +13,7 @@ import wasmUrl from '@resvg/resvg-wasm/index_bg.wasm?url';
 prepare(fontFiles());
 let rasterReady: Promise<void> | undefined;
 let raw: any;
-let modelKey: [any, string, string, boolean] | undefined;
+let modelKey: [any, string, string, boolean, boolean] | undefined;
 let model: any;
 /** 预览作为独立图片交给浏览器绘制。这里只把文字转路径，保留原图的滤镜和细节；
  *  对整张图运行 resvg.render() 会让纸纹等滤镜占住排版队列数秒。 */
@@ -28,15 +28,15 @@ async function preview(svg: string, style: string, classic: boolean) {
   } finally { image.free(); }
 }
 self.onmessage = async ({ data }) => {
-  const { seq, style, lang, group, id, variant, classic } = data;
+  const { seq, style, lang, group, named, id, variant, classic } = data;
   try {
     if (data.warm) { await warm(themeById(style)!); return; }
     if (data.svg) { self.postMessage({ seq, preview: await preview(data.svg, style, classic) }); return; }
     if ('raw' in data) raw = data.raw;
     const current = raw;
-    if (!modelKey || modelKey[0] !== current || modelKey[1] !== lang || modelKey[2] !== group || modelKey[3] !== classic) {
-      model = classic ? C.buildModel(current, { director: false, lang, group }) : V.buildModel(current, { lang, named: false, sign: '', group });
-      modelKey = [current, lang, group, classic];
+    if (!modelKey || modelKey[0] !== current || modelKey[1] !== lang || modelKey[2] !== group || modelKey[3] !== classic || modelKey[4] !== named) {
+      model = classic ? C.buildModel(current, { director: false, lang, group, named }) : V.buildModel(current, { lang, named, sign: '', group });
+      modelKey = [current, lang, group, classic, named];
     }
     const a = classic ? await classicRender(id, model, themeById(style)!, { lang, variant }) : v2Art(id, model, STYLES.find((s) => s.id === style)!, { variant });
     self.postMessage({ seq, art: a });

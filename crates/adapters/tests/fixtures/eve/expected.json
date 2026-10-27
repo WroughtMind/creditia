@@ -1,0 +1,4 @@
+{
+  "created": "export const eve_created_0 = 0 + 739;\nexport const eve_created_1 = 1 + 739;\nexport const eve_created_2 = 2 + 739;\nexport const eve_created_3 = 3 + 739;\nexport const eve_created_4 = 4 + 739;\nexport const eve_created_5 = 5 + 739;\nexport const eve_created_6 = 6 + 739;\nexport const eve_created_7 = 7 + 739;\n",
+  "patched": "export const eve_patched_0 = 0 + 739;\nexport const eve_patched_1 = 1 + 739;\nexport const eve_patched_2 = 2 + 739;\nexport const eve_patched_3 = 3 + 739;\nexport const eve_patched_4 = 4 + 739;\nexport const eve_patched_5 = 5 + 739;\nexport const eve_patched_6 = 6 + 739;\nexport const eve_patched_7 = 7 + 739;\n"
+}

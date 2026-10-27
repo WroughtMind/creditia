@@ -2,7 +2,8 @@
 //! 证据库只存「项目、相对路径、行哈希、工具、模型、会话、时间、是否 tab」，不存代码和 prompt。
 
 use creditia_core::model::{Ev, Session, Src, Store};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, TransactionBehavior};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 pub fn data_dir() -> PathBuf {
@@ -42,13 +43,20 @@ pub struct Library {
     conn: Connection,
 }
 
+pub struct LoadedEvidence {
+    pub events: Vec<Ev>,
+    pub sessions: Vec<Session>,
+    /// Old Claude rows whose main/subagent transcript has not identified them.
+    pub legacy_claude: Vec<Ev>,
+}
+
 impl Library {
     pub fn open() -> Result<Library, String> {
         Self::open_in(data_dir())
     }
     fn open_in(dir: PathBuf) -> Result<Library, String> {
         std::fs::create_dir_all(&dir).map_err(|e| creditia_core::tr!("创建项目库目录失败 {}: {e}", "couldn't create the library folder {}: {e}", dir.display()))?;
-        let conn = Connection::open(dir.join("library.sqlite")).map_err(|e| e.to_string())?;
+        let mut conn = Connection::open(dir.join("library.sqlite")).map_err(|e| e.to_string())?;
         // App 和命令行可能同时打开作品库：被锁住时等一会儿，而不是直接报 database is locked
         conn.busy_timeout(std::time::Duration::from_secs(5)).map_err(|e| e.to_string())?;
         // 切到 WAL 要独占整个库，busy_timeout 管不到这一步：两个进程（或并行的测试）同时第一次打开新库，
@@ -67,11 +75,14 @@ impl Library {
         conn.execute_batch(
             "create table if not exists projects(
                id text primary key, name text not null, path text not null, root_commit text not null,
-               remotes text not null default '[]', last_head text, last_analyzed integer);
+               remotes text not null default '[]', last_head text, last_analyzed integer, hidden integer not null default 0);
              create table if not exists evidence(
                project text not null, rel text not null, key integer not null, src text not null, model text not null,
                session text not null, ts integer not null, tab integer not null default 0,
-               primary key(project, rel, key, src, session));
+               next integer not null default 0, single_use integer not null default 0,
+               occurrence integer not null default 0,
+               claude_legacy integer not null default 0,
+               primary key(project, rel, key, src, session, model, ts, tab, next, single_use, occurrence));
              create index if not exists idx_ev_project on evidence(project);
              create table if not exists sessions(
                project text not null, src text not null, id text not null, model text not null, start integer not null, end integer not null,
@@ -89,6 +100,48 @@ impl Library {
         let _ = conn.execute("alter table sessions add column provider text", []);
         // 证据的下一行
         let _ = conn.execute("alter table evidence add column next integer not null default 0", []);
+        // The old key collapsed different model responses and repeated writes
+        // in one session. Migrate atomically while preserving existing hashes.
+        let has_occurrence = |db: &Connection| db.query_row("select count(*) from pragma_table_info('evidence') where name='occurrence'", [], |r| r.get::<_, i64>(0));
+        if has_occurrence(&conn).map_err(|e| e.to_string())? == 0 {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(|e| e.to_string())?;
+            // Another App/CLI process may have migrated while this one waited.
+            if has_occurrence(&tx).map_err(|e| e.to_string())? == 0 {
+                tx.execute_batch(
+                    "create table evidence_events(
+                       project text not null, rel text not null, key integer not null, src text not null, model text not null,
+                       session text not null, ts integer not null, tab integer not null default 0,
+                       next integer not null default 0, single_use integer not null default 0,
+                       occurrence integer not null default 0,
+                       primary key(project, rel, key, src, session, model, ts, tab, next, single_use, occurrence));
+                     insert into evidence_events(project,rel,key,src,model,session,ts,tab,next,single_use)
+                       select project,rel,key,src,model,session,ts,tab,next,src<>'cursor' from evidence;
+                     drop table evidence;
+                     alter table evidence_events rename to evidence;
+                     create index idx_ev_project on evidence(project);",
+                ).map_err(|e| e.to_string())?;
+            }
+            tx.commit().map_err(|e| e.to_string())?;
+        }
+        // Old Claude rows combined a parent and all of its subagents. Preserve
+        // unclaimed rows until an available transcript identifies their owner.
+        let has_claude_legacy = |db: &Connection| db.query_row("select count(*) from pragma_table_info('evidence') where name='claude_legacy'", [], |r| r.get::<_, i64>(0));
+        if has_claude_legacy(&conn).map_err(|e| e.to_string())? == 0 {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(|e| e.to_string())?;
+            if has_claude_legacy(&tx).map_err(|e| e.to_string())? == 0 {
+                tx.execute_batch("alter table evidence add column claude_legacy integer not null default 0;
+                    update evidence set claude_legacy=1 where src='claude-code';").map_err(|e| e.to_string())?;
+            }
+            tx.commit().map_err(|e| e.to_string())?;
+        }
+        let has_hidden = |db: &Connection| db.query_row("select count(*) from pragma_table_info('projects') where name='hidden'", [], |r| r.get::<_, i64>(0));
+        if has_hidden(&conn).map_err(|e| e.to_string())? == 0 {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(|e| e.to_string())?;
+            if has_hidden(&tx).map_err(|e| e.to_string())? == 0 {
+                tx.execute("alter table projects add column hidden integer not null default 0", []).map_err(|e| e.to_string())?;
+            }
+            tx.commit().map_err(|e| e.to_string())?;
+        }
         Ok(Library { conn })
     }
 
@@ -96,7 +149,7 @@ impl Library {
         self.conn
             .execute(
                 "insert into projects(id,name,path,root_commit,remotes,last_head,last_analyzed) values(?1,?2,?3,?4,?5,?6,?7)
-                 on conflict(id) do update set name=excluded.name, path=excluded.path, remotes=excluded.remotes,
+                 on conflict(id) do update set name=excluded.name, path=excluded.path, remotes=excluded.remotes, hidden=0,
                  last_head=coalesce(excluded.last_head, projects.last_head), last_analyzed=coalesce(excluded.last_analyzed, projects.last_analyzed)",
                 params![p.id, p.name, p.path, p.root_commit, serde_json::to_string(&p.remotes).unwrap(), p.last_head, p.last_analyzed],
             )
@@ -105,9 +158,18 @@ impl Library {
     }
 
     pub fn projects(&self) -> Result<Vec<Project>, String> {
-        let mut st = self.conn.prepare("select id,name,path,root_commit,remotes,last_head,last_analyzed from projects order by last_analyzed desc").map_err(|e| e.to_string())?;
+        self.project_rows(false)
+    }
+
+    /// 身份匹配包括已从作品库隐藏的项目，避免 fork 重新添加时接错档案。
+    pub fn project_identities(&self) -> Result<Vec<Project>, String> {
+        self.project_rows(true)
+    }
+
+    fn project_rows(&self, include_hidden: bool) -> Result<Vec<Project>, String> {
+        let mut st = self.conn.prepare("select id,name,path,root_commit,remotes,last_head,last_analyzed from projects where hidden=0 or ?1 order by last_analyzed desc").map_err(|e| e.to_string())?;
         let rows = st
-            .query_map([], |r| {
+            .query_map([include_hidden], |r| {
                 Ok(Project {
                     id: r.get(0)?,
                     name: r.get(1)?,
@@ -124,23 +186,103 @@ impl Library {
         Ok(rows)
     }
 
+    /// A host may identify an engine session after it was first collected.
+    /// Move its existing hashes and metadata atomically, without a second author.
+    pub fn reassign_sessions(&mut self, project: &str, from: Src, to: Src, ids: &HashSet<String>) -> Result<(), String> {
+        if ids.is_empty() || from == to { return Ok(()); }
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(|e| e.to_string())?;
+        for id in ids {
+            tx.execute("update or ignore evidence set src=?3 where project=?1 and src=?2 and session=?4", params![project, from.harness(), to.harness(), id]).map_err(|e| e.to_string())?;
+            // Conflicting rows already exist with exactly the same full event key.
+            tx.execute("delete from evidence where project=?1 and src=?2 and session=?3", params![project, from.harness(), id]).map_err(|e| e.to_string())?;
+            tx.execute("insert or replace into sessions(project,src,id,model,start,end,tokens,branch,prompts,reviewer,has_content,provider) select project,?3,id,model,start,end,tokens,branch,prompts,reviewer,has_content,provider from sessions where project=?1 and src=?2 and id=?4", params![project, from.harness(), to.harness(), id]).map_err(|e| e.to_string())?;
+            tx.execute("delete from sessions where project=?1 and src=?2 and id=?3", params![project, from.harness(), id]).map_err(|e| e.to_string())?;
+        }
+        tx.commit().map_err(|e| e.to_string())
+    }
+
+    pub fn session_ids(&self, project: &str, src: Src) -> Result<HashSet<String>, String> {
+        let mut q = self.conn.prepare("select id from sessions where project=?1 and src=?2").map_err(|e| e.to_string())?;
+        let ids = q.query_map(params![project, src.harness()], |r| r.get(0)).map_err(|e| e.to_string())?;
+        ids.collect::<Result<HashSet<String>, _>>().map_err(|e| e.to_string())
+    }
+
     /// 把内存证据写进证据库（幂等）
     pub fn save_evidence(&mut self, project: &str, store: &Store) -> Result<usize, String> {
-        let tx = self.conn.transaction().map_err(|e| e.to_string())?;
+        self.save_evidence_with_claude_sessions(project, store, &[])
+    }
+
+    /// A complete Claude transcript can identify exact rows from the old shared
+    /// parent namespace. Claim only its observed occurrences, in the same
+    /// transaction as saving the replacement; unknown old rows remain durable.
+    pub fn save_evidence_with_claude_sessions(&mut self, project: &str, store: &Store, aliases: &[(String, String)]) -> Result<usize, String> {
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(|e| e.to_string())?;
+        for (old, current) in aliases {
+            let mut counts = HashMap::new();
+            for e in store.groups.values().flat_map(|g| &g.evs).filter(|e| e.src == Src::Claude && e.session == *current) {
+                *counts.entry((&e.rel, e.key, &e.model, e.ts, e.tab, e.next, e.single_use)).or_insert(0_i64) += 1;
+            }
+            for ((rel, key, model, ts, tab, next, single_use), count) in counts {
+                let already: i64 = tx.query_row("select count(*) from evidence where project=?1 and src='claude-code' and session=?2 and rel=?3 and key=?4 and model=?5 and ts=?6 and tab=?7 and next=?8 and single_use=?9 and claude_legacy=0",
+                    params![project, current, rel, key as i64, model, ts, tab as i64, next as i64, single_use as i64], |r| r.get(0)).map_err(|e| e.to_string())?;
+                // Fresh rows are inserted below. Retries must not consume another
+                // old occurrence that belonged to a now-missing sibling.
+                let needed = (count - already).max(0);
+                tx.execute("delete from evidence where rowid in (select rowid from evidence where project=?1 and src='claude-code' and session=?2 and rel=?3 and key=?4 and model=?5 and ts=?6 and tab=?7 and next=?8 and single_use=?9 and claude_legacy=1 order by occurrence limit ?10)",
+                    params![project, old, rel, key as i64, model, ts, tab as i64, next as i64, single_use as i64, needed]).map_err(|e| e.to_string())?;
+            }
+        }
         let mut n = 0;
+        let mut occurrences = HashMap::new();
+        // A reconstructed native session can now contain fewer or zero edits.
+        // Keep the exact current event keys so failed/conflicting observations
+        // retract only that session, without erasing genuinely missing history.
+        type EventKey = (String, i64, String, i64, i64, i64, i64, i64);
+        let mut rebuilt: HashMap<(&str, &str), HashSet<EventKey>> = store.groups.values()
+            .flat_map(|g| &g.reconciled_sessions)
+            .filter(|(_, id)| !id.is_empty())
+            .map(|(src, id)| ((src.harness(), id.as_str()), HashSet::new()))
+            .collect();
+        let present_sessions: HashSet<(&str, &str)> = store.groups.values()
+            .flat_map(|g| &g.sessions)
+            .map(|s| (s.src.harness(), s.id.as_str()))
+            .collect();
         {
             let mut ins = tx
-                .prepare("insert or ignore into evidence(project,rel,key,src,model,session,ts,tab,next) values(?1,?2,?3,?4,?5,?6,?7,?8,?9)")
+                .prepare("insert or ignore into evidence(project,rel,key,src,model,session,ts,tab,next,single_use,occurrence) values(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)")
                 .map_err(|e| e.to_string())?;
             let mut ses = tx
                 .prepare("insert or replace into sessions(project,src,id,model,start,end,tokens,branch,prompts,reviewer,has_content,provider) values(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)")
                 .map_err(|e| e.to_string())?;
             for g in store.groups.values() {
                 for e in &g.evs {
-                    n += ins.execute(params![project, e.rel, e.key as i64, e.src.harness(), e.model, e.session, e.ts, e.tab as i64, e.next as i64]).map_err(|x| x.to_string())?;
+                    let ordinal = occurrences.entry((&e.rel, e.key, e.src, &e.model, &e.session, e.ts, e.tab, e.next, e.single_use)).or_insert(0_i64);
+                    n += ins.execute(params![project, e.rel, e.key as i64, e.src.harness(), e.model, e.session, e.ts, e.tab as i64, e.next as i64, e.single_use as i64, *ordinal]).map_err(|x| x.to_string())?;
+                    if let Some(current) = rebuilt.get_mut(&(e.src.harness(), e.session.as_str())) {
+                        current.insert((e.rel.clone(), e.key as i64, e.model.clone(), e.ts, e.tab as i64, e.next as i64, e.single_use as i64, *ordinal));
+                    }
+                    *ordinal += 1;
                 }
                 for s in &g.sessions {
                     ses.execute(params![project, s.src.harness(), s.id, s.model, s.start, s.end, s.tokens, s.branch, s.prompts, s.reviewer as i64, s.has_content as i64, s.provider]).map_err(|x| x.to_string())?;
+                }
+            }
+        }
+        {
+            let mut existing = tx.prepare("select rowid,rel,key,model,ts,tab,next,single_use,occurrence from evidence where project=?1 and src=?2 and session=?3 and claude_legacy=0").map_err(|e| e.to_string())?;
+            let mut remove = tx.prepare("delete from evidence where rowid=?1").map_err(|e| e.to_string())?;
+            let mut remove_session = tx.prepare("delete from sessions where project=?1 and src=?2 and id=?3").map_err(|e| e.to_string())?;
+            for ((src, id), current) in &rebuilt {
+                let rows = existing.query_map(params![project, src, id], |r| {
+                    Ok((r.get::<_, i64>(0)?, (r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?)))
+                }).map_err(|e| e.to_string())?.collect::<Result<Vec<(i64, EventKey)>, _>>().map_err(|e| e.to_string())?;
+                for (rowid, key) in rows {
+                    if !current.contains(&key) {
+                        remove.execute([rowid]).map_err(|e| e.to_string())?;
+                    }
+                }
+                if !present_sessions.contains(&(*src, *id)) {
+                    remove_session.execute(params![project, src, id]).map_err(|e| e.to_string())?;
                 }
             }
         }
@@ -150,16 +292,26 @@ impl Library {
 
     /// 从证据库读回（日志已被清理时仍能归因）
     pub fn load_evidence(&self, project: &str) -> Result<(Vec<Ev>, Vec<Session>), String> {
+        let mut loaded = self.load_evidence_for_analysis(project)?;
+        loaded.events.extend(loaded.legacy_claude);
+        Ok((loaded.events, loaded.sessions))
+    }
+
+    /// Legacy Claude rows without an identified transcript must also survive a
+    /// partial live family. They cannot be suppressed by a readable parent.
+    pub fn load_evidence_for_analysis(&self, project: &str) -> Result<LoadedEvidence, String> {
         let src_of = Src::from_harness;
-        let mut st = self.conn.prepare("select rel,key,src,model,session,ts,tab,next from evidence where project=?1").map_err(|e| e.to_string())?;
-        let evs = st
+        let mut st = self.conn.prepare("select rel,key,src,model,session,ts,tab,next,single_use,claude_legacy from evidence where project=?1").map_err(|e| e.to_string())?;
+        let rows = st
             .query_map([project], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?, r.get::<_, i64>(5)?, (r.get::<_, i64>(6)?, r.get::<_, i64>(7)?)))
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?, r.get::<_, i64>(5)?, (r.get::<_, i64>(6)?, r.get::<_, i64>(7)?, r.get::<_, i64>(8)?, r.get::<_, i64>(9)?)))
             })
             .map_err(|e| e.to_string())?
             .flatten()
-            .filter_map(|(rel, key, src, model, session, ts, (tab, next))| src_of(&src).map(|src| Ev { rel, key: key as u32, src, model, session, ts, tab: tab != 0, next: next as u32 }))
-            .collect();
+            .filter_map(|(rel, key, src, model, session, ts, (tab, next, single_use, legacy))| src_of(&src).map(|src| (Ev { rel, key: key as u32, src, model, session, ts, tab: tab != 0, next: next as u32, single_use: single_use != 0 }, legacy != 0)))
+            .collect::<Vec<_>>();
+        let (mut evs, mut legacy) = (vec![], vec![]);
+        for (e, old) in rows { if old { legacy.push(e); } else { evs.push(e); } }
         let mut st2 = self.conn.prepare("select src,id,model,start,end,tokens,branch,prompts,reviewer,has_content,provider from sessions where project=?1").map_err(|e| e.to_string())?;
         let sessions = st2
             .query_map([project], |r| {
@@ -171,7 +323,7 @@ impl Library {
                 src_of(&src).map(|src| Session { src, id, model, start, end, tokens, branch, prompts, reviewer: reviewer != 0, has_content: has_content != 0, provider })
             })
             .collect();
-        Ok((evs, sessions))
+        Ok(LoadedEvidence { events: evs, sessions, legacy_claude: legacy })
     }
 
     pub fn save_snapshot(&self, project: &str, head: &str, generated_at: &str, json: &str) -> Result<(), String> {
@@ -198,11 +350,11 @@ impl Library {
             .or_else(|e| if matches!(e, rusqlite::Error::QueryReturnedNoRows) { Ok(None) } else { Err(e.to_string()) })
     }
 
-    /// 改仓库配置里的展示选项（App 设置页用）：是否写出人名、落款。只动 display 段，其他原样保留。
-    pub fn set_display(repo: &Path, named: bool, sign: &str) -> Result<(), String> {
+    /// 改仓库配置里的展示选项（App 设置页用）：写不写贡献者的名字、落款。只动 display 段，其他原样保留。
+    pub fn set_display(repo: &Path, hide_names: bool, sign: &str) -> Result<(), String> {
         let p = repo.join(".creditia/config.json");
         let mut v: serde_json::Value = std::fs::read_to_string(&p).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
-        v["display"] = serde_json::json!({ "named": named, "sign": sign });
+        v["display"] = serde_json::json!({ "hideNames": hide_names, "sign": sign });
         if let Some(d) = p.parent() {
             std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
         }
@@ -218,10 +370,9 @@ impl Library {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
-    /// 从作品库里移除一个项目：只删项目这一行。证据、会话、路径、快照和缓存都留着，
-    /// 以后再加回同一个仓库（项目 id 由根提交算出，不会变）就直接接上，不用从头分析
+    /// 从作品库隐藏项目，保留身份、证据和缓存；重新添加时复用原身份。
     pub fn remove_project(&self, project: &str) -> Result<usize, String> {
-        self.conn.execute("delete from projects where id=?1", [project]).map_err(|e| e.to_string())
+        self.conn.execute("update projects set hidden=1 where id=?1 and hidden=0", [project]).map_err(|e| e.to_string())
     }
     pub fn remove_path(&self, project: &str, path: &str) -> Result<usize, String> {
         self.conn.execute("delete from paths where project=?1 and path=?2", params![project, path]).map_err(|e| e.to_string())
@@ -279,7 +430,7 @@ mod tests {
     }
 
     fn ev(rel: &str, key: u32, session: &str) -> Ev {
-        Ev { rel: rel.into(), key, src: Src::Codex, model: "gpt-test".into(), session: session.into(), ts: 100, tab: false, next: 0 }
+        Ev { rel: rel.into(), key, src: Src::Codex, model: "gpt-test".into(), session: session.into(), ts: 100, tab: false, next: 0, single_use: true }
     }
 
     fn session(id: &str, provider: Option<&str>) -> Session {
@@ -287,10 +438,37 @@ mod tests {
     }
 
     #[test]
+    fn confirmed_host_ownership_moves_existing_library_without_duplicates() {
+        let mut l = lib();
+        let mut old = ev("src/a.rs", 7, "ses-engine");
+        old.src = Src::OpenCode;
+        let mut mapped = old.clone();
+        mapped.src = Src::Tabnine;
+        let mut s = session("ses-engine", Some("engine-provider"));
+        s.src = Src::OpenCode;
+        let mut unrelated = old.clone();
+        unrelated.session = "other-session".into();
+        let mut st = Store::default();
+        st.groups.insert("before".into(), FileGroup { evs: vec![old.clone(), old, mapped, unrelated], sessions: vec![s], ..Default::default() });
+        l.save_evidence("p-host-mapping", &st).unwrap();
+        let ids = ["ses-engine".to_string()].into_iter().collect();
+        l.reassign_sessions("p-host-mapping", Src::OpenCode, Src::Tabnine, &ids).unwrap();
+        l.reassign_sessions("p-host-mapping", Src::OpenCode, Src::Tabnine, &ids).unwrap();
+        let (evs, sessions) = l.load_evidence("p-host-mapping").unwrap();
+        assert_eq!(evs.iter().filter(|e| e.src == Src::Tabnine).count(), 2);
+        assert_eq!(evs.iter().filter(|e| e.src == Src::OpenCode).count(), 1);
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].src, Src::Tabnine);
+        assert_eq!(sessions[0].model, "claude-test");
+        assert_eq!(sessions[0].tokens, 30);
+        assert_eq!(sessions[0].provider.as_deref(), Some("engine-provider"));
+    }
+
+    #[test]
     fn evidence_round_trip_is_idempotent() {
         let mut l = lib();
         let mut store = Store::default();
-        store.groups.insert("g1".into(), FileGroup { fp: (1, 1), evs: vec![ev("src/a.rs", 1, "s1"), ev("src/a.rs", 2, "s1")], sessions: vec![session("c1", Some("bedrock"))] });
+        store.groups.insert("g1".into(), FileGroup { fp: (1, 1), evs: vec![ev("src/a.rs", 1, "s1"), ev("src/a.rs", 2, "s1")], sessions: vec![session("c1", Some("bedrock"))], ..Default::default() });
         assert_eq!(l.save_evidence("p-ev", &store).unwrap(), 2);
         // 同样的证据再存一次不重复
         assert_eq!(l.save_evidence("p-ev", &store).unwrap(), 0);
@@ -303,6 +481,98 @@ mod tests {
         assert_eq!(ses[0].branch.as_deref(), Some("main"));
         // 别的项目看不到
         assert_eq!(l.evidence_count("p-other"), 0);
+    }
+
+    #[test]
+    fn evidence_preserves_repeated_writes_models_and_consumption() {
+        let mut l = lib();
+        let first = Ev { src: Src::Cursor, ..ev("a.rs", 7, "multi") };
+        let second = Ev { model: "another-model".into(), ..first.clone() };
+        let mut store = Store::default();
+        store.groups.entry("writes".into()).or_default().evs = vec![first.clone(), first, second];
+        assert_eq!(l.save_evidence("p-events", &store).unwrap(), 3);
+        assert_eq!(l.save_evidence("p-events", &store).unwrap(), 0);
+        let (evs, _) = l.load_evidence("p-events").unwrap();
+        assert_eq!(evs.len(), 3);
+        assert_eq!(evs.iter().filter(|e| e.model == "gpt-test").count(), 2);
+        assert!(evs.iter().all(|e| e.single_use));
+    }
+
+    #[test]
+    fn reconciled_sessions_replace_rejected_evidence_without_erasing_missing_history() {
+        let mut l = lib();
+        let old = Ev { src: Src::Devin, ..ev("a.rs", 7, "updated") };
+        let revoked = Ev { session: "revoked".into(), ..old.clone() };
+        let missing = Ev { session: "missing".into(), ..old.clone() };
+        let other_source = Ev { src: Src::Codex, ..revoked.clone() };
+        let ses = |id: &str| Session { src: Src::Devin, ..session(id, None) };
+        let mut before = Store::default();
+        before.groups.insert("native".into(), FileGroup {
+            evs: vec![old.clone(), old.clone(), revoked, missing.clone(), other_source],
+            sessions: vec![ses("updated"), ses("revoked"), ses("missing")],
+            ..Default::default()
+        });
+        assert_eq!(l.save_evidence("p-reconcile", &before).unwrap(), 5);
+        assert_eq!(l.save_evidence("p-reconcile-other", &before).unwrap(), 5);
+
+        let corrected = Ev { model: String::new(), ..old };
+        let mut now = Store::default();
+        now.groups.insert("native".into(), FileGroup {
+            evs: vec![corrected],
+            sessions: vec![ses("updated")],
+            reconciled_sessions: vec![(Src::Devin, "updated".into()), (Src::Devin, "revoked".into())],
+            ..Default::default()
+        });
+        assert_eq!(l.save_evidence("p-reconcile", &now).unwrap(), 1);
+        let (evs, sessions) = l.load_evidence("p-reconcile").unwrap();
+        assert_eq!(evs.len(), 3, "replace old models/occurrences, revoke failed sessions, preserve missing history and other sources");
+        assert_eq!(evs.iter().filter(|e| e.src == Src::Devin && e.session == "updated").count(), 1);
+        assert!(evs.iter().find(|e| e.session == "updated").unwrap().model.is_empty());
+        assert!(!evs.iter().any(|e| e.src == Src::Devin && e.session == "revoked"));
+        assert!(evs.iter().any(|e| e.session == missing.session));
+        assert!(evs.iter().any(|e| e.src == Src::Codex && e.session == "revoked"));
+        assert_eq!(sessions.len(), 2);
+        assert!(!sessions.iter().any(|s| s.id == "revoked"));
+        assert_eq!(l.evidence_count("p-reconcile-other"), 5, "other projects stay intact");
+        assert_eq!(l.save_evidence("p-reconcile", &now).unwrap(), 0, "synchronization is idempotent");
+        l.save_evidence("p-reconcile", &Store::default()).unwrap();
+        assert_eq!(l.evidence_count("p-reconcile"), 3, "absent logs do not revoke prior evidence");
+    }
+
+    #[test]
+    fn legacy_evidence_migrates_without_losing_hashes() {
+        let dir = std::env::temp_dir().join(format!("creditia-legacy-evidence-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        {
+            let db = Connection::open(dir.join("library.sqlite")).unwrap();
+            db.execute_batch("create table evidence(project text,rel text,key integer,src text,model text,session text,ts integer,tab integer,primary key(project,rel,key,src,session));
+                insert into evidence values('old','a.rs',7,'cursor','m','s',100,0);
+                insert into evidence values('old','b.rs',8,'codex','m','s',100,0);").unwrap();
+        }
+        let mut l = Library::open_in(dir.clone()).unwrap();
+        let (evs, _) = l.load_evidence("old").unwrap();
+        assert_eq!(evs.len(), 2);
+        assert!(!evs.iter().find(|e| e.src == Src::Cursor).unwrap().single_use);
+        assert!(evs.iter().find(|e| e.src == Src::Codex).unwrap().single_use);
+        let mut store = Store::default();
+        store.groups.entry("new".into()).or_default().evs.push(ev("b.rs", 8, "s"));
+        assert_eq!(l.save_evidence("old", &store).unwrap(), 1);
+        drop(l);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// 一次写入里重复的行（同一会话、同一时间、同一内容）：每一行都要留下，删日志后重建也不少
+    #[test]
+    fn repeated_lines_in_one_write_are_kept() {
+        let mut l = lib();
+        let mut store = Store::default();
+        let evs: Vec<Ev> = (0..3).map(|_| ev("tests/t.rs", 9, "s1")).chain([ev("tests/t.rs", 10, "s1")]).collect();
+        store.groups.insert("g".into(), FileGroup { fp: (1, 1), evs, ..Default::default() });
+        assert_eq!(l.save_evidence("p-dup", &store).unwrap(), 4);
+        assert_eq!(l.save_evidence("p-dup", &store).unwrap(), 0);
+        let (evs, _) = l.load_evidence("p-dup").unwrap();
+        assert_eq!(evs.iter().filter(|e| e.key == 9).count(), 3);
     }
 
     /// 几个进程同时第一次打开一个新库（App 和命令行、并行的测试）：都要打开成功，不能报 database is locked
@@ -372,12 +642,14 @@ mod tests {
         let p = Project { id: "p-rm".into(), name: "gone".into(), path: "/tmp/gone".into(), root_commit: "r".into(), remotes: vec![], last_head: Some("h".into()), last_analyzed: Some(1) };
         l.upsert_project(&p).unwrap();
         let mut store = Store::default();
-        store.groups.insert("g".into(), FileGroup { fp: (1, 1), evs: vec![ev("a.rs", 1, "s")], sessions: vec![] });
+        store.groups.insert("g".into(), FileGroup { fp: (1, 1), evs: vec![ev("a.rs", 1, "s")], ..Default::default() });
         l.save_evidence("p-rm", &store).unwrap();
         l.add_path("p-rm", "/tmp/gone-wt", "worktree").unwrap();
         l.save_snapshot("p-rm", "h", "2026-01-01T00:00:00Z", "{}").unwrap();
         assert_eq!(l.remove_project("p-rm").unwrap(), 1);
         assert!(!l.projects().unwrap().iter().any(|x| x.id == "p-rm"));
+        assert!(l.project_identities().unwrap().iter().any(|x| x.id == "p-rm"));
+        assert_eq!(l.remove_project("p-rm").unwrap(), 0);
         // 证据、路径、快照都还在；加回来之后照旧
         assert_eq!(l.evidence_count("p-rm"), 1);
         assert_eq!(l.paths("p-rm").unwrap().len(), 1);
@@ -396,7 +668,7 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(repo.join(".creditia/config.json")).unwrap()).unwrap();
         assert_eq!(v["name"], "demo");
         assert_eq!(v["level"], "strict");
-        assert_eq!(v["display"]["named"], true);
+        assert_eq!(v["display"]["hideNames"], true);
         assert_eq!(v["display"]["sign"], "— demo");
         // 没有配置文件也能写
         let fresh = repo.join("fresh");
