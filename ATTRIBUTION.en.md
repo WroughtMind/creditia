@@ -4,7 +4,7 @@
 
 This document explains how creditia decides who wrote a line. The principles: **no language model is called; evidence and inference are recorded and shown separately; every conclusion can be checked.**
 
-To be clear up front: the default level (standard) **makes two kinds of inference**: extending through the same change block, and branch prefixes. Both are recorded as "inferred" and never mixed into line-level evidence or declarations. If you only want conclusions backed by evidence, use `strict`.
+To be clear up front: the default level (standard) **makes two kinds of inference**: extending through the same change block, and branch prefixes. Both are recorded as "inferred" and never mixed into line-level evidence or declarations. If you only want conclusions backed by evidence, use `strict`. creditia **never infers who wrote by hand**: logs can prove what AI wrote, not what people wrote.
 
 ## 1. Where evidence comes from
 
@@ -14,10 +14,12 @@ To be clear up front: the default level (standard) **makes two kinds of inferenc
 | Agent shell commands | The text of commands that ran successfully (heredocs, `printf`, new text inside a python script), as candidate evidence for the repo files the command names (Claude Code's Bash, Codex, Amp, TRAE CLI, Goose, Continue, Zed, Amazon Q CLI and Antigravity CLI shells) | Line-level evidence |
 | Cursor's line store | Cursor's own per-line hashes. creditia reproduces its normalization and hashing byte for byte | Line-level evidence |
 | Commit trailers | `Creditia-Harness` / `Creditia-Model` (written by `creditia stamp` or the hook) | Declared |
+| `Creditia-Lines` trailer | Lines per tool that the commit-stamp hook counted from local logs at commit time (`claude-code/claude-opus-5-5 30 / 120`; `/ 120` when there were no AI lines) | Declared (by line count) |
 | Commit metadata | An agent's commit email (Cursor cloud, Copilot, Devin, Jules…), `Co-authored-by`, `Assisted-by: tool:model` (Crush writes it by default, and it's the Linux kernel's format for AI credit; values naming a person or an email don't count), bot accounts, the author name aider rewrites | Declared |
 | Other people's commits | Not your commit identity → credited to that person | Declared |
 | Branch prefix | Branches a tool creates by itself: `codex/`, `cursor/`, `copilot/`… | Inferred |
 | Time window | A session of some tool happened to be running at commit time | Inferred (loose level only) |
+| Body of a web-merged commit | When a PR is squash-merged on GitHub's website, the stamps and `Co-authored-by` of the branch commits end up in the middle of the message body; the whole body is read for them, and `Creditia-Lines` values are added up | Declared |
 
 The evidence store keeps only "relative path, line hash, tool, model, session, time, provider". **It stores no code and no prompts.**
 
@@ -32,7 +34,9 @@ Evidence records only the lines an agent **newly wrote in that edit**, and each 
 - When editing, a model may include unchanged context or overwrite a whole file. Claude Code requires a paired successful tool result. Its `structuredPatch` contributes only added lines; when the successful result has no patch, Edit/MultiEdit subtract old text from new text. A request without its successful receipt does not count.
 - Commits claim evidence in time order. If Codex wrote `return Ok(());` three times and you later typed it once yourself, that fourth one does not go to Codex. (Cursor's line-hash table stores each line once, so it is not counted per occurrence.)
 
-Very short lines (`}`, blank lines) hash the same for everyone and cannot be evidence on their own. For them the store records a position: within one edit, which line this `}` follows and by how many lines, and which line it precedes. A short line in the same position in a commit follows that edit; one that doesn't match follows the nearest long line above it in the same change block.
+Very short lines (`}`, blank lines) hash the same for everyone and cannot be evidence on their own. For them the store records a position: within one edit, which line this `}` follows and by how many lines, and which line it precedes. A short line in the same position in a commit is line-level evidence of that edit; one that doesn't match follows the nearest long line above it in the same change block, recorded as inferred.
+
+Lines a formatter split up: when 2–4 consecutive added lines in one change block, normalized and joined, equal one line of an agent's edit, they are all line-level evidence of that edit. Normalization already drops whitespace, commas and semicolons, so a long call that prettier or rustfmt folded onto several lines, trailing commas added, still joins back.
 
 Surviving code uses `git blame`'s original line numbers to map each line back to the same line in the commit that introduced it.
 
@@ -53,7 +57,12 @@ Because the last step requires that "the line's content appears in a real commit
 | Most of the same change block has line-level evidence from one agent → the rest of the block follows it (inferred) | | ✓ | ✓ |
 | A session was running at commit time (inferred) | | | ✓ |
 | Branch prefix (inferred) | | ✓ | ✓ |
+| `Creditia-Lines` quota: a tool now has fewer lines than the commit recorded (its logs were cleaned up since), so it is topped up, in order, from the lines above that aren't an agent's | ✓ | ✓ | ✓ |
 | None of the above → **unattributed** | ✓ | ✓ | ✓ |
+
+**No AI evidence doesn't mean a person wrote it.** Lines in your own commits that match no AI evidence are recorded as unattributed, never inferred as hand-written: the code may have been written by an agent on another computer or in a cloud session whose logs aren't on this one, or an agent's lines may have been merged by a formatter or reworked by a person. The way to fewer unattributed lines is more complete evidence: install the commit-stamp hook on every computer you write code on, and `evidence import` the evidence from other computers.
+
+**Stamps count lines.** When a commit carries `Creditia-Lines`, the stamp trailer, `Co-authored-by` and `Assisted-by` no longer stand for the whole commit: every line was checked against the logs at commit time, the stamp counts only the lines it recorded, and the rest are unattributed. A batch of your own changes committed from inside an agent is no longer credited wholesale to the agent, and the recorded counts survive the logs being cleaned up. Older commits without `Creditia-Lines` still credit the whole commit to the stamp. In a web squash merge, when the `Creditia-Lines` values add up to more than the commit actually adds (later commits rewrote earlier lines), they're scaled down in proportion.
 
 A **change block** is a contiguous run of added lines in a diff. The rest of a block follows a tool only when at least half of its lines have line-level evidence and at least 80% of those belong to that one tool; inferred lines are never used as evidence to carry other lines. One kind of line is an exception: lines sitting between two lines of line-level evidence that were adjacent in the agent's single edit. Those were inserted later, not written by that edit, so they don't follow the inference. This way, lines in an agent's code that a formatter split up, or that you changed by a few characters, still count as the agent's, while a separate file or a new paragraph you wrote in the same commit isn't carried off by a single line of evidence. Models work the same way: a model is recorded only when at least 80% of the block's evidence comes from one model; otherwise only the tool is. When a commit carries a declaration (for example the `Co-authored-by` Claude Code adds by default), the block is inferred only when its tool matches the declaration, to fill in the model the declaration lacks.
 
@@ -66,13 +75,22 @@ A repository often lives in several places at once: your main directory, several
 - **Identity**: root commit + remote URL. Clones, worktrees and moved directories of one repository count as one project; a fork with the same root commit but an entirely different remote is kept separate.
 - **Path registry**: every directory you run in (including a worktree where an agent runs it for you) is registered in the library. If the directory is later deleted, paths left in the logs are still recognized.
 - **Manual links**: `creditia link <path>` links a path on another computer or a directory that no longer exists (it checks that a directory that still exists is the same repository); `creditia paths` lists them all. `paths` in the config works the same way.
-- **Path mapping**: for an absolute path in a log, the longest suffix found in the repo's history becomes the in-repo relative path, so different computers, different user names and Windows backslashes all match.
+- **Path mapping**: for an absolute path in a log, the longest suffix found in the repo (its history, the current tree, and files staged or in the working tree that aren't committed yet) becomes the in-repo relative path, so different computers, different user names and Windows backslashes all match; failing that, a path under a known root (main repo, worktree, registered clone) is cut at that root. A file an agent created is recognized even when the log is read before the file is committed (the commit hook always does this), so its evidence isn't lost once it is.
+- **Newly registered paths**: after a new worktree, clone or linked path is registered, logs that yielded no evidence because their paths weren't recognized are read again, instead of their empty result being reused because the log file hasn't changed.
 - **Several computers**: `creditia evidence export` / `import` merges evidence stores (hashes and metadata only); a different root commit is refused.
 - **Gemini CLI / Qwen Code** (older versions) name their directories with the SHA-256 of the project path, with no plain path: every registered path above is hashed and tried in turn. Newer Gemini CLI names the directory after the project and writes the project path to `.project_root`, which is read directly. Newer Qwen Code stores `projects/<dir>/chats/<session>.jsonl` instead, and every record carries its cwd, which is matched directly.
 
 ## 5. Models and providers (including relays)
 
-- **Name normalization**: `anthropic/claude-opus-5.5`, `openrouter/anthropic/claude-opus-5.5`, `us.anthropic.claude-…-v1:0`, `claude-…@20250514` and `[逆向]claude-…-thinking` all map to the same official id; Claude ids lose their date suffix, GPT ids keep the official dotted form.
+- **Name normalization** groups by "is it the same model", not by how alike the strings look.
+  - Providers: `anthropic/`, `openrouter/anthropic/`, `models/`, `us.anthropic.…-v1:0` (Bedrock), `…@20250514` (Vertex), `:free` and `:thinking` (OpenRouter) are dropped;
+  - Snapshots and previews: dates (`-20250929`, `-2024-08-06`, `-0709`, `-2507`), `-latest`, `-preview` and `-exp` are dropped;
+  - Display forms: spaces, underscores and bracketed tags as in `Claude Sonnet 4.5`, `Gemini 3 Pro (High)`, `CLAUDE_SONNET_4_20250514_V1_0`, `[1m]`, `(1M context)`;
+  - A way of calling a model isn't another model: OpenAI reasoning effort (`-high`, `-xhigh`, Cursor's `-fast`), Claude's `-thinking`, Cursor MAX mode's `-max`, `-instruct`;
+  - Claude uses the official word order: `claude-<family>-<version>` from generation 4 on (`claude-4.5-sonnet` as Cursor and Amazon Q write it → `claude-sonnet-4-5`), `claude-<version>-<family>` for generation 3 and earlier; GPT keeps the official dotted form (`gpt-5-1-codex` → `gpt-5.1-codex`);
+  - Models that really differ stay apart: `kimi-k2-thinking` vs `kimi-k2`, `gpt-5.1-codex-max` vs `gpt-5.1-codex`, local model sizes (`gpt-oss:20b` → `gpt-oss-20b`, apart from `gpt-oss-120b`).
+  The `same_model_everywhere` test in `crates/core/src/model.rs` lists over a hundred spellings across tools and providers, plus pairs that must stay apart; add new spellings there as you meet them.
+- **Tool names**: `Claude Code`, `claude`, `Codex CLI`, `GitHub Copilot`, `Amazon Q`, `agy`… in stamps, `Assisted-by` and `creditia stamp --harness` all map to creditia's tool ids.
 - **Vendor**: decided by name rules (OpenAI, Anthropic, Google, xAI, Moonshot, DeepSeek, Alibaba, Zhipu, MiniMax, ByteDance, Mistral, Meta, Cursor).
 - **Provider** (who served the model) is recorded only when there is evidence:
   - Claude Code: message ids returned by Bedrock / Vertex have fixed prefixes; an id not starting with `msg_` means a relay rewrote the response (recorded as `relay`). A relay that passes official responses through can't be told apart, so nothing is recorded.
@@ -87,7 +105,9 @@ Pieces answer one question only: which AI tools and models wrote how much. Peopl
 
 - **Messages to AI**: how many messages people sent in sessions (user messages in each tool's logs);
 - **Reviews**: your own reviews on GitHub PRs (`--github`); bot reviews are counted separately;
-- **Lines by people**: other people's commits go to them, and Tab-completed lines count as people's too; lines in your own commits with no AI evidence are recorded as "unattributed", because there's no telling whether you wrote them or an AI that left no log did;
+- **Lines by people**: other people's commits go to them, and Tab-completed lines count as people's too; lines in your own commits with no AI evidence are recorded as "unattributed", never inferred as hand-written, because there's no telling whether you wrote them or an AI that left no log did (see section 3);
+- **Web-merged commits**: a commit whose committer is GitHub (`noreply@github.com`) was merged on GitHub's website; its author is just whoever opened or merged the PR, under that account's email rather than the one used while writing the code, so it isn't credited to them: the branch's stamps count as usual and the rest is unattributed;
+- **Same GitHub account**: `123+login@users.noreply.github.com` and `login@users.noreply.github.com` are the same person;
 - **Where the AI's code went**: lines AI wrote in sessions → lines committed → lines still here;
 - **Tab completion**: Cursor's Tab completion counts as assisted typing by a person, not as an agent.
 
@@ -105,7 +125,8 @@ Pieces answer one question only: which AI tools and models wrote how much. Peopl
 - An agent's line that you changed by a few characters, or that a formatter split or merged, hashes differently and is not line-level evidence. When most of what surrounds it is the agent's line-level evidence, the change-block inference credits it to the agent; when the whole passage was rewritten, it's recorded as unattributed.
 - A few lines you insert into the middle of an agent's code are recorded as unattributed if they sit exactly between two lines that were adjacent in one of the agent's edits; if you also changed the agent's lines next to them, they can't be told apart and follow the passage's inference to the agent.
 - When an agent writes a file through a shell command, content written in the command itself (`cat > file <<EOF`, `printf`, new text inside a python script) counts as line-level evidence: a line of the command text counts only if it really appears among that file's added lines in a commit, so commands that only read files (`cat`, `grep`) can't cause false matches. Content produced by a program (scaffolding, codegen scripts, `curl > file`) is recorded as unattributed: a model didn't write it, and like generated files it isn't credited to AI.
-- Once a tool cleans up its own logs, the evidence store still has them as long as `analyze` / `collect` ran once before; if they were never collected, only the commit metadata is left.
+- Once a tool cleans up its own logs, the evidence store still has them as long as `analyze` / `collect` (or the commit hook) ran once before, with every line of every edit stored separately, so results after rebuilding the cache match those while the logs were there; if they were never collected, only the commit metadata is left.
+- Lines a formatter merged (two of an agent's lines joined into one) still don't match line-level evidence and rely on the change-block inference.
 - For a relay that passes official responses through, the provider can't be determined and isn't recorded.
 - Sources are read according to confirmed formats. Windsurf Cascade supports existing hooks/transcripts; Antigravity editor summaries are readable but do not establish edit evidence. Native history, official imports, ACP capture for new sessions, session-only sources and unconfirmed edit contracts are listed separately in [the adapter matrix](ADAPTERS.md). File extensions alone do not establish encryption or stamp-only support. Without a per-call model, the model remains unknown; a mutable final model is not applied to earlier edits.
 - Successful edits without a reliable timestamp remain undated. They are used only when the path and line key were added once in the complete, non-shallow analyzed history and no competing tool or model exists. Dated evidence takes priority. Repeated additions and staged-only changes do not use this fallback.
@@ -115,13 +136,15 @@ Pieces answer one question only: which AI tools and models wrote how much. Peopl
 
 ## 9. Accuracy benchmark
 
-`crates/cli/tests/bench.rs` simulates a project's development with the author of every line known: several agents each writing their own parts, edits with context, full-file overwrites, mixed commits, formatter-split lines, people changing a few characters, stamps, cloud branches, one tool with two models, Chinese docs, lost logs, renames, common lines repeated within a file, several agents taking turns on one file, agents writing files through the shell (heredoc, python script), output of a generator script, an agent only reading a file a person wrote, a person inserting lines into agent code, Aider and Copilot edits, and a Copilot edit that errored. It analyzes with the real binary and checks every line against the answer (by convention, generator output isn't credited to AI and is counted together with people's lines as "lines that shouldn't go to AI"):
+`crates/cli/tests/bench.rs` simulates a project's development with the author of every line known: several agents each writing their own parts, edits with context, full-file overwrites, mixed commits, formatter-split lines, people changing a few characters, stamps, cloud branches, one tool with two models, Chinese docs, lost logs, renames, common lines repeated within a file, several agents taking turns on one file, agents writing files through the shell (heredoc, python script), output of a generator script, an agent only reading a file a person wrote, a person inserting lines into agent code, Aider and Copilot edits, a Copilot edit that errored, hand-written lines committed from inside an agent, formatter-merged lines, and a GitHub web squash merge. It analyzes with the real binary and checks every line against the answer (by convention, generator output isn't credited to AI and is counted together with people's lines as "lines that shouldn't go to AI"):
 
 | | Right tool | Right model | Credited to another AI | Missed | People's or generated lines credited to AI | Total share error |
 |---|--:|--:|--:|--:|--:|--:|
-| Current | 96.4% | 96.3% | 0.1% | 3.6% | 0% | 2.5 points |
+| Current | 95.7% | 95.6% | 0.1% | 4.2% | 0% | 2.9 points |
 
-Almost all of "missed" comes from the lost-logs scenario, which can't be recovered; the remaining error is a few `}` lines and the model when one tool alternates between two models. CI runs it every time, and the test fails if results get worse. `cargo test -p creditia-cli --test bench -- --nocapture` prints the per-scenario table.
+The last three scenarios: in "hand-written lines committed from inside an agent" (stamped, with `Creditia-Lines`), none of the people's lines is credited to AI; in "formatter-merged lines", an agent's lines are joined in pairs so no line evidence matches, and they're recorded as unattributed; in "GitHub web squash merge", code written in the cloud and merged on the website leaves no logs on this computer, the commit author is the GitHub account's email, and the branch stamps sit in the middle of the body. 100% of AI lines are recovered from the stamps (0%, all missed, without recognizing web merges). The bench asserts that 0% of AI lines are credited to people.
+
+Almost all of "missed" comes from the lost-logs scenario, which can't be recovered, and from formatter-merged lines (see the limits in section 8); the remaining error is a few `}` lines and the model when one tool alternates between two models. CI runs it every time, and the test fails if results get worse. `cargo test -p creditia-cli --test bench -- --nocapture` prints the per-scenario table.
 
 ## 10. When an agent runs it for you
 

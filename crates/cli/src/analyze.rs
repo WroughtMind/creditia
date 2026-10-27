@@ -51,7 +51,7 @@ struct CommitCache {
     stamps: HashMap<String, (String, Option<String>)>,
 }
 
-const COMMIT_CACHE_VERSION: u32 = 5;
+const COMMIT_CACHE_VERSION: u32 = 6;
 
 /// 读配置：指定了就用指定的；仓库里有就用仓库的；都没有就现场探测（不落盘）。空着的字段自动补
 pub fn load_config(repo: &Path, override_path: Option<&Path>) -> Config {
@@ -158,6 +158,7 @@ pub fn collect(repo: &Path, lib: &mut Library, config: Option<&Path>) -> Result<
     if store.version != STORE_VERSION {
         store = Store { version: STORE_VERSION, ..Default::default() };
     }
+    store.rescan_if_markers_changed(&pm.markers);
     let mut st = ad::Stats::default();
     remember_session_owners(&mut store, lib, &proj.id)?;
     scan_all(&mut store, &pm, &roots, &mut st);
@@ -186,6 +187,7 @@ fn evidence(repo: &Path, cfg: &Config, lib: &mut Library, project: &str, head: &
     if store.version != STORE_VERSION {
         store = Store { version: STORE_VERSION, ..Default::default() };
     }
+    store.rescan_if_markers_changed(&pm.markers);
     let mut st = ad::Stats::default();
     remember_session_owners(&mut store, lib, project)?;
     creditia_core::progress::tick("logs", 0, 0);

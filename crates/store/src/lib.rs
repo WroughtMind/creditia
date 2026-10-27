@@ -541,6 +541,19 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
+    /// 一次写入里重复的行（同一会话、同一时间、同一内容）：每一行都要留下，删日志后重建也不少
+    #[test]
+    fn repeated_lines_in_one_write_are_kept() {
+        let mut l = lib();
+        let mut store = Store::default();
+        let evs: Vec<Ev> = (0..3).map(|_| ev("tests/t.rs", 9, "s1")).chain([ev("tests/t.rs", 10, "s1")]).collect();
+        store.groups.insert("g".into(), FileGroup { fp: (1, 1), evs, ..Default::default() });
+        assert_eq!(l.save_evidence("p-dup", &store).unwrap(), 4);
+        assert_eq!(l.save_evidence("p-dup", &store).unwrap(), 0);
+        let (evs, _) = l.load_evidence("p-dup").unwrap();
+        assert_eq!(evs.iter().filter(|e| e.key == 9).count(), 3);
+    }
+
     /// 几个进程同时第一次打开一个新库（App 和命令行、并行的测试）：都要打开成功，不能报 database is locked
     #[test]
     fn concurrent_first_opens_succeed() {
