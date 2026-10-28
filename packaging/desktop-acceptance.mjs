@@ -105,17 +105,31 @@ try {
   await screenshot('roam');
   await click('#view [data-v="wall"]'); await ready();
   record('wall and roam views');
+  // Object URLs are revoked after the image loads. Observe the Blob while
+  // opening focus instead of trying to fetch a revoked preview URL later.
+  await js(`window.__acceptanceArtwork = new Map();
+    window.__acceptanceCreateURL = URL.createObjectURL;
+    URL.createObjectURL = function(blob) {
+      const url = window.__acceptanceCreateURL.call(this, blob);
+      if (blob.type === 'image/svg+xml') window.__acceptanceArtwork.set(url, blob);
+      return url;
+    };`);
   const tile = await element('#board .tile:not(.slot)');
   await command('POST', `/element/${tile}/value`, { text: '\uE007', value: ['\uE007'] });
-  await until(() => js('return !document.querySelector("#focus").hidden && !!document.querySelector("#focus .xp")'), 'enlarged artwork');
-  // Keep the actual SVG input when a native rasterizer fails; the screenshot
-  // alone cannot reproduce a failure inside WASM.
+  await until(() => js('const img = document.querySelector("#focus .art img"); return !document.querySelector("#focus").hidden && !!document.querySelector("#focus .xp") && img?.complete && img.naturalWidth > 0 && !document.querySelector("#focus .big.loading")'), 'enlarged artwork');
+  // Keep the focused SVG preview when a native rasterizer fails. Classic path
+  // artwork is unchanged; text styles have already been outlined for preview.
   const artwork = await command('POST', '/execute/async', {
     script: `const done = arguments[arguments.length - 1];
-      fetch(document.querySelector('#focus .art img').src).then(r => r.text()).then(svg => done({ svg }), e => done({ error: String(e) }));`,
+      const blob = window.__acceptanceArtwork.get(document.querySelector('#focus .art img').src);
+      URL.createObjectURL = window.__acceptanceCreateURL;
+      delete window.__acceptanceCreateURL;
+      delete window.__acceptanceArtwork;
+      if (!blob) done({ failure: 'Focused SVG was not observed' });
+      else blob.text().then(svg => done({ svg }), e => done({ failure: String(e) }));`,
     args: [],
   });
-  assert(!artwork.error, artwork.error);
+  assert(!artwork.failure, artwork.failure);
   assert.match(artwork.svg, /<svg/);
   writeFileSync(path.join(output, 'export-artwork.svg'), artwork.svg);
   for (const format of ['png', 'svg', 'pdf', 'html', 'gif']) {

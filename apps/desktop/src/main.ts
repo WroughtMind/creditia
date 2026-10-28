@@ -930,10 +930,16 @@ const closeBtn = () => `<button class="closer glass" data-act="close" aria-label
 function openFocus(id: string, k: string) {
   const el = $('#focus');
   // 放大视图里可以只给这一件换风格试试：kit 是正在看的那一套，墙上的风格不动
-  let kit = state.style, art: Art | null = null, preview: Blob | null = null, seq = 0, open = true;
+  let kit = state.style, art: Art | null = null, preview: Blob | null = null, seq = 0, open = true, exportReady = false;
   const tried: Record<string, string> = {};
   const variantNow = () => kit === state.style ? curVariant(k) : tried[kit.id] ?? kit.current(id);
-  const setVariant = async (v: string) => { if (kit === state.style) await changeVariant(id, k, v); else tried[kit.id] = v; };
+  const pending = () => {
+    exportReady = false; seq++; closeFormats();
+    const button = el.querySelector<HTMLButtonElement>('.xp');
+    if (button) button.disabled = true;
+    el.querySelector('.big')?.classList.add('loading');
+  };
+  const setVariant = async (v: string) => { pending(); if (kit === state.style) await changeVariant(id, k, v); else tried[kit.id] = v; };
   const keyList = () => {
     const wall = [...document.querySelectorAll<HTMLElement>('#board .tile:not(.slot)')].map((t) => t.dataset.k!);
     return wall.length ? wall : tiles().map(keyOf); // 墙在漫游里没画，就按作品顺序走
@@ -957,29 +963,38 @@ function openFocus(id: string, k: string) {
         <div class="pop"><button class="kit" data-act="kits"><svg viewBox="0 0 24 24">${kit.dot}</svg>${esc(kit.name(state.lang))}</button></div>
         ${kit !== state.style ? `<button class="apply" data-act="apply">${L('设为全局风格', 'Use for all cards')}</button>` : ''}
         <span class="sep"></span>
-        <div class="pop"><button class="xp" data-act="export">${L('导出', 'Export')}</button></div>
+        <div class="pop"><button class="xp" data-act="export" disabled>${L('导出', 'Export')}</button></div>
       </div>`;
     if (art && preview) { mountPreview(el.querySelector('.big .art') as HTMLElement, art, preview); place(art); } // 换风格时旧图先留着，新的画好再换
   };
   const place = (a: Art) => { (el.querySelector('.big') as HTMLElement).style.width = `${Math.max(320, Math.min(a.w, 1100, ((innerHeight - 240) * a.w) / a.h))}px`; };
   // 快速连点几个版式：按钮立刻跟上，图只认最后一次（先点的画得慢，回来也不会盖掉后点的）
   const draw = async () => {
-    const my = ++seq, v = variantNow(), k0 = kit;
+    pending();
+    const my = seq, v = variantNow(), k0 = kit;
     el.querySelectorAll<HTMLElement>('.strip button[data-v]').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
     el.querySelector('.vs .on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // 版式多时这一排会横着滚
-    el.querySelector('.big')?.classList.add('loading');
-    const a = await drawArt(id, v, k0);
-    if (!a || my !== seq || !open) return;
-    const p = await k0.preview(a);
-    if (my !== seq || !open) return;
-    art = a; preview = p;
-    if (k0 === state.style) state.arts.set(k, a);
-    const big = el.querySelector('.big') as HTMLElement, artEl = el.querySelector('.big .art') as HTMLElement;
-    big.classList.remove('loading');
-    releasePreview(artEl); artEl.replaceChildren();
-    mountPreview(artEl, a, p);
-    place(a);
-    mountRoamHits(artEl, a);
+    try {
+      const a = await drawArt(id, v, k0);
+      if (my !== seq || !open) return;
+      if (!a) throw new Error(L('当前档案无法生成这个版式', 'This layout is unavailable for the current project'));
+      const p = await k0.preview(a);
+      if (my !== seq || !open) return;
+      art = a; preview = p;
+      if (k0 === state.style) state.arts.set(k, a);
+      const big = el.querySelector('.big') as HTMLElement, artEl = el.querySelector('.big .art') as HTMLElement;
+      big.classList.remove('loading');
+      releasePreview(artEl); artEl.replaceChildren();
+      mountPreview(artEl, a, p);
+      place(a);
+      mountRoamHits(artEl, a);
+      exportReady = true;
+      el.querySelector<HTMLButtonElement>('.xp')!.disabled = false;
+    } catch (error) {
+      if (my !== seq || !open) return;
+      el.querySelector('.big')?.classList.remove('loading');
+      toast(errText(error), 8000, { acts: [{ label: L('重试', 'Retry'), run: () => { if (open) void draw(); } }] });
+    }
   };
   const pickKit = (host: HTMLElement) => {
     const open = host.querySelector(':scope > .kits'); closeFormats(); el.querySelector('.kits')?.remove();
@@ -1012,7 +1027,7 @@ function openFocus(id: string, k: string) {
       if (first && v) selectWallVariant(t, state.variants, keyOf(first), v);
       return void paint();
     }
-    if (act === 'export') { el.querySelector('.kits')?.remove(); return toggleFormats(b.parentElement!, id, (f) => { if (art) doExport(f, id, k, kit === state.style ? {} : { kit, art, variant: variantNow() }); }, kit); }
+    if (act === 'export' && exportReady) { el.querySelector('.kits')?.remove(); return toggleFormats(b.parentElement!, id, (f) => { if (exportReady && art) doExport(f, id, k, kit === state.style ? {} : { kit, art, variant: variantNow() }); }, kit); }
     if (b.dataset.v) void setVariant(b.dataset.v).then(() => { if (open) draw(); });
   };
   // 版式已同步到墙上；关闭后键盘焦点回到刚才的位置。
