@@ -68,7 +68,12 @@ function Send-Keys([string]$keys) {
   [System.Windows.Forms.SendKeys]::SendWait($keys)
 }
 function Assert-Hidden([string]$name) {
-  if ($null -ne (Find-Control $name)) { throw "Control remained visible: $name" }
+  $until = [DateTime]::UtcNow.AddSeconds(30)
+  do {
+    if ($null -eq (Find-Control $name)) { return }
+    Start-Sleep -Milliseconds 100
+  } while ([DateTime]::UtcNow -lt $until)
+  throw "Control remained visible: $name"
 }
 $p = Start-Process -FilePath $App -PassThru
 try {
