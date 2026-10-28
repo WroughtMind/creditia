@@ -4,6 +4,14 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class NativeFocus {
+  [DllImport("user32.dll")]
+  public static extern IntPtr GetForegroundWindow();
+}
+'@
 New-Item -ItemType Directory -Force $Output | Out-Null
 $records = [System.Collections.Generic.List[object]]::new()
 function Record($name,$detail='') { $records.Add(@{test=$name;detail=$detail}); Write-Host "$name $detail" }
@@ -65,6 +73,11 @@ function Wait-Text([string]$pattern) {
 function Send-Keys([string]$keys) {
   $shell = New-Object -ComObject WScript.Shell
   if (-not $shell.AppActivate($p.Id)) { throw 'Could not focus the isolated candidate window' }
+  $until = [DateTime]::UtcNow.AddSeconds(30)
+  while ([NativeFocus]::GetForegroundWindow() -ne $p.MainWindowHandle) {
+    if ([DateTime]::UtcNow -ge $until) { throw 'Candidate did not become the keyboard input window' }
+    Start-Sleep -Milliseconds 50
+  }
   [System.Windows.Forms.SendKeys]::SendWait($keys)
 }
 function Assert-Hidden([string]$name) {
@@ -81,7 +94,11 @@ try {
   Click-Control 'English'
   $null = Wait-Control 'General'
   Click-Control 'Close'
+  # UI Automation Invoke can return before the web control handles the click.
+  Assert-Hidden 'General'
   $null = Wait-Control 'creditia · Share card'
+  # Establish the initial keyboard target after removing the settings controls.
+  (Wait-Control 'Switch project').SetFocus()
   Record 'language switched to English'
   Send-Keys '^k'
   $null = Wait-Control 'More'
@@ -148,7 +165,7 @@ try {
   if (-not $p.HasExited) {
     $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
     $all = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
-    @($all | ForEach-Object { @{name=$_.Current.Name;type=$_.Current.ControlType.ProgrammaticName} }) | ConvertTo-Json -Depth 4 | Set-Content "$Output/native-elements.json"
+    @($all | ForEach-Object { @{name=$_.Current.Name;type=$_.Current.ControlType.ProgrammaticName;focused=$_.Current.HasKeyboardFocus;offscreen=$_.Current.IsOffscreen} }) | ConvertTo-Json -Depth 4 | Set-Content "$Output/native-elements.json"
     $null = $p.CloseMainWindow()
     if (-not $p.WaitForExit(5000)) { Stop-Process -Id $p.Id }
   }
