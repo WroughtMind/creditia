@@ -1,8 +1,9 @@
-# Interact with the installed candidate using Windows UI Automation only.
+# Interact with the installed candidate using native controls and keyboard input.
 param([Parameter(Mandatory=$true)][string]$App, [string]$Output = 'evidence/ui')
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName System.Windows.Forms
 New-Item -ItemType Directory -Force $Output | Out-Null
 $records = [System.Collections.Generic.List[object]]::new()
 function Record($name,$detail='') { $records.Add(@{test=$name;detail=$detail}); Write-Host "$name $detail" }
@@ -61,6 +62,14 @@ function Wait-Text([string]$pattern) {
   } while ([DateTime]::UtcNow -lt $until)
   throw "No native text: $pattern"
 }
+function Send-Keys([string]$keys) {
+  $shell = New-Object -ComObject WScript.Shell
+  if (-not $shell.AppActivate($p.Id)) { throw 'Could not focus the isolated candidate window' }
+  [System.Windows.Forms.SendKeys]::SendWait($keys)
+}
+function Assert-Hidden([string]$name) {
+  if ($null -ne (Find-Control $name)) { throw "Control remained visible: $name" }
+}
 $p = Start-Process -FilePath $App -PassThru
 try {
   Click-Control '设置'
@@ -69,6 +78,22 @@ try {
   Click-Control 'Close'
   $null = Wait-Control 'creditia · Share card'
   Record 'language switched to English'
+  Send-Keys '^k'
+  $null = Wait-Control 'More'
+  Send-Keys '{ESC}'
+  Assert-Hidden 'More'
+  Send-Keys '^i'
+  $null = Wait-Text '^Link a folder'
+  Send-Keys '{ESC}'
+  Assert-Hidden 'Project settings'
+  Send-Keys '^,'
+  $null = Wait-Control 'General'
+  Send-Keys '{ESC}'
+  Assert-Hidden 'General'
+  $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+  $menuBars = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,(New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty,[System.Windows.Automation.ControlType]::MenuBar)))
+  if (@($menuBars | Where-Object { -not $_.Current.IsOffscreen }).Count) { throw 'Unexpected menu bar in Windows window' }
+  Record 'native shortcuts' 'Ctrl+K, Ctrl+I, Ctrl+comma and Escape; no extra menu bar'
   Click-Control 'By model'
   Click-Control 'By tool'
   Record 'model and tool grouping'
@@ -82,11 +107,11 @@ try {
   $null = Wait-Control 'Minimal Dark'
   $null = Wait-ReplacedControl 'creditia · Share card' $previousArt
   Record 'visual style switched' 'Minimal Dark'
-  Click-Control 'Roam'
+  Send-Keys '^2'
   $null = Wait-Text 'creditia.*Share card'
-  Click-Control 'Wall'
+  Send-Keys '^1'
   $null = Wait-Control 'creditia · Share card'
-  Record 'wall and roam views'
+  Record 'wall and roam views' 'Ctrl+2 and Ctrl+1'
   $exportDir = Join-Path $env:USERPROFILE 'Downloads'
   foreach ($format in @('PNG','SVG','PDF','HTML','GIF')) {
     $before = @(Get-ChildItem $exportDir -File -ErrorAction SilentlyContinue | ForEach-Object Name)
