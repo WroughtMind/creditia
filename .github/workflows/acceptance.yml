@@ -86,7 +86,15 @@ jobs:
             # D-Bus activated desktop services must inherit DISPLAY and XAUTHORITY.
             xvfb-run -a -s "-screen 0 1920x1080x24" dbus-run-session -- bash -c '
               set -euo pipefail
-              openbox >"$EVIDENCE/window-manager.log" 2>&1 &
+              openbox >"$EVIDENCE/window-manager.log" 2>&1 & wm=$!
+              # Starting the process does not mean it has claimed the display yet.
+              for attempt in $(seq 1 50); do
+                kill -0 "$wm"
+                if xprop -root _NET_SUPPORTING_WM_CHECK >"$EVIDENCE/window-manager-ready.txt" && grep -q "window id # 0x" "$EVIDENCE/window-manager-ready.txt"; then break; fi
+                sleep 0.2
+              done
+              grep -q "window id # 0x" "$EVIDENCE/window-manager-ready.txt"
+              xev -root -event substructure >"$EVIDENCE/window-events.txt" 2>&1 &
               "$APP" >"$EVIDENCE/app.log" 2>&1 & pid=$!
               diagnose_exit() {
                 status=$?
@@ -94,7 +102,7 @@ jobs:
                   ps -eo pid,ppid,stat,pcpu,args >"$EVIDENCE/processes.txt"
                   xprop -root >"$EVIDENCE/root-properties.txt" 2>&1 || true
                   xprop -name creditia >"$EVIDENCE/window-properties.txt" 2>&1 || true
-                  timeout 20s sudo gdb -batch -ex "set pagination off" -ex "thread apply all bt" -p "$pid" >"$EVIDENCE/app-stack.txt" 2>&1 || true
+                  timeout 20s sudo gdb -batch -ex "set pagination off" -ex "thread apply all bt" -ex "print (int)gtk_widget_get_visible(*(void**)gtk_window_list_toplevels())" -ex "print (int)gtk_widget_get_mapped(*(void**)gtk_window_list_toplevels())" -p "$pid" >"$EVIDENCE/app-stack.txt" 2>&1 || true
                 fi
                 kill "$pid" 2>/dev/null || true
                 exit "$status"
@@ -164,7 +172,14 @@ jobs:
             # D-Bus activated desktop services must inherit DISPLAY and XAUTHORITY.
             xvfb-run -a -s "-screen 0 1920x1080x24" dbus-run-session -- bash -c '
               set -euo pipefail
-              openbox >/tmp/creditia-ui-openbox.log 2>&1 &
+              mkdir -p "$EVIDENCE"
+              openbox >"$EVIDENCE/window-manager.log" 2>&1 & wm=$!
+              for attempt in $(seq 1 50); do
+                kill -0 "$wm"
+                if xprop -root _NET_SUPPORTING_WM_CHECK >"$EVIDENCE/window-manager-ready.txt" && grep -q "window id # 0x" "$EVIDENCE/window-manager-ready.txt"; then break; fi
+                sleep 0.2
+              done
+              grep -q "window id # 0x" "$EVIDENCE/window-manager-ready.txt"
               node packaging/desktop-acceptance.mjs "$APP" "$EVIDENCE"
             '
           done
