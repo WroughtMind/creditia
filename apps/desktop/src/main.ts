@@ -939,7 +939,12 @@ function openFocus(id: string, k: string) {
     if (button) button.disabled = true;
     el.querySelector('.big')?.classList.add('loading');
   };
-  const setVariant = async (v: string) => { pending(); if (kit === state.style) await changeVariant(id, k, v); else tried[kit.id] = v; };
+  const setVariant = async (v: string) => {
+    pending();
+    const my = seq;
+    if (kit === state.style) await changeVariant(id, k, v); else tried[kit.id] = v;
+    if (my === seq && open) void draw();
+  };
   const keyList = () => {
     const wall = [...document.querySelectorAll<HTMLElement>('#board .tile:not(.slot)')].map((t) => t.dataset.k!);
     return wall.length ? wall : tiles().map(keyOf); // 墙在漫游里没画，就按作品顺序走
@@ -1028,7 +1033,7 @@ function openFocus(id: string, k: string) {
       return void paint();
     }
     if (act === 'export' && exportReady) { el.querySelector('.kits')?.remove(); return toggleFormats(b.parentElement!, id, (f) => { if (exportReady && art) doExport(f, id, k, kit === state.style ? {} : { kit, art, variant: variantNow() }); }, kit); }
-    if (b.dataset.v) void setVariant(b.dataset.v).then(() => { if (open) draw(); });
+    if (b.dataset.v) void setVariant(b.dataset.v);
   };
   // 版式已同步到墙上；关闭后键盘焦点回到刚才的位置。
   const close = (refocus = true) => {
@@ -1043,7 +1048,7 @@ function openFocus(id: string, k: string) {
     const vs = kit.variants(id);
     if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && vs.length > 1) {
       const j = vs.indexOf((kit === state.style ? requestedVariant(k) : variantNow()) ?? '');
-      void setVariant(vs[(j + (e.key === 'ArrowRight' ? 1 : vs.length - 1)) % vs.length]).then(() => { if (open) draw(); });
+      void setVariant(vs[(j + (e.key === 'ArrowRight' ? 1 : vs.length - 1)) % vs.length]);
       return true;
     }
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { step(e.key === 'ArrowDown' ? 1 : -1); return true; }

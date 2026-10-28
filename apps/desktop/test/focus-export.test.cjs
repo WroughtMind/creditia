@@ -86,3 +86,15 @@ test('a global layout change disables focused export while the wall selection is
   slow.resolve(); await tick();
   assert.equal(s.xp.disabled, false);
 });
+
+test('an earlier global layout completion cannot enable export while the last choice is still pending', async () => {
+  const s = scene(), earlier = deferred(), last = deferred();
+  s.ctx.openFocus('share', 'share#'); await tick();
+  s.ctx.changeVariant = (_id, _key, variant) => variant === 'alt' ? earlier.promise : last.promise;
+  s.click({ v: 'alt' }); s.click({ v: 'original' });
+  earlier.resolve(); await tick();
+  assert.equal(s.xp.disabled, true); assert(s.classes.has('loading'));
+  s.click({ act: 'export' }); assert.equal(s.exports.length, 0);
+  last.resolve(); await tick();
+  assert.equal(s.xp.disabled, false);
+});
