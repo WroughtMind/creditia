@@ -67,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y xvfb x11-utils imagemagick openbox dbus-x11 libwebkit2gtk-4.1-0 libayatana-appindicator3-1
+          sudo apt-get install -y xvfb x11-utils imagemagick openbox dbus-x11 gdb libwebkit2gtk-4.1-0 libayatana-appindicator3-1
           sudo apt-get install -y "$PWD"/candidate/*.deb
           package=$(dpkg-deb -f candidate/*.deb Package)
           core=$(dpkg -L "$package" | grep '/creditia-core$')
@@ -88,7 +88,18 @@ jobs:
               set -euo pipefail
               openbox >"$EVIDENCE/window-manager.log" 2>&1 &
               "$APP" >"$EVIDENCE/app.log" 2>&1 & pid=$!
-              trap "kill $pid 2>/dev/null || true" EXIT
+              diagnose_exit() {
+                status=$?
+                if (( status != 0 )); then
+                  ps -eo pid,ppid,stat,pcpu,args >"$EVIDENCE/processes.txt"
+                  xprop -root >"$EVIDENCE/root-properties.txt" 2>&1 || true
+                  xprop -name creditia >"$EVIDENCE/window-properties.txt" 2>&1 || true
+                  timeout 20s sudo gdb -batch -ex "set pagination off" -ex "thread apply all bt" -p "$pid" >"$EVIDENCE/app-stack.txt" 2>&1 || true
+                fi
+                kill "$pid" 2>/dev/null || true
+                exit "$status"
+              }
+              trap diagnose_exit EXIT
               for attempt in $(seq 1 30); do
                 kill -0 "$pid"
                 if xwininfo -name creditia -stats >"$EVIDENCE/main-window.txt" 2>/dev/null && grep -q "Map State: IsViewable" "$EVIDENCE/main-window.txt"; then break; fi
