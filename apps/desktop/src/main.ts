@@ -333,7 +333,7 @@ async function openProject(p: any) {
   try { raw = await creditsOf(p); }
   catch (e: any) {
     if (seq !== state.openSeq) return;
-    if (e?.code && e.code !== 'no_credits') return empty(() => [L('读不到这个项目', 'Cannot read this project'), errText(e)], true, true);
+    if (e?.code !== 'no_credits') return empty(() => [L('读不到这个项目', 'Cannot read this project'), errText(e)], true, true);
     const can = native && p.exists !== false;
     return empty(() => [L('这个项目还没分析过', 'Not analyzed yet'), '', `cd ${p.path} && creditia analyze`, can ? { label: L('现在分析', 'Analyze now'), run: () => reanalyze(p) } : undefined], true);
   }
@@ -664,8 +664,8 @@ function tileHtml(id: string, vs: string[], cur?: string) {
 }
 
 /** 瀑布流：先确定缩略图尺寸，再排能容纳的栏数；减栏时不能反过来放大作品。
- *  跨栏的作品会在矮的那栏下面留洞：它挑底下最平的几栏放；几栏高低差超过 40px 就先往后放别的（最多往后看 8 张），
- *  让单栏的作品把矮的那栏垫平再放它。一张跨栏的最多让 6 次，免得宽幅作品全沉到墙底 */
+ *  跨栏作品优先放在底部最平的几栏；高低差超过 40px 时，先从剩余作品找能填平的。
+ *  提前的距离计入代价，尽量保留作品顺序，不按等待次数强行留下空洞 */
 function layout(board: HTMLElement = $('#board')) {
   const tiles = [...board.querySelectorAll('.tile')] as HTMLElement[];
   const available = Math.min(innerWidth - 120, 1680);
@@ -695,17 +695,16 @@ function layout(board: HTMLElement = $('#board')) {
     return at(t, Math.min(cols, span));
   };
   const queue = tiles.slice();
-  const waited = new Map<HTMLElement, number>();
-  const cost = (t: HTMLElement, g: ReturnType<typeof fit>, j: number) => g.y + g.hole + j * 60 // 越往后越不愿意提前，尽量保持原来的顺序
-    + (g.span > 1 && g.hole > 40 && (waited.get(t) ?? 0) < 6 ? 2000 : 0);
+  const cost = (g: ReturnType<typeof fit>, j: number) => g.y + g.hole + j * 60 // 越往后越不愿意提前，尽量保持原来的顺序
+    + (g.span > 1 && g.hole > 40 ? 2000 : 0);
   while (queue.length) {
-    const fits = queue.slice(0, 8).map(fit);
-    let pick = 0, f = fits[0], score = cost(queue[0], f, 0);
+    // 跨栏作品会留洞时，从剩余作品找能填平的；不因等待次数强行跨过去。
+    const fits = queue.map(fit);
+    let pick = 0, f = fits[0], score = cost(f, 0);
     for (let j = 1; j < fits.length; j++) {
-      const sc = cost(queue[j], fits[j], j);
+      const sc = cost(fits[j], j);
       if (sc < score - 1) { pick = j; f = fits[j]; score = sc; }
     }
-    for (let j = 0; j < pick; j++) if (fits[j].span > 1) waited.set(queue[j], (waited.get(queue[j]) ?? 0) + 1);
     const t = queue.splice(pick, 1)[0];
     const x = f.best * (cw + gap) + (f.full - f.w) / 2;
     t.style.left = `${x}px`; t.style.top = `${f.y}px`; t.style.width = `${f.w}px`;

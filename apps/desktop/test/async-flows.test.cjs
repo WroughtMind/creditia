@@ -160,3 +160,19 @@ test('empty and failed startup register resize before taking their recovery path
     await ctx.boot(); assert.ok(events.includes('resize'));
   }
 });
+
+
+test('an unexpected archive read failure is an error, not an unanalyzed project', async () => {
+  for (const error of [new Error('connection lost'), { code: 'core_failed' }, { code: 'no_credits' }]) {
+    const { ctx, painted } = scene(), states = [];
+    ctx.native = false;
+    ctx.readStamp = async () => '';
+    ctx.creditsOf = async () => { throw error; };
+    ctx.empty = (view, keepName, failed) => states.push({ text: view()[0], failed: !!failed });
+    load(ctx, 'async function openProject(', '// ───────────────────────── 档案变了');
+    await ctx.openProject({ id: 'A', name: 'A', path: '/A' });
+    assert.equal(painted.length, 0);
+    assert.equal(states[0].failed, error.code !== 'no_credits');
+    assert.equal(states[0].text, error.code === 'no_credits' ? 'Not analyzed yet' : 'Cannot read this project');
+  }
+});
