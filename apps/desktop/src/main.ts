@@ -815,6 +815,48 @@ function setSize(id: string) {
   document.querySelectorAll<HTMLElement>('[data-s]').forEach((b) => { if (b.closest('.szs, #sizes, #defsize')) b.classList.toggle('on', b.dataset.s === id); });
 }
 
+type ExportJob = { key: string; raw: unknown; name: string; status: 'running' | 'saved' | 'failed'; path?: string; error?: string };
+const exportJobs = new Set<ExportJob>();
+let exportsOpen = false;
+function renderExports() {
+  const el = $('#exports');
+  const button = $('#export-tasks');
+  const count = (status: ExportJob['status']) => [...exportJobs].filter(j => j.status === status).length;
+  const running = count('running'), saved = count('saved'), failed = count('failed');
+  button.hidden = !exportJobs.size;
+  if (!exportJobs.size) exportsOpen = false;
+  const summary = L(`导出任务：${running} 项处理中，${saved} 项已保存，${failed} 项失败`, `Export tasks: ${running} exporting, ${saved} saved, ${failed} failed`);
+  button.title = summary; button.setAttribute('aria-label', summary);
+  button.setAttribute('aria-expanded', String(exportsOpen));
+  button.innerHTML = `${running ? SPIN() : icon(failed ? 'close' : 'check', 16)}<span>${running || exportJobs.size}</span>`;
+  button.onclick = () => { exportsOpen = !exportsOpen; renderExports(); };
+  el.hidden = !exportsOpen;
+  el.setAttribute('aria-label', L('导出任务', 'Export tasks'));
+  el.replaceChildren(...[...exportJobs].map(job => {
+    const row = document.createElement('div'); row.className = 'export-job'; row.dataset.status = job.status;
+    row.innerHTML = `${job.status === 'running' ? SPIN() : icon(job.status === 'saved' ? 'check' : 'close', 16)}<div class="export-detail"><b></b><span class="export-status"></span></div>`;
+    row.querySelector('b')!.textContent = job.name;
+    row.querySelector('b')!.title = job.name;
+    row.querySelector('.export-status')!.textContent = job.status === 'running' ? L('正在导出…', 'Exporting…') : job.status === 'saved' ? L(`已保存到 ${short(job.path!)}`, `Saved to ${short(job.path!)}`) : L(`导出失败：${job.error}`, `Export failed: ${job.error}`);
+    if (job.path && native) {
+      const reveal = document.createElement('button'); reveal.textContent = revealLabel();
+      reveal.onclick = () => { api('reveal', { path: job.path }).catch(e => toast(errText(e), 5000)); };
+      row.appendChild(reveal);
+    }
+    if (job.status !== 'running') {
+      const dismiss = document.createElement('button'); dismiss.innerHTML = icon('close', 14); dismiss.title = L('关闭', 'Dismiss'); dismiss.setAttribute('aria-label', dismiss.title);
+      dismiss.onclick = () => { exportJobs.delete(job); renderExports(); }; row.appendChild(dismiss);
+    }
+    return row;
+  }));
+}
+document.addEventListener('pointerdown', event => {
+  if (exportsOpen && !(event.target as HTMLElement).closest('#exports, #export-tasks')) { exportsOpen = false; renderExports(); }
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && exportsOpen) { event.preventDefault(); event.stopPropagation(); exportsOpen = false; renderExports(); $('#export-tasks').focus(); }
+});
+
 /** 默认导出墙上这一张；放大视图里试别的风格时，把那一套和画好的图传进来 */
 async function doExport(fmtId: string, id: string, k: string, o: { kit?: Kit; art?: Art; variant?: string } = {}) {
   if (!o.kit && view() === 'wall' && $('#board').inert) return;
@@ -824,26 +866,36 @@ async function doExport(fmtId: string, id: string, k: string, o: { kit?: Kit; ar
   const preferences = { group: groupPref(), named: namesOn() };
   const variant = o.kit ? o.variant : curVariant(k);
   const base = `${m.project || 'credits'}-${id}${variant && variant !== 'original' ? '-' + variant : ''}-${kit.id}`;
+  let job: ExportJob | undefined;
   try {
     if (fmtId === 'md') {
       const text = mergeCreditsMd(null, creditsBlock(buildText(raw, { lang, ...preferences })));
       try { await navigator.clipboard.writeText(text); return toast(L('CREDITS.md 区块已复制', 'CREDITS.md block copied')); }
       catch { return toast(L('没能写进剪贴板', 'Could not copy to the clipboard'), 8000, { acts: [{ label: L('存成文件', 'Save as a file'), run: () => saveBytes('CREDITS.md', new TextEncoder().encode(text), 'text/markdown').catch((e) => toast(errText(e), 5000)) }] }); }
     }
-    toast(fmtId === 'gif' ? L('正在逐帧生成 GIF…', 'Rendering GIF frames…') : L('正在导出…', 'Exporting…'), 60000, { spin: true });
+    const key = JSON.stringify([base, fmtId, size, lang, preferences]);
+    if ([...exportJobs].some(j => j.status === 'running' && j.key === key && j.raw === raw)) return;
+    job = { key, raw, name: `${base}${size !== 'native' && fmtId !== 'html' ? '-' + size : ''}.${fmtId}`, status: 'running' };
+    exportJobs.add(job); renderExports();
     const a = o.art ?? await drawArt(id, variant, kit);
     if (!a) throw new Error(L('当前档案无法生成这个版式', 'This layout is unavailable for the current project'));
     await new Promise((r) => setTimeout(r, 30));
     const out = await exportArt(fmtId as Format, kit.style, a, size, kit.frames ? () => kit.frames!(raw, lang, id, variant, preferences) : undefined);
     const sz = size !== 'native' && fmtId !== 'html' ? `-${size}` : '';
-    await saveBytes(`${base}${sz}.${out.ext}`, out.bytes, out.mime);
-  } catch (e: any) { console.error(e); toast(L(`导出失败：${errText(e)}`, `Export failed: ${errText(e)}`), 5000); }
+    job.path = await saveBytes(`${base}${sz}.${out.ext}`, out.bytes, out.mime, false);
+    job.status = 'saved';
+  } catch (e: any) {
+    console.error(e);
+    if (job) { job.status = 'failed'; job.error = errText(e); }
+    else toast(L(`导出失败：${errText(e)}`, `Export failed: ${errText(e)}`), 5000);
+  } finally { if (job) renderExports(); }
 }
 /** 存文件；App 里提示带「在访达中显示」 */
-async function saveBytes(name: string, bytes: Uint8Array, mime: string) {
+async function saveBytes(name: string, bytes: Uint8Array, mime: string, notify = true) {
   const path: string = await api('save_file', { name, bytes: b64(bytes), mime });
   const acts = native ? [{ label: revealLabel(), run: () => { api('reveal', { path }).catch((e) => toast(errText(e), 5000)); } }] : [];
-  toast(L(`已保存到 ${short(path)}`, `Saved to ${short(path)}`), 6000, { acts });
+  if (notify) toast(L(`已保存到 ${short(path)}`, `Saved to ${short(path)}`), 6000, { acts });
+  return path;
 }
 
 function renderDock() {
@@ -920,6 +972,9 @@ let closeFocus: (() => void) | null = null;
 let focusKeys: ((e: KeyboardEvent) => boolean) | null = null;
 function closeTop() {
   if (!$('#sheet').hidden) return closeSheet();
+  if (document.querySelector('.fmts')) return closeFormats();
+  const kits = $('#focus').querySelector('.kits');
+  if (kits) { kits.remove(); return; }
   if (closeFocus) return closeFocus();
   if (!$('#menu').hidden) return closeMenu();
   if ($('#dots').querySelector('.styles')) return closeStyles();
@@ -1444,6 +1499,7 @@ const CMDS: Cmd[] = [
 ];
 /** ⌘E：放大视图里导出那一张；墙上导出键盘停着或鼠标指着的那一张 */
 function exportHere() {
+  if (exportsOpen) { exportsOpen = false; renderExports(); }
   const fb = document.querySelector<HTMLElement>('#focus:not([hidden]) [data-act="export"]');
   if (fb) return fb.click();
   const tile = document.querySelector<HTMLElement>('#board .tile:not(.slot):focus, #board .tile:not(.slot):hover, #roam .rt:hover');
@@ -1571,14 +1627,14 @@ function toggleMenu() {
   const markKb = () => items().forEach((x, j) => { x.classList.toggle('kb', j === kb); if (j === kb) x.scrollIntoView({ block: 'nearest' }); });
   redrawMenu = draw;
   draw();
-  if (!demo && found === null) void discover().then(() => redrawMenu?.());
+  if (!demo && found === null) void discover().then(() => redrawMenu?.(), e => toast(errText(e), 6000));
   void fillMarks();
   const q = $('#q') as HTMLInputElement;
   q.oninput = () => { kb = -1; closeRowMenu(); draw(); };
   q.onkeydown = (e) => {
     const n = items().length;
     if (e.key === 'ArrowDown' && n) { kb = (kb + 1) % n; markKb(); e.preventDefault(); }
-    else if (e.key === 'ArrowUp' && n) { kb = (kb - 1 + n) % n; markKb(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp' && n) { kb = kb < 0 ? n - 1 : (kb - 1 + n) % n; markKb(); e.preventDefault(); }
     else if (e.key === 'Enter' && n) { items()[Math.max(kb, 0)].click(); e.preventDefault(); }
   };
   q.focus();
@@ -1651,7 +1707,7 @@ async function removeProject(p: any) {
 type Found = { name: string; path: string; tools: Record<string, number>; lastActive: string; exists: boolean; inLibrary: boolean };
 let found: Found[] | null = null, finding: Promise<Found[]> | null = null;
 function discover(): Promise<Found[]> {
-  finding ??= api('discover').then((r: any) => (found = ((r?.projects ?? []) as Found[]).filter((d) => d.exists && !state.projects.some((p) => p.path === d.path))), () => (found = []));
+  finding ??= api('discover').then((r: any) => (found = ((r?.projects ?? []) as Found[]).filter((d) => d.exists && !state.projects.some((p) => p.path === d.path))), e => { finding = null; throw e; });
   return finding;
 }
 const toolsOf = (d: Found) => Object.entries(d.tools).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([t]) => nameOf(t, state.lang)).join(' · ');
@@ -1739,7 +1795,7 @@ async function addProject() {
   if (dir) await addProjects([dir]);
 }
 /** 一个接一个分析、加进作品库。第一个分析完就打开它，其余的在后台接着跑（* 上看进度、能取消） */
-async function addProjects(paths: string[], each?: (path: string, st: 'run' | 'done' | 'fail') => void) {
+async function addProjects(paths: string[], each?: (path: string, st: 'run' | 'done' | 'fail' | 'cancelled') => void) {
   let opened = false, ok = 0;
   const notes: string[] = [];
   for (const [i, path] of paths.entries()) {
@@ -1754,7 +1810,7 @@ async function addProjects(paths: string[], each?: (path: string, st: 'run' | 'd
       const p = state.projects.find((x) => x.id === r?.id);
       if (p && !opened) { opened = true; $('#welcome').hidden = true; welcomeDraw = null; void openProject(p); }
     } catch (e: any) {
-      each?.(path, 'fail');
+      each?.(path, e?.code === 'cancelled' ? 'cancelled' : 'fail');
       if (e?.code === 'cancelled') { flash(errText(e)); return; }
       markError();
       toast(L(`${name}：${errText(e)}`, `${name}: ${errText(e)}`), 6000);
@@ -1773,6 +1829,7 @@ function welcome() {
   applyView();
   const picked = new Set<string>();
   let list: Found[] | null = null;
+  let scanError = '';
   const status = new Map<string, string>();
   const ST: Record<string, string> = { run: SPIN(), done: icon('check', 14), fail: icon('close', 14) };
   const draw = () => {
@@ -1782,13 +1839,13 @@ function welcome() {
       <span class="logo"></span>
       <h1>${L('选择要分析的项目', 'Select projects to start')}</h1>
       <p class="wstat" aria-live="polite"></p>
-      <div class="found">${list === null ? `<p class="wait">${L('正在扫描本地包含 AI 工具记录的 Git 仓库…', 'Looking for repos where you used AI tools…')}</p>`
+      <div class="found">${scanError ? `<p class="wait" role="alert">${esc(scanError)}</p>` : list === null ? `<p class="wait">${L('正在扫描本地包含 AI 工具记录的 Git 仓库…', 'Looking for repos where you used AI tools…')}</p>`
         : list.length ? list.map((d) => `<label class="row ${status.get(d.path) ?? ''}" data-path="${esc(d.path)}">
-            <input type="checkbox" ${picked.has(d.path) ? 'checked' : ''} ${running || status.has(d.path) ? 'disabled' : ''}>
+            <input type="checkbox" ${picked.has(d.path) ? 'checked' : ''} ${running || status.get(d.path) === 'done' ? 'disabled' : ''}>
             <b>${esc(d.name)}</b><span class="path" title="${esc(d.path)}">${esc(short(d.path))}</span><span class="tools">${esc(toolsOf(d))}</span>
             <i class="st">${ST[status.get(d.path) ?? ''] ?? ''}</i></label>`).join('')
         : `<p class="wait">${L('未发现包含 AI 工具记录的 Git 仓库', 'No git repos with AI tool activity found')}</p>`}</div>
-      <div class="acts"><button class="pick" ${running ? 'disabled' : ''}>${icon('folder')}${L('选择文件夹…', 'Choose folder…')}</button>${list?.length ? `<button class="go" ${!picked.size || running ? 'disabled' : ''}>${running ? L('分析中…', 'Analyzing…') : picked.size > 1 ? L(`分析这 ${picked.size} 个`, `Analyze ${picked.size}`) : L('开始分析', 'Analyze')}</button>` : ''}</div>
+      <div class="acts"><button class="pick" ${running ? 'disabled' : ''}>${icon('folder')}${L('选择文件夹…', 'Choose folder…')}</button>${scanError ? `<button class="retry">${L('重新扫描', 'Retry scan')}</button>` : ''}${list?.length ? `<button class="go" ${!picked.size || running ? 'disabled' : ''}>${running ? L('分析中…', 'Analyzing…') : picked.size > 1 ? L(`分析这 ${picked.size} 个`, `Analyze ${picked.size}`) : L('开始分析', 'Analyze')}</button>` : ''}</div>
     </div>`;
     settleMark(); syncStatus();
   };
@@ -1802,13 +1859,19 @@ function welcome() {
   el.onclick = async (e) => {
     const b = (e.target as HTMLElement).closest('button'); if (!b || b.disabled) return;
     if (b.classList.contains('pick')) return addProject();
+    if (b.classList.contains('retry')) return scan();
+    if (!b.classList.contains('go')) return;
     const paths = list!.map((d) => d.path).filter((p) => picked.has(p));
-    await addProjects(paths, (path, st) => { status.set(path, st); draw(); });
+    await addProjects(paths, (path, st) => { if (st === 'cancelled') status.delete(path); else status.set(path, st); if (st === 'done') picked.delete(path); draw(); });
   };
   mark.set(BRAND, { grow: true });
-  scanning = true;
-  draw();
-  void discover().then((r) => { scanning = false; list = r; r.slice(0, 3).forEach((d) => picked.add(d.path)); draw(); });
+  async function scan() {
+    scanError = ''; scanning = true; draw();
+    try { list = await discover(); list.slice(0, 3).forEach((d) => picked.add(d.path)); }
+    catch (e) { scanError = errText(e); markError(); }
+    finally { scanning = false; draw(); }
+  }
+  void scan();
 }
 
 /** 分析跑完：一句结果写在项目名后面；核心有提醒（某个数据源读不了之类）就再给个能点「查看」的提示 */

@@ -150,7 +150,7 @@ try {
   assert(!artwork.failure, artwork.failure);
   assert.match(artwork.svg, /<svg/);
   writeFileSync(path.join(output, 'export-artwork.svg'), artwork.svg);
-  for (const format of ['png', 'svg', 'pdf', 'html', 'gif']) {
+  for (const format of ['png', 'svg', 'pdf', 'html', 'gif', 'png', 'png']) {
     await click('#focus .xp');
     if (!(await js('return !!document.querySelector(arguments[0])', `#focus .fmts [data-f="${format}"]`))) {
       assert.equal(format, 'gif');
@@ -160,7 +160,7 @@ try {
     const before = new Set(files(info.exportDir));
     await click(`#focus .fmts [data-f="${format}"]`);
     const outcome = await until(async () => {
-      const message = await js('return document.querySelector("#toast .msg")?.textContent ?? ""');
+      const message = await js('return document.querySelector(".export-job[data-status=failed] .export-status")?.textContent ?? ""');
       // Return a terminal failure to escape the polling helper; throwing here
       // would be swallowed by until() and turn the real error into a timeout.
       if (message.startsWith('Export failed:')) return { error: message };
@@ -169,7 +169,7 @@ try {
     }, `${format} export`, 180000);
     assert(!outcome.error, `${format}: ${outcome.error}`);
     const { file } = outcome;
-    await until(() => js('return document.querySelector("#toast .msg")?.textContent.startsWith("Saved to")'), 'native save completes');
+    await until(() => js('return !document.querySelector(".export-job[data-status=running]") && !!document.querySelector(".export-job[data-status=saved]")'), 'native save completes');
     const data = readFileSync(path.join(info.exportDir, file));
     assert(data.length > 100);
     if (format === 'png') assert.equal(data.subarray(1, 4).toString(), 'PNG');

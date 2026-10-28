@@ -118,15 +118,20 @@ try {
   $null = Wait-Control 'creditia · Share card'
   Record 'wall and roam views' 'Ctrl+2 and Ctrl+1'
   $exportDir = Join-Path $env:USERPROFILE 'Downloads'
+  $savedCount = 0
   foreach ($format in @('PNG','SVG','PDF','HTML','GIF')) {
     $before = @(Get-ChildItem $exportDir -File -ErrorAction SilentlyContinue | ForEach-Object Name)
     Click-Control 'Export'
     Click-Control $format
+    $savedCount++
+    $tasks = Wait-Text "^Export tasks: 0 exporting, $savedCount saved, 0 failed$"
+    Click-Control $tasks
     $saved = Wait-Text '^Saved to '
     $files = @(Get-ChildItem $exportDir -File | Where-Object { $_.Name -notin $before -and $_.Extension -eq ".$($format.ToLower())" })
     if ($files.Count -ne 1 -or $files[0].Length -lt 100) { throw "No complete new $format file after $saved" }
     Copy-Item $files[0].FullName $Output
     Record "native $format export" @{file=$files[0].Name;bytes=$files[0].Length}
+    Send-Keys '{ESC}'
   }
   if (-not $p.CloseMainWindow()) { throw 'Could not close candidate window normally' }
   if (-not $p.WaitForExit(15000)) { throw 'Candidate did not exit after close' }
