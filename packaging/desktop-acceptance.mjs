@@ -108,6 +108,16 @@ try {
   const tile = await element('#board .tile:not(.slot)');
   await command('POST', `/element/${tile}/value`, { text: '\uE007', value: ['\uE007'] });
   await until(() => js('return !document.querySelector("#focus").hidden && !!document.querySelector("#focus .xp")'), 'enlarged artwork');
+  // Keep the actual SVG input when a native rasterizer fails; the screenshot
+  // alone cannot reproduce a failure inside WASM.
+  const artwork = await command('POST', '/execute/async', {
+    script: `const done = arguments[arguments.length - 1];
+      fetch(document.querySelector('#focus .art img').src).then(r => r.text()).then(svg => done({ svg }), e => done({ error: String(e) }));`,
+    args: [],
+  });
+  assert(!artwork.error, artwork.error);
+  assert.match(artwork.svg, /<svg/);
+  writeFileSync(path.join(output, 'export-artwork.svg'), artwork.svg);
   for (const format of ['png', 'svg', 'pdf', 'html', 'gif']) {
     await click('#focus .xp');
     if (!(await js('return !!document.querySelector(arguments[0])', `#focus .fmts [data-f="${format}"]`))) {
@@ -117,7 +127,16 @@ try {
     }
     const before = new Set(files(info.exportDir));
     await click(`#focus .fmts [data-f="${format}"]`);
-    const file = await until(() => files(info.exportDir).find(f => !before.has(f) && f.endsWith('.' + format)), `${format} export`, 180000);
+    const outcome = await until(async () => {
+      const message = await js('return document.querySelector("#toast .msg")?.textContent ?? ""');
+      // Return a terminal failure to escape the polling helper; throwing here
+      // would be swallowed by until() and turn the real error into a timeout.
+      if (message.startsWith('Export failed:')) return { error: message };
+      const file = files(info.exportDir).find(f => !before.has(f) && f.endsWith('.' + format));
+      return file ? { file } : null;
+    }, `${format} export`, 180000);
+    assert(!outcome.error, `${format}: ${outcome.error}`);
+    const { file } = outcome;
     await until(() => js('return document.querySelector("#toast .msg")?.textContent.startsWith("Saved to")'), 'native save completes');
     const data = readFileSync(path.join(info.exportDir, file));
     assert(data.length > 100);
