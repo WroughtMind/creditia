@@ -206,13 +206,25 @@ function syncStatus() {
   const text = job ? jobText(job) : loading ? L(`正在读取 ${loading.name}…`, `Opening ${loading.name}…`) : flashText;
   const show = (job || loading) ? since >= 2000 : !!flashText;
   const cancel = !!job && !job.auto && !job.cancelling;
-  const html = show && text ? `<span class="txt">${esc(text)}</span>${cancel ? `<button data-act="cancel">${L('取消', 'Cancel')}</button>` : ''}` : '';
+  const visible = show && !!text;
   const center = !$('#center').hidden, wel = !$('#welcome').hidden;
-  const put = (el: HTMLElement | null, on: boolean) => { if (!el) return; const h = on ? html : ''; if (el.innerHTML !== h) el.innerHTML = h; el.classList.toggle('on', on && !!html); };
+  const put = (el: HTMLElement | null, on: boolean) => {
+    if (!el) return;
+    el.classList.toggle('on', on && visible);
+    if (!on || !visible) { if (el.childNodes.length) el.replaceChildren(); return; }
+    let label = el.querySelector<HTMLElement>('.txt');
+    if (!label) { label = document.createElement('span'); label.className = 'txt'; el.appendChild(label); }
+    if (label.textContent !== text) label.textContent = text;
+    let button = el.querySelector<HTMLButtonElement>('[data-act="cancel"]');
+    if (cancel) {
+      if (!button) { button = document.createElement('button'); button.dataset.act = 'cancel'; el.appendChild(button); }
+      button.textContent = L('取消', 'Cancel');
+    } else button?.remove();
+  };
   put($('#center .lbl'), center);
   put(document.querySelector<HTMLElement>('#welcome .wstat'), wel && !center);
   put($('#pstat .in'), !center && !wel);
-  $('#pstat').classList.toggle('on', !center && !wel && !!html);
+  $('#pstat').classList.toggle('on', !center && !wel && visible);
   dockBar();
   // 等待中每半秒刷一次（秒数、分档）；都结束了就停
   if ((job || loading) && !statusTick) statusTick = window.setInterval(syncStatus, 500);
@@ -604,13 +616,13 @@ async function paint() {
     arts.set(k, a);
     const tile = document.createElement('div');
     tile.className = 'tile';
-    tileA11y(tile, b.id);
     tile.dataset.k = k;
     tile.dataset.variant = variant ?? '';
     tile.dataset.w = String(a.w); tile.dataset.h = String(a.h);
     tile.dataset.span = String(b.span ?? (a.w / a.h > 2.2 ? 2 : ''));
     const vs = st.variants(b.id);
     tile.innerHTML = tileHtml(b.id, vs, variant);
+    tileA11y(tile, b.id);
     const artEl = tile.querySelector('.art') as HTMLElement;
     mountPreview(artEl, a, preview);
     mountRoamHits(artEl, a);
@@ -719,13 +731,14 @@ function wireTile(tile: HTMLElement, id: string, k: string, vs: string[]) {
   });
   const artEl = tile.querySelector('.art') as HTMLElement;
   artEl.addEventListener('pointerdown', (e) => startDrag(e, tile, id, k));
-  tile.addEventListener('keydown', (e) => { if (e.target === tile && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openFocus(id, k); } });
+  artEl.addEventListener('keydown', (e) => { if (e.target === artEl && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openFocus(id, k); } });
 }
 /** 键盘也能用：Tab 走到每一张，回车放大 */
 function tileA11y(tile: HTMLElement, id: string) {
-  tile.tabIndex = 0;
-  tile.setAttribute('role', 'button');
-  tile.setAttribute('aria-label', `${state.style.pieceName(id, state.lang, state.raw)} · ${L('回车放大', 'press Enter to enlarge')}`);
+  const art = tile.querySelector<HTMLElement>('.art')!;
+  art.tabIndex = 0;
+  art.setAttribute('role', 'button');
+  art.setAttribute('aria-label', `${state.style.pieceName(id, state.lang, state.raw)} · ${L('回车放大', 'press Enter to enlarge')}`);
 }
 function applyVariant(id: string, k: string, variant: string) {
   if (!selectWallVariant(state.style, state.variants, k, variant).length) return;
@@ -1095,7 +1108,7 @@ function openFocus(id: string, k: string) {
     open = false; el.hidden = true; el.innerHTML = ''; closeFocus = null; focusKeys = null;
     document.body.classList.remove('focusing');
     document.querySelector('.ct-tip')?.classList.remove('on');
-    if (refocus) (document.querySelector(`.tile[data-k="${k}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
+    if (refocus) (document.querySelector(`.tile[data-k="${k}"] .art`) as HTMLElement | null)?.focus({ preventScroll: true });
   };
   closeFocus = close;
   focusKeys = (e) => {
@@ -1502,7 +1515,7 @@ function exportHere() {
   if (exportsOpen) { exportsOpen = false; renderExports(); }
   const fb = document.querySelector<HTMLElement>('#focus:not([hidden]) [data-act="export"]');
   if (fb) return fb.click();
-  const tile = document.querySelector<HTMLElement>('#board .tile:not(.slot):focus, #board .tile:not(.slot):hover, #roam .rt:hover');
+  const tile = document.querySelector<HTMLElement>('#board .tile:not(.slot):focus-within, #board .tile:not(.slot):hover, #roam .rt:hover');
   if (tile?.closest('[inert]')) return;
   tile?.querySelector<HTMLElement>('.bar [data-act="export"]')?.click();
 }

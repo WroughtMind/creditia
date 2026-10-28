@@ -66,21 +66,23 @@ body::after { /* 底下渐隐，浮在下面的风格栏不和作品打架 */
   background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 0%, transparent), color-mix(in srgb, var(--bg) 88%, transparent));
 }
 /* 左上：项目的 * + 项目名，点开换项目；忙的时候往右展开一段状态 */
+.project-status { display: flex; align-items: center; min-width: 0; }
 .pill { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 8px; border-radius: var(--r-2); cursor: pointer; transition: background var(--dur-1) var(--ease); min-width: 0; }
 .pill:hover, .pill[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 6%, transparent); }
 .pmark { width: 20px; height: 20px; flex: none; display: grid; place-items: center; }
 .pname { font-weight: 600; font-size: var(--t-title); letter-spacing: -.015em; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pill .chev { color: var(--faint); flex: none; transition: color var(--dur-1) var(--ease); }
 .pill:hover .chev, .pill[aria-expanded="true"] .chev { color: var(--ink); }
-.pstat { display: grid; grid-template-columns: 0fr; transition: grid-template-columns var(--dur-3) var(--ease), opacity var(--dur-2) var(--ease); opacity: 0; }
+.pstat { display: grid; min-width: 0; grid-template-columns: 0fr; transition: grid-template-columns var(--dur-3) var(--ease), opacity var(--dur-2) var(--ease); opacity: 0; }
 .pstat.on { grid-template-columns: 1fr; opacity: 1; }
 .pstat > .in { overflow: hidden; min-width: 0; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-.pstat .txt { color: var(--soft); font-size: var(--t-small); font-variant-numeric: tabular-nums; padding-left: 2px; }
+.pstat .txt { color: var(--soft); font-size: var(--t-small); font-variant-numeric: tabular-nums; padding-left: 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pstat button { flex: none; }
 .pstat button, #center button { border: 0; background: var(--glass2); box-shadow: inset 0 0 0 1px var(--edge); height: 22px; padding: 0 9px; border-radius: var(--r-pill); font-size: var(--t-meta); font-weight: 600; cursor: pointer; }
 .pstat button:hover, #center button:hover { background: var(--ink); color: var(--bg); }
 body:has(#welcome:not([hidden])) #project { visibility: hidden; } /* 第一次打开：中间已经在挑项目 */
 /* 右上：一条胶囊装下分组、视图、设置 */
-.tools { display: flex; align-items: center; gap: 2px; height: 36px; padding: 3px; border-radius: var(--r-pill); }
+.tools { display: flex; flex-shrink: 0; align-items: center; gap: 2px; height: 36px; padding: 3px; border-radius: var(--r-pill); }
 .tools .seg { background: transparent; box-shadow: none; padding: 0; }
 .tools .seg button { height: 30px; padding: 0 11px; display: inline-flex; align-items: center; }
 .tools .seg button:hover { color: var(--ink); }
@@ -170,9 +172,9 @@ body.dragging .tile.placed { transition: none; }
 .tile::after { /* 悬停的虚线框 */
   content: ""; position: absolute; inset: -9px; border-radius: var(--r-3); border: 1.25px dashed var(--dash); opacity: 0; transform: scale(.985); transition: opacity var(--dur-1) var(--ease), transform var(--dur-1) var(--ease); pointer-events: none;
 }
-.tile:hover::after, .tile.hover::after, .tile.menuopen::after, .tile:focus-visible::after { opacity: 1; transform: none; }
-.tile:focus { outline: none; }
-.tile:focus-visible .bar, .tile:has(:focus-visible) .bar { opacity: 1; transform: none; }
+.tile:hover::after, .tile.hover::after, .tile.menuopen::after, .tile:has(:focus-visible)::after { opacity: 1; transform: none; }
+.tile .art:focus { outline: none; }
+.tile:has(:focus-visible) .bar { opacity: 1; transform: none; }
 .tile .bar { position: absolute; top: -24px; right: -6px; display: flex; gap: 2px; align-items: center; padding: 3px; border-radius: var(--r-pill); opacity: 0; transform: translateY(4px); transition: opacity var(--dur-1) var(--ease), transform var(--dur-1) var(--ease); z-index: 3; }
 .tile:hover .bar, .tile.hover .bar, .tile.menuopen .bar { opacity: 1; transform: none; }
 .tile .bar button { border: 0; background: transparent; height: 26px; min-width: 26px; padding: 0 10px; border-radius: var(--r-pill); cursor: pointer; font-size: var(--t-small); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
@@ -183,7 +185,7 @@ body.dragging .tile.placed { transition: none; }
 .tile .name .vn { margin-left: 6px; color: var(--faint); }
 .tile .name .q { display: block; height: 0; overflow: hidden; color: var(--faint); font-size: var(--t-meta); opacity: 0; transition: opacity var(--dur-1) var(--ease); }
 .tile:hover .name, .tile.hover .name { color: var(--ink); }
-.tile:is(:hover, .hover, :focus-visible) .name .q { height: auto; opacity: 1; }
+.tile:is(:hover, .hover, :has(:focus-visible)) .name .q { height: auto; opacity: 1; }
 /* 导出菜单：格式一列，复制 CREDITS.md 单独一项，下面三列尺寸 */
 .fmts { position: absolute; top: 12px; right: -6px; z-index: 4; border-radius: var(--r-3); padding: 4px; display: grid; gap: 1px; width: 236px; animation: drop2 var(--dur-2) var(--ease); }
 @keyframes drop2 { from { opacity: 0; transform: translateY(-4px); } }

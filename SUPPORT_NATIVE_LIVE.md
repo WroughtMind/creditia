@@ -63,7 +63,7 @@ evidence=native-write-receipt
 - 无索引时从原生 `session_meta` 读取 ID、cwd、时间，逐轮读取模型；不凭目录名填写项目。
 - 同一原生会话从多个目录出现只保留一份，已有完整记录优先于缺失内容的索引。
 - 读取 `patch_apply_end` 的成功更改、配对的原生 apply_patch 回执，以及严格限定的成功命令 heredoc；没有结果、失败、不同目标或未执行的 shell 片段不计。
-- 跨 agent 转换生成的 `originator=agentprotocol` 且没有 CLI 版本的头部不当成 Codex 原生执行。本轮原生实跑时尚未实现 `history_base`；后续分段读取和受控回归见 [2026-10-28 记录](docs/2026-10-28-issue-110-114-115.md)，真实分段样本仍待验收。
+- 跨 agent 转换生成的 `originator=agentprotocol` 且没有 CLI 版本的头部不当成 Codex 原生执行。本轮原生实跑时尚未实现 `history_base`；后续分段读取和受控回归见 [2026-10-28 记录](docs/2026-10-28-issue-110-114-115.md)，真实 fork / revert / resume 分段样本已于 2026-10-28 验收，详情见同一记录。
 - 模型取原生 turn_context，归因始终是实际执行的 Codex，不增加一份 inference.sh 贡献。
 
 只向 Creditia 指定该导出目录，使用独立持久库分析；两次均为 **3 条 Codex / gpt-6-luna 行证据，最终 verified 3 行**。导出没有 SQLite 索引，源历史摘要前后一致。报告为 `/private/tmp/creditia-native-live-20261024/inference-analysis.json`。

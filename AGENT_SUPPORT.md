@@ -29,7 +29,7 @@
 | CodeBuddy | `codebuddy` | 原生编辑 | `.codebuddy/skills` |
 | Codemaker | `codemaker` | 官方 CodeMaker AI CLI 1.6.0 已实测，因无 API key 停在认证；Y3 移植版产品对应和落盘回执仍未确认 | `.codemaker/skills` |
 | Code Studio | `codestudio` | 原生已接受编辑时间线与文本快照；逐请求模型 | `.codestudio/skills` |
-| Codex | `codex` | 原生成功执行；分段历史读取已有受控回归，真实分段样本仍待验收，见[本轮记录](docs/2026-10-28-issue-110-114-115.md) | `.agents/skills` |
+| Codex | `codex` | 原生成功执行；真实 fork / revert / resume 分段历史已验收，重复分析稳定且源历史不变，见[本轮记录](docs/2026-10-28-issue-110-114-115.md) | `.agents/skills` |
 | Command Code | `command-code` | 原生编辑 | `.commandcode/skills` |
 | Continue | `continue` | 已有读取 | `.continue/skills` |
 | Cortex Code | `cortex` | 原生编辑 + ACP | `.cortex/skills` |
@@ -59,7 +59,7 @@
 | Kode | `kode` | 原生 projects JSONL：成功 Write/Edit structuredPatch；子 agent 分开 | `.kode/skills` |
 | Lingma | `lingma` | 原生 local.db + workingSpace：已接受且前后 MD5 匹配；已用公开真实库验证，支持迁移的 Windows 快照，模型未知 | `.lingma/skills` |
 | Loaf | `loaf` | 已查原生工作日志；代码贡献从实际执行的宿主 agent 读取 | `.agents/skills` |
-| MCPJam | `mcpjam` | 自动读取本地 Codex 和 Claude 执行器历史，解析项目链接并按原生会话去重；官方桥与真实执行器的脚本模型验收通过，贡献归执行器；账户模型代理、完整受管启动及云端 RPC 未验收 | `.mcpjam/skills` |
+| MCPJam | `mcpjam` | 自动读取本地 Codex 和 Claude 执行器历史，解析项目链接并按原生会话去重；官方桥与真实执行器的脚本模型验收通过，贡献归执行器；官方签名运行时、临时授权、真实启动和进程停止已验收；账户模型代理及云端 RPC 未验收 | `.mcpjam/skills` |
 | MiniMax Code | `minimax-code` | 原生编辑 | `.minimax/skills` |
 | Mistral Vibe | `mistral-vibe` | 原生编辑 | `.vibe/skills` |
 | Moxby | `moxby` | Desktop 3.2.0 原生 SQLite：最终成功 file_edit 回执、绝对路径及逐轮模型 | `.moxby/skills` |

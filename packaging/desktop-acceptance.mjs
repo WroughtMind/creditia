@@ -132,7 +132,7 @@ try {
       if (blob.type === 'image/svg+xml') window.__acceptanceArtwork.set(url, blob);
       return url;
     };`);
-  const tile = await element('#board .tile:not(.slot)');
+  const tile = await element('#board .tile:not(.slot) .art[role="button"]');
   await command('POST', `/element/${tile}/value`, { text: '\uE007', value: ['\uE007'] });
   await until(() => js('const img = document.querySelector("#focus .art img"); return !document.querySelector("#focus").hidden && !!document.querySelector("#focus .xp") && img?.complete && img.naturalWidth > 0 && !document.querySelector("#focus .big.loading")'), 'enlarged artwork');
   // Keep the focused SVG preview when a native rasterizer fails. Classic path
