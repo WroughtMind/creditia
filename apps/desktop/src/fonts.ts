@@ -22,7 +22,7 @@ export async function ready(st: Style) {
 
 const bytes = new Map<string, Promise<Uint8Array>>();
 /** 导出要用的字体字节：只取风格用到的字体与字重，加中文后备的常规、粗体两档（每个中文字体子集都有几 MB，全载会撑爆内存） */
-export async function fontBytes(st: Style, svg = ''): Promise<Uint8Array[]> {
+export async function fontBytes(st: Pick<Style, 'f'>, svg = ''): Promise<Uint8Array[]> {
   const specs = [st.f.display, st.f.body, st.f.num, st.f.label, st.f.mono, st.f.script].filter(Boolean) as { family: string; weight?: number; italic?: boolean }[];
   const want = new Map<string, Set<number>>();
   const add = (fam: string, w: number) => { if (!want.has(fam)) want.set(fam, new Set()); want.get(fam)!.add(w); };

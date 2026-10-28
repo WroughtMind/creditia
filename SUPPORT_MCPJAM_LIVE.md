@@ -2,6 +2,8 @@
 
 剩余实现与验收统一跟踪于 [Issue #110](https://github.com/WroughtMind/creditia/issues/110)，按读取缺口、本地入口验收、账户或样本依赖分别推进；以下已完成结果保持原有范围。
 
+2026-10-28 更新：Codex 分段读取已实现并通过受控回归，详见[实现与验收记录](docs/2026-10-28-issue-110-114-115.md)。下文的分段“未读取”描述对应当时版本；MCPJam 真实分段链与完整受管入口仍未验收。
+
 2026-10-26 合入前复验：修复路径边界、主/子会话持久化和截断历史保护后，再用官方启动链与 Codex 0.164.0 分别执行 attended 的 7 个场景、unattended 的 9 个场景。两组均从默认 `work/project` 软链入口完成执行，各为 5 行 verified，重复扫描不增加，原始历史摘要不变。模型仍为脚本服务。新证据在 `/private/tmp/creditia-integration-mcpjam-{attended,unattended}/`；Rust 工作区 362 项通过、3 项忽略，严格 Clippy 通过。
 
 ## 2026-10-26：默认软链入口已通过，新增后台命令归因

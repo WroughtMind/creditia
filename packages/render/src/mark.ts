@@ -44,9 +44,10 @@ export function markPaths(o: MarkOpts = {}): string {
   const petals: Petal[] = o.petals ?? MARK_COLORS.map((color) => ({ color }));
   const n = petals.length, gap = ink ? 0 : R * (optical ? 0.035 : 0.07), head = optical ? 0.25 : 0.224;
   return petals.map((p, i) => {
-    // 太短的瓣画不出切线（末端圆比瓣还长），干脆不画
-    if ((p.len ?? 1) < 0.12 || p.opacity === 0) return '';
-    const len = R * (p.len ?? 1), rb = R * head * Math.sqrt(p.len ?? 1);
+    const len = R * (p.len ?? 1);
+    if (len <= gap || p.opacity === 0) return '';
+    // 生长动画中圆头也要跟着缩小，让尖端始终处于圆外，切线才有实数解。
+    const rb = Math.min(R * head * Math.sqrt(p.len ?? 1), (len - gap) / 2);
     const op = p.opacity != null && p.opacity < 1 ? ` fill-opacity="${+p.opacity.toFixed(3)}"` : '';
     const a = -Math.PI / 2 + 2 * Math.PI * (p.at ?? i / n);
     return `<path d="${petal(cx, cy, a, len, rb, gap)}" fill="${ink ?? p.color}"${op}/>`;

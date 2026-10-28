@@ -1,47 +1,27 @@
-// 浏览器端导出：resvg-wasm 栅格化（PNG、PDF、GIF、文字转路径的 SVG），和 CLI 共用 export.ts。
-import { initWasm, Resvg } from '@resvg/resvg-wasm';
-import wasmUrl from '@resvg/resvg-wasm/index_bg.wasm?url';
-import { makeExporter, sized, SIZES, type Art, type Raster } from '../../../packages/render/src/export.ts';
+// 每次导出独占一个 WASM 运行环境，结束后释放；一次底层异常不污染后续导出。
+import type { Art } from '../../../packages/render/src/export.ts';
 import type { Style } from '../../../packages/render/src/style.ts';
-import { fontBytes } from './fonts.ts';
-
-let boot: Promise<void> | null = null;
-const init = () => (boot ??= initWasm(fetch(wasmUrl)));
-
-async function deflate(data: Uint8Array): Promise<Uint8Array> {
-  const cs = new CompressionStream('deflate');
-  const out = new Response(new Blob([data as BlobPart]).stream().pipeThrough(cs));
-  return new Uint8Array(await out.arrayBuffer());
-}
-
-/** 文字已经是路径的（原版作品）不需要字体；有 <text> 的按风格取字体 */
-async function exporter(st: Style | null, svg: string) {
-  await init();
-  const fonts = st && svg.includes('<text') ? await fontBytes(st, svg) : [];
-  const opts = (width?: number) => ({ font: { fontBuffers: fonts, loadSystemFonts: false, defaultFontFamily: 'Noto Sans SC' }, fitTo: width ? { mode: 'width' as const, value: Math.round(width) } : undefined });
-  const raster: Raster = {
-    png: (svg, w) => { const r = new Resvg(svg, opts(w)); const out = r.render().asPng(); r.free(); return out; },
-    rgba: (svg, w) => { const r = new Resvg(svg, opts(w)); const img = r.render(); const res = { w: img.width, h: img.height, data: img.pixels }; r.free(); return res; },
-    flat: (svg) => { const r = new Resvg(svg, opts()); const s = r.toString(); r.free(); return s; },
-  };
-  return makeExporter(raster, deflate);
-}
 
 export type Format = 'png' | 'svg' | 'pdf' | 'gif' | 'html';
+export type Exported = { bytes: Uint8Array; mime: string; ext: string };
+export type ExportJob = { fmt: Format; fontStyle: Pick<Style, 'f'> | null; art: Art; size: string; frames?: Art[] };
 /** 按格式出文件。frames 只在 GIF 时用 */
-export async function exportArt(fmt: Format, st: Style | null, a: Art, size: string, frames?: () => Art[] | Promise<Art[]>): Promise<{ bytes: Uint8Array; mime: string; ext: string }> {
-  const ex = await exporter(st, a.svg);
-  const sz = SIZES.find((x) => x.id === size);
-  const fit = (x: Art) => (sz && sz.w ? sized(x, sz.w, sz.h) : x);
-  const enc = new TextEncoder();
-  switch (fmt) {
-    case 'png': return { bytes: ex.png(fit(a), sz?.w ? 1 : 2), mime: 'image/png', ext: 'png' };
-    case 'svg': return { bytes: enc.encode(ex.svg(fit(a))), mime: 'image/svg+xml', ext: 'svg' };
-    case 'pdf': return { bytes: await ex.pdf(fit(a), sz?.id === 'a4' ? 1 : Math.min(3, 4000 / Math.max(a.w, a.h))), mime: 'application/pdf', ext: 'pdf' };
-    case 'html': return { bytes: enc.encode(ex.html([a], { title: a.title })), mime: 'text/html', ext: 'html' };
-    case 'gif': {
-      const fr = (frames ? await frames() : [a]).map(fit);
-      return { bytes: ex.gif(fr, { width: Math.min(fr[0].w, 800) }), mime: 'image/gif', ext: 'gif' };
-    }
-  }
+export async function exportArt(fmt: Format, st: Style | null, a: Art, size: string, frames?: () => Art[] | Promise<Art[]>): Promise<Exported> {
+  const job: ExportJob = { fmt, fontStyle: st ? { f: st.f } : null, art: a, size };
+  if (fmt === 'gif' && frames) job.frames = await frames();
+  const worker = new Worker(new URL('./export-worker.ts', import.meta.url), { type: 'module' });
+  return new Promise((resolve, reject) => {
+    const fail = (error: unknown) => { worker.terminate(); reject(error); };
+    worker.onmessage = ({ data }) => {
+      worker.terminate();
+      if (data.error) {
+        const error = new Error(data.error.message);
+        if (data.error.stack) error.stack = data.error.stack;
+        reject(error);
+      } else resolve(data.result);
+    };
+    worker.onerror = event => fail(new Error(event.message || 'Export renderer failed'));
+    worker.onmessageerror = () => fail(new Error('Unable to read export result'));
+    try { worker.postMessage(job); } catch (error) { fail(error); }
+  });
 }

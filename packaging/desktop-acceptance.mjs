@@ -15,7 +15,7 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
 async function request(method, route, body) {
   const response = await fetch(`http://127.0.0.1:4444${route}`, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(180000) });
   const result = await response.json();
-  if (!response.ok || result.value?.error) throw Error(JSON.stringify(result));
+  if (!response.ok || result.value?.error) throw Object.assign(Error(JSON.stringify(result)), { code: result.value?.error });
   return result.value;
 }
 const command = (method, route, body) => request(method, `/session/${session}${route}`, body);
@@ -34,8 +34,18 @@ async function element(selector) {
   return el['element-6066-11e4-a52e-4f735466cecf'];
 }
 async function click(selector) {
-  await until(async () => await js('return !!document.querySelector(arguments[0])', selector), selector);
-  await command('POST', `/element/${await element(selector)}/click`, {});
+  const deadline = Date.now() + 120000;
+  while (true) {
+    try {
+      await command('POST', `/element/${await element(selector)}/click`, {});
+      return;
+    } catch (error) {
+      // Project discovery can redraw the list between lookup and click. These
+      // WebDriver errors mean no click happened; reacquire the current element.
+      if (!['no such element', 'stale element reference', 'element not interactable'].includes(error.code) || Date.now() >= deadline) throw error;
+      await pause(500);
+    }
+  }
 }
 async function ready() {
   await until(() => js(`return !document.body.classList.contains('busy') && [...document.querySelectorAll('#board .art img')].some(i => i.complete && i.naturalWidth > 0)`), 'rendered project artwork');
@@ -66,14 +76,16 @@ try {
   const info = await command('POST', '/execute/async', { script: 'window.__TAURI__.core.invoke("app_info").then(arguments[arguments.length-1])', args: [] });
   writeFileSync(path.join(output, 'app-info.json'), JSON.stringify(info, null, 2));
   assert.equal(path.resolve(info.library), path.resolve(process.env.CREDITIA_HOME));
-  await click('#lang'); await ready();
-  if (await js('return document.documentElement.lang !== "en"')) { await click('#lang'); await ready(); }
+  await click('#gear');
+  await click('#sheet [data-lang="en"]'); await ready();
   assert.equal(await js('return document.documentElement.lang'), 'en');
+  await click('#sheet [data-act="close"]');
   record('switch language', 'English');
   await click('#project');
-  assert.equal(await js('return document.querySelector("#re").disabled'), false);
-  await click('#re');
-  await until(() => js('return !document.querySelector("#toast").hidden && document.querySelector("#toast .msg")?.textContent.startsWith("Updated")'), 'real re-analysis completes');
+  await click('#plist .item.on [data-more]');
+  assert.equal(await js('return document.querySelector("[data-r=re]").disabled'), false);
+  await click('.rowmenu [data-r="re"]');
+  await until(() => js('return document.querySelector("#pstat")?.textContent.startsWith("Updated") || (!document.querySelector("#toast").hidden && document.querySelector("#toast .msg")?.textContent.startsWith("Updated"))'), 'real re-analysis completes');
   await ready();
   record('re-analyze through installed app');
   if (await js('return !document.querySelector("#group").hidden')) {
@@ -93,9 +105,33 @@ try {
   await screenshot('roam');
   await click('#view [data-v="wall"]'); await ready();
   record('wall and roam views');
+  // Object URLs are revoked after the image loads. Observe the Blob while
+  // opening focus instead of trying to fetch a revoked preview URL later.
+  await js(`window.__acceptanceArtwork = new Map();
+    window.__acceptanceCreateURL = URL.createObjectURL;
+    URL.createObjectURL = function(blob) {
+      const url = window.__acceptanceCreateURL.call(this, blob);
+      if (blob.type === 'image/svg+xml') window.__acceptanceArtwork.set(url, blob);
+      return url;
+    };`);
   const tile = await element('#board .tile:not(.slot)');
   await command('POST', `/element/${tile}/value`, { text: '\uE007', value: ['\uE007'] });
-  await until(() => js('return !document.querySelector("#focus").hidden && !!document.querySelector("#focus .xp")'), 'enlarged artwork');
+  await until(() => js('const img = document.querySelector("#focus .art img"); return !document.querySelector("#focus").hidden && !!document.querySelector("#focus .xp") && img?.complete && img.naturalWidth > 0 && !document.querySelector("#focus .big.loading")'), 'enlarged artwork');
+  // Keep the focused SVG preview when a native rasterizer fails. Classic path
+  // artwork is unchanged; text styles have already been outlined for preview.
+  const artwork = await command('POST', '/execute/async', {
+    script: `const done = arguments[arguments.length - 1];
+      const blob = window.__acceptanceArtwork.get(document.querySelector('#focus .art img').src);
+      URL.createObjectURL = window.__acceptanceCreateURL;
+      delete window.__acceptanceCreateURL;
+      delete window.__acceptanceArtwork;
+      if (!blob) done({ failure: 'Focused SVG was not observed' });
+      else blob.text().then(svg => done({ svg }), e => done({ failure: String(e) }));`,
+    args: [],
+  });
+  assert(!artwork.failure, artwork.failure);
+  assert.match(artwork.svg, /<svg/);
+  writeFileSync(path.join(output, 'export-artwork.svg'), artwork.svg);
   for (const format of ['png', 'svg', 'pdf', 'html', 'gif']) {
     await click('#focus .xp');
     if (!(await js('return !!document.querySelector(arguments[0])', `#focus .fmts [data-f="${format}"]`))) {
@@ -105,7 +141,16 @@ try {
     }
     const before = new Set(files(info.exportDir));
     await click(`#focus .fmts [data-f="${format}"]`);
-    const file = await until(() => files(info.exportDir).find(f => !before.has(f) && f.endsWith('.' + format)), `${format} export`, 180000);
+    const outcome = await until(async () => {
+      const message = await js('return document.querySelector("#toast .msg")?.textContent ?? ""');
+      // Return a terminal failure to escape the polling helper; throwing here
+      // would be swallowed by until() and turn the real error into a timeout.
+      if (message.startsWith('Export failed:')) return { error: message };
+      const file = files(info.exportDir).find(f => !before.has(f) && f.endsWith('.' + format));
+      return file ? { file } : null;
+    }, `${format} export`, 180000);
+    assert(!outcome.error, `${format}: ${outcome.error}`);
+    const { file } = outcome;
     await until(() => js('return document.querySelector("#toast .msg")?.textContent.startsWith("Saved to")'), 'native save completes');
     const data = readFileSync(path.join(info.exportDir, file));
     assert(data.length > 100);

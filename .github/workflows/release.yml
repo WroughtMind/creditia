@@ -73,7 +73,7 @@ jobs:
       - name: Build installers
         if: matrix.bundles != ''
         working-directory: apps/desktop
-        run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+        run: npx tauri build --verbose --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
       - name: Verify macOS signatures
         if: runner.os == 'macOS'
         env:
@@ -83,7 +83,7 @@ jobs:
           mount="$RUNNER_TEMP/creditia-dmg"
           mkdir -p "$mount"
           hdiutil attach -readonly -nobrowse -mountpoint "$mount" apps/desktop/src-tauri/target/"$TARGET"/release/bundle/dmg/*.dmg
-          trap 'hdiutil detach "$mount"' EXIT
+          trap 'bash packaging/detach-dmg.sh "$mount"' EXIT
           codesign --verify --deep --strict "$mount/creditia.app"
           "$mount/creditia.app/Contents/MacOS/creditia-core" help
       - name: Collect installers
