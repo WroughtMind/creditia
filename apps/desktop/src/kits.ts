@@ -14,6 +14,7 @@ import { historyBasis, historyLabels } from '../../../packages/render/src/histor
 import { fontFiles, registerFonts, ready } from './fonts.ts';
 
 type Lang = 'zh' | 'en';
+type Preferences = { group: V.GroupOpt; named: boolean };
 export interface Tile { id: string; variant?: string; span?: number }
 export interface Kit {
   id: string;
@@ -25,7 +26,7 @@ export interface Kit {
   board: Tile[];
   /** raw 档案 → 这一套的模型（按语言缓存） */
   render(raw: any, lang: Lang, id: string, variant?: string): Promise<Art | null>;
-  frames?(raw: any, lang: Lang, id: string, variant?: string): Art[] | Promise<Art[]>;
+  frames?(raw: any, lang: Lang, id: string, variant?: string, preferences?: Preferences): Art[] | Promise<Art[]>;
   variants(id: string): string[];
   current(id: string, variant?: string): string | undefined;
   animated(id: string): boolean;
@@ -52,14 +53,6 @@ export function setNamed(v: boolean) { named = v; }
 export const groupOf = (raw: any) => V.resolveGroup(raw, group);
 /** 档案里有没有记下模型：一个都没有就不用给分组开关 */
 export const hasModels = (raw: any) => (raw?.contributors ?? []).some((c: any) => !!V.agentOf(raw, c.id)?.model);
-
-/** 同一份档案、同一种语言、同一种分组只建一次模型 */
-function memo<M>(build: (raw: any, lang: Lang) => M) {
-  let k: [any, Lang, V.GroupOpt, boolean] | null = null, v: M;
-  return (raw: any, lang: Lang) => { if (!k || k[0] !== raw || k[1] !== lang || k[2] !== group || k[3] !== named) { v = build(raw, lang); k = [raw, lang, group, named]; } return v; };
-}
-const classicModel = memo((raw, lang) => C.buildModel(raw, { director: false, lang, group, named }));
-const v2Model = memo((raw, lang) => V.buildModel(raw, { lang, named, sign: '', group }));
 
 const CLASSIC_BOARD: Tile[] = [
   { id: 'share', span: 2 }, { id: 'tier' }, { id: 'people' }, { id: 'roll' }, { id: 'receipt' }, { id: 'donut' },
@@ -101,9 +94,9 @@ function ask<T>(message: any): Promise<T> {
     try { w.postMessage(message); } catch (e) { rendering.delete(seq); if ('raw' in message) sentRaw = undefined; reject(e); }
   });
 }
-function renderAway(raw: any, style: string, lang: Lang, id: string, variant: string | undefined, classic: boolean, grouping = group): Promise<Art | null> {
+function renderAway(raw: any, style: string, lang: Lang, id: string, variant: string | undefined, classic: boolean, grouping = group, names = named): Promise<Art | null> {
   wakeRenderer();
-  const message: any = { style, lang, id, variant, group: grouping, named, classic };
+  const message: any = { style, lang, id, variant, group: grouping, named: names, classic };
   if (sentRaw !== raw) { message.raw = raw; sentRaw = raw; }
   return ask(message);
 }
@@ -124,16 +117,16 @@ const classicKits: Kit[] = ORDERED_THEMES.map((t) => ({
   board: CLASSIC_BOARD,
   // 原版没有的作品、追加的新风格版式按这个主题的颜色、字体、框线用新风格的画法画，先等字体
   render: async (raw, lang, id, variant) => {
-    const grouping = group;
+    const grouping = group, names = named;
     if (isBridged(id, variant)) await ready(bridgeStyle(t));
-    return renderAway(raw, t.id, lang, id, variant, true, grouping);
+    return renderAway(raw, t.id, lang, id, variant, true, grouping, names);
   },
-  frames: async (raw, lang, id, variant) => {
+  frames: async (raw, lang, id, variant, preferences = { group, named }) => {
     // 动图在主线程排；satori 很大，用到才载入、初始化
     const { prepare, frames } = await import('../../../packages/render/src/classic/browser.ts');
     prepare(fontFiles());
     if (isBridged(id, variant)) await ready(bridgeStyle(t));
-    return frames(id, classicModel(raw, lang), t, { lang, variant }, 24);
+    return frames(id, C.buildModel(raw, { director: false, lang, ...preferences }), t, { lang, variant }, 24);
   },
   variants: variantsOf,
   current: (id, variant) => variant ?? defaultVariant(id, t) ?? variantsOf(id)[0],
@@ -149,8 +142,8 @@ const v2Kits: Kit[] = STYLES.filter((s) => !SKIP.has(s.id)).map((s) => ({
   id: s.id, style: s, dot: s.dot(),
   name: (lang) => (lang === 'zh' ? s.name : s.en), note: (lang) => (lang === 'zh' ? s.note : s.noteEn),
   board: V2_BOARD,
-  render: async (raw, lang, id, variant) => { const grouping = group; await ready(s); return renderAway(raw, s.id, lang, id, variant, false, grouping); },
-  frames: (raw, lang, id, variant) => v2Frames(id, v2Model(raw, lang), s, { variant }, 24),
+  render: async (raw, lang, id, variant) => { const grouping = group, names = named; await ready(s); return renderAway(raw, s.id, lang, id, variant, false, grouping, names); },
+  frames: (raw, lang, id, variant, preferences = { group, named }) => v2Frames(id, V.buildModel(raw, { lang, sign: '', ...preferences }), s, { variant }, 24),
   variants: (id) => PIECES[id]?.variants ?? [],
   current: (id, variant) => variant ?? s.prefer[id] ?? PIECES[id]?.variants?.[0],
   animated: (id) => !!PIECES[id]?.animated,

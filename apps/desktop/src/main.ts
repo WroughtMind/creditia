@@ -265,10 +265,6 @@ async function boot() {
   // 滚动之后顶栏垫一层渐隐的玻璃，作品不再直接透到项目名和按钮后面
   const stageEl = $('#stage');
   stageEl.addEventListener('scroll', () => document.body.classList.toggle('scrolled', stageEl.scrollTop > 8), { passive: true });
-  try { state.projects = await api('projects'); } catch (e: any) { return empty(() => [L('无法读取本地项目记录', 'Cannot read local projects'), errText(e)], false, true); }
-  if (!state.projects.length) return welcome();
-  const last = (store.get('project') === ALL_ID && state.projects.length > 1 ? allProject() : null) ?? state.projects.find((p) => p.id === store.get('project')) ?? state.projects[0];
-  await openProject(last);
   let resizeFrame = 0, columnWidth = rcw(), viewportWidth = innerWidth, viewportHeight = innerHeight;
   addEventListener('resize', () => {
     cancelAnimationFrame(resizeFrame);
@@ -279,6 +275,10 @@ async function boot() {
       columnWidth = width; viewportWidth = innerWidth; viewportHeight = innerHeight;
     });
   });
+  try { state.projects = await api('projects'); } catch (e: any) { return empty(() => [L('无法读取本地项目记录', 'Cannot read local projects'), errText(e)], false, true); }
+  if (!state.projects.length) return welcome();
+  const last = (store.get('project') === ALL_ID && state.projects.length > 1 ? allProject() : null) ?? state.projects.find((p) => p.id === store.get('project')) ?? state.projects[0];
+  await openProject(last);
 }
 /** 空状态。传进来的是函数：换语言时按新语言重写一遍 */
 type EmptyView = () => [title: string, detail?: string, cmd?: string, act?: Act];
@@ -326,7 +326,9 @@ async function openProject(p: any) {
     return empty(() => [L('这个项目还没分析过', 'Not analyzed yet'), '', `cd ${p.path} && creditia analyze`, can ? { label: L('现在分析', 'Analyze now'), run: () => reanalyze(p) } : undefined], true);
   }
   if (seq !== state.openSeq) return; // 已经切到别的项目
-  stampOf = await st;
+  const stamp = await st;
+  if (seq !== state.openSeq) return;
+  stampOf = stamp;
   state.raw = raw;
   $('#empty').hidden = true; emptyView = null;
   setGroup(groupPref()); setNamed(namesOn());
@@ -537,21 +539,37 @@ async function paint() {
   applyView(); if (roam.ready) roamReset();
   // 在漫游里就不在背后画整面墙（排版线程只有一个，会和漫游抢），切回墙时再画
   wallStale = view() === 'roam';
-  if (wallStale) { board.innerHTML = ''; document.body.classList.remove('busy'); return; }
-  // 墙上已经有作品（换风格、换语言）：旧的先留着，新的在后台全部画好，再一次原地换上，整面墙只滑动一次；
-  // 一张一张换的话，每换一张后面的都要重排，墙会连着抽动十几次。空墙先摆占位，画好一张换掉一张。
-  const old = [...board.querySelectorAll('.tile:not(.slot)')] as HTMLElement[];
-  const batch = old.length > 0;
+  if (wallStale) { board.innerHTML = ''; board.inert = false; document.body.classList.remove('busy'); return; }
+  // 新风格先在独立容器里排占位。可视区完成就一次换墙，屏幕外继续填图。
+  const batch = board.querySelector('.tile:not(.slot)') !== null;
+  // 旧墙只作等待时的预览，不能拿新风格去操作仍显示的旧作品。
+  board.inert = batch;
   document.body.classList.toggle('busy', batch);
-  if (batch) board.querySelectorAll('.slot').forEach((g) => g.remove());
-  const slots = batch ? [] : slotWall();
-  const fresh: HTMLElement[] = [];
-  const keep = new Set<string>();
   const list = tiles();
-  // 空墙按占位离视口的远近排队：看得见的先画；换风格是整批换，按原来的顺序
+  const target = batch ? document.createElement('div') : board;
+  const slots = batch ? list.map((b) => target.appendChild(slotFor(b, curVariant(keyOf(b))))) : slotWall();
+  if (batch) layout(target);
+  const arts = new Map<string, Art>();
+  let published = !batch;
+  if (published) state.arts = arts;
   const sc = $('#stage').scrollTop, vh = innerHeight;
-  const far = (i: number) => { const g = slots[i]; if (!g) return i; const y = parseFloat(g.style.top) || 0, h = g.offsetHeight; return Math.max(0, y - (sc + vh), sc - y - h) * 1e3 + i; };
-  const order = list.map((_, i) => i).sort((a, b) => far(a) - far(b));
+  const distance = (i: number) => {
+    const g = slots[i], y = parseFloat(g.style.top) || 0;
+    const h = (parseFloat(g.style.width) || 0) * Number(g.dataset.h) / Number(g.dataset.w);
+    return Math.max(0, y - (sc + vh), sc - y - h);
+  };
+  const order = list.map((_, i) => i).sort((a, b) => distance(a) - distance(b) || a - b);
+  const visible = new Set(order.filter((i) => distance(i) === 0));
+  if (!visible.size && order.length) visible.add(order[0]);
+  const publish = () => {
+    if (published || visible.size) return;
+    state.arts = arts;
+    board.replaceChildren(...target.children);
+    board.style.width = target.style.width; board.style.height = target.style.height;
+    board.inert = false;
+    published = true;
+    loaded();
+  };
   let done = 0;
   ring(0);
   for (const i of order) {
@@ -565,12 +583,25 @@ async function paint() {
         a = await drawArt(b.id, variant);
         preview = a && token === state.token ? await st.preview(a) : null;
       } while (token === state.token && variant !== curVariant(k));
-    } catch (e) { console.error(b.id, e); }
+    } catch (e) {
+      if (token !== state.token) return;
+      console.error(b.id, e);
+      if (published) { board.querySelectorAll('.slot').forEach((g) => g.remove()); layout(); }
+      document.body.classList.remove('busy'); loading = null; markError(); syncStatus();
+      toast(L(`作品生成失败：${errText(e)}`, `Artwork could not be rendered: ${errText(e)}`), 0,
+        { acts: [{ label: L('重试', 'Retry'), run: () => void paint() }] });
+      return;
+    }
     if (token !== state.token) return;
     ring(++done / list.length);
-    if (!a || !preview) { slots[i]?.remove(); continue; }
+    visible.delete(i);
+    if (!a || !preview) {
+      slots[i]?.remove();
+      layout(published ? board : target); publish();
+      continue;
+    }
     dims[dimKey(b.id, variant)] = [a.w, a.h];
-    state.arts.set(k, a); keep.add(k);
+    arts.set(k, a);
     const tile = document.createElement('div');
     tile.className = 'tile';
     tileA11y(tile, b.id);
@@ -584,28 +615,17 @@ async function paint() {
     mountPreview(artEl, a, preview);
     mountRoamHits(artEl, a);
     wireTile(tile, b.id, k, vs);
-    if (batch) { fresh.push(tile); continue; }
     const g = slots[i];
     tile.style.left = g.style.left; tile.style.top = g.style.top; tile.style.width = g.style.width;
     tile.classList.add('placed');
     g.replaceWith(tile);
-    layout();
-    loaded();
+    if (!published || g.dataset.w !== tile.dataset.w || g.dataset.h !== tile.dataset.h || g.dataset.span !== tile.dataset.span) layout(published ? board : target);
+    publish();
+    if (published) loaded();
   }
   store.set('dims', JSON.stringify(dims));
-  for (const tile of fresh) {
-    const prev = old.shift();
-    if (prev) {
-      // 接着旧的那张的位置和宽度，淡入，再滑到自己的位置
-      tile.style.left = prev.style.left; tile.style.top = prev.style.top; tile.style.width = prev.style.width;
-      tile.classList.add('swap', 'placed');
-      prev.replaceWith(tile);
-    } else board.appendChild(tile);
-  }
-  old.forEach((t) => t.remove());
   if (batch) styleDone();
   document.body.classList.remove('busy');
-  for (const k of [...state.arts.keys()]) if (!keep.has(k)) state.arts.delete(k);
   layout();
   // 一张都没画出来也算读完，* 不能一直呼吸
   if (loading) { loading = null; syncStatus(); }
@@ -634,8 +654,7 @@ function tileHtml(id: string, vs: string[], cur?: string) {
 /** 瀑布流：先确定缩略图尺寸，再排能容纳的栏数；减栏时不能反过来放大作品。
  *  跨栏的作品会在矮的那栏下面留洞：它挑底下最平的几栏放；几栏高低差超过 40px 就先往后放别的（最多往后看 8 张），
  *  让单栏的作品把矮的那栏垫平再放它。一张跨栏的最多让 6 次，免得宽幅作品全沉到墙底 */
-function layout() {
-  const board = $('#board');
+function layout(board: HTMLElement = $('#board')) {
   const tiles = [...board.querySelectorAll('.tile')] as HTMLElement[];
   const available = Math.min(innerWidth - 120, 1680);
   const gap = 40;
@@ -798,13 +817,16 @@ function setSize(id: string) {
 
 /** 默认导出墙上这一张；放大视图里试别的风格时，把那一套和画好的图传进来 */
 async function doExport(fmtId: string, id: string, k: string, o: { kit?: Kit; art?: Art; variant?: string } = {}) {
+  if (!o.kit && view() === 'wall' && $('#board').inert) return;
   const kit = o.kit ?? state.style;
   const m = state.model!;
+  const raw = state.raw, lang = state.lang, size = state.size;
+  const preferences = { group: groupPref(), named: namesOn() };
   const variant = o.kit ? o.variant : curVariant(k);
   const base = `${m.project || 'credits'}-${id}${variant && variant !== 'original' ? '-' + variant : ''}-${kit.id}`;
   try {
     if (fmtId === 'md') {
-      const text = mergeCreditsMd(null, creditsBlock(buildText(state.raw, { lang: state.lang, group: groupPref(), named: namesOn() })));
+      const text = mergeCreditsMd(null, creditsBlock(buildText(raw, { lang, ...preferences })));
       try { await navigator.clipboard.writeText(text); return toast(L('CREDITS.md 区块已复制', 'CREDITS.md block copied')); }
       catch { return toast(L('没能写进剪贴板', 'Could not copy to the clipboard'), 8000, { acts: [{ label: L('存成文件', 'Save as a file'), run: () => saveBytes('CREDITS.md', new TextEncoder().encode(text), 'text/markdown').catch((e) => toast(errText(e), 5000)) }] }); }
     }
@@ -812,8 +834,8 @@ async function doExport(fmtId: string, id: string, k: string, o: { kit?: Kit; ar
     const a = o.art ?? await drawArt(id, variant, kit);
     if (!a) throw new Error(L('当前档案无法生成这个版式', 'This layout is unavailable for the current project'));
     await new Promise((r) => setTimeout(r, 30));
-    const out = await exportArt(fmtId as Format, kit.style, a, state.size, kit.frames ? () => kit.frames!(state.raw, state.lang, id, variant) : undefined);
-    const sz = state.size !== 'native' && fmtId !== 'html' ? `-${state.size}` : '';
+    const out = await exportArt(fmtId as Format, kit.style, a, size, kit.frames ? () => kit.frames!(raw, lang, id, variant, preferences) : undefined);
+    const sz = size !== 'native' && fmtId !== 'html' ? `-${size}` : '';
     await saveBytes(`${base}${sz}.${out.ext}`, out.bytes, out.mime);
   } catch (e: any) { console.error(e); toast(L(`导出失败：${errText(e)}`, `Export failed: ${errText(e)}`), 5000); }
 }
@@ -1405,6 +1427,7 @@ function exportHere() {
   const fb = document.querySelector<HTMLElement>('#focus:not([hidden]) [data-act="export"]');
   if (fb) return fb.click();
   const tile = document.querySelector<HTMLElement>('#board .tile:not(.slot):focus, #board .tile:not(.slot):hover, #roam .rt:hover');
+  if (tile?.closest('[inert]')) return;
   tile?.querySelector<HTMLElement>('.bar [data-act="export"]')?.click();
 }
 let menuKeys = false;
@@ -1619,28 +1642,39 @@ async function withProgress<T>(name: string, run: () => Promise<T>, o: { auto?: 
 }
 async function reanalyze(p: any, auto = false) {
   // 没有墙可看（空状态里点「现在分析」）：空状态让开，* 到中间
-  const blocking = !auto && !painted();
+  const seq = state.openSeq;
+  const current = () => seq === state.openSeq && state.current?.id === p.id;
+  const blocking = !auto && current() && !painted();
   const wasEmpty = blocking && !$('#empty').hidden && emptyView;
   if (wasEmpty) $('#empty').hidden = true;
   try {
     const v: any = await withProgress(p.name, () => api('analyze', { projectId: p.id, lang: state.lang }), { auto, blocking });
     state.projects = await api('projects');
     const fresh = state.projects.find((x) => x.id === p.id) ?? p;
-    // 正看着这个项目：原地换，不清空墙
-    if (state.current?.id === p.id && state.raw) {
-      const st = readStamp(fresh);
-      const raw = await api('credits', { projectId: p.id });
-      state.current = fresh; stampOf = await st;
-      await swapRaw(raw);
-    } else await openProject(fresh);
+    // 分析归属于启动时的项目，用户切走后不改变当前视图。
+    if (current()) {
+      if (state.raw) {
+        const st = readStamp(fresh);
+        const raw = await api('credits', { projectId: p.id });
+        const stamp = await st;
+        if (current()) {
+          state.current = fresh; stampOf = stamp;
+          await swapRaw(raw);
+        }
+      } else await openProject(fresh);
+    }
+    if (auto && !current()) return;
     const n = Number(v?.newCommits) || 0;
     if (auto) flash(n ? L(`已跟上 ${n} 个新提交`, `Caught up with ${n} new commit${n > 1 ? 's' : ''}`) : L('已更新', 'Updated'));
-    else done(L('已更新', 'Updated'), v?.warnings);
+    else done(current() ? L('已更新', 'Updated') : L(`${p.name} 已更新`, `${p.name} updated`), v?.warnings);
   } catch (e: any) {
-    if (wasEmpty && !state.raw) empty(wasEmpty, true, emptyErr);
-    if (e?.code === 'cancelled') return flash(errText(e));
+    if (auto && !current()) return;
+    if (current() && wasEmpty && !state.raw) empty(wasEmpty, true, emptyErr);
+    const message = current() ? errText(e) : `${p.name}: ${errText(e)}`;
+    if (e?.code === 'cancelled') return flash(message);
     if (auto && e?.code === 'busy') return;
-    markError(); toast(errText(e), 6000);
+    if (current()) markError();
+    toast(message, 6000);
   }
 }
 async function addProject() {
@@ -1923,7 +1957,14 @@ async function settings(tab: Tab = settingsTab) {
     Object.assign(SOURCES, { 'kiro-kas-v3': ['Kiro CLI（V3 会话）', 'Kiro CLI (V3 sessions)'], 'kiro-cli-v2': ['Kiro CLI（V2 会话）', 'Kiro CLI (V2 sessions)'] });
     Object.assign(SOURCES, { 'trae-native': ['TRAE（编辑器历史）', 'TRAE (editor history)'] });
     const sourceName = (id: string) => id.endsWith('-acp') ? `${nameOf(id.slice(0, -4), state.lang)} ${L('采集', 'capture')}` : (SOURCES[id] ? L(...SOURCES[id]) : nameOf(id.replace(/-cli$/, ''), state.lang));
-    const doc = await api('doctor').catch(() => []);
+    let doc: any[];
+    try { doc = await api('doctor'); }
+    catch (e) {
+      const box = sec.querySelector('#doc'); if (!box || !live()) return;
+      box.innerHTML = `<p>${esc(L('检查数据源失败', 'Could not check data sources'))}：${esc(errText(e))}</p><button class="mini">${L('重试', 'Retry')}</button>`;
+      box.querySelector('button')!.onclick = () => void settings('data');
+      return;
+    }
     const detail = (d: any) => d.scope === 'sessions' && d.ok ? L('仅会话信息', 'Session information only')
       : d.scope === 'capture' && !d.ok ? L('需开启采集', 'Capture required')
       : d.unsupported ? L('编辑格式待接', 'Edit format unconfirmed')

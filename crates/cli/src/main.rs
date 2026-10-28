@@ -498,7 +498,7 @@ fn cmd_init(a: &Args) -> R<(Value, Vec<String>)> {
 
 fn cmd_analyze(a: &Args) -> R<(Value, Vec<String>)> {
     let repo = a.repo()?;
-    let invoked = std::env::current_dir().ok().and_then(|p| p.canonicalize().ok());
+    let invoked = a.flags.get("repo").map(PathBuf::from).or_else(|| std::env::current_dir().ok()).and_then(|p| p.canonicalize().ok());
     let opts = analyze::Opts { fresh: a.on("fresh"), github: a.on("github"), out: a.flags.get("out").map(PathBuf::from), blame: None, config: a.flags.get("config").map(PathBuf::from), level: a.flags.get("level").cloned(), invoked };
     let r = analyze::run(&repo, &opts)?;
     let summary = tr!(

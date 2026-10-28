@@ -44,7 +44,7 @@ pub(super) fn read_rollout(path: &Path) -> Result<String, String> {
 }
 
 pub(super) fn all(warnings: &mut Vec<String>) -> Vec<(Thread, Option<PathBuf>)> {
-    let mut selected: BTreeMap<String, (Thread, Option<PathBuf>)> = BTreeMap::new();
+    let mut selected: BTreeMap<String, (Thread, Option<PathBuf>, bool, bool)> = BTreeMap::new();
     for base in roots() {
         let files = rollout_files(&base);
         let mut indexed = HashSet::new();
@@ -61,7 +61,7 @@ pub(super) fn all(warnings: &mut Vec<String>) -> Vec<(Thread, Option<PathBuf>)> 
                         if file.is_some() {
                             indexed.insert(name);
                         }
-                        rows.push((thread, file));
+                        rows.push((thread, file, true));
                     }
                 }
                 Err(e) => warnings.push(e),
@@ -76,26 +76,48 @@ pub(super) fn all(warnings: &mut Vec<String>) -> Vec<(Thread, Option<PathBuf>)> 
         orphaned.sort_by_key(|(name, _)| *name);
         for (_, path) in orphaned {
             if let Some(t) = header(path, warnings) {
-                rows.push((t, Some(path.clone())));
+                rows.push((t, Some(path.clone()), false));
             }
         }
-        for (thread, file) in rows {
-            let quality = |t: &Thread, p: &Option<PathBuf>| {
+        let referenced: HashSet<_> = rows
+            .iter()
+            .filter_map(|(t, _, _)| t.base.as_ref().map(|base| (t.id.clone(), base.clone())))
+            .collect();
+        for (thread, file, indexed) in rows {
+            let name = Path::new(&thread.rollout)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy();
+            let leaf = !referenced.iter().any(|(owner, id)| {
+                owner == &thread.id
+                    && (name
+                        .trim_end_matches(".zst")
+                        .ends_with(&format!("-{id}.jsonl"))
+                        || name
+                            .trim_end_matches(".zst")
+                            .ends_with(&format!("_{id}.jsonl")))
+            });
+            let quality = |t: &Thread, p: &Option<PathBuf>, indexed: bool, leaf: bool| {
                 (
                     p.is_some(),
+                    indexed,
+                    leaf,
                     t.end,
                     p.as_ref().map(|p| fingerprint(p).1).unwrap_or(0),
                 )
             };
             if selected
                 .get(&thread.id)
-                .is_none_or(|(old, old_file)| quality(&thread, &file) > quality(old, old_file))
+                .is_none_or(|(old, old_file, old_indexed, old_leaf)| {
+                    quality(&thread, &file, indexed, leaf)
+                        > quality(old, old_file, *old_indexed, *old_leaf)
+                })
             {
-                selected.insert(thread.id.clone(), (thread, file));
+                selected.insert(thread.id.clone(), (thread, file, indexed, leaf));
             }
         }
     }
-    selected.into_values().collect()
+    selected.into_values().map(|(t, f, _, _)| (t, f)).collect()
 }
 fn header(path: &Path, warnings: &mut Vec<String>) -> Option<Thread> {
     let data = match read_rollout(path) {
@@ -117,13 +139,6 @@ fn header(path: &Path, warnings: &mut Vec<String>) -> Option<Thread> {
     {
         return None; // a cross-agent conversion is not proof that Codex ran it
     }
-    if !m["history_base"].is_null() {
-        warnings.push(format!(
-            "codex: {}: paginated inherited rollout requires its materialized history",
-            path.display()
-        ));
-        return None;
-    }
     let start = m["timestamp"]
         .as_str()
         .or(first["timestamp"].as_str())
@@ -138,6 +153,7 @@ fn header(path: &Path, warnings: &mut Vec<String>) -> Option<Thread> {
         branch: m["git"]["branch"].as_str().map(String::from),
         cwd: cwd.into(),
         origin: m["git"]["repository_url"].as_str().unwrap_or("").into(),
+        base: m["history_base"]["thread_id"].as_str().map(String::from),
     };
     for line in lines {
         let Ok(row) = serde_json::from_str::<Value>(line) else {
@@ -163,7 +179,7 @@ fn header(path: &Path, warnings: &mut Vec<String>) -> Option<Thread> {
     Some(t)
 }
 
-pub(super) type PatchCalls = HashMap<String, (String, String, i64)>;
+pub(super) type PatchCalls = HashMap<String, (String, String, i64, String)>;
 
 /// A launch error (including macOS refusing a symlinked writable root) is not
 /// a successful command merely because it contains no numeric exit code.
@@ -300,10 +316,10 @@ pub(super) fn patch_receipt(
                 .as_ref()
                 .and_then(|p| p["patch"].as_str())
                 .unwrap_or(args);
-            calls.insert(id.into(), (patch.into(), model.into(), ts));
+            calls.insert(id.into(), (patch.into(), model.into(), ts, t.cwd.clone()));
         }
         Some("custom_tool_call_output" | "function_call_output") => {
-            let Some((patch, model, at)) = calls.remove(id) else {
+            let Some((patch, model, at, workdir)) = calls.remove(id) else {
                 return;
             };
             let raw = &p["output"];
@@ -346,7 +362,7 @@ pub(super) fn patch_receipt(
                     crate::push_text(
                         &mut g.evs,
                         pm,
-                        &target(&path, &t.cwd),
+                        &target(&path, &workdir),
                         &body,
                         Src::Codex,
                         &model,
@@ -387,6 +403,7 @@ mod tests {
             branch: None,
             cwd: workdir,
             origin: String::new(),
+            base: None,
         };
         let count = |it: &Value| {
             let mut g = FileGroup::default();

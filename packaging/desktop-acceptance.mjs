@@ -66,14 +66,16 @@ try {
   const info = await command('POST', '/execute/async', { script: 'window.__TAURI__.core.invoke("app_info").then(arguments[arguments.length-1])', args: [] });
   writeFileSync(path.join(output, 'app-info.json'), JSON.stringify(info, null, 2));
   assert.equal(path.resolve(info.library), path.resolve(process.env.CREDITIA_HOME));
-  await click('#lang'); await ready();
-  if (await js('return document.documentElement.lang !== "en"')) { await click('#lang'); await ready(); }
+  await click('#gear');
+  await click('#sheet [data-lang="en"]'); await ready();
   assert.equal(await js('return document.documentElement.lang'), 'en');
+  await click('#sheet [data-act="close"]');
   record('switch language', 'English');
   await click('#project');
-  assert.equal(await js('return document.querySelector("#re").disabled'), false);
-  await click('#re');
-  await until(() => js('return !document.querySelector("#toast").hidden && document.querySelector("#toast .msg")?.textContent.startsWith("Updated")'), 'real re-analysis completes');
+  await click('#plist .item.on [data-more]');
+  assert.equal(await js('return document.querySelector("[data-r=re]").disabled'), false);
+  await click('.rowmenu [data-r="re"]');
+  await until(() => js('return document.querySelector("#pstat")?.textContent.startsWith("Updated") || (!document.querySelector("#toast").hidden && document.querySelector("#toast .msg")?.textContent.startsWith("Updated"))'), 'real re-analysis completes');
   await ready();
   record('re-analyze through installed app');
   if (await js('return !document.querySelector("#group").hidden')) {

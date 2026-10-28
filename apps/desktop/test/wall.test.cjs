@@ -6,7 +6,7 @@ const ts = require('typescript');
 
 // Exercise the shipped layout with wide, tall, square and small artwork.
 const main = fs.readFileSync(require.resolve('../src/main.ts'), 'utf8');
-const code = ts.transpile(main.slice(main.indexOf('function layout()'), main.indexOf('function wireTile(')), { target: ts.ScriptTarget.ES2022 });
+const code = ts.transpile(main.slice(main.indexOf('function layout('), main.indexOf('function wireTile(')), { target: ts.ScriptTarget.ES2022 });
 function wall() {
   const tiles = [
     [1200, 630, 2], [960, 1300], [900, 1800], [460, 1000], [800, 800],

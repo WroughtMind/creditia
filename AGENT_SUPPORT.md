@@ -29,7 +29,7 @@
 | CodeBuddy | `codebuddy` | 原生编辑 | `.codebuddy/skills` |
 | Codemaker | `codemaker` | 官方 CodeMaker AI CLI 1.6.0 已实测，因无 API key 停在认证；Y3 移植版产品对应和落盘回执仍未确认 | `.codemaker/skills` |
 | Code Studio | `codestudio` | 原生已接受编辑时间线与文本快照；逐请求模型 | `.codestudio/skills` |
-| Codex | `codex` | 已有读取 | `.agents/skills` |
+| Codex | `codex` | 原生成功执行；分段历史读取已有受控回归，真实分段样本仍待验收，见[本轮记录](docs/2026-10-28-issue-110-114-115.md) | `.agents/skills` |
 | Command Code | `command-code` | 原生编辑 | `.commandcode/skills` |
 | Continue | `continue` | 已有读取 | `.continue/skills` |
 | Cortex Code | `cortex` | 原生编辑 + ACP | `.cortex/skills` |

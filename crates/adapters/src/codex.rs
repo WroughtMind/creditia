@@ -7,7 +7,9 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 mod histories;
+mod segments;
 
+#[derive(Clone)]
 struct Thread {
     id: String,
     rollout: String,
@@ -18,6 +20,7 @@ struct Thread {
     branch: Option<String>,
     cwd: String,
     origin: String,
+    base: Option<String>,
 }
 
 fn threads(base: &Path) -> Result<Vec<Thread>, String> {
@@ -43,6 +46,7 @@ fn threads(base: &Path) -> Result<Vec<Thread>, String> {
                 branch: r.get(6)?,
                 cwd: r.get(7)?,
                 origin: r.get(8)?,
+                base: None,
             })
         })
         .map_err(|e| e.to_string())?
@@ -57,7 +61,7 @@ fn rollout_files(base: &Path) -> HashMap<String, PathBuf> {
     for dir in ["sessions", "archived_sessions"] {
         for e in walkdir::WalkDir::new(base.join(dir)).into_iter().flatten() {
             let name = e.file_name().to_string_lossy().replace(".zst", "");
-            if name.ends_with(".jsonl") {
+            if e.file_type().is_file() && name.ends_with(".jsonl") {
                 files.insert(name, e.path().to_path_buf());
             }
         }
@@ -79,7 +83,17 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         let file = file.as_ref();
         let reviewer = t.model == "codex-auto-review";
         let gk = format!("codex:rollout-v4:{}", t.id);
-        let fp = file.map(|f| fingerprint(f)).unwrap_or((0, 0));
+        let (data, fp) = if let Some(f) = file {
+            match segments::snapshot(f, &t.id) {
+                Ok((data, fp)) => (Some(data), fp),
+                Err(e) => {
+                    st.warnings.push(format!("codex: {}: {e}", f.display()));
+                    continue;
+                }
+            }
+        } else {
+            (None, (0, 0))
+        };
         if file.is_some() {
             found += 1
         } else {
@@ -94,21 +108,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         };
         let mut prompts = 0;
         let mut provider: Option<String> = None;
-        if let Some(f) = file {
-            let data = match histories::read_rollout(f) {
-                Ok(data) => data,
-                Err(e) => {
-                    st.warnings.push(format!("codex: {}: {e}", f.display()));
-                    continue;
-                }
-            };
-            if fingerprint(f) != fp {
-                st.warnings.push(format!(
-                    "codex: {}: rollout changed while reading",
-                    f.display()
-                ));
-                continue;
-            }
+        if let Some(data) = data {
             if data
                 .lines()
                 .find(|line| !line.trim().is_empty())
@@ -117,6 +117,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
             {
                 g.reconciled_sessions.push((Src::Codex, t.id.clone()));
             }
+            let mut execution = t.clone();
             let mut cur_model = t.model.clone();
             let mut shells: Vec<(String, String, String, String, i64)> = vec![];
             let mut patches = HashMap::new();
@@ -135,6 +136,15 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
                             .as_str()
                             .filter(|p| !p.is_empty())
                             .map(String::from);
+                    }
+                }
+                if line.contains("\"session_meta\"") {
+                    if let Ok(row) = serde_json::from_str::<Value>(line) {
+                        if row["type"] == "session_meta" && row["payload"]["id"] == t.id {
+                            if let Some(cwd) = row["payload"]["cwd"].as_str() {
+                                execution.cwd = cwd.into();
+                            }
+                        }
                     }
                 }
                 let is_ctx = line.contains("\"turn_context\"");
@@ -169,9 +179,9 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
                 if p["type"] == "patch_apply_end" {
                     patches.remove(p["call_id"].as_str().unwrap_or(""));
                 }
-                histories::patch_receipt(p, &mut patches, &mut g, pm, &t, &cur_model, ts);
+                histories::patch_receipt(p, &mut patches, &mut g, pm, &execution, &cur_model, ts);
                 if p["type"] == "item_completed" {
-                    histories::command_patch(&p["item"], &mut g, pm, &t, &cur_model, ts);
+                    histories::command_patch(&p["item"], &mut g, pm, &execution, &cur_model, ts);
                 }
                 // shell 调用：命令原文（heredoc、脚本里的新文本）作为它提到的文件的候选证据；退出码非 0 的不算
                 if is_call {
@@ -181,7 +191,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
                         .unwrap_or(t.start);
                     match p["type"].as_str() {
                         Some("function_call") | Some("local_shell_call") => {
-                            if let Some((cmd, wd)) = shell_call(p, &t.cwd) {
+                            if let Some((cmd, wd)) = shell_call(p, &execution.cwd) {
                                 let id = p["call_id"].as_str().unwrap_or("").to_string();
                                 command_ids.insert(id.clone());
                                 shells.push((id, cmd, wd, cur_model.clone(), ts));
@@ -193,9 +203,8 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
                                     if let Some(sid) = args["session_id"].as_u64() {
                                         if let Some(origin) = running.get(&sid) {
                                             if args["chars"].as_str().is_none_or(str::is_empty) {
-                                                if let Some(id) = p["call_id"]
-                                                    .as_str()
-                                                    .filter(|s| !s.is_empty())
+                                                if let Some(id) =
+                                                    p["call_id"].as_str().filter(|s| !s.is_empty())
                                                 {
                                                     polls.insert(id.into(), (sid, origin.clone()));
                                                 }
@@ -256,8 +265,10 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
                 };
                 if let Some(ch) = changes.as_object() {
                     for (path, v) in ch {
-                        let target =
-                            histories::target(v["move_path"].as_str().unwrap_or(path), &t.cwd);
+                        let target = histories::target(
+                            v["move_path"].as_str().unwrap_or(path),
+                            &execution.cwd,
+                        );
                         match v["type"].as_str() {
                             Some("add") => {
                                 crate::push_text(
