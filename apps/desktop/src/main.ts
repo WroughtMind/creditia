@@ -1511,6 +1511,7 @@ function toggleMenu() {
     <div class="foot"><button id="add" ${analyzing ? 'disabled' : ''}>${icon('addFolder')}${L('添加文件夹…', 'Add folder…')}<kbd>${MOD}O</kbd></button></div>`;
   const day = (t: number) => new Date(t * 1000).toLocaleDateString(state.lang === 'zh' ? 'zh-CN' : 'en-US');
   const more = (id: string) => `<button class="more" data-more="${esc(id)}" aria-haspopup="menu" aria-expanded="false" aria-label="${L('更多', 'More')}" title="${L('更多', 'More')}">${icon('more')}</button>`;
+  const renderedRows = new WeakMap<HTMLElement, string>();
   const draw = () => {
     const q = ($('#q') as HTMLInputElement).value.trim().toLowerCase();
     const hit = (s: string) => !q || s.toLowerCase().includes(q);
@@ -1527,8 +1528,32 @@ function toggleMenu() {
         ${markEl(UNREAD)}<b>${esc(d.name)}</b><span class="r">${esc(toolsOf(d))}</span>
         <span class="path" title="${esc(d.path)}">${esc(short(d.path))}</span>
       </div>`).join('');
-    $('#plist').innerHTML = all + mine + (fresh ? `<div class="sec">${L('还没添加', 'Not added yet')}</div>${fresh}` : '')
+    const html = all + mine + (fresh ? `<div class="sec">${L('还没添加', 'Not added yet')}</div>${fresh}` : '')
       || `<div class="item"><span>${L('没有匹配的项目', 'No match')}</span></div>`;
+    // 后台发现项目或补齐标记时保留原行与按钮。整表替换会让正在
+    // 激活的原生控件失效，也会丢掉已打开的“更多”按钮状态。
+    const list = $('#plist'), template = document.createElement('template');
+    template.innerHTML = html;
+    const key = (row: HTMLElement) => row.dataset.id ? `id:${row.dataset.id}` : row.dataset.path ? `path:${row.dataset.path}` : undefined;
+    const previous = new Map([...list.children].map(row => [key(row as HTMLElement), row as HTMLElement]));
+    const next = [...template.content.children] as HTMLElement[];
+    next.forEach((row, i) => {
+      const id = key(row), old = id ? previous.get(id) : undefined, markup = row.outerHTML;
+      if (old) {
+        if (renderedRows.get(old) !== markup) {
+          const button = old.querySelector('[data-more]'), replacement = row.querySelector('[data-more]');
+          if (button && replacement) replacement.replaceWith(button);
+          const selected = old.classList.contains('kb');
+          old.className = row.className; old.classList.toggle('kb', selected);
+          old.setAttribute('aria-selected', row.getAttribute('aria-selected') ?? 'false');
+          old.replaceChildren(...row.childNodes);
+        }
+        row = old;
+      }
+      renderedRows.set(row, markup);
+      if (list.children[i] !== row) list.insertBefore(row, list.children[i] ?? null);
+    });
+    while (list.children.length > next.length) list.lastElementChild!.remove();
   };
   // ↑ ↓ 选，回车打开（没选就开第一个）
   let kb = -1;
@@ -1538,7 +1563,7 @@ function toggleMenu() {
   if (!demo && found === null) void discover().then(() => { if (!menu.hidden) draw(); });
   void fillMarks(() => { if (!menu.hidden) draw(); });
   const q = $('#q') as HTMLInputElement;
-  q.oninput = () => { kb = -1; closeRowMenu(); draw(); };
+  q.oninput = () => { kb = -1; closeRowMenu(); draw(); markKb(); };
   q.onkeydown = (e) => {
     const n = items().length;
     if (e.key === 'ArrowDown' && n) { kb = (kb + 1) % n; markKb(); e.preventDefault(); }
