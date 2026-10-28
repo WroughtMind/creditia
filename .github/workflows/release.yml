@@ -73,7 +73,7 @@ jobs:
       - name: Build installers
         if: matrix.bundles != ''
         working-directory: apps/desktop
-        run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+        run: npx tauri build --verbose --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
       - name: Verify macOS signatures
         if: runner.os == 'macOS'
         env:
