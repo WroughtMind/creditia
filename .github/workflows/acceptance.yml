@@ -83,7 +83,8 @@ jobs:
             export CREDITIA_HOME="$EVIDENCE/library"
             unset CREDITIA_CORE
             if [[ "$kind" == deb ]]; then export APP="$app"; else export APP="$image/AppRun"; fi
-            dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" bash -c '
+            # D-Bus activated desktop services must inherit DISPLAY and XAUTHORITY.
+            xvfb-run -a -s "-screen 0 1920x1080x24" dbus-run-session -- bash -c '
               set -euo pipefail
               openbox >"$EVIDENCE/window-manager.log" 2>&1 &
               "$APP" >"$EVIDENCE/app.log" 2>&1 & pid=$!
@@ -149,7 +150,8 @@ jobs:
             else
               export APP=$(realpath candidate/*.AppImage)
             fi
-            dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" bash -c '
+            # D-Bus activated desktop services must inherit DISPLAY and XAUTHORITY.
+            xvfb-run -a -s "-screen 0 1920x1080x24" dbus-run-session -- bash -c '
               set -euo pipefail
               openbox >/tmp/creditia-ui-openbox.log 2>&1 &
               node packaging/desktop-acceptance.mjs "$APP" "$EVIDENCE"
