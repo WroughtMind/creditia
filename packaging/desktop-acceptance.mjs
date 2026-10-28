@@ -15,7 +15,7 @@ const pause = ms => new Promise(r => setTimeout(r, ms));
 async function request(method, route, body) {
   const response = await fetch(`http://127.0.0.1:4444${route}`, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(180000) });
   const result = await response.json();
-  if (!response.ok || result.value?.error) throw Error(JSON.stringify(result));
+  if (!response.ok || result.value?.error) throw Object.assign(Error(JSON.stringify(result)), { code: result.value?.error });
   return result.value;
 }
 const command = (method, route, body) => request(method, `/session/${session}${route}`, body);
@@ -34,8 +34,18 @@ async function element(selector) {
   return el['element-6066-11e4-a52e-4f735466cecf'];
 }
 async function click(selector) {
-  await until(async () => await js('return !!document.querySelector(arguments[0])', selector), selector);
-  await command('POST', `/element/${await element(selector)}/click`, {});
+  const deadline = Date.now() + 120000;
+  while (true) {
+    try {
+      await command('POST', `/element/${await element(selector)}/click`, {});
+      return;
+    } catch (error) {
+      // Project discovery can redraw the list between lookup and click. These
+      // WebDriver errors mean no click happened; reacquire the current element.
+      if (!['no such element', 'stale element reference', 'element not interactable'].includes(error.code) || Date.now() >= deadline) throw error;
+      await pause(500);
+    }
+  }
 }
 async function ready() {
   await until(() => js(`return !document.body.classList.contains('busy') && [...document.querySelectorAll('#board .art img')].some(i => i.complete && i.naturalWidth > 0)`), 'rendered project artwork');

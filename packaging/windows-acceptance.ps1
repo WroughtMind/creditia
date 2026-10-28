@@ -58,15 +58,18 @@ function Wait-Text([string]$pattern) {
 }
 $p = Start-Process -FilePath $App -PassThru
 try {
-  $null = Wait-Control '切换到英文'
-  Click-Control '切换到英文'
-  $null = Wait-Control 'Switch to Chinese'
+  Click-Control '设置'
+  Click-Control 'English'
+  $null = Wait-Control 'General'
+  Click-Control 'Close'
+  $null = Wait-Control 'creditia · Share card'
   Record 'language switched to English'
   Click-Control 'By model'
   Click-Control 'By tool'
   Record 'model and tool grouping'
   Click-Control 'Switch project'
-  Click-Control 'Re-analyze'
+  Click-Control 'More'
+  Click-Control (Wait-Text '^Re-analyze')
   $updated = Wait-Text '^Updated'
   Record 'native re-analysis completed' $updated
   $previousArt = (Wait-Control 'creditia · Share card').GetRuntimeId() -join ','
@@ -93,7 +96,7 @@ try {
   if (-not $p.CloseMainWindow()) { throw 'Could not close candidate window normally' }
   if (-not $p.WaitForExit(15000)) { throw 'Candidate did not exit after close' }
   $p = Start-Process -FilePath $App -PassThru
-  $null = Wait-Control 'Switch to Chinese'
+  $null = Wait-Control 'Settings'
   $null = Wait-Control 'Minimal Dark'
   $null = Wait-Text 'creditia.*Share card'
   Record 'restart restores language, style and rendered project'
