@@ -15,9 +15,15 @@ function Find-Control([string]$name) {
   $matches = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,$condition)
   return $matches | Where-Object { -not $_.Current.IsOffscreen } | Select-Object -First 1
 }
-function Wait-Control([string]$name) {
+function Wait-Control([string]$name, [switch]$Enabled) {
   $until = [DateTime]::UtcNow.AddSeconds(90)
-  do { $el = Find-Control $name; if ($null -ne $el) { return $el }; Start-Sleep -Milliseconds 500 } while ([DateTime]::UtcNow -lt $until)
+  do {
+    try {
+      $el = Find-Control $name
+      if ($null -ne $el -and (-not $Enabled -or $el.Current.IsEnabled)) { return $el }
+    } catch [System.Windows.Automation.ElementNotAvailableException] { }
+    Start-Sleep -Milliseconds 500
+  } while ([DateTime]::UtcNow -lt $until)
   throw "No native control: $name"
 }
 # The style label updates before paint() replaces the old artwork and its menus.
@@ -34,8 +40,7 @@ function Wait-ReplacedControl([string]$name, [string]$previousId) {
   throw "Native artwork was not replaced: $name"
 }
 function Click-Control([string]$name) {
-  $el = Wait-Control $name
-  if (-not $el.Current.IsEnabled) { throw "Disabled native control: $name" }
+  $el = Wait-Control $name -Enabled
   Write-Host "Activating native control: $name"
   $pattern = $null
   if ($el.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern,[ref]$pattern)) { $pattern.Invoke(); return }
