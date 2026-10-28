@@ -1485,7 +1485,8 @@ async function installMenu() {
 // ───────────────────────── 项目切换 ─────────────────────────
 /** 菜单里还没有 * 的项目：在后台一个个读档案，算出来就换上 */
 let filling = false;
-async function fillMarks(redraw: () => void) {
+let redrawMenu: (() => void) | undefined;
+async function fillMarks() {
   if (filling) return;
   filling = true;
   try {
@@ -1493,11 +1494,11 @@ async function fillMarks(redraw: () => void) {
       if (markOf(p.id) || !p.lastAnalyzed || p.exists === false) continue;
       const raw = await api('credits', { projectId: p.id }).catch(() => null);
       if (!raw) continue;
-      try { store.set('mark.' + p.id, JSON.stringify(petalsOf(buildModel(raw, { director: false, lang: state.lang, group: 'tool' })))); redraw(); } catch { /* 读不了的档案就留着淡的 * */ }
+      try { store.set('mark.' + p.id, JSON.stringify(petalsOf(buildModel(raw, { director: false, lang: state.lang, group: 'tool' })))); redrawMenu?.(); } catch { /* 读不了的档案就留着淡的 * */ }
     }
   } finally { filling = false; }
 }
-function closeMenu() { $('#menu').hidden = true; $('#project').setAttribute('aria-expanded', 'false'); }
+function closeMenu() { $('#menu').hidden = true; $('#project').setAttribute('aria-expanded', 'false'); redrawMenu = undefined; }
 /** 项目菜单只管挑项目：搜索、全部项目、各项目（右边「…」是这个项目能做的事）、还没添加的；底下只有添加文件夹 */
 function toggleMenu() {
   const menu = $('#menu'), pill = $('#project');
@@ -1533,6 +1534,8 @@ function toggleMenu() {
     // 后台发现项目或补齐标记时保留原行与按钮。整表替换会让正在
     // 激活的原生控件失效，也会丢掉已打开的“更多”按钮状态。
     const list = $('#plist'), template = document.createElement('template');
+    const selected = kb >= 0 ? items()[kb] : undefined;
+    const expanded = list.querySelector('[data-more][aria-expanded="true"]');
     template.innerHTML = html;
     const key = (row: HTMLElement) => row.dataset.id ? `id:${row.dataset.id}` : row.dataset.path ? `path:${row.dataset.path}` : undefined;
     const previous = new Map([...list.children].map(row => [key(row as HTMLElement), row as HTMLElement]));
@@ -1542,11 +1545,15 @@ function toggleMenu() {
       if (old) {
         if (renderedRows.get(old) !== markup) {
           const button = old.querySelector('[data-more]'), replacement = row.querySelector('[data-more]');
-          if (button && replacement) replacement.replaceWith(button);
-          const selected = old.classList.contains('kb');
-          old.className = row.className; old.classList.toggle('kb', selected);
+          old.className = row.className;
           old.setAttribute('aria-selected', row.getAttribute('aria-selected') ?? 'false');
-          old.replaceChildren(...row.childNodes);
+          if (button && replacement) {
+            // 按钮须始终留在页面上；移出再放回仍会丢失焦点和按下中的点击。
+            const children = [...row.childNodes], at = children.indexOf(replacement);
+            [...old.childNodes].forEach(child => { if (child !== button) child.remove(); });
+            button.before(...children.slice(0, at));
+            button.after(...children.slice(at + 1));
+          } else old.replaceChildren(...row.childNodes);
         }
         row = old;
       }
@@ -1554,16 +1561,20 @@ function toggleMenu() {
       if (list.children[i] !== row) list.insertBefore(row, list.children[i] ?? null);
     });
     while (list.children.length > next.length) list.lastElementChild!.remove();
+    kb = selected ? items().indexOf(selected) : -1;
+    markKb();
+    if (expanded && !expanded.isConnected) closeRowMenu();
   };
   // ↑ ↓ 选，回车打开（没选就开第一个）
   let kb = -1;
   const items = () => [...$('#plist').querySelectorAll<HTMLElement>('.item[data-id], .item[data-path]')];
   const markKb = () => items().forEach((x, j) => { x.classList.toggle('kb', j === kb); if (j === kb) x.scrollIntoView({ block: 'nearest' }); });
+  redrawMenu = draw;
   draw();
-  if (!demo && found === null) void discover().then(() => { if (!menu.hidden) draw(); });
-  void fillMarks(() => { if (!menu.hidden) draw(); });
+  if (!demo && found === null) void discover().then(() => redrawMenu?.());
+  void fillMarks();
   const q = $('#q') as HTMLInputElement;
-  q.oninput = () => { kb = -1; closeRowMenu(); draw(); markKb(); };
+  q.oninput = () => { kb = -1; closeRowMenu(); draw(); };
   q.onkeydown = (e) => {
     const n = items().length;
     if (e.key === 'ArrowDown' && n) { kb = (kb + 1) % n; markKb(); e.preventDefault(); }
