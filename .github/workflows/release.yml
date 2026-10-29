@@ -23,8 +23,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-15, target: aarch64-apple-darwin, bundles: dmg }
-          - { os: macos-15-intel, target: x86_64-apple-darwin, bundles: dmg }
+          - { os: macos-26, target: aarch64-apple-darwin, bundles: dmg }
+          - { os: macos-26-intel, target: x86_64-apple-darwin, bundles: dmg }
           - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, bundles: 'appimage,deb' }
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, bundles: '' }
           - { os: windows-latest, target: x86_64-pc-windows-msvc, bundles: nsis }
@@ -35,7 +35,7 @@ jobs:
         with: { node-version: 24 }
       - name: Select Xcode with Icon Composer support
         if: runner.os == 'macOS'
-        run: echo "DEVELOPER_DIR=/Applications/Xcode_26.3.app/Contents/Developer" >> "$GITHUB_ENV"
+        run: echo "DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
