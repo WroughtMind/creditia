@@ -250,7 +250,7 @@ fn run_analysis(repo: &str, lang: Option<&str>, app: Option<tauri::AppHandle>) -
         if slot.is_some() {
             return Err(Fail::new("busy"));
         }
-        let mut cmd = core_cmd(&["analyze", "--repo", repo]);
+        let mut cmd = core_cmd(&["analyze", "--repo", repo, "--github"]);
         if let Some(l) = lang {
             cmd.env("CREDITIA_LANG", l);
         }
@@ -931,7 +931,8 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
 
         // 成功（有警告时退出码 2 也算成功）
-        std::env::set_var("CREDITIA_CORE", fake_core(&dir, r#"echo '{"ok":true}'; exit 2"#));
+        std::env::set_var("CREDITIA_CORE", fake_core(&dir, r#"case " $* " in *" --github "*) ;; *) echo '{"error":"missing GitHub enrichment"}'; exit 1;; esac
+echo '{"ok":true}'; exit 2"#));
         assert_eq!(run_analysis("/tmp", None, None).unwrap()["ok"], true);
 
         // 核心报错：带上它的原话

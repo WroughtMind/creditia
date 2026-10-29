@@ -831,13 +831,20 @@ fn accuracy_bench() {
     s.commit("agent file reformatted onto fewer lines + hand file");
 
     // 在云端写、在 GitHub 网页上 squash 合并：本机没有日志，提交作者是 GitHub 账号的邮箱、提交者是 GitHub。
-    // 原分支各提交的盖章被并进正文中间，只有最后一段算 trailer
+    // 保留真实原分支供缓存回放。正文配额本身无法证明哪些行在 squash 后存活。
     s.scene("24 GitHub 网页 squash 合并");
+    git_in(&s.repo, &["remote", "add", "origin", "https://github.com/example/bench.git"]);
+    git_in(&s.repo, &["checkout", "-qb", "cloud-work"]);
     s.t += 300;
     let v: Vec<L> = s.gen("src/web.rs", 30).into_iter().map(|text| L { text, who: GPT }).collect();
     s.files.insert("src/web.rs".into(), v);
     s.write_disk("src/web.rs");
-    s.commit_web(
+    let original = s.commit("cloud original\n\nCreditia-Harness: codex\nCreditia-Lines: codex/gpt-a 30 / 30");
+    // Original commits are not part of main's expected contribution totals.
+    s.snaps.remove(&original);
+    git_in(&s.repo, &["checkout", "-q", "main"]);
+    git_in(&s.repo, &["merge", "--squash", "cloud-work"]);
+    let squash = s.commit_web(
         "cloud work (#7)\n\n* first part\n\nCreditia-Harness: codex\nCreditia-Lines: codex/gpt-a 20 / 20\n\n* second part\n\nCreditia-Harness: codex\nCreditia-Lines: codex/gpt-a 10 / 10\n\nCo-authored-by: me <me@example.com>",
         "account@gmail.com",
     );
@@ -845,7 +852,17 @@ fn accuracy_bench() {
     s.flush_logs();
     let rs = s.repo.display().to_string();
     s.run(&["init", "--repo", &rs]);
-    let v = s.run(&["analyze", "--repo", &rs, "--fresh"]);
+    // The cache fixture represents already-validated PR metadata; API association
+    // checks are tested separately. Derive every line from real Git provenance.
+    let (commits,_) = creditia_adapters::git::read_commits(&s.repo,&squash,Some(&format!("{squash}^..{squash}")));
+    let history = creditia_adapters::squash::local_history(&s.repo,&commits[0],&original).unwrap();
+    let mut snapshot = serde_json::to_value(history).unwrap();
+    snapshot["repository"] = "example/bench".into(); snapshot["number"] = 7.into();
+    let (root,_) = creditia_adapters::git::identity(&s.repo);
+    let dir=s.root.join("lib/cache").join(&root[..12]).join("squash-v1/example/bench");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join(format!("{squash}.json")),serde_json::to_vec(&snapshot).unwrap()).unwrap();
+    let v = s.run(&["analyze", "--repo", &rs]);
     assert!(v["commits"].as_u64().unwrap() > 10, "{v}");
     let dump: Value = serde_json::from_str(&fs::read_to_string(s.root.join("dump.json")).unwrap()).unwrap();
 

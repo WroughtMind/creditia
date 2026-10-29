@@ -425,7 +425,7 @@ pub struct Unit {
     pub commits: Vec<String>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PrMeta {
     pub source: String,
     pub number: u64,
@@ -435,6 +435,8 @@ pub struct PrMeta {
     pub author: Option<String>,
     #[serde(default)]
     pub reviews: Vec<String>,
+    #[serde(default)]
+    pub merge_commit: Option<String>,
 }
 
 /// HEAD 上存活的一行：来自哪个提交、该提交里的哪一行
@@ -780,6 +782,22 @@ impl Registry {
             _ => UNATTR.into(),
         }
     }
+}
+
+/// A declaration at an exact final position, recovered from original PR history.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LineDeclaration {
+    pub rel: String,
+    pub at: u32,
+    pub harness: String,
+    pub model: Option<String>,
+}
+
+/// PR number in GitHub's usual squash subject. This is only a lookup hint;
+/// the adapter must verify the merged PR's exact merge and head commits.
+pub fn squash_number(c: &Commit) -> Option<u64> {
+    if !c.web { return None; }
+    c.subject.rsplit_once(" (#")?.1.strip_suffix(')')?.parse().ok().filter(|n| *n > 0)
 }
 
 /// 单个提交的归因结果

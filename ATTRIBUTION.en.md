@@ -19,7 +19,7 @@ To be clear up front: the default level (standard) **makes two kinds of inferenc
 | Other people's commits | Not your commit identity → credited to that person | Declared |
 | Branch prefix | Branches a tool creates by itself: `codex/`, `cursor/`, `copilot/`… | Inferred |
 | Time window | A session of some tool happened to be running at commit time | Inferred (loose level only) |
-| Body of a web-merged commit | When a PR is squash-merged on GitHub's website, the stamps and `Co-authored-by` of the branch commits end up in the middle of the message body; the whole body is read for them, and `Creditia-Lines` values are added up | Declared |
+| Original branch of a GitHub squash merge | Verify the merged PR and exact original head, then project surviving positions from complete, single-source original commit declarations | Declared, not verified log evidence |
 
 The evidence store keeps only "relative path, line hash, tool, model, session, time, provider". **It stores no code and no prompts.**
 
@@ -45,7 +45,7 @@ Because the last step requires that "the line's content appears in a real commit
 - Edits that were rejected or errored in the logs are not evidence: Claude Code checks `is_error` in the tool result, Cline / Roo / Kilo need a "write succeeded" result in the conversation, Gemini CLI checks `status`, OpenCode checks `completed`;
 - Edits that were later deleted never turn into credit;
 - Path matching can be loose (several worktrees, temporary clones), because content matching guards against false matches;
-- Rewriting history (rebase, squash, cherry-pick) doesn't change the result: the line contents and author times are still there.
+- After a history rewrite, content and time can still match local line evidence. Squashed declarations require original branch provenance, so unchanged results are not guaranteed.
 
 ## 3. Unmatched lines: the fallback chain and levels
 
@@ -57,12 +57,12 @@ Because the last step requires that "the line's content appears in a real commit
 | Most of the same change block has line-level evidence from one agent → the rest of the block follows it (inferred) | | ✓ | ✓ |
 | A session was running at commit time (inferred) | | | ✓ |
 | Branch prefix (inferred) | | ✓ | ✓ |
-| `Creditia-Lines` quota: a tool now has fewer lines than the commit recorded (its logs were cleaned up since), so it is topped up, in order, from the lines above that aren't an agent's | ✓ | ✓ | ✓ |
+| `Creditia-Lines` quota for ordinary commits: fill the deficit from non-agent lines without verified evidence; web commits do not use this positional fill | ✓ | ✓ | ✓ |
 | None of the above → **unattributed** | ✓ | ✓ | ✓ |
 
 **No AI evidence doesn't mean a person wrote it.** Lines in your own commits that match no AI evidence are recorded as unattributed, never inferred as hand-written: the code may have been written by an agent on another computer or in a cloud session whose logs aren't on this one, or an agent's lines may have been merged by a formatter or reworked by a person. The way to fewer unattributed lines is more complete evidence: install the commit-stamp hook on every computer you write code on, and `evidence import` the evidence from other computers.
 
-**Stamps count lines.** When a commit carries `Creditia-Lines`, the stamp trailer, `Co-authored-by` and `Assisted-by` no longer stand for the whole commit: every line was checked against the logs at commit time, the stamp counts only the lines it recorded, and the rest are unattributed. A batch of your own changes committed from inside an agent is no longer credited wholesale to the agent, and the recorded counts survive the logs being cleaned up. Older commits without `Creditia-Lines` still credit the whole commit to the stamp. In a web squash merge, when the `Creditia-Lines` values add up to more than the commit actually adds (later commits rewrote earlier lines), they're scaled down in proportion.
+**Stamps count lines.** When a commit carries `Creditia-Lines`, the stamp trailer, `Co-authored-by` and `Assisted-by` no longer stand for the whole commit: every line was checked against the logs at commit time, the stamp counts only the lines it recorded, and the rest are unattributed. A batch of your own changes committed from inside an agent is no longer credited wholesale to the agent, and the recorded counts survive the logs being cleaned up. Older commits without `Creditia-Lines` still credit the whole commit to the stamp. Squash bodies may include receipts for overwritten or deleted lines; even equal totals cannot locate surviving positions. Web commit quotas no longer fill individual lines. `creditia analyze --github` verifies the merged PR and exact original head, fetches into a separate cache, and projects declarations by original commit, path and line number. Mixed quotas and files changed during conflict resolution remain unprojected; native verified evidence wins. The App also attempts enrichment. Without gh, authentication, network access or the original ref, local evidence and existing caches remain usable. Custom subjects can be associated through PR metadata; a trailing `(#number)` is only a lookup hint.
 
 A **change block** is a contiguous run of added lines in a diff. The rest of a block follows a tool only when at least half of its lines have line-level evidence and at least 80% of those belong to that one tool; inferred lines are never used as evidence to carry other lines. One kind of line is an exception: lines sitting between two lines of line-level evidence that were adjacent in the agent's single edit. Those were inserted later, not written by that edit, so they don't follow the inference. This way, lines in an agent's code that a formatter split up, or that you changed by a few characters, still count as the agent's, while a separate file or a new paragraph you wrote in the same commit isn't carried off by a single line of evidence. Models work the same way: a model is recorded only when at least 80% of the block's evidence comes from one model; otherwise only the tool is. When a commit carries a declaration (for example the `Co-authored-by` Claude Code adds by default), the block is inferred only when its tool matches the declaration, to fill in the model the declaration lacks.
 
@@ -155,7 +155,7 @@ The `human` section of your local `credits.json` also records the developer side
 |---|--:|--:|--:|--:|--:|--:|
 | Current | 95.7% | 95.6% | 0.1% | 4.2% | 0% | 2.9 points |
 
-The last three scenarios: in "hand-written lines committed from inside an agent" (stamped, with `Creditia-Lines`), none of the people's lines is credited to AI; in "formatter-merged lines", an agent's lines are joined in pairs so no line evidence matches, and they're recorded as unattributed; in "GitHub web squash merge", code written in the cloud and merged on the website leaves no logs on this computer, the commit author is the GitHub account's email, and the branch stamps sit in the middle of the body. 100% of AI lines are recovered from the stamps (0%, all missed, without recognizing web merges). The bench asserts that 0% of AI lines are credited to people.
+The last three scenarios: in "hand-written lines committed from inside an agent" (stamped, with `Creditia-Lines`), none of the people's lines is credited to AI; in "formatter-merged lines", an agent's lines are joined in pairs so no line evidence matches, and they're recorded as unattributed; in "GitHub web squash merge", a real original branch and squash commit are replayed through a cache representing verified PR metadata. No local tool logs are present; original complete declarations recover the AI lines without guessing positions from body quotas. The bench asserts that 0% of AI lines are credited to people.
 
 Almost all of "missed" comes from the lost-logs scenario, which can't be recovered, and from formatter-merged lines (see the limits in section 8); the remaining error is a few `}` lines and the model when one tool alternates between two models. CI runs it every time, and the test fails if results get worse. `cargo test -p creditia-cli --test bench -- --nocapture` prints the per-scenario table.
 
@@ -166,3 +166,8 @@ Almost all of "missed" comes from the lost-logs scenario, which can't be recover
 - Cursor auto-detection requires `CURSOR_AGENT`; `CURSOR_TRACE_ID` and `TERM_PROGRAM` do not establish agent execution. Explicit `CREDITIA_HARNESS` still takes precedence.
 - Run in a worktree or temporary clone, results are written back to the main repo's record, and the path is registered under the same project;
 - Before publishing anything (writing CREDITS.md, changing the README, committing), the skill requires the agent to ask you first.
+
+
+## 11. Real-data replay
+
+A sanitized observational sample contains 3 real commits, 151 added lines, 234 Claude Code / Codex events and 6 session metadata records. Per-line attribution and levels matched before and after sanitization. This is a behavioral regression baseline, not independently labeled accuracy, and is not included in the synthetic benchmark percentages. Public PR #124 / #125 provenance fixtures support 262 of 428 and 533 of 609 positional declarations respectively; mixed quotas stay unknown. See the [fixture manifest](crates/core/tests/fixtures/real/README.md) for replay instructions and missing coverage.

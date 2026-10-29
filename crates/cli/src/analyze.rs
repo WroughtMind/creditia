@@ -350,27 +350,37 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     // ---- PR 元数据（gh 只读；缓存）
     let prs_path = cache.join("prs.json");
     let mut prs: Vec<PrMeta> = load_json::<Vec<Value>>(&prs_path).into_iter().filter_map(|v| serde_json::from_value(v).ok()).collect();
-    if opts.github {
+    if opts.github && ad::squash::github_repository(repo).is_some() {
         let fresh = ad::git::github_prs(repo);
         if fresh.is_empty() {
             warnings.push(creditia_core::tr!("gh 没有返回 PR 列表（未安装、未登录或仓库不在 GitHub）", "gh returned no pull requests (not installed, not signed in, or the repository is not on GitHub)"));
         } else {
             prs = fresh;
-            let v: Vec<Value> = prs.iter().map(|p| json!({ "source": p.source, "number": p.number, "title": p.title, "branch": p.branch, "author": p.author, "reviews": p.reviews })).collect();
-            save_json(&prs_path, &v)?;
+            save_json(&prs_path, &prs)?;
         }
     }
     let (units, parents) = ad::git::units(repo, &head, &prs);
     let (tags, ver_of) = ad::git::versions(repo, &head, &parents, &cfg.ignore_tags)?;
+    let recovered = ad::squash::recover(repo, &cache, &cc.commits, &prs, &cfg, opts.github);
 
     // ---- 证据：日志（增量）+ 证据库（日志被清理后仍在）
     let (store, mut st) = evidence(repo, &cfg, &mut lib, &proj.id, &head)?;
     warnings.extend(st.warnings.clone());
+    if !recovered.declarations.is_empty() {
+        let pulls = recovered.declarations.len();
+        let lines: usize = recovered.declarations.values().map(Vec::len).sum();
+        st.notes.push(creditia_core::tr!("在 {pulls} 个压缩合并的原 PR 中定位了 {lines} 行声明；逐行日志证据优先，混合配额不猜位置", "Located {lines} line declarations in {pulls} squashed PRs; verified log evidence wins and aggregate quotas do not locate individual lines"));
+    }
+    if recovered.unavailable > 0 {
+        let n = recovered.unavailable;
+        st.notes.push(creditia_core::tr!("{n} 个压缩合并没有可用的原 PR 缓存；可在联网并登录 gh 后用 --github 补齐。现有本地证据照常使用", "Original PR history unavailable for {n} squash commits; use --github with gh signed in to cache it. Existing local evidence remains in use"));
+    }
     let idx = Index::build(&store);
     let sessions: Vec<Session> = store.groups.values().flat_map(|g| g.sessions.clone()).collect();
 
     // ---- 归因
     let mut eng = Engine::new(&cfg, &idx, &sessions, &units, cc.stamps.clone());
+    eng.squash_declarations = recovered.declarations;
     if ad::git::git(repo,&["rev-parse","--is-shallow-repository"]).trim()=="false" {
         eng.set_history(&cc.commits);
     }

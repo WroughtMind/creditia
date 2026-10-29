@@ -74,6 +74,8 @@ pub mod crush;
 pub mod cursor;
 pub mod gemini;
 pub mod git;
+mod command;
+pub mod squash;
 pub mod goose;
 pub mod grok;
 pub mod kimi;
