@@ -1,17 +1,16 @@
 // 两套渲染器摆在同一面展墙上：原版（satori 排版，十五个主题）和新风格（手写 SVG）。
 // 圆点里先是原版主题，再是新风格；选到哪个，展墙就用哪一套的作品、版式和导出。
-import * as C from '../../../packages/render/src/classic/data.ts';
 import { themeById } from '../../../packages/render/src/classic/themes.ts';
 import { ORDERED_THEMES, themeDot, themeName, themeNote, pieceName as cPiece, pieceQ as cQ, variantName as cVariant } from '../../../packages/render/src/classic/catalog.ts';
 import { variantsOf, defaultVariant, animatedClassic } from '../../../packages/render/src/classic/art.ts';
 import { isBridged, bridgeStyle } from '../../../packages/render/src/classic/bridge.ts';
 import { STYLES } from '../../../packages/render/src/styles/index.ts';
 import * as V from '../../../packages/render/src/data.ts';
-import { PIECES, frames as v2Frames, variantName as v2Variant } from '../../../packages/render/src/registry.ts';
+import { PIECES, variantName as v2Variant } from '../../../packages/render/src/registry.ts';
 import type { Style } from '../../../packages/render/src/style.ts';
 import type { Art } from '../../../packages/render/src/export.ts';
 import { historyBasis, historyLabels } from '../../../packages/render/src/history.ts';
-import { fontFiles, registerFonts, ready } from './fonts.ts';
+import { registerFonts, ready } from './fonts.ts';
 
 type Lang = 'zh' | 'en';
 type Preferences = { group: V.GroupOpt; named: boolean };
@@ -27,6 +26,8 @@ export interface Kit {
   /** raw 档案 → 这一套的模型（按语言缓存） */
   render(raw: any, lang: Lang, id: string, variant?: string): Promise<Art | null>;
   frames?(raw: any, lang: Lang, id: string, variant?: string, preferences?: Preferences): Art[] | Promise<Art[]>;
+  /** 放大视图专属任务；取消直接停止排版，不占用展墙或导出的线程。 */
+  motion(raw: any, lang: Lang, id: string, variant: string | undefined, signal: AbortSignal): Promise<Blob[]>;
   variants(id: string): string[];
   current(id: string, variant?: string): string | undefined;
   animated(id: string): boolean;
@@ -111,6 +112,25 @@ function previewAway(art: Art, style: string, classic: boolean) {
   return p;
 }
 
+function framesAway<T>(raw: any, style: string, lang: Lang, id: string, variant: string | undefined, classic: boolean, preferences: Preferences, previews: boolean, signal?: AbortSignal): Promise<T> {
+  if (signal?.aborted) return Promise.reject(new DOMException('Animation cancelled', 'AbortError'));
+  const worker = new Worker(new URL('./render-worker.ts', import.meta.url), { type: 'module' });
+  return new Promise((resolve, reject) => {
+    const finish = (error?: Error, result?: T) => {
+      signal?.removeEventListener('abort', abort);
+      worker.terminate();
+      if (error) reject(error); else resolve(result!);
+    };
+    const abort = () => finish(new DOMException('Animation cancelled', 'AbortError'));
+    signal?.addEventListener('abort', abort, { once: true });
+    worker.onmessage = ({ data }) => data.error ? finish(new Error(data.error)) : finish(undefined, data.frames);
+    worker.onerror = (event) => finish(new Error(event.message || 'Animation renderer failed'));
+    worker.onmessageerror = () => finish(new Error('Unable to read animation frames'));
+    try { worker.postMessage({ frames: true, previews, raw, style, lang, id, variant, classic, ...preferences }); }
+    catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
+  });
+}
+
 const classicKits: Kit[] = ORDERED_THEMES.map((t) => ({
   id: t.id, style: bridgeStyle(t), dot: themeDot(t),
   name: (lang) => themeName(t, lang), note: (lang) => themeNote(t, lang),
@@ -121,13 +141,8 @@ const classicKits: Kit[] = ORDERED_THEMES.map((t) => ({
     if (isBridged(id, variant)) await ready(bridgeStyle(t));
     return renderAway(raw, t.id, lang, id, variant, true, grouping, names);
   },
-  frames: async (raw, lang, id, variant, preferences = { group, named }) => {
-    // 动图在主线程排；satori 很大，用到才载入、初始化
-    const { prepare, frames } = await import('../../../packages/render/src/classic/browser.ts');
-    prepare(fontFiles());
-    if (isBridged(id, variant)) await ready(bridgeStyle(t));
-    return frames(id, C.buildModel(raw, { director: false, lang, ...preferences }), t, { lang, variant }, 24);
-  },
+  frames: (raw, lang, id, variant, preferences = { group, named }) => framesAway<Art[]>(raw, t.id, lang, id, variant, true, preferences, false),
+  motion: (raw, lang, id, variant, signal) => framesAway<Blob[]>(raw, t.id, lang, id, variant, true, { group, named }, true, signal),
   variants: variantsOf,
   current: (id, variant) => variant ?? defaultVariant(id, t) ?? variantsOf(id)[0],
   animated: animatedClassic,
@@ -143,7 +158,8 @@ const v2Kits: Kit[] = STYLES.filter((s) => !SKIP.has(s.id)).map((s) => ({
   name: (lang) => (lang === 'zh' ? s.name : s.en), note: (lang) => (lang === 'zh' ? s.note : s.noteEn),
   board: V2_BOARD,
   render: async (raw, lang, id, variant) => { const grouping = group, names = named; await ready(s); return renderAway(raw, s.id, lang, id, variant, false, grouping, names); },
-  frames: (raw, lang, id, variant, preferences = { group, named }) => v2Frames(id, V.buildModel(raw, { lang, sign: '', ...preferences }), s, { variant }, 24),
+  frames: (raw, lang, id, variant, preferences = { group, named }) => framesAway<Art[]>(raw, s.id, lang, id, variant, false, preferences, false),
+  motion: (raw, lang, id, variant, signal) => framesAway<Blob[]>(raw, s.id, lang, id, variant, false, { group, named }, true, signal),
   variants: (id) => PIECES[id]?.variants ?? [],
   current: (id, variant) => variant ?? s.prefer[id] ?? PIECES[id]?.variants?.[0],
   animated: (id) => !!PIECES[id]?.animated,

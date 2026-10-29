@@ -1,6 +1,7 @@
 // 统计图：环形、华夫饼、周河流图、会话泳道、作息打卡、版本、留存、文件马赛克、日历、出处、板块。
 // 颜色、条形、标记都走风格钩子，所以每张图在每个风格里都是那个风格的样子。
-import { Scene, rect, line, path, circle, el, g, r, ease, arc, mix, alpha } from '../svg.ts';
+import { Scene, rect, line, path, circle, el, g, r, arc, mix, alpha } from '../svg.ts';
+import { phase, styleProgress, reveal, move, drawGroup } from '../motion.ts';
 import type { Model, Agent } from '../data.ts';
 import { fmt, pct, compact, nameOf } from '../data.ts';
 import type { Style, Box } from '../style.ts';
@@ -45,6 +46,14 @@ const orderKeys = (m: Model, keys: Iterable<string>) => [...new Set(keys)].sort(
 
 export const DONUT_VARIANTS = ['ring', 'nested'];
 
+/** 表盘扫过已定型的扇区：后面的份额不追着前面的份额挪位置。 */
+function sweepReveal(s: Scene, k: number, cx: number, cy: number, radius: number, draw: () => void) {
+  if (k >= 1) { draw(); return; }
+  const clipPath = s.url(`sweep-${radius}`, (id) => el('clipPath', { id },
+    path(arc(cx, cy, radius, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, k)))));
+  drawGroup(s, { clipPath }, draw);
+}
+
 export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (o.variant === 'nested') return nested(m, st, o);
   if (!m.rows.length) return null;
@@ -53,8 +62,9 @@ export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
   const cx = p.x + p.w * 0.36, cy = p.y + p.h / 2, R1 = 270, R0 = 170;
   let a0 = -Math.PI / 2;
   const cellSegs: { a0: number; a1: number; fill: string }[] = [];
+  sweepReveal(s, styleProgress(st, t, 0.05, 0.88), cx, cy, R1 + 2, () => {
   m.rows.forEach((a, i) => {
-    const sweep = (a.pct / 100) * Math.PI * 2 * ease(t, i, m.rows.length, 0.8);
+    const sweep = (a.pct / 100) * Math.PI * 2;
     const gap = Math.min(0.012, sweep / 4);
     if (st.grid && st.cells) cellSegs.push({ a0, a1: a0 + sweep, fill: a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a) });
     else if (sweep > 0) s.add(path(arc(cx, cy, R1, R0, a0 + gap, a0 + sweep - gap), { fill: a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a) }));
@@ -63,6 +73,7 @@ export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
     a0 += sweep;
   });
   if (cellSegs.length) gridRing(s, st, cx, cy, R0, R1, cellSegs);
+  });
   st.num(s, fmt(m.linesAdded), cx, cy + 6, 46, 'middle');
   s.text(T(m, '行', 'lines'), cx, cy + 44, { font: st.f.body, size: 18, fill: st.c.soft, anchor: 'middle' });
   // 右侧名单
@@ -108,11 +119,11 @@ function nested(m: Model, st: Style, o: PieceOpts): Scene | null {
   const inner: { a0: number; a1: number; fill: string }[] = [], outer: typeof inner = [];
   let a0 = -Math.PI / 2;
   m.tools.forEach((a, i) => {
-    const sweep = (a.pct / 100) * Math.PI * 2 * ease(t, i, m.tools.length, 0.8);
+    const sweep = (a.pct / 100) * Math.PI * 2;
     const gap = Math.min(0.012, sweep / 4);
     const unk = a.key === 'unattributed';
     if (grid) inner.push({ a0, a1: a0 + sweep, fill: unk ? st.hatch(s) : colorOf(st, a) });
-    else if (sweep > 0) s.add(path(arc(cx, cy, Ri1, Ri0, a0 + gap, a0 + sweep - gap), { fill: unk ? st.hatch(s) : colorOf(st, a) }));
+    else if (sweep > 0) sweepReveal(s, styleProgress(st, t, 0, 0.55), cx, cy, Ri1 + 1, () => s.add(path(arc(cx, cy, Ri1, Ri0, a0 + gap, a0 + sweep - gap), { fill: unk ? st.hatch(s) : colorOf(st, a) })));
     const mid = a0 + sweep / 2;
     s.hit(cx + Math.cos(mid) * (Ri0 + Ri1) / 2 - 26, cy + Math.sin(mid) * (Ri0 + Ri1) / 2 - 26, 52, 52, tip(m, a));
     // 外环：这一段按模型再切
@@ -121,14 +132,17 @@ function nested(m: Model, st: Style, o: PieceOpts): Scene | null {
       const sw = sweep * (q.lines / Math.max(1, a.lines));
       const gg = Math.min(0.01, sw / 4);
       if (grid) outer.push({ a0: b0, a1: b0 + sw, fill: unk ? st.hatch(s) : q.color });
-      else if (sw > 0) s.add(path(arc(cx, cy, Ro1, Ro0, b0 + gg, b0 + sw - gg), { fill: unk ? st.hatch(s) : q.color }));
+      else if (sw > 0) sweepReveal(s, styleProgress(st, t, 0.3, 0.95), cx, cy, Ro1 + 1, () => s.add(path(arc(cx, cy, Ro1, Ro0, b0 + gg, b0 + sw - gg), { fill: unk ? st.hatch(s) : q.color })));
       const qm = b0 + sw / 2;
       if (sw > 0.04) s.hit(cx + Math.cos(qm) * (Ro0 + Ro1) / 2 - 22, cy + Math.sin(qm) * (Ro0 + Ro1) / 2 - 22, 44, 44, segTip(m, a, q));
       b0 += sw;
     }
     a0 += sweep;
   });
-  if (grid) { gridRing(s, st, cx, cy, Ri0, Ri1, inner); gridRing(s, st, cx, cy, Ro0, Ro1, outer); }
+  if (grid) {
+    sweepReveal(s, styleProgress(st, t, 0, 0.55), cx, cy, Ri1 + 1, () => gridRing(s, st, cx, cy, Ri0, Ri1, inner));
+    sweepReveal(s, styleProgress(st, t, 0.3, 0.95), cx, cy, Ro1 + 1, () => gridRing(s, st, cx, cy, Ro0, Ro1, outer));
+  }
   st.num(s, fmt(m.linesAdded), cx, cy + 6, 40, 'middle');
   s.text(T(m, '行', 'lines'), cx, cy + 40, { font: st.f.body, size: 17, fill: st.c.soft, anchor: 'middle' });
   // 右侧：工具一行，下面缩进写它的模型
@@ -178,9 +192,10 @@ export function waffle(m: Model, st: Style, o: PieceOpts): Scene | null {
   cells.forEach((a, i) => {
     const col = Math.floor(i / 10), row = i % 10;
     const x = gx + col * (size + gap), y = p.y + row * (size + gap);
-    const k = ease(t, i, 100, 0.3);
+    // 一格始终等于 1%；按列点数，不把格子缩成另一种面积编码。
+    const k = phase(styleProgress(st, t), i / 100, (i + 1) / 100);
     if (k <= 0) return;
-    const ss = size * k;
+    const ss = size;
     if (a.key === 'unattributed') s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill: st.hatch(s), rx: Math.min(st.radius, ss / 4) }));
     else s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill: colorOf(st, a), rx: Math.min(st.radius, ss / 4) }));
     s.hit(x, y, size, size, tip(m, a));
@@ -216,14 +231,15 @@ function blocks(m: Model, st: Style, o: PieceOpts): Scene | null {
   const size = Math.min(p.h / rows - gap, (gw - breaks.length * split) / cols - gap);
   const gx = p.x, gy = p.y + (p.h - rows * (size + gap)) / 2;
   const colX = (col: number) => gx + col * (size + gap) + breaks.filter((b) => b <= col).length * split;
-  let n = 0;
   cells.forEach((c, i) => {
     if (!c) return;
     const col = Math.floor(i / rows), row = i % rows;
     const x = colX(col), y = gy + row * (size + gap);
-    const k = ease(t, n++, 100, 0.3);
+    // 分块版先认出工具，再铺开其内部模型，节奏按工具块走。
+    const toolAt = m.tools.indexOf(c.a);
+    const k = phase(styleProgress(st, t), toolAt / m.tools.length, (toolAt + 1) / m.tools.length);
     if (k <= 0) return;
-    const ss = size * k;
+    const ss = size;
     const fill = c.a.key === 'unattributed' ? st.hatch(s) : c.q.color;
     s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill, rx: Math.min(st.radius, ss / 4) }));
     s.hit(x, y, size, size, segsOf(m, st, c.a).length > 1 ? segTip(m, c.a, c.q) : tip(m, c.a));
@@ -245,7 +261,7 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
   const X = (i: number) => p.x + (i / (n - 1)) * p.w;
   const mid = p.y + p.h / 2;
   // 河流：以中线对称
-  const base = m.weeks.map((_, i) => mid - (tot[i] / max) * (p.h / 2) * ease(t, i, n, 0.5));
+  const base = m.weeks.map((_, i) => mid - (tot[i] / max) * (p.h / 2));
   const acc = [...base];
   const smooth = (pts: [number, number][]) => pts.map(([x, y], i) => {
     if (i === 0) return `M${r(x)} ${r(y)}`;
@@ -255,13 +271,14 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
   }).join('');
   // 字符格风格（原版终端）：每一列按两周之间插值的数堆起来，落到格子上，一格一个方块字；算法和平滑的河流一样，只是笔触不同
   const G = st.grid;
+  // 时间从左往右读；波峰、波谷和各层厚度始终是真实值。
+  reveal(s, styleProgress(st, t, 0.02, 0.92), p, 'right', () => {
   if (G && st.cells) {
     const r0 = Math.ceil(p.y / G), nr = Math.floor((p.y + p.h) / G) - r0;
     for (let c = Math.ceil((p.x - G / 2) / G); (c + 0.5) * G <= p.x + p.w; c++) {
       const u = Math.min(n - 1, Math.max(0, (((c + 0.5) * G - p.x) / p.w) * (n - 1))), i = Math.min(n - 2, Math.floor(u)), f = u - i;
-      const e = ease(t, u, n, 0.5);
       let cum = 0;
-      const b = keys.map((k) => (cum += (m.weeks[i].by[k] ?? 0) * (1 - f) + (m.weeks[i + 1].by[k] ?? 0) * f, Math.round((cum / max) * nr * e)));
+      const b = keys.map((k) => (cum += (m.weeks[i].by[k] ?? 0) * (1 - f) + (m.weeks[i + 1].by[k] ?? 0) * f, Math.round((cum / max) * nr)));
       const top = r0 + Math.floor((nr - b[b.length - 1]) / 2);
       keys.forEach((k, j) => {
         const a = j ? b[j - 1] : 0;
@@ -271,11 +288,12 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
   }
   for (const k of G && st.cells ? [] : keys) {
     const top = acc.map((y, i) => [X(i), y] as [number, number]);
-    const bot = acc.map((y, i) => [X(i), y + (((m.weeks[i].by[k] ?? 0) / max) * p.h) * ease(t, i, n, 0.5)] as [number, number]);
+    const bot = acc.map((y, i) => [X(i), y + (((m.weeks[i].by[k] ?? 0) / max) * p.h)] as [number, number]);
     bot.forEach(([, y], i) => (acc[i] = y));
     const d = smooth(top) + smooth([...bot].reverse()).replace(/^M/, 'L') + 'Z';
     s.add(path(d, { fill: fillKey(s, st, m, k), opacity: 0.92, stroke: st.c.bg, strokeWidth: 0.6 }));
   }
+  });
   // 每周的悬停区
   m.weeks.forEach((w, i) => {
     const lines = keys.filter((k) => w.by[k]).sort((a, b) => w.by[b] - w.by[a]).slice(0, 4).map((k) => `${agentOf(m, k)?.name ?? (k === 'human' ? nameOf('people', m.lang) : k)} ${fmt(w.by[k])}`);
@@ -305,12 +323,11 @@ export function lanes(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.text(a?.name ?? k, p.x + 38, y + laneH / 2 + 6, { font: st.f.body, size: 16, fill: st.c.ink, maxW: 125 });
     st.track(s, p.x + 170, y + laneH / 2 - 1, p.w - 170, 2);
     const mine = ss.filter((x) => x.key === k);
-    mine.forEach((x, i) => {
-      if (ease(t, i, mine.length) <= 0) return;
+    reveal(s, styleProgress(st, t), { x: p.x + 170, y, w: p.w - 170 + 3, h: laneH }, 'right', () => mine.forEach((x) => {
       const x0 = X(x.start), w = Math.max(3, X(x.end) - x0);
       const col = a ? colorOf(st, m.rows.find((q) => q.key === k) ?? a) : st.c.soft;
       s.add(rect(x0, y + 16, w, laneH - 32, { fill: x.review ? 'none' : col, stroke: x.review ? col : 'none', strokeWidth: 1.4, rx: Math.min(st.radius, 4), opacity: 0.9 }));
-    });
+    }));
     s.hit(p.x, y, p.w, laneH, a ? tip(m, a) : { t: k });
   });
   const d = (v: number) => new Date(v * 1000).toISOString().slice(0, 10);
@@ -332,8 +349,9 @@ export function clock(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.text(m.lang === 'zh' ? `周${days[d]}` : days[d], p.x, p.y + d * ch + ch / 2 + 6, { font: st.f.label, size: 14, fill: st.c.soft });
     row.forEach((v, hr) => {
       const cx = p.x + 60 + hr * cw + cw / 2, cy = p.y + d * ch + ch / 2;
-      const rr = (Math.sqrt(v / max) * Math.min(cw, ch) * 0.46) * ease(t, d * 24 + hr, 168, 0.3);
-      if (v) s.add(circle(cx, cy, Math.max(1.5, rr), { fill: st.c.accent, opacity: 0.25 + 0.75 * (v / max) }));
+      const rr = Math.sqrt(v / max) * Math.min(cw, ch) * 0.46;
+      // 同一小时的七天一起点亮，圆的大小和浓度仍只表示提交数量。
+      if (v && (t >= 1 || styleProgress(st, t) > hr / 24)) s.add(circle(cx, cy, Math.max(1.5, rr), { fill: st.c.accent, opacity: 0.25 + 0.75 * (v / max) }));
       else s.add(circle(cx, cy, 1.2, { fill: st.c.faint, opacity: 0.5 }));
       if (v) s.hit(cx - cw / 2, cy - ch / 2, cw, ch, { t: `${m.lang === 'zh' ? '周' + days[d] : days[d]} ${hr}:00`, d: [T(m, `${v} 次提交`, `${v} commits`)] });
     });
@@ -359,16 +377,18 @@ export function versions(m: Model, st: Style, o: PieceOpts): Scene | null {
   buckets.forEach((v, i) => {
     const x = p.x + (i + 0.5) * (p.w / n) - bw / 2;
     let y = p.y + p.h;
-    const k = ease(t, i, n);
+    const k = styleProgress(st, t, i / (n + 1), (i + 2) / (n + 1));
+    reveal(s, k, { x, y: p.y - 35, w: bw, h: p.h + 35 }, 'up', () => {
     for (const key of keys) {
-      const h = ((v.by[key] ?? 0) / max) * p.h * k;
+      const h = ((v.by[key] ?? 0) / max) * p.h;
       if (h <= 0) continue;
       y -= h;
       s.add(rect(x, y, bw, Math.max(0, h - 1.5), { fill: fillKey(s, st, m, key) }));
     }
+    });
     const label = v.tag === 'unreleased' ? T(m, '未发布', 'Unreleased') : v.tag;
     s.text(label, x + bw / 2, p.y + p.h + 28, { font: st.f.label, size: 14, fill: st.c.soft, anchor: 'middle', maxW: p.w / n - 16 });
-    st.num(s, compact(v.total), x + bw / 2, y - 12, 16, 'middle', { fill: st.c.soft });
+    if (k >= 1) st.num(s, compact(v.total), x + bw / 2, y - 12, 16, 'middle', { fill: st.c.soft });
     s.hit(x - 10, p.y, bw + 20, p.h + 40, { t: label, d: [v.date, T(m, `${fmt(v.total)} 行`, `${fmt(v.total)} lines`), ...keys.filter((q) => v.by[q]).slice(0, 4).map((q) => `${agentOf(m, q)?.name ?? q} ${Math.round((v.by[q] / v.total) * 100)}%`)].filter(Boolean) });
   });
   st.rule(s, p.x, p.y + p.h, p.w, 'thin');
@@ -386,16 +406,20 @@ export function survival(m: Model, st: Style, o: PieceOpts): Scene | null {
   const max = Math.max(...list.map((a) => a.lines));
   list.forEach((a, i) => {
     const y = p.y + i * rowH;
-    const k = ease(t, i, list.length);
     st.mark(s, a.key, p.x + 14, y + 22, 24);
     s.text(a.name, p.x + 36, y + 30, { font: st.f.body, size: 17, fill: st.c.ink, maxW: 170 });
     const x0 = p.x + 230, w = p.w - 330;
-    const wa = (a.lines / max) * w * k, ws = (a.surviving / max) * w * k;
+    const wa = (a.lines / max) * w, ws = (a.surviving / max) * w;
     // 字符格风格：写过、已经不在的那一截是一排点（原版的 ···）
+    reveal(s, styleProgress(st, t, 0, 0.45), { x: x0, y: y + 8, w: wa + 2, h: 30 }, 'right', () => {
     if (st.cells) st.track(s, x0, y + 10, wa, 26);
     else s.add(rect(x0, y + 10, wa, 26, { fill: colorOf(st, a), opacity: 0.25, rx: Math.min(st.radius, 6) }));
-    st.bar(s, x0, y + 10, Math.max(2, ws), 26, colorOf(st, a), i);
-    st.num(s, `${Math.round(a.survival * 100)}%`, p.x + p.w, y + 32, 22, 'end');
+    });
+    // 先说明写入总量，再从右端退去已删除部分，停在留存量。
+    const retained = styleProgress(st, t, 0.45, 0.95);
+    const solid = t >= 1 ? ws : wa + (ws - wa) * retained;
+    reveal(s, styleProgress(st, t, 0, 0.45), { x: x0, y: y + 8, w: wa + 2, h: 30 }, 'right', () => st.bar(s, x0, y + 10, Math.max(2, solid), 26, colorOf(st, a), i));
+    if (retained >= 1) st.num(s, `${Math.round(a.survival * 100)}%`, p.x + p.w, y + 32, 22, 'end');
     s.hit(p.x, y, p.w, rowH - 6, { ...tip(m, a), d: [T(m, `新增 ${fmt(a.lines)} 行，留存 ${fmt(a.surviving)} 行`, `${fmt(a.lines)} added, ${fmt(a.surviving)} retained`), ...tip(m, a).d.slice(1)] });
   });
   return s;
@@ -412,19 +436,22 @@ export function mosaic(m: Model, st: Style, o: PieceOpts): Scene | null {
   const rects = squarify(files.map((f) => f.lines / total * p.w * p.h), { ...p });
   rects.forEach((b, i) => {
     const f = files[i];
-    const k = ease(t, i, rects.length, 0.4);
-    if (k <= 0) return;
-    // 每个文件内部按贡献方竖切
+    // 文件从空间中的所属位置拼合，保留各文件面积；不是按排名同时闪入。
+    const at = ((b.x - p.x) / p.w + (b.y - p.y) / p.h) / 2;
+    const k = styleProgress(st, t, at * 0.55, at * 0.55 + 0.45);
     const keys = orderKeys(m, Object.keys(f.by));
+    move(s, k, (b.x + b.w / 2 < p.x + p.w / 2 ? -1 : 1) * Math.min(22, b.w / 4), 0, () => {
+    // 每个文件内部按贡献方竖切
     let x = b.x;
     for (const key of keys) {
       const w = ((f.by[key] ?? 0) / f.lines) * b.w;
-      if (w > 0) s.add(rect(x, b.y, w, b.h, { fill: fillKey(s, st, m, key), opacity: 0.35 + 0.6 * k }));
+      if (w > 0) s.add(rect(x, b.y, w, b.h, { fill: fillKey(s, st, m, key), opacity: 0.95 }));
       x += w;
     }
     // 文件全画：很小的格子描边跟着变细，不然整格被边线盖住
     s.add(rect(b.x, b.y, b.w, b.h, { fill: 'none', stroke: st.c.bg, strokeWidth: Math.min(2, b.w / 4, b.h / 4) }));
     if (b.w > 120 && b.h > 34 && f.path) s.text(f.path.split('/').pop()!, b.x + 10, b.y + 22, { font: st.f.mono, size: 13, fill: st.on(fillKey(s, st, m, keys[0])), maxW: b.w - 20, overflow: 'clip' });
+    });
     s.hit(b.x, b.y, b.w, b.h, { t: f.path || T(m, '文件', 'file'), d: [T(m, `${fmt(f.lines)} 行`, `${fmt(f.lines)} lines`), ...keys.filter((q) => f.by[q]).slice(0, 4).map((q) => `${agentOf(m, q)?.name ?? (q === 'human' ? nameOf('people', m.lang) : q)} ${Math.round((f.by[q] / f.lines) * 100)}%`)] });
   });
   return s;
@@ -475,8 +502,8 @@ export function calendar(m: Model, st: Style, o: PieceOpts): Scene | null {
     const tot = by ? Object.values(by).reduce((a, b) => a + b, 0) : 0;
     if (!tot) { s.add(rect(x, y, cell, cell, { fill: st.c.ink, opacity: 0.05, rx: Math.min(st.radius, 4) })); continue; }
     const top = Object.entries(by!).sort((a, b) => b[1] - a[1])[0][0];
-    const k = ease(t, w, weeks);
-    s.add(rect(x, y, cell, cell, { fill: fillKey(s, st, m, top), opacity: (0.3 + 0.7 * Math.sqrt(tot / max)) * k, rx: Math.min(st.radius, 4) }));
+    // 日期逐个盖印。颜色浓淡只编码当日活动量，不拿来做淡入。
+    if (t >= 1 || styleProgress(st, t) > (w * 7 + d) / (weeks * 7)) s.add(rect(x, y, cell, cell, { fill: fillKey(s, st, m, top), opacity: 0.3 + 0.7 * Math.sqrt(tot / max), rx: Math.min(st.radius, 4) }));
     s.hit(x, y, cell, cell, { k: top, t: day, d: [T(m, `${fmt(tot)} 行`, `${fmt(tot)} lines`), ...Object.entries(by!).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([q, v]) => `${agentOf(m, q)?.name ?? (q === 'human' ? nameOf('people', m.lang) : q === 'unattributed' ? T(m, '未确认', 'Unattributed') : q)} ${fmt(v)}`)] });
   }
   return s;
@@ -501,19 +528,20 @@ export function evidence(m: Model, st: Style, o: PieceOpts): Scene | null {
   const head = 150;
   const { s, p } = frame(m, st, 1200, head + list.length * rowH + 40, T(m, '出处', 'EVIDENCE'), T(m, '归因依据', 'Attribution evidence'), false);
   // 头条：全部 AI 行里有逐行证据的比例
-  st.num(s, `${Math.round(m.verifiedShare * 100 * ease(t))}%`, p.x, p.y + 64, 64, 'start');
+  reveal(s, styleProgress(st, t, 0.72, 1), { x: p.x, y: p.y, w: p.w, h: 78 }, 'right', () => st.num(s, `${Math.round(m.verifiedShare * 100)}%`, p.x, p.y + 64, 64, 'start'));
   s.text(T(m, '的代码行有完整日志记录', 'of lines have matching session logs'), p.x, p.y + 104, { font: st.f.body, size: 17, fill: st.c.soft, maxW: p.w });
   const max = Math.max(...list.map((a) => a.lines));
   const x0 = p.x + 230, w = p.w - 330;
   list.forEach((a, i) => {
     const y = p.y + head + i * rowH;
-    const k = ease(t, i, list.length);
     st.mark(s, a.key, p.x + 14, y + 22, 24);
     s.text(a.name, p.x + 36, y + 30, { font: st.f.body, size: 17, fill: st.c.ink, maxW: 170 });
-    const full = (a.lines / max) * w * k;
+    const full = (a.lines / max) * w;
     if (a.key === 'unattributed') {
+      reveal(s, styleProgress(st, t, 0.05, 0.4), { x: x0, y: y + 8, w: full + 2, h: 30 }, 'right', () => {
       if (st.cells) st.bar(s, x0, y + 10, Math.max(2, full), 26, st.hatch(s), i);
       else s.add(rect(x0, y + 10, Math.max(2, full), 26, { fill: st.hatch(s), rx: Math.min(st.radius, 6) }));
+      });
       s.text(T(m, '无日志证据', 'no evidence'), p.x + p.w, y + 30, { font: st.f.body, size: 15, fill: st.c.faint, anchor: 'end' });
       s.hit(p.x, y, p.w, rowH - 6, tip(m, a));
       return;
@@ -524,13 +552,17 @@ export function evidence(m: Model, st: Style, o: PieceOpts): Scene | null {
     PROOF.forEach((q, j) => {
       const ww = (pf[q.k] / tot) * full;
       if (ww <= 0) return;
+      // 从较弱的依据到有日志的证据，最后才揭示总的核验比例。
+      const start = j === 0 ? 0.45 : j === 1 ? 0.2 : 0;
+      reveal(s, styleProgress(st, t, start, start + 0.5), { x, y: y + 8, w: ww + 2, h: 30 }, 'up', () => {
       if (j === 0) st.bar(s, x, y + 10, Math.max(2, ww), 26, colorOf(st, a), i);
       // 字符格风格：浅的两层也是方块字，按浓淡调透明
       else if (st.cells) st.bar(s, x, y + 10, ww, 26, alpha(colorOf(st, a), q.o), i);
       else s.add(rect(x, y + 10, ww, 26, { fill: colorOf(st, a), opacity: q.o, rx: Math.min(st.radius, 6) }));
+      });
       x += ww;
     });
-    st.num(s, `${Math.round((pf.verified / tot) * 100)}%`, p.x + p.w, y + 32, 22, 'end');
+    if (t >= 0.95) st.num(s, `${Math.round((pf.verified / tot) * 100)}%`, p.x + p.w, y + 32, 22, 'end');
     s.hit(p.x, y, p.w, rowH - 6, { ...tip(m, a), d: PROOF.filter((q) => pf[q.k] > 0).map((q) => T(m, `${q.zh} ${fmt(pf[q.k])} 行`, `${q.en}: ${fmt(pf[q.k])} lines`)) });
   });
   // 图例：浓淡说明
@@ -562,22 +594,24 @@ export function areas(m: Model, st: Style, o: PieceOpts): Scene | null {
   const x0 = p.x + 200, w = p.w - 200;
   rows.forEach((r, i) => {
     const y = p.y + i * rowH;
-    const k = ease(t, i, rows.length);
+    const k = styleProgress(st, t, i / (rows.length + 1), (i + 2) / (rows.length + 1));
     s.text(r.name, p.x, y + 30, { font: st.f.body, size: 19, fill: st.c.ink, maxW: 180 });
     s.text(T(m, `${fmt(r.tot)} 行`, `${fmt(r.tot)} lines`), p.x, y + 54, { font: st.f.body, size: 14, fill: st.c.faint });
     let x = x0;
+    reveal(s, k, { x: x0, y: y + 8, w, h: 68 }, 'right', () => {
     for (const key of orderKeys(m, r.by.map(([key]) => key))) {
       const v = r.by.find(([kk]) => kk === key)![1];
-      const ww = (v / r.tot) * w * k;
+      const ww = (v / r.tot) * w;
       if (ww < 0.5) continue;
       if (st.block && (key !== 'unattributed' || st.cells)) st.block(s, x, y + 12, Math.max(1, ww - 2), 38, fillKey(s, st, m, key));
       else s.add(rect(x, y + 12, Math.max(1, ww - 2), 38, { fill: fillKey(s, st, m, key), rx: Math.min(st.radius, 6) }));
       // 百分比写在色块下面：色块的颜色由风格定，字压在上面不一定看得清
-      if (ww > 52 && k >= 1) s.text(`${Math.round((v / r.tot) * 100)}%`, x + 2, y + 70, { font: st.f.body, size: 13, fill: st.c.soft });
+      if (ww > 52) s.text(`${Math.round((v / r.tot) * 100)}%`, x + 2, y + 70, { font: st.f.body, size: 13, fill: st.c.soft });
       const tk = tipKey(m, key);
       s.hit(x, y + 8, ww, 46, { ...tk, d: [T(m, `${r.name}里 ${fmt(v)} 行，占 ${Math.round((v / r.tot) * 100)}%`, `${fmt(v)} lines in ${r.name}, ${Math.round((v / r.tot) * 100)}%`), ...(tk.d ?? []).slice(1)] });
       x += ww;
     }
+    });
   });
   return s;
 }

@@ -1,10 +1,11 @@
 // 小票、分享图、徽章、署名行、人的部分。
-import { Scene, rect, line, path, circle, el, g, r, ease, measure, rng, hash, mix, alpha } from '../svg.ts';
+import { Scene, rect, line, path, circle, el, g, r, measure, rng, hash, mix, alpha } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
 import { fmt, compact, pct, modelName, tzOf } from '../data.ts';
 import type { Style } from '../style.ts';
 import { T, zh, colorOf, tip, handFacts, handTip, canvas, range, summary, modelLine, type PieceOpts } from './common.ts';
 import { segsOf, segTip } from './tier.ts';
+import { styleProgress, reveal } from '../motion.ts';
 
 // ───────────────────────── 精力小票 ─────────────────────────
 
@@ -28,11 +29,11 @@ function effort(m: Model): { k: string; v: string; d?: string }[] {
 export function receipt(m: Model, st: Style, o: PieceOpts): Scene | null {
   const v = o.variant ?? st.prefer.receipt;
   if (v === 'ticket') return ticket(m, st, o);
-  return slip(m, st, v === 'itemized');
+  return slip(m, st, v === 'itemized', o);
 }
 
 /** 热敏小票。itemized（明细）：分项按工具列，每个工具下面再逐个列它的模型 */
-function slip(m: Model, st: Style, itemized: boolean): Scene {
+function slip(m: Model, st: Style, itemized: boolean, o: PieceOpts): Scene {
   const items = effort(m);
   const W = 720, P = 70, lh = 46;
   const list = itemized ? m.tools : m.rows;
@@ -42,6 +43,9 @@ function slip(m: Model, st: Style, itemized: boolean): Scene {
   // 热敏纸：上下锯齿边
   const px = c.x + 30, pw = c.w - 60, py = c.y + 10, ph = c.h - 20;
   const paper = st.dark ? mix(st.c.paper, '#FFFFFF', 0.04) : st.c.paper;
+  const t = o.t ?? 1;
+  // 纸从打印口逐行送出，字与数字保持完整尺寸。
+  reveal(s, styleProgress(st, t, 0, 0.96), { x: px - 12, y: py - 12, w: pw + 24, h: ph + 28 }, 'down', () => {
   let d = `M${r(px)} ${r(py)}`;
   for (let x = px; x < px + pw - 1; x += 14) d += `L${r(Math.min(x + 7, px + pw))} ${r(py - 8)}L${r(Math.min(x + 14, px + pw))} ${r(py)}`;
   d += `L${r(px + pw)} ${r(py + ph)}`;
@@ -93,19 +97,22 @@ function slip(m: Model, st: Style, itemized: boolean): Scene {
   s.text(`${m.project.toUpperCase()}-${m.commits}-${m.linesAdded}`, cx, y + 76, { font: mono, size: 12, fill: st.c.soft, anchor: 'middle', track: 0.2 });
   const hf = handFacts(m);
   if (hf.length) { s.text(hf.slice(0, 2).map((f) => f.text).join(T(m, '，', ', ')), cx, y + 112, { font: st.f.body, size: 14, fill: st.c.soft, anchor: 'middle', maxW: pw - 80 }); s.hit(x0, y + 92, x1 - x0, 28, handTip(m)); }
+  });
   return s;
 }
 
 /** 电影票：横版，右边可撕的票根 */
-function ticket(m: Model, st: Style, _o: PieceOpts): Scene {
+function ticket(m: Model, st: Style, o: PieceOpts): Scene {
   const W = 1240;
   const { s, c } = canvas(m, st, W, 480, 40);
   const x = c.x + 20, y = c.y + 20, w = c.w - 40, h = c.h - 40, stub = 300;
   const paper = st.dark ? mix(st.c.paper, '#FFFFFF', 0.05) : st.c.paper;
+  const t = o.t ?? 1;
   // 票面 + 两侧打孔半圆
   const notch = 22;
   s.add(path(`M${r(x)} ${r(y)}H${r(x + w - stub - notch)}a${notch} ${notch} 0 0 0 ${notch * 2} 0H${r(x + w)}V${r(y + h)}H${r(x + w - stub + notch)}a${notch} ${notch} 0 0 0 ${-notch * 2} 0H${r(x)}Z`, { fill: paper, stroke: st.c.ink, strokeOpacity: 0.2 }));
   s.add(line(x + w - stub, y + notch + 6, x + w - stub, y + h - notch - 6, { stroke: st.c.ink, strokeOpacity: 0.4, strokeDasharray: '6 6' }));
+  reveal(s, styleProgress(st, t, 0, 0.65), { x, y, w: w - stub, h }, 'right', () => {
   st.label(s, 'ADMIT ONE', x + 50, y + 62, { size: 14 });
   st.title(s, m.project || 'Untitled', x + 50, y + 150, 76, 'start', { maxW: w - stub - 100 });
   const lead = m.rows.filter((a) => a.kind === 'agent').slice(0, 3);
@@ -117,8 +124,10 @@ function ticket(m: Model, st: Style, _o: PieceOpts): Scene {
     st.label(s, k, fx, y + h - 78, { size: 12 });
     st.num(s, v, fx, y + h - 40, 28, 'start');
   });
+  });
   // 票根
   const sx = x + w - stub / 2;
+  reveal(s, styleProgress(st, t, 0.38, 0.96), { x: x + w - stub, y, w: stub, h }, 'down', () => {
   st.label(s, 'STUB', sx, y + 62, { anchor: 'middle', size: 12 });
   st.num(s, range(m).split(' — ')[1] ?? '', sx, y + 110, 22, 'middle');
   const rnd = rng(hash(m.project));
@@ -127,6 +136,7 @@ function ticket(m: Model, st: Style, _o: PieceOpts): Scene {
   s.add(g({ opacity: 0.8 }, ...bars));
   const hf = handFacts(m);
   if (hf[0]) { s.text(hf[0].text, sx, y + h - 46, { font: st.f.body, size: 16, fill: st.c.soft, anchor: 'middle' }); s.hit(sx - 120, y + h - 70, 240, 36, handTip(m)); }
+  });
   return s;
 }
 
@@ -150,9 +160,12 @@ export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
   const by = c.y + c.h - 196, bw = x1 - x0, bh = 30;
   let x = x0;
   m.rows.forEach((a, i) => {
-    const w = (bw * a.pct) / 100 * ease(t, i, m.rows.length);
-    if (a.key === 'unattributed') s.add(rect(x, by, w, bh, { fill: st.hatch(s) }));
-    else st.bar(s, x, by, Math.max(0, w - 2), bh, colorOf(st, a), i);
+    const w = (bw * a.pct) / 100;
+    const k = styleProgress(st, t, i / Math.max(1, m.rows.length - 1) * 0.4, 0.55 + i / Math.max(1, m.rows.length - 1) * 0.4);
+    reveal(s, k, { x: x - 12, y: by - 12, w: w + 24, h: bh + 24 }, 'up', () => {
+      if (a.key === 'unattributed') s.add(rect(x, by, w, bh, { fill: st.hatch(s) }));
+      else st.bar(s, x, by, Math.max(0, w - 2), bh, colorOf(st, a), i);
+    });
     s.hit(x, by - 6, w, bh + 12, tip(m, a));
     x += w;
   });
@@ -391,10 +404,11 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
   ].filter((q) => q.v > 0);
   const max = Math.max(...steps.map((q) => q.v), 1);
   steps.forEach((q, i) => {
-    const w = (x1 - x0) * (q.v / max) * ease(t, i, steps.length);
+    const w = (x1 - x0) * (q.v / max);
     const bx = cx - w / 2;
     const col = mix(st.c.accent2.startsWith('#') ? st.c.accent2 : '#888888', st.dark ? '#000000' : '#FFFFFF', 0.15 + i * 0.25);
-    st.bar(s, bx, y, w, 64, col, i);
+    const k = styleProgress(st, t, i * 0.16, 0.42 + i * 0.16);
+    reveal(s, k, { x: bx - 12, y: y - 12, w: w + 24, h: 88 }, 'down', () => st.bar(s, bx, y, w, 64, col, i));
     s.text(q.k, x0, y - 14, { font: st.f.label, size: 15, fill: st.c.soft });
     st.num(s, fmt(q.v), x1, y - 12, 22, 'end');
     s.hit(x0, y - 40, x1 - x0, 110, { k: 'human', t: q.k, d: [T(m, `${fmt(q.v)} 行`, `${fmt(q.v)} lines`), ...(i ? [T(m, `是上一项的 ${Math.round((q.v / steps[i - 1].v) * 100)}%`, `${Math.round((q.v / steps[i - 1].v) * 100)}% of the previous step`)] : [])] });
@@ -408,8 +422,8 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
     const ph = 140, top = y + 20, maxv = Math.max(...weekly.vals, 1);
     const step = (x1 - x0) / (weekly.vals.length - 1);
     let d = '';
-    weekly.vals.forEach((v, i) => { const px = x0 + i * step, py = top + ph - (v / maxv) * ph * ease(t, i, weekly.vals.length); d += `${i ? 'L' : 'M'}${r(px)} ${r(py)}`; });
-    s.add(path(d + `L${r(x1)} ${r(top + ph)}L${r(x0)} ${r(top + ph)}Z`, { fill: st.c.accent2, opacity: 0.12 }), path(d, { fill: 'none', stroke: st.c.accent2, strokeWidth: 2.4, strokeLinejoin: 'round' }));
+    weekly.vals.forEach((v, i) => { const px = x0 + i * step, py = top + ph - (v / maxv) * ph; d += `${i ? 'L' : 'M'}${r(px)} ${r(py)}`; });
+    reveal(s, styleProgress(st, t, 0.4, 0.96), { x: x0 - 2, y: top - 2, w: x1 - x0 + 4, h: ph + 4 }, 'right', () => s.add(path(d + `L${r(x1)} ${r(top + ph)}L${r(x0)} ${r(top + ph)}Z`, { fill: st.c.accent2, opacity: 0.12 }), path(d, { fill: 'none', stroke: st.c.accent2, strokeWidth: 2.4, strokeLinejoin: 'round' })));
     st.rule(s, x0, top + ph, x1 - x0, 'thin');
     s.hit(x0, top, x1 - x0, ph, { k: 'human', t: weekly.label, d: [T(m, `${weekly.vals.length} 周，最多一周 ${fmt(maxv)}`, `${weekly.vals.length} weeks, peak ${fmt(maxv)}`)] });
     y = top + ph + 50;

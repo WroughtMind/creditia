@@ -10,6 +10,8 @@ import { FORMATS, SIZES, type Art } from '../../../packages/render/src/export.ts
 import { INTERACT_CSS, mountHits, placeTip } from '../../../packages/render/src/interact.ts';
 import { KITS, CLASSIC_COUNT, kitById, bootKits, setGroup, setNamed, groupOf, hasModels, type Kit } from './kits.ts';
 import { exportArt, type Format } from './engine.ts';
+import { playFocusMotion } from './focus-motion.ts';
+import { motionDuration } from '../../../packages/render/src/motion.ts';
 import { mountRoamPreview, releaseRoamPreview } from './roam-preview.ts';
 import { RoamViewport } from './roam-viewport.ts';
 import { wallTiles, tileKey as keyOf, wallVariant, selectWallVariant } from './wall.ts';
@@ -998,9 +1000,11 @@ function openFocus(id: string, k: string) {
   const el = $('#focus');
   // 放大视图里可以只给这一件换风格试试：kit 是正在看的那一套，墙上的风格不动
   let kit = state.style, art: Art | null = null, preview: Blob | null = null, seq = 0, open = true, exportReady = false;
+  let cancelMotion: (() => void) | undefined;
   const tried: Record<string, string> = {};
   const variantNow = () => kit === state.style ? curVariant(k) : tried[kit.id] ?? kit.current(id);
   const pending = () => {
+    cancelMotion?.(); cancelMotion = undefined;
     exportReady = false; seq++; closeFormats();
     const button = el.querySelector<HTMLButtonElement>('.xp');
     if (button) button.disabled = true;
@@ -1023,6 +1027,9 @@ function openFocus(id: string, k: string) {
     document.querySelector(`.tile[data-k="${next}"]`)?.scrollIntoView({ block: 'nearest' });
   };
   const chrome = () => {
+    cancelMotion?.(); cancelMotion = undefined;
+    const oldArt = el.querySelector<HTMLElement>('.big .art');
+    if (oldArt) releasePreview(oldArt);
     const vs = kit.variants(id), v = variantNow(), all = keyList(), at = all.indexOf(k);
     const multiModel = !!state.raw && resolveGroup(state.raw, 'auto') === 'model';
     el.innerHTML = `${closeBtn()}
@@ -1039,7 +1046,13 @@ function openFocus(id: string, k: string) {
       </div>`;
     if (art && preview) { mountPreview(el.querySelector('.big .art') as HTMLElement, art, preview); place(art); } // 换风格时旧图先留着，新的画好再换
   };
-  const place = (a: Art) => { (el.querySelector('.big') as HTMLElement).style.width = `${Math.max(320, Math.min(a.w, 1100, ((innerHeight - 240) * a.w) / a.h))}px`; };
+  const place = (a: Pick<Art, 'w' | 'h' | 'motion'>) => {
+    const big = el.querySelector('.big') as HTMLElement | null; if (!big) return;
+    const w = a.motion?.viewW ?? a.w, h = a.motion?.viewH ?? a.h;
+    const width = Math.max(320, Math.min(w, 1100, ((innerHeight - 240) * w) / h));
+    big.style.width = `${width}px`;
+    big.style.height = a.motion ? `${big.getBoundingClientRect().width * h / w}px` : '';
+  };
   // 快速连点几个版式：按钮立刻跟上，图只认最后一次（先点的画得慢，回来也不会盖掉后点的）
   const draw = async () => {
     pending();
@@ -1059,9 +1072,18 @@ function openFocus(id: string, k: string) {
       releasePreview(artEl); artEl.replaceChildren();
       mountPreview(artEl, a, p);
       place(a);
+      big.scrollTop = 0;
       mountRoamHits(artEl, a);
       exportReady = true;
       el.querySelector<HTMLButtonElement>('.xp')!.disabled = false;
+      if (k0.animated(id) || a.motion) {
+        const raw = state.raw, lang = state.lang;
+        cancelMotion = playFocusMotion(artEl, a, p, (signal) => k0.motion(raw, lang, id, v, signal), motionDuration(id, v, k0.id), place, (error) => {
+          if (my !== seq || !open) return;
+          console.error('Artwork animation failed', { id, variant: v, style: k0.id }, error);
+          toast(L('动画未能播放，静态作品仍可查看和导出', 'Animation could not play. The artwork is still available to view and export.'), 6000);
+        });
+      }
     } catch (error) {
       if (my !== seq || !open) return;
       el.querySelector('.big')?.classList.remove('loading');
@@ -1082,6 +1104,8 @@ function openFocus(id: string, k: string) {
   chrome(); draw();
   el.hidden = false;
   document.body.classList.add('focusing');
+  const resize = () => { if (art) place(art); };
+  addEventListener('resize', resize);
   el.onclick = (e) => {
     const b = (e.target as HTMLElement).closest('button') as HTMLElement | null;
     if (!b) { el.querySelector('.kits')?.remove(); closeFormats(); if (e.target === el) close(); return; }
@@ -1104,6 +1128,10 @@ function openFocus(id: string, k: string) {
   };
   // 版式已同步到墙上；关闭后键盘焦点回到刚才的位置。
   const close = (refocus = true) => {
+    cancelMotion?.(); cancelMotion = undefined;
+    const artEl = el.querySelector<HTMLElement>('.big .art');
+    if (artEl) releasePreview(artEl);
+    removeEventListener('resize', resize);
     open = false; el.hidden = true; el.innerHTML = ''; closeFocus = null; focusKeys = null;
     document.body.classList.remove('focusing');
     document.querySelector('.ct-tip')?.classList.remove('on');
@@ -1440,6 +1468,7 @@ function closeStyles() {
 }
 async function useStyle(t: Kit, turn = 1) {
   if (t.id === state.style.id) return;
+  closeFocus?.();
   state.style = t; store.set('theme', t.id);
   state.variants = {};
   renderDots();

@@ -6,6 +6,7 @@ import type { Model, Agent } from '../data.ts';
 import { fmt } from '../data.ts';
 import type { Style } from '../style.ts';
 import { T, colorOf, canvas, tip, type PieceOpts } from './common.ts';
+import { styleProgress } from '../motion.ts';
 
 const PITCH = 4.5, CW = 56, GAP = 22, FILE_GAP = 2, SHADE = [1, 0.78, 0.6];
 
@@ -51,7 +52,9 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
   // 按颜色 × 深浅归并成少数几条 path，文件小
   const layers = new Map<string, string[]>();
   const base: string[] = [];
-  const sweepX = x0 - 2 + (pw + 4) * Math.min(1, t / 0.85);
+  const progress = styleProgress(st, t, 0, 0.85);
+  const sweepX = x0 - 2 + (pw + 4) * progress;
+  const typed = !!st.grid || ['terminal', 'crt', 'arcade', 'manuscript'].includes(st.id);
   let col = 0, row = 0;
   for (const f of files) {
     const all = linesOf(f);
@@ -84,7 +87,7 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
           const shade = first ? 0 : R() < 0.45 ? 1 : R() < 0.5 ? 2 : 0;
           const d = `M${r(x)} ${y}h${r(w)}`;
           base.push(d);
-          if (x < sweepX) {
+          if (typed ? (col * rows + row) / (cols * rows) < progress : x < sweepX) {
             const lk = `${key}|${shade}`;
             (layers.get(lk) ?? layers.set(lk, []).get(lk)!).push(d);
           }
@@ -103,7 +106,12 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.add(path(ds.join(''), { fill: 'none', stroke: color(key), strokeOpacity: r(SHADE[+sh] * (neutral(key) ? 0.55 : 1)), strokeWidth: 2 }));
   }
   // 扫描线
-  if (t > 0 && t < 0.85) s.add(rect(sweepX - 1, py - 10, 2, plotH + 14, { fill: st.c.ink, opacity: 0.8 }));
+  if (t > 0 && t < 0.85) {
+    if (typed) {
+      const at = Math.min(cols * rows - 1, Math.floor(progress * cols * rows));
+      s.add(rect(x0 + Math.floor(at / rows) * (cw + GAP), py + (at % rows) * PITCH, cw, 2, { fill: st.c.ink, opacity: 0.8 }));
+    } else s.add(rect(sweepX - 1, py - 10, 2, plotH + 14, { fill: st.c.ink, opacity: 0.8 }));
+  }
 
   // 占比条与图例：按图里画的这些行（现在的代码）算，只在 AI 和未确认之间分
   const cur: Record<string, number> = {};
@@ -116,7 +124,7 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
   const by = py + plotH + 26, ly = by + 52;
   s.add(rect(x0, by, pw, 5, { fill: st.c.ink, fillOpacity: 0.1 }));
   let bx = x0;
-  const reveal = Math.min(1, Math.max(0, (t - 0.1) / 0.75));
+  const reveal = styleProgress(st, t, 0.1, 0.85);
   for (const { a, pct } of shown) {
     const w = (pct / 100) * pw;
     const vis = Math.max(0, Math.min(w, x0 + pw * reveal - bx));

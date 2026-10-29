@@ -8,7 +8,8 @@ import { pieceName } from './catalog.ts';
 import { FIT_KEY, BODY_KEY, CONTENT_KEY } from './ui.ts';
 import { enTree, enSvg } from './i18n.ts';
 import { BRIDGED, BRIDGED_LAYOUTS, isBridged, bridgeArt, bridgeFrames } from './bridge.ts';
-import { reveal, rise, RISING } from './motion.ts';
+import { animate } from './motion.ts';
+import { motionDuration } from '../motion.ts';
 import { hitsOf, type Seen } from './hits.ts';
 
 export type Satori = (tree: any, o: { width: number; height: number; fonts: any[]; onNodeDetected?: (n: any) => void }) => Promise<string>;
@@ -166,7 +167,7 @@ export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, sator
 /** 会动的作品：徽章是单独的小 SVG，不做动画；其余原版作品都能出帧 */
 export const animatedClassic = (id: string) => id !== 'badge' && (!!FORMS[id] || BRIDGED.includes(id));
 
-/** 动画帧：t 从 0 到 1。排版（统一宽度、放大）只量一次，每帧在排好的树上改透明度和条形长度，再出一遍图 */
+/** 动画帧：t 从 0 到 1。排版（统一宽度、放大）只量一次，每帧在排好的树上按作品标出的内容组改绘制属性，再出一遍图 */
 export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, satori: Satori, fonts: any[], n = 24): Promise<Art[]> {
   if (isBridged(id, ctx.variant)) return bridgeFrames(id, m, t, ctx, n);
   const f = FORMS[id];
@@ -176,17 +177,15 @@ export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, sa
   if (ctx.lang === 'en') enTree(out.tree);
   await fitted(out, satori, fonts);
   const laid = JSON.stringify(out.tree);
-  const variant = ctx.variant ?? f.def?.(t);
-  const rising = id === 'roll' && RISING.has(variant ?? '');
   const title = `${m.project || 'credits'} · ${pieceName(id, ctx.lang, m.raw)}`;
   const frames: Art[] = [];
+  const frameDelay = motionDuration(id, ctx.variant ?? f.def?.(t), t.id) / n;
   for (let i = 0; i <= n; i++) {
     const k = i / n;
-    let tree = JSON.parse(laid);
-    if (rising) tree = rise(tree, k, out.w, out.h, t.bg);
-    else reveal(tree, k);
+    const tree = JSON.parse(laid);
+    animate(tree, k, t);
     const svg = tidy(await satori(tree, { width: out.w, height: out.h, fonts }), out.w, out.h);
-    frames.push({ w: out.w, h: out.h, svg, hits: [], bg: t.bg, title });
+    frames.push({ w: out.w, h: out.h, svg, hits: [], bg: t.bg, title, frameDelay });
   }
   return frames;
 }

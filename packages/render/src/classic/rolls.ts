@@ -5,6 +5,7 @@
 //   slate      场记板：黑板白字，PROD / DIRECTOR / CAMERA / SCENE / TAKE
 //   crew       部门：每个工具一个部门，底下列它用到的模型和各写了多少行
 import type { Theme } from './themes.ts';
+import { motion, sequence, stage } from './motion.ts';
 import type { Model } from './data.ts';
 import { fmt } from './data.ts';
 import { modelName } from '../data.ts';
@@ -51,6 +52,10 @@ const range = (m: Model) => (m.range.from && m.range.to ? `${dot(m.range.from)} 
 const totals = (m: Model) => [m.commits && `${fmt(m.commits)} 次提交`, m.linesAdded && `+${fmt(m.linesAdded)} 行`].filter(Boolean).join('  ·  ');
 
 export function rollNew(m: Model, t: Theme, v: string): Out | null {
+  const out = rollScene(m, t, v);
+  return out && (v === 'slate' || v === 'crew' || v === 'opening' ? out : stage(out, 'title'));
+}
+function rollScene(m: Model, t: Theme, v: string): Out | null {
   const c = cast(m);
   const serif = serifOf(t);
 
@@ -67,7 +72,7 @@ export function rollNew(m: Model, t: Theme, v: string): Out | null {
         mark(x.p.key, t, x.lead ? 30 : 22),
         txt({ fontFamily: t.display, fontSize: x.lead ? 50 : 36, fontWeight: t.displayWeight, color: t.ink, lineHeight: 1.05, letterSpacing: serif ? 0 : -1, whiteSpace: 'nowrap' }, x.p.name)),
       x.p.model ? txt({ fontFamily: MONO_FONT, fontSize: 11, color: t.faint, marginTop: 2 }, x.p.model) : null);
-    const list = fit(2.4, { alignItems: 'flex-start', transformOrigin: 'left center', flexShrink: 0 }, spread(2.4, col({ gap: 22, alignItems: 'flex-start' }, ...people.map(entry))));
+    const list = fit(2.4, { alignItems: 'flex-start', transformOrigin: 'left center', flexShrink: 0 }, spread(2.4, col({ gap: 22, alignItems: 'flex-start' }, ...sequence(people.map(entry), 'credits'))));
     // Fit the author list inside its real body, after header/footer layout.
     // Project titles can wrap; fixed vertical padding cannot predict their height.
     const body = box({ flexGrow: 1, minHeight: 0, alignItems: 'center', margin: '32px 0' }, list);
@@ -115,7 +120,7 @@ export function rollNew(m: Model, t: Theme, v: string): Out | null {
     const others = [...new Set([...c.rest.map((p) => p.name), ...c.reviewers.map((p) => p.name)])];
     return { w: W, h: H, fit: { padX: 70, padY: 110 }, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
       fit(1.15, { alignItems: 'center', width: 900 },
-        box({ width: 900, height: 78, backgroundImage: stripe, border: `5px solid ${bg}`, borderRadius: 8, transform: 'rotate(-6deg)', transformOrigin: 'left bottom', marginBottom: 14 }),
+        motion(box({ width: 900, height: 78, backgroundImage: stripe, border: `5px solid ${bg}`, borderRadius: 8, transform: 'rotate(-6deg)', transformOrigin: 'left bottom', marginBottom: 14 }), 'clap'),
         box({ width: 900, height: 52, backgroundImage: stripe, border: `5px solid ${bg}`, borderRadius: 6 }),
         col({ width: 900, backgroundColor: bg, borderRadius: 10, marginTop: 6, overflow: 'hidden' },
           box({ padding: '22px 24px 20px' }, col({ gap: 6 },
@@ -146,7 +151,7 @@ export function rollNew(m: Model, t: Theme, v: string): Out | null {
         txt({ fontFamily: t.display, fontSize: 54, fontWeight: t.displayWeight, margin: '12px 0 10px', textAlign: 'center' }, m.project),
         ornament(t, 11),
         spread(2.6, col({ gap: 34, marginTop: 36, alignItems: 'center' },
-          ...depts.map(dept),
+          ...sequence(depts.map(dept), 'credits'),
           c.reviewers.length ? col({ alignItems: 'center', gap: 10 }, label(t, '审阅', 14, { color: t.accent, letterSpacing: 6 }), txt({ fontFamily: t.display, fontSize: 24, color: t.ink }, c.reviewers.map((p) => p.name).join('  ·  '))) : null)),
         label(t, totals(m), 11, { marginTop: 40 }))) };
   }

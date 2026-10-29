@@ -8,7 +8,7 @@ import { INTERACT_CSS, mountHits } from './interact.ts';
 import type { Hit } from './svg.ts';
 
 /** 一张可导出的作品 */
-export interface Art { w: number; h: number; svg: string; hits: Hit[]; bg: string; title: string; motion?: Motion; crop?: Crop }
+export interface Art { w: number; h: number; svg: string; hits: Hit[]; bg: string; title: string; motion?: Motion; crop?: Crop; /** 动画采样帧的持续时间（毫秒） */ frameDelay?: number }
 /** 滚动片尾字幕的一帧：整卷 svg 里从 y 开始、高 h 的一段 */
 export interface Crop { svg: string; w: number; h: number; y: number }
 /** HTML 里的动态：scroll = 片尾字幕在银幕里滚动 */
@@ -76,7 +76,7 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
   /** frames：同一作品在动画各时刻的画面 */
   function gif(frames: Art[], o: { width?: number; fps?: number; hold?: number } = {}): Uint8Array {
     const enc = GIFEncoder();
-    const fps = o.fps ?? 20, delay = Math.round(1000 / fps);
+    const delay = Math.round(1000 / (o.fps ?? 20));
     const width = o.width ?? Math.min(frames[0].w, 960);
     // 滚动字幕：整卷栅格化一次，逐帧裁行
     const c0 = frames[0].crop;
@@ -89,7 +89,7 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
       const img = whole ? cut(f) : R.rgba(f.svg, width);
       const palette = quantize(img.data, 256, { format: 'rgb565' });
       const index = applyPalette(img.data, palette, 'rgb565');
-      enc.writeFrame(index, img.w, img.h, { palette, delay: i === frames.length - 1 ? (o.hold ?? 2400) : delay, repeat: 0 });
+      enc.writeFrame(index, img.w, img.h, { palette, delay: i === frames.length - 1 ? (o.hold ?? 2400) : o.fps === undefined ? f.frameDelay ?? delay : delay, repeat: 0 });
     });
     enc.finish();
     return enc.bytes();
