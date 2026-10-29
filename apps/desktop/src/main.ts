@@ -108,8 +108,8 @@ const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&
 const markEl = (petals?: Petal[] | null, cls = '') => `<svg class="mk${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${markPaths({ petals: petals ?? undefined })}</svg>`;
 const SPIN = () => markEl(null, 'spin');
 const petalsOf = (m: Model) => sharePetals(m.agents.filter((a) => a.kind === 'agent').map((a) => ({ tool: a.key.split('/')[0], lines: a.lines })));
-/** 每个项目的 * 记在本机，菜单里不用每次都读档案 */
-const markOf = (id: string): Petal[] | null => { try { return JSON.parse(store.get('mark.' + id) ?? 'null'); } catch { return null; } };
+/** 缓存完整工具的 *；旧版折叠过的 mark 缓存不再读取，菜单会从档案重建。 */
+const markOf = (id: string): Petal[] | null => { try { return JSON.parse(store.get('mark.full.' + id) ?? 'null'); } catch { return null; } };
 type Act = { label: string; run: () => void };
 let toastTimer = 0, toastMs = 0;
 /** 提示条：可以带按钮（在访达中显示、取消……）、转圈的 *、或者一个项目的 *；ms 为 0 就一直留着。鼠标停在上面时不消失 */
@@ -419,7 +419,7 @@ function rebuildModel() {
   const m = state.model;
   $('#pname').textContent = m.project || state.current?.name;
   const petals = petalsOf(m);
-  if (state.current?.id) store.set('mark.' + state.current.id, JSON.stringify(petals));
+  if (state.current?.id) store.set('mark.full.' + state.current.id, JSON.stringify(petals));
   mark.set(petals);
   renderGroup();
   renderPlugs();
@@ -1562,7 +1562,7 @@ async function fillMarks() {
       if (markOf(p.id) || !p.lastAnalyzed || p.exists === false) continue;
       const raw = await api('credits', { projectId: p.id }).catch(() => null);
       if (!raw) continue;
-      try { store.set('mark.' + p.id, JSON.stringify(petalsOf(buildModel(raw, { director: false, lang: state.lang, group: 'tool' })))); redrawMenu?.(); } catch { /* 读不了的档案就留着淡的 * */ }
+      try { store.set('mark.full.' + p.id, JSON.stringify(petalsOf(buildModel(raw, { director: false, lang: state.lang, group: 'tool' })))); redrawMenu?.(); } catch { /* 读不了的档案就留着淡的 * */ }
     }
   } finally { filling = false; }
 }

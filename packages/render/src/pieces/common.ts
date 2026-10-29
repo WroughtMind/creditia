@@ -92,7 +92,7 @@ export const legendRows = (m: Model) => [...m.rows].sort((a, b) => keyRank(m, a.
 
 /** 这个项目自己的 *：瓣长是各工具的份额，颜色用这个风格给各工具的颜色 */
 export function markOf(m: Model, st: Style, x: number, y: number, size: number): string {
-  const petals = sharePetals(m.tools.filter((a) => a.kind === 'agent').map((a) => ({ tool: a.key, lines: a.lines, color: colorOf(st, a) })), st.c.faint);
+  const petals = sharePetals(m.tools.flatMap((a) => a.members ?? [a]).filter((a) => a.kind === 'agent').map((a) => ({ tool: a.key, lines: a.lines, color: colorOf(st, a) })), st.c.faint);
   return `<g transform="translate(${+x.toFixed(2)} ${+y.toFixed(2)}) scale(${+(size / 24).toFixed(4)})">${markPaths({ petals })}</g>`;
 }
 /** 落款：右下角的 creditia，前面挂上这个项目的 * */

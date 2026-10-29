@@ -43,11 +43,13 @@ export function markPaths(o: MarkOpts = {}): string {
   const { cx = 12, cy = 12, R = 10.7, ink, optical } = o;
   const petals: Petal[] = o.petals ?? MARK_COLORS.map((color) => ({ color }));
   const n = petals.length, gap = ink ? 0 : R * (optical ? 0.035 : 0.07), head = optical ? 0.25 : 0.224;
+  // 每瓣占自己的扇区；工具变多时收窄圆头，不合并工具或让相邻瓣盖住彼此。
+  const spread = Math.sin(Math.PI / Math.max(2, n));
   return petals.map((p, i) => {
     const len = R * (p.len ?? 1);
     if (len <= gap || p.opacity === 0) return '';
     // 生长动画中圆头也要跟着缩小，让尖端始终处于圆外，切线才有实数解。
-    const rb = Math.min(R * head * Math.sqrt(p.len ?? 1), (len - gap) / 2);
+    const rb = Math.min(R * head * Math.sqrt(p.len ?? 1), (len - gap) * spread / (1 + spread));
     const op = p.opacity != null && p.opacity < 1 ? ` fill-opacity="${+p.opacity.toFixed(3)}"` : '';
     const a = -Math.PI / 2 + 2 * Math.PI * (p.at ?? i / n);
     return `<path d="${petal(cx, cy, a, len, rb, gap)}" fill="${ink ?? p.color}"${op}/>`;
@@ -63,16 +65,16 @@ export const toolColor = (tool: string) => TOOL_COLOR[tool] ?? MARK_GREY;
 
 /**
  * 一个项目自己的 *：各工具按行数排，最多的在正上方，顺时针递减；
- * 瓣长按份额开方（小份额也看得见）。不到五个工具时补几瓣淡灰的短瓣，形还是一个 *。
+ * 每个有贡献的工具都保留一瓣；瓣长按相对行数开方，再留出短瓣的可见长度。
+ * 不到五个工具时补几瓣淡灰的短瓣，形还是一个 *。
  * 作品里用这个风格自己的颜色（color），App 里用工具色。
  */
 export function sharePetals(tools: { tool: string; lines: number; color?: string }[], grey = MARK_GREY): Petal[] {
   const by = new Map<string, { lines: number; color?: string }>();
   for (const t of tools) if (t.lines > 0) { const e = by.get(t.tool); by.set(t.tool, { lines: (e?.lines ?? 0) + t.lines, color: e?.color ?? t.color }); }
-  let list: [string, { lines: number; color?: string }][] = [...by].sort((a, b) => b[1].lines - a[1].lines);
-  if (list.length > 6) list = [...list.slice(0, 5), ['', { lines: list.slice(5).reduce((s, x) => s + x[1].lines, 0), color: grey }]];
+  const list = [...by].sort((a, b) => b[1].lines - a[1].lines);
   const max = list[0]?.[1].lines ?? 0;
-  const out: Petal[] = list.map(([k, v]) => ({ color: v.color ?? (k ? toolColor(k) : grey), len: 0.46 + 0.54 * Math.sqrt(v.lines / max) }));
+  const out: Petal[] = list.map(([k, v]) => ({ color: v.color ?? toolColor(k), len: 0.46 + 0.54 * Math.sqrt(v.lines / max) }));
   while (out.length < 5) out.push({ color: grey, len: 0.42, opacity: 0.35 });
   return out;
 }
