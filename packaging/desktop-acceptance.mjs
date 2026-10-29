@@ -47,6 +47,11 @@ async function click(selector) {
     }
   }
 }
+async function keys(...values) {
+  const actions = values.map(value => ({ type: 'keyDown', value }));
+  actions.push(...values.slice().reverse().map(value => ({ type: 'keyUp', value })));
+  await command('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions }] });
+}
 async function ready() {
   await until(() => js(`return !document.body.classList.contains('busy') && [...document.querySelectorAll('#board .art img')].some(i => i.complete && i.naturalWidth > 0)`), 'rendered project artwork');
 }
@@ -81,6 +86,19 @@ try {
   assert.equal(await js('return document.documentElement.lang'), 'en');
   await click('#sheet [data-act="close"]');
   record('switch language', 'English');
+  await keys('\uE009', 'k');
+  await until(() => js('return !document.querySelector("#menu").hidden && document.activeElement?.id === "q"'), 'Ctrl+K opens project search');
+  await keys('\uE00C');
+  assert(await js('return document.querySelector("#menu").hidden'));
+  await keys('\uE009', 'i');
+  await until(() => js('return !document.querySelector("#sheet").hidden && !!document.querySelector("#sheet [data-x=link]")'), 'Ctrl+I opens project settings');
+  await keys('\uE00C');
+  assert(await js('return document.querySelector("#sheet").hidden'));
+  await keys('\uE009', ',');
+  await until(() => js('return !document.querySelector("#sheet").hidden && !!document.querySelector("#sheet [data-lang=en]")'), 'Ctrl+comma opens app settings');
+  await keys('\uE00C');
+  assert.equal(await js('return document.querySelectorAll("[role=menubar]").length'), 0);
+  record('native shortcuts', 'Ctrl+K, Ctrl+I, Ctrl+comma and Escape');
   await click('#project');
   await click('#plist .item.on [data-more]');
   assert.equal(await js('return document.querySelector("[data-r=re]").disabled'), false);
@@ -100,11 +118,11 @@ try {
   assert(changed && changed !== original);
   record('switch visual style', changed);
   await screenshot('changed-style');
-  await click('#view [data-v="roam"]');
+  await keys('\uE009', '2');
   await until(() => js('return !document.querySelector("#roam").hidden && !!document.querySelector("#roam canvas[data-ready=true], #roam img")'), 'roaming artwork');
   await screenshot('roam');
-  await click('#view [data-v="wall"]'); await ready();
-  record('wall and roam views');
+  await keys('\uE009', '1'); await ready();
+  record('wall and roam views', 'Ctrl+2 and Ctrl+1');
   // Object URLs are revoked after the image loads. Observe the Blob while
   // opening focus instead of trying to fetch a revoked preview URL later.
   await js(`window.__acceptanceArtwork = new Map();
@@ -114,7 +132,7 @@ try {
       if (blob.type === 'image/svg+xml') window.__acceptanceArtwork.set(url, blob);
       return url;
     };`);
-  const tile = await element('#board .tile:not(.slot)');
+  const tile = await element('#board .tile:not(.slot) .art[role="button"]');
   await command('POST', `/element/${tile}/value`, { text: '\uE007', value: ['\uE007'] });
   await until(() => js('const img = document.querySelector("#focus .art img"); return !document.querySelector("#focus").hidden && !!document.querySelector("#focus .xp") && img?.complete && img.naturalWidth > 0 && !document.querySelector("#focus .big.loading")'), 'enlarged artwork');
   // Keep the focused SVG preview when a native rasterizer fails. Classic path
@@ -132,7 +150,7 @@ try {
   assert(!artwork.failure, artwork.failure);
   assert.match(artwork.svg, /<svg/);
   writeFileSync(path.join(output, 'export-artwork.svg'), artwork.svg);
-  for (const format of ['png', 'svg', 'pdf', 'html', 'gif']) {
+  for (const format of ['png', 'svg', 'pdf', 'html', 'gif', 'png', 'png']) {
     await click('#focus .xp');
     if (!(await js('return !!document.querySelector(arguments[0])', `#focus .fmts [data-f="${format}"]`))) {
       assert.equal(format, 'gif');
@@ -142,7 +160,7 @@ try {
     const before = new Set(files(info.exportDir));
     await click(`#focus .fmts [data-f="${format}"]`);
     const outcome = await until(async () => {
-      const message = await js('return document.querySelector("#toast .msg")?.textContent ?? ""');
+      const message = await js('return document.querySelector(".export-job[data-status=failed] .export-status")?.textContent ?? ""');
       // Return a terminal failure to escape the polling helper; throwing here
       // would be swallowed by until() and turn the real error into a timeout.
       if (message.startsWith('Export failed:')) return { error: message };
@@ -151,7 +169,7 @@ try {
     }, `${format} export`, 180000);
     assert(!outcome.error, `${format}: ${outcome.error}`);
     const { file } = outcome;
-    await until(() => js('return document.querySelector("#toast .msg")?.textContent.startsWith("Saved to")'), 'native save completes');
+    await until(() => js('return !document.querySelector(".export-job[data-status=running]") && !!document.querySelector(".export-job[data-status=saved]")'), 'native save completes');
     const data = readFileSync(path.join(info.exportDir, file));
     assert(data.length > 100);
     if (format === 'png') assert.equal(data.subarray(1, 4).toString(), 'PNG');

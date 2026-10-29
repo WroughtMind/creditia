@@ -1,8 +1,17 @@
-# Interact with the installed candidate using Windows UI Automation only.
+# Interact with the installed candidate using native controls and keyboard input.
 param([Parameter(Mandatory=$true)][string]$App, [string]$Output = 'evidence/ui')
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class NativeFocus {
+  [DllImport("user32.dll")]
+  public static extern IntPtr GetForegroundWindow();
+}
+'@
 New-Item -ItemType Directory -Force $Output | Out-Null
 $records = [System.Collections.Generic.List[object]]::new()
 function Record($name,$detail='') { $records.Add(@{test=$name;detail=$detail}); Write-Host "$name $detail" }
@@ -61,14 +70,52 @@ function Wait-Text([string]$pattern) {
   } while ([DateTime]::UtcNow -lt $until)
   throw "No native text: $pattern"
 }
+function Send-Keys([string]$keys) {
+  $shell = New-Object -ComObject WScript.Shell
+  if (-not $shell.AppActivate($p.Id)) { throw 'Could not focus the isolated candidate window' }
+  $until = [DateTime]::UtcNow.AddSeconds(30)
+  while ([NativeFocus]::GetForegroundWindow() -ne $p.MainWindowHandle) {
+    if ([DateTime]::UtcNow -ge $until) { throw 'Candidate did not become the keyboard input window' }
+    Start-Sleep -Milliseconds 50
+  }
+  [System.Windows.Forms.SendKeys]::SendWait($keys)
+}
+function Assert-Hidden([string]$name) {
+  $until = [DateTime]::UtcNow.AddSeconds(30)
+  do {
+    if ($null -eq (Find-Control $name)) { return }
+    Start-Sleep -Milliseconds 100
+  } while ([DateTime]::UtcNow -lt $until)
+  throw "Control remained visible: $name"
+}
 $p = Start-Process -FilePath $App -PassThru
 try {
   Click-Control '设置'
   Click-Control 'English'
   $null = Wait-Control 'General'
   Click-Control 'Close'
+  # UI Automation Invoke can return before the web control handles the click.
+  Assert-Hidden 'General'
   $null = Wait-Control 'creditia · Share card'
+  # Establish the initial keyboard target after removing the settings controls.
+  (Wait-Control 'Switch project').SetFocus()
   Record 'language switched to English'
+  Send-Keys '^k'
+  $null = Wait-Control 'More'
+  Send-Keys '{ESC}'
+  Assert-Hidden 'More'
+  Send-Keys '^i'
+  $null = Wait-Text '^Link a folder'
+  Send-Keys '{ESC}'
+  Assert-Hidden 'Project settings'
+  Send-Keys '^,'
+  $null = Wait-Control 'General'
+  Send-Keys '{ESC}'
+  Assert-Hidden 'General'
+  $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+  $menuBars = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,(New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty,[System.Windows.Automation.ControlType]::MenuBar)))
+  if (@($menuBars | Where-Object { -not $_.Current.IsOffscreen }).Count) { throw 'Unexpected menu bar in Windows window' }
+  Record 'native shortcuts' 'Ctrl+K, Ctrl+I, Ctrl+comma and Escape; no extra menu bar'
   Click-Control 'By model'
   Click-Control 'By tool'
   Record 'model and tool grouping'
@@ -82,21 +129,28 @@ try {
   $null = Wait-Control 'Minimal Dark'
   $null = Wait-ReplacedControl 'creditia · Share card' $previousArt
   Record 'visual style switched' 'Minimal Dark'
-  Click-Control 'Roam'
-  $null = Wait-Text 'creditia.*Share card'
-  Click-Control 'Wall'
+  Send-Keys '^2'
+  $null = Wait-Control 'Back to start'
+  Send-Keys '^1'
+  Assert-Hidden 'Back to start'
   $null = Wait-Control 'creditia · Share card'
-  Record 'wall and roam views'
+  Record 'wall and roam views' 'Ctrl+2 and Ctrl+1'
   $exportDir = Join-Path $env:USERPROFILE 'Downloads'
+  $savedCount = 0
   foreach ($format in @('PNG','SVG','PDF','HTML','GIF')) {
     $before = @(Get-ChildItem $exportDir -File -ErrorAction SilentlyContinue | ForEach-Object Name)
     Click-Control 'Export'
     Click-Control $format
+    $savedCount++
+    $tasks = Wait-Text "^Export tasks: 0 exporting, $savedCount saved, 0 failed$"
+    Click-Control $tasks
     $saved = Wait-Text '^Saved to '
     $files = @(Get-ChildItem $exportDir -File | Where-Object { $_.Name -notin $before -and $_.Extension -eq ".$($format.ToLower())" })
     if ($files.Count -ne 1 -or $files[0].Length -lt 100) { throw "No complete new $format file after $saved" }
     Copy-Item $files[0].FullName $Output
     Record "native $format export" @{file=$files[0].Name;bytes=$files[0].Length}
+    Send-Keys '{ESC}'
+    Assert-Hidden $saved
   }
   if (-not $p.CloseMainWindow()) { throw 'Could not close candidate window normally' }
   if (-not $p.WaitForExit(15000)) { throw 'Candidate did not exit after close' }
@@ -113,7 +167,7 @@ try {
   if (-not $p.HasExited) {
     $root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
     $all = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
-    @($all | ForEach-Object { @{name=$_.Current.Name;type=$_.Current.ControlType.ProgrammaticName} }) | ConvertTo-Json -Depth 4 | Set-Content "$Output/native-elements.json"
+    @($all | ForEach-Object { @{name=$_.Current.Name;type=$_.Current.ControlType.ProgrammaticName;focused=$_.Current.HasKeyboardFocus;offscreen=$_.Current.IsOffscreen} }) | ConvertTo-Json -Depth 4 | Set-Content "$Output/native-elements.json"
     $null = $p.CloseMainWindow()
     if (-not $p.WaitForExit(5000)) { Stop-Process -Id $p.Id }
   }

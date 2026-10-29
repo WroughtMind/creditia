@@ -9,15 +9,18 @@
 <body>
 <!-- 图标由 icons.ts 在启动时填进 [data-icon] -->
 <header id="top" data-tauri-drag-region>
-  <div class="pill" id="project" role="button" tabindex="0" aria-haspopup="listbox">
-    <span class="pmark" id="pmark"></span>
-    <span class="pname" id="pname">creditia</span>
+  <div class="project-status">
+    <div class="pill" id="project" role="button" tabindex="0" aria-haspopup="listbox">
+      <span class="pmark" id="pmark"></span>
+      <span class="pname" id="pname">creditia</span>
+      <span class="chev" data-icon="updown"></span>
+    </div>
     <span class="pstat" id="pstat" aria-live="polite"><span class="in"></span></span>
-    <span class="chev" data-icon="updown"></span>
   </div>
   <div class="tools glass" id="tools">
     <div class="seg" id="group" role="group" hidden></div><i class="sep" aria-hidden="true"></i>
     <div class="seg" id="view" role="group"><button data-v="wall" data-icon="wall"></button><button data-v="roam" data-icon="roam"></button></div><i class="sep" aria-hidden="true"></i>
+    <button class="round" id="export-tasks" aria-controls="exports" aria-expanded="false" aria-live="polite" hidden></button>
     <button class="round" id="gear" data-icon="gear"></button>
   </div>
 </header>
@@ -40,6 +43,7 @@
 <div id="sheet" hidden></div>
 <div id="ghost" hidden></div>
 <div id="toast" class="glass" hidden></div>
+<div id="exports" class="glass" role="status" aria-live="polite" hidden></div>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

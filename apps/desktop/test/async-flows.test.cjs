@@ -19,7 +19,7 @@ function scene() {
     emptyView: null, emptyErr: false, empty() {}, painted: () => true, withProgress: (_name, run) => run(),
     openProject: async p => { opened.push(p); ctx.state.current = p; },
     swapRaw: async raw => { ctx.state.raw = raw; }, done() {}, flash() {}, markError() {}, toast() {},
-    L: (zh, en) => en, errText: String, console, view: () => 'wall',
+    L: (zh, en) => en, errText: String, console, view: () => 'wall', exportJobs: new Set(), renderExports() {},
   });
   return { ctx, painted, opened };
 }
@@ -107,6 +107,46 @@ test('an unavailable old wall does not block exporting a successfully rendered r
   assert.equal(exported, true);
 });
 
+test('parallel exports retain independent outcomes and suppress only an identical running export', async () => {
+  const { ctx } = scene(), png = deferred(), calls = [], files = [];
+  ctx.state.model = { project: 'A' }; ctx.state.raw = {};
+  ctx.curVariant = () => 'original'; ctx.drawArt = async () => ({});
+  ctx.exportArt = async fmt => { calls.push(fmt); if (fmt === 'png') await png.promise; return { ext: fmt, bytes: [], mime: 'test' }; };
+  ctx.saveBytes = async name => { files.push(name); return '/exports/' + name; };
+  load(ctx, 'async function doExport(', '/** 存文件');
+  const first = ctx.doExport('png', 'share', 'share#'); await tick();
+  await ctx.doExport('png', 'share', 'share#');
+  await ctx.doExport('svg', 'share', 'share#');
+  assert.deepEqual(calls, ['png', 'svg']);
+  assert.deepEqual([...ctx.exportJobs].map(j => j.status), ['running', 'saved']);
+  png.reject(new Error('rasterizer failed')); await first;
+  assert.deepEqual([...ctx.exportJobs].map(j => j.status), ['failed', 'saved']);
+  assert.match([...ctx.exportJobs][0].error, /rasterizer failed/);
+  ctx.exportArt = async fmt => ({ ext: fmt, bytes: [], mime: 'test' });
+  await ctx.doExport('png', 'share', 'share#');
+  assert.equal([...ctx.exportJobs].at(-1).status, 'saved');
+  assert.deepEqual(files, ['A-share-minimal.svg', 'A-share-minimal.png']);
+});
+
+test('a failed discovery preserves its error and can be retried', async () => {
+  const { ctx } = scene(); let calls = 0;
+  const error = { code: 'core_missing' };
+  ctx.api = async () => { if (++calls === 1) throw error; return { projects: [{ name: 'A', path: '/A', exists: true }] }; };
+  load(ctx, 'type Found =', 'const toolsOf');
+  await assert.rejects(ctx.discover(), e => e === error);
+  assert.equal((await ctx.discover())[0].path, '/A');
+  assert.equal(calls, 2);
+});
+
+test('cancelling a first analysis restores that selection and does not start the next project', async () => {
+  const { ctx } = scene(), events = [], calls = [];
+  ctx.api = async (_cmd, args) => { calls.push(args.path); throw { code: 'cancelled' }; };
+  load(ctx, 'async function addProjects(', '// ───────────────────────── 第一次打开');
+  await ctx.addProjects(['/A', '/B'], (...args) => events.push(args));
+  assert.deepEqual(events, [['/A', 'run'], ['/A', 'cancelled']]);
+  assert.deepEqual(calls, ['/A']);
+});
+
 test('empty and failed startup register resize before taking their recovery paths', async () => {
   for (const fail of [false, true]) {
     const { ctx } = scene(), events = [];
@@ -118,5 +158,21 @@ test('empty and failed startup register resize before taking their recovery path
     });
     load(ctx, 'async function boot(', '/** 空状态。');
     await ctx.boot(); assert.ok(events.includes('resize'));
+  }
+});
+
+
+test('an unexpected archive read failure is an error, not an unanalyzed project', async () => {
+  for (const error of [new Error('connection lost'), { code: 'core_failed' }, { code: 'no_credits' }]) {
+    const { ctx, painted } = scene(), states = [];
+    ctx.native = false;
+    ctx.readStamp = async () => '';
+    ctx.creditsOf = async () => { throw error; };
+    ctx.empty = (view, keepName, failed) => states.push({ text: view()[0], failed: !!failed });
+    load(ctx, 'async function openProject(', '// ───────────────────────── 档案变了');
+    await ctx.openProject({ id: 'A', name: 'A', path: '/A' });
+    assert.equal(painted.length, 0);
+    assert.equal(states[0].failed, error.code !== 'no_credits');
+    assert.equal(states[0].text, error.code === 'no_credits' ? 'Not analyzed yet' : 'Cannot read this project');
   }
 });

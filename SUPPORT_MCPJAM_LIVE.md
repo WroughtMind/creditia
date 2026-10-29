@@ -2,7 +2,13 @@
 
 剩余实现与验收统一跟踪于 [Issue #110](https://github.com/WroughtMind/creditia/issues/110)，按读取缺口、本地入口验收、账户或样本依赖分别推进；以下已完成结果保持原有范围。
 
-2026-10-28 更新：Codex 分段读取已实现并通过受控回归，详见[实现与验收记录](docs/2026-10-28-issue-110-114-115.md)。下文的分段“未读取”描述对应当时版本；MCPJam 真实分段链与完整受管入口仍未验收。
+2026-10-28/29 更新：Codex 分段读取已通过真实官方执行器的 fork / revert / resume 验收；MCPJam 官方受管运行时的签名、内容完整性、工作区授权、启动、停止和撤销授权也已通过。详见[实现与验收记录](docs/2026-10-28-issue-110-114-115.md)。下文保留各轮当时的结果，不再代表当前未完成清单。
+
+本轮使用固定源码 `520eb9aa3c8b7b965d92611c414543c91b04f16e` 与官方 macOS arm64 Codex pack 1.0.3。首次自动下载超时；随后下载同一官方发布文件，通过上游严格 `fromArchive` 路径校验签名、归档摘要和展开内容，未跳过校验。真实桥接进程启动成功，错配授权被拒绝，停止后整个进程树消失，临时测试授权撤销成功。
+
+默认 zsh 已用该受管包重跑：相对路径 patch 和读回成功，多行 heredoc 仍报 `can't create temp file for here document: operation not permitted`，退出码 1。保留原始失败回执；此前显式 Bash 通过不替代默认 zsh 的失败。
+
+账户条件已核对：官方 [本地入口](https://github.com/MCPJam/inspector/blob/520eb9aa3c8b7b965d92611c414543c91b04f16e/mcpjam-inspector/server/utils/harness/local/readiness.ts) 还校验真实项目成员及账户开关；本轮只使用隔离临时授权，不冒充账户验收。[本地执行器清单](https://github.com/MCPJam/inspector/blob/520eb9aa3c8b7b965d92611c414543c91b04f16e/mcpjam-inspector/server/utils/harness/local/targets.ts) 仅含 Claude/Codex。Cursor 要通过独立云端链路验收，不能从本地 Codex 结果推定支持。用户已确认无 MCPJam 账户，账户代理和云端 RPC 保持未验收。
 
 2026-10-26 合入前复验：修复路径边界、主/子会话持久化和截断历史保护后，再用官方启动链与 Codex 0.164.0 分别执行 attended 的 7 个场景、unattended 的 9 个场景。两组均从默认 `work/project` 软链入口完成执行，各为 5 行 verified，重复扫描不增加，原始历史摘要不变。模型仍为脚本服务。新证据在 `/private/tmp/creditia-integration-mcpjam-{attended,unattended}/`；Rust 工作区 362 项通过、3 项忽略，严格 Clippy 通过。
 
