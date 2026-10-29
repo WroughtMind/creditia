@@ -130,8 +130,9 @@ try {
   $null = Wait-ReplacedControl 'creditia · Share card' $previousArt
   Record 'visual style switched' 'Minimal Dark'
   Send-Keys '^2'
-  $null = Wait-Text 'creditia.*Share card'
+  $null = Wait-Control 'Back to start'
   Send-Keys '^1'
+  Assert-Hidden 'Back to start'
   $null = Wait-Control 'creditia · Share card'
   Record 'wall and roam views' 'Ctrl+2 and Ctrl+1'
   $exportDir = Join-Path $env:USERPROFILE 'Downloads'
@@ -149,6 +150,7 @@ try {
     Copy-Item $files[0].FullName $Output
     Record "native $format export" @{file=$files[0].Name;bytes=$files[0].Length}
     Send-Keys '{ESC}'
+    Assert-Hidden $saved
   }
   if (-not $p.CloseMainWindow()) { throw 'Could not close candidate window normally' }
   if (-not $p.WaitForExit(15000)) { throw 'Candidate did not exit after close' }
