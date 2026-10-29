@@ -26,7 +26,7 @@ cmp private-result.json sanitized-result.json
 cargo test -p creditia-core --test real_replay
 ```
 
-The replay covers the Engine's historical attribution only. It does not establish native parser, complete CLI report or survival replay equivalence. Removing Codex records in a test is a **controlled evidence-loss experiment**, not a naturally observed cleanup: verified Codex disappears, its full 48-line receipt remains declared, and two competing positions match existing Claude records. This does not prove which of the competing writes is independently correct.
+This fixture covers the Engine's historical attribution only. Separate [real native excerpts](../../../../cli/tests/fixtures/real-native/README.md) now run Codex and Claude Code records through the native readers, CLI, full report and survival paths; they do not extend this 151-position fixture's scope. Removing Codex records in this test is a **controlled evidence-loss experiment**, not a naturally observed cleanup: verified Codex disappears, its full 48-line receipt remains declared, and two competing positions match existing Claude records. This does not prove which of the competing writes is independently correct.
 
 ## Public squash provenance samples
 
@@ -48,7 +48,7 @@ The `squash_replay` adapter example captures raw provenance locally; sanitize an
 | Real project using multiple tools | Bounded observational fixture included |
 | Real team project with independent contributor truth | Missing |
 | Naturally cleaned native logs with before/after truth | Missing; controlled deletion test only |
-| Sanitized native logs through the readers | Missing; current fixture begins at decoded Engine inputs |
-| Full report and survival replay equivalence | Missing |
+| Sanitized native logs through the readers | Bounded Codex / Claude Code excerpts included separately; other formats remain uncovered |
+| Full report and survival replay equivalence | Verified for the two native excerpts; not for this full 151-position Engine fixture |
 
 Do not close #121 or label synthetic benchmark percentages as real-world accuracy based on this batch.
