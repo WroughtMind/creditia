@@ -10,6 +10,7 @@ import { creditsBlock, fetchSegs, commitsComment, mergeMarked } from '../src/tex
 import { hanzi, modelName, resolveGroup } from '../src/data.ts';
 import * as C from '../src/classic/data.ts';
 import { creditsOf } from '../src/pieces/roll.ts';
+import { markOf } from '../src/pieces/common.ts';
 
 const raw = JSON.parse(readFileSync(new URL('../fixtures/catnap.json', import.meta.url), 'utf8'));
 const m = buildModel(raw);
@@ -37,6 +38,46 @@ test('模型名好读', () => {
   assert.equal(modelName('gpt-5.6-sol'), 'GPT-5.6 Sol');
   assert.equal(modelName('kimi-k3'), 'Kimi K3');
   assert.equal(modelName('auto'), 'Auto');
+});
+
+test('星号作品保留小份额工具的名称、百分比和提示，不折叠为其他', () => {
+  const tools = ['claude-code', 'codex', 'cursor', 'kimi', 'grok', 'gemini-cli', 'aider', 'cline'];
+  const sample = {
+    schemaVersion: 0, project: { name: 'Small shares' },
+    totals: { linesAdded: 10000, linesSurviving: 10000 },
+    contributors: tools.map((tool) => ({ id: tool, kind: 'agent', harness: tool })),
+    breakdown: tools.map((tool, i) => ({ contributor: tool, linesAdded: i === 0 ? 9993 : 1, linesSurviving: i === 0 ? 9993 : 1 })),
+  };
+  const model = buildModel(sample, { lang: 'en' });
+  for (const st of STYLES) {
+    const scene = art('asterisk', model, st)!;
+    assert.equal(scene.hits[0].d?.length, tools.length);
+    for (const row of model.all) {
+      assert.ok(scene.svg.includes(row.name), `${st.id}: missing ${row.name}`);
+      assert.ok(scene.hits.some((h) => h.t === row.name), `${st.id}: missing tooltip for ${row.name}`);
+    }
+    assert.ok(!scene.hits.some((h) => h.k === 'other'));
+    assert.equal((markOf(model, st, 0, 0, 24).match(/<path /g) ?? []).length, tools.length);
+    for (const hit of scene.hits) assert.ok(hit.x >= 0 && hit.y >= 0 && hit.x + hit.w <= scene.w && hit.y + hit.h <= scene.h);
+  }
+});
+
+test('作品落款的工具份额和颜色不随模型排名改变', () => {
+  const sample = {
+    schemaVersion: 0, project: { name: 'Model ranking' }, totals: { linesAdded: 180 },
+    contributors: [
+      { id: 'a:claude-code/model-a', kind: 'agent', harness: 'claude-code', model: 'model-a' },
+      { id: 'a:claude-code/model-b', kind: 'agent', harness: 'claude-code', model: 'model-b' },
+      { id: 'a:codex/model-c', kind: 'agent', harness: 'codex', model: 'model-c' },
+    ],
+    breakdown: [
+      { contributor: 'a:claude-code/model-a', linesAdded: 50 },
+      { contributor: 'a:claude-code/model-b', linesAdded: 50 },
+      { contributor: 'a:codex/model-c', linesAdded: 80 },
+    ],
+  };
+  const byTool = buildModel(sample, { group: 'tool' }), byModel = buildModel(sample, { group: 'model' });
+  for (const st of STYLES) assert.equal(markOf(byTool, st, 0, 0, 24), markOf(byModel, st, 0, 0, 24), st.id);
 });
 
 test('汉字数字', () => {
