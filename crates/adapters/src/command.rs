@@ -15,6 +15,100 @@ impl Drop for OwnedGroup {
     }
 }
 
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+    fn path() -> std::path::PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        std::env::temp_dir().join(format!(
+            "creditia-helper-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ))
+    }
+    fn helper(path: &std::path::Path, end: &str) -> Command {
+        let script = format!(
+            r#"
+$info = New-Object System.Diagnostics.ProcessStartInfo
+$info.FileName = 'powershell.exe'
+$info.Arguments = '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 30"'
+$info.UseShellExecute = $false
+$p = [System.Diagnostics.Process]::Start($info)
+Set-Content -LiteralPath $env:CREDITIA_TEST_PID -Value $p.Id
+{end}
+"#
+        );
+        let mut command = Command::new("powershell.exe");
+        command
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .env("CREDITIA_TEST_PID", path);
+        command
+    }
+    fn assert_stopped(path: &std::path::Path) {
+        let pid = std::fs::read_to_string(path)
+            .unwrap()
+            .trim()
+            .parse::<u32>()
+            .unwrap();
+        let _ = std::fs::remove_file(path);
+        let script =
+            format!("if (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ exit 1 }}");
+        assert!(
+            Command::new("powershell.exe")
+                .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+                .status()
+                .unwrap()
+                .success(),
+            "helper {pid} survived"
+        );
+    }
+    #[test]
+    fn job_cleans_timeout_and_exited_leader() {
+        for end in ["Start-Sleep -Seconds 30", "exit 0", "exit 1"] {
+            let path = path();
+            let result = output(
+                &mut helper(&path, end),
+                Instant::now() + Duration::from_secs(5),
+            );
+            assert_eq!(result.is_ok(), end == "exit 0");
+            assert_stopped(&path);
+        }
+    }
+    #[test]
+    fn parent_exit_helper() {
+        let Some(path) = std::env::var_os("CREDITIA_TEST_HELPER_PID") else {
+            return;
+        };
+        let _ = output(
+            &mut helper(std::path::Path::new(&path), "Start-Sleep -Seconds 30"),
+            Instant::now() + Duration::from_secs(60),
+        );
+    }
+    #[test]
+    fn job_closes_when_core_is_killed() {
+        let path = path();
+        let mut core = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "command::windows_tests::parent_exit_helper"])
+            .env("CREDITIA_TEST_HELPER_PID", &path)
+            .stdout(Stdio::null())
+            .spawn()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| s.trim().parse::<u32>().ok())
+            .is_none()
+            && Instant::now() < deadline
+        {
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        core.kill().unwrap();
+        core.wait().unwrap();
+        assert!(path.exists(), "helper did not start");
+        assert_stopped(&path);
+    }
+}
+
 #[cfg(unix)]
 fn guarded(command: &Command) -> Command {
     // The parent owns the only write end of stdin. Killing the core (App cancel
@@ -22,7 +116,7 @@ fn guarded(command: &Command) -> Command {
     // Arguments are passed as argv, never interpolated into shell source.
     let script = r#"
 exec 3<&0
-(IFS= read -r unused <&3; kill -KILL -- "-$$") >/dev/null 2>&1 &
+(IFS= read -r unused <&3; kill -KILL "-$$") >/dev/null 2>&1 &
 "$@" </dev/null 3<&- &
 job=$!
 wait "$job"
@@ -176,7 +270,12 @@ mod tests {
             .spawn()
             .unwrap();
         let deadline = Instant::now() + Duration::from_secs(10);
-        while !path.exists() && Instant::now() < deadline {
+        while std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| s.trim().parse::<u32>().ok())
+            .is_none()
+            && Instant::now() < deadline
+        {
             std::thread::sleep(Duration::from_millis(25));
         }
         core.kill().unwrap();
