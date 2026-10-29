@@ -52,6 +52,10 @@ The golden files are observational regression baselines, not independently
 labeled real-world accuracy. Later additions without a matching included write
 stay unknown.
 
+An intentional algorithm or report change may update the golden files after
+reviewing the differences and their evidence. Snapshot equality detects changes;
+it does not require the algorithm to reproduce old behavior forever.
+
 ## Regressions
 
 ```sh
