@@ -21,3 +21,4 @@ pbkdf2 = "0.12"
 flate2 = "1"
 rmpv = "1"
 md-5 = "0.10"
+command-group = { version = "5.0.1", default-features = false }

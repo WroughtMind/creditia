@@ -221,26 +221,31 @@ fn web_bodies(repo: &Path, spec: &str, commits: &mut [Commit], stamps: &mut Stam
 
 /// 解析 `git log -p` 输出。`range` 为空表示全量到 `rev`。返回提交和盖章表
 pub fn read_commits(repo: &Path, rev: &str, range: Option<&str>) -> (Vec<Commit>, Stamps) {
+    read_commits_checked(repo, rev, range).unwrap_or_default()
+}
+
+/// Recovery caches must never persist a partially read Git history.
+pub(crate) fn read_commits_checked(repo: &Path, rev: &str, range: Option<&str>) -> Result<(Vec<Commit>, Stamps), String> {
     let spec = range.map(|r| r.to_string()).unwrap_or_else(|| rev.to_string());
     let total: usize = git(repo, &["rev-list", "--count", "--no-merges", &spec]).trim().parse().unwrap_or(0);
     creditia_core::progress::tick("history", 0, total);
     let Ok(mut child) = Command::new("git")
         .arg("-C")
         .arg(repo)
-        .args(["-c", "core.quotepath=false", "log", "--no-merges", "-p", "-M", "--unified=0", "--no-color", "--no-ext-diff"])
+        .args(["-c", "core.quotepath=false", "log", "--no-merges", "-p", "-M", "--unified=0", "--no-color", "--no-ext-diff", "--no-textconv"])
         .arg(format!("--format={FMT}"))
         .arg(&spec)
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
     else {
-        return (vec![], HashMap::new());
+        return Err("cannot start Git history read".into());
     };
     let rd = BufReader::with_capacity(1 << 20, child.stdout.take().unwrap());
     let (mut commits, mut stamps) = parse_log(rd, total);
-    let _ = child.wait();
+    if !child.wait().map_err(|e| e.to_string())?.success() { return Err("Git history read failed".into()); }
     web_bodies(repo, &spec, &mut commits, &mut stamps);
-    (commits, stamps)
+    Ok((commits, stamps))
 }
 
 /// 暂存区（`git diff --cached`）当成一个还没提交的提交：提交盖章 hook 用它算这次提交里各工具写了几行
@@ -671,15 +676,12 @@ pub fn known_paths(repo: &Path, rev: &str) -> HashSet<String> {
 
 /// 用 gh 只读拉取 PR 元数据（没有 gh 或未登录就返回空）
 pub fn github_prs(repo: &Path) -> Vec<PrMeta> {
-    let out = Command::new("gh")
+    let Some(repository) = crate::squash::github_repository(repo) else { return vec![]; };
+    let out = crate::command::output(Command::new("gh")
         .current_dir(repo)
-        .args(["pr", "list", "--state", "all", "--limit", "1000", "--json", "number,headRefName,title,reviews,author"])
-        .output();
+        .args(["pr", "list", "--repo", &format!("github.com/{repository}"), "--state", "all", "--limit", "1000", "--json", "number,headRefName,title,reviews,author,mergedAt,mergeCommit"]), std::time::Instant::now() + std::time::Duration::from_secs(15));
     let Ok(o) = out else { return vec![] };
-    if !o.status.success() {
-        return vec![];
-    }
-    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap_or_default();
+    let v: serde_json::Value = serde_json::from_str(&o).unwrap_or_default();
     v.as_array()
         .map(|a| {
             a.iter()
@@ -690,6 +692,7 @@ pub fn github_prs(repo: &Path) -> Vec<PrMeta> {
                     branch: x["headRefName"].as_str().unwrap_or("").into(),
                     author: x["author"]["login"].as_str().map(String::from),
                     reviews: x["reviews"].as_array().map(|r| r.iter().filter_map(|y| y["author"]["login"].as_str().map(String::from)).collect()).unwrap_or_default(),
+                    merge_commit: x["mergedAt"].as_str().and_then(|_| x["mergeCommit"]["oid"].as_str()).map(String::from),
                 })
                 .collect()
         })

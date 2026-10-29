@@ -7,6 +7,16 @@ on:
   workflow_dispatch:
 
 jobs:
+  command-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Verify helper jobs stop on completion, timeout and core cancellation
+        run: |
+          cargo test -p creditia-adapters command:: --lib
+
   core:
     runs-on: ubuntu-latest
     steps:

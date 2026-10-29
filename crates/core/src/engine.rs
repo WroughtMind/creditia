@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::hash::short_key;
-use crate::model::{canonical_harness, Attr, BlameFile, Commit, CommitAttr, Index, Level, Registry, Session, Src, Unit, JOIN_WINDOWS};
+use crate::model::{canonical_harness, Attr, BlameFile, Commit, CommitAttr, Index, Level, LineDeclaration, Registry, Session, Src, Unit, JOIN_WINDOWS};
 use std::collections::{HashMap, HashSet};
 
 pub const WINDOW_BEFORE: i64 = 14 * 86400;
@@ -34,6 +34,9 @@ pub struct Engine<'a> {
     pub unit_branch: HashMap<String, String>,
     /// git trailer 盖章：commit → (harness, model)
     pub stamps: HashMap<String, (String, Option<String>)>,
+    /// Exact final positions recovered from a pinned PR head. An empty entry
+    /// still means recovery succeeded but none of its declarations locate lines.
+    pub squash_declarations: HashMap<String, Vec<LineDeclaration>>,
     /// 已被提交认领过的证据（与 idx.map 里的 Vec 一一对应）
     used: HashMap<(String, u32), Vec<bool>>,
     /// 主导者的 GitHub 账号名：同一个账号的几种 noreply 邮箱（`123+login@…`、`login@…`）都是他
@@ -64,7 +67,7 @@ impl<'a> Engine<'a> {
             }
         }
         let director_logins = cfg.director_emails().iter().filter_map(|e| gh_login(e)).map(String::from).collect();
-        Engine { cfg, strictness: Strictness::parse(&cfg.level), idx, sessions, reg, director_emails, director_logins, unit_branch, stamps, used: HashMap::new(), untimed_unique: HashSet::new() }
+        Engine { cfg, strictness: Strictness::parse(&cfg.level), idx, sessions, reg, director_emails, director_logins, unit_branch, stamps, squash_declarations: HashMap::new(), used: HashMap::new(), untimed_unique: HashSet::new() }
     }
 
     fn is_director(&self, email: &str) -> bool {
@@ -95,6 +98,9 @@ impl<'a> Engine<'a> {
     }
 
     pub fn attribute(&mut self, c: &Commit) -> CommitAttr {
+        let recovered = self.squash_declarations.contains_key(&c.hash);
+        // A customized GitHub subject may omit the PR number entirely.
+        let squash = recovered || c.web;
         let lo = c.author_ts.min(c.commit_ts) - WINDOW_BEFORE;
         let hi = c.commit_ts.max(c.author_ts) + WINDOW_AFTER;
         let mut hits: HashMap<&'static str, usize> = HashMap::new();
@@ -215,7 +221,7 @@ impl<'a> Engine<'a> {
         }
         // 第二轮：提交本身的声明（盖章、agent 邮箱、Co-authored-by、bot、别人的提交），覆盖所有没对上的行。
         // 带 Creditia-Lines 的提交，工具的声明只按它记下的行数算（见最后的配额），不再整个提交算给工具
-        let declared = self.declared(c, c.lines_stamp.is_some());
+        let declared = if squash { None } else { self.declared(c, c.lines_stamp.is_some()) };
         let mut reason = declared.as_ref().map(|d| d.1.clone());
         // 第三轮：同一改动块里的推断。块里一半以上的行有逐行证据、其中八成以上是同一个工具，
         // 才把块里其余的行推给它；推断出来的行不再当证据。模型分不清时只记工具。
@@ -260,7 +266,7 @@ impl<'a> Engine<'a> {
         // 没有 AI 证据不说明是人写的：creditia 只认 AI 留下的记录，不推断谁手写
         let (fallback, r) = match &declared {
             Some(d) => d.clone(),
-            None if c.lines_stamp.is_some() => (Attr { who: self.reg.unattributed(), level: Level::Unattributed }, crate::tr!("没有证据", "no evidence")),
+            None if squash || c.lines_stamp.is_some() => (Attr { who: self.reg.unattributed(), level: Level::Unattributed }, crate::tr!("没有证据", "no evidence")),
             None => self.guess(c),
         };
         let reason = reason.unwrap_or(r);
@@ -310,13 +316,11 @@ impl<'a> Engine<'a> {
             }
             out.push(res);
         }
-        // 配额：Creditia-Lines 记着提交时各工具写了几行。现在少算了的（日志后来被清理了）从不是 agent 的行里按顺序补足；
-        // 多出来的不动——那是提交以后才读到的证据
+        // A squash body can sum receipts for overwritten/deleted lines. Even a
+        // matching single-source total does not identify which lines survived.
         let mut reason = reason;
         let mut main = main;
-        if let Some((quota, stamped)) = &c.lines_stamp {
-            // 网页 squash 合并把原分支各提交的 Creditia-Lines 加在一起：后面的提交改写过前面的行时，
-            // 总数比这个提交实际新增的多，按比例缩
+        if let Some((quota, stamped)) = c.lines_stamp.as_ref().filter(|_| !recovered && !c.web) {
             let actual: usize = out.iter().map(Vec::len).sum();
             let scale = |n: usize| if *stamped > actual { n * actual / stamped } else { n };
             let mut have: HashMap<usize, usize> = HashMap::new();
@@ -350,7 +354,7 @@ impl<'a> Engine<'a> {
                     if deficit == 0 {
                         break;
                     }
-                    if self.reg.list[a.who].kind != "agent" {
+                    if self.reg.list[a.who].kind != "agent" && a.level > Level::Manual {
                         *a = Attr { who, level: Level::Declared };
                         deficit -= 1;
                         filled = true;
@@ -370,7 +374,60 @@ impl<'a> Engine<'a> {
                 main = counts.iter().max_by_key(|(w, n)| (**n, std::cmp::Reverse(**w))).map(|(w, _)| *w);
             }
         }
+        if let Some(declarations) = self.squash_declarations.get(&c.hash) {
+            let positions: HashMap<(&str, u32), &LineDeclaration> = declarations.iter().map(|d| ((d.rel.as_str(), d.at), d)).collect();
+            for (file, rows) in c.files.iter().zip(&mut out) {
+                for (a, at) in rows.iter_mut().zip(&file.at) {
+                    if a.level <= Level::Manual { continue; }
+                    if let Some(d) = positions.get(&(file.rel.as_str(), *at)) {
+                        *a = Attr { who: self.reg.agent(&d.harness, d.model.as_deref()), level: Level::Declared };
+                    }
+                }
+            }
+            let mut counts: HashMap<usize, usize> = HashMap::new();
+            for (file, rows) in c.files.iter().zip(&out) {
+                for (a, _) in rows.iter().zip(&file.keys).filter(|(_, key)| **key != 0) {
+                    *counts.entry(a.who).or_default() += 1;
+                }
+            }
+            main = counts.iter().max_by_key(|(w, n)| (**n, std::cmp::Reverse(**w))).map(|(w, _)| *w);
+            if !declarations.is_empty() { reason = crate::tr!("原 PR 提交的逐行声明（非逐行日志验证）", "line declarations from original PR commits (not verified log evidence)"); }
+        }
         CommitAttr { lines: out, hits, conflicts, main, tab_lines, reason }
+    }
+
+    /// A count for only some lines cannot be projected through a squash. Accept
+    /// a full single-source receipt, or an unambiguous whole-commit declaration.
+    /// No native events are read or consumed here.
+    pub fn whole_declaration(&mut self, c: &Commit) -> Option<(String, Option<String>)> {
+        if c.web { return None; }
+        if let Some((quota, total)) = &c.lines_stamp {
+            return (quota.len() == 1 && quota[0].1 == *total && *total > 0 && *total == c.files.iter().map(|f| f.keys.len()).sum::<usize>())
+                .then(|| {
+                    let (h, m) = quota[0].0.split_once('/').map(|(h,m)| (h,Some(m.to_string()))).unwrap_or((&quota[0].0,None));
+                    (canonical_harness(h), m)
+                });
+        }
+        let mut claims = Vec::new();
+        if let Some(s) = self.stamps.get(&c.hash) { claims.push(s.clone()); }
+        if let Some(h) = self.cfg.agent_emails.get(&c.email) { claims.push((h.clone(), None)); }
+        for co in &c.coauthors {
+            for (email, harness) in &self.cfg.agent_emails {
+                if co.contains(email) { claims.push((harness.clone(), coauthor_model(co))); }
+            }
+        }
+        claims.extend(c.assisted.iter().filter_map(|a| assisted_by(a)));
+        if let Some((a, _)) = self.declared(c, false) {
+            let who = &self.reg.list[a.who];
+            if let Some(h) = &who.harness { claims.push((h.clone(), who.model.clone())); }
+        }
+        let mut normalized = Registry::default();
+        let ids: Vec<_> = claims.iter().map(|(h,m)| normalized.agent(h,m.as_deref())).collect();
+        let first = normalized.list.get(*ids.first()?)?;
+        if ids.iter().any(|i| normalized.list[*i].harness != first.harness) { return None; }
+        let models: HashSet<_> = ids.iter().filter_map(|i| normalized.list[*i].model.clone()).collect();
+        if models.len() > 1 { return None; }
+        Some((first.harness.clone()?, models.into_iter().next()))
     }
 
     /// 取一条还没被认领、时间在窗口里的证据：时间最接近提交的那条。返回它和「候选里是否有不止一个工具」
@@ -1007,16 +1064,68 @@ mod tests {
         c.web = true;
         let r = e.attribute(&c);
         assert!(r.lines[0].iter().all(|x| x.level == Level::Unattributed), "{:?}", r.lines[0]);
-        // 正文里各提交的 Creditia-Lines 加起来是 6 / 8，提交实际只新增 4 行：按比例 3 行给 Codex
+        // 原分支配额无法说明压缩后剩下的是哪几行，不能按比例填进文件。
         c.hash = "b".repeat(40);
         c.lines_stamp = Some((vec![("codex/gpt-a".into(), 6)], 8));
         let r = e.attribute(&c);
         let ids: Vec<&str> = r.lines[0].iter().map(|x| e.reg.list[x.who].id.as_str()).collect();
-        assert_eq!(ids.iter().filter(|i| **i == "a:codex/gpt-a").count(), 3, "{ids:?}");
-        assert_eq!(ids.iter().filter(|i| **i == "unattributed").count(), 1, "{ids:?}");
+        assert_eq!(ids.iter().filter(|i| **i == "unattributed").count(), 4, "{ids:?}");
         // 不是网页合并的、别人的提交：照旧算那个人
         let r = e.attribute(&commit("someone@gmail.com", vec![5]));
         assert_eq!(e.reg.list[r.lines[0][0].who].kind, "human");
+    }
+
+    #[test]
+    fn squash_mixed_quotas_do_not_locate_lines() {
+        let idx = Index::build(&Store::default());
+        let cfg = cfg();
+        let mut engine = Engine::new(&cfg, &idx, &[], &[], HashMap::new());
+        let mut c = commit("me@x.com", vec![1, 2, 3]);
+        c.web = true;
+        c.subject = "feature (#42)".into();
+        let mut second = c.files[0].clone();
+        second.rel = "b.rs".into();
+        c.files.push(second);
+        c.lines_stamp = Some((vec![("codex".into(), 3), ("claude-code".into(), 3)], 6));
+        let result = engine.attribute(&c);
+        assert!(result.lines.iter().flatten().all(|a| a.level == Level::Unattributed));
+        // Equal totals can hide a later un-stamped human replacement too.
+        c.lines_stamp=Some((vec![("codex".into(),6)],6));
+        assert!(engine.attribute(&c).lines.iter().flatten().all(|a|a.level==Level::Unattributed));
+    }
+
+    #[test]
+    fn recovered_declarations_preserve_verified_and_do_not_spread() {
+        let mut store=Store::default();
+        let mut tab=ev(2,Src::Codex,"native"); tab.tab=true;
+        store.groups.entry("x".into()).or_default().evs=vec![ev(1,Src::Codex,"native"),tab];
+        let idx=Index::build(&store); let mut cfg=cfg(); cfg.level="strict".into();
+        let mut c=commit("me@x.com",vec![1,2,3,0,5]); c.web=true; c.subject="feature (#42)".into(); c.files[0].at=vec![1,2,3,4,5];
+        let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());
+        engine.squash_declarations.insert(c.hash.clone(),(1..=3).map(|at|LineDeclaration{rel:"a.rs".into(),at,harness:"claude-code".into(),model:Some("declared".into())}).collect());
+        let got=engine.attribute(&c);
+        assert_eq!(got.lines[0][0].level,Level::Verified);
+        assert_eq!(engine.reg.list[got.lines[0][0].who].harness.as_deref(),Some("codex"));
+        assert_eq!(got.lines[0][1].level,Level::Verified);
+        assert_eq!(engine.reg.list[got.lines[0][1].who].kind,"human");
+        assert_eq!(got.lines[0][2].level,Level::Declared);
+        assert!(got.lines[0][3..].iter().all(|a|a.level==Level::Unattributed));
+        c.hash="c".repeat(40);
+        let next=engine.attribute(&c);
+        assert!(next.lines[0].iter().all(|a|a.level==Level::Unattributed),"native evidence was already consumed exactly once");
+    }
+
+    #[test]
+    fn whole_declarations_reject_conflicting_sources_and_partial_counts() {
+        let idx=Index::build(&Store::default()); let cfg=cfg();
+        let mut c=commit("me@x.com",vec![1,2]);
+        let mut stamps=HashMap::new(); stamps.insert(c.hash.clone(),("codex".into(),Some("model-a".into())));
+        let mut engine=Engine::new(&cfg,&idx,&[],&[],stamps);
+        assert_eq!(engine.whole_declaration(&c),Some(("codex".into(),Some("model-a".into()))));
+        c.lines_stamp=Some((vec![("codex/model-a".into(),1)],2));
+        assert!(engine.whole_declaration(&c).is_none());
+        c.lines_stamp=None; c.coauthors.push("Claude <noreply@anthropic.com>".into());
+        assert!(engine.whole_declaration(&c).is_none());
     }
 
     #[test]
