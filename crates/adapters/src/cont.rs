@@ -167,8 +167,7 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         let tokens = u["promptTokens"].as_i64().unwrap_or(0) + u["completionTokens"].as_i64().unwrap_or(0);
         let model = if models.is_empty() { fallback } else { top(models) };
         let provider = Some(top(providers)).filter(|p| !p.is_empty());
-        // Correct only observed edits; a pruned history must keep other old rows.
-        g.reconciled_events = g.evs.clone();
+        // Session timestamps do not distinguish calls; keep ambiguous old evidence.
         g.sessions.push(Session { src: Src::Continue, id, model, start, end, tokens, branch: None, prompts, reviewer: false, has_content: true, provider });
         n += 1;
         store.groups.insert(gk, g);

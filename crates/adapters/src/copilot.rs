@@ -109,7 +109,6 @@ impl Read {
             // A later selection or session/debug summary cannot identify an older edit.
             crate::push_text(&mut g.evs, pm, abs, text, src, model, &self.id, *ts);
         }
-        g.reconciled_events.extend_from_slice(&g.evs[before..]);
         if self.start > 0 && (keep || g.evs.len() > before) {
             g.sessions.push(Session { src, id: self.id, model: self.model, start: self.start, end: self.end, tokens: self.tokens, branch: self.branch, prompts: self.prompts, reviewer: false, has_content: true, provider: None });
         }
@@ -599,7 +598,7 @@ mod tests {
         let mut g = FileGroup::default();
         r.into_group(Src::Copilot, &pm, &mut g, true);
         assert_eq!(g.evs.iter().map(|e| e.model.as_str()).collect::<Vec<_>>(), vec!["", "gpt-5.2"]);
-        assert_eq!(g.reconciled_events.len(), g.evs.len());
+        assert!(g.reconciled_events.is_empty());
     }
 
     #[test]
@@ -618,6 +617,6 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
         assert_eq!(g.evs.len(), 1);
         assert!(g.evs[0].model.is_empty());
-        assert_eq!(g.reconciled_events.len(), 1);
+        assert!(g.reconciled_events.is_empty());
     }
 }

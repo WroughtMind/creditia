@@ -1289,9 +1289,7 @@ fn continue_sessions() {
               ] },
         ]
     });
-    let mut title_only = ide.clone();
-    title_only["history"][1]["promptLogs"][0]["completionOptions"] = serde_json::json!({});
-    fs::write(dir.join("c1.json"), title_only.to_string()).unwrap();
+    fs::write(dir.join("c1.json"), ide.to_string()).unwrap();
     // 命令行（cn）：同样的格式，工具名是 Write / Edit
     let cn = serde_json::json!({
         "sessionId": "c2", "title": "t", "workspaceDirectory": rs, "chatModelTitle": "gpt-5",
@@ -1307,10 +1305,6 @@ fn continue_sessions() {
     assert!(ok, "{v}");
     let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
     assert!(ok, "{v}");
-    // A later parse has the real request ID; saved evidence must lose the old title.
-    fs::write(dir.join("c1.json"), ide.to_string()).unwrap();
-    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
-    assert!(ok, "{v}");
     let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
     let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
     // 被拒绝、报错的那几行没有逐行证据（和前面同一个改动块，只按块推断，不算 verified）
@@ -1323,8 +1317,54 @@ fn continue_sessions() {
     assert!(ok, "{v}");
     let archived: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
     assert!(!archived["breakdown"].as_array().unwrap().iter().any(|b| b["contributor"] == "a:continue/daily-coding"), "{}", archived["breakdown"]);
-    assert_eq!(archived["breakdown"], credits["breakdown"], "removing a source log must retain only corrected evidence");
+    assert_eq!(archived["breakdown"], credits["breakdown"], "removing a source log must retain its evidence");
     let _ = fs::remove_dir_all(&env.root);
+}
+
+/// Same-line edits can share a session timestamp. Pruning one request must not
+/// turn the remaining request into authority to delete another model's history.
+#[test]
+fn pruned_requests_preserve_distinct_archived_models() {
+    for source in ["continue", "copilot"] {
+        let mut env = setup();
+        let repo = env.repo.canonicalize().unwrap();
+        let rs = repo.display().to_string();
+        let base: i64 = 1_793_000_000;
+        let line = "export const repeated = computeValue(17);";
+        fs::write(repo.join("a.ts"), format!("{line}\n")).unwrap();
+        commit(&repo, "two calls wrote this line", "me@example.com", &format!("@{} +0800", base + 600));
+        let (file, key, mut session) = if source == "continue" {
+            let dir = env.root.join("continue/sessions");
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(dir.join("sessions.json"), serde_json::json!([{ "sessionId": "same-line", "dateCreated": (base * 1000).to_string(), "workspaceDirectory": rs }]).to_string()).unwrap();
+            let call = |id: &str, model: &str| serde_json::json!({
+                "message": {"role": "assistant"}, "promptLogs": [{"completionOptions": {"model": model}}],
+                "toolCallStates": [{"status": "done", "toolCallId": id, "toolCall": {"id": id, "function": {"name": "create_new_file"}}, "parsedArgs": {"filepath": "a.ts", "contents": line}}]
+            });
+            (dir.join("same-line.json"), "history", serde_json::json!({"sessionId": "same-line", "workspaceDirectory": rs, "history": [call("a", "claude-sonnet-4.5"), call("b", "gpt-5.2")]}))
+        } else {
+            let user = env.root.join("copilot-user");
+            env.vars.insert("CREDITIA_VSCODE_USER".into(), user.display().to_string());
+            let dir = user.join("workspaceStorage/pruning");
+            fs::create_dir_all(dir.join("chatSessions")).unwrap();
+            fs::write(dir.join("workspace.json"), serde_json::json!({"folder": format!("file://{}", rs.replace(' ', "%20"))}).to_string()).unwrap();
+            let request = |model: &str| serde_json::json!({"modelId": model, "response": [{"kind": "textEditGroup", "uri": format!("{rs}/a.ts"), "edits": [[{"text": line}]]}]});
+            (dir.join("chatSessions/same-line.json"), "requests", serde_json::json!({"sessionId": "same-line", "creationDate": base * 1000, "requests": [request("claude-sonnet-4.5"), request("gpt-5.2")]}))
+        };
+        fs::write(&file, session.to_string()).unwrap();
+        assert!(run(&env, &["init", "--repo", &rs]).0);
+        assert!(run(&env, &["analyze", "--repo", &rs]).0);
+        let model_count = || {
+            let db = rusqlite::Connection::open(env.root.join("lib/library.sqlite")).unwrap();
+            db.query_row("SELECT count(DISTINCT model) FROM evidence WHERE src=?1 AND session='same-line'", [source], |r| r.get::<_, i64>(0)).unwrap()
+        };
+        assert_eq!(model_count(), 2, "{source}: both calls must be archived first");
+        session[key].as_array_mut().unwrap().remove(0);
+        fs::write(&file, session.to_string()).unwrap();
+        assert!(run(&env, &["analyze", "--repo", &rs, "--fresh"]).0);
+        assert_eq!(model_count(), 2, "{source}: a pruned request is not a corrected model assignment");
+        fs::remove_dir_all(&env.root).unwrap();
+    }
 }
 
 /// Zed：threads.db 里 zstd 压缩的线程，edit_file / write_file 的结果带改前改后的内容；报错的不算，别的项目的线程不读
@@ -1446,14 +1486,11 @@ fn amazon_q_conversations() {
     assert_eq!(verified("a:amazon-q/claude-sonnet-4-5"), appended.len() as u64, "{}", credits["breakdown"]);
     let s = credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with("a:amazon-q/")).count();
     assert_eq!(s, 1, "{}", credits["sessions"]);
-    let lib = rusqlite::Connection::open(env.root.join("lib/library.sqlite")).unwrap();
-    lib.execute("UPDATE evidence SET model='old-selection' WHERE src='amazon-q' AND model=''", []).unwrap();
-    drop(lib);
     assert!(run(&env, &["analyze", "--repo", &rs, "--fresh"]).0);
     fs::remove_file(dir.join("data.sqlite3")).unwrap();
     assert!(run(&env, &["analyze", "--repo", &rs, "--fresh"]).0);
     let after: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
-    assert_eq!(after["breakdown"], credits["breakdown"], "corrected request models survive native-history cleanup");
+    assert_eq!(after["breakdown"], credits["breakdown"], "request models survive native-history cleanup");
     let _ = fs::remove_dir_all(&env.root);
 }
 

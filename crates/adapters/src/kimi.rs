@@ -56,7 +56,6 @@ fn sessions() -> Vec<Sess> {
 
 /// 解析一组 wire.jsonl，返回（起、止、模型、token、prompt 数）
 fn parse_wires(s: &Sess, pm: &PathMap, g: &mut FileGroup, id: &str) -> (i64, i64, String, i64, i64) {
-    let before = g.evs.len();
     let (mut start, mut end, mut tokens, mut prompts) = (i64::MAX, 0i64, 0i64, 0i64);
     let mut models: HashMap<String, usize> = HashMap::new();
     let mut model = String::new();
@@ -114,7 +113,6 @@ fn parse_wires(s: &Sess, pm: &PathMap, g: &mut FileGroup, id: &str) -> (i64, i64
             }
         }
     }
-    g.reconciled_events.extend_from_slice(&g.evs[before..]);
     let main_model = models.into_iter().max_by_key(|(_, n)| *n).map(|(m, _)| m).unwrap_or(model);
     (if start == i64::MAX { 0 } else { start }, end, main_model, tokens, prompts)
 }
@@ -202,6 +200,6 @@ mod tests {
         parse_wires(&s, &pm, &mut g, "models");
         std::fs::remove_dir_all(dir).unwrap();
         assert_eq!(g.evs.iter().map(|e| e.model.as_str()).collect::<Vec<_>>(), vec!["known-model", "", ""]);
-        assert_eq!(g.reconciled_events.len(), g.evs.len());
+        assert!(g.reconciled_events.is_empty());
     }
 }

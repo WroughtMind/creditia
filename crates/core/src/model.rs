@@ -289,6 +289,8 @@ pub struct FileGroup {
     /// Observed native event identities, ignoring their old model value. Replace
     /// only these rows with matching `evs`; an observation with no matching edit
     /// retracts it. Unlike whole-session reconciliation, absent rows survive.
+    /// Only use with a native unique identity (Cursor's line hash), not merely
+    /// equal content and second-level timestamps shared by different calls.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reconciled_events: Vec<Ev>,
     /// Native snapshot progress also survives an empty/retracted session, which

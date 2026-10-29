@@ -74,7 +74,7 @@ jobs:
         run: npm run core
         working-directory: apps/desktop
       - name: 编译并打包 App
-        run: npx tauri build --bundles app
+        run: npm run tauri -- build --bundles app --verbose
         working-directory: apps/desktop
       - name: 验证分层图标及三种外观
         run: node apps/desktop/tools/verify-macos-icon.mjs apps/desktop/src-tauri/target/release/bundle/macos/creditia.app

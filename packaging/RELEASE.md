@@ -27,7 +27,11 @@ PR 涉及发布文件时，或手动运行 `release` workflow 时，只上传 Ac
 
 `apps/desktop/src-tauri/icons/Creditia.icon` 是可用 Icon Composer 打开的源文档：深色底板与五个独立的星号花瓣，含浅色、深色、着色外观。`npm run icon --prefix apps/desktop` 从现有品牌 SVG 重新生成花瓣和静态图标；材质在 Icon Composer 中调整。
 
-macOS 构建需要 Xcode 26 或更新版本。Tauri 通过 `tauri.macos.conf.json` 编译 `.icon` 为 `Assets.car`，同时保留原有 `.icns` 供旧系统使用；Windows、Linux 继续使用原配置。CI 检查最终 App 的三种外观、五个花瓣层和静态图标，不能只检查源文件：
+macOS 构建需要 Xcode 26 或更新版本。Tauri 通过 `tauri.macos.conf.json` 编译 `.icon` 为 `Assets.car`，同时保留原有 `.icns` 供旧系统使用；Windows、Linux 继续使用原配置。
+
+构建入口使用 `npm run tauri -- build`。它在 macOS 为 `actool` 保持有效的标准输入，处理 [Tauri Node CLI 的已知编译问题](https://github.com/tauri-apps/tauri/pull/15991)；图标仍从 `.icon` 源文件编译，失败会直接终止构建。上游修复发布后可移除 `tools/tauri.mjs` 与 `tools/macos/actool`。
+
+CI 检查最终 App 的三种外观、五个花瓣层和静态图标，不能只检查源文件：
 
 ```sh
 node apps/desktop/tools/verify-macos-icon.mjs /path/to/creditia.app

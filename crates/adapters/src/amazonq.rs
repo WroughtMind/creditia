@@ -169,7 +169,6 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
             crate::push_text(&mut g.evs, pm, &abs, text, Src::AmazonQ, model, &p.id, *ts);
         }
         let model = p.models.iter().max_by_key(|(k, n)| (**n, std::cmp::Reverse((*k).clone()))).map(|(k, _)| k.clone()).unwrap_or_default();
-        g.reconciled_events = g.evs.clone();
         g.sessions.push(Session { src: Src::AmazonQ, id: p.id.clone(), model, start: p.start, end: p.end, tokens: 0, branch: None, prompts: p.prompts, reviewer: false, has_content: true, provider: None });
         n += 1;
         store.groups.insert(gk, g);

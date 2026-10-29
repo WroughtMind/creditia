@@ -90,7 +90,7 @@
   - Claude 用官方词序：4 代起 `claude-<系列>-<版本>`（Cursor、Amazon Q 写的 `claude-4.5-sonnet` → `claude-sonnet-4-5`），3 代及以前 `claude-<版本>-<系列>`；GPT 保留官方的点号写法（`gpt-5-1-codex` → `gpt-5.1-codex`）；
   - 真不同的模型分开：`kimi-k2-thinking` 和 `kimi-k2`、`gpt-5.1-codex-max` 和 `gpt-5.1-codex`、本地模型的尺寸（`gpt-oss:20b` → `gpt-oss-20b`，和 `gpt-oss-120b` 分开）。
   `crates/core/src/model.rs` 的 `same_model_everywhere` 测试列着各工具、渠道的上百种写法和必须分开的模型对；见到新写法就往里加。
-- **Continue 请求模型**：优先读 `promptLogs[].completionOptions.model`，缺失时才用同次请求的 `modelTitle`；都没有就保持未知，不用 `chatModelTitle` 当前选择或前次请求补空。自定义标题不能覆盖已记录的请求模型标识；请求标识不等于服务端最终执行模型的回执。升级会重新解析日志，并修正已读事件旧的标题归属；已经丢失、无法重读的日志不能据此猜回真实模型。
+- **Continue 请求模型**：优先读 `promptLogs[].completionOptions.model`，缺失时才用同次请求的 `modelTitle`；都没有就保持未知，不用 `chatModelTitle` 当前选择或前次请求补空。自定义标题不能覆盖已记录的请求模型标识；请求标识不等于服务端最终执行模型的回执。升级会重新解析可读日志。旧归档没有稳定的调用标识，无法无损判断旧标题与新模型是否对应同一次调用，因此保留原有历史，不自动删除或改名。
 - **工具名归一**：盖章、`Assisted-by`、`creditia stamp --harness` 里的 `Claude Code`、`claude`、`Codex CLI`、`GitHub Copilot`、`Amazon Q`、`agy`……都归到 creditia 的工具 id。
 - **厂商**：按名字规则判断（OpenAI、Anthropic、Google、xAI、Moonshot、DeepSeek、阿里、智谱、MiniMax、字节、Mistral、Meta、Cursor）。
 - **渠道**（谁提供的模型）只在有证据时才写：
@@ -110,7 +110,7 @@
 | [Copilot SDK 事件定义](https://github.com/github/copilot-sdk/blob/e22b95e6ead5e1de7e9a68d3087b8d28dc5f364a/nodejs/src/generated/session-events.ts) 与 [VS Code 请求记录](https://github.com/microsoft/vscode/blob/e1eafb38b7179f09c61af3482d63dd2aac021784/src/vs/workbench/contrib/chat/common/model/chatSessionOperationLog.ts#L140) | CLI 优先工具事件自己的 `model`，否则保留调用时的 `selectedModel` / `newModel` 选择；VS Code 读该请求的 `modelId`。缺失的历史模型不由后续选择、会话汇总或调试日志回填。 |
 | [Kimi wire 类型](https://github.com/MoonshotAI/kimi-cli/blob/9ab1286b8fe4e6bcd116949a27ce5e0ac3389c82/src/kimi_cli/wire/types.py) | 官方嵌套 `message.type/payload` 格式的 `StatusUpdate` 没有模型字段，不能从启动时模型选择补历史。现有读取器支持的顶层 `llm.request` / `usage.record` 是另一种记录形状；仅使用其中明确写出的标识，缺字段或换 wire 时保持未知，不宣称已支持官方 wire 的逐请求模型。 |
 
-重新解析可读日志时会修正对应旧模型归属。Cursor 等滚动历史按实际读到的事件修正，已被清理、无法重读的记录不根据当前选择猜测。构造回归覆盖自定义标题、Auto/未知、切换模型、跨记录缺字段、不可合并的型号，以及日志清理后的归档结果。
+重新解析可读日志时使用上述模型规则。Cursor 的唯一行哈希能定位当前记录，因此仅纠正实际读到的记录；已被清理的记录不根据当前选择猜测。Continue、Amazon Q、Kimi、Copilot 的旧归档缺少调用标识，秒级时间也可能相同，无法安全区分模型更正与不同调用，所以保留旧归档，不自动迁移。构造回归覆盖自定义标题、Auto/未知、切换模型、跨记录缺字段、不可合并的型号，以及日志裁剪后不同模型的历史仍然保留。
 
 ## 6. 贡献者
 
