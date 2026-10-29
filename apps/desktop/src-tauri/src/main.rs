@@ -820,7 +820,7 @@ fn doctor_local() -> Value {
 }
 
 // ───────────────────────── 标志：设置里选，程序坞图标跟着换 ─────────────────────────
-// 安装包里的图标是默认的条纹圆（orb）；选了别的，App 开着时程序坞显示选的那个（关着时 macOS 仍显示安装包里的）
+// 默认星号使用安装包的分层图标；其他标志在 App 运行时替换为静态图。
 
 const DEFAULT_LOGO: &str = "star";
 
@@ -839,10 +839,16 @@ fn icon_png(id: &str) -> Option<&'static [u8]> {
 #[cfg(target_os = "macos")]
 fn apply_icon(app: &tauri::AppHandle, id: &str) {
     let Some(png) = icon_png(id) else { return };
+    let restore_bundle_icon = id == DEFAULT_LOGO;
     let _ = app.run_on_main_thread(move || {
         use objc2::AnyThread;
         use objc2_app_kit::{NSApplication, NSImage};
         let Some(mtm) = objc2::MainThreadMarker::new() else { return };
+        if restore_bundle_icon {
+            // nil 恢复系统从 Assets.car 读取的图标，不用 PNG 覆盖其分层与外观变体。
+            unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(None) };
+            return;
+        }
         let data = objc2_foundation::NSData::with_bytes(png);
         if let Some(img) = NSImage::initWithData(NSImage::alloc(), &data) {
             // SAFETY: 在主线程上，传的是刚解码好的 NSImage

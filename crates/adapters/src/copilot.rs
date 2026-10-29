@@ -106,7 +106,8 @@ impl Read {
     fn into_group(self, src: Src, pm: &PathMap, g: &mut FileGroup, keep: bool) {
         let before = g.evs.len();
         for (abs, text, model, ts) in &self.evs {
-            crate::push_text(&mut g.evs, pm, abs, text, src, if model.is_empty() { &self.model } else { model }, &self.id, *ts);
+            // A later selection or session/debug summary cannot identify an older edit.
+            crate::push_text(&mut g.evs, pm, abs, text, src, model, &self.id, *ts);
         }
         if self.start > 0 && (keep || g.evs.len() > before) {
             g.sessions.push(Session { src, id: self.id, model: self.model, start: self.start, end: self.end, tokens: self.tokens, branch: self.branch, prompts: self.prompts, reviewer: false, has_content: true, provider: None });
@@ -487,7 +488,7 @@ pub fn doctor() -> Vec<Health> {
         records: files.len() as u64,
         earliest: mt.iter().min().copied().map(date_local),
         latest: mt.iter().max().copied().map(date_local),
-        note: creditia_core::tr!("{} 个工作区有 Copilot Chat 记录", "{} workspaces with Copilot Chat sessions", ws.len()),
+        note: creditia_core::tr!("{} 个工作区有 Copilot Chat 记录；按请求或工具记录的模型读取，汇总与调试主模型不回填缺失编辑", "{} workspaces with Copilot Chat sessions; request/tool model fields are used, session/debug summaries do not fill missing edit models", ws.len()),
         ..Default::default()
     };
     let base = source_dir(Src::Copilot).join("session-state");
@@ -501,7 +502,7 @@ pub fn doctor() -> Vec<Health> {
         records: cs.len() as u64,
         earliest: mt.iter().min().copied().map(date_local),
         latest: mt.iter().max().copied().map(date_local),
-        note: String::new(),
+        note: creditia_core::tr!("逐工具模型优先，其次用调用开始时的模型选择；后续选择不回填历史，不据此断言服务端实际路由", "tool model fields take precedence over the selection at call start; later selections do not fill history or prove server-side routing"),
         ..Default::default()
     };
     vec![vs, cli]
@@ -578,5 +579,44 @@ mod tests {
         assert_eq!(r.evs.len(), 1);
         assert_eq!(r.evs[0].0, "/home/me/demo/src/ok.rs");
         assert_eq!(r.branch.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn event_model_boundaries_preserve_unknown_before_later_selection() {
+        let event = |ty: &str, data: Value| json!({"type": ty, "timestamp": "2026-10-01T09:00:00Z", "data": data}).to_string();
+        let text = [
+            event("session.start", json!({"sessionId": "models", "context": {"cwd": "/demo"}})),
+            event("tool.execution_start", json!({"toolCallId": "unknown", "toolName": "create", "arguments": {"path": "src/unknown.rs", "file_text": "pub fn unknown_model_before_selection() -> usize { 17 }"}})),
+            event("tool.execution_complete", json!({"toolCallId": "unknown", "success": true})),
+            event("session.model_change", json!({"newModel": "gpt-5.2"})),
+            event("tool.execution_start", json!({"toolCallId": "known", "toolName": "create", "arguments": {"path": "src/known.rs", "file_text": "pub fn known_model_after_selection() -> usize { 29 }"}})),
+            event("tool.execution_complete", json!({"toolCallId": "known", "success": true})),
+        ].join("\n");
+        let r = read_events(&text, "models", "/demo");
+        assert_eq!(r.model, "gpt-5.2");
+        let pm = PathMap { known: ["src/unknown.rs".into(), "src/known.rs".into()].into(), markers: vec!["/demo/".into()], excludes: vec![] };
+        let mut g = FileGroup::default();
+        r.into_group(Src::Copilot, &pm, &mut g, true);
+        assert_eq!(g.evs.iter().map(|e| e.model.as_str()).collect::<Vec<_>>(), vec!["", "gpt-5.2"]);
+        assert!(g.reconciled_events.is_empty());
+    }
+
+    #[test]
+    fn chat_model_boundaries_do_not_fill_unknown_request_from_summary() {
+        let dir = std::env::temp_dir().join(format!("creditia-copilot-models-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("chat.json");
+        std::fs::write(&file, json!({"sessionId": "models", "creationDate": 1_790_000_000_000i64, "requests": [
+            {"response": [{"kind": "textEditGroup", "uri": "/demo/src/unknown.rs", "edits": [[{"text": "pub fn unknown_request_before_named_model() -> usize { 41 }"}]]}]},
+            {"modelId": "claude-sonnet-4.5", "response": []}
+        ]}).to_string()).unwrap();
+        let r = read_chat(&file, "/demo").unwrap();
+        let pm = PathMap { known: ["src/unknown.rs".into()].into(), markers: vec!["/demo/".into()], excludes: vec![] };
+        let mut g = FileGroup::default();
+        r.into_group(Src::Copilot, &pm, &mut g, true);
+        std::fs::remove_dir_all(dir).unwrap();
+        assert_eq!(g.evs.len(), 1);
+        assert!(g.evs[0].model.is_empty());
+        assert!(g.reconciled_events.is_empty());
     }
 }

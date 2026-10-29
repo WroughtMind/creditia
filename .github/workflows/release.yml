@@ -12,6 +12,9 @@ on:
       - 'packaging/**'
       - 'apps/desktop/tools/core.mjs'
       - 'apps/desktop/src-tauri/tauri.conf.json'
+      - 'apps/desktop/src-tauri/tauri.macos.conf.json'
+      - 'apps/desktop/src-tauri/icons/**'
+      - 'apps/desktop/tools/verify-macos-icon.mjs'
 permissions:
   contents: read
 jobs:
@@ -20,8 +23,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-15, target: aarch64-apple-darwin, bundles: dmg }
-          - { os: macos-15-intel, target: x86_64-apple-darwin, bundles: dmg }
+          - { os: macos-26, target: aarch64-apple-darwin, bundles: dmg }
+          - { os: macos-26-intel, target: x86_64-apple-darwin, bundles: dmg }
           - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, bundles: 'appimage,deb' }
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, bundles: '' }
           - { os: windows-latest, target: x86_64-pc-windows-msvc, bundles: nsis }
@@ -30,6 +33,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
+      - name: Select Xcode with Icon Composer support
+        if: runner.os == 'macOS'
+        run: echo "DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -73,7 +79,7 @@ jobs:
       - name: Build installers
         if: matrix.bundles != ''
         working-directory: apps/desktop
-        run: npx tauri build --verbose --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+        run: npm run tauri -- build --verbose --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
       - name: Verify macOS signatures
         if: runner.os == 'macOS'
         env:
@@ -84,6 +90,7 @@ jobs:
           mkdir -p "$mount"
           hdiutil attach -readonly -nobrowse -mountpoint "$mount" apps/desktop/src-tauri/target/"$TARGET"/release/bundle/dmg/*.dmg
           trap 'bash packaging/detach-dmg.sh "$mount"' EXIT
+          node apps/desktop/tools/verify-macos-icon.mjs "$mount/creditia.app"
           codesign --verify --deep --strict "$mount/creditia.app"
           "$mount/creditia.app/Contents/MacOS/creditia-core" help
       - name: Collect installers

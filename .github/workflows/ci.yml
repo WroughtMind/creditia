@@ -46,9 +46,11 @@ jobs:
           node_modules/.bin/creditia export --credits "$GITHUB_WORKSPACE/packages/render/fixtures/catnap.json" --piece tier --style ink --format png --out tier.png
 
   desktop-macos:
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode with Icon Composer support
+        run: echo "DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
@@ -74,8 +76,10 @@ jobs:
         run: npm run core
         working-directory: apps/desktop
       - name: 编译并打包 App
-        run: npx tauri build --bundles app
+        run: npm run tauri -- build --bundles app --verbose
         working-directory: apps/desktop
+      - name: 验证分层图标及三种外观
+        run: node apps/desktop/tools/verify-macos-icon.mjs apps/desktop/src-tauri/target/release/bundle/macos/creditia.app
       # 放在打包之后：要用上一步 vite 编出来的 dist（App 把它编进二进制）
       - name: App 的 Rust：clippy 与单测
         run: |

@@ -148,19 +148,6 @@ pub fn source_dir(src: Src) -> PathBuf {
     }
 }
 
-/// Cursor 对话库（state.vscdb）所在目录，各平台不同
-pub fn cursor_global_storage() -> PathBuf {
-    if let Ok(p) = std::env::var("CREDITIA_CURSOR_STORAGE") {
-        return PathBuf::from(p);
-    }
-    #[cfg(target_os = "macos")]
-    { home().join("Library/Application Support/Cursor/User/globalStorage") }
-    #[cfg(target_os = "windows")]
-    { PathBuf::from(std::env::var("APPDATA").unwrap_or_default()).join("Cursor/User/globalStorage") }
-    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
-    { home().join(".config/Cursor/User/globalStorage") }
-}
-
 /// XDG 数据目录（OpenCode 等用）；Windows / macOS 上 OpenCode 也用 ~/.local/share
 pub fn xdg_data() -> PathBuf {
     std::env::var("XDG_DATA_HOME").ok().filter(|s| !s.is_empty()).map(PathBuf::from).unwrap_or_else(|| home().join(".local/share"))

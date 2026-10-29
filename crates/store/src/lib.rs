@@ -234,6 +234,18 @@ impl Library {
         }
         let mut n = 0;
         let mut occurrences = HashMap::new();
+        // Rolling native stores may retain only part of a session. Reconcile
+        // observed identities without discarding rows no longer available.
+        let identity = |e: &Ev| (e.src, e.session.clone(), e.rel.clone(), e.key, e.ts, e.tab, e.next, e.single_use);
+        let mut observed: HashMap<_, HashMap<String, i64>> = store.groups.values()
+            .flat_map(|g| &g.reconciled_events)
+            .map(|e| (identity(e), HashMap::new()))
+            .collect();
+        for e in store.groups.values().flat_map(|g| &g.evs) {
+            if let Some(models) = observed.get_mut(&identity(e)) {
+                *models.entry(e.model.clone()).or_default() += 1;
+            }
+        }
         // A reconstructed native session can now contain fewer or zero edits.
         // Keep the exact current event keys so failed/conflicting observations
         // retract only that session, without erasing genuinely missing history.
@@ -283,6 +295,30 @@ impl Library {
                 }
                 if !present_sessions.contains(&(*src, *id)) {
                     remove_session.execute(params![project, src, id]).map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        {
+            let mut existing = tx.prepare("select rowid,model,occurrence from evidence where project=?1 and src=?2 and session=?3 and rel=?4 and key=?5 and ts=?6 and tab=?7 and next=?8 and single_use=?9 and claude_legacy=0").map_err(|e| e.to_string())?;
+            let mut remove = tx.prepare("delete from evidence where rowid=?1").map_err(|e| e.to_string())?;
+            let mut touched = HashSet::new();
+            for ((src, session, rel, key, ts, tab, next, single_use), models) in observed {
+                touched.insert((src, session.clone()));
+                let rows = existing.query_map(params![project, src.harness(), session, rel, key as i64, ts, tab as i64, next as i64, single_use as i64], |r| {
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?))
+                }).map_err(|e| e.to_string())?.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+                for (rowid, model, occurrence) in rows {
+                    if occurrence >= models.get(&model).copied().unwrap_or(0) {
+                        remove.execute([rowid]).map_err(|e| e.to_string())?;
+                    }
+                }
+            }
+            // Cursor sessions are derived from accepted line records. Once the
+            // last false row is withdrawn, do not resurrect its old summary.
+            let mut remove_empty = tx.prepare("delete from sessions where project=?1 and src=?2 and id=?3 and not exists (select 1 from evidence where project=?1 and src=?2 and session=?3)").map_err(|e| e.to_string())?;
+            for (src, id) in touched {
+                if !present_sessions.contains(&(src.harness(), id.as_str())) {
+                    remove_empty.execute(params![project, src.harness(), id]).map_err(|e| e.to_string())?;
                 }
             }
         }
@@ -537,6 +573,39 @@ mod tests {
         assert_eq!(l.save_evidence("p-reconcile", &now).unwrap(), 0, "synchronization is idempotent");
         l.save_evidence("p-reconcile", &Store::default()).unwrap();
         assert_eq!(l.evidence_count("p-reconcile"), 3, "absent logs do not revoke prior evidence");
+    }
+
+    #[test]
+    fn observed_events_correct_models_without_erasing_trimmed_history() {
+        let mut l = lib();
+        let old = Ev { src: Src::Cursor, single_use: false, ..ev("a.rs", 7, "s") };
+        let human = Ev { key: 8, ..old.clone() };
+        let trimmed = Ev { key: 9, ..old.clone() };
+        let cli = Ev { single_use: true, ..human.clone() };
+        let other_source = Ev { src: Src::Codex, ..human.clone() };
+        let human_only = Ev { session: "human-only".into(), ..human.clone() };
+        let mut before = Store::default();
+        before.groups.insert("native".into(), FileGroup {
+            evs: vec![old.clone(), human.clone(), trimmed, cli, other_source, human_only.clone()],
+            sessions: vec![Session { src: Src::Cursor, ..session("s", None) }, Session { src: Src::Cursor, ..session("human-only", None) }],
+            ..Default::default()
+        });
+        l.save_evidence("p-observed", &before).unwrap();
+        l.save_evidence("p-observed-other", &before).unwrap();
+        let corrected = Ev { model: "auto".into(), ..old.clone() };
+        let mut now = Store::default();
+        now.groups.insert("native".into(), FileGroup { evs: vec![corrected], reconciled_events: vec![old, human, human_only], ..Default::default() });
+        l.save_evidence("p-observed", &now).unwrap();
+        let (events, sessions) = l.load_evidence("p-observed").unwrap();
+        assert_eq!(events.len(), 4, "replace old model and retract human row; preserve trimmed rows and other sources/receipt types");
+        assert_eq!(events.iter().find(|e| e.key == 7).unwrap().model, "auto");
+        assert!(!events.iter().any(|e| e.src == Src::Cursor && e.key == 8 && !e.single_use));
+        assert_eq!(sessions.len(), 1, "withdraw a derived session when its last false row is retracted");
+        assert_eq!(sessions[0].id, "s", "trimmed native rows still support their session");
+        assert_eq!(l.evidence_count("p-observed-other"), 6);
+        assert_eq!(l.save_evidence("p-observed", &now).unwrap(), 0);
+        l.save_evidence("p-observed", &Store::default()).unwrap();
+        assert_eq!(l.evidence_count("p-observed"), 4);
     }
 
     #[test]

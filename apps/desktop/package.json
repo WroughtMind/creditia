@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --port 5183",
     "build": "vite build",
-    "tauri": "tauri",
+    "tauri": "node tools/tauri.mjs",
     "fonts": "node tools/fonts.mjs",
     "icon": "node tools/icon.mjs && tauri icon tools/icon.png && rm -rf src-tauri/icons/android src-tauri/icons/ios",
     "core": "node tools/core.mjs",

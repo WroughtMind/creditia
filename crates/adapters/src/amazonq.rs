@@ -4,7 +4,7 @@
 //! 之前 analyze 过的留在证据库里。
 //! history[] 每项是 user + assistant + request_metadata；assistant 的 ToolUse 里的工具调用，结果在下一项 user 的 ToolUseResults 里，
 //! status 为 Success 才算。fs_write（command 为 create / str_replace / insert / append）写下的文本是证据，execute_bash 的命令原文是候选证据。
-//! 模型取 request_metadata.model_id，没有就取对话的 model；时间取 request_start_timestamp_ms，没有就取 user 的 timestamp。
+//! 模型只取历史 request_metadata.model_id（请求标识），不以对话当前选择回填；时间取 request_start_timestamp_ms，没有就取 user 的 timestamp。
 
 use crate::{added_lines, open_ro, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
@@ -69,17 +69,15 @@ pub(crate) struct Parsed {
 }
 
 pub(crate) fn parse(v: &Value) -> Parsed {
-    let fallback = v["model"].as_str().or(v["model_info"]["model_id"].as_str()).unwrap_or("").to_string();
-    parse_with_fallback(v, &fallback, true)
+    parse_history(v, true)
 }
 
-/// Kiro has mutable selected-model metadata; only historical request IDs can
-/// label its edits. Keep the legacy Amazon Q entry point's behavior separate.
+/// Kiro shares the request history format but does not accept whole-file writes.
 pub(crate) fn parse_request_models(v: &Value) -> Parsed {
-    parse_with_fallback(v, "", false)
+    parse_history(v, false)
 }
 
-fn parse_with_fallback(v: &Value, fallback: &str, allow_whole_write: bool) -> Parsed {
+fn parse_history(v: &Value, allow_whole_write: bool) -> Parsed {
     let hist: Vec<&Value> = v["history"].as_array().map(|h| h.iter().collect()).unwrap_or_default();
     let mut p = Parsed { id: v["conversation_id"].as_str().unwrap_or("").to_string(), edits: vec![], start: 0, end: 0, prompts: 0, models: HashMap::new() };
     // 成功的工具结果：在下一项 user 里
@@ -102,7 +100,7 @@ fn parse_with_fallback(v: &Value, fallback: &str, allow_whole_write: bool) -> Pa
             p.start = if p.start == 0 { ts } else { p.start.min(ts) };
             p.end = p.end.max(ts);
         }
-        let model = e["request_metadata"]["model_id"].as_str().filter(|m| !m.is_empty()).map(String::from).unwrap_or_else(|| fallback.to_string());
+        let model = e["request_metadata"]["model_id"].as_str().unwrap_or("").trim().to_string();
         if !model.is_empty() {
             *p.models.entry(model.clone()).or_default() += 1;
         }
@@ -203,8 +201,8 @@ pub fn doctor() -> Health {
         earliest: cs.iter().map(|p| p.start).filter(|&t| t > 0).min().map(date_local),
         latest: cs.iter().map(|p| p.end).max().filter(|&t| t > 0).map(date_local),
         note: creditia_core::tr!(
-            "每个目录只存最近一次对话；逐条时间与模型。尚未用真实日志核对",
-            "only the latest conversation per directory is kept; time and model per request. Not yet checked against real logs"
+            "每个目录只存最近一次对话；历史请求模型字段已按官方源码核对，缺失时不以当前选择回填",
+            "only the latest conversation per directory is kept; historical request model field checked against official source, never backfilled from the current selection"
         ),
         ..Default::default()
     }
@@ -217,7 +215,7 @@ mod tests {
 
     #[test]
     fn conversation_to_edits() {
-        let v = json!({ "conversation_id": "q1", "model": "claude-sonnet-4", "history": [
+        let mut v = json!({ "conversation_id": "q1", "model": "claude-sonnet-4", "history": [
             { "user": { "content": { "Prompt": { "prompt": "go" } }, "timestamp": "2026-09-22T10:00:00+08:00" },
               "assistant": { "ToolUse": { "message_id": "m", "content": "", "tool_uses": [
                   { "id": "a", "name": "fs_write", "orig_name": "fs_write", "args": { "command": "create", "path": "src/x.py", "file_text": "x = 1" }, "orig_args": {} },
@@ -234,5 +232,11 @@ mod tests {
         assert_eq!((p.start, p.end), (1_790_000_000, 1_790_000_000));
         assert_eq!(edits("execute_bash", &json!({ "command": "ls" })), vec![(String::new(), "ls".to_string())]);
         assert_eq!(edits("fs_read", &json!({ "path": "a" })), vec![]);
+        // /model changes selection, not the identity of earlier requests.
+        v["history"][0]["request_metadata"]["model_id"] = Value::Null;
+        v["model_info"] = json!({"model_id": "claude-opus-4.5"});
+        let p = parse(&v);
+        assert!(p.edits[0].2.is_empty(), "current selection must not relabel historical edits");
+        assert!(p.models.is_empty());
     }
 }
