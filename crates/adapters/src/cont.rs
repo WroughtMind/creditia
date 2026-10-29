@@ -4,7 +4,7 @@
 //! 编辑工具：扩展的 create_new_file（filepath, contents）、single_find_and_replace、multi_edit、edit_existing_file（changes 是带
 //! 「... existing code ...」占位的片段，去掉占位行当候选证据），命令行的 Write / Edit / MultiEdit（file_path）；
 //! run_terminal_command / Bash 的命令原文作为命令里提到的文件的候选证据。
-//! 模型取 promptLogs 的 modelTitle（用户给模型起的标题，规整成小写连字符），没有就取会话的 chatModelTitle；渠道取 modelProvider。
+//! 模型优先取 promptLogs 的 completionOptions.model（本次请求的模型标识），缺失时才用同次记录的 modelTitle；渠道取 modelProvider。
 
 use crate::{file_uri_path, new_text, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, FileGroup, PathMap, Session, Src, Store};
@@ -69,6 +69,11 @@ fn model_id(title: &str) -> String {
     title.split_whitespace().collect::<Vec<_>>().join("-").to_lowercase()
 }
 
+fn request_model(log: &Value) -> Option<String> {
+    log["completionOptions"]["model"].as_str().filter(|t| !t.trim().is_empty()).map(|t| t.trim().to_string())
+        .or_else(|| log["modelTitle"].as_str().filter(|t| !t.trim().is_empty()).map(model_id))
+}
+
 /// 一次成功的工具调用写下的（路径, 新增的行）；shell 命令路径为空
 fn edits(name: &str, a: &Value) -> Vec<(String, String)> {
     let path = ["filepath", "file_path", "path"].iter().find_map(|k| a[*k].as_str()).unwrap_or("").to_string();
@@ -119,7 +124,6 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         let fallback = model_id(v["chatModelTitle"].as_str().unwrap_or(""));
         let (mut models, mut providers): (HashMap<String, usize>, HashMap<String, usize>) = Default::default();
         let mut prompts = 0;
-        let mut model = fallback.clone();
         let mut any = false;
         for item in v["history"].as_array().into_iter().flatten() {
             let role = item["message"]["role"].as_str().unwrap_or("");
@@ -131,11 +135,12 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
                 continue;
             }
             any = true;
-            if let Some(log) = item["promptLogs"].as_array().and_then(|l| l.last()) {
-                if let Some(t) = log["modelTitle"].as_str().filter(|t| !t.is_empty()) {
-                    model = model_id(t);
-                    *models.entry(model.clone()).or_default() += 1;
-                }
+            let log = item["promptLogs"].as_array().and_then(|l| l.last());
+            // A missing request record must not inherit a previous response or
+            // the conversation's mutable chatModelTitle selection.
+            let model = log.and_then(request_model).unwrap_or_default();
+            if !model.is_empty() { *models.entry(model.clone()).or_default() += 1; }
+            if let Some(log) = log {
                 if let Some(p) = log["modelProvider"].as_str().filter(|p| !p.is_empty()) {
                     *providers.entry(p.to_string()).or_default() += 1;
                 }
@@ -162,6 +167,8 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         let tokens = u["promptTokens"].as_i64().unwrap_or(0) + u["completionTokens"].as_i64().unwrap_or(0);
         let model = if models.is_empty() { fallback } else { top(models) };
         let provider = Some(top(providers)).filter(|p| !p.is_empty());
+        // Correct only observed edits; a pruned history must keep other old rows.
+        g.reconciled_events = g.evs.clone();
         g.sessions.push(Session { src: Src::Continue, id, model, start, end, tokens, branch: None, prompts, reviewer: false, has_content: true, provider });
         n += 1;
         store.groups.insert(gk, g);
@@ -196,8 +203,8 @@ pub fn doctor() -> Health {
         earliest: fs.iter().map(|f| if f.1 > 0 { f.1 } else { mtime(&f.0) }).filter(|&t| t > 0).min().map(date_local),
         latest: fs.iter().map(|f| mtime(&f.0)).max().filter(|&t| t > 0).map(date_local),
         note: creditia_core::tr!(
-            "扩展和命令行共用；工具调用带状态，模型是用户起的标题。尚未用真实日志核对",
-            "shared by the editor extensions and the CLI; tool calls carry a status, models are user-given titles. Not yet checked against real logs"
+            "优先读取请求模型标识，其次同次请求标题；缺失时不以当前选择或前次模型回填。模型字段已按公开记录核对",
+            "request model ID takes precedence over that request's title; missing fields are never filled from current selections or previous requests. Model fields checked against public records"
         ),
         ..Default::default()
     }
@@ -222,5 +229,14 @@ mod tests {
     fn model_titles() {
         assert_eq!(model_id("Claude Sonnet 4.5"), "claude-sonnet-4.5");
         assert_eq!(model_id("gpt-5"), "gpt-5");
+    }
+
+    #[test]
+    fn native_request_model_precedes_display_title() {
+        // Model-only excerpt from continuedev/continue#2085, comment 2687146546.
+        let log = json!({"modelTitle": "Gemini Exp 1206", "completionOptions": {"model": "gemini-exp-1206"}});
+        assert_eq!(request_model(&log).as_deref(), Some("gemini-exp-1206"));
+        assert_eq!(request_model(&json!({"modelTitle": "Claude Sonnet 4.5", "completionOptions": {"model": " "}})).as_deref(), Some("claude-sonnet-4.5"));
+        assert_eq!(request_model(&json!({})), None);
     }
 }

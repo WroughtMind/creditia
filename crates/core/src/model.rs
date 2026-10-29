@@ -286,6 +286,11 @@ pub struct FileGroup {
     /// synchronizes only these sessions and preserves other historical evidence.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reconciled_sessions: Vec<(Src, String)>,
+    /// Observed native event identities, ignoring their old model value. Replace
+    /// only these rows with matching `evs`; an observation with no matching edit
+    /// retracts it. Unlike whole-session reconciliation, absent rows survive.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reconciled_events: Vec<Ev>,
     /// Native snapshot progress also survives an empty/retracted session, which
     /// need not appear in this project's user-facing session list.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -324,7 +329,7 @@ impl Store {
 }
 
 /// 日志缓存的格式版本：adapter 的读法变了就加一，升级后整份重新解析（2：编辑只记新增的行）
-pub const STORE_VERSION: u32 = 5;
+pub const STORE_VERSION: u32 = 6;
 
 pub fn fingerprint(path: &std::path::Path) -> (u64, u64) {
     match std::fs::metadata(path) {
@@ -580,6 +585,11 @@ pub fn normalize_model(m: &str) -> String {
         m = m.replace("--", "-");
     }
     m = m.trim_matches('-').to_string();
+    // These unversioned Gemini experiments have no stable family to collapse to.
+    // Dropping their experiment ID would merge distinct models into just "gemini".
+    if m.starts_with("gemini-exp-") {
+        return m;
+    }
     let openai = |m: &str| m.starts_with("gpt") || m.starts_with("chatgpt") || (m.starts_with('o') && m[1..].starts_with(|c: char| c.is_ascii_digit())) || m.starts_with("codex-");
     let claude = |m: &str| m.starts_with("claude");
     // 后缀反复剥，直到不再变化：`claude-sonnet-4-5-20250929-v1-0`、`gemini-2.5-pro-preview-05-06`
@@ -919,7 +929,10 @@ mod tests {
             ("claude-sonnet-4", &["claude-sonnet-4", "claude-4-sonnet", "claude-sonnet-4-20250514", "CLAUDE_SONNET_4_20250514_V1_0", "claude-4-sonnet-thinking"]),
             ("claude-3-7-sonnet", &["claude-3-7-sonnet", "claude-3.7-sonnet", "claude-3-7-sonnet-20250219", "claude-3.7-sonnet-max", "claude-sonnet-3.7", "anthropic.claude-3-7-sonnet-20250219-v1:0"]),
             ("claude-3-5-sonnet", &["claude-3-5-sonnet-20241022", "claude-3.5-sonnet", "anthropic.claude-3-5-sonnet-20241022-v2:0", "claude-3-5-sonnet-latest"]),
-            ("claude-haiku-4-5", &["claude-haiku-4-5", "claude-haiku-4-5-20251001", "claude-4.5-haiku", "Claude Haiku 4.5"]),
+            // Copilot session-state: microsoft/vscode#338949, comment 6099460320.
+            ("claude-haiku-4-5", &["claude-haiku-4-5", "claude-haiku-4.5", "claude-haiku-4-5-20251001", "claude-4.5-haiku", "Claude Haiku 4.5"]),
+            ("gpt-6-luna", &["gpt-6-luna"]),
+            // Kimi's real startup log: MoonshotAI/kimi-cli#290 uses openai/gpt-5.1-codex.
             ("gpt-5.1-codex", &["gpt-5.1-codex", "openai/gpt-5.1-codex", "gpt-5.1-codex-high", "gpt-5.1-codex-medium", "GPT-5.1 Codex", "gpt-5-1-codex", "gpt5.1-codex"]),
             ("gpt-5.1-codex-max", &["gpt-5.1-codex-max", "gpt-5.1-codex-max-xhigh", "GPT-5.1-Codex-Max"]),
             ("gpt-5", &["gpt-5", "gpt-5-high", "gpt-5-high-fast", "gpt-5-2025-08-07", "openai/gpt-5", "azure/gpt-5", "gpt-5-thinking", "GPT-5"]),
@@ -927,6 +940,8 @@ mod tests {
             ("o4-mini", &["o4-mini", "o4-mini-high", "o4-mini-2025-04-16"]),
             ("gemini-2.5-pro", &["gemini-2.5-pro", "models/gemini-2.5-pro", "google/gemini-2.5-pro", "gemini-2.5-pro-preview-05-06", "gemini-2.5-pro-exp-03-25", "vertex_ai/gemini-2.5-pro", "Gemini 2.5 Pro"]),
             ("gemini-3-pro", &["gemini-3-pro", "gemini-3-pro-preview", "Gemini 3 Pro (High)", "Gemini 3 Pro (Low)"]),
+            // Real Continue promptLogs: continuedev/continue#2085, comment 2687146546.
+            ("gemini-exp-1206", &["gemini-exp-1206", "Gemini Exp 1206", "models/gemini-exp-1206"]),
             ("grok-4", &["grok-4", "grok-4-0709", "x-ai/grok-4", "xai/grok-4"]),
             ("grok-code-fast-1", &["grok-code-fast-1", "x-ai/grok-code-fast-1"]),
             ("kimi-k2", &["kimi-k2", "kimi-k2-0905", "kimi-k2-0905-preview", "moonshotai/kimi-k2", "moonshotai/kimi-k2-instruct", "kimi-k2-instruct-0905"]),
@@ -948,6 +963,7 @@ mod tests {
             ("gpt-5.1-codex-max", "gpt-5.1-codex"), ("gpt-5-mini", "gpt-5"), ("o3-mini", "o3"), ("claude-opus-4-1", "claude-opus-4"),
             ("claude-sonnet-4-5", "claude-sonnet-4"), ("gemini-2.5-flash", "gemini-2.5-pro"), ("gemini-2.0-flash-thinking-exp", "gemini-2.0-flash"),
             ("grok-4-fast", "grok-4"), ("deepseek-reasoner", "deepseek-chat"), ("composer-1", "composer-2"),
+            ("gemini-exp-1206", "gemini-exp-1121"),
         ];
         for (a, b) in distinct {
             assert_ne!(normalize_model(a), normalize_model(b), "{a} vs {b}");

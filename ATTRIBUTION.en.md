@@ -84,7 +84,7 @@ A repository often lives in several places at once: your main directory, several
 
 - **Name normalization** groups by "is it the same model", not by how alike the strings look.
   - Providers: `anthropic/`, `openrouter/anthropic/`, `models/`, `us.anthropic.…-v1:0` (Bedrock), `…@20250514` (Vertex), `:free` and `:thinking` (OpenRouter) are dropped;
-  - Snapshots and previews: dates (`-20250929`, `-2024-08-06`, `-0709`, `-2507`), `-latest`, `-preview` and `-exp` are dropped;
+  - Snapshots and previews: dates (`-20250929`, `-2024-08-06`, `-0709`, `-2507`), `-latest`, `-preview` and `-exp` are dropped; unversioned experiments such as `gemini-exp-1206` retain their full identifiers and stay separate from `gemini-exp-1121`;
   - Display forms: spaces, underscores and bracketed tags as in `Claude Sonnet 4.5`, `Gemini 3 Pro (High)`, `CLAUDE_SONNET_4_20250514_V1_0`, `[1m]`, `(1M context)`;
   - A way of calling a model isn't another model: OpenAI reasoning effort (`-high`, `-xhigh`, Cursor's `-fast`), Claude's `-thinking`, Cursor MAX mode's `-max`, `-instruct`;
   - Claude uses the official word order: `claude-<family>-<version>` from generation 4 on (`claude-4.5-sonnet` as Cursor and Amazon Q write it → `claude-sonnet-4-5`), `claude-<version>-<family>` for generation 3 and earlier; GPT keeps the official dotted form (`gpt-5-1-codex` → `gpt-5.1-codex`);
@@ -98,6 +98,18 @@ A repository often lives in several places at once: your main directory, several
   - OpenCode: each message's `providerID` (including your own relay names).
   - Cline / Roo / Kilo: `model_provider_id`.
   - Prefixes in the model string itself (`openrouter/`, `bedrock/`, `vertex_ai/`).
+
+Model fields retain their source meaning: a selection, a request identifier and an execution receipt are different evidence. Official source, documented formats and constructed regression cases establish these rules; running every tool or model is not required. Uncertain aliases stay separate.
+
+| Source and reference | Reading rule and limit |
+|---|---|
+| [Cursor 3.27.22 official build](https://downloads.cursor.com/production/b1aa50cb6db84fd3e8c808259cb172ea73425c1f/darwin/arm64/Cursor-darwin-arm64.dmg): `storeHashes`, `trackSingleEdit`, `setModelConfigForComposer` | `ai_code_hashes.model` is the row's model snapshot. `default` means Auto; an empty field stays unknown. Mutable `composerData.modelConfig` cannot fill historical rows. Only `composer`, `cli` and `tab` are accepted; `human` and unknown sources are excluded, and Tab remains assisted typing. |
+| [Amazon Q request metadata](https://github.com/aws/amazon-q-developer-cli/blob/15cc8f3cd18c4272925ce1c7053268eedff1ea0a/crates/chat-cli/src/cli/chat/parser.rs#L216) | `history[].request_metadata.model_id` is the historical request identifier. Top-level `model` / `model_info` is the current selection and cannot label earlier edits. |
+| [Continue persisted model fields](https://github.com/continuedev/continue/issues/2085#issuecomment-2687146546) | `promptLogs[].completionOptions.model` is the request identifier and takes precedence over the customizable `modelTitle`. Only that request's recorded title is retained when its identifier is absent; if both are missing, neither a previous request nor the current `chatModelTitle` fills the gap. Similar titles do not establish model identity. A request identifier is not a server execution receipt. |
+| [Copilot SDK events](https://github.com/github/copilot-sdk/blob/e22b95e6ead5e1de7e9a68d3087b8d28dc5f364a/nodejs/src/generated/session-events.ts) and [VS Code requests](https://github.com/microsoft/vscode/blob/e1eafb38b7179f09c61af3482d63dd2aac021784/src/vs/workbench/contrib/chat/common/model/chatSessionOperationLog.ts#L140) | CLI tool-event `model` takes precedence over the selection at call time (`selectedModel` / `newModel`). VS Code uses that request's `modelId`. Missing historical values are never filled from later selections, session summaries or debug logs. |
+| [Kimi wire types](https://github.com/MoonshotAI/kimi-cli/blob/9ab1286b8fe4e6bcd116949a27ce5e0ac3389c82/src/kimi_cli/wire/types.py) | Official nested `message.type/payload` records have no model in `StatusUpdate`; startup selections cannot fill historical requests. The reader's top-level `llm.request` / `usage.record` format is a separate shape. Only explicit identifiers from that shape are used; missing fields or a different wire file reset the model to unknown. This does not establish per-request model support for official wire records. |
+
+Re-reading available logs corrects their archived model assignments. Rolling histories such as Cursor reconcile only observed events; pruned records are not guessed from the current selection. Regression cases cover custom titles, Auto versus unknown, model switches, missing fields across records, distinct models, and archive results after native logs are removed.
 
 ## 6. Contributors
 
@@ -151,5 +163,6 @@ Almost all of "missed" comes from the lost-logs scenario, which can't be recover
 
 - Every command is non-interactive and takes `--json`; exit codes: 0 success, 1 failure, 2 warnings;
 - `creditia whoami` detects which agent it is running inside; `creditia stamp --harness <tool> --model <model>` stamps the next commit; after `creditia hook install`, commits made in an agent are stamped automatically;
+- Cursor auto-detection requires `CURSOR_AGENT`; `CURSOR_TRACE_ID` and `TERM_PROGRAM` do not establish agent execution. Explicit `CREDITIA_HARNESS` still takes precedence.
 - Run in a worktree or temporary clone, results are written back to the main repo's record, and the path is registered under the same project;
 - Before publishing anything (writing CREDITS.md, changing the README, committing), the skill requires the agent to ask you first.

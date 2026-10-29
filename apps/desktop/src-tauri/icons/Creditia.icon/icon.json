@@ -1,0 +1,98 @@
+{
+  "fill": {
+    "solid": "srgb:0.055,0.055,0.055,1"
+  },
+  "groups": [
+    {
+      "name": "Five petals",
+      "layers": [
+        {
+          "image-name": "petal-1.svg",
+          "name": "Terracotta",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:1,1"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "petal-2.svg",
+          "name": "Green",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:1,1"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "petal-3.svg",
+          "name": "Blue",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:1,1"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "petal-4.svg",
+          "name": "Violet",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:1,1"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "petal-5.svg",
+          "name": "Gold",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:1,1"
+              }
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.3
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.08
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  },
+  "fill-specializations": [
+    {
+      "appearance": "dark",
+      "value": "system-dark"
+    },
+    {
+      "appearance": "tinted",
+      "value": "automatic"
+    }
+  ]
+}

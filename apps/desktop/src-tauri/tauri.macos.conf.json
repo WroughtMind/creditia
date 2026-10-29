@@ -1,0 +1,9 @@
+{
+  "bundle": {
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.png",
+      "icons/Creditia.icon"
+    ]
+  }
+}

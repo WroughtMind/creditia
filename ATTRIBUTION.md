@@ -84,12 +84,13 @@
 
 - **名称归一**：按「是不是同一个模型」归，不按字符串像不像。
   - 渠道：`anthropic/`、`openrouter/anthropic/`、`models/`、`us.anthropic.…-v1:0`（Bedrock）、`…@20250514`（Vertex）、`:free`、`:thinking`（OpenRouter）去掉；
-  - 快照与预览：日期（`-20250929`、`-2024-08-06`、`-0709`、`-2507`）、`-latest`、`-preview`、`-exp` 去掉；
+  - 快照与预览：日期（`-20250929`、`-2024-08-06`、`-0709`、`-2507`）、`-latest`、`-preview`、`-exp` 去掉；没有稳定系列名的 `gemini-exp-1206` 保留完整实验标识，不能与 `gemini-exp-1121` 一起变成 `gemini`；
   - 界面写法：`Claude Sonnet 4.5`、`Gemini 3 Pro (High)`、`CLAUDE_SONNET_4_20250514_V1_0`、`[1m]`、`(1M context)` 这类空格、下划线、括号标签；
   - 同一模型的调用档位不是另一个模型：OpenAI 系的推理强度（`-high`、`-xhigh`，Cursor 的 `-fast`）、Claude 的 `-thinking`、Cursor MAX 模式的 `-max`、`-instruct`；
   - Claude 用官方词序：4 代起 `claude-<系列>-<版本>`（Cursor、Amazon Q 写的 `claude-4.5-sonnet` → `claude-sonnet-4-5`），3 代及以前 `claude-<版本>-<系列>`；GPT 保留官方的点号写法（`gpt-5-1-codex` → `gpt-5.1-codex`）；
   - 真不同的模型分开：`kimi-k2-thinking` 和 `kimi-k2`、`gpt-5.1-codex-max` 和 `gpt-5.1-codex`、本地模型的尺寸（`gpt-oss:20b` → `gpt-oss-20b`，和 `gpt-oss-120b` 分开）。
   `crates/core/src/model.rs` 的 `same_model_everywhere` 测试列着各工具、渠道的上百种写法和必须分开的模型对；见到新写法就往里加。
+- **Continue 请求模型**：优先读 `promptLogs[].completionOptions.model`，缺失时才用同次请求的 `modelTitle`；都没有就保持未知，不用 `chatModelTitle` 当前选择或前次请求补空。自定义标题不能覆盖已记录的请求模型标识；请求标识不等于服务端最终执行模型的回执。升级会重新解析日志，并修正已读事件旧的标题归属；已经丢失、无法重读的日志不能据此猜回真实模型。
 - **工具名归一**：盖章、`Assisted-by`、`creditia stamp --harness` 里的 `Claude Code`、`claude`、`Codex CLI`、`GitHub Copilot`、`Amazon Q`、`agy`……都归到 creditia 的工具 id。
 - **厂商**：按名字规则判断（OpenAI、Anthropic、Google、xAI、Moonshot、DeepSeek、阿里、智谱、MiniMax、字节、Mistral、Meta、Cursor）。
 - **渠道**（谁提供的模型）只在有证据时才写：
@@ -98,6 +99,18 @@
   - OpenCode：每条消息的 `providerID`（包括你自定义的中转站名）。
   - Cline / Roo / Kilo：`model_provider_id`。
   - 模型串本身的前缀（`openrouter/`、`bedrock/`、`vertex_ai/`）。
+
+模型字段按它在来源中的含义使用；选择、请求和执行回执不是同一层证据。模型规则通过官方源码、数据格式和构造测试核对，不要求每个工具、每个型号另跑一次真实会话。不确定的别名保持独立。
+
+| 来源与依据 | 读取与边界 |
+|---|---|
+| [Cursor 3.27.22 官方发行包](https://downloads.cursor.com/production/b1aa50cb6db84fd3e8c808259cb172ea73425c1f/darwin/arm64/Cursor-darwin-arm64.dmg) 中 `storeHashes`、`trackSingleEdit`、`setModelConfigForComposer` | `ai_code_hashes.model` 是该行记录的模型快照；`default` 为 Auto，空字段为未知。不用可变的 `composerData.modelConfig` 回填历史。只接受 `composer` / `cli` / `tab`，排除 `human` 和未知来源；Tab 仍记辅助输入。 |
+| [Amazon Q 请求元数据](https://github.com/aws/amazon-q-developer-cli/blob/15cc8f3cd18c4272925ce1c7053268eedff1ea0a/crates/chat-cli/src/cli/chat/parser.rs#L216) | `history[].request_metadata.model_id` 是历史请求标识；对话顶层 `model` / `model_info` 是当前选择，不用于补旧编辑。 |
+| [Continue 已保存的模型字段](https://github.com/continuedev/continue/issues/2085#issuecomment-2687146546) | `completionOptions.model` 是请求标识，优先于可自定义的 `modelTitle`；没有请求标识才保留同次请求中的标题；两者都缺失则未知，不继承前次请求或 `chatModelTitle` 当前选择。标题相似不能证明是同一模型。 |
+| [Copilot SDK 事件定义](https://github.com/github/copilot-sdk/blob/e22b95e6ead5e1de7e9a68d3087b8d28dc5f364a/nodejs/src/generated/session-events.ts) 与 [VS Code 请求记录](https://github.com/microsoft/vscode/blob/e1eafb38b7179f09c61af3482d63dd2aac021784/src/vs/workbench/contrib/chat/common/model/chatSessionOperationLog.ts#L140) | CLI 优先工具事件自己的 `model`，否则保留调用时的 `selectedModel` / `newModel` 选择；VS Code 读该请求的 `modelId`。缺失的历史模型不由后续选择、会话汇总或调试日志回填。 |
+| [Kimi wire 类型](https://github.com/MoonshotAI/kimi-cli/blob/9ab1286b8fe4e6bcd116949a27ce5e0ac3389c82/src/kimi_cli/wire/types.py) | 官方嵌套 `message.type/payload` 格式的 `StatusUpdate` 没有模型字段，不能从启动时模型选择补历史。现有读取器支持的顶层 `llm.request` / `usage.record` 是另一种记录形状；仅使用其中明确写出的标识，缺字段或换 wire 时保持未知，不宣称已支持官方 wire 的逐请求模型。 |
+
+重新解析可读日志时会修正对应旧模型归属。Cursor 等滚动历史按实际读到的事件修正，已被清理、无法重读的记录不根据当前选择猜测。构造回归覆盖自定义标题、Auto/未知、切换模型、跨记录缺字段、不可合并的型号，以及日志清理后的归档结果。
 
 ## 6. 贡献者
 
@@ -151,5 +164,6 @@
 
 - 所有命令非交互、支持 `--json`，退出码：0 成功、1 失败、2 有警告；
 - `creditia whoami` 识别当前运行在哪个 agent 里；`creditia stamp --harness <工具> --model <模型>` 给下一次提交盖章；`creditia hook install` 之后在 agent 里提交会自动盖章；
+- Cursor 自动识别只接受 `CURSOR_AGENT`；`CURSOR_TRACE_ID` 和 `TERM_PROGRAM` 不足以证明命令由 Agent 执行。显式 `CREDITIA_HARNESS` 仍优先。
 - 在 worktree、临时克隆里运行，结果写回主仓库的档案，路径登记进同一个项目；
 - 公开任何内容（写 CREDITS.md、改 README、提交）之前，skill 要求 agent 先让你确认。

@@ -472,12 +472,90 @@ fn fake_cursor(env: &Env, ts: i64) {
         let source = if i < 3 { "tab" } else { "composer" };
         conn.execute("insert into ai_code_hashes(hash,source,fileExtension,fileName,requestId,conversationId,timestamp,model,createdAt) values(?1,?2,'ts',?3,'r','conv1',?4,?5,?4)", rusqlite::params![h, source, abs, (ts - 100) * 1000, if i % 2 == 0 { "grok-test" } else { "default" }]).unwrap();
     }
-    // 对话库：default 回退到 grok-test
+    // 可变的当前选择不能回填历史 default / 缺失模型。
     let sdir = env.root.join("cursor-storage");
     fs::create_dir_all(&sdir).unwrap();
     let c2 = rusqlite::Connection::open(sdir.join("state.vscdb")).unwrap();
     c2.execute_batch("create table cursorDiskKV(key text primary key, value text);").unwrap();
     c2.execute("insert into cursorDiskKV values('composerData:conv1', ?1)", [r#"{"modelConfig":{"modelName":"grok-test"}}"#]).unwrap();
+}
+
+#[test]
+fn cursor_terminal_identity_and_commit_stamp() {
+    let mut env = setup();
+    let rs = env.repo.display().to_string();
+    let msg = env.root.join("COMMIT_MSG");
+    env.vars.insert("CREDITIA_HOOK_TIMEOUT".into(), "0".into());
+    env.vars.insert("TERM_PROGRAM".into(), "vscode".into());
+    // Native ordinary terminal has no marker; a trace-only environment must
+    // also stay manual even if a future Cursor build starts setting it.
+    for trace in ["", "trace-without-agent"] {
+        env.vars.insert("CURSOR_TRACE_ID".into(), trace.into());
+        let (ok, identity) = run(&env, &["whoami"]);
+        assert!(ok && identity["agent"].is_null(), "{identity}");
+        fs::write(&msg, "Manual change\n").unwrap();
+        let (ok, stamp) = run(&env, &["hook-trailers", msg.to_str().unwrap(), "--repo", &rs]);
+        assert!(ok && stamp["added"] == false, "{stamp}");
+        assert_eq!(fs::read_to_string(&msg).unwrap(), "Manual change\n");
+    }
+    env.vars.insert("CURSOR_AGENT".into(), "1".into());
+    let (ok, identity) = run(&env, &["whoami"]);
+    assert!(ok && identity["agent"] == "cursor", "{identity}");
+    let (ok, stamp) = run(&env, &["hook-trailers", msg.to_str().unwrap(), "--repo", &rs]);
+    assert!(ok && stamp["harness"] == "cursor", "{stamp}");
+    assert!(fs::read_to_string(&msg).unwrap().contains("Creditia-Harness: cursor"));
+    fs::remove_dir_all(env.root).unwrap();
+}
+
+#[test]
+fn cursor_native_rows_keep_auto_unknown_and_human_separate() {
+    let env = setup();
+    let rs = env.repo.canonicalize().unwrap().display().to_string();
+    let base: i64 = 1_795_000_000;
+    let lines: Vec<String> = (0..7).map(|i| format!("export const cursorBoundary{i} = buildValue({i});")).collect();
+    fs::write(env.repo.join("app.ts"), lines.join("\n") + "\n").unwrap();
+    commit(&env.repo, "test rows", "me@example.com", &format!("@{} +0800", base + 10));
+    let dir = env.root.join("cursor/ai-tracking");
+    fs::create_dir_all(&dir).unwrap();
+    let db = rusqlite::Connection::open(dir.join("ai-code-tracking.db")).unwrap();
+    db.execute_batch("CREATE TABLE ai_code_hashes(hash TEXT PRIMARY KEY, source TEXT, fileName TEXT, conversationId TEXT, timestamp INTEGER, model TEXT, createdAt INTEGER);").unwrap();
+    let sources = ["composer", "composer", "human", "unknown-source", "cli", "composer", "tab"];
+    let models = [Some("default"), None, None, Some("gpt-5"), Some("gpt-5"), Some("claude-sonnet-4.5"), Some("default")];
+    for (i, line) in lines.iter().enumerate() {
+        let hash = format!("{:x}", line_key("app.ts", &normalize(line, "ts")));
+        db.execute("INSERT INTO ai_code_hashes VALUES (?1,?2,?3,'c1',?4,?5,?4)", rusqlite::params![hash, sources[i], format!("{rs}/app.ts"), base * 1000, models[i]]).unwrap();
+    }
+    drop(db);
+    let read = || -> serde_json::Value { serde_json::from_str(&fs::read_to_string(env.repo.join(".creditia/credits.json")).unwrap()).unwrap() };
+    let check = |v: &serde_json::Value| {
+        let count = |id: &str| v["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["linesAdded"].as_u64().unwrap()).unwrap_or(0);
+        assert_eq!(count("a:cursor/auto"), 1, "{v}");
+        assert_eq!(count("a:cursor"), 1, "missing model is unknown, not Auto");
+        assert_eq!(count("a:cursor/gpt-5"), 1, "unknown source is not an AI receipt");
+        assert_eq!(count("a:cursor/claude-sonnet-4-5"), 1);
+        assert_eq!(count("unattributed"), 2, "human and unknown source rows are not AI evidence");
+        assert_eq!(v["human"]["tabAssistedLines"], 1);
+        assert!(!v.to_string().contains("old-selection"));
+    };
+    assert!(run(&env, &["init", "--repo", &rs]).0);
+    assert!(run(&env, &["analyze", "--repo", &rs, "--level", "strict"]).0);
+    check(&read());
+
+    // Simulate the former reader's archived current-selection and human rows.
+    let lib = rusqlite::Connection::open(env.root.join("lib/library.sqlite")).unwrap();
+    let project: String = lib.query_row("SELECT id FROM projects LIMIT 1", [], |r| r.get(0)).unwrap();
+    lib.execute("UPDATE evidence SET model='old-selection' WHERE src='cursor'", []).unwrap();
+    for i in [2, 3] {
+        lib.execute("INSERT INTO evidence(project,rel,key,src,model,session,ts,tab,next,single_use,occurrence) VALUES (?1,'app.ts',?2,'cursor','old-selection','c1',?3,0,0,0,0)",
+            rusqlite::params![project, line_key("app.ts", &normalize(&lines[i], "ts")) as i64, base]).unwrap();
+    }
+    drop(lib);
+    assert!(run(&env, &["analyze", "--repo", &rs, "--level", "strict", "--fresh"]).0);
+    check(&read());
+    fs::remove_dir_all(env.root.join("cursor")).unwrap();
+    assert!(run(&env, &["analyze", "--repo", &rs, "--level", "strict", "--fresh"]).0);
+    check(&read());
+    fs::remove_dir_all(env.root).unwrap();
 }
 
 #[test]
@@ -531,8 +609,9 @@ fn end_to_end() {
     // Codex：30 行全部逐行对上（add 20 + diff 10）
     assert_eq!(lines("a:codex/gpt-test"), 30, "{}", credits["breakdown"]);
     assert_eq!(verified("a:codex/gpt-test"), 30);
-    // Cursor：17 行 composer（模型 default 回退到 grok-test）+ 3 行 Tab 归人
-    assert_eq!(lines("a:cursor/grok-test"), 17, "{}", credits["breakdown"]);
+    // Cursor：17 行 composer，8 行显式模型 + 9 行 Auto；3 行 Tab 归人。
+    assert_eq!(lines("a:cursor/grok-test"), 8, "{}", credits["breakdown"]);
+    assert_eq!(lines("a:cursor/auto"), 9, "{}", credits["breakdown"]);
     assert_eq!(credits["human"]["tabAssistedLines"], 3);
     // Claude：12 行文档
     assert_eq!(lines("a:claude-code/claude-test"), 12, "{}", credits["breakdown"]);
@@ -1199,7 +1278,7 @@ fn continue_sessions() {
         "usage": { "promptTokens": 3000, "completionTokens": 400, "totalCost": 0.1 },
         "history": [
             { "message": { "role": "user", "content": "make a.ts" }, "contextItems": [] },
-            { "message": { "role": "assistant", "content": "" }, "contextItems": [], "promptLogs": [{ "modelTitle": "Claude Sonnet 4.5", "modelProvider": "anthropic", "prompt": "", "completion": "" }],
+            { "message": { "role": "assistant", "content": "" }, "contextItems": [], "promptLogs": [{ "modelTitle": "Daily coding", "modelProvider": "anthropic", "completionOptions": { "model": "claude-sonnet-4-5-20250929" }, "prompt": "", "completion": "" }],
               "toolCallStates": [call("t1", "create_new_file", serde_json::json!({ "filepath": "src/a.ts", "contents": created.join("\n") }), "done")] },
             { "message": { "role": "tool", "content": "ok", "toolCallId": "t1" }, "contextItems": [] },
             { "message": { "role": "assistant", "content": "" }, "contextItems": [],
@@ -1210,7 +1289,9 @@ fn continue_sessions() {
               ] },
         ]
     });
-    fs::write(dir.join("c1.json"), ide.to_string()).unwrap();
+    let mut title_only = ide.clone();
+    title_only["history"][1]["promptLogs"][0]["completionOptions"] = serde_json::json!({});
+    fs::write(dir.join("c1.json"), title_only.to_string()).unwrap();
     // 命令行（cn）：同样的格式，工具名是 Write / Edit
     let cn = serde_json::json!({
         "sessionId": "c2", "title": "t", "workspaceDirectory": rs, "chatModelTitle": "gpt-5",
@@ -1226,13 +1307,23 @@ fn continue_sessions() {
     assert!(ok, "{v}");
     let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
     assert!(ok, "{v}");
+    // A later parse has the real request ID; saved evidence must lose the old title.
+    fs::write(dir.join("c1.json"), ide.to_string()).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs]);
+    assert!(ok, "{v}");
     let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
     let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
     // 被拒绝、报错的那几行没有逐行证据（和前面同一个改动块，只按块推断，不算 verified）
-    assert_eq!(verified("a:continue/claude-sonnet-4-5"), (created.len() + replaced.len()) as u64, "{}", credits["breakdown"]);
-    assert_eq!(verified("a:continue/gpt-5"), cli.len() as u64, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:continue/claude-sonnet-4-5"), created.len() as u64, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:continue"), (replaced.len() + cli.len()) as u64, "missing request metadata cannot inherit a previous request or current chat selection");
     let s = credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with("a:continue/")).count();
     assert_eq!(s, 2, "{}", credits["sessions"]);
+    fs::remove_file(dir.join("c1.json")).unwrap();
+    let (ok, v) = run(&env, &["analyze", "--repo", &rs, "--fresh"]);
+    assert!(ok, "{v}");
+    let archived: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    assert!(!archived["breakdown"].as_array().unwrap().iter().any(|b| b["contributor"] == "a:continue/daily-coding"), "{}", archived["breakdown"]);
+    assert_eq!(archived["breakdown"], credits["breakdown"], "removing a source log must retain only corrected evidence");
     let _ = fs::remove_dir_all(&env.root);
 }
 
@@ -1332,7 +1423,7 @@ fn amazon_q_conversations() {
               "assistant": { "ToolUse": { "message_id": "m1", "content": "", "tool_uses": [
                   tool("a", serde_json::json!({ "command": "create", "path": format!("{rs}/src/conf.py"), "file_text": created.join("\n"), "summary": "s" })),
                   tool("b", serde_json::json!({ "command": "create", "path": "src/other.py", "file_text": failed.join("\n") })) ] } },
-              "request_metadata": { "message_id": "m1", "request_start_timestamp_ms": (base + 20) * 1000, "stream_end_timestamp_ms": (base + 25) * 1000, "model_id": "claude-sonnet-4.5" } },
+              "request_metadata": { "message_id": "m1", "request_start_timestamp_ms": (base + 20) * 1000, "stream_end_timestamp_ms": (base + 25) * 1000 } },
             { "user": { "additional_context": "", "env_context": {}, "content": { "ToolUseResults": { "tool_use_results": [{ "tool_use_id": "a", "content": [], "status": "Success" }, { "tool_use_id": "b", "content": [], "status": "Error" }] } }, "timestamp": null },
               "assistant": { "ToolUse": { "message_id": "m2", "content": "", "tool_uses": [tool("c", serde_json::json!({ "command": "append", "path": "src/conf.py", "new_str": appended.join("\n") }))] } },
               "request_metadata": { "message_id": "m2", "request_start_timestamp_ms": (base + 40) * 1000, "stream_end_timestamp_ms": (base + 45) * 1000, "model_id": "claude-sonnet-4.5" } },
@@ -1351,9 +1442,18 @@ fn amazon_q_conversations() {
     assert!(ok, "{v}");
     let credits: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
     let verified = |id: &str| credits["breakdown"].as_array().unwrap().iter().find(|b| b["contributor"] == id).map(|b| b["byEvidence"]["verified"]["linesAdded"].as_u64().unwrap()).unwrap_or(0);
-    assert_eq!(verified("a:amazon-q/claude-sonnet-4-5"), (created.len() + appended.len()) as u64, "{}", credits["breakdown"]);
+    assert_eq!(verified("a:amazon-q"), created.len() as u64, "missing historical request ID stays unknown");
+    assert_eq!(verified("a:amazon-q/claude-sonnet-4-5"), appended.len() as u64, "{}", credits["breakdown"]);
     let s = credits["sessions"].as_array().unwrap().iter().filter(|s| s["contributor"].as_str().unwrap_or("").starts_with("a:amazon-q/")).count();
     assert_eq!(s, 1, "{}", credits["sessions"]);
+    let lib = rusqlite::Connection::open(env.root.join("lib/library.sqlite")).unwrap();
+    lib.execute("UPDATE evidence SET model='old-selection' WHERE src='amazon-q' AND model=''", []).unwrap();
+    drop(lib);
+    assert!(run(&env, &["analyze", "--repo", &rs, "--fresh"]).0);
+    fs::remove_file(dir.join("data.sqlite3")).unwrap();
+    assert!(run(&env, &["analyze", "--repo", &rs, "--fresh"]).0);
+    let after: serde_json::Value = serde_json::from_str(&fs::read_to_string(repo.join(".creditia/credits.json")).unwrap()).unwrap();
+    assert_eq!(after["breakdown"], credits["breakdown"], "corrected request models survive native-history cleanup");
     let _ = fs::remove_dir_all(&env.root);
 }
 

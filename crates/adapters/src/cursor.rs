@@ -1,6 +1,7 @@
-//! Cursor：行级记录 `ai-tracking/ai-code-tracking.db`（逐行哈希 → 模型、对话、来源），模型为 `default` 时回退到对话库的对话级模型。
+//! Cursor：行级记录 `ai-tracking/ai-code-tracking.db`（逐行哈希 → 模型、对话、来源）。
+//! 只读记录自己的模型快照：default 为 Auto，缺失为未知，不以可变的当前对话选择回填。
 
-use crate::{cursor_global_storage, open_ro, source_dir, Activity, Health, Stats};
+use crate::{open_ro, source_dir, Activity, Health, Stats};
 use creditia_core::model::{fingerprint, Ev, FileGroup, PathMap, Session, Src, Store};
 use creditia_core::util::date_local;
 use std::collections::HashMap;
@@ -32,33 +33,8 @@ fn rows() -> Result<Vec<Row>, String> {
     Ok(r)
 }
 
-/// Auto 模式记为 default：回退到对话库里的对话级模型，仍然没有就记 `auto`
-struct ModelResolver {
-    conn: Option<rusqlite::Connection>,
-    cache: HashMap<String, String>,
-}
-
-impl ModelResolver {
-    fn new() -> Self {
-        ModelResolver { conn: open_ro(&cursor_global_storage().join("state.vscdb")).ok(), cache: HashMap::new() }
-    }
-    fn resolve(&mut self, conv: &str, m: &str) -> String {
-        if m != "default" && !m.is_empty() {
-            return m.to_string();
-        }
-        if let Some(x) = self.cache.get(conv) {
-            return x.clone();
-        }
-        let got: Option<String> = self.conn.as_ref().and_then(|c| {
-            c.query_row("select json_extract(value,'$.modelConfig.modelName') from cursorDiskKV where key = ?1", [format!("composerData:{conv}")], |r| r.get::<_, Option<String>>(0)).ok().flatten()
-        });
-        let x = match got.as_deref() {
-            Some(v) if v != "default" && !v.is_empty() => v.to_string(),
-            _ => "auto".to_string(),
-        };
-        self.cache.insert(conv.to_string(), x.clone());
-        x
-    }
+fn is_ai_source(source: &str) -> bool {
+    matches!(source, "composer" | "cli" | "tab")
 }
 
 pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
@@ -66,7 +42,9 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
     if !db.exists() {
         return; // 没装 Cursor 不是问题
     }
-    let fp = fingerprint(&db);
+    let a = fingerprint(&db);
+    let b = fingerprint(&PathBuf::from(format!("{}-wal", db.display())));
+    let fp = (a.0.max(b.0), a.1 + b.1);
     let gk = "cursor:ai-code-tracking".to_string();
     if store.groups.get(&gk).map(|g| g.fp == fp).unwrap_or(false) {
         return;
@@ -75,7 +53,6 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         Ok(r) => r,
         Err(e) => return st.warnings.push(e),
     };
-    let mut res = ModelResolver::new();
     let mut g = FileGroup { fp, ..Default::default() };
     let mut conv: HashMap<String, (i64, i64, String)> = HashMap::new();
     let (mut unmapped, mut total) = (0, 0);
@@ -90,11 +67,14 @@ pub fn scan(store: &mut Store, pm: &PathMap, st: &mut Stats) {
         };
         let Ok(key) = u32::from_str_radix(&r.hash, 16) else { continue };
         let ts = r.ts_ms / 1000;
-        let model = res.resolve(&r.conv, &r.model);
+        let model = match r.model.trim() { "default" => "auto", m => m }.to_string();
+        let ev = Ev { rel, key, src: Src::Cursor, model: model.clone(), session: r.conv.clone(), ts, tab: r.source == "tab", next: 0, single_use: false };
+        g.reconciled_events.push(ev.clone());
+        if !is_ai_source(&r.source) { continue; }
         let e = conv.entry(r.conv.clone()).or_insert((ts, ts, model.clone()));
         e.0 = e.0.min(ts);
         e.1 = e.1.max(ts);
-        g.evs.push(Ev { rel, key, src: Src::Cursor, model, session: r.conv, ts, tab: r.source == "tab", next: 0, single_use: false });
+        g.evs.push(ev);
     }
     for (id, (start, end, model)) in conv {
         g.sessions.push(Session { src: Src::Cursor, id, model, start, end, tokens: 0, branch: None, prompts: 0, reviewer: false, has_content: true, provider: None });
@@ -110,6 +90,7 @@ pub fn discover() -> Vec<Activity> {
     let mut convs: HashMap<String, std::collections::HashSet<String>> = HashMap::new();
     let mut m: HashMap<String, Activity> = HashMap::new();
     for r in all {
+        if !is_ai_source(&r.source) { continue; }
         let Some(dir) = std::path::Path::new(&r.file).parent() else { continue };
         let key = dir.to_string_lossy().to_string();
         let root = repo_of
@@ -145,9 +126,9 @@ pub fn doctor() -> Health {
             h.records = r.len() as u64;
             h.earliest = r.iter().map(|x| x.ts_ms / 1000).min().map(date_local);
             h.latest = r.iter().map(|x| x.ts_ms / 1000).max().map(date_local);
-            let auto = r.iter().filter(|x| x.model == "default").count();
-            let vscdb = cursor_global_storage().join("state.vscdb");
-            h.note = if vscdb.exists() { creditia_core::tr!("只保留 30 天；{auto} 条模型为 Auto；对话库可用", "kept for 30 days; {auto} records with model Auto; chat database found") } else { creditia_core::tr!("只保留 30 天；{auto} 条模型为 Auto；对话库未找到", "kept for 30 days; {auto} records with model Auto; chat database not found") };
+            let auto = r.iter().filter(|x| is_ai_source(&x.source) && x.model == "default").count();
+            let excluded = r.iter().filter(|x| !is_ai_source(&x.source)).count();
+            h.note = creditia_core::tr!("滚动保留的行级记录；{auto} 条模型为 Auto；排除 {excluded} 条人工或未知来源；缺失模型保持未知", "rolling line records; {auto} records with model Auto; excluded {excluded} human or unknown-source rows; missing models stay unknown");
         }
         Err(e) => h.note = e,
     }

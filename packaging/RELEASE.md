@@ -23,6 +23,18 @@ PR 涉及发布文件时，或手动运行 `release` workflow 时，只上传 Ac
 5. Homebrew 不自动清除隔离标记。校验值由最终签名后的文件计算，不使用占位值。
 6. 用 `npm pack` 生成 tarball，在仓库以外安装并执行 `creditia --help`、用公开档案执行 `creditia doc`，检查包内容和渲染依赖。首次下载核心的端到端检查在 Release 公开后执行。
 
+## macOS 分层图标
+
+`apps/desktop/src-tauri/icons/Creditia.icon` 是可用 Icon Composer 打开的源文档：深色底板与五个独立的星号花瓣，含浅色、深色、着色外观。`npm run icon --prefix apps/desktop` 从现有品牌 SVG 重新生成花瓣和静态图标；材质在 Icon Composer 中调整。
+
+macOS 构建需要 Xcode 26 或更新版本。Tauri 通过 `tauri.macos.conf.json` 编译 `.icon` 为 `Assets.car`，同时保留原有 `.icns` 供旧系统使用；Windows、Linux 继续使用原配置。CI 检查最终 App 的三种外观、五个花瓣层和静态图标，不能只检查源文件：
+
+```sh
+node apps/desktop/tools/verify-macos-icon.mjs /path/to/creditia.app
+```
+
+设置里的默认星号恢复安装包图标，由系统渲染分层材质；其他可选标志仍是运行时静态图。改回星号会清除静态覆盖。
+
 ## 刷新自身档案
 
 在有真实 agent 日志的机器、最新待发布提交上操作：

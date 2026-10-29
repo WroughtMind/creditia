@@ -56,10 +56,13 @@ fn sessions() -> Vec<Sess> {
 
 /// 解析一组 wire.jsonl，返回（起、止、模型、token、prompt 数）
 fn parse_wires(s: &Sess, pm: &PathMap, g: &mut FileGroup, id: &str) -> (i64, i64, String, i64, i64) {
+    let before = g.evs.len();
     let (mut start, mut end, mut tokens, mut prompts) = (i64::MAX, 0i64, 0i64, 0i64);
     let mut models: HashMap<String, usize> = HashMap::new();
     let mut model = String::new();
     for w in &s.wires {
+        // Each agent wire has its own request stream and model state.
+        model.clear();
         let text = std::fs::read_to_string(w).unwrap_or_default();
         for line in text.lines() {
             let Ok(o) = serde_json::from_str::<Value>(line) else { continue };
@@ -71,10 +74,12 @@ fn parse_wires(s: &Sess, pm: &PathMap, g: &mut FileGroup, id: &str) -> (i64, i64
             let ty = o["type"].as_str().unwrap_or("");
             let p = &o["payload"];
             match ty {
-                "turn.prompt" => prompts += 1,
+                "turn.prompt" => { prompts += 1; model.clear(); }
                 "llm.request" => {
-                    if let Some(m) = p["model"].as_str().or(p["modelAlias"].as_str()) {
-                        model = m.to_string();
+                    // Missing metadata belongs to this request, not the previous one.
+                    model = p["model"].as_str().filter(|m| !m.trim().is_empty())
+                        .or_else(|| p["modelAlias"].as_str().filter(|m| !m.trim().is_empty())).unwrap_or("").trim().to_string();
+                    if !model.is_empty() {
                         *models.entry(model.clone()).or_default() += 1;
                     }
                 }
@@ -109,6 +114,7 @@ fn parse_wires(s: &Sess, pm: &PathMap, g: &mut FileGroup, id: &str) -> (i64, i64
             }
         }
     }
+    g.reconciled_events.extend_from_slice(&g.evs[before..]);
     let main_model = models.into_iter().max_by_key(|(_, n)| *n).map(|(m, _)| m).unwrap_or(model);
     (if start == i64::MAX { 0 } else { start }, end, main_model, tokens, prompts)
 }
@@ -165,7 +171,37 @@ pub fn doctor() -> Health {
         records: ss.len() as u64,
         earliest: mt.iter().min().copied().map(date_local),
         latest: mt.iter().max().copied().map(date_local),
-        note: creditia_core::tr!("{no_cwd} 个会话无 cwd（已用 session_index 回退）", "{no_cwd} sessions without cwd (recovered from session_index)"),
+        note: creditia_core::tr!("{no_cwd} 个会话无 cwd（已用 session_index 回退）；仅识别顶层 llm.request / usage.record / tool.call 事件。官方 Python Wire 未记录逐请求模型，缺失保持未知，不以启动配置回填", "{no_cwd} sessions without cwd (recovered from session_index); only top-level llm.request / usage.record / tool.call events are read. Official Python Wire has no per-request model field; missing models stay unknown, without startup-config fallback"),
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn wire_model_boundaries_clear_missing_requests_and_other_agents() {
+        let dir = std::env::temp_dir().join(format!("creditia-kimi-models-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let event = |ty: &str, payload: Value| json!({"type": ty, "time": 1_790_000_000, "payload": payload});
+        let edit = |file: &str| event("tool.call", json!({"name": "Edit", "args": {"path": format!("/demo/src/{file}.rs"), "new_string": format!("pub fn {file}_model_boundary() -> usize {{ 734 }}")}}));
+        let a = dir.join("a.jsonl");
+        let b = dir.join("b.jsonl");
+        let first = [
+            event("llm.request", json!({"model": "known-model"})), edit("known"),
+            event("llm.request", json!({})), edit("missing"),
+            event("llm.request", json!({"model": "known-model"})),
+        ];
+        std::fs::write(&a, first.iter().map(Value::to_string).collect::<Vec<_>>().join("\n")).unwrap();
+        std::fs::write(&b, edit("other_wire").to_string()).unwrap();
+        let s = Sess { dir: dir.clone(), cwd: "/demo".into(), wires: vec![a, b] };
+        let pm = PathMap { known: ["src/known.rs".into(), "src/missing.rs".into(), "src/other_wire.rs".into()].into(), markers: vec!["/demo/".into()], excludes: vec![] };
+        let mut g = FileGroup::default();
+        parse_wires(&s, &pm, &mut g, "models");
+        std::fs::remove_dir_all(dir).unwrap();
+        assert_eq!(g.evs.iter().map(|e| e.model.as_str()).collect::<Vec<_>>(), vec!["known-model", "", ""]);
+        assert_eq!(g.reconciled_events.len(), g.evs.len());
     }
 }

@@ -909,7 +909,9 @@ pub fn detect_agent(env: &HashMap<String, String>) -> Option<(String, Option<Str
     if has("CODEX_SANDBOX") || has("CODEX_THREAD_ID") || env.keys().any(|k| k.starts_with("CODEX_") && !user_set(k)) {
         return Some(("codex".into(), None));
     }
-    if has("CURSOR_AGENT") || has("CURSOR_TRACE_ID") {
+    // Cursor documents CURSOR_AGENT for agent-run commands. A trace identifier alone
+    // does not establish who ran a command, so it must not stamp a manual commit.
+    if has("CURSOR_AGENT") {
         return Some(("cursor".into(), None));
     }
     if has("GROK_SESSION_ID") || has("GROK_AGENT") {
@@ -1184,6 +1186,18 @@ mod hook_tests {
         assert_eq!(detect_agent(&env), None);
         let env: HashMap<String, String> = [("CODEX_MANAGED_BY_NPM".to_string(), "1".to_string())].into();
         assert_eq!(detect_agent(&env).map(|(h, _)| h), Some("codex".to_string()));
+    }
+
+    #[test]
+    fn cursor_requires_agent_execution_marker() {
+        let mut env: HashMap<String, String> = [("CURSOR_TRACE_ID".into(), "trace".into()), ("TERM_PROGRAM".into(), "vscode".into())].into();
+        assert_eq!(detect_agent(&env), None);
+        env.insert("CURSOR_AGENT".into(), String::new());
+        assert_eq!(detect_agent(&env), None);
+        env.insert("CURSOR_AGENT".into(), "1".into());
+        assert_eq!(detect_agent(&env), Some(("cursor".into(), None)));
+        env.insert("CREDITIA_HARNESS".into(), "claude-code".into());
+        assert_eq!(detect_agent(&env), Some(("claude-code".into(), None)));
     }
 
     #[test]

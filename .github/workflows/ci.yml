@@ -76,6 +76,8 @@ jobs:
       - name: 编译并打包 App
         run: npx tauri build --bundles app
         working-directory: apps/desktop
+      - name: 验证分层图标及三种外观
+        run: node apps/desktop/tools/verify-macos-icon.mjs apps/desktop/src-tauri/target/release/bundle/macos/creditia.app
       # 放在打包之后：要用上一步 vite 编出来的 dist（App 把它编进二进制）
       - name: App 的 Rust：clippy 与单测
         run: |

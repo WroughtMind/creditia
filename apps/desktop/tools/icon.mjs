@@ -6,6 +6,14 @@ const HERE = import.meta.dirname;
 const require = createRequire(path.resolve(HERE, '../../../packages/render/package.json'));
 const { Resvg } = require('@resvg/resvg-js');
 const mark = (file) => readFileSync(path.resolve(HERE, '../../../packages/render/assets/creditia', file), 'utf8').replace(/^<svg[^>]*>|<\/svg>\s*$/g, '').replaceAll('#0E0E0E', '#F4F4F2');
+// Icon Composer keeps each original petal as a vector layer; materials live in icon.json.
+const petals = mark('logo-star.svg').match(/<path\b[^>]*\/>/g);
+if (petals?.length !== 5) throw new Error('The star mark must contain five petals');
+const LAYERS = path.resolve(HERE, '../src-tauri/icons/Creditia.icon/Assets');
+mkdirSync(LAYERS, { recursive: true });
+for (const [i, petal] of petals.entries()) {
+  writeFileSync(path.join(LAYERS, `petal-${i + 1}.svg`), `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><g transform="translate(164 164) scale(29)">${petal}</g></svg>\n`);
+}
 const S = 1024, M = 100, R = 185;
 const tile = (logo) => `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}">
 <defs>
