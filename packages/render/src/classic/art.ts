@@ -8,7 +8,7 @@ import { pieceName } from './catalog.ts';
 import { FIT_KEY, BODY_KEY, CONTENT_KEY } from './ui.ts';
 import { enTree, enSvg } from './i18n.ts';
 import { BRIDGED, BRIDGED_LAYOUTS, isBridged, bridgeArt, bridgeFrames } from './bridge.ts';
-import { animate } from './motion.ts';
+import { animate, terminalCursorTargets, placeTerminalCursors } from './motion.ts';
 import { motionDuration } from '../motion.ts';
 import { hitsOf, type Seen } from './hits.ts';
 
@@ -180,7 +180,10 @@ export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, sa
   const out = f.render(m, t, ctx);
   if (!out) return [];
   if (ctx.lang === 'en') enTree(out.tree);
-  await fitted(out, satori, fonts);
+  const cursorGroups = t.family === 'terminal' ? terminalCursorTargets(out.tree) : [];
+  const positions: Seen[] = [];
+  await fitted(out, satori, fonts, cursorGroups.length ? positions : undefined);
+  if (cursorGroups.length) placeTerminalCursors(cursorGroups, positions);
   const laid = JSON.stringify(out.tree);
   const title = `${m.project || 'credits'} · ${pieceName(id, ctx.lang, m.raw)}`;
   const frames: Art[] = [];

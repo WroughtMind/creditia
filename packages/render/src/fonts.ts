@@ -60,5 +60,5 @@ export const FONTS: FontFace[] = [
 /** 某个 family 的全部字重 */
 export const facesOf = (family: string) => FONTS.filter((f) => f.family === family);
 
-/** CSS font-family 串 → 引用到的 family 名（去引号） */
-export const familiesIn = (stack: string) => stack.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+/** CSS font-family 串（也可直接来自 SVG 属性）→ 引用到的 family 名。 */
+export const familiesIn = (stack: string) => stack.replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'").split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);

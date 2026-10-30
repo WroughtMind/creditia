@@ -22,7 +22,14 @@ export function attrs(a: Attrs = {}): string {
   let s = '';
   for (const [k, v] of Object.entries(a)) {
     if (v === null || v === undefined || v === false) continue;
-    s += ` ${kebab(k)}="${typeof v === 'number' ? r(v) : esc(v === true ? '' : v)}"`;
+    // 字体名中的数字起始词（如 Press Start 2P）不是合法 CSS 标识符。
+    // resvg 宽容接受未引号的名称，浏览器却会丢弃整个列表并回退到界面字体。
+    const value = typeof v === 'string' && (k === 'fontFamily' || k === 'font-family')
+      ? v.split(',').map(part => /(?:^|\s)\d/.test(part.trim()) && !/^\s*["']/.test(part)
+        ? part.replace(/^(\s*)(.*?)(\s*)$/, (_all, lead, name, tail) => `${lead}"${name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"${tail}`)
+        : part).join(',')
+      : v;
+    s += ` ${kebab(k)}="${typeof value === 'number' ? r(value) : esc(value === true ? '' : value)}"`;
   }
   return s;
 }
@@ -119,6 +126,11 @@ function scriptRuns(str: string, f: FontSpec, size: number, track: number, x0: n
 export interface Tip { k?: string; t: string; d?: string[] }
 export interface Hit extends Tip { x: number; y: number; w: number; h: number }
 
+/** 已完成缩放、截断及对齐的一行文字度量；仅在调用方临时捕获时保留。 */
+export interface TextBounds {
+  x: number; y: number; w: number; h: number; baseline: number; size: number; rotate?: number;
+}
+
 export interface TextOpts {
   font: FontSpec;
   size: number;
@@ -144,6 +156,7 @@ export class Scene {
   readonly id: string;
   private defs = new Map<string, string>();
   private out: string[] = [];
+  private textCollectors: TextBounds[][] = [];
   readonly hits: Hit[] = [];
   /** 背景色（导出 PDF / 尺寸画布时用来铺底） */
   bg = '#ffffff';
@@ -162,9 +175,22 @@ export class Scene {
   }
   url(name: string, make: (id: string) => string) { return `url(#${this.def(name, make)})`; }
   add(...parts: (string | null | undefined | false)[]) { for (const p of parts) if (p) this.out.push(p); return this; }
+  /** 作者声明的完整绘制组；保留原输出，只另外记录其已有画面，不拆字或扫描叶子。 */
+  capturePaint(draw: () => void): string {
+    const start = this.out.length;
+    draw();
+    return this.out.slice(start).join('');
+  }
   hit(x: number, y: number, w: number, h: number, tip: Tip) {
     if (w > 0 && h > 0) this.hits.push({ x: r(x), y: r(y), w: r(w), h: r(h), ...tip });
     return this;
+  }
+  /** 捕获本次绘制的真实字面，嵌套捕获各自完整；弧形 textPath 不会误作横行。 */
+  captureTextBounds(draw: () => void): TextBounds[] {
+    const found: TextBounds[] = [];
+    this.textCollectors.push(found);
+    try { draw(); } finally { this.textCollectors.pop(); }
+    return found;
   }
   /** 写一行字，返回实际宽度 */
   text(s: string | number, x: number, y: number, o: TextOpts): number {
@@ -182,6 +208,11 @@ export class Scene {
     else if (o.base === 'top') yy = y + capOf(o.font, size);
     // 混排拆段时各段的位置是量出来的，统一从左边排起
     const x0 = o.anchor === 'middle' ? x - w / 2 : o.anchor === 'end' ? x - w : x;
+    if (str.trim() && this.textCollectors.length) {
+      const h = capOf(o.font, size);
+      const bounds: TextBounds = { x: x0, y: yy - h, w, h, baseline: yy, size, ...(o.rotate ? { rotate: o.rotate } : {}) };
+      for (const collector of this.textCollectors) collector.push(bounds);
+    }
     const runs = scriptRuns(str, o.font, size, track, x0);
     // letter-spacing 会在末字后面也加一份间距；居中、右对齐时补偿回来
     const dx = track && o.anchor === 'middle' ? (track * size) / 2 : track && o.anchor === 'end' ? track * size : 0;

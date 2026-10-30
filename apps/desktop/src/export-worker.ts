@@ -4,6 +4,7 @@ import wasmUrl from '@resvg/resvg-wasm/index_bg.wasm?url';
 import { makeExporter, sized, SIZES, type Art, type Raster } from '../../../packages/render/src/export.ts';
 import { fontBytes } from './fonts.ts';
 import type { ExportJob, Exported } from './engine.ts';
+import { flattenSvg } from '../../../packages/render/src/flatten.ts';
 
 /** WASM 对象不等 GC 回收；底层异常后的清理失败不能覆盖原始错误。 */
 function using<T extends { free(): void }, R>(value: T, read: (value: T) => R): R {
@@ -30,7 +31,7 @@ async function run({ fmt, fontStyle, art: a, size, frames }: ExportJob): Promise
   const raster: Raster = {
     png: (svg, w) => using(new Resvg(svg, opts(w)), r => using(r.render(), img => img.asPng())),
     rgba: (svg, w) => using(new Resvg(svg, opts(w)), r => using(r.render(), img => ({ w: img.width, h: img.height, data: img.pixels }))),
-    flat: svg => using(new Resvg(svg, opts()), r => r.toString()),
+    flat: svg => flattenSvg(svg, source => using(new Resvg(source, opts()), r => r.toString())),
   };
   const ex = makeExporter(raster, deflate);
   const sz = SIZES.find(x => x.id === size);

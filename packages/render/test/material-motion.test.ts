@@ -34,6 +34,25 @@ test('数据轮廓从初现起保留每个归属色，不把份额统染为强�
   }
 });
 
+test('插画材质的着色纹理保留整片真值底面与归属色，不挖空或裁短数据', () => {
+  for (const id of ['pastel', 'cutout', 'meadow', 'manga', 'cyber']) {
+    const st = styles.find(s => s.id === id)!;
+    for (const k of [.08, .2, .5, .8, .999]) {
+      const s = new Scene(240, 100);
+      materialEnter(s, st, k, b, () => {
+        s.add(rect(20, 20, 90, 50, { fill: '#ff0000' }), rect(110, 20, 90, 50, { fill: '#00ff00' }));
+      }, 'data');
+      const { data } = raster.rgba(s.toString(), 240);
+      for (let y = 21; y < 69; y++) for (let x = 21; x < 199; x++) {
+        const at = (y * 240 + x) * 4, owned = x < 110 ? 0 : 1;
+        assert.ok(data[at + 3] > 10, `${id}/${k}: missing true surface at ${x},${y}`);
+        assert.ok(data[at + owned] > data[at + 1 - owned] * 3, `${id}/${k}: changed ownership at ${x},${y}`);
+        if (k === .999) assert.ok(data[at + 3] >= 254, `${id}: unfinished hole at the endpoint`);
+      }
+    }
+  }
+});
+
 test('每个可选风格有明确的材质动作，终点直接回到原始作品', () => {
   assert.deepEqual(styles.map(s => s.id).sort(), Object.keys(MATERIAL_MOTIONS).sort());
   for (const st of styles) {

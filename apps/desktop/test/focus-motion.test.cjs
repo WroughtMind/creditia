@@ -22,7 +22,7 @@ function scene({ reduced = false, decode = async () => {} } = {}) {
   });
   vm.runInContext(ts.transpile(scrollSource + '\n' + source, { target: ts.ScriptTarget.ES2022 }), ctx);
   return { ctx, root, classes, children, urls, revoked, errors, listeners, media, animations, placed,
-    play: (frames, a = art) => ctx.playFocusMotion(root, a, {}, frames, 1600, size => placed.push(size), e => errors.push(e)),
+    play: (frames, a = art, scrollPreview) => ctx.playFocusMotion(root, a, {}, frames, 1600, size => placed.push(size), e => errors.push(e), scrollPreview),
     frame(now) { const entries = [...tasks.values()]; tasks.clear(); entries.forEach(f => f(now)); },
   };
 }
@@ -113,4 +113,31 @@ test('animation workers are isolated, cancellable, and preserve their request pr
   const cancelled = assert.rejects(first, { name: 'AbortError' }); abort.abort(); await cancelled;
   assert(workers[0].stopped); assert(!workers[1].stopped);
   workers[1].onmessage({ data: { frames: [art] } }); assert.equal((await exportFrames)[0], art); assert(workers[1].stopped);
+});
+
+
+test('material scroll uses actual display width and releases a late prepared canvas on cancellation', async () => {
+  const s = scene(), preparing = deferred(), calls = []; let destroyed = 0;
+  s.root.clientWidth = 800; s.ctx.devicePixelRatio = 2;
+  s.ctx.scrollAtlas = () => ({ svg: 'atlas', originalW: 100, originalH: 500, layers: [] });
+  s.ctx.prepareScrollCanvas = (blob, atlas, motion, width, signal) => { calls.push({ width, signal }); return preparing.promise; };
+  const a = { ...art, svg: '<svg/>', h: 500, motion: { kind: 'scroll', viewW: 100, viewH: 60, secs: 12, keys: [], material: { style: 'cutout', layers: [] } } };
+  const stop = s.play(() => { throw Error('material scroll must not generate per-frame SVG'); }, a, async svg => { assert.equal(svg, 'atlas'); return {}; });
+  await tick(); assert.equal(calls[0].width, 1600, 'no arbitrary 960px cap on a visible HiDPI artwork');
+  stop(); assert.equal(calls[0].signal.aborted, true);
+  preparing.resolve({ canvas: {}, destroy() { destroyed++; } }); await tick(); s.frame(1);
+  assert.equal(destroyed, 1); assert.equal(s.children.length, 0); assert.equal(s.errors.length, 0);
+  assert.equal(s.root.parentElement.scrollTop, 0, 'a cancelled late result must not scroll its replacement');
+});
+
+test('material scroll paints the shared timeline once and restores the static long artwork at completion', async () => {
+  const s = scene(), progress = []; let destroyed = 0, layouts = 0;
+  s.root.clientWidth = 700;
+  s.ctx.scrollAtlas = () => ({ svg: 'atlas', originalW: 100, originalH: 500, layers: [] });
+  s.ctx.prepareScrollCanvas = async () => ({ canvas: {}, paint(p) { progress.push(p); }, destroy() { destroyed++; } });
+  const a = { ...art, svg: '<svg/>', h: 500, motion: { kind: 'scroll', viewW: 100, viewH: 60, secs: 2, keys: [], material: { style: 'cutout', layers: [] } } };
+  s.play(() => { throw Error('must not generate frames'); }, a, async () => { layouts++; return {}; }); await tick();
+  s.frame(100); s.frame(1100); s.frame(2100);
+  assert.deepEqual(progress, [0, .5, 1]); assert.equal(layouts, 1); assert.equal(destroyed, 1);
+  assert.equal(s.children.length, 0); assert.equal(s.placed.at(-1), a); assert.equal(s.root.parentElement.scrollTop, 500);
 });

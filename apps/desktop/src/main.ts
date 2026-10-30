@@ -1082,7 +1082,7 @@ function openFocus(id: string, k: string) {
           if (my !== seq || !open) return;
           console.error('Artwork animation failed', { id, variant: v, style: k0.id }, error);
           toast(L('动画未能播放，静态作品仍可查看和导出', 'Animation could not play. The artwork is still available to view and export.'), 6000);
-        });
+        }, (svg) => k0.preview({ ...a, svg }));
       }
     } catch (error) {
       if (my !== seq || !open) return;

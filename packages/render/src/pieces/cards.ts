@@ -115,7 +115,10 @@ function slip(m: Model, st: Style, itemized: boolean, o: PieceOpts): Scene {
   let bx = cx - 150;
   const bars: string[] = [];
   while (bx < cx + 150) { const w = 1 + Math.floor(rnd() * 3.2); bars.push(rect(bx, y, w, 54, { fill: st.c.ink })); bx += w + 1 + Math.floor(rnd() * 3); }
-  materialReveal(s, st, styleProgress(st, t, 0.72, 0.94), { x: cx - 150, y, w: 300, h: 54 }, 'right', () => s.add(g({ opacity: 0.85 }, ...bars)));
+  const barcode = () => s.add(g({ opacity: 0.85 }, ...bars));
+  const barcodeBox = { x: cx - 150, y, w: 300, h: 54 }, barcodeInk = styleProgress(st, t, .72, .94);
+  if (st.id === 'playbill') materialEnter(s, st, barcodeInk, barcodeBox, barcode, 'data', 'x');
+  else materialReveal(s, st, barcodeInk, barcodeBox, 'right', barcode);
   print(y + 88, 28, () => s.text(`${m.project.toUpperCase()}-${m.commits}-${m.linesAdded}`, cx, y + 76, { font: mono, size: 12, fill: st.c.soft, anchor: 'middle', track: 0.2 }));
   const hf = handFacts(m);
   if (hf.length) print(y + 126, 36, () => { s.text(hf.slice(0, 2).map((f) => f.text).join(T(m, '，', ', ')), cx, y + 112, { font: st.f.body, size: 14, fill: st.c.soft, anchor: 'middle', maxW: pw - 80 }); s.hit(x0, y + 92, x1 - x0, 28, handTip(m)); });
@@ -246,8 +249,16 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     const S = 260;
     const s = new Scene(S, S);
     s.bg = st.c.bg;
-    s.add(circle(S / 2, S / 2, S / 2 - 4, { fill: st.c.paper, stroke: st.c.ink, strokeWidth: 3, ...tracing(styleProgress(st, t, 0, 0.64), 2 * Math.PI * (S / 2 - 4)) }));
-    s.add(circle(S / 2, S / 2, S / 2 - 16, { fill: 'none', stroke: st.c.ink, strokeWidth: 1, strokeOpacity: 0.5, ...tracing(styleProgress(st, t, 0.12, 0.76), 2 * Math.PI * (S / 2 - 16)) }));
+    if (t < 1 && ['pastel', 'cutout', 'meadow', 'manga', 'cyber'].includes(st.id)) {
+      // 同一枚完整圆章由自己的纸、墨或像素成形，题字仍作为完整字组落版。
+      materialEnter(s, st, styleProgress(st, t, 0, .64), { x: 1, y: 1, w: S - 2, h: S - 2 }, () =>
+        s.add(circle(S / 2, S / 2, S / 2 - 4, { fill: st.c.paper, stroke: st.c.ink, strokeWidth: 3 })), 'data');
+      materialEnter(s, st, styleProgress(st, t, .12, .76), { x: 14, y: 14, w: S - 28, h: S - 28 }, () =>
+        s.add(circle(S / 2, S / 2, S / 2 - 16, { fill: 'none', stroke: st.c.ink, strokeWidth: 1, strokeOpacity: .5 })), 'data');
+    } else {
+      s.add(circle(S / 2, S / 2, S / 2 - 4, { fill: st.c.paper, stroke: st.c.ink, strokeWidth: 3, ...tracing(styleProgress(st, t, 0, 0.64), 2 * Math.PI * (S / 2 - 4)) }));
+      s.add(circle(S / 2, S / 2, S / 2 - 16, { fill: 'none', stroke: st.c.ink, strokeWidth: 1, strokeOpacity: 0.5, ...tracing(styleProgress(st, t, 0.12, 0.76), 2 * Math.PI * (S / 2 - 16)) }));
+    }
     // 外圈一圈字
     const txt = T(m, `· ${m.project} · AI 参与编写 `, `· ${m.project.toUpperCase()} · WRITTEN WITH AI `);
     const R0 = S / 2 - 46;
@@ -255,7 +266,7 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     const rim = styleProgress(st, t, 0.16, 0.8);
     const lettering = () => s.add(el('text', { fontFamily: st.f.label.family, fontWeight: st.f.label.weight ?? 500, fontSize: 15, fill: st.c.ink, letterSpacing: 3 }, el('textPath', { href: `#${id}`, startOffset: '0' }, txt)));
     // 圆弧题字没有水平基线；排版与手稿的通用直线批注会穿出圆章，不能套在这里。
-    materialEnter(s, st, rim, { x: S / 2 - R0 - 18, y: S / 2 - R0 - 18, w: R0 * 2 + 36, h: R0 * 2 + 36 }, lettering, ['manuscript', 'editorial'].includes(st.id) ? 'data' : 'content');
+    materialEnter(s, st, rim, { x: S / 2 - R0 - 18, y: S / 2 - R0 - 18, w: R0 * 2 + 36, h: R0 * 2 + 36 }, lettering, ['manuscript', 'editorial'].includes(st.id) ? 'data' : st.id === 'minimal-dark' ? 'mark' : 'content');
     stamp(s, st, styleProgress(st, t, 0.3, 0.82), S / 2, S / 2 - 10, () => st.mark(s, lead[0].key, S / 2, S / 2 - 10, 48));
     materialEnter(s, st, styleProgress(st, t, 0.46, 0.96), { x: S / 2 - 40, y: S / 2 + 18, w: 80, h: 26 }, () => st.num(s, pct(lead[0].pct), S / 2, S / 2 + 40, 18, 'middle'));
     if (t > 0.3) s.hit(40, 40, S - 80, S - 80, tip(m, lead[0]));
@@ -423,7 +434,11 @@ export function byline(m: Model, st: Style, o: PieceOpts): Scene | null {
     }
     materialEnter(s, st, k, { x: it.x - 4, y: models ? 38 : 44, w: it.w + 34, h: models ? 60 : 40 }, () => { mark(); name(); hit(); });
     // 次行跟随所属工具，单独落位，避免外层和内层叠加两次滤镜/位移。
-    if (it.sub) materialEnter(s, st, styleProgress(st, t, start + 0.16, start + 0.58), { x: it.x + 30, y: 74, w: it.subW, h: 20 }, sub);
+    // WebKit 的实际字形包围盒略宽于排版估值。滤镜可使用下一图标前的真实空隙，
+    // 不能把模型说明的末字裁掉；文字字号、截断规则和静态布局完全沿用原值。
+    const subBoundsW = ['broadsheet', 'crt'].includes(st.id)
+      ? Math.max(it.subW, (plan.items[i + 1]?.x ?? end) - (it.x + 30)) : it.subW;
+    if (it.sub) materialEnter(s, st, styleProgress(st, t, start + 0.16, start + 0.58), { x: it.x + 30, y: 74, w: subBoundsW, h: 20 }, sub);
   }
   let tx = plan.end;
   materialEnter(s, st, styleProgress(st, t, 0.5, 0.98), { x: tx, y: nameY - 22, w: Math.max(20, end - tx), h: 28 }, () => {
@@ -512,7 +527,12 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
     const step = (x1 - x0) / (weekly.vals.length - 1);
     let d = '';
     weekly.vals.forEach((v, i) => { const px = x0 + i * step, py = top + ph - (v / maxv) * ph; d += `${i ? 'L' : 'M'}${r(px)} ${r(py)}`; });
-    materialReveal(s, st, styleProgress(st, t, 0.4, 0.96), { x: x0 - 2, y: top - 2, w: x1 - x0 + 4, h: ph + 4 }, 'right', () => s.add(path(d + `L${r(x1)} ${r(top + ph)}L${r(x0)} ${r(top + ph)}Z`, { fill: st.c.accent2, opacity: 0.12 }), path(d, { fill: 'none', stroke: st.c.accent2, strokeWidth: 2.4, strokeLinejoin: 'round' })));
+    const curve = () => s.add(path(d + `L${r(x1)} ${r(top + ph)}L${r(x0)} ${r(top + ph)}Z`, { fill: st.c.accent2, opacity: 0.12 }), path(d, { fill: 'none', stroke: st.c.accent2, strokeWidth: 2.4, strokeLinejoin: 'round' }));
+    const curveBox = { x: x0 - 2, y: top - 2, w: x1 - x0 + 4, h: ph + 4 };
+    const curveProgress = styleProgress(st, t, 0.4, 0.96);
+    // 单色周曲线作为实际墨版压实，不用通用横向窗口把版面切成半张。
+    if (st.id === 'ukiyoe') materialEnter(s, st, curveProgress, curveBox, curve, 'data');
+    else materialReveal(s, st, curveProgress, curveBox, 'right', curve);
     st.rule(s, x0, top + ph, x1 - x0, 'thin');
     s.hit(x0, top, x1 - x0, ph, { k: 'human', t: weekly.label, d: [T(m, `${weekly.vals.length} 周，最多一周 ${fmt(maxv)}`, `${weekly.vals.length} weeks, peak ${fmt(maxv)}`)] });
     y = top + ph + 50;

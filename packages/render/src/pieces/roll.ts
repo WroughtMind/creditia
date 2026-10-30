@@ -1,20 +1,31 @@
 // 片尾字幕：谁担任了什么角色。角色来自数据（哪个工具写了核心、界面、测试、文档），不是按名次编头衔。
 // 版式：classic（双栏）、scroll（银幕滚动，HTML/GIF 会动）、card（终卡）、vertical（竖排）、ed（动画片尾）、billing（海报署名块）、terminal、troupe（分部：工具一部，下面列它的模型）
-import { Scene, rect, line, path, el, g, r, measure, mix } from '../svg.ts';
+import { Scene, rect, line, path, el, g, r, measure, mix, type TextBounds } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
 import { fmt, compact, pct, nameOf, hanzi } from '../data.ts';
-import type { Style } from '../style.ts';
+import type { Style, Box } from '../style.ts';
 import { T, zh, tip, handFacts, handTip, canvas, range, measureV, type PieceOpts } from './common.ts';
 import { segsOf, segTip } from './tier.ts';
 import { inkSeal } from '../styles/east.ts';
-import { phase, styleProgress } from '../motion.ts';
-import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
-import { scrollMotion } from '../scroll-motion.ts';
+import { phase, styleProgress, drawGroup } from '../motion.ts';
+import { materialEnter, materialReveal, materialOrder, type MaterialRole } from '../material-motion.ts';
+import { scrollMotion, type ScrollLayer } from '../scroll-motion.ts';
 
 export const ROLL_VARIANTS = ['classic', 'scroll', 'card', 'vertical', 'ed', 'billing', 'terminal', 'troupe'];
 
 interface Credit { name: string; sub?: string; key?: string }
 interface Section { head: string; credits: Credit[]; key?: string }
+
+/** 四种密排字幕的真实文字版：整组套到原位，再把原墨面压实。 */
+function rollPlate(s: Scene, st: Style, k: number, b: Pick<Box, 'x' | 'y' | 'w' | 'h'>, draw: () => void, role: MaterialRole = 'content', side = 1): void {
+  if (st.id !== 'ukiyoe') { materialEnter(s, st, k, b, draw, role); return; }
+  if (k >= 1) { draw(); return; }
+  const rest = 1 - Math.max(0, k), dx = r(side * 10 * rest * rest), dy = r(-2 * rest * rest);
+  const first = s.hits.length;
+  // 原文字、原色整版着墨；不逐字裁切，也不改变竖排阅读次序或横行间距。
+  drawGroup(s, { transform: `translate(${dx} ${dy})` }, () => materialEnter(s, st, k, b, draw, 'data'));
+  for (const hit of s.hits.slice(first)) { hit.x = r(hit.x + dx); hit.y = r(hit.y + dy); }
+}
 
 const AREA: Record<string, [string, string]> = {
   core: ['核心', 'Core'], frontend: ['界面', 'Interface'], tests: ['测试', 'Tests'], docs: ['文档', 'Documentation'], build: ['构建与发布', 'Build & Release'], assets: ['素材', 'Assets'],
@@ -105,6 +116,13 @@ function classic(m: Model, st: Style, secs: Section[], scroll: boolean, o: Piece
   const { s, c } = canvas(m, st, W, inner + (scroll ? view * 0.15 : 0), 40);
   const cx = W / 2;
   const sections: { y: number; h: number }[] = [], lines: number[] = [];
+  const materialLayers: ScrollLayer[] = [];
+  const capture = scroll && ['ink', 'ukiyoe', 'woodblock', 'baroque', 'grimoire', 'manuscript', 'pastel', 'cutout', 'meadow', 'manga', 'cyber'].includes(st.id);
+  const rows = ['manuscript', 'meadow', 'manga', 'cyber'].includes(st.id);
+  const inkBounds = (boxes: TextBounds[]) => {
+    const x = Math.min(...boxes.map(b => b.x)) - 12, y = Math.min(...boxes.map(b => b.y)) - 12;
+    return { x, y, w: Math.max(...boxes.map(b => b.x + b.w)) - x + 12, h: Math.max(...boxes.map(b => b.y + b.h)) - y + 16 };
+  };
   let y = c.y + 110;
   st.label(s, T(m, '片尾字幕', 'END CREDITS'), cx, y, { anchor: 'middle', size: 14 });
   st.title(s, m.project || 'Untitled', cx, y + 92, 78, 'middle', { maxW: c.w - 120 });
@@ -116,20 +134,42 @@ function classic(m: Model, st: Style, secs: Section[], scroll: boolean, o: Piece
     const y0 = y;
     const k = scroll ? 1 : styleProgress(st, t, materialOrder(st, i, secs.length) * 0.65, 0.3 + materialOrder(st, i, secs.length) * 0.65);
     // 角色与姓名作为完整排版单元，进入方式服从纸墨、光学或屏幕材质。
+    const rolePaint: string[] = [], creditPaint: string[] = [], creditLayers: ScrollLayer[] = [];
+    let roleBounds: TextBounds[] = [];
+    const allCreditBounds: TextBounds[] = [];
     const draw = () => {
-      headLines(sc).forEach((h, j) => { lines.push(y0 + 10 + j * 26); st.label(s, h, cx - gut, y0 + 4 + j * 26, { anchor: 'end', size: 17, fill: st.c.soft, maxW: c.w / 2 - gut - 50 }); });
+      const roles = () => headLines(sc).forEach((h, j) => { lines.push(y0 + 10 + j * 26); st.label(s, h, cx - gut, y0 + 4 + j * 26, { anchor: 'end', size: 17, fill: st.c.soft, maxW: c.w / 2 - gut - 50 }); });
+      if (capture) rolePaint.push(s.capturePaint(() => { roleBounds = s.captureTextBounds(roles); })); else roles();
       sc.credits.forEach((cr) => {
+
         lines.push(y + 14);
         if (cr.sub) lines.push(y + 38);
-        s.text(cr.name, cx + gut, y + 6, { font: st.f.display, size: 30, fill: st.c.ink, maxW: c.w / 2 - 70 });
         let hh = lineH;
-        if (cr.sub) { s.text(cr.sub, cx + gut, y + 34, { font: st.f.body, size: 16, fill: st.c.soft, maxW: c.w / 2 - 70, overflow: 'clip' }); hh += subH; }
+        const person = () => {
+          s.text(cr.name, cx + gut, y + 6, { font: st.f.display, size: 30, fill: st.c.ink, maxW: c.w / 2 - 70 });
+          if (cr.sub) s.text(cr.sub, cx + gut, y + 34, { font: st.f.body, size: 16, fill: st.c.soft, maxW: c.w / 2 - 70, overflow: 'clip' });
+        };
+        if (cr.sub) hh += subH;
+        if (capture) {
+          let boxes: TextBounds[] = [];
+          const paint = s.capturePaint(() => { boxes = s.captureTextBounds(person); }); creditPaint.push(paint); allCreditBounds.push(...boxes);
+          creditLayers.push({ ...inkBounds(boxes), paint, role: 'line', chapter: i });
+        } else person();
         s.hit(c.x + 40, y - 34, c.w - 80, hh, tipFor(m, cr, sc.head));
         y += hh;
       });
       y = Math.max(y, y0 + headLines(sc).length * 26);
     };
     materialEnter(s, st, k, { x: c.x + 40, y: y0 - 34, w: c.w - 80, h: Math.max(sc.credits.reduce((h, cr) => h + lineH + (cr.sub ? subH : 0), 0), headLines(sc).length * 26) + 34 }, draw);
+    if (capture) {
+      const bounds = { x: c.x + 40, y: y0 - 34, w: c.w - 80, h: y - y0 + 34, chapter: i };
+      if (['cutout', 'ink', 'woodblock', 'grimoire'].includes(st.id) && bounds.h <= view - 80) materialLayers.push({ ...bounds, paint: rolePaint.join('') + creditPaint.join(''), role: 'chapter' });
+      else {
+        materialLayers.push({ ...inkBounds(roleBounds), paint: rolePaint.join(''), role: 'role', chapter: i });
+        if (rows || inkBounds(allCreditBounds).h > view - 80) materialLayers.push(...creditLayers);
+        else materialLayers.push({ ...inkBounds(allCreditBounds), paint: creditPaint.join(''), role: 'credits', chapter: i });
+      }
+    }
     sections.push({ y: y0 - 34, h: y - y0 + 34 });
   }
   y += 120;
@@ -139,7 +179,11 @@ function classic(m: Model, st: Style, secs: Section[], scroll: boolean, o: Piece
   if (m.sign) st.title(s, m.sign, cx, y + 120, 34, 'middle');
   lines.push(y + 15, y + 48);
   if (m.sign) lines.push(y + 129);
-  if (scroll) (s as any).motion = scrollMotion(st.id, W, view, s.h, sections, lines);
+  if (scroll) {
+    const motion = scrollMotion(st.id, W, view, s.h, sections, lines);
+    if (capture) motion.material = { style: st.id, layers: materialLayers };
+    (s as any).motion = motion;
+  }
   return s;
 }
 
@@ -209,18 +253,22 @@ function vertical(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   s.vtext(zh(m) ? '署名' : 'Credits', tx - 74, c.y + 80, { font: st.f.label, size: 22, fill: st.c.soft });
   let x = tx - titleW + 30;
   cols.forEach((col, i) => {
-    const k = styleProgress(st, t, materialOrder(st, cols.length - i - 1, cols.length, cols.length) * 0.65, 0.3 + materialOrder(st, cols.length - i - 1, cols.length, cols.length) * 0.65);
+    const order = i / Math.max(1, cols.length - 1);
+    const k = styleProgress(st, t, order * 0.65, 0.3 + order * 0.65);
     const cx = x - col.w / 2;
     const draw = () => {
       if (col.kind === 'head') s.vtext(col.text, cx, c.y + 90, { font: st.f.label, size: HS, fill: st.c.accent2, gap: 0.2 });
       else {
-        s.vtext(col.text, cx + (col.sub ? 16 : 0), c.y + 200, { font: st.f.display, size: NS, fill: st.c.ink });
+        const nameX = cx + (col.sub ? 16 : 0);
+        const nameHeight = s.vtext(col.text, nameX, c.y + 200, { font: st.f.display, size: NS, fill: st.c.ink });
+        if (st.id === 'terminal' && k > 0 && k < .9) s.add(rect(nameX - 8, c.y + 204 + nameHeight, 16, 3,
+          { fill: st.c.accent, opacity: Math.floor(k * 12) % 3 === 2 ? .35 : 1 }));
         if (col.sub) s.vtext(col.sub, cx - 30, c.y + 212, { font: st.f.body, size: SS, fill: st.c.soft });
         s.hit(x - col.w, c.y + 180, col.w, col.h + 40, tipFor(m, col.cr!, col.head));
       }
     };
-    // 列坐标从右往左生成；铺版顺序按真实位置计算，水墨仍从右起笔。
-    materialEnter(s, st, k, { x: x - col.w, y: c.y + (col.kind === 'head' ? 70 : 180), w: col.w, h: col.h + 40 }, draw);
+    // 职务与姓名按既有右起阅读顺序；材质负责每列怎样成形，不颠倒主创层级。
+    rollPlate(s, st, k, { x: x - col.w, y: c.y + (col.kind === 'head' ? 70 : 180), w: col.w, h: col.h + 40 }, draw, 'content', col.kind === 'head' ? -1 : 1);
     x -= col.w;
   });
   const foot = c.y + c.h - 40;
@@ -247,7 +295,7 @@ function ed(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   y += 64;
   flat.forEach((sc, si) => {
     const k = styleProgress(st, t, materialOrder(st, si, flat.length) * 0.6, 0.35 + materialOrder(st, si, flat.length) * 0.6);
-    materialEnter(s, st, k, { x: x0 - 10, y, w: w + 20, h: (38 + sc.credits.length * 46 + 16) * k0 }, () => {
+    rollPlate(s, st, k, { x: x0 - 10, y, w: w + 20, h: (38 + sc.credits.length * 46 + 16) * k0 }, () => {
     s.text(sc.head, x0, y + 26 * k0, { font: st.f.label, size: 20 * k0, fill: st.c.soft, opacity: 1 });
     y += 38 * k0;
     for (const cr of sc.credits) {
@@ -275,7 +323,7 @@ function billing(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   st.label(s, lead.credits.map((x) => x.name).join('  ·  ').toUpperCase(), cx, c.y + 120, { anchor: 'middle', size: 22, fill: st.c.ink });
   s.hit(c.x + 40, c.y + 90, c.w - 80, 44, { t: lead.head, d: lead.credits.map((x) => x.name) });
   // 海报标题完整落位，底部署名块再逐行排印；材质由所选风格决定。
-  materialEnter(s, st, styleProgress(st, t, 0, 0.45), { x: c.x + 40, y: c.y + 340, w: c.w - 80, h: 250 }, () => st.title(s, m.project || 'Untitled', cx, c.y + 560, 220, 'middle', { maxW: c.w - 80 }), 'title');
+  rollPlate(s, st, styleProgress(st, t, 0, 0.45), { x: c.x + 40, y: c.y + 340, w: c.w - 80, h: 250 }, () => st.title(s, m.project || 'Untitled', cx, c.y + 560, 220, 'middle', { maxW: c.w - 80 }), 'title');
   // 署名块
   const cond = { family: 'Oswald, Anton, Noto Sans SC', weight: 400 };
   const lines: [string, string][] = secs.filter((x) => x.head !== T(m, '模型', 'Models')).map((sc) => [sc.head.toUpperCase(), sc.credits.map((x) => x.name.toUpperCase()).join('  ·  ')]);
@@ -285,7 +333,7 @@ function billing(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   for (const [i, [h, names]] of lines.slice(0, 6).entries()) {
     const start = 0.3 + i / Math.max(1, Math.min(6, lines.length) - 1) * 0.45;
     // 排印以整行为单位落下，不让扫描边缘切过姓名。
-    materialEnter(s, st, styleProgress(st, t, start, start + 0.2), { x: c.x + 60, y: y - 18, w: c.w - 120, h: 56 }, () => {
+    rollPlate(s, st, styleProgress(st, t, start, start + 0.2), { x: c.x + 60, y: y - 18, w: c.w - 120, h: 56 }, () => {
       s.text(h, cx, y, { font: cond, size: 13, fill: st.c.soft, track: 0.24, anchor: 'middle', maxW: c.w - 140 });
       s.text(names, cx, y + 30, { font: cond, size: 26, fill: st.c.ink, track: 0.04, anchor: 'middle', maxW: c.w - 140 });
       s.hit(c.x + 60, y - 18, c.w - 120, 56, { t: h, d: [names] });
@@ -312,15 +360,16 @@ function terminalRoll(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene
   const total = secs.reduce((n, sc) => n + sc.credits.length + 1, 0);
   let i = 0;
   let cursorY: number | undefined;
-  const print = (draw: () => void) => {
+  const print = (draw: () => void, heading = false) => {
     const start = i / Math.max(1, total - 1) * 0.78;
     const k = styleProgress(st, t, start, start + 0.16);
     i++;
-    if (k < 1 && cursorY === undefined) cursorY = y;
-    materialEnter(s, st, k, { x: x - 10, y: y - 24, w: c.w - 80, h: lh }, draw, st.id === 'terminal' ? 'data' : 'content');
+    // 光标停在下一条尚未输出的空行；整组已经显现的名字不能再被方块盖住。
+    if (k <= 0 && cursorY === undefined) cursorY = y;
+    rollPlate(s, st, k, { x: x - 10, y: y - 24, w: c.w - 80, h: lh }, draw, st.id === 'terminal' ? 'data' : 'content', heading ? -1 : 1);
   };
   for (const sc of secs) {
-    print(() => s.text(`# ${sc.head}`, x, y, { font: mono, size: 18, fill: st.c.accent2 }));
+    print(() => s.text(`# ${sc.head}`, x, y, { font: mono, size: 18, fill: st.c.accent2 }), true);
     y += lh;
     for (const cr of sc.credits) {
       print(() => {

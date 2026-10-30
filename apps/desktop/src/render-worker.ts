@@ -9,6 +9,7 @@ import { fontFiles, fontBytes } from './fonts.ts';
 import { bridgeStyle } from '../../../packages/render/src/classic/bridge.ts';
 import { Resvg, initWasm } from '@resvg/resvg-wasm';
 import wasmUrl from '@resvg/resvg-wasm/index_bg.wasm?url';
+import { flattenSvg } from '../../../packages/render/src/flatten.ts';
 
 prepare(fontFiles());
 let rasterReady: Promise<void> | undefined;
@@ -22,10 +23,11 @@ async function preview(svg: string, style: string, classic: boolean) {
   await (rasterReady ??= initWasm(fetch(wasmUrl)));
   const styleSpec = classic ? bridgeStyle(themeById(style)!) : STYLES.find((s) => s.id === style)!;
   const fonts = await fontBytes(styleSpec, svg);
-  const image = new Resvg(svg, {font:{fontBuffers:fonts,loadSystemFonts:false,defaultFontFamily:'Noto Sans SC'}});
-  try {
-    return new Blob([image.toString()], {type:'image/svg+xml'});
-  } finally { image.free(); }
+  const outlined = flattenSvg(svg, source => {
+    const image = new Resvg(source, {font:{fontBuffers:fonts,loadSystemFonts:false,defaultFontFamily:'Noto Sans SC'}});
+    try { return image.toString(); } finally { image.free(); }
+  });
+  return new Blob([outlined], {type:'image/svg+xml'});
 }
 self.onmessage = async ({ data }) => {
   const { seq, style, lang, group, named, id, variant, classic } = data;

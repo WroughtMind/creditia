@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { FONTS } from './fonts.ts';
 import { makeExporter, type Raster } from './export.ts';
+import { flattenSvg } from './flatten.ts';
 
 const require = createRequire(import.meta.url);
 const { Resvg } = require('@resvg/resvg-js');
@@ -33,7 +34,7 @@ const opts = (width?: number) => ({
 export const raster: Raster = {
   png(svg, width) { return new Uint8Array(new Resvg(svg, opts(width)).render().asPng()); },
   rgba(svg, width) { const img = new Resvg(svg, opts(width)).render(); return { w: img.width, h: img.height, data: new Uint8Array(img.pixels) }; },
-  flat(svg) { return new Resvg(svg, opts()).toString(); },
+  flat(svg) { return flattenSvg(svg, source => new Resvg(source, opts()).toString()); },
 };
 
 export const exporter = makeExporter(raster);

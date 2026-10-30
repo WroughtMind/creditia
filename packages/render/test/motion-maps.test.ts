@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { art, buildModel, STYLES } from '../src/index.ts';
+import { art, buildModel, STYLES, raster } from '../src/index.ts';
 import { THEMES } from '../src/classic/themes.ts';
 import { bridgeStyle } from '../src/classic/bridge.ts';
 
@@ -67,15 +67,14 @@ test('代码地图拼贴按完整文件片段入位，套版按完整归属色�
 test('26风格代码地图的汇总份额条始终完整，不沿数值轴裁开归属', () => {
   const styles = [...THEMES.map(bridgeStyle), ...STYLES.filter(st => !['minimal', 'noir', 'glass', 'cinema', 'terminal'].includes(st.id))];
   const summaryBars = (svg: string) => {
-    const stack: { tag: string; clipped: boolean }[] = [], bars: { xml: string; y: number; clipped: boolean }[] = [];
+    const stack: { tag: string; xml: string }[] = [], bars: { xml: string; x: number; y: number; w: number; parents: string[] }[] = [];
     for (const match of normalized(svg).matchAll(/<\/?([\w:-]+)\b[^>]*>/g)) {
       const [xml, tag] = match;
       if (xml.startsWith('</')) { stack.pop(); continue; }
-      const clipped = stack.some(parent => parent.clipped) || /\b(?:clip-path|mask)=/.test(xml);
       if (tag === 'rect' && !stack.some(parent => parent.tag === 'defs') && /\bheight="5"/.test(xml)) {
-        bars.push({ xml, y: Number(/\by="([^"]+)"/.exec(xml)![1]), clipped });
+        bars.push({ xml, x: Number(/\bx="([^"]+)"/.exec(xml)![1]), y: Number(/\by="([^"]+)"/.exec(xml)![1]), w: Number(/\bwidth="([^"]+)"/.exec(xml)![1]), parents: stack.filter(p => p.tag === 'g').map(p => p.xml) });
       }
-      if (!xml.endsWith('/>')) stack.push({ tag, clipped });
+      if (!xml.endsWith('/>')) stack.push({ tag, xml });
     }
     const y = bars.find(bar => /\bfill-opacity="0\.1"/.test(bar.xml))!.y;
     return bars.filter(bar => bar.y === y);
@@ -84,9 +83,33 @@ test('26风格代码地图的汇总份额条始终完整，不沿数值轴裁开
     const full = summaryBars(art('codemap', model, st)!.svg);
     assert.ok(full.length >= 3, st.id);
     for (const t of [0.12, 0.2, 0.5, 0.8]) {
-      const current = summaryBars(art('codemap', model, st, { t })!.svg);
+      const frame = art('codemap', model, st, { t })!, svg = normalized(frame.svg), current = summaryBars(svg);
       assert.deepEqual(current.map(bar => bar.xml), full.map(bar => bar.xml), `${st.id}/${t}: true widths and positions`);
-      assert.ok(current.every(bar => !bar.clipped), `${st.id}/${t}: every attribution is complete`);
+      // 保留实际父组的 mask/filter/opacity，栅格化这条真实汇总；完整材质纹理不是裁窗。
+      const shares = current.filter(bar => !/\bfill-opacity="0\.1"/.test(bar.xml));
+      let body = '', open: string[] = [];
+      for (const bar of shares) {
+        let same = 0; while (same < open.length && open[same] === bar.parents[same]) same++;
+        body += open.slice(same).map(() => '</g>').join('') + bar.parents.slice(same).join('') + bar.xml;
+        open = bar.parents;
+      }
+      body += open.map(() => '</g>').join('');
+      const definitions = [...svg.matchAll(/<defs>[\s\S]*?<\/defs>/g)].map(m => m[0]).join('');
+      const y = shares[0].y, top = Math.floor(y) - 8;
+      const isolated = `<svg xmlns="http://www.w3.org/2000/svg" width="${frame.w}" height="22" viewBox="0 ${top} ${frame.w} 22">${definitions}${body}</svg>`;
+      const pixels = raster.rgba(isolated, frame.w);
+      const columns = shares.map(bar => {
+        const visible: boolean[] = [];
+        for (let x = Math.ceil(bar.x + 1); x < Math.floor(bar.x + bar.w - 1); x++) {
+          let alpha = 0; for (let yy = 0; yy < pixels.h; yy++) alpha += pixels.data[(yy * pixels.w + x) * 4 + 3];
+          visible.push(alpha > 0);
+        }
+        assert.ok(visible.length > 0, `${st.id}/${t}: inspect even the smallest attribution`);
+        return visible;
+      });
+      if (columns.some(cols => cols.some(Boolean)))
+        assert.ok(columns.every(cols => cols.every(Boolean)), `${st.id}/${t}: every visible attribution must reach both real endpoints with no holes along the value axis`);
+      if (t >= .2) assert.ok(columns.every(cols => cols.some(Boolean)), `${st.id}/${t}: each attribution has actually appeared`);
     }
   }
 });

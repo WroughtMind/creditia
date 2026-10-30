@@ -134,8 +134,25 @@ test('分享图和堆叠徽章沿厚度揭示整张份额图，不逐段改写�
 
 test('木刻细徽章份额压印完整条，不用大面刀纹切成条码', () => {
   const style = STYLES.find(s => s.id === 'woodblock')!;
-  for (const variant of ['stack', 'split']) for (const t of [0.2, 0.5, 0.8]) {
-    const svg = art('badge', model, style, { variant, t })!.svg;
-    assert.doesNotMatch(svg, /<mask\b/, `${variant}/${t}: narrow share is a complete print surface`);
+  const paper = style.c.paper.replace('#', '').match(/../g)!.map(value => parseInt(value, 16));
+  for (const variant of ['stack', 'split']) {
+    const full = art('badge', model, style, { variant, t: 1 })!, final = raster.rgba(full.svg, full.w);
+    const y0 = variant === 'stack' ? 42 : 40;
+    const inkAt = (data: Uint8Array, x: number) => {
+      let difference = 0;
+      for (let y = y0 + 1; y < y0 + 13; y++) {
+        const pixel = (y * full.w + x) * 4;
+        difference = Math.max(difference, ...paper.map((c, channel) => Math.abs(c - data[pixel + channel])));
+      }
+      return difference;
+    };
+    for (const t of [0.2, 0.5, 0.8]) {
+      const middle = raster.rgba(art('badge', model, style, { variant, t })!.svg, full.w);
+      for (let x = 19; x < full.w - 19; x++) {
+        const finalInk = inkAt(final.data, x);
+        if (finalInk > 12) assert.ok(inkAt(middle.data, x) > finalInk * .3,
+          `${variant}/${t}/${x}: each true value-axis column retains continuous base ink`);
+      }
+    }
   }
 });

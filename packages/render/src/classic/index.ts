@@ -11,6 +11,7 @@ import type { Out } from './ui.ts';
 import { fontsFor } from './fonts.ts';
 import { classicArt, classicFrames } from './art.ts';
 import type { Raster } from '../export.ts';
+import { flattenSvg } from '../flatten.ts';
 
 
 const require = createRequire(import.meta.url);
@@ -62,7 +63,7 @@ const ropts = (width?: number) => ({ font: { loadSystemFonts: false }, fitTo: wi
 export const raster: Raster = {
   png(svg, width) { return new Uint8Array(new Resvg(svg, ropts(width)).render().asPng()); },
   rgba(svg, width) { const img = new Resvg(svg, ropts(width)).render(); return { w: img.width, h: img.height, data: new Uint8Array(img.pixels) }; },
-  flat(svg) { return new Resvg(svg, ropts()).toString(); },
+  flat(svg) { return flattenSvg(svg, source => new Resvg(source, ropts()).toString()); },
 };
 
 /** 统一的 Art：命令行导出、官网都走这个 */

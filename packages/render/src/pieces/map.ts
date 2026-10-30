@@ -22,7 +22,7 @@ interface CodeStroke { d: string; key: string; shade: number; file: number; col:
 function codeUnits(s: Scene, st: Style, progress: number, strokes: CodeStroke[], columns: number, rows: number, color: (key: string) => string, neutral: (key: string) => boolean) {
   const id = st.id === 'minimal' ? 'minimal-light' : st.id === 'noir' ? 'minimal-dark' : st.id;
   const mode = id === 'ukiyoe' ? 'plate' : id === 'broadsheet' ? 'column'
-    : ['terminal', 'crt', 'ink', 'manuscript', 'neon'].includes(id) ? 'line' : 'file';
+    : ['terminal', 'crt', 'manuscript', 'neon', 'cyber'].includes(id) ? 'line' : 'file';
   const units = new Map<string, CodeStroke[]>();
   for (const q of strokes) {
     const key = mode === 'plate' ? color(q.key) : mode === 'column' ? `${q.col}` : mode === 'line' ? `${q.col}/${q.row}` : `${q.file}/${q.col}`;
@@ -48,6 +48,45 @@ function codeUnits(s: Scene, st: Style, progress: number, strokes: CodeStroke[],
     if (k >= 1) { settled.push(...part); continue; }
     const x = Math.min(...part.map(q => q.x)), y = Math.min(...part.map(q => q.y));
     const w = Math.max(...part.map(q => q.x + q.w)) - x, h = Math.max(...part.map(q => q.y)) - y + PITCH;
+    if (['ink', 'woodblock', 'baroque', 'grimoire'].includes(id)) {
+      // 真实代码行/文件是完整印面；微弱模糊与位移不足以表现纸墨，使用其表面成形。
+      materialEnter(s, st, k, { x, y: y - 2, w, h: h + 4 }, () => draw(part), 'content');
+      continue;
+    }
+    if (['pastel', 'cutout', 'meadow', 'manga', 'cyber'].includes(id)) {
+      // 文件/代码整行本身就是运动单元，细笔画不单靠表面透明度区分。
+      // 横向归位只借用列间留白；每道原笔画的长度、归属及整文件面积都保留。
+      const bounds = { x: x - 2, y: y - 2, w: w + 4, h: h + 4 };
+      const side = first.col < columns / 2 ? -1 : 1, rest = 1 - k;
+      let dx = 0, dy = 0, angle = 0;
+      if (id === 'pastel') { dx = side * 16 * rest; dy = (first.col % 2 ? 1 : -1) * 3 * Math.sin(Math.PI * k); }
+      if (id === 'cutout') { dx = side * 5 * rest; angle = side * Math.min(2.8, Math.atan(10 / Math.max(h, 1)) * 180 / Math.PI) * rest; }
+      if (id === 'meadow') { dx = 7 * Math.sin(Math.PI * k) * rest; angle = -Math.min(2.2, Math.atan(8 / Math.max(h, 1)) * 180 / Math.PI) * rest; }
+      if (id === 'manga') dx = k < .38 ? -16 : k < .68 ? -5 : 0;
+      // 终端型寻址针对真实整行，按字格归位；漫画仍按整个文件块落版。
+      if (id === 'cyber') dx = -Math.ceil(rest * 3) * 4;
+      drawGroup(s, { transform: `translate(${r(dx)} ${r(dy)})${angle ? ` rotate(${r(angle)} ${r(x)} ${r(y + h)})` : ''}` },
+        () => id === 'cyber' ? draw(part) : materialEnter(s, st, k, bounds, () => draw(part), 'data'));
+      continue;
+    }
+    if (['editorial', 'mono', 'cinema', 'playbill'].includes(id)) {
+      // 一份真实文件共用一个印面/投影。保留每道代码的归属、全长和缩进，
+      // 不让细笔画的独立旧分支退化为文件透明度或几像素平移。
+      const bounds = { x: x - 2, y: y - 2, w: w + 4, h: h + 4 };
+      if (id === 'editorial') materialEnter(s, st, k, bounds, () => draw(part), 'data');
+      else if (id === 'playbill') {
+        const side = first.col < columns / 2 ? -1 : 1, rest = 1 - k;
+        drawGroup(s, { transform: `translate(${r(side * 6 * rest)} ${r(-3 * rest)}) rotate(${r(side * 1.8 * rest)} ${r(x + w / 2)} ${r(y + h)})` },
+          () => materialEnter(s, st, k, bounds, () => draw(part), 'data'));
+      } else materialEnter(s, st, k, bounds, () => draw(part), 'content');
+      continue;
+    }
+    if (['gala', 'broadsheet', 'crt', 'arcade'].includes(id)) {
+      // 代码的整文件、真实行或报纸列共享一幅完整材质印面；长度/归属不裁短。
+      const bounds = { x: x - 2, y: y - 2, w: w + 4, h: h + 4 };
+      drawGroup(s, { 'data-code-unit': mode }, () => materialEnter(s, st, k, bounds, () => draw(part), 'data'));
+      continue;
+    }
     const rest = 1 - k, side = first.col < columns / 2 ? -1 : 1;
     const a: Attrs = { 'data-code-unit': mode };
     let dx = 0, dy = 0, angle = 0, optics = '';
@@ -57,10 +96,6 @@ function codeUnits(s: Scene, st: Style, progress: number, strokes: CodeStroke[],
       case 'minimal-dark': optics = 'edge'; break;
       case 'glass': optics = 'focus'; dy = -2 * rest; break;
       case 'film': optics = 'exposure'; dy = k < 0.3 ? 2 * (1 - k / 0.3) : 0; break;
-      case 'editorial': dx = -Math.min(12, w / 5) * rest; break;
-      case 'mono': optics = 'edge'; dx = -2 * rest; break;
-      case 'cinema': dy = 6 * rest; a.opacity = Math.min(1, k * 2); break;
-      case 'playbill': dx = side * 8 * rest; break;
       case 'gala': optics = 'light'; dy = 3 * rest; break;
       case 'broadsheet': optics = 'press'; break;
       case 'crt': optics = 'phosphor'; break;
@@ -73,11 +108,6 @@ function codeUnits(s: Scene, st: Style, progress: number, strokes: CodeStroke[],
       case 'baroque': dx = side * 4 * rest; angle = side * 0.6 * rest; break;
       case 'grimoire': optics = 'engrave'; break;
       case 'manuscript': dx = -2 * rest; break;
-      case 'pastel': dx = side * 4 * rest; dy = -Math.sin(k * Math.PI); break;
-      case 'cutout': dx = side * 4 * rest; dy = -3 * rest; angle = side * 1.4 * rest; break;
-      case 'meadow': angle = side * Math.min(1.3, 120 / h) * rest; break;
-      case 'manga': dx = 8 * rest; break;
-      case 'cyber': dx = (unit % 2 ? 1 : -1) * Math.ceil(rest * 3) * 2; break;
     }
     if (dx || dy || angle) a.transform = `translate(${r(dx)} ${r(dy)})${angle ? ` rotate(${r(angle)} ${r(x)} ${r(y + h)})` : ''}`;
     if (optics) {

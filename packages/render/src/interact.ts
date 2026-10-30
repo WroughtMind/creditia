@@ -29,7 +29,7 @@ export function placeTip(tip: HTMLElement, x: number, y: number) {
 }
 
 /** 在 root（包着 SVG 的元素）上挂交互层。w、h 是作品的原始尺寸，区域按比例摆放 */
-export function mountHits(root: HTMLElement, hits: HitLike[], w: number, h: number): () => void {
+export function mountHits(root: HTMLElement, hits: HitLike[], w: number, h: number, positionTip = placeTip): () => void {
   const layer = document.createElement('div');
   layer.className = 'ct-hits';
   let tip = document.querySelector('.ct-tip') as HTMLElement | null;
@@ -48,10 +48,10 @@ export function mountHits(root: HTMLElement, hits: HitLike[], w: number, h: numb
       for (const o of els) o.classList.toggle('kin', !!x.k && (o as any)._k === x.k && o !== e);
       e.classList.add('on');
       tip!.innerHTML = `<b>${esc(x.t)}</b>${(x.d ?? []).map((l) => `<span>${esc(l)}</span>`).join('')}`;
-      placeTip(tip!, ev.clientX, ev.clientY);
+      positionTip(tip!, ev.clientX, ev.clientY);
       tip!.classList.add('on');
     };
-    e.onmousemove = (ev) => placeTip(tip!, ev.clientX, ev.clientY);
+    e.onmousemove = (ev) => positionTip(tip!, ev.clientX, ev.clientY);
     e.onmouseleave = () => { e.classList.remove('on'); for (const o of els) o.classList.remove('kin'); tip!.classList.remove('on'); };
     (e as any)._k = x.k;
     els.push(e);

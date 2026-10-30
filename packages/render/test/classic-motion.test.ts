@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { buildModel } from '../src/classic/data.ts';
 import { FORMS } from '../src/classic/registry.ts';
 import { THEMES, themeById } from '../src/classic/themes.ts';
-import { animate, motion, progress } from '../src/classic/motion.ts';
+import { animate, motion, progress, terminalCursorTargets, placeTerminalCursors } from '../src/classic/motion.ts';
 import { art, frames, animatedClassic, raster } from '../src/classic/index.ts';
 import { motionDuration } from '../src/motion.ts';
 
@@ -16,8 +16,115 @@ const nodes = (tree: any): any[] => {
   return [tree, ...[tree.props.children].flat().flatMap(nodes)];
 };
 const cues = (tree: any) => nodes(tree).filter((node) => node.motionCue);
+
+test('terminal cursors follow the actual text advance inside stretched and aligned layout boxes', () => {
+  const text = (children: string, style: any = {}): any => ({ type: 'div', props: { style, children } });
+  const make = (width: number, align = 'left') => {
+    const word = text('734', { textAlign: align });
+    const group = motion({ type: 'div', props: { style: { fontFamily: 'JetBrains Mono', fontSize: 20 }, children: word } }, 'credits');
+    const targets = terminalCursorTargets(group);
+    placeTerminalCursors(targets, [
+      { key: group.key, left: 0, top: 0, width, height: 50 },
+      { key: word.key, textContent: '734', left: 0, top: 0, width, height: 26 },
+    ]);
+    return group.motionCursor[0];
+  };
+  // JetBrains Mono's three digits occupy 36px at 20px, even in a 200/400px flex cell.
+  assert.equal(make(200).x, 39);
+  assert.equal(make(400).x, 39);
+  assert.equal(make(200, 'center').x, 121);
+  assert.equal(make(200, 'right').y, 28, 'a full-width right-aligned value uses actual blank space below, not its last glyph');
+
+  const word = text('734', { fontFamily: 'JetBrains Mono', fontSize: 20 });
+  motion(word, 'credits');
+  const tight = terminalCursorTargets(word);
+  placeTerminalCursors(tight, [{ key: word.key, textContent: '734', left: 0, top: 0, width: 36, height: 26 }]);
+  assert.deepEqual(word.motionCursor, [], 'a tightly fitted word has no safe cursor space');
+});
+
+test('terminal cursor rows respect explicit and confirmed soft line breaks without duplicate parent cursors', () => {
+  const child: any = motion({ type: 'div', props: { style: { fontFamily: 'JetBrains Mono', fontSize: 20, lineHeight: 1.5, textAlign: 'center' }, children: 'AAA BBB CCC' } }, 'credits');
+  const parent = motion({ type: 'div', props: { style: {}, children: child } }, 'title');
+  const targets = terminalCursorTargets(parent);
+  placeTerminalCursors(targets, [
+    { key: parent.key, left: 0, top: 0, width: 110, height: 100 },
+    { key: child.key, textContent: child.props.children, left: 0, top: 0, width: 110, height: 60 },
+  ]);
+  assert.deepEqual(parent.motionCursor, [], 'a nested credits group owns its words');
+  assert.equal(child.motionCursor.length, 2);
+  assert.equal(child.motionCursor[0].x, 100);
+  assert.equal(child.motionCursor[1].x, 76);
+  assert.equal(child.motionCursor[1].y - child.motionCursor[0].y, 30);
+  child.props.style.whiteSpace = 'pre'; child.props.children = 'AAA\nB';
+  placeTerminalCursors(targets, [
+    { key: parent.key, left: 0, top: 0, width: 110, height: 100 },
+    { key: child.key, textContent: child.props.children, left: 0, top: 0, width: 110, height: 60 },
+  ]);
+  assert.equal(child.motionCursor[0].x, 76);
+  assert.equal(child.motionCursor[1].x, 64);
+});
+
+test('neon lane current shares the actual session time axis and connects each whole interval', () => {
+  const neon = themeById('neon')!;
+  const out = FORMS.lanes.render(m, neon, { lang: 'en' })!;
+  const plots = nodes(out.tree).filter(node => [node.props.children].flat().some(child => child?.motionCue?.kind === 'neon-lane'));
+  assert.ok(plots.length > 0);
+  for (const plot of plots) {
+    const kids = [plot.props.children].flat(), guide = kids.find(child => child?.motionCue?.kind === 'neon-lane');
+    assert.equal(guide.props.style.left, 0, 'current and intervals share the same plot origin after flex layout');
+    assert.equal(guide.props.style.width, '100%', 'the temporary light stays on the existing baseline');
+    for (const bar of kids.filter(child => child?.motionCue?.kind === 'bar-x')) {
+      const start = bar.motionCue.order / (bar.motionCue.total - 1), time = start * .8;
+      assert.ok(Math.abs(start * guide.motionCue.guide.width - bar.props.style.left) <= .01);
+      assert.equal(progress(time, bar.motionCue, neon), 0);
+      const before = structuredClone(bar); animate(before, Math.max(0, time - .001), neon);
+      assert.equal(before.props.style.opacity, 0);
+      const lit = structuredClone(bar); animate(lit, time + .02, neon);
+      for (const prop of ['left', 'top', 'width', 'height', 'backgroundColor', 'opacity', 'border']) {
+        assert.equal(lit.props.style[prop], bar.props.style[prop], `session ${prop} must retain its real value as soon as it connects`);
+      }
+      assert.equal(lit.props.style.clipPath, undefined);
+      assert.equal(lit.props.style.maskImage, undefined);
+      assert.match(lit.props.style.boxShadow, /0 0 /);
+      const settled = structuredClone(bar); animate(settled, Math.min(1, time + .15), neon);
+      assert.deepEqual(settled.props.style, bar.props.style, 'the short ignition bloom settles before the final frame');
+    }
+  }
+});
 // A motion frame may change drawing, but never the laid-out content or geometry.
-const layout = (tree: any) => JSON.stringify(tree, (key, value) => ['opacity', 'transform', 'clipPath', 'src', 'filter', 'maskImage', 'textShadow', 'boxShadow', 'backgroundColor'].includes(key) ? undefined : value);
+const layout = (tree: any, proofBackground = false) => {
+  const copy = structuredClone(tree);
+  // 票据引导线的背景短光段属于绘制；仍检查其他节点的背景数据、所有字组和盒尺寸。
+  for (const node of cues(copy).filter((node) => ['neon-guide', 'neon-lane', 'lane-rule'].includes(node.motionCue.kind))) {
+    for (const key of ['backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat']) delete node.props.style[key];
+  }
+  // 节目单真实会话上的暂态折光是绘制层；这批 lane 原本没有背景图案。
+  for (const node of cues(copy).filter(node => node.motionCue.kind === 'bar-x' && node.motionCue.lane)) {
+    const image = node.props.style.backgroundImage?.replace(/^linear-gradient\(180deg, transparent [\d.]+%, #[0-9a-f]{8} 50%, transparent [\d.]+%\)(?:, )?/i, '');
+    if (image) node.props.style.backgroundImage = image; else delete node.props.style.backgroundImage;
+  }
+  // CRT 横条只剥离临时白色刷新束，保留原份额条的归属纹样和全部真几何。
+  for (const node of cues(copy).filter(node => node.motionCue.kind === 'bar-x')) {
+    const image = node.props.style.backgroundImage?.replace(/^linear-gradient\(90deg, transparent [-\d.]+%, #ffffff[0-9a-f]{2} [-\d.]+%, transparent [-\d.]+%\)(?:, )?/i, '');
+    if (image) node.props.style.backgroundImage = image; else delete node.props.style.backgroundImage;
+  }
+  // 日期列只剥离新增的表面软光；原有归属图案仍然参加比较。
+  for (const node of cues(copy).filter((node) => node.motionCue.plane === 'time')) {
+    const image = node.props.style.backgroundImage?.replace(/^linear-gradient\(180deg, transparent [\d.]+%, #[0-9a-f]{8} [\d.]+%, transparent [\d.]+%\)(?:, )?/i, '');
+    if (image) node.props.style.backgroundImage = image; else delete node.props.style.backgroundImage;
+  }
+  // CRT 字组的2px边缘刷新属于绘制，不改变文字、底色与盒尺寸。
+  for (const node of cues(copy).filter(node => ['row', 'print', 'title', 'signature', 'credits'].includes(node.motionCue.kind))) {
+    if (node.props.style.backgroundSize === '100% 2px') {
+      const pattern = node.props.style.backgroundImage?.replace(/^linear-gradient\(90deg, transparent [-\d.]+%, #[0-9a-f]{8} [-\d.]+%, transparent [-\d.]+%\)(?:, )?/i, '');
+      if (pattern) node.props.style.backgroundImage = pattern; else delete node.props.style.backgroundImage;
+      for (const key of ['backgroundSize', 'backgroundPosition', 'backgroundRepeat']) delete node.props.style[key];
+    }
+  }
+  // editorial 的校样底线是绘制层；盒子、文字与原有底色仍参加比较。
+  if (proofBackground) for (const node of cues(copy)) delete node.props.style.backgroundImage;
+  return JSON.stringify(copy, (key, value) => ['opacity', 'transform', 'clipPath', 'src', 'filter', 'maskImage', 'textShadow', 'boxShadow', 'backgroundColor'].includes(key) ? undefined : value);
+};
 
 test('every classic form and layout declares content groups; sampling leaves layout and the static end untouched', () => {
   for (const t of THEMES) for (const [id, form] of Object.entries(FORMS)) for (const variant of form.variants ?? [undefined]) {
@@ -30,7 +137,7 @@ test('every classic form and layout declares content groups; sampling leaves lay
     assert.deepEqual(still, out.tree, `${label} altered the static end`);
     const middle = structuredClone(out.tree);
     animate(middle, 0.25, t);
-    assert.equal(layout(middle), layout(out.tree), `${label} changed layout or text`);
+    assert.equal(layout(middle, t.family === 'editorial'), layout(out.tree, t.family === 'editorial'), `${label} changed layout or text`);
   }
 });
 
@@ -52,7 +159,7 @@ test('chart motion follows the represented quantity and leaves headings and deco
   assert.ok(bars.every((node) => node.props.style.opacity === 0));
 });
 
-test('terminal output steps by whole rows, cinema settles, and print styles reveal without displacement', () => {
+test('terminal rows, cinema settling and newspaper impression preserve whole words and layout', () => {
   const source = { type: 'div', props: { style: { width: 100, height: 20 }, children: 'Tool 42%' } };
   const terminal = motion(structuredClone(source), 'row');
   animate(terminal, 0.15, themeById('terminal')!);
@@ -65,8 +172,12 @@ test('terminal output steps by whole rows, cinema settles, and print styles reve
   const print = motion(structuredClone(source), 'row');
   animate(print, 0.15, themeById('broadsheet')!);
   assert.equal(print.props.style.clipPath, undefined);
-  assert.ok(print.props.style.opacity > 0 && print.props.style.opacity < 1);
-  assert.equal(print.props.style.transform, undefined);
+  assert.equal(print.props.style.opacity, 1);
+  assert.equal(print.props.children, source.props.children);
+  assert.equal(print.props.style.width, source.props.style.width);
+  assert.equal(print.props.style.height, source.props.style.height);
+  assert.equal(print.props.style.maskImage, undefined, 'fitted words are not placed behind a CSS mask');
+  assert.match(print.props.style.transform, /^translate\([\d.-]+px, 0px\)$/);
   const p = progress(0.15, { kind: 'bar-x' }, themeById('terminal')!);
   assert.equal(p * 16, Math.floor(p * 16));
 });
@@ -77,6 +188,8 @@ test('export frames render the same static end across different drawing techniqu
     ['badge', 'minimal-light'], ['byline', 'editorial'], ['tier', 'minimal-light'], ['tier', 'minimal-dark'], ['tier', 'glass'], ['tier', 'crt'], ['donut', 'neon'], ['area', 'terminal'],
     ['versions', 'minimal-light'], ['receipt', 'minimal-light', 'thermal'],
     ['roll', 'cinema', 'crawl'], ['roll', 'cinema', 'slate'], ['app', 'mono', 'ios'],
+    ['roll', 'terminal', 'slate'], ['roll', 'terminal', 'production'], ['roll', 'terminal', 'columns'], ['roll', 'terminal', 'program'],
+    ['lanes', 'neon'],
   ]) {
     const t = themeById(tid)!;
     const ctx = { lang: 'en' as const, variant };
@@ -262,16 +375,21 @@ test('clock reveals complete cells at their true intensity and terminal bars nev
   }
 });
 
-test('material cells preserve their true painted area instead of scaling percentage and treemap units', async () => {
+test('material cells preserve their full geometric footprint instead of scaling percentage and treemap units', async () => {
   const { default: satori } = await import('satori');
-  for (const id of ['glass', 'gala', 'minimal-dark']) for (const time of [.03, .07, .12]) {
+  for (const id of ['glass', 'gala', 'minimal-dark', 'broadsheet', 'crt']) for (const time of [.03, .07, .12]) {
     const tile = motion({ type: 'div', props: { style: { position: 'absolute', left: 64, top: 50, width: 80, height: 40, backgroundColor: '#ff0000' }, children: [] } }, 'cell');
     const tree = { type: 'div', props: { style: { display: 'flex', position: 'relative', width: 240, height: 160 }, children: [tile] } };
     animate(tree, time, themeById(id)!);
     const frame = raster.rgba(await satori(tree as any, { width: 240, height: 160, fonts: [] }), 240);
-    let alpha = 0; for (let i = 3; i < frame.data.length; i += 4) alpha += frame.data[i];
-    const paintedArea = alpha / 255 / (tile.props.style as any).opacity;
-    assert.ok(Math.abs(paintedArea - 80 * 40) < 80 * 40 * .01, `${id}@${time}: material may expose or rigidly move a tile, but its full geometric area must remain 3200`);
+    // 印面密度/金属反光可以不同，面积单位却必须整枚连通；总 alpha 不是几何面积。
+    const xs: number[] = [], ys: number[] = [];
+    for (let y = 0; y < frame.h; y++) for (let x = 0; x < frame.w; x++) if (frame.data[(y * frame.w + x) * 4 + 3] > 0) { xs.push(x); ys.push(y); }
+    const left = Math.min(...xs), right = Math.max(...xs), top = Math.min(...ys), bottom = Math.max(...ys);
+    assert.ok([80, 81].includes(right - left + 1) && [40, 41].includes(bottom - top + 1), `${id}@${time}: the complete 80×40 unit survives a rigid subpixel translation`);
+    for (let y = top + 1; y < bottom; y++) for (let x = left + 1; x < right; x++) {
+      assert.ok(frame.data[(y * frame.w + x) * 4 + 3] > 0, `${id}@${time}: a material surface cannot cut a hole in the represented area`);
+    }
     assert.equal(tile.props.style.width, 80); assert.equal(tile.props.style.height, 40);
   }
 });
@@ -475,8 +593,18 @@ test('clock uses real day, period and activity-run units while every visible cel
       assert.equal(n.props.style.backgroundColor, original[i]);
       assert.ok([0, 1, undefined].includes(n.props.style.opacity));
       assert.ok(!n.props.style.filter && !n.props.style.maskImage && !n.props.style.clipPath);
-      if (n.props.style.transform) for (const v of n.props.style.transform.matchAll(/(-?[\d.]+)px/g)) assert.ok(Math.abs(Number(v[1])) <= 6, 'a cell must stay within its own grid gap while settling');
+      assert.equal(n.props.style.width, 34);
+      assert.equal(n.props.style.height, 34);
+      if (n.props.style.transform) assert.match(n.props.style.transform, /^translate\([\d.-]+px, [\d.-]+px\)$/, 'semantic groups may move rigidly, never scale their encoded area');
     });
+    const boxes = cells.filter(n => n.props.style.opacity !== 0).map(n => {
+      const move = /translate\(([\d.-]+)px, ([\d.-]+)px\)/.exec(n.props.style.transform ?? '');
+      return { x: n.motionCue.column * 40 + Number(move?.[1] ?? 0), y: n.motionCue.row * 40 + Number(move?.[2] ?? 0) };
+    });
+    for (let i = 0; i < boxes.length; i++) for (const b of boxes.slice(i + 1)) {
+      const a = boxes[i];
+      assert.ok(Math.abs(a.x - b.x) >= 34 - .001 || Math.abs(a.y - b.y) >= 34 - .001, `${id}@${at}: complete activity cells must not overlap and combine their true intensity`);
+    }
     return cells;
   };
   for (const theme of THEMES) for (const at of [.04, .16, .35, .6, .85]) cellsAt(theme.id, at);
@@ -489,6 +617,7 @@ test('clock uses real day, period and activity-run units while every visible cel
   assertSame(cellsAt('terminal', .16), n => n.motionCue.row);
   assertSame(cellsAt('glass', .16), n => Math.floor(n.motionCue.column / 6));
   assertSame(cellsAt('poster', .16), () => 0);
+  for (const id of ['gala', 'broadsheet', 'crt']) assertSame(cellsAt(id, .16), n => n.motionCue.row);
   assertSame(cellsAt('neon', .35).filter(n => n.motionCue.level > 0), n => n.motionCue.run);
   const arcade = cellsAt('arcade', .16);
   assertSame(arcade, n => n.motionCue.row * 4 + Math.floor(n.motionCue.column / 6));

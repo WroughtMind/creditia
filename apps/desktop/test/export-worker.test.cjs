@@ -100,6 +100,7 @@ function renderer(failAt, cleanupFails = false) {
       svg: a => r.flat(a.svg), html: arts => r.flat(arts[0].svg),
     }),
   });
+  load(fs.readFileSync(require.resolve('../../../packages/render/src/flatten.ts'), 'utf8').replace(/^export /gm, ''), ctx);
   load(source('export-worker.ts'), ctx);
   return { ctx, counts, primary, messages };
 }

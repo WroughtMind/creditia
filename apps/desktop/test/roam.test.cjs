@@ -336,6 +336,8 @@ test('preview keeps filters and outlines text without rasterizing on the shared 
       free() { freed++; }
     },
   });
+  const flatten = fs.readFileSync(require.resolve('../../../packages/render/src/flatten.ts'), 'utf8').replace(/^export /gm, '');
+  vm.runInContext(ts.transpile(flatten, {target:ts.ScriptTarget.ES2022}), ctx);
   vm.runInContext(ts.transpile(snippet, {target:ts.ScriptTarget.ES2022}) + '\nglobalThis.preview = preview;', ctx);
   const paths = '<svg><path d="M0 0"/></svg>';
   assert.equal(await (await ctx.preview(paths,'minimal-light',true)).text(), paths);

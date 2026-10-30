@@ -8,6 +8,9 @@ import { variantsOf, defaultVariant } from '../../src/classic/art.ts';
 import { ORDERED_THEMES, themeName, pieceName, variantName as classicVariant } from '../../src/classic/catalog.ts';
 import { BRIDGED } from '../../src/classic/bridge.ts';
 import { scrollTransforms } from '../../src/scroll-motion.ts';
+import { scrollAtlas } from '../../src/scroll-compositor.ts';
+import { prepareScrollCanvas } from '../../src/scroll-player.ts';
+import { familiesIn } from '../../src/fonts.ts';
 
 const byId = (id: string) => document.getElementById(id)!;
 const style = byId('style') as HTMLSelectElement, piece = byId('piece') as HTMLSelectElement, variant = byId('variant') as HTMLSelectElement;
@@ -26,6 +29,7 @@ document.head.append(css);
 let worker: Worker | undefined, seq = 0, pending = false, animation: any[] = [], stillArt: any;
 let playing = false, time = 0, origin = 0, request = 0, duration = 1600, last = -1;
 let scroll: Animation | undefined, resize: ResizeObserver | undefined;
+let materialScroll: Awaited<ReturnType<typeof prepareScrollCanvas>> | undefined, scrollAbort: AbortController | undefined;
 let frameImages: HTMLImageElement[] = [], frameUrls: string[] = [];
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const workerUrl = URL.createObjectURL(new Blob([workerSource], { type: 'application/javascript' }));
@@ -35,6 +39,7 @@ function namespace(svg: string, prefix: string) {
 }
 function resetScroll() {
   scroll?.cancel(); scroll = undefined; resize?.disconnect(); resize = undefined;
+  scrollAbort?.abort(); scrollAbort = undefined; materialScroll?.destroy(); materialScroll = undefined;
 }
 function resetFrameImages() {
   frameImages = [];
@@ -60,11 +65,26 @@ function showStill() {
   if (stillArt) stage.innerHTML = namespace(stillArt.svg, 'motion-');
   time = 1; timeline.value = '1000'; progress.value = '100%';
 }
-function scrollScene() {
+async function scrollScene(job: number) {
   const motion = stillArt.motion;
   const screen = document.createElement('div'), reel = document.createElement('div');
   screen.className = 'scroll-screen'; reel.className = 'scroll-reel';
   screen.style.background = stillArt.bg;
+  if (motion.material) {
+    const atlas = scrollAtlas(stillArt.svg, stillArt.w, stillArt.h, motion);
+    screen.dataset.materialWindows = JSON.stringify(atlas.layers.map(({ role, chapter, start, duration }) => ({ role, chapter, start, duration })));
+    screen.dataset.materialSeconds = String(motion.secs);
+    const used = new Set([...atlas.svg.matchAll(/font-family="([^"]+)"/g)].flatMap(match => familiesIn(match[1])));
+    const fontCss = fonts.filter(font => used.has(font.family)).map(font => `@font-face{font-family:"${font.family}";font-weight:${font.weight};font-style:${font.italic ? 'italic' : 'normal'};src:url(${font.url}) format('truetype')}`).join('');
+    const svg = atlas.svg.replace(/(<svg[^>]*>)/, `$1<style>${fontCss}</style>`);
+    scrollAbort = new AbortController();
+    const player = await prepareScrollCanvas(new Blob([svg], { type: 'image/svg+xml' }), atlas, motion, Math.round(Math.min(stage.clientWidth / motion.viewW, stage.clientHeight / motion.viewH) * motion.viewW * (devicePixelRatio || 1)), scrollAbort.signal);
+    if (job !== seq) { player.destroy(); return; }
+    materialScroll = player; (screen as any).__scrollMetrics = player.metrics; screen.append(player.canvas); stage.replaceChildren(screen);
+    const fit = () => { const scale = Math.min(stage.clientWidth / motion.viewW, stage.clientHeight / motion.viewH); screen.style.width = `${motion.viewW * scale}px`; screen.style.height = `${motion.viewH * scale}px`; };
+    fit(); resize = new ResizeObserver(fit); resize.observe(stage); duration = motion.secs * 1000;
+    return;
+  }
   reel.innerHTML = namespace(stillArt.svg, 'motion-'); screen.append(reel); stage.replaceChildren(screen);
   const fit = () => {
     const scale = Math.min(stage.clientWidth / motion.viewW, stage.clientHeight / motion.viewH);
@@ -76,7 +96,8 @@ function scrollScene() {
   scroll.pause(); scroll.currentTime = 0;
 }
 function paint(force = false) {
-  if (scroll) scroll.currentTime = time * duration;
+  if (materialScroll) materialScroll.paint(time);
+  else if (scroll) scroll.currentTime = time * duration;
   else if (animation.length) {
     const i = Math.min(animation.length - 1, Math.floor(time * (animation.length - 1)));
     if (force || i !== last) {
@@ -93,7 +114,7 @@ function tick(now: number) {
   if (time >= 1) play(false); else request = requestAnimationFrame(tick);
 }
 function play(value: boolean) {
-  cancelAnimationFrame(request); playing = value && !reduced.matches && (!!scroll || animation.length > 0);
+  cancelAnimationFrame(request); playing = value && !reduced.matches && (!!scroll || !!materialScroll || animation.length > 0);
   toggle.textContent = playing ? '暂停' : '播放'; toggle.setAttribute('aria-pressed', String(playing));
   if (playing) { if (time >= 1) time = 0; paint(); origin = performance.now() - time * duration; request = requestAnimationFrame(tick); }
 }
@@ -127,20 +148,25 @@ function makeWorker() {
       }
       if (w !== worker || job !== seq) return;
     }
-    pending = false; time = 0; last = -1;
+    time = 0; last = -1;
     status.textContent = piece.value === 'blame' ? '溯源使用明确标注的演示记录。' : '';
-    document.documentElement.dataset.state = 'ready';
     if (reduced.matches) {
+      pending = false; document.documentElement.dataset.state = 'ready';
       showStill(); status.textContent = '已按系统设置减少动态效果。';
       document.documentElement.dataset.animationKind = 'static';
       return;
     }
-    if (stillArt.motion?.kind === 'scroll') scrollScene();
+    if (stillArt.motion?.kind === 'scroll') {
+      try { await scrollScene(job); }
+      catch (error) { if (w === worker && job === seq) fail(`长卷准备失败：${error instanceof Error ? error.message : String(error)}`); return; }
+      if (w !== worker || job !== seq) return;
+    }
     else {
       if (animation.length < 2) { fail('这份作品没有可播放的动画帧。'); return; }
       duration = (animation[0]?.frameDelay ?? 65) * (animation.length - 1);
     }
-    document.documentElement.dataset.animationKind = scroll ? 'scroll' : 'frames';
+    pending = false; document.documentElement.dataset.state = 'ready';
+    document.documentElement.dataset.animationKind = scroll || materialScroll ? 'scroll' : 'frames';
     toggle.disabled = replay.disabled = timeline.disabled = false;
     paint(true); play(true);
   };

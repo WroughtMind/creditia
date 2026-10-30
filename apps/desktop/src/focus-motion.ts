@@ -1,20 +1,25 @@
 import type { Art } from '../../../packages/render/src/export.ts';
 import { scrollTransforms } from '../../../packages/render/src/scroll-motion.ts';
+import { scrollAtlas } from '../../../packages/render/src/scroll-compositor.ts';
+import { prepareScrollCanvas } from '../../../packages/render/src/scroll-player.ts';
 
 /** 一次播放只拥有自己的图层、URL 和线程；静态图始终留在下面。 */
 export function playFocusMotion(
   root: HTMLElement, art: Art, preview: Blob,
   frames: (signal: AbortSignal) => Promise<Blob[]>, duration: number,
   place: (size: Pick<Art, 'w' | 'h'>) => void, onError: (error: unknown) => void,
+  scrollPreview?: (svg: string) => Promise<Blob>,
 ): () => void {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   if (reduced.matches) return () => {};
   const controller = new AbortController(), urls: string[] = [];
   let frame = 0, active: HTMLElement | null = null, animation: Animation | null = null, stopped = false;
+  let material: Awaited<ReturnType<typeof prepareScrollCanvas>> | null = null;
   const stop = () => {
     if (stopped) return;
     stopped = true;
     controller.abort(); cancelAnimationFrame(frame); animation?.cancel(); animation = null;
+    material?.destroy(); material = null;
     active?.remove(); active = null;
     root.classList.remove('motion-playing', 'motion-scroll');
     reduced.removeEventListener('change', preferenceChanged);
@@ -34,6 +39,27 @@ export function playFocusMotion(
   };
   void (async () => {
     if (art.motion?.kind === 'scroll') {
+      if (art.motion.material && scrollPreview) {
+        const motion = art.motion, atlas = scrollAtlas(art.svg, art.w, art.h, motion);
+        const source = await scrollPreview(atlas.svg);
+        if (stopped) return;
+        const player = await prepareScrollCanvas(source, atlas, motion, Math.ceil((root.clientWidth || motion.viewW) * (globalThis.devicePixelRatio || 1)), controller.signal);
+        if (stopped) { player.destroy(); return; }
+        material = player;
+        const screen = document.createElement('div'); screen.className = 'focus-motion-screen';
+        screen.style.aspectRatio = `${motion.viewW} / ${motion.viewH}`; screen.style.background = art.bg;
+        screen.appendChild(player.canvas); active = screen;
+        root.classList.add('motion-playing', 'motion-scroll'); root.appendChild(screen);
+        let start: number | undefined;
+        const paint = (now: number) => {
+          if (stopped) return;
+          start ??= now;
+          const p = Math.min(1, (now - start) / (motion.secs * 1000)); player.paint(p);
+          if (p < 1) frame = requestAnimationFrame(paint);
+          else { stop(); if (root.parentElement) root.parentElement.scrollTop = root.parentElement.scrollHeight; }
+        };
+        frame = requestAnimationFrame(paint); return;
+      }
       const image = await imageOf(preview);
       if (!image || stopped) return;
       const motion = art.motion, screen = document.createElement('div');

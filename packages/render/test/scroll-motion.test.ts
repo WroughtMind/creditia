@@ -39,14 +39,18 @@ test('GIF 每个滚动作品只栅格化一次，与 App/HTML 取同一时间线
     const timeline = scrollSamples(full.motion!, 28);
     samples.forEach((frame, i) => assert.equal(frame.crop!.y, Math.round(scrollY(full.motion!.keys, timeline[i].progress))));
     let rasterizations = 0;
-    const exporter = makeExporter({ png: () => new Uint8Array(), flat: svg => svg, rgba: () => {
+    const exporter = makeExporter({ png: () => new Uint8Array(), flat: svg => svg, rgba: (_svg, width = 2) => {
       rasterizations++;
-      return { w: 2, h: Math.ceil(full.h * 2 / full.w), data: new Uint8Array(2 * Math.ceil(full.h * 2 / full.w) * 4).fill(255) };
+      const w = width, h = Math.ceil(full.h * 2 / full.w);
+      return { w, h, data: new Uint8Array(w * h * 4).fill(255) };
     } });
     exporter.gif(samples, { width: 2 });
     assert.equal(rasterizations, 1, id);
     const html = exporter.html([full], { title: 'Scroll' });
-    for (const key of scrollTransforms(full.motion!.keys, full.h)) assert.ok(html.includes(`transform:${key.transform};animation-timing-function:${key.easing ?? 'linear'}`));
+    if (full.motion!.material) {
+      assert.match(html, /makeScrollCompositor/);
+      assert.ok(html.includes(JSON.stringify(full.motion!.keys)));
+    } else for (const key of scrollTransforms(full.motion!.keys, full.h)) assert.ok(html.includes(`transform:${key.transform};animation-timing-function:${key.easing ?? 'linear'}`));
     assert.match(html, /prefers-reduced-motion:reduce/);
     assert.match(html, /left:0;top:0;animation:/, 'first screen starts with readable content');
     assert.doesNotMatch(html, /linear infinite|top:100%/);

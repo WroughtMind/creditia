@@ -104,9 +104,14 @@ test('作息圆点显示时已经是最终大小和强度，不把进度误作�
     .filter((m) => Number(m[3]) >= 1.5).map((m) => [`${m[1]}/${m[2]}`, m[0]]));
   for (const st of STYLES) {
     const full = circles(art('clock', model, st)!.svg);
-    const halfway = circles(art('clock', model, st, { t: 0.5 })!.svg);
-    assert.ok(halfway.size > 0 && halfway.size < full.size, st.id);
-    for (const [position, circle] of halfway) assert.equal(circle, full.get(position), `${st.id}/${position}`);
+    let partial = false;
+    for (const t of [.15, .35, .5, .8]) {
+      const current = circles(art('clock', model, st, { t })!.svg);
+      partial ||= current.size > 0 && current.size < full.size;
+      for (const [position, circle] of current) assert.equal(circle, full.get(position), `${st.id}/${t}/${position}`);
+    }
+    // 整组可以在半程前已显示、继续刚性归位；真实值不依赖恰好 t=.5 时还缺几个点。
+    assert.ok(partial, `${st.id}: intermediate groups appear before the complete work`);
   }
 });
 
@@ -194,7 +199,7 @@ test('马赛克文件块移动时悬停区跟着移动，尚未出现的文件�
   assert.ok(moved);
 });
 
-test('比例环揭示真实图形，中间帧不移动扇区', () => {
+test('比例环保持真角度；完整纸弧刚性归位时命中区随同移动', () => {
   for (const style of STYLES) for (const [id, variant] of [['donut', 'ring'], ['donut', 'nested']]) {
     if (style.cells) continue;
     const full = art(id!, model, style, { variant })!;
@@ -203,7 +208,15 @@ test('比例环揭示真实图形，中间帧不移动扇区', () => {
       assert.deepEqual(shapes(frame.svg), shapes(full.svg), `${style.id}/${id}/${variant}/${t}`);
       assert.equal(frame.w, full.w);
       assert.equal(frame.h, full.h);
-      // 尚未揭示的扇区可以不接收悬停；已可见的热区必须仍对应相同真值和位置。
+      // 纸弧可以整体搬动，不能缩放份额；悬停区必须采用实际绘图的同一个位移。
+      if (['pastel', 'cutout'].includes(style.id)) {
+        const moves = [[0, 0], ...[...frame.svg.matchAll(/<g transform="translate\(([-\d.]+) ([-\d.]+)\)"/g)].map(m => [+m[1], +m[2]])];
+        for (const hit of frame.hits) assert.ok(full.hits.some(final => final.k === hit.k && final.t === hit.t
+          && JSON.stringify(final.d) === JSON.stringify(hit.d) && final.w === hit.w && final.h === hit.h
+          && moves.some(([x, y]) => Math.abs(hit.x - final.x - x) < .02 && Math.abs(hit.y - final.y - y) < .02)), `${style.id}: rigid arc and hit move together`);
+        continue;
+      }
+      // 尚未揭示的扇区可以不接收悬停；原位成形的热区仍对应同一真值和位置。
       for (const hit of frame.hits) assert.ok(full.hits.some((final) => final.k === hit.k && final.t === hit.t
         && JSON.stringify(final.d) === JSON.stringify(hit.d) && hit.x >= final.x - 0.02 && hit.y >= final.y - 0.02
         && hit.x + hit.w <= final.x + final.w + 0.02 && hit.y + hit.h <= final.y + final.h + 0.02), `${style.id}: hit remains inside its data shape`);
@@ -332,12 +345,20 @@ test('河流终帧保持原静态作品', () => {
 });
 
 test('日历中已出现的日期沿用最终活动强度，不把淡入程度当成活跃量', () => {
-  const cells = (svg: string) => new Map([...svg.matchAll(/<rect x="([^"]+)" y="([^"]+)"[^>]*opacity="([^"]+)"[^>]*\/>/g)].map((m) => [`${m[1]},${m[2]}`, m[3]]));
+  const cells = (svg: string, top: number, bottom: number) => new Map([...svg.replace(/<defs>[\s\S]*?<\/defs>/g, '').matchAll(/<rect x="([^"]+)" y="([^"]+)"[^>]*opacity="([^"]+)"[^>]*\/>/g)]
+    .filter(m => Number(m[2]) >= top && Number(m[2]) < bottom).map((m) => [`${m[1]},${m[2]}`, m[3]]));
   for (const style of STYLES) {
-    const full = cells(art('calendar', model, style)!.svg);
-    const halfway = cells(art('calendar', model, style, { t: 0.5 })!.svg);
-    assert.ok(halfway.size < full.size, style.id);
-    for (const [position, opacity] of halfway) assert.equal(opacity, full.get(position), `${style.id}/${position}`);
+    const end = art('calendar', model, style)!;
+    const dates = end.hits.filter(hit => /^\d{4}-\d{2}-\d{2}$/.test(hit.t));
+    const top = Math.min(...dates.map(hit => hit.y)), bottom = Math.max(...dates.map(hit => hit.y + hit.h));
+    const full = cells(end.svg, top, bottom);
+    let partial = false;
+    for (const t of [.15, .35, .5, .8]) {
+      const current = cells(art('calendar', model, style, { t })!.svg, top, bottom);
+      partial ||= current.size > 0 && current.size < full.size;
+      for (const [position, opacity] of current) assert.equal(opacity, full.get(position), `${style.id}/${t}/${position}`);
+    }
+    assert.ok(partial, `${style.id}: intermediate weeks appear before the complete calendar`);
   }
 });
 
@@ -348,7 +369,12 @@ test('泳道按完整会话成形，不用扫描边伪造会话的结束时刻',
     for (const t of [0.15, 0.5, 0.8]) {
       const current = art('lanes', model, style, { t })!;
       assert.deepEqual(current.hits, full.hits);
-      assert.deepEqual(segments(current.svg), segments(full.svg), `${style.id}/${t}: true start/end`);
+      const currentSegments = segments(current.svg), finalSegments = segments(full.svg);
+      if (style.id === 'cyber') {
+        // 寻址前的会话尚未绘制；每个已接通区间必须逐属性等于真实最终区间。
+        assert.ok(currentSegments.length > 0 && currentSegments.every(segment => finalSegments.includes(segment)), `${style.id}/${t}: whole true intervals`);
+        if (t === .15) assert.ok(currentSegments.length < finalSegments.length, 'later sessions remain pending before their real start');
+      } else assert.deepEqual(currentSegments, finalSegments, `${style.id}/${t}: true start/end`);
       assert.doesNotMatch(current.svg, /<clipPath[^>]*material-/, `${style.id}/${t}: whole sessions`);
     }
   }
@@ -362,7 +388,9 @@ test('柔粉色按完整河带与数据条配对显现，不以圆泡裁碎真�
     for (const t of [0.15, 0.5, 0.8]) {
       const svg = art(id, model, style, { t })!.svg;
       assert.deepEqual(geometry(svg), full, `${id}/${t}: complete true outlines`);
-      assert.doesNotMatch(svg, /<g[^>]+(?:clip-path|mask|transform)=/, `${id}/${t}: no bubble crop or displaced data`);
+      // 材质可在完整底面上着色；底面的逐像素覆盖由 material-motion 测试验证。
+      // 几何裁窗与位移仍会改写真实外廓，不能用于这几种数据图。
+      assert.doesNotMatch(svg, /<g[^>]+(?:clip-path|transform)=/, `${id}/${t}: no bubble crop or displaced data`);
     }
   }
 });

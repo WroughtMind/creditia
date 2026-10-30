@@ -4,14 +4,17 @@ import * as gifenc from 'gifenc';
 // gifenc 在 Node 里是 CommonJS（导出挂在 default 上），在打包器里是 ESM
 const G: any = (gifenc as any).GIFEncoder ? gifenc : (gifenc as any).default;
 const { GIFEncoder, quantize, applyPalette } = G;
-import { INTERACT_CSS, mountHits } from './interact.ts';
+import { INTERACT_CSS, mountHits, placeTip } from './interact.ts';
 import type { Hit } from './svg.ts';
-import { scrollTransforms, type ScrollMotion } from './scroll-motion.ts';
+import { scrollTransforms, scrollY, type ScrollMotion } from './scroll-motion.ts';
+import { scrollPaperPose, scrollPaperTexture } from './scroll-paper.ts';
+import { scrollAtlas, createScrollCompositor } from './scroll-compositor.ts';
+import { prepareScrollCanvas } from './scroll-player.ts';
 
 /** 一张可导出的作品 */
 export interface Art { w: number; h: number; svg: string; hits: Hit[]; bg: string; title: string; motion?: Motion; crop?: Crop; /** 动画采样帧的持续时间（毫秒） */ frameDelay?: number }
 /** 滚动片尾字幕的一帧：整卷 svg 里从 y 开始、高 h 的一段 */
-export interface Crop { svg: string; w: number; h: number; y: number; /** 调整画幅后，裁窗在输出画布内的位置 */ viewport?: { x: number; y: number; w: number; h: number } }
+export interface Crop { svg: string; w: number; h: number; y: number; motion?: ScrollMotion; progress?: number; /** 调整画幅后，裁窗在输出画布内的位置 */ viewport?: { x: number; y: number; w: number; h: number } }
 /** HTML 里的动态：scroll = 片尾字幕在银幕里滚动 */
 export type Motion = ScrollMotion;
 
@@ -84,28 +87,57 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
     const c0 = frames[0].crop;
     // 公共导出器也接受不同长卷或普通帧的混合；只有同卷同倍率时复用栅格。
     const viewport = c0?.viewport;
-    // 产品纸面/银幕用六位 RGB；其他 CSS 颜色仍走完整 SVG 的通用渲染路径。
-    const padded = viewport && /^#[0-9a-f]{6}$/i.test(frames[0].bg);
-    const whole = c0 && (!viewport || padded) && frames.every(f => f.crop?.svg === c0.svg && f.crop.w === c0.w && f.w === frames[0].w && f.h === frames[0].h && f.bg === frames[0].bg && JSON.stringify(f.crop.viewport) === JSON.stringify(viewport))
-      ? R.rgba(c0.svg, width * (viewport?.w ?? c0.w) / frames[0].w) : null;
+    const motionSignature = JSON.stringify(c0?.motion);
+    const sameReel = c0 && frames.every(f => f.crop?.svg === c0.svg && f.crop.w === c0.w && f.w === frames[0].w && f.h === frames[0].h && f.bg === frames[0].bg && JSON.stringify(f.crop.viewport) === JSON.stringify(viewport) && JSON.stringify(f.crop.motion) === motionSignature);
+    const atlas = sameReel && c0.motion?.material ? scrollAtlas(c0.svg, c0.w, c0.h, c0.motion) : null;
+    const logicalWidth = Math.round(width * (viewport?.w ?? c0?.w ?? frames[0].w) / frames[0].w);
+    const whole = sameReel ? R.rgba(atlas?.svg ?? c0.svg, logicalWidth * (atlas ? 3 : 1)) : null;
+    const composite = atlas && whole ? createScrollCompositor(whole, atlas, c0!.motion!) : null;
+    const backgrounds = new Map<string, number[]>();
+    const background = (color: string) => {
+      let rgba = backgrounds.get(color);
+      if (!rgba) {
+        // 产品六位 RGB 无额外栅格；其他 CSS 颜色由原 SVG 引擎解析一次 1px 色样。
+        rgba = /^#[0-9a-f]{6}$/i.test(color) ? [...[1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16)), 255]
+          : Array.from(R.rgba(`<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="${attr(color)}"/></svg>`, 1).data.slice(0, 4));
+        backgrounds.set(color, rgba);
+      }
+      return rgba;
+    };
+    const pad = (img: ReturnType<Raster['rgba']>, f: Art, view: Crop['viewport']) => {
+      if (!view) return img;
+      const scale = width / f.w, w = Math.round(width), height = Math.round(f.h * scale);
+      const out = new Uint8Array(w * height * 4);
+      const bg = background(f.bg);
+      for (let i = 0; i < out.length; i += 4) { out[i] = bg[0]; out[i + 1] = bg[1]; out[i + 2] = bg[2]; out[i + 3] = bg[3]; }
+      const x = Math.round(view.x * scale), y = Math.round(view.y * scale);
+      for (let row = 0; row < img.h && row + y < height; row++) out.set(img.data.subarray(row * img.w * 4, (row + 1) * img.w * 4), ((row + y) * w + x) * 4);
+      return { w, h: height, data: out };
+    };
+    const mixedMaterials = new Map<string, ReturnType<typeof createScrollCompositor>>();
+    const mixedFrame = (f: Art) => {
+      const c = f.crop;
+      if (!c?.motion?.material) return R.rgba(f.svg, width);
+      const w = Math.round(width * (c.viewport?.w ?? c.w) / f.w);
+      const key = JSON.stringify([c.svg, c.motion, w]);
+      let renderer = mixedMaterials.get(key);
+      if (!renderer) {
+        const a = scrollAtlas(c.svg, c.w, c.h, c.motion);
+        renderer = createScrollCompositor(R.rgba(a.svg, w * 3), a, c.motion); mixedMaterials.set(key, renderer);
+      }
+      return pad(renderer.render(c.progress ?? 1, c.y) as ReturnType<Raster['rgba']>, f, c.viewport);
+    };
     const cut = (f: Art, reel: ReturnType<Raster['rgba']>) => {
       const k = reel.w / f.crop!.w;
       const h = Math.round(viewport ? reel.w * viewport.h / viewport.w : f.h * k);
       const top = Math.max(0, Math.min(Math.round(f.crop!.y * k), reel.h - h));
       // gifenc 读取整块 ArrayBuffer，不能把带偏移/多余行的 subarray 传进去。
       const data = reel.data.slice(top * reel.w * 4, (top + h) * reel.w * 4);
-      if (!viewport) return { w: reel.w, h, data };
-      const scale = width / f.w, w = Math.round(width), height = Math.round(f.h * scale);
-      const out = new Uint8Array(w * height * 4);
-      const bg = [1, 3, 5].map(i => parseInt(f.bg.slice(i, i + 2), 16));
-      for (let i = 0; i < out.length; i += 4) { out[i] = bg[0]; out[i + 1] = bg[1]; out[i + 2] = bg[2]; out[i + 3] = 255; }
-      const x = Math.round(viewport.x * scale), y = Math.round(viewport.y * scale);
-      for (let row = 0; row < h && row + y < height; row++) out.set(data.subarray(row * reel.w * 4, (row + 1) * reel.w * 4), ((row + y) * w + x) * 4);
-      return { w, h: height, data: out };
+      return pad({ w: reel.w, h, data }, f, viewport);
     };
     let elapsed = 0, encoded = 0;
     frames.forEach((f, i) => {
-      const img = whole ? cut(f, whole) : R.rgba(f.svg, width);
+      const img = composite ? pad(composite.render(f.crop!.progress ?? 1, f.crop!.y) as ReturnType<Raster['rgba']>, f, viewport) : whole ? cut(f, whole) : mixedFrame(f);
       const palette = quantize(img.data, 256, { format: 'rgb565' });
       const index = applyPalette(img.data, palette, 'rgb565');
       elapsed += i === frames.length - 1 ? (o.hold ?? 2400) : o.fps === undefined ? f.frameDelay ?? delay : delay;
@@ -119,12 +151,22 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
   }
 
   /** 单文件 HTML：画面是文字转路径后的 SVG，交互层盖在上面。arts 多于一张时排成一页 */
-  function html(arts: Art[], o: { title: string; lang?: string; bg?: string; note?: string } ): string {
+  function html(arts: Art[], o: { title: string; lang?: string; bg?: string; note?: string; motionWidth?: number } ): string {
     const bg = o.bg ?? arts[0]?.bg ?? '#111';
+    const materials: any[] = [];
     const blocks = arts.map((a, i) => {
       const flat = svg(a);
       if (a.motion?.kind === 'scroll') {
         const m = a.motion;
+        if (m.material) {
+          const atlas = scrollAtlas(a.svg, a.w, a.h, m);
+          // 字体只转路径；浏览器按实际可见宽度×DPR 一次栅格化图集，避免固定像素上限。
+          const encoded = new TextEncoder().encode(R.flat(atlas.svg));
+          let binary = '';
+          for (let offset = 0; offset < encoded.length; offset += 0x8000) binary += String.fromCharCode(...encoded.subarray(offset, offset + 0x8000));
+          materials.push({ i, width: o.motionWidth, source: `data:image/svg+xml;base64,${btoa(binary)}`, atlas: { originalW: atlas.originalW, originalH: atlas.originalH, layers: atlas.layers.map(({ paint: _paint, ...layer }) => ({ ...layer, paint: '' })) }, motion: { ...m, material: { style: m.material.style, layers: [] } } });
+          return `<figure class="screen material-screen" data-material="${i}" style="--vw:${m.viewW}px;aspect-ratio:${m.viewW}/${m.viewH}"><div class="reel"><div class="ct-art" id="a${i}" style="width:100%">${flat}</div></div><button class="replay" aria-label="replay">↻</button></figure>`;
+        }
         const keys = scrollTransforms(m.keys, a.h).map(key => `${key.offset * 100}%{transform:${key.transform};animation-timing-function:${key.easing ?? 'linear'}}`).join('');
         return `<style>@keyframes roll${i}{${keys}}</style><figure class="screen" style="--vw:${m.viewW}px;aspect-ratio:${m.viewW}/${m.viewH};--secs:${m.secs}s;--roll:roll${i}"><div class="reel"><div class="ct-art" id="a${i}" style="width:100%">${flat}</div></div><button class="replay" aria-label="replay">↻</button></figure>`;
       }
@@ -151,9 +193,12 @@ body.wall .piece.wide{column-span:all;max-width:100%!important}
 .screen{position:relative;max-width:var(--vw);overflow:hidden;border-radius:4px;background:${bg};box-shadow:0 30px 80px rgba(0,0,0,.35)}
 .screen .reel{position:absolute;inset:0}
 .screen .reel .ct-art{position:absolute;left:0;top:0;animation:var(--roll) var(--secs) linear forwards}
+.material-screen .reel .ct-art{animation:none}
+.material-screen.material-ready .ct-art>svg{visibility:hidden}
+.material-screen>canvas{position:absolute;inset:0;pointer-events:none}
 .screen:hover .ct-art{animation-play-state:paused}
 .replay{position:absolute;right:12px;bottom:12px;border:0;border-radius:99px;width:32px;height:32px;background:rgba(255,255,255,.14);color:#fff;font-size:16px;cursor:pointer;backdrop-filter:blur(8px)}
-@media(prefers-reduced-motion:reduce){.screen{overflow-y:auto}.screen .reel,.screen .reel .ct-art{position:relative}.screen .reel .ct-art,.piece{animation:none}.replay{display:none}}
+@media(prefers-reduced-motion:reduce){.screen{overflow-y:auto}.screen .reel,.screen .reel .ct-art{position:relative;transform:none!important}.screen .reel .ct-art,.piece{animation:none}.replay,.material-screen>canvas{display:none}.material-screen.material-ready .ct-art>svg{visibility:visible}}
 @keyframes rise{from{opacity:0;transform:translateY(16px) scale(.985);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
 footer{font:12px/1.4 Inter,-apple-system,"PingFang SC",sans-serif;color:${lumOf(bg) > 0.5 ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.45)'};text-align:center}
 ${INTERACT_CSS}
@@ -164,9 +209,28 @@ ${wall ? `<main>${blocks}</main>` : blocks}
 <footer>${o.note ? esc(o.note) + ' · ' : ''}creditia</footer>
 <script>
 const DATA=${JSON.stringify(data)};
-${mountHits.toString()}
-DATA.forEach((d,i)=>{const el=document.getElementById('a'+i);if(el)mountHits(el,d.hits,d.w,d.h)});
+const placeTip=(${placeTip.toString()});
+const mountHits=(${mountHits.toString()});
+DATA.forEach((d,i)=>{const el=document.getElementById('a'+i);if(el)mountHits(el,d.hits,d.w,d.h,placeTip)});
 document.querySelectorAll('.replay').forEach(b=>b.onclick=()=>{const r=b.parentElement.querySelector('.ct-art');r.style.animation='none';r.offsetHeight;r.style.animation=''});
+const MATERIALS=${JSON.stringify(materials).replace(/</g, '\\u003c')};
+const sampleScrollPosition=(${scrollY.toString()});
+const paperPose=(${scrollPaperPose.toString()});
+const paperTexture=(${scrollPaperTexture.toString()});
+const makeScrollCompositor=(${createScrollCompositor.toString()});
+const prepareMaterialCanvas=(${prepareScrollCanvas.toString()});
+MATERIALS.forEach(async config=>{
+  const figure=document.querySelector('[data-material="'+config.i+'"]'), reel=figure.querySelector('.ct-art'), reduced=matchMedia('(prefers-reduced-motion: reduce)');
+  let player=null, raf=0, time=0, origin=0, playing=false, loading=false;
+  const paint=()=>{if(player)player.paint(time);reel.style.transform='translateY('+(-sampleScrollPosition(config.motion.keys,time)/config.atlas.originalH*100)+'%)';figure.dataset.progress=String(time)};
+  const tick=now=>{if(!playing)return;time=Math.min(1,(now-origin)/(config.motion.secs*1000));paint();if(time<1)raf=requestAnimationFrame(tick);else playing=false;figure.dataset.playing=String(playing)};
+  const play=value=>{cancelAnimationFrame(raf);playing=value&&!reduced.matches&&!!player;figure.dataset.playing=String(playing);if(playing){origin=performance.now()-time*config.motion.secs*1000;raf=requestAnimationFrame(tick)}};
+  const ready=async()=>{if(player||loading||reduced.matches)return;loading=true;try{const bytes=Uint8Array.from(atob(config.source.split(',')[1]),c=>c.charCodeAt(0));player=await prepareMaterialCanvas(new Blob([bytes],{type:'image/svg+xml'}),config.atlas,config.motion,config.width??Math.round(figure.clientWidth*(devicePixelRatio||1)),undefined,makeScrollCompositor,sampleScrollPosition,paperPose,paperTexture);figure.__scrollMetrics=player.metrics;figure.insertBefore(player.canvas,figure.firstChild);figure.classList.add('material-ready');figure.dataset.state='ready';paint();play(true)}catch(error){figure.dataset.state='error';console.error(error)}finally{loading=false}};
+  figure.querySelector('.replay').onclick=()=>{time=0;paint();play(true)};
+  figure.addEventListener('pointerenter',()=>play(false));figure.addEventListener('pointerleave',()=>{if(time<1)play(true)});
+  reduced.addEventListener('change',()=>{if(reduced.matches){play(false);reel.style.transform='none'}else{if(player){time=0;paint();play(true)}else ready()}});
+  ready();
+});
 </script>
 </body>
 </html>

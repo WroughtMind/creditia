@@ -2,7 +2,7 @@
 // 颜色、条形、标记都走风格钩子，所以每张图在每个风格里都是那个风格的样子。
 import { Scene, rect, line, path, circle, el, g, r, ease, arc, mix, alpha } from '../svg.ts';
 import { phase, styleProgress, drawGroup, reveal } from '../motion.ts';
-import { materialReveal, materialEnter, materialOrder } from '../material-motion.ts';
+import { materialReveal, materialEnter, materialOrder, activityEnter } from '../material-motion.ts';
 import type { Model, Agent } from '../data.ts';
 import { fmt, pct, compact, nameOf } from '../data.ts';
 import type { Style, Box } from '../style.ts';
@@ -12,7 +12,7 @@ import { historyLabels, historyEmpty } from '../history.ts';
 import { valueBar } from './value-bar.ts';
 
 /** 图的外框：标签 + 标题 + 图例，返回绘图区 */
-function frame(m: Model, st: Style, W: number, plotH: number, kicker: string, title: string, legend = true): { s: Scene; p: Box } {
+function frame(m: Model, st: Style, W: number, plotH: number, kicker: string, title: string, legend = true, headerProgress = 1): { s: Scene; p: Box } {
   const legendH = legend ? 50 : 0;
   // 没有图例时绘图区和下面的刻度一直排到底：底板角上有装饰就留出它的高度，刻度不压在角花上
   const corner = legend ? 0 : plateCorner(st, W);
@@ -20,9 +20,11 @@ function frame(m: Model, st: Style, W: number, plotH: number, kicker: string, ti
   const x0 = c.x + 50, x1 = c.x + c.w - 50;
   // 底板角上有装饰时，贴角的表头和图例往里让，绘图区不动
   const hx0 = Math.max(x0, c.x + (c.corner ?? 0) + 14), hx1 = Math.min(x1, c.x + c.w - (c.corner ?? 0) - 14);
-  st.label(s, kicker, hx0, c.y + 58, { size: 13 });
-  st.title(s, title, hx0, c.y + 116, 40, 'start', { maxW: x1 - hx0 });
-  st.label(s, m.project, hx1, c.y + 58, { anchor: 'end', size: 13, fill: st.c.faint });
+  materialEnter(s, st, headerProgress, { x: hx0, y: c.y + 40, w: hx1 - hx0, h: 82 }, () => {
+    st.label(s, kicker, hx0, c.y + 58, { size: 13 });
+    st.title(s, title, hx0, c.y + 116, 40, 'start', { maxW: x1 - hx0 });
+    st.label(s, m.project, hx1, c.y + 58, { anchor: 'end', size: 13, fill: st.c.faint });
+  }, 'title');
   if (legend) {
     let x = hx0;
     const y = c.y + 170 + plotH + 40;
@@ -48,11 +50,24 @@ const orderKeys = (m: Model, keys: Iterable<string>) => [...new Set(keys)].sort(
 
 export const DONUT_VARIANTS = ['ring', 'nested'];
 
+/** 成对归位与剪纸落贴都搬动完整的真角度弧，不把一份贡献裁成临时小份额。 */
+function illustratedArcOffset(st: Style, k: number, mid: number) {
+  const rest = 1 - Math.max(0, Math.min(1, k));
+  return st.id === 'pastel' ? { x: (Math.cos(mid) < 0 ? -1 : 1) * 18 * rest, y: 0 }
+    : st.id === 'cutout' ? { x: Math.cos(mid) * 18 * rest, y: Math.sin(mid) * 18 * rest - 5 * rest }
+    : { x: 0, y: 0 };
+}
+
 /** 份额编码在角度：沿环带厚度或完整印面成形，不把某个归属切成临时短弧。 */
-function ringReveal(s: Scene, st: Style, k: number, cx: number, cy: number, inner: number, outer: number, draw: () => void, layered = false) {
+function ringReveal(s: Scene, st: Style, k: number, cx: number, cy: number, inner: number, outer: number, draw: () => void, midAngle?: number) {
   if (k >= 1) { draw(); return; }
   const bounds = { x: cx - outer, y: cy - outer, w: outer * 2, h: outer * 2 };
-  if (['mono', 'neon', 'poster', 'manuscript', 'cutout', 'ukiyoe'].includes(st.id)) {
+  if (midAngle !== undefined && ['pastel', 'cutout'].includes(st.id)) {
+    const { x, y } = illustratedArcOffset(st, k, midAngle);
+    drawGroup(s, { transform: `translate(${r(x)} ${r(y)})` }, () => materialEnter(s, st, k, bounds, draw, 'data'));
+    return;
+  }
+  if (['mono', 'neon', 'poster', 'manuscript', 'cutout', 'ukiyoe', 'pastel', 'meadow', 'manga', 'cyber', 'ink', 'baroque'].includes(st.id)) {
     materialEnter(s, st, k, bounds, draw, 'data');
     return;
   }
@@ -76,19 +91,20 @@ function ringReveal(s: Scene, st: Style, k: number, cx: number, cy: number, inne
     materialReveal(s, st, k, bounds, 'down', draw);
     return;
   }
+  // 两层归属环的角度/层数从第一帧即完整。电影按乳剂表面成像，玻璃整层由虚焦清晰。
+  if (st.id === 'film') { materialReveal(s, st, k, bounds, 'right', draw); return; }
+  if (st.id === 'glass') { materialEnter(s, st, k, bounds, draw, 'data'); return; }
   const progress = ['arcade', 'cyber'].includes(st.id) ? Math.floor(k * 12) / 12 : k;
   const width = outer - inner, middle = (inner + outer) / 2;
   let lo = inner, hi = inner + width * progress, shape = '';
-  if (['glass', 'minimal-dark', 'meadow', 'manga', 'crt'].includes(st.id)) { lo = outer - width * progress; hi = outer; }
+  if (['minimal-dark', 'meadow', 'manga', 'crt'].includes(st.id)) { lo = outer - width * progress; hi = outer; }
   else if (['cinema', 'playbill', 'gala', 'baroque', 'pastel', 'cyber'].includes(st.id)) {
     lo = middle - width * progress / 2; hi = middle + width * progress / 2;
   }
   // 临近完成让裁边退到原图形之外，避免撤掉裁窗时重复抗锯齿的边缘突然补实。
   const bleed = 2 * phase(k, .85, 1);
   const band = (from: number, to: number) => path(arc(cx, cy, to + bleed, Math.max(0, from - bleed), 0, Math.PI * 2));
-  // 两级数据环只保留一条曝光前沿，否则双边会被读成第三个数据层。
-  if (st.id === 'film' && !layered) shape = band(inner, inner + width * progress / 2) + band(outer - width * progress / 2, outer);
-  else shape = band(lo, hi);
+  shape = band(lo, hi);
   const clipPath = s.url(`ring-${inner}-${outer}`, id => el('clipPath', { id }, shape));
   const first = s.hits.length;
   drawGroup(s, { clipPath }, () => materialEnter(s, st, k, bounds, draw, 'data'));
@@ -108,21 +124,23 @@ export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
   m.rows.forEach((a, i) => {
     const sweep = (a.pct / 100) * Math.PI * 2;
     const gap = Math.min(0.012, sweep / 4);
+    const mid = a0 + sweep / 2;
     if (st.grid && st.cells) cellSegs.push({ a0, a1: a0 + sweep, fill: a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a) });
     else if (sweep > 0) {
       const draw = () => s.add(path(arc(cx, cy, R1, R0, a0 + gap, a0 + sweep - gap), { fill: a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a) }));
       // 浮世绘按真实归属套完整色版，任何一版的角度都已经是最终份额。
       const at = i / Math.max(1, m.rows.length - 1);
       if (st.id === 'ukiyoe') materialEnter(s, st, styleProgress(st, t, at * .55, .35 + at * .55), { x: cx - R1, y: cy - R1, w: R1 * 2, h: R1 * 2 }, draw, 'data');
+      else if (['pastel', 'cutout'].includes(st.id)) ringReveal(s, st, progress, cx, cy, R0, R1, draw, mid);
       else draw();
     }
-    const mid = a0 + sweep / 2;
-    s.hit(cx + Math.cos(mid) * (R0 + R1) / 2 - 30, cy + Math.sin(mid) * (R0 + R1) / 2 - 30, 60, 60, tip(m, a));
+    const shift = illustratedArcOffset(st, progress, mid);
+    if (progress > 0 || !['pastel', 'cutout'].includes(st.id)) s.hit(cx + Math.cos(mid) * (R0 + R1) / 2 - 30 + shift.x, cy + Math.sin(mid) * (R0 + R1) / 2 - 30 + shift.y, 60, 60, tip(m, a));
     a0 += sweep;
   });
   if (cellSegs.length) gridRing(s, st, cx, cy, R0, R1, cellSegs, progress);
   };
-  if (st.grid && st.cells || st.id === 'ukiyoe') ring(); else ringReveal(s, st, progress, cx, cy, R0, R1, ring);
+  if (st.grid && st.cells || ['ukiyoe', 'pastel', 'cutout'].includes(st.id)) ring(); else ringReveal(s, st, progress, cx, cy, R0, R1, ring);
   st.num(s, fmt(m.linesAdded), cx, cy + 6, 46, 'middle');
   s.text(T(m, '行', 'lines'), cx, cy + 44, { font: st.f.body, size: 18, fill: st.c.soft, anchor: 'middle' });
   // 右侧名单
@@ -175,19 +193,23 @@ function nested(m: Model, st: Style, o: PieceOpts): Scene | null {
     const sweep = (a.pct / 100) * Math.PI * 2;
     const gap = Math.min(0.012, sweep / 4);
     const unk = a.key === 'unattributed';
-    if (grid) inner.push({ a0, a1: a0 + sweep, fill: unk ? st.hatch(s) : colorOf(st, a) });
-    else if (sweep > 0) ringReveal(s, st, styleProgress(st, t, st.id === 'ukiyoe' ? at * .28 : 0, st.id === 'ukiyoe' ? .35 + at * .28 : .55), cx, cy, Ri0, Ri1, () => s.add(path(arc(cx, cy, Ri1, Ri0, a0 + gap, a0 + sweep - gap), { fill: unk ? st.hatch(s) : colorOf(st, a) })), true);
     const mid = a0 + sweep / 2;
-    s.hit(cx + Math.cos(mid) * (Ri0 + Ri1) / 2 - 26, cy + Math.sin(mid) * (Ri0 + Ri1) / 2 - 26, 52, 52, tip(m, a));
+    const innerK = styleProgress(st, t, st.id === 'ukiyoe' ? at * .28 : 0, st.id === 'ukiyoe' ? .35 + at * .28 : .55);
+    if (grid) inner.push({ a0, a1: a0 + sweep, fill: unk ? st.hatch(s) : colorOf(st, a) });
+    else if (sweep > 0) ringReveal(s, st, innerK, cx, cy, Ri0, Ri1, () => s.add(path(arc(cx, cy, Ri1, Ri0, a0 + gap, a0 + sweep - gap), { fill: unk ? st.hatch(s) : colorOf(st, a) })), mid);
+    const innerShift = illustratedArcOffset(st, innerK, mid);
+    if (innerK > 0 || !['pastel', 'cutout'].includes(st.id)) s.hit(cx + Math.cos(mid) * (Ri0 + Ri1) / 2 - 26 + innerShift.x, cy + Math.sin(mid) * (Ri0 + Ri1) / 2 - 26 + innerShift.y, 52, 52, tip(m, a));
     // 外环：这一段按模型再切
     let b0 = a0;
     for (const q of segsOf(m, st, a)) {
       const sw = sweep * (q.lines / Math.max(1, a.lines));
       const gg = Math.min(0.01, sw / 4);
-      if (grid) outer.push({ a0: b0, a1: b0 + sw, fill: unk ? st.hatch(s) : q.color });
-      else if (sw > 0) ringReveal(s, st, styleProgress(st, t, st.id === 'ukiyoe' ? .3 + at * .24 : .3, st.id === 'ukiyoe' ? .7 + at * .24 : .95), cx, cy, Ro0, Ro1, () => s.add(path(arc(cx, cy, Ro1, Ro0, b0 + gg, b0 + sw - gg), { fill: unk ? st.hatch(s) : q.color })), true);
       const qm = b0 + sw / 2;
-      if (sw > 0.04) s.hit(cx + Math.cos(qm) * (Ro0 + Ro1) / 2 - 22, cy + Math.sin(qm) * (Ro0 + Ro1) / 2 - 22, 44, 44, segTip(m, a, q));
+      const outerK = styleProgress(st, t, st.id === 'ukiyoe' ? .3 + at * .24 : .3, st.id === 'ukiyoe' ? .7 + at * .24 : .95);
+      if (grid) outer.push({ a0: b0, a1: b0 + sw, fill: unk ? st.hatch(s) : q.color });
+      else if (sw > 0) ringReveal(s, st, outerK, cx, cy, Ro0, Ro1, () => s.add(path(arc(cx, cy, Ro1, Ro0, b0 + gg, b0 + sw - gg), { fill: unk ? st.hatch(s) : q.color })), qm);
+      const outerShift = illustratedArcOffset(st, outerK, qm);
+      if (sw > 0.04 && (outerK > 0 || !['pastel', 'cutout'].includes(st.id))) s.hit(cx + Math.cos(qm) * (Ro0 + Ro1) / 2 - 22 + outerShift.x, cy + Math.sin(qm) * (Ro0 + Ro1) / 2 - 22 + outerShift.y, 44, 44, segTip(m, a, q));
       b0 += sw;
     }
     a0 += sweep;
@@ -231,6 +253,26 @@ export const WAFFLE_VARIANTS = ['grid', 'blocks'];
 // 百分比格是可计数的完整单位。纸片、排字和像素可以刚性入位，绝不缩小成不足 1% 的格子。
 const placedCells = new Set(['minimal', 'minimal-light', 'cutout', 'arcade', 'pastel', 'playbill', 'manga', 'editorial', 'baroque', 'meadow']);
 
+function waffleCell(s: Scene, st: Style, k: number, t: number, b: Box, draw: () => void) {
+  if (st.id === 'minimal-light' || st.id === 'minimal-dark') {
+    if (t >= 1) { draw(); return; }
+    // 100 个真单位共同对齐网格；没有逐格淡色、缩小或相互覆盖。
+    const shift = 18 * (1 - Math.max(0, Math.min(1, t)));
+    const dx = st.id === 'minimal-dark' ? -shift : 0, dy = st.id === 'minimal-light' ? shift : 0;
+    const filter = st.id === 'minimal-dark' ? s.url('minimal-grid-edge', id => el('filter', { id },
+      el('feMorphology', { in: 'SourceAlpha', operator: 'erode', radius: r(2.4 * (1 - t)), result: 'core' }),
+      el('feComposite', { in: 'SourceAlpha', in2: 'core', operator: 'out', result: 'edge' }),
+      el('feFlood', { floodColor: st.c.ink, floodOpacity: .53 * (1 - t), result: 'color' }),
+      el('feComposite', { in: 'color', in2: 'edge', operator: 'in', result: 'rim' }),
+      el('feMerge', {}, el('feMergeNode', { in: 'SourceGraphic' }), el('feMergeNode', { in: 'rim' })))) : undefined;
+    const first = s.hits.length;
+    drawGroup(s, { transform: `translate(${r(dx)} ${r(dy)})`, filter }, draw);
+    for (let i = first; i < s.hits.length; i++) { s.hits[i].x = r(s.hits[i].x + dx); s.hits[i].y = r(s.hits[i].y + dy); }
+    return;
+  }
+  materialEnter(s, st, k, b, draw, ['pastel', 'meadow', 'manga'].includes(st.id) ? 'mark' : st.id === 'baroque' ? 'data' : placedCells.has(st.id) ? 'paper' : 'data');
+}
+
 export function waffle(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (o.variant === 'blocks') return blocks(m, st, o);
   if (!m.rows.length) return null;
@@ -249,15 +291,16 @@ export function waffle(m: Model, st: Style, o: PieceOpts): Scene | null {
     const col = Math.floor(i / 10), row = i % 10;
     const x = gx + col * (size + gap), y = p.y + row * (size + gap);
     // 一格始终等于 1%；材质决定铺版顺序，不把格子缩成另一种面积编码。
-    const at = materialOrder(st, row * 10 + col, 100, 10);
-    const k = phase(styleProgress(st, t), at * 0.84, at * 0.84 + 0.16);
+    const at = st.id === 'ukiyoe' ? m.rows.indexOf(a) / Math.max(1, m.rows.length - 1) : materialOrder(st, row * 10 + col, 100, 10);
+    const k = st.id === 'ukiyoe' ? phase(styleProgress(st, t), at * .55, at * .55 + .45)
+      : phase(styleProgress(st, t), at * 0.84, at * 0.84 + 0.16);
     if (k <= 0) return;
     const ss = size;
-    materialEnter(s, st, k, { x, y, w: size, h: size }, () => {
+    waffleCell(s, st, k, t, st.id === 'ukiyoe' ? p : { x, y, w: size, h: size }, () => {
       if (a.key === 'unattributed') s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill: st.hatch(s), rx: Math.min(st.radius, ss / 4) }));
       else s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill: colorOf(st, a), rx: Math.min(st.radius, ss / 4) }));
       s.hit(x, y, size, size, tip(m, a));
-    }, placedCells.has(st.id) ? 'paper' : 'data');
+    });
   });
   return s;
 }
@@ -306,14 +349,16 @@ function blocks(m: Model, st: Style, o: PieceOpts): Scene | null {
     const k = phase(styleProgress(st, t), toolOrder * 0.65, toolOrder * 0.65 + 0.35);
     const cellAt = placed[toolAt]++;
     const cellOrder = cellOrders[toolAt][cellAt];
-    const cellProgress = phase(k, cellOrder * 0.8, cellOrder * 0.8 + 0.2);
+    const plate = segs.indexOf(c) / Math.max(1, segs.length - 1);
+    const cellProgress = st.id === 'ukiyoe' ? phase(styleProgress(st, t), plate * .6, plate * .6 + .4)
+      : phase(k, cellOrder * 0.8, cellOrder * 0.8 + 0.2);
     if (cellProgress <= 0) return;
     const ss = size;
     const fill = c.a.key === 'unattributed' ? st.hatch(s) : c.q.color;
-    materialEnter(s, st, cellProgress, { x, y, w: size, h: size }, () => {
+    waffleCell(s, st, cellProgress, t, st.id === 'ukiyoe' ? p : { x, y, w: size, h: size }, () => {
       s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill, rx: Math.min(st.radius, ss / 4) }));
       s.hit(x, y, size, size, segsOf(m, st, c.a).length > 1 ? segTip(m, c.a, c.q) : tip(m, c.a));
-    }, placedCells.has(st.id) ? 'paper' : 'data');
+    });
   });
   toolLegend(s, m, st, p.x + p.w * 0.68, p.x + p.w, p.y + 40, p.y + p.h);
   return s;
@@ -398,15 +443,16 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
     else draw();
   }
   };
-  if (['editorial', 'cyber', 'manga'].includes(st.id) && t < 1) {
-    // 单元都是真实周列的完整截面：排版逐栏落版，数据包交错装入，漫画由右向左回读。
-    // 不用斜切边或错位的水平窗，避免把同一周误画成缺了某个贡献方。
-    const at = st.id === 'editorial' ? phase(t, 0, 0.92) : styleProgress(st, t), half = p.w / (n - 1) / 2;
+  if (['cyber', 'manga'].includes(st.id) && t < 1) {
+    // 电路格/网点在完整的周截面上成像，不拆成隔周黑栅栏或缺少下层的河带。
+    materialEnter(s, st, styleProgress(st, t), p, drawRiver, 'data');
+  }
+  else if (st.id === 'editorial' && t < 1) {
+    // 排版逐栏落下真实周列的完整截面，不用斜切边割掉同一周的某个贡献方。
+    const at = phase(t, 0, 0.92), half = p.w / (n - 1) / 2;
     const windows: [number, number][] = [];
     m.weeks.forEach((_, i) => {
-      const order = st.id === 'manga' ? n - 1 - i
-        : st.id === 'cyber' ? (i % 2 ? Math.ceil(n / 2) : 0) + Math.floor(i / 2) : i;
-      if (at <= order / n) return;
+      if (at <= i / n) return;
       const left = Math.max(p.x, X(i) - half), right = Math.min(p.x + p.w, X(i) + half);
       const last = windows[windows.length - 1];
       // 邻列使用一个连续裁窗，避免每个矩形抗锯齿在完整河面上留下细竖缝。
@@ -439,7 +485,7 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
       drawGroup(s, { mask }, drawRiver);
     }
   }
-  else if (organic || ['ukiyoe', 'woodblock', 'poster', 'broadsheet', 'manuscript', 'glass', 'neon', 'mono', 'grimoire', 'pastel', 'cutout'].includes(st.id)) drawRiver();
+  else if (organic || ['ukiyoe', 'woodblock', 'poster', 'broadsheet', 'manuscript', 'glass', 'neon', 'mono', 'grimoire', 'pastel', 'cutout', 'manga'].includes(st.id)) drawRiver();
   else materialReveal(s, st, styleProgress(st, t), p, 'right', drawRiver);
   // 每周的悬停区
   m.weeks.forEach((w, i) => {
@@ -466,20 +512,45 @@ export function lanes(m: Model, st: Style, o: PieceOpts): Scene | null {
   keys.forEach((k, li) => {
     const y = p.y + li * laneH;
     const a = m.agents.find((x) => x.key === k);
-    st.mark(s, k, p.x + 16, y + laneH / 2, 24);
-    s.text(a?.name ?? k, p.x + 38, y + laneH / 2 + 6, { font: st.f.body, size: 16, fill: st.c.ink, maxW: 125 });
-    st.track(s, p.x + 170, y + laneH / 2 - 1, p.w - 170, 2);
     const mine = ss.filter((x) => x.key === k);
-    mine.forEach((x) => {
-      const x0 = X(x.start), w = Math.max(3, X(x.end) - x0);
-      const col = a ? colorOf(st, m.rows.find((q) => q.key === k) ?? a) : st.c.soft;
-      // 会话是已发生的完整区间，扫描边不能伪造一个不断移动的结束时刻。
-      // 时间决定区间先后，材质决定整枚区间的压印、通电或聚焦。
-      const start = ((x.start - t0) / Math.max(1, t1 - t0)) * 0.65;
-      materialEnter(s, st, styleProgress(st, t, start, start + 0.35), { x: x0, y: y + 16, w, h: laneH - 32 }, () => {
-        s.add(rect(x0, y + 16, w, laneH - 32, { fill: x.review ? 'none' : col, stroke: x.review ? col : 'none', strokeWidth: 1.4, rx: Math.min(st.radius, 4), opacity: 0.9 }));
-      }, 'data');
-    });
+    const illustrated = ['pastel', 'cutout', 'meadow', 'manga'].includes(st.id) && t < 1;
+    const connected = st.id === 'cyber' && t < 1;
+    const progress = styleProgress(st, t, .02, .9);
+    const drawLane = () => {
+      st.mark(s, k, p.x + 16, y + laneH / 2, 24);
+      s.text(a?.name ?? k, p.x + 38, y + laneH / 2 + 6, { font: st.f.body, size: 16, fill: st.c.ink, maxW: 125 });
+      st.track(s, p.x + 170, y + laneH / 2 - 1, p.w - 170, 2);
+      mine.forEach((x) => {
+        const x0 = X(x.start), w = Math.max(3, X(x.end) - x0);
+        const col = a ? colorOf(st, m.rows.find((q) => q.key === k) ?? a) : st.c.soft;
+        const draw = () => s.add(rect(x0, y + 16, w, laneH - 32, { fill: x.review ? 'none' : col, stroke: x.review ? col : 'none', strokeWidth: 1.4, rx: Math.min(st.radius, 4), opacity: 0.9 }));
+        const at = (x.start - t0) / Math.max(1, t1 - t0);
+        // 插画版把真实泳道作为整张排版单元；数字版沿现有时间轴寻址后接通完整区间。
+        if (illustrated) draw();
+        else if (connected) { if (progress > 0 && progress >= at) draw(); }
+        else {
+          const start = at * .65;
+          materialEnter(s, st, styleProgress(st, t, start, start + .35), { x: x0, y: y + 16, w, h: laneH - 32 }, draw, 'data');
+        }
+      });
+      if (connected && progress > 0 && progress < 1) {
+        // 读头只点亮原本的泳道线，位置对应上方真实开始时刻，不另加连接线或假区间。
+        const left = p.x + 170, width = p.w - 170, head = left + progress * width;
+        s.add(rect(Math.max(left, head - 12), y + laneH / 2 - 1, Math.min(12, head - left), 2, { fill: st.c.accent }));
+      }
+    };
+    if (illustrated) {
+      const order = st.id === 'pastel' ? Math.floor(li / 2) / Math.max(1, Math.ceil(keys.length / 2) - 1)
+        : li / Math.max(1, keys.length - 1);
+      const formed = styleProgress(st, t, order * .52, order * .52 + .48), rest = 1 - formed;
+      let dy = 0, angle = 0;
+      if (st.id === 'pastel') dy = (li % 2 ? 1 : -1) * 12 * rest;
+      if (st.id === 'cutout') { dy = -6 * rest; angle = -1 * rest; }
+      if (st.id === 'meadow') { dy = 16 * rest * rest; angle = -1.1 * rest; }
+      if (st.id === 'manga') dy = formed < .35 ? -14 : formed < .7 ? -4 : 0;
+      drawGroup(s, { transform: `translate(0 ${r(dy)})${angle ? ` rotate(${r(angle)} ${r(p.x)} ${r(y + laneH / 2)})` : ''}` },
+        () => materialEnter(s, st, formed, { x: p.x, y: y + 12, w: p.w, h: laneH - 24 }, drawLane, 'data'));
+    } else drawLane();
     s.hit(p.x, y, p.w, laneH, a ? tip(m, a) : { t: k });
   });
   const d = (v: number) => new Date(v * 1000).toISOString().slice(0, 10);
@@ -509,18 +580,30 @@ function activityCue(s: Scene, st: Style, k: number, b: Box, round: boolean) {
 }
 function activityPhase(st: Style, t: number, at: number): number {
   const progress = styleProgress(st, t);
-  return ['terminal', 'crt', 'neon'].includes(st.id)
-    ? phase(progress, at * 0.82, at * 0.82 + 0.18)
-    : t >= 1 || progress > at ? 1 : 0;
+  return phase(progress, at * 0.82, at * 0.82 + 0.18);
 }
 
 export function clock(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (m.clock.length !== 7) return null;
   const t = o.t ?? 1;
-  const { s, p } = frame(m, st, 1400, 420, T(m, '星期 × 小时', 'DAY × HOUR'), T(m, '活跃时段', 'Active hours'), false);
+  const { s, p } = frame(m, st, 1400, 420, T(m, '星期 × 小时', 'DAY × HOUR'), T(m, '活跃时段', 'Active hours'), false, styleProgress(st, t, 0, .44));
   const max = Math.max(...m.clock.flat(), 1);
   const days = T(m, '一二三四五六日', 'MTWTFSS');
   const cw = (p.w - 60) / 24, ch = p.h / 7;
+  const grouped = t < 1 && ['pastel', 'cutout', 'meadow', 'manga', 'cyber', 'ukiyoe'].includes(st.id);
+  const bands = new Map<number, { b: Box; at: number; side: -1 | 1; draw: (() => void)[] }>();
+  const bandFor = (d: number, hr: number) => {
+    const half = Math.floor(hr / 12), panel = Math.floor(hr / 6);
+    const key = st.id === 'pastel' ? d * 2 + half : st.id === 'manga' ? panel : d;
+    if (!bands.has(key)) {
+      const b = st.id === 'pastel' ? { x: p.x + 60 + half * 12 * cw, y: p.y + d * ch, w: 12 * cw, h: ch }
+        : st.id === 'manga' ? { x: p.x + 60 + panel * 6 * cw, y: p.y, w: 6 * cw, h: p.h }
+        : { x: p.x + 60, y: p.y + d * ch, w: p.w - 60, h: ch };
+      bands.set(key, { b, at: st.id === 'manga' ? (3 - panel) / 3 : d / 6,
+        side: st.id === 'pastel' ? half ? 1 : -1 : d % 2 ? 1 : -1, draw: [] });
+    }
+    return bands.get(key)!;
+  };
   m.clock.forEach((row, d) => {
     s.text(m.lang === 'zh' ? `周${days[d]}` : days[d], p.x, p.y + d * ch + ch / 2 + 6, { font: st.f.label, size: 14, fill: st.c.soft });
     row.forEach((v, hr) => {
@@ -529,12 +612,34 @@ export function clock(m: Model, st: Style, o: PieceOpts): Scene | null {
       // 屏幕材质先准备外缘，其余整枚落定；大小和浓度不参与插值。
       const at = materialOrder(st, d * 24 + hr, 7 * 24, 24);
       const k = activityPhase(st, t, at), radius = Math.max(1.5, rr);
+      if (grouped) {
+        // 半日成对、完整星期行或六小时分镜一起归位；空网点也跟随它所属的时间组。
+        bandFor(d, hr).draw.push(() => {
+          s.add(v ? circle(cx, cy, radius, { fill: st.c.accent, opacity: 0.25 + 0.75 * (v / max) })
+            : circle(cx, cy, 1.2, { fill: st.c.faint, opacity: 0.5 }));
+          if (v) s.hit(cx - cw / 2, cy - ch / 2, cw, ch, { t: `${m.lang === 'zh' ? '周' + days[d] : days[d]} ${hr}:00`, d: [T(m, `${v} 次提交`, `${v} commits`)] });
+        });
+        return;
+      }
       if (v) activityCue(s, st, k, { x: cx - radius, y: cy - radius, w: radius * 2, h: radius * 2 }, true);
-      if (v && (t >= 1 || k >= 0.4)) s.add(circle(cx, cy, radius, { fill: st.c.accent, opacity: 0.25 + 0.75 * (v / max) }));
+      if (v && !['terminal', 'crt', 'neon'].includes(st.id)) activityEnter(s, st, k, { x: cx - radius, y: cy - radius, w: radius * 2, h: radius * 2 },
+        () => s.add(circle(cx, cy, radius, { fill: st.c.accent, opacity: 0.25 + 0.75 * (v / max) })), true);
+      else if (v && (t >= 1 || k >= 0.4)) s.add(circle(cx, cy, radius, { fill: st.c.accent, opacity: 0.25 + 0.75 * (v / max) }));
       else s.add(circle(cx, cy, 1.2, { fill: st.c.faint, opacity: 0.5 }));
       if (v) s.hit(cx - cw / 2, cy - ch / 2, cw, ch, { t: `${m.lang === 'zh' ? '周' + days[d] : days[d]} ${hr}:00`, d: [T(m, `${v} 次提交`, `${v} commits`)] });
     });
   });
+  for (const band of bands.values()) {
+    const k = phase(styleProgress(st, t), band.at * .62, band.at * .62 + .36);
+    if (st.id === 'ukiyoe') {
+      // 每个真实星期是一张完整的时段墨版；原点径、强度与点间距不参与压印插值。
+      // 整行轻套位，避免退回单点的斜向点亮顺序，也不跨到相邻日期行。
+      if (k <= 0) continue;
+      const dx = r(-14 * (1 - k) ** 2), dy = r(-2 * (1 - k) ** 2), firstHit = s.hits.length;
+      drawGroup(s, { transform: `translate(${dx} ${dy})` }, () => band.draw.forEach(draw => draw()));
+      for (const hit of s.hits.slice(firstHit)) { hit.x += dx; hit.y += dy; }
+    } else activityEnter(s, st, k, band.b, () => band.draw.forEach(draw => draw()), true, band.side);
+  }
   for (const hr of [0, 6, 12, 18, 23]) s.text(`${hr}:00`, p.x + 60 + hr * cw + cw / 2, p.y + p.h + 24, { font: st.f.label, size: 12, fill: st.c.faint, anchor: 'middle' });
   return s;
 }
@@ -673,23 +778,53 @@ export function calendar(m: Model, st: Style, o: PieceOpts): Scene | null {
   const start = new Date(first); start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
   const weeks = Math.ceil(((last.getTime() - start.getTime()) / 864e5 + 1) / 7);
   const cell = Math.min(26, 1100 / weeks - 4);
-  const { s, p } = frame(m, st, Math.max(900, weeks * (cell + 4) + 230), 7 * (cell + 4), T(m, '日历', 'CALENDAR'), T(m, '活跃日历', 'Activity calendar'));
+  const { s, p } = frame(m, st, Math.max(900, weeks * (cell + 4) + 230), 7 * (cell + 4), T(m, '日历', 'CALENDAR'), T(m, '活跃日历', 'Activity calendar'), true, styleProgress(st, t, 0, .44));
   const byDate = new Map(m.days.map((d) => [d.date, d.by]));
+  const plateKeys = st.id === 'ukiyoe' ? [...new Set(m.days.map(d => Object.entries(d.by).sort((a, b) => b[1] - a[1])[0]?.[0]).filter(Boolean))] : [];
   const max = Math.max(...m.days.map((d) => Object.values(d.by).reduce((x, y) => x + y, 0)), 1);
+  // 剪纸已有清楚的整枚纸格倾转；其余插画材质把真实整周作为可读的活动单位。
+  const edition = ['editorial', 'mono', 'cinema', 'playbill', 'broadsheet', 'gala', 'crt', 'arcade'].includes(st.id);
+  const weekday = ['editorial', 'crt'].includes(st.id);
+  const grouped = t < 1 && (edition || ['pastel', 'meadow', 'manga', 'cyber'].includes(st.id));
+  const weeksDrawn: (() => void)[][] = Array.from({ length: weekday ? 7 : weeks }, () => []);
   for (let w = 0; w < weeks; w++) for (let d = 0; d < 7; d++) {
     const day = new Date(start.getTime() + (w * 7 + d) * 864e5).toISOString().slice(0, 10);
     const by = byDate.get(day);
     const x = p.x + w * (cell + 4), y = p.y + d * (cell + 4);
     const tot = by ? Object.values(by).reduce((a, b) => a + b, 0) : 0;
-    if (!tot) { s.add(rect(x, y, cell, cell, { fill: st.c.ink, opacity: 0.05, rx: Math.min(st.radius, 4) })); continue; }
+    if (!tot) {
+      const draw = () => s.add(rect(x, y, cell, cell, { fill: st.c.ink, opacity: 0.05, rx: Math.min(st.radius, 4) }));
+      if (grouped) weeksDrawn[weekday ? d : w].push(draw); else draw();
+      continue;
+    }
     const top = Object.entries(by!).sort((a, b) => b[1] - a[1])[0][0];
+    if (grouped) {
+      weeksDrawn[weekday ? d : w].push(() => {
+        s.add(rect(x, y, cell, cell, { fill: fillKey(s, st, m, top), opacity: 0.3 + 0.7 * Math.sqrt(tot / max), rx: Math.min(st.radius, 4) }));
+        s.hit(x, y, cell, cell, { k: top, t: day, d: [T(m, `${fmt(tot)} 行`, `${fmt(tot)} lines`), ...Object.entries(by!).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([q, v]) => `${agentOf(m, q)?.name ?? (q === 'human' ? nameOf('people', m.lang) : q === 'unattributed' ? T(m, '未确认', 'Unattributed') : q)} ${fmt(v)}`)] });
+      });
+      continue;
+    }
     // 屏幕日期先寻址/扫描/接通边线，其余整枚落定；格子始终承载真实活动量。
-    const at = materialOrder(st, d * weeks + w, weeks * 7, weeks);
+    const at = st.id === 'ukiyoe' ? plateKeys.indexOf(top) / Math.max(1, plateKeys.length - 1)
+      : materialOrder(st, d * weeks + w, weeks * 7, weeks);
     const k = activityPhase(st, t, at);
     activityCue(s, st, k, { x, y, w: cell, h: cell }, false);
-    if (t >= 1 || k >= 0.4) s.add(rect(x, y, cell, cell, { fill: fillKey(s, st, m, top), opacity: 0.3 + 0.7 * Math.sqrt(tot / max), rx: Math.min(st.radius, 4) }));
+    if (!['terminal', 'crt', 'neon'].includes(st.id)) activityEnter(s, st, k, { x, y, w: cell, h: cell },
+      () => s.add(rect(x, y, cell, cell, { fill: fillKey(s, st, m, top), opacity: 0.3 + 0.7 * Math.sqrt(tot / max), rx: Math.min(st.radius, 4) })), false);
+    else if (t >= 1 || k >= 0.4) s.add(rect(x, y, cell, cell, { fill: fillKey(s, st, m, top), opacity: 0.3 + 0.7 * Math.sqrt(tot / max), rx: Math.min(st.radius, 4) }));
     s.hit(x, y, cell, cell, { k: top, t: day, d: [T(m, `${fmt(tot)} 行`, `${fmt(tot)} lines`), ...Object.entries(by!).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([q, v]) => `${agentOf(m, q)?.name ?? (q === 'human' ? nameOf('people', m.lang) : q === 'unattributed' ? T(m, '未确认', 'Unattributed') : q)} ${fmt(v)}`)] });
   }
+  if (grouped) weeksDrawn.forEach((draws, w) => {
+    const at = weekday ? w / 6
+      : st.id === 'cinema' ? Math.abs(w - (weeks - 1) / 2) / Math.max(1, (weeks - 1) / 2)
+      : ['pastel', 'playbill', 'gala'].includes(st.id) ? Math.floor(w / 2) / Math.max(1, Math.ceil(weeks / 2) - 1)
+      : st.id === 'manga' ? (weeks - w - 1) / Math.max(1, weeks - 1) : w / Math.max(1, weeks - 1);
+    activityEnter(s, st, phase(styleProgress(st, t), at * .62, at * .62 + .36),
+      weekday ? { x: p.x, y: p.y + w * (cell + 4), w: weeks * (cell + 4) - 4, h: cell }
+        : { x: p.x + w * (cell + 4), y: p.y, w: cell, h: 7 * (cell + 4) - 4 },
+      () => draws.forEach(draw => draw()), false, w % 2 ? 1 : -1);
+  });
   return s;
 }
 
@@ -733,6 +868,10 @@ export function evidence(m: Model, st: Style, o: PieceOpts): Scene | null {
     }
     const pf = a.proof!;
     const tot = pf.verified + pf.declared + pf.inferred || 1;
+    if (t < .95 && ['minimal-light', 'minimal-dark', 'film', 'glass'].includes(st.id)) {
+      // 各来源仍按真实段宽、固定位置核验；完整总条底面提供量程语境，避免早期短段悬空。
+      s.add(rect(x0, y + 10, full, 26, { fill: st.c.ink, opacity: .09 * (1 - phase(t, .8, .95)), rx: Math.min(st.radius, 6) }));
+    }
     let x = x0;
     PROOF.forEach((q, j) => {
       const ww = (pf[q.k] / tot) * full;

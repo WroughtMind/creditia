@@ -59,7 +59,7 @@ export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
       const draw = () => drawGroup(s, { transform }, () => s.add(p));
       const a = -Math.PI / 2 + i / petals.length * Math.PI * 2;
       if (k >= 1) { draw(); return; }
-      if (['cyber', 'neon', 'grimoire'].includes(st.id)) {
+      if (['cyber', 'neon'].includes(st.id)) {
         // markPaths 输出的是封闭折线路径，按实际线段求周长，resvg 无须支持 pathLength。
         const length = points.reduce((sum, [x, y], j) => {
           const next = points[(j + 1) % points.length];
@@ -74,9 +74,12 @@ export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
           strokeDasharray: length, strokeDashoffset: length * (1 - phase(k, 0, 0.64)),
           visibility: k <= 0 ? 'hidden' : undefined }));
         }), 'mark');
-      } else if (['film', 'broadsheet', 'woodblock'].includes(st.id)) {
+      } else if (['film', 'broadsheet', 'woodblock', 'grimoire'].includes(st.id)) {
         // 乳剂、网线、木纹在每瓣的真实轮廓内成像，不把瓣长当作播放进度。
         materialReveal(s, st, k, bounds, 'up', draw);
+      } else if (st.id === 'editorial') {
+        // 校样星瓣按各自完整真轮廓落墨；压印前沿留在已有底墨内，不把瓣长当进度。
+        materialEnter(s, st, k, bounds, draw, 'data');
       } else if (st.id === 'cinema') {
         // 完整金瓣像镜头光圈绕花心转开；左右对称，瓣长始终是贡献的真值。
         const turn = (i === 0 ? -12 : i <= petals.length / 2 ? -18 : 18) * (1 - k);
@@ -89,7 +92,7 @@ export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
       } else if (st.id === 'meadow') {
         // 花瓣从花心轻轻舒展，保留每瓣的完整形状与份额；不是整张卡片上浮。
         const turn = (i % 2 ? -1 : 1) * 7 * (1 - k) ** 2;
-        drawGroup(s, { transform }, () => drawGroup(s, { transform: `rotate(${r(turn)} 12 12)`, opacity: phase(k, 0, 0.22), visibility: k <= 0 ? 'hidden' : undefined }, () => s.add(p)));
+        materialEnter(s, st, k, bounds, () => drawGroup(s, { transform }, () => drawGroup(s, { transform: `rotate(${r(turn)} 12 12)`, visibility: k <= 0 ? 'hidden' : undefined }, () => s.add(p))), 'data');
       } else if (st.id === 'cutout') {
         const rest = 1 - k;
         // 每瓣是一张完整纸片，绕自身落位，保持轮廓和面积不变。

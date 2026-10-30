@@ -9,6 +9,7 @@ import { Resvg } from '@resvg/resvg-js';
 import { FONTS, familiesIn } from '../../src/fonts.ts';
 import { art, frames, buildModel, PIECES, STYLES, raster, fontFiles } from '../../src/index.ts';
 import { makeExporter } from '../../src/export.ts';
+import { scrollAtlas, createScrollCompositor } from '../../src/scroll-compositor.ts';
 import * as classic from '../../src/classic/index.ts';
 import { variantsOf } from '../../src/classic/art.ts';
 import { BRIDGED, isBridged } from '../../src/classic/bridge.ts';
@@ -48,7 +49,11 @@ function filesFor(svg) {
 }
 const renderSvg = (svg, width = 120) => new Resvg(svg, { font: { fontFiles: filesFor(svg), loadSystemFonts: false, defaultFontFamily: 'Noto Sans SC' }, fitTo: { mode: 'width', value: width }, shapeRendering: 2, textRendering: 1, imageRendering: 0 }).render();
 const pngOf = svg => renderSvg(svg).asPng();
-const cropExporter = makeExporter({ png: (svg, width) => renderSvg(svg, width).asPng(), rgba: (svg, width) => { const image = renderSvg(svg, width); return { w: image.width, h: image.height, data: new Uint8Array(image.pixels) }; }, flat: svg => svg });
+let scrollRasterCalls = 0, scrollRasterSource;
+const cropExporter = makeExporter({ png: (svg, width) => renderSvg(svg, width).asPng(), rgba: (svg, width) => {
+  const image = renderSvg(svg, width), pixels = { w: image.width, h: image.height, data: new Uint8Array(image.pixels) };
+  scrollRasterCalls++; scrollRasterSource = { svg, width, pixels }; return pixels;
+}, flat: svg => svg });
 const modern = STYLES.filter(s => !['minimal', 'noir', 'glass', 'cinema', 'terminal'].includes(s.id));
 const cases = modern.flatMap(st => Object.entries(PIECES).flatMap(([id, p]) => (p.variants ?? ['']).map(variant => ({ kind: 'modern', st, id, variant }))));
 for (const st of classic.THEMES) for (const id of [...Object.keys(classic.FORMS), ...BRIDGED, 'badge']) {
@@ -101,11 +106,44 @@ for (const [i, c] of selected.entries()) {
       if (norm(aa.at(-1).svg) !== norm(still.svg)) throw Error('final SVG differs from static');
     }
     const output = path.join(dir, 'frames', st.id, id, variant || 'default'); mkdirSync(output, { recursive: true });
+    let scrollEvidence, scrollFinalPixels;
     if (still.motion?.kind === 'scroll') {
       // Exercise the public GIF exporter: rasterize the reel once, then crop RGBA.
       // Re-rasterizing the offscreen SVG filters is both the wrong product path and a resvg panic.
-      writeFileSync(path.join(output, 'samples.gif'), cropExporter.gif(aa, { width: 120, hold: 100 }));
-      await execute('python3', ['-c', 'from PIL import Image; import sys; from pathlib import Path; p=Path(sys.argv[1]); im=Image.open(p/"samples.gif"); [(im.seek(i),im.convert("RGBA").save(p/(str(i)+".png"))) for i in range(im.n_frames)]', output]);
+      scrollRasterCalls = 0; scrollRasterSource = undefined;
+      const gif = cropExporter.gif(aa, { width: 120, hold: 100 });
+      writeFileSync(path.join(output, 'samples.gif'), gif);
+      if (scrollRasterCalls !== 1) throw Error(`scroll GIF rasterized ${scrollRasterCalls} times instead of once`);
+      const material = still.motion.material;
+      await execute('python3', ['-c', 'from PIL import Image; import sys; from pathlib import Path; p=Path(sys.argv[1]); im=Image.open(p/"samples.gif"); [(im.seek(i),im.convert("RGBA").save(p/(sys.argv[2]+str(i)+".png"))) for i in range(im.n_frames)]', output, material ? 'gif-' : '']);
+      scrollEvidence = { rasterCalls: scrollRasterCalls, gifSha256: hash(gif), materialStyle: material?.style ?? null, atlasPlanes: material ? 3 : 1 };
+      if (material) {
+        // frames() creates its own Scene IDs. Verify the exact reel handed to GIF,
+        // after the separate normalized comparison with static art above.
+        const reel = aa[0].crop;
+        if (!reel.motion) throw Error('material scroll crop lacks its shared motion');
+        const atlas = scrollAtlas(reel.svg, reel.w, reel.h, reel.motion);
+        if (scrollRasterSource.svg !== atlas.svg || scrollRasterSource.width !== 360) throw Error('GIF did not rasterize the declared shared material atlas');
+        const compositor = createScrollCompositor(scrollRasterSource.pixels, atlas, reel.motion);
+        for (const [index, frame] of aa.entries()) {
+          if (!Number.isFinite(frame.crop?.progress)) throw Error('material scroll frame lacks shared progress');
+          if (Math.abs(frame.crop.progress - elapsed[indices[index]] / elapsed.at(-1)) > 1e-8) throw Error('material scroll progress differs from the shared frame timing');
+          const img = compositor.render(frame.crop.progress, frame.crop.y);
+          writeFileSync(path.join(output, `${index}.rgba`), img.data);
+          if (index === aa.length - 1) {
+            scrollFinalPixels = { w: img.w, h: img.h, data: Buffer.from(img.data) };
+            const source = scrollRasterSource.pixels, scale = img.w / reel.w;
+            const top = Math.max(0, Math.min(Math.round(frame.crop.y * scale), source.h - img.h));
+            for (let y = 0; y < img.h; y++) {
+              const originalPlaneRow = Buffer.from(source.data.buffer, source.data.byteOffset + ((top + y) * source.w) * 4, img.w * 4);
+              if (!scrollFinalPixels.data.subarray(y * img.w * 4, (y + 1) * img.w * 4).equals(originalPlaneRow)) throw Error('material scroll final differs from atlas original plane');
+            }
+            scrollEvidence.finalViewportMatchesAtlasOriginalPlane = true;
+          }
+        }
+        await execute('python3', ['-c', 'from PIL import Image; import sys; from pathlib import Path; p=Path(sys.argv[1]); size=(int(sys.argv[2]),int(sys.argv[3])); [(Image.frombytes("RGBA",size,(p/(str(i)+".rgba")).read_bytes()).save(p/(str(i)+".png")),(p/(str(i)+".rgba")).unlink()) for i in range(4)]', output, String(compositor.width), String(compositor.height)]);
+        Object.assign(scrollEvidence, { sharedCompositorSamples: true, materialLayers: atlas.layers.length, frameBytes: compositor.frameBytes, sourceBytes: compositor.sourceBytes, progressSamples: aa.map(frame => frame.crop.progress) });
+      }
     }
     const evidence = aa.map((a, index) => {
       if (/NaN|Infinity/.test(a.svg)) throw Error('non-finite SVG');
@@ -116,13 +154,38 @@ for (const [i, c] of selected.entries()) {
       return { t: elapsed[indices[index]] / elapsed.at(-1), svgSha256: hash(norm(a.svg)), pngSha256: hash(png), image: path.relative(dir, path.join(output, filename)), cropY: a.crop?.y };
     });
     if (new Set(evidence.map(a => a.pngSha256)).size < 2) throw Error('no rasterized motion');
-    let baselineHash;
+    let baselineHash, baselineMatch;
     if (baseline) {
       const oldCtx = { ...ctx, projects: [baseline.cm], person: baseline.cm.director };
       const oldStyle = kind === 'modern' ? baseline.original.STYLES.find(t => t.id === st.id) : baseline.originalClassic.THEMES.find(t => t.id === st.id);
       const old = kind === 'modern' ? baseline.original.art(id, baseline.m, oldStyle, opts) : await baseline.originalClassic.art(id, baseline.cm, oldStyle, oldCtx);
       if (!old || old.w !== still.w || old.h !== still.h) throw Error('baseline dimensions differ');
+      if (scrollFinalPixels) {
+        // 独立静态基线校验；不计入上面公共 GIF 路径只栅格化一次的断言。
+        const reference = renderSvg(old.svg), scale = reference.width / old.w;
+        const top = Math.max(0, Math.min(Math.round(aa.at(-1).crop.y * scale), reference.height - scrollFinalPixels.h));
+        const crop = Buffer.from(reference.pixels).subarray(top * reference.width * 4, (top + scrollFinalPixels.h) * reference.width * 4);
+        if (reference.width !== scrollFinalPixels.w || crop.length !== scrollFinalPixels.data.length) throw Error('material scroll independent crop dimensions differ');
+        // 原 viewport 隔离必需：防止越界笔触污染透明材质平面。独立 Resvg 上下文
+        // 的斜线/字边抗锯齿差异逐像素记录，不用容差吞掉，也不冒称完全一致。
+        const pixels = [], bounds = [Infinity, Infinity, -1, -1]; let changedChannels = 0, maxChannelDifference = 0;
+        for (let i = 0; i < crop.length; i += 4) {
+          const before = [...crop.subarray(i, i + 4)], after = [...scrollFinalPixels.data.subarray(i, i + 4)];
+          if (before.some((v, k) => v !== after[k])) {
+            const x = i / 4 % reference.width, y = Math.floor(i / 4 / reference.width);
+            pixels.push({ x, y, baselineRGBA: before, compositorRGBA: after });
+            bounds[0] = Math.min(bounds[0], x); bounds[1] = Math.min(bounds[1], y); bounds[2] = Math.max(bounds[2], x); bounds[3] = Math.max(bounds[3], y);
+            before.forEach((v, k) => { if (v !== after[k]) { changedChannels++; maxChannelDifference = Math.max(maxChannelDifference, Math.abs(v - after[k])); } });
+          }
+        }
+        const delta = { exactMatch: pixels.length === 0, changedPixels: pixels.length, changedChannels, maxChannelDifference, bounds: pixels.length ? bounds : null, pixels };
+        writeFileSync(path.join(output, 'independent-static-crop-delta.json'), JSON.stringify(delta, null, 2));
+        scrollEvidence.finalViewportMatchesBaselinePixels = delta.exactMatch;
+        scrollEvidence.independentStaticRasterDelta = { ...delta, pixels: undefined, evidence: path.relative(dir, path.join(output, 'independent-static-crop-delta.json')), interpretation: 'separate raster context AA; original SVG geometry and atlas original-plane equality checked independently' };
+        if (norm(old.svg) !== norm(still.svg)) throw Error('material scroll original static SVG differs from baseline');
+      }
       baselineHash = hash(norm(old.svg));
+      baselineMatch = 'normalized-svg-identical';
       if (norm(old.svg) !== norm(still.svg)) {
         writeFileSync(`${dir}/current-stage${suffix}.txt`, key + '/baseline'); writeFileSync(`${dir}/current-svg${suffix}.svg`, old.svg);
         const oldPng = pngOf(old.svg), finalPng = pngOf(still.svg);
@@ -130,9 +193,13 @@ for (const [i, c] of selected.entries()) {
           writeFileSync(path.join(output, 'baseline.png'), oldPng); writeFileSync(path.join(output, 'static.png'), finalPng);
           throw Error(`static pixels differ from baseline ${baseline.commit}`);
         }
+        // 不消去真差异：即使仅修 CSS 字体引号，也先完成上面的实际像素比较。
+        const oldFontSpelling = svg => norm(svg).replace(/font-family="([^"]*)"/g, (whole, stack) => whole.replace(stack, stack.replace(/&quot;Press Start 2P&quot;/g, 'Press Start 2P')));
+        baselineMatch = oldFontSpelling(old.svg) === oldFontSpelling(still.svg)
+          ? 'pixel-identical-font-family-quoting-only' : 'pixel-identical-at-raster-width';
       }
     }
-    checks.push({ key, kind, w: still.w, h: still.h, states: new Set(evidence.map(a => a.pngSha256)).size, baselineSvgSha256: baselineHash, frames: evidence });
+    checks.push({ key, kind, w: still.w, h: still.h, states: new Set(evidence.map(a => a.pngSha256)).size, baselineSvgSha256: baselineHash, baselineMatch, scrollEvidence, frames: evidence });
   } catch (error) { failures.push({ key, kind, error: error.stack ?? String(error) }); console.log('FAIL', key, error.message); }
   if (i % 10 === 0) { console.log(`${i + 1}/${selected.length} ${key}`); save(); }
 }

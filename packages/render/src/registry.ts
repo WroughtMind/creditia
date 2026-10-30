@@ -86,7 +86,7 @@ export function frames(id: string, m: Model, st: Style, o: PieceOpts = {}, n = 2
       const y = Math.round(scrollY(full.motion!.keys, progress));
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewW}" height="${viewH}" viewBox="0 ${y} ${viewW} ${viewH}"><rect y="${y}" width="${viewW}" height="${viewH}" fill="${full.bg}"/>${inner}</svg>`;
       // 同一张静态长图，按共享阅读时间线裁窗。
-      return { ...full, w: viewW, h: viewH, svg, hits: [], motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y }, frameDelay: delay };
+      return { ...full, w: viewW, h: viewH, svg, hits: [], motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y, ...(full.motion!.material ? { motion: full.motion!, progress } : {}) }, frameDelay: delay };
     });
   }
   const out: Art[] = [];
