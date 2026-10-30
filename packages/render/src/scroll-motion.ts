@@ -52,3 +52,18 @@ export function scrollY(keys: ScrollKey[], progress: number): number {
 export function scrollTransforms(keys: ScrollKey[], height: number) {
   return keys.map(({ offset, y, easing }) => ({ offset, transform: `translateY(${-y / height * 100}%)`, ...(easing ? { easing } : {}) }));
 }
+
+/** 移动段以 20fps 采样，阅读停驻和逐行进纸只需一张保持帧。 */
+export function scrollSamples(motion: ScrollMotion, minimum = 0) {
+  const interval = motion.secs * 1000 / Math.max(minimum, Math.ceil(motion.secs * 20));
+  const times: number[] = [];
+  for (let i = 1; i < motion.keys.length; i++) {
+    const a = motion.keys[i - 1], b = motion.keys[i];
+    const duration = (b.offset - a.offset) * motion.secs * 1000;
+    if (duration <= 0) continue;
+    const count = a.y === b.y || a.easing ? 1 : Math.ceil(duration / interval);
+    for (let j = 0; j < count; j++) times.push(a.offset + (b.offset - a.offset) * j / count);
+  }
+  times.push(1);
+  return times.map((progress, i) => ({ progress, delay: ((times[i + 1] ?? 1) - progress) * motion.secs * 1000 }));
+}

@@ -55,14 +55,26 @@ export const DONUT_VARIANTS = ['ring', 'nested'];
 /** 表盘扫过已定型的扇区：后面的份额不追着前面的份额挪位置。 */
 function sweepReveal(s: Scene, st: Style, k: number, cx: number, cy: number, radius: number, draw: () => void) {
   if (k >= 1) { draw(); return; }
-  // 极简保留表盘的读数动作；其余材质在同一组真实扇区上完成自己的显影。
-  if (!['minimal', 'minimal-light'].includes(st.id)) {
-    materialReveal(s, st, k, { x: cx - radius, y: cy - radius, w: radius * 2, h: radius * 2 }, 'center-x', draw);
+  const bounds = { x: cx - radius, y: cy - radius, w: radius * 2, h: radius * 2 };
+  // 印版与灯管沿完整圆环显影，环形不用条形图的矩形扫描窗。
+  if (['mono', 'neon', 'poster', 'woodblock', 'grimoire', 'manuscript', 'broadsheet'].includes(st.id)) {
+    materialEnter(s, st, k, bounds, draw, 'data');
     return;
   }
-  const clipPath = s.url(`sweep-${radius}`, (id) => el('clipPath', { id },
-    path(arc(cx, cy, radius, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, k)))));
-  drawGroup(s, { clipPath }, draw);
+  // 中轴材质对开，漫画从右侧回读；字符屏以完整角度步进。
+  const paired = ['cinema', 'playbill', 'gala', 'baroque', 'pastel'].includes(st.id);
+  const progress = ['terminal', 'arcade', 'cyber'].includes(st.id) ? Math.floor(k * 24) / 24 : k;
+  const sweep = Math.PI * 2 * Math.max(0, progress);
+  const start = -Math.PI / 2 - (paired ? sweep / 2 : st.id === 'manga' ? sweep : 0);
+  const clipPath = s.url(`sweep-${radius}`, (id) => el('clipPath', { id }, path(arc(cx, cy, radius, 0, start, start + sweep))));
+  const first = s.hits.length;
+  drawGroup(s, { clipPath }, () => materialEnter(s, st, k, bounds, draw, 'data'));
+  // 尚未揭示的扇区不抢占命中；保留原数据和位置。
+  for (let i = s.hits.length - 1; i >= first; i--) {
+    const hit = s.hits[i];
+    const angle = ((Math.atan2(hit.y + hit.h / 2 - cy, hit.x + hit.w / 2 - cx) - start) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    if (progress <= 0 || angle > sweep) s.hits.splice(i, 1);
+  }
 }
 
 export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
@@ -451,10 +463,9 @@ export function survival(m: Model, st: Style, o: PieceOpts): Scene | null {
     if (st.cells) st.track(s, x0, y + 10, wa, 26);
     else s.add(rect(x0, y + 10, wa, 26, { fill: colorOf(st, a), opacity: 0.25, rx: Math.min(st.radius, 6) }));
     });
-    // 先说明写入总量，再从右端退去已删除部分，停在留存量。
+    // 先说明写入总量，再显现真实留存量；条长始终由数据决定，不插入虚假的留存比例。
     const retained = styleProgress(st, t, 0.45, 0.95);
-    const solid = t >= 1 ? ws : wa + (ws - wa) * retained;
-    barReveal(s, st, styleProgress(st, t, 0, 0.45), { x: x0, y: y + 8, w: wa + 2, h: 30 }, 'right', () => st.bar(s, x0, y + 10, Math.max(2, solid), 26, colorOf(st, a), i));
+    barReveal(s, st, retained, { x: x0, y: y + 8, w: ws + 2, h: 30 }, 'right', () => st.bar(s, x0, y + 10, Math.max(2, ws), 26, colorOf(st, a), i));
     if (retained >= 1) st.num(s, `${Math.round(a.survival * 100)}%`, p.x + p.w, y + 32, 22, 'end');
     s.hit(p.x, y, p.w, rowH - 6, { ...tip(m, a), d: [T(m, `新增 ${fmt(a.lines)} 行，留存 ${fmt(a.surviving)} 行`, `${fmt(a.lines)} added, ${fmt(a.surviving)} retained`), ...tip(m, a).d.slice(1)] });
   });

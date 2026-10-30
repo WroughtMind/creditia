@@ -11,7 +11,7 @@ import { scrollTransforms, type ScrollMotion } from './scroll-motion.ts';
 /** 一张可导出的作品 */
 export interface Art { w: number; h: number; svg: string; hits: Hit[]; bg: string; title: string; motion?: Motion; crop?: Crop; /** 动画采样帧的持续时间（毫秒） */ frameDelay?: number }
 /** 滚动片尾字幕的一帧：整卷 svg 里从 y 开始、高 h 的一段 */
-export interface Crop { svg: string; w: number; h: number; y: number }
+export interface Crop { svg: string; w: number; h: number; y: number; /** 调整画幅后，裁窗在输出画布内的位置 */ viewport?: { x: number; y: number; w: number; h: number } }
 /** HTML 里的动态：scroll = 片尾字幕在银幕里滚动 */
 export type Motion = ScrollMotion;
 
@@ -50,8 +50,9 @@ export function sized(a: Art, W: number, H: number, pad = 0.06): Art {
   if (!W || !H) return a;
   const k = Math.min((W * (1 - pad * 2)) / a.w, (H * (1 - pad * 2)) / a.h);
   const dx = (W - a.w * k) / 2, dy = (H - a.h * k) / 2;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${a.bg}"/><g transform="translate(${dx.toFixed(2)} ${dy.toFixed(2)}) scale(${k.toFixed(4)})">${strip(a.svg)}</g></svg>`;
-  return { ...a, w: W, h: H, svg, hits: a.hits.map((x) => ({ ...x, x: dx + x.x * k, y: dy + x.y * k, w: x.w * k, h: x.h * k })) };
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${a.bg}"/><g transform="translate(${dx.toFixed(2)} ${dy.toFixed(2)}) scale(${k.toFixed(4)})">${a.crop ? a.svg : strip(a.svg)}</g></svg>`;
+  const viewport = a.crop?.viewport ?? { x: 0, y: 0, w: a.w, h: a.h };
+  return { ...a, w: W, h: H, svg, ...(a.crop ? { crop: { ...a.crop, viewport: { x: dx + viewport.x * k, y: dy + viewport.y * k, w: viewport.w * k, h: viewport.h * k } } } : {}), hits: a.hits.map((x) => ({ ...x, x: dx + x.x * k, y: dy + x.y * k, w: x.w * k, h: x.h * k })) };
 }
 
 export function makeExporter(R: Raster, deflate?: Deflate) {
@@ -81,18 +82,37 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
     const width = o.width ?? Math.min(frames[0].w, 960);
     // 滚动长卷只栅格化一次；逐帧只裁取可见行。
     const c0 = frames[0].crop;
-    if (c0 && frames.some(f => f.crop?.svg !== c0.svg)) throw new Error('Scroll frames must share one static reel');
-    const whole = c0 ? R.rgba(c0.svg, (width * c0.w) / frames[0].w) : null;
+    // 公共导出器也接受不同长卷或普通帧的混合；只有同卷同倍率时复用栅格。
+    const viewport = c0?.viewport;
+    // 产品纸面/银幕用六位 RGB；其他 CSS 颜色仍走完整 SVG 的通用渲染路径。
+    const padded = viewport && /^#[0-9a-f]{6}$/i.test(frames[0].bg);
+    const whole = c0 && (!viewport || padded) && frames.every(f => f.crop?.svg === c0.svg && f.crop.w === c0.w && f.w === frames[0].w && f.h === frames[0].h && f.bg === frames[0].bg && JSON.stringify(f.crop.viewport) === JSON.stringify(viewport))
+      ? R.rgba(c0.svg, width * (viewport?.w ?? c0.w) / frames[0].w) : null;
     const cut = (f: Art, reel: ReturnType<Raster['rgba']>) => {
-      const k = reel.w / f.crop!.w, h = Math.round(f.h * k);
-      const top = Math.min(Math.round(f.crop!.y * k), reel.h - h);
-      return { w: reel.w, h, data: reel.data.subarray(top * reel.w * 4, (top + h) * reel.w * 4) };
+      const k = reel.w / f.crop!.w;
+      const h = Math.round(viewport ? reel.w * viewport.h / viewport.w : f.h * k);
+      const top = Math.max(0, Math.min(Math.round(f.crop!.y * k), reel.h - h));
+      // gifenc 读取整块 ArrayBuffer，不能把带偏移/多余行的 subarray 传进去。
+      const data = reel.data.slice(top * reel.w * 4, (top + h) * reel.w * 4);
+      if (!viewport) return { w: reel.w, h, data };
+      const scale = width / f.w, w = Math.round(width), height = Math.round(f.h * scale);
+      const out = new Uint8Array(w * height * 4);
+      const bg = [1, 3, 5].map(i => parseInt(f.bg.slice(i, i + 2), 16));
+      for (let i = 0; i < out.length; i += 4) { out[i] = bg[0]; out[i + 1] = bg[1]; out[i + 2] = bg[2]; out[i + 3] = 255; }
+      const x = Math.round(viewport.x * scale), y = Math.round(viewport.y * scale);
+      for (let row = 0; row < h && row + y < height; row++) out.set(data.subarray(row * reel.w * 4, (row + 1) * reel.w * 4), ((row + y) * w + x) * 4);
+      return { w, h: height, data: out };
     };
+    let elapsed = 0, encoded = 0;
     frames.forEach((f, i) => {
-      const img = f.crop ? cut(f, whole!) : R.rgba(f.svg, width);
+      const img = whole ? cut(f, whole) : R.rgba(f.svg, width);
       const palette = quantize(img.data, 256, { format: 'rgb565' });
       const index = applyPalette(img.data, palette, 'rgb565');
-      enc.writeFrame(index, img.w, img.h, { palette, delay: i === frames.length - 1 ? (o.hold ?? 2400) : o.fps === undefined ? f.frameDelay ?? delay : delay, repeat: 0 });
+      elapsed += i === frames.length - 1 ? (o.hold ?? 2400) : o.fps === undefined ? f.frameDelay ?? delay : delay;
+      // GIF 只存 10ms；量化累计边界，避免长卷逐帧舍入后偏离 App/HTML 时长。
+      const until = Math.round(elapsed / 10) * 10;
+      enc.writeFrame(index, img.w, img.h, { palette, delay: until - encoded, repeat: 0 });
+      encoded = until;
     });
     enc.finish();
     return enc.bytes();

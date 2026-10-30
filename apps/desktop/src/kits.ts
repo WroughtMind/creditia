@@ -11,6 +11,7 @@ import type { Style } from '../../../packages/render/src/style.ts';
 import type { Art } from '../../../packages/render/src/export.ts';
 import { historyBasis, historyLabels } from '../../../packages/render/src/history.ts';
 import { registerFonts, ready } from './fonts.ts';
+import { cachedMotion } from './motion-cache.ts';
 
 type Lang = 'zh' | 'en';
 type Preferences = { group: V.GroupOpt; named: boolean };
@@ -131,6 +132,12 @@ function framesAway<T>(raw: any, style: string, lang: Lang, id: string, variant:
   });
 }
 
+function motionAway(raw: any, style: string, lang: Lang, id: string, variant: string | undefined, classic: boolean, signal: AbortSignal) {
+  const preferences = { group, named };
+  const key = JSON.stringify([style, lang, id, variant ?? '', classic, preferences.group, preferences.named]);
+  return cachedMotion(raw, key, signal, () => framesAway<Blob[]>(raw, style, lang, id, variant, classic, preferences, true, signal));
+}
+
 const classicKits: Kit[] = ORDERED_THEMES.map((t) => ({
   id: t.id, style: bridgeStyle(t), dot: themeDot(t),
   name: (lang) => themeName(t, lang), note: (lang) => themeNote(t, lang),
@@ -142,7 +149,7 @@ const classicKits: Kit[] = ORDERED_THEMES.map((t) => ({
     return renderAway(raw, t.id, lang, id, variant, true, grouping, names);
   },
   frames: (raw, lang, id, variant, preferences = { group, named }) => framesAway<Art[]>(raw, t.id, lang, id, variant, true, preferences, false),
-  motion: (raw, lang, id, variant, signal) => framesAway<Blob[]>(raw, t.id, lang, id, variant, true, { group, named }, true, signal),
+  motion: (raw, lang, id, variant, signal) => motionAway(raw, t.id, lang, id, variant, true, signal),
   variants: variantsOf,
   current: (id, variant) => variant ?? defaultVariant(id, t) ?? variantsOf(id)[0],
   animated: animatedClassic,
@@ -159,7 +166,7 @@ const v2Kits: Kit[] = STYLES.filter((s) => !SKIP.has(s.id)).map((s) => ({
   board: V2_BOARD,
   render: async (raw, lang, id, variant) => { const grouping = group, names = named; await ready(s); return renderAway(raw, s.id, lang, id, variant, false, grouping, names); },
   frames: (raw, lang, id, variant, preferences = { group, named }) => framesAway<Art[]>(raw, s.id, lang, id, variant, false, preferences, false),
-  motion: (raw, lang, id, variant, signal) => framesAway<Blob[]>(raw, s.id, lang, id, variant, false, { group, named }, true, signal),
+  motion: (raw, lang, id, variant, signal) => motionAway(raw, s.id, lang, id, variant, false, signal),
   variants: (id) => PIECES[id]?.variants ?? [],
   current: (id, variant) => variant ?? s.prefer[id] ?? PIECES[id]?.variants?.[0],
   animated: (id) => !!PIECES[id]?.animated,

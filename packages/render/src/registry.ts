@@ -13,7 +13,7 @@ import { asterisk } from './pieces/asterisk.ts';
 import { people } from './pieces/people.ts';
 import { historyLabels } from './history.ts';
 import { motionDuration } from './motion.ts';
-import { scrollY } from './scroll-motion.ts';
+import { scrollSamples, scrollY } from './scroll-motion.ts';
 
 export interface PieceDef {
   name: string;
@@ -80,13 +80,13 @@ export function frames(id: string, m: Model, st: Style, o: PieceOpts = {}, n = 2
   // 银幕滚动：一个固定大小的取景框从上往下扫过整张字幕
   if (full?.motion?.kind === 'scroll') {
     const { viewW, viewH } = full.motion;
-    const steps = Math.max(n, 60);
+    const samples = scrollSamples(full.motion, n);
     const inner = full.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
-    return Array.from({ length: steps + 1 }, (_, i) => {
-      const y = Math.round(scrollY(full.motion!.keys, i / steps));
+    return samples.map(({ progress, delay }) => {
+      const y = Math.round(scrollY(full.motion!.keys, progress));
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewW}" height="${viewH}" viewBox="0 ${y} ${viewW} ${viewH}"><rect y="${y}" width="${viewW}" height="${viewH}" fill="${full.bg}"/>${inner}</svg>`;
       // 同一张静态长图，按共享阅读时间线裁窗。
-      return { ...full, w: viewW, h: viewH, svg, hits: [], motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y }, frameDelay: full.motion!.secs * 1000 / steps };
+      return { ...full, w: viewW, h: viewH, svg, hits: [], motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y }, frameDelay: delay };
     });
   }
   const out: Art[] = [];

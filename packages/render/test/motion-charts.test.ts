@@ -98,7 +98,7 @@ test('作息圆点显示时已经是最终大小和强度，不把进度误作�
   }
 });
 
-test('留存先展示写入总量，再收回到保留量，数据文字不使用中间量', () => {
+test('留存分阶段显现，所有中间帧的条长始终是真实留存量', () => {
   const list = model.rows.filter((a) => a.kind === 'agent' && a.lines > 0);
   for (const st of STYLES) {
     const widths = (t: number) => {
@@ -106,12 +106,9 @@ test('留存先展示写入总量，再收回到保留量，数据文字不使�
       art('survival', model, { ...st, bar(s, x, y, w, h, color, i) { values.push(w); st.bar(s, x, y, w, h, color, i); } }, { t });
       return values;
     };
-    const written = widths(0.45), retiring = widths(0.7), retained = widths(1);
-    assert.equal(written.length, list.length);
-    list.forEach((a, i) => {
-      assert.ok(retiring[i] <= written[i] && retiring[i] >= retained[i], `${st.id}/${a.key}`);
-      assert.ok(Math.abs(retained[i] - Math.max(2, written[i] * a.surviving / a.lines)) < 0.01, `${st.id}/${a.key}: retained data`);
-    });
+    const retained = widths(1);
+    assert.equal(retained.length, list.length);
+    for (const t of [0, 0.15, 0.45, 0.7, 0.9]) assert.deepEqual(widths(t), retained, `${st.id}/${t}: no invented retention`);
   }
 });
 
@@ -146,6 +143,14 @@ test('比例环揭示真实图形，中间帧不移动扇区', () => {
         && JSON.stringify(final.d) === JSON.stringify(hit.d) && hit.x >= final.x - 0.02 && hit.y >= final.y - 0.02
         && hit.x + hit.w <= final.x + final.w + 0.02 && hit.y + hit.h <= final.y + final.h + 0.02), `${style.id}: hit remains inside its data shape`);
     }
+  }
+});
+
+test('环形材质沿圆心显现，不用条形扫描窗切出直角断面', () => {
+  for (const st of STYLES) for (const variant of ['ring', 'nested']) {
+    const svg = art('donut', model, st, { variant, t: 0.46 })!.svg;
+    assert.doesNotMatch(svg, /<clipPath[^>]*material-/, `${st.id}/${variant}: no rectangular material window`);
+    assert.deepEqual(shapes(svg), shapes(art('donut', model, st, { variant })!.svg), `${st.id}/${variant}: fixed sectors`);
   }
 });
 

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { art, frames, buildModel, STYLES } from '../src/index.ts';
 import { THEMES } from '../src/classic/themes.ts';
 import { makeExporter } from '../src/export.ts';
-import { SCROLL_READING, scrollMotion, scrollTransforms, scrollY } from '../src/scroll-motion.ts';
+import { SCROLL_READING, scrollMotion, scrollSamples, scrollTransforms, scrollY } from '../src/scroll-motion.ts';
 
 const model = buildModel(JSON.parse(readFileSync(new URL('../fixtures/catnap.json', import.meta.url), 'utf8')));
 
@@ -36,7 +36,8 @@ test('GIF 每个滚动作品只栅格化一次，与 App/HTML 取同一时间线
     const samples = frames('roll', model, style, { variant: 'scroll' });
     assert.equal(new Set(samples.map(frame => frame.crop!.svg)).size, 1);
     assert.equal(samples[0].crop!.y, 0);
-    samples.forEach((frame, i) => assert.equal(frame.crop!.y, Math.round(scrollY(full.motion!.keys, i / (samples.length - 1)))));
+    const timeline = scrollSamples(full.motion!, 28);
+    samples.forEach((frame, i) => assert.equal(frame.crop!.y, Math.round(scrollY(full.motion!.keys, timeline[i].progress))));
     let rasterizations = 0;
     const exporter = makeExporter({ png: () => new Uint8Array(), flat: svg => svg, rgba: () => {
       rasterizations++;
