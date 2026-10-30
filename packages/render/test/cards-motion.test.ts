@@ -16,6 +16,16 @@ const normalize = (svg: string) => svg.replace(/\bc[0-9a-z]+-/g, 'scene-');
 const hash = (text: string | Uint8Array) => createHash('sha256').update(text).digest('hex');
 const texts = (svg: string) => [...svg.matchAll(/<text\b[^>]*>(.*?)<\/text>/gs)].map((m) => m[1].replace(/<[^>]*>/g, ''));
 
+test('手稿与排版圆章的弧形题字不生成圆外水平批注', () => {
+  const styles = [STYLES.find(s => s.id === 'manuscript')!, bridgeStyle(THEMES.find(s => s.id === 'editorial')!)];
+  for (const style of styles) for (const t of [0.2, 0.5, 0.8]) {
+    const svg = art('badge', model, style, { variant: 'emblem', t })!.svg;
+    const annotations = [...svg.matchAll(/<line\b[^>]*y1="([\d.]+)"[^>]*stroke="([^\"]+)"[^>]*>/g)].filter(m => m[2] === style.c.accent);
+    assert.ok(annotations.every(m => Number(m[1]) < 200), `${t}: curved lettering has no straight underline outside the seal`);
+    assert.match(svg, /<textPath\b[^>]*>[^<]+<\/textPath>/, `${t}: whole curved lettering`);
+  }
+});
+
 // 16 风格静态指纹，按版式汇总；终端已移除纸面外不可见的代码雨字形。
 const staticHashes: Record<string, string> = {
   'share/': 'b82c961bc1238317ca1be610a5707fb7c1d7712278070bce840f5e1ccd90730b',
@@ -119,5 +129,13 @@ test('分享图和堆叠徽章沿厚度揭示整张份额图，不逐段改写�
       assert.ok(visible, `${st.id}/${id}/${variant}/${end.t}: all shares enter together`);
       assert.equal(visible.w, end.w, `${st.id}/${id}/${variant}/${end.t}: horizontal data width stays true`);
     }
+  }
+});
+
+test('木刻细徽章份额压印完整条，不用大面刀纹切成条码', () => {
+  const style = STYLES.find(s => s.id === 'woodblock')!;
+  for (const variant of ['stack', 'split']) for (const t of [0.2, 0.5, 0.8]) {
+    const svg = art('badge', model, style, { variant, t })!.svg;
+    assert.doesNotMatch(svg, /<mask\b/, `${variant}/${t}: narrow share is a complete print surface`);
   }
 });

@@ -2,7 +2,8 @@
 // 只说是谁提交的，不说是谁手写的；只有一位提交者时没有这张（和署名榜一样）
 import { Scene, rect } from '../svg.ts';
 import { styleProgress } from '../motion.ts';
-import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
+import { materialEnter, materialOrder } from '../material-motion.ts';
+import { valueBar } from './value-bar.ts';
 import type { Model, Agent } from '../data.ts';
 import { pct, fmt } from '../data.ts';
 import type { Style } from '../style.ts';
@@ -48,8 +49,7 @@ export function people(m: Model, st: Style, o: PieceOpts): Scene | null {
     }
     const bar = { x: x0, y: y + 16, w: bw, h: 14 };
     if (['cutout', 'playbill'].includes(st.id)) materialEnter(s, st, k, bar, drawBar, 'paper');
-    else if (['terminal', 'baroque', 'gala'].includes(st.id)) materialEnter(s, st, k, bar, drawBar, 'data');
-    else materialReveal(s, st, k, bar, 'up', drawBar);
+    else valueBar(s, st, k, bar, 'x', drawBar);
     const parts = a.parts.map((p) => `${p.name} ${pct(p.pct)}`);
     materialEnter(s, st, styleProgress(st, t, 0.2 + order * 0.35, 0.65 + order * 0.35), { x: x0, y: y + 40, w: x1 - x0, h: 20 }, () => {
       s.text(parts.join(' · '), x0, y + 56, { font: st.f.mono, size: 13, fill: st.c.soft, maxW: x1 - x0, overflow: 'clip' });

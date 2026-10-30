@@ -2,8 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { art, buildModel, STYLES } from '../src/index.ts';
-import { ease } from '../src/svg.ts';
+import { art, buildModel, STYLES, raster } from '../src/index.ts';
+import { ease, Scene } from '../src/svg.ts';
+import { THEMES } from '../src/classic/themes.ts';
+import { bridgeStyle } from '../src/classic/bridge.ts';
 
 const model = buildModel(JSON.parse(readFileSync(new URL('../fixtures/catnap.json', import.meta.url), 'utf8')));
 const shapes = (svg: string) => [...svg.replace(/<defs>[\s\S]*?<\/defs>/g, '').matchAll(/<path\b[^>]*\bd="([^"]+)"/g)].map((m) => m[1]);
@@ -122,6 +124,59 @@ test('留存分阶段显现，所有中间帧的条长始终是真实留存量',
   }
 });
 
+test('26风格留存和证据条显现时保留完整数值宽度，不被横向材质窗裁短', () => {
+  const styles = [...THEMES.map(bridgeStyle), ...STYLES.filter(st => !['minimal', 'noir', 'glass', 'cinema', 'terminal'].includes(st.id))];
+  for (const st of styles) for (const id of ['survival', 'evidence']) {
+    const bars = (t: number) => {
+      let n = 0;
+      const frame = art(id, model, { ...st, bar(s, x, y, w, h, color, i) {
+        st.bar(s, x, y, w, h, color, i);
+        // Probe the visible bounds too: comparing source rect widths alone can
+        // miss a material clip that leaves only a false fraction on screen.
+        s.hit(x, y, w, h, { k: `numeric-bar-${n++}`, t: 'numeric-bar' });
+      } }, { t })!;
+      return frame.hits.filter(hit => hit.t === 'numeric-bar');
+    };
+    const full = new Map(bars(1).map(hit => [hit.k, hit]));
+    assert.ok(full.size > 0, `${st.id}/${id}`);
+    for (const t of [0.15, 0.3, 0.5, 0.7, 0.9]) for (const hit of bars(t)) {
+      const final = full.get(hit.k)!;
+      assert.ok(Math.abs(hit.x - final.x) < 0.025 && Math.abs(hit.w - final.w) < 0.025, `${st.id}/${id}/${t}/${hit.k}: complete value axis`);
+    }
+  }
+});
+
+test('26风格版本列出现时具有真实全高和完整上下份额，不从统一窗口长高', () => {
+  const styles = [...THEMES.map(bridgeStyle), ...STYLES.filter(st => !['minimal', 'noir', 'glass', 'cinema', 'terminal'].includes(st.id))];
+  const add = Scene.prototype.add;
+  for (const st of styles) {
+    const full = art('versions', model, st)!;
+    const columns = full.hits.filter(hit => model.history.buckets.some(bucket => bucket.tag === hit.t || bucket.tag === 'unreleased' && ['未发布', 'Unreleased'].includes(hit.t)));
+    assert.equal(columns.length, model.history.buckets.length, st.id);
+    // Observe the actual painted stacked rectangles inside their material
+    // groups, so a fixed plot-height crop cannot pass by retaining source data.
+    Scene.prototype.add = function (...parts) {
+      const result = add.apply(this, parts);
+      for (const part of parts) if (typeof part === 'string') for (const match of part.matchAll(/<rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"/g)) {
+        const [x, y, w, h] = match.slice(1).map(Number);
+        if (columns.some(column => Math.abs(x - column.x - 10) < 0.025 && Math.abs(w - column.w + 20) < 0.025 && y >= column.y && y + h <= column.y + column.h - 40.0 + 0.025)) {
+          this.hit(x, y, w, h, { k: `${x}/${y}/${w}/${h}`, t: 'version-rectangle' });
+        }
+      }
+      return result;
+    };
+    try {
+      const rectangles = (t: number) => art('versions', model, st, { t })!.hits.filter(hit => hit.t === 'version-rectangle');
+      const final = new Map(rectangles(1).map(hit => [hit.k, hit]));
+      assert.ok(final.size > columns.length, st.id);
+      for (const t of [0.15, 0.3, 0.5, 0.8]) for (const hit of rectangles(t)) {
+        const original = final.get(hit.k)!;
+        assert.ok(Math.abs(hit.y - original.y) < 0.025 && Math.abs(hit.h - original.h) < 0.025, `${st.id}/${t}/${hit.k}: true column height and ownership`);
+      }
+    } finally { Scene.prototype.add = add; }
+  }
+});
+
 test('马赛克文件块移动时悬停区跟着移动，尚未出现的文件不抢悬停', () => {
   const st = STYLES[0], full = art('mosaic', model, st)!;
   const fileHits = (t: number) => art('mosaic', model, st, { t })!.hits.filter((h) => model.files.some((f) => f.path === h.t));
@@ -164,6 +219,28 @@ test('环形材质沿圆心显现，不用条形扫描窗切出直角断面', ()
   }
 });
 
+test('环带中间帧在每份真实角度都有像素，不把份额揭成临时短弧', () => {
+  const equal = { ...model, rows: model.rows.slice(0, 2).map(a => ({ ...a, pct: 50 })) };
+  for (const st of STYLES.filter(s => ['ink', 'cinema', 'glass', 'pastel', 'manga', 'cyber'].includes(s.id))) {
+    const full = art('donut', equal, st, { variant: 'ring' })!;
+    const hit = full.hits.find(h => h.w === 60 && h.h === 60)!;
+    const cx = hit.x + 30 - 220, cy = hit.y + 30;
+    const empty = raster.rgba(art('donut', equal, st, { variant: 'ring', t: 0 })!.svg, 500);
+    for (const t of [.3, .5]) {
+      const frame = raster.rgba(art('donut', equal, st, { variant: 'ring', t })!.svg, 500);
+      for (const angle of [-Math.PI / 4, Math.PI / 4, Math.PI * 3 / 4, Math.PI * 5 / 4]) {
+        let changed = 0;
+        for (let radius = 172; radius < 269; radius += 2) {
+          const x = Math.round((cx + Math.cos(angle) * radius) / 2), y = Math.round((cy + Math.sin(angle) * radius) / 2);
+          const i = (y * frame.w + x) * 4;
+          if (Math.max(...[0, 1, 2].map(c => Math.abs(frame.data[i + c] - empty.data[i + c]))) > 8) changed++;
+        }
+        assert.ok(changed >= 2, `${st.id}/${t}/${angle}: every actual share keeps its full angle`);
+      }
+    }
+  }
+});
+
 test('河流材质成形时各周比例保持真值，水墨仍从中线自然生长', () => {
   const bands = (svg: string) => [...svg.matchAll(/<path d="([^"]+)"[^>]*opacity="0\.92"[^>]*stroke-width="0\.6"/g)].map((m) =>
     [...m[1].matchAll(/[MLC]([^MLCZ]+)/g)].map((segment) => segment[1].trim().split(/[ ,]+/).map(Number).slice(-2)));
@@ -178,7 +255,8 @@ test('河流材质成形时各周比例保持真值，水墨仍从中线自然�
       assert.equal(frame.h, full.h);
       assert.deepEqual(frame.hits, full.hits);
       assert.deepEqual(text(frame.svg), text(full.svg));
-      assert.ok(!frame.svg.includes('motion-'), `${style.id}: no rectangular scan edge`);
+      // A vertical time-scan edge is valid: it preserves the whole stacked
+      // cross-section. The raster regression below rejects partial layers.
       if (style.cells) continue;
       const current = bands(frame.svg);
       assert.equal(current.length, final.length);
@@ -197,6 +275,46 @@ test('河流材质成形时各周比例保持真值，水墨仍从中线自然�
           assert.ok(Math.abs(actual - expected) < 0.03, `${style.id}/${t}/${i}/${band}: share`);
         }
       }
+    }
+  }
+});
+
+test('屏幕与漫画河流每个已出现的时间列保留完整上下截面', () => {
+  const keys = model.rows.filter(row => row.kind === 'agent').slice(0, 2).map(row => row.key);
+  const flat = { ...model, weeks: model.weeks.map(week => ({ ...week, by: { [keys[0]]: 70, [keys[1]]: 30 } })) };
+  const styles = [...THEMES.map(bridgeStyle), ...STYLES.filter(style => ['cyber', 'manga'].includes(style.id))];
+  for (const st of styles.filter(style => ['crt', 'terminal', 'cyber', 'manga', 'gala'].includes(style.id))) {
+    const full = art('stream', flat, st)!;
+    const first = full.hits.find(hit => hit.t === flat.weeks[0].week)!, last = full.hits.find(hit => hit.t === flat.weeks.at(-1)!.week)!;
+    const left = first.x + first.w / 2, right = last.x + last.w / 2;
+    const final = raster.rgba(full.svg, 500), empty = raster.rgba(art('stream', flat, st, { t: 0 })!.svg, 500);
+    const scale = 500 / full.w;
+    const difference = (a: typeof final, b: typeof final, x: number, y: number) => {
+      const i = (y * a.w + x) * 4;
+      return Math.max(...[0, 1, 2].map(channel => Math.abs(a.data[i + channel] - b.data[i + channel])));
+    };
+    for (const t of [.2, .5, .8]) {
+      const current = raster.rgba(art('stream', flat, st, { t })!.svg, 500);
+      let shownColumns = 0, truncatedColumns = 0;
+      for (let x = Math.ceil(left * scale) + 2; x < Math.floor(right * scale) - 2; x += 3) {
+        const exposure: number[] = [];
+        for (let y = Math.ceil(first.y * scale) + 2; y < Math.floor((first.y + first.h) * scale) - 2; y++) {
+          const expected = difference(final, empty, x, y);
+          if (expected < 16) continue;
+          exposure.push(difference(current, empty, x, y) / expected);
+        }
+        exposure.sort((a, b) => a - b);
+        const low = exposure[Math.floor(exposure.length * .1)], high = exposure[Math.floor(exposure.length * .9)];
+        if (!(high >= .18)) continue;
+        shownColumns++;
+        // Soft light may attenuate a complete column uniformly. Missing lower
+        // ownership produces zero exposure in part of that same column.
+        if (low < high * .55) truncatedColumns++;
+      }
+      assert.ok(shownColumns > 0, `${st.id}/${t}: time columns appear`);
+      // One anti-aliased frontier column is harmless; a horizontal/diagonal
+      // crop removes ownership across many time columns and must fail.
+      assert.ok(truncatedColumns <= 1, `${st.id}/${t}: ${truncatedColumns} truncated time columns`);
     }
   }
 });
@@ -245,6 +363,44 @@ test('柔粉色按完整河带与数据条配对显现，不以圆泡裁碎真�
       const svg = art(id, model, style, { t })!.svg;
       assert.deepEqual(geometry(svg), full, `${id}/${t}: complete true outlines`);
       assert.doesNotMatch(svg, /<g[^>]+(?:clip-path|mask|transform)=/, `${id}/${t}: no bubble crop or displaced data`);
+    }
+  }
+});
+
+test('浮世绘模块图按真实归属色版套印，已落版份额跨模块保持完整真值', () => {
+  const style = STYLES.find((s) => s.id === 'ukiyoe')!;
+  const shares = (t: number) => art('areas', model, style, { t })!.hits.filter(h => h.d?.[0]?.includes('里'));
+  const full = shares(1);
+  const clips = (t: number) => [...normalized(art('areas', model, style, { t })!.svg).matchAll(/<g[^>]+clip-path="([^"]+)"/g)].map(m => m[1]);
+  assert.ok(full.length > 4);
+  for (const t of [0.15, 0.35, 0.6, 0.8]) {
+    const current = shares(t);
+    assert.ok(current.length > 0);
+    for (const hit of current) assert.ok(full.some(final => JSON.stringify(final) === JSON.stringify(hit)), `${t}: full share, no clipped width`);
+    for (const key of new Set(current.map(h => h.k))) {
+      assert.equal(current.filter(h => h.k === key).length, full.filter(h => h.k === key).length, `${t}/${key}: same contribution plate across modules`);
+    }
+    assert.deepEqual(clips(t), clips(1), `${t}: only existing static ornament clips, no row scan window`);
+  }
+});
+
+test('26风格模块份额不会沿数值轴裁短或只留下中间归属', () => {
+  const styles = [...THEMES.map(bridgeStyle), ...STYLES.filter(s => !['minimal', 'noir', 'glass', 'cinema', 'terminal'].includes(s.id))];
+  const shares = (style: typeof styles[number], t: number) => art('areas', model, style, { t })!.hits.filter(h => h.d?.[0]?.includes('里'));
+  const moduleOf = (h: ReturnType<typeof shares>[number]) => h.d![0].split('里')[0];
+  for (const style of styles) {
+    const full = shares(style, 1);
+    for (const t of [0.12, 0.2, 0.35, 0.5, 0.8]) {
+      const current = shares(style, t);
+      for (const hit of current) {
+        const final = full.find(h => h.k === hit.k && h.d![0] === hit.d![0]);
+        assert.ok(final, `${style.id}/${t}: real contribution`);
+        assert.ok(Math.abs(hit.w - final.w) < 0.025, `${style.id}/${t}/${hit.d![0]}: full true width`);
+      }
+      // 色版套印按真实贡献方分组；其余模块的所有份额同时以真实宽度进入。
+      if (style.id !== 'ukiyoe') for (const module of new Set(current.map(moduleOf))) {
+        assert.equal(current.filter(h => moduleOf(h) === module).length, full.filter(h => moduleOf(h) === module).length, `${style.id}/${t}/${module}: all shares together`);
+      }
     }
   }
 });

@@ -51,3 +51,45 @@ test('preview waits for initialization and reports failure against the current r
   assert.equal(w.messages[0].seq, 3);
   assert.equal(w.messages[0].error, 'font initialization failed');
 });
+
+function framePreparation() {
+  const source = fs.readFileSync(require.resolve('../../../packages/render/tools/motion-preview/entry.ts'), 'utf8');
+  const file = ts.createSourceFile('entry.ts', source, ts.ScriptTarget.ES2022, true);
+  const helpers = file.statements.filter(node => ts.isFunctionDeclaration(node)
+    && ['prepareFrameImages', 'resetFrameImages'].includes(node.name?.text)).map(node => node.getText(file)).join('\n');
+  const waiting = [], revoked = [];
+  let next = 0;
+  class Image {
+    style = {};
+    decode() { return new Promise((resolve, reject) => waiting.push({ resolve, reject })); }
+  }
+  const context = vm.createContext({ Image, Blob, Promise, seq: 1, frameImages: [], frameUrls: [],
+    URL: { createObjectURL: () => `blob:frame-${next++}`, revokeObjectURL: url => revoked.push(url) } });
+  vm.runInContext(ts.transpile(helpers, { target: ts.ScriptTarget.ES2022 }), context);
+  return { context, waiting, revoked };
+}
+
+test('preview keeps static content until every independent SVG frame has decoded', async () => {
+  const { context, waiting } = framePreparation();
+  const preparation = context.prepareFrameImages([{ svg: '<svg><image/></svg>' }, { svg: '<svg/>' }], 1);
+  assert.equal(waiting.length, 2);
+  waiting[0].resolve();
+  await Promise.resolve();
+  assert.equal(context.frameImages.length, 0);
+  waiting[1].resolve();
+  await preparation;
+  assert.equal(context.frameImages.length, 2);
+  assert.equal(context.frameImages[0].src, 'blob:frame-0');
+});
+
+test('preview discards late image decodes and releases URLs after switching or reducing motion', async () => {
+  const { context, waiting, revoked } = framePreparation();
+  const preparation = context.prepareFrameImages([{ svg: '<svg><image/></svg>' }], 1);
+  context.seq = 2;
+  context.resetFrameImages();
+  waiting[0].resolve();
+  await preparation;
+  assert.equal(context.frameImages.length, 0);
+  assert.equal(context.frameUrls.length, 0);
+  assert.deepEqual(revoked, ['blob:frame-0']);
+});

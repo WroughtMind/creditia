@@ -7,7 +7,7 @@ import { fmt } from '../data.ts';
 import type { Style } from '../style.ts';
 import { T, colorOf, canvas, tip, type PieceOpts } from './common.ts';
 import { styleProgress, phase, drawGroup } from '../motion.ts';
-import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
+import { materialEnter, materialOrder } from '../material-motion.ts';
 
 const PITCH = 4.5, CW = 56, GAP = 22, FILE_GAP = 2, SHADE = [1, 0.78, 0.6];
 
@@ -216,13 +216,15 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
   s.add(rect(x0, by, pw, 5, { fill: st.c.ink, fillOpacity: 0.1 }));
   let bx = x0;
   const reveal = styleProgress(st, t, 0.1, 0.85);
-  materialReveal(s, st, reveal, { x: x0, y: by, w: pw, h: 5 }, 'right', () => {
+  // 这是 5px 高的真实份额刻度，不是代码铺版的扫描窗。
+  // 整条保留所有归属的完整宽度；各风格的行/文件/色版动作在上方代码主体里。
+  materialEnter(s, st, reveal, { x: x0, y: by, w: pw, h: 5 }, () => {
     for (const { a, pct } of shown) {
       const w = (pct / 100) * pw;
       if (w > 0) s.add(rect(bx, by, Math.max(0, w - 3), 5, { fill: a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a) }));
       bx += w;
     }
-  });
+  }, 'data');
   let lx = x0;
   for (const { a, pct } of shown) {
     if (lx > x1 - 140) break;

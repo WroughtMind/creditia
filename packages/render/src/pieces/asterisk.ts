@@ -77,6 +77,15 @@ export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
       } else if (['film', 'broadsheet', 'woodblock'].includes(st.id)) {
         // 乳剂、网线、木纹在每瓣的真实轮廓内成像，不把瓣长当作播放进度。
         materialReveal(s, st, k, bounds, 'up', draw);
+      } else if (st.id === 'cinema') {
+        // 完整金瓣像镜头光圈绕花心转开；左右对称，瓣长始终是贡献的真值。
+        const turn = (i === 0 ? -12 : i <= petals.length / 2 ? -18 : 18) * (1 - k);
+        drawGroup(s, { transform }, () => drawGroup(s, { transform: `rotate(${r(turn)} 12 12)`, opacity: phase(k, 0, 0.14), visibility: k <= 0 ? 'hidden' : undefined }, () => s.add(p)));
+      } else if (st.id === 'playbill') {
+        // 台翼按瓣所在的左右方位送入整片纸，顶瓣从上方归位；不裁开数据形状。
+        const dx = i === 0 ? 0 : (i <= petals.length / 2 ? 2.4 : -2.4) * (1 - k);
+        const dy = i === 0 ? -2 * (1 - k) : 0;
+        drawGroup(s, { transform }, () => drawGroup(s, { transform: `translate(${r(dx)} ${r(dy)})`, opacity: phase(k, 0, 0.14), visibility: k <= 0 ? 'hidden' : undefined }, () => s.add(p)));
       } else if (st.id === 'meadow') {
         // 花瓣从花心轻轻舒展，保留每瓣的完整形状与份额；不是整张卡片上浮。
         const turn = (i % 2 ? -1 : 1) * 7 * (1 - k) ** 2;

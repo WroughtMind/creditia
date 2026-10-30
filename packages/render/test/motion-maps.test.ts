@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { art, buildModel, STYLES } from '../src/index.ts';
+import { THEMES } from '../src/classic/themes.ts';
+import { bridgeStyle } from '../src/classic/bridge.ts';
 
 const model = buildModel(JSON.parse(readFileSync(new URL('../fixtures/catnap.json', import.meta.url), 'utf8')));
 const normalized = (svg: string) => svg.replace(/\bc[0-9a-z]+-/g, 'scene-');
@@ -60,6 +62,33 @@ test('代码地图拼贴按完整文件片段入位，套版按完整归属色�
   const complete = colors(art('codemap', model, ukiyoe)!.svg), partial = colors(art('codemap', model, ukiyoe, { t: 0.25 })!.svg);
   assert.ok(partial.size > 0 && partial.size < complete.size);
   for (const [color, strokes] of partial) assert.deepEqual(strokes, complete.get(color), `${color}: complete color plate`);
+});
+
+test('26风格代码地图的汇总份额条始终完整，不沿数值轴裁开归属', () => {
+  const styles = [...THEMES.map(bridgeStyle), ...STYLES.filter(st => !['minimal', 'noir', 'glass', 'cinema', 'terminal'].includes(st.id))];
+  const summaryBars = (svg: string) => {
+    const stack: { tag: string; clipped: boolean }[] = [], bars: { xml: string; y: number; clipped: boolean }[] = [];
+    for (const match of normalized(svg).matchAll(/<\/?([\w:-]+)\b[^>]*>/g)) {
+      const [xml, tag] = match;
+      if (xml.startsWith('</')) { stack.pop(); continue; }
+      const clipped = stack.some(parent => parent.clipped) || /\b(?:clip-path|mask)=/.test(xml);
+      if (tag === 'rect' && !stack.some(parent => parent.tag === 'defs') && /\bheight="5"/.test(xml)) {
+        bars.push({ xml, y: Number(/\by="([^"]+)"/.exec(xml)![1]), clipped });
+      }
+      if (!xml.endsWith('/>')) stack.push({ tag, clipped });
+    }
+    const y = bars.find(bar => /\bfill-opacity="0\.1"/.test(bar.xml))!.y;
+    return bars.filter(bar => bar.y === y);
+  };
+  for (const st of styles) {
+    const full = summaryBars(art('codemap', model, st)!.svg);
+    assert.ok(full.length >= 3, st.id);
+    for (const t of [0.12, 0.2, 0.5, 0.8]) {
+      const current = summaryBars(art('codemap', model, st, { t })!.svg);
+      assert.deepEqual(current.map(bar => bar.xml), full.map(bar => bar.xml), `${st.id}/${t}: true widths and positions`);
+      assert.ok(current.every(bar => !bar.clipped), `${st.id}/${t}: every attribution is complete`);
+    }
+  }
 });
 
 test('贡献者的文字与比例保持真值，材质展开不改变分段宽度', () => {

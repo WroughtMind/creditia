@@ -51,8 +51,8 @@ export function materialOrder(st: Pick<Style, 'id'>, index: number, total: numbe
 }
 
 /** 滤镜只覆盖当前内容及光晕，长字幕不会为每一行分配整张画布。 */
-function optical(s: Scene, st: Style, k: number, kind: 'ink' | 'focus' | 'outline' | 'neon' | 'crt' | 'press' | 'paper' | 'register', b: Bounds, solid = false): string {
-  const rest = 1 - k;
+function optical(s: Scene, st: Style, k: number, kind: 'ink' | 'focus' | 'outline' | 'neon' | 'crt' | 'press' | 'paper' | 'register', b: Bounds, role: MaterialRole = 'content'): string {
+  const rest = 1 - k, solid = role === 'mark';
   let primitives = '';
   if (kind === 'ink') primitives = (solid ? el('feMorphology', { operator: 'dilate', radius: r(0.28 * rest) }) : '') + el('feGaussianBlur', { stdDeviation: r(0.12 * rest) });
   if (kind === 'focus') primitives = el('feGaussianBlur', { stdDeviation: r(2.4 * rest * rest) });
@@ -66,8 +66,11 @@ function optical(s: Scene, st: Style, k: number, kind: 'ink' | 'focus' | 'outlin
   if (kind === 'outline' || kind === 'neon') {
     primitives = el('feMorphology', { in: 'SourceAlpha', operator: 'erode', radius: kind === 'neon' ? 0.8 : 0.55, result: 'core' })
       + el('feComposite', { in: 'SourceAlpha', in2: 'core', operator: 'out', result: 'edge' })
-      + el('feFlood', { floodColor: kind === 'neon' ? st.c.accent : st.c.ink, result: 'color' })
-      + el('feComposite', { in: 'color', in2: 'edge', operator: 'in', result: 'outline' })
+      // 数据轮廓沿原来的归属色通电；不能把多色份额暂时染成同一个强调色。
+      + (role === 'data'
+        ? el('feComposite', { in: 'SourceGraphic', in2: 'edge', operator: 'in', result: 'outline' })
+        : el('feFlood', { floodColor: kind === 'neon' ? st.c.accent : st.c.ink, result: 'color' })
+          + el('feComposite', { in: 'color', in2: 'edge', operator: 'in', result: 'outline' }))
       + el('feComponentTransfer', { in: 'SourceGraphic', result: 'fill' }, el('feFuncA', { type: 'linear', slope: r(phase(k, 0.28, 0.9)) }));
     if (kind === 'neon') primitives += el('feGaussianBlur', { in: 'outline', stdDeviation: 2.2, result: 'halo' });
     primitives += el('feMerge', {}, kind === 'neon' && el('feMergeNode', { in: 'halo' }), el('feMergeNode', { in: 'outline' }), el('feMergeNode', { in: 'fill' }));
@@ -95,20 +98,20 @@ export function materialEnter(s: Scene, st: Style, value: number, b: Bounds, dra
     case 'film': y = 2 * rest; attrs.opacity = k < 0.15 ? k * 2 : 0.3 + 0.7 * phase(k, 0.15, 1); break;
     case 'cinema': y = dy * rest; attrs.opacity = Math.sin(k * Math.PI / 2) ** 2; break;
     case 'editorial': x = -dx * rest; attrs.opacity = phase(k, 0, 0.35); break;
-    case 'broadsheet': attrs.opacity = phase(k, 0, 0.22); attrs.filter = optical(s, st, k, 'press', b, role === 'mark'); break;
+    case 'broadsheet': attrs.opacity = phase(k, 0, 0.22); attrs.filter = optical(s, st, k, 'press', b, role); break;
     case 'playbill': x = (cx < s.w / 2 ? -1 : 1) * dx * rest; attrs.opacity = phase(k, 0, 0.5); break;
     case 'gala': y = -dy * rest; attrs.opacity = phase(k, 0.12, 0.65); break;
-    case 'mono': attrs.opacity = phase(k, 0, 0.25); attrs.filter = optical(s, st, k, 'outline', b); break;
-    case 'poster': angle = -lean * rest; attrs.opacity = phase(k, 0, 0.18); attrs.filter = optical(s, st, k, 'press', b, role === 'mark'); break;
+    case 'mono': attrs.opacity = phase(k, 0, 0.25); attrs.filter = optical(s, st, k, 'outline', b, role); break;
+    case 'poster': angle = -lean * rest; attrs.opacity = phase(k, 0, 0.18); attrs.filter = optical(s, st, k, 'press', b, role); break;
     case 'terminal': attrs.opacity = k > 0.06 ? 1 : 0; break;
     case 'crt': attrs.opacity = phase(k, 0, 0.35); attrs.filter = optical(s, st, k, 'crt', b); break;
-    case 'neon': attrs.opacity = phase(k, 0, 0.22); attrs.filter = optical(s, st, k, 'neon', b); break;
+    case 'neon': attrs.opacity = phase(k, 0, 0.22); attrs.filter = optical(s, st, k, 'neon', b, role); break;
     case 'arcade': x = Math.round(dx * rest / 4) * -4; attrs.opacity = k > 0.06 ? 1 : 0; break;
-    case 'ink': attrs.opacity = Math.sqrt(k); attrs.filter = optical(s, st, k, 'ink', b, role === 'mark'); break;
+    case 'ink': attrs.opacity = Math.sqrt(k); attrs.filter = optical(s, st, k, 'ink', b, role); break;
     case 'ukiyoe': attrs.opacity = phase(k, 0, 0.28); if (!data) attrs.filter = optical(s, st, k, 'register', b); break;
-    case 'woodblock': attrs.opacity = phase(k, 0, 0.2); attrs.filter = optical(s, st, k, 'press', b, role === 'mark'); y = -2 * rest; break;
+    case 'woodblock': attrs.opacity = phase(k, 0, 0.2); attrs.filter = optical(s, st, k, 'press', b, role); y = -2 * rest; break;
     case 'baroque': y = -dy * rest; angle = (cx < s.w / 2 ? -1 : 1) * lean * rest; break;
-    case 'grimoire': attrs.opacity = phase(k, 0.06, 0.5); attrs.filter = optical(s, st, k, 'outline', b); break;
+    case 'grimoire': attrs.opacity = phase(k, 0.06, 0.5); attrs.filter = optical(s, st, k, 'outline', b, role); break;
     case 'manuscript': attrs.opacity = phase(k, 0.08, 0.24); x = -3 * rest; break;
     case 'pastel': x = (cx < s.w / 2 ? -1 : 1) * dx * rest; y = -2 * Math.sin(k * Math.PI); break;
     case 'cutout': x = (cx < s.w / 2 ? -1 : 1) * dx * rest; y = -dy * rest; angle = lean * rest; attrs.opacity = 1; attrs.filter = optical(s, st, k, 'paper', b); break;
@@ -137,7 +140,11 @@ export function materialEnter(s: Scene, st: Style, value: number, b: Bounds, dra
   if (id === 'broadsheet') s.add(stroke(b.x, b.y, b.x, b.y + b.h * k));
   if (id === 'minimal-dark') s.add(stroke(b.x, b.y + b.h, b.x + b.w * phase(k, 0, 0.6), b.y + b.h));
   if (id === 'film') s.add(stroke(b.x, b.y + b.h * rest / 2, b.x + b.w, b.y + b.h * rest / 2));
-  if (id === 'crt') s.add(stroke(b.x, b.y + b.h * k, b.x + b.w, b.y + b.h * k));
+  // 字组已经完整点亮，回扫线走组边缘；穿过笔画会把小签名读成删除线。
+  if (id === 'crt') {
+    const scanY = role === 'mark' ? b.y + b.h * k : b.y + b.h;
+    s.add(stroke(b.x, scanY, b.x + b.w * (role === 'mark' ? 1 : k), scanY));
+  }
   if (id === 'terminal' && role !== 'mark') s.add(rect(b.x + b.w - Math.min(6, b.h * 0.16), b.y + b.h * 0.82, Math.min(6, b.h * 0.16), Math.min(3, b.h * 0.08), { fill: st.c.accent, opacity: rest }));
 }
 

@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 import { art, buildModel, PIECES, raster, STYLES } from '../src/index.ts';
 import { Scene, rect } from '../src/svg.ts';
 import { move, reveal } from '../src/motion.ts';
+import { THEMES } from '../src/classic/themes.ts';
+import { bridgeStyle } from '../src/classic/bridge.ts';
 
 const raw = JSON.parse(readFileSync(new URL('../fixtures/catnap.json', import.meta.url), 'utf8'));
 const m = buildModel(raw);
@@ -91,7 +93,8 @@ test('特殊材质的中间帧可被实际 SVG 栅格器绘制', () => {
 });
 
 test('星号各材质保持完整瓣形，显示的贡献比例始终不变', () => {
-  const scene = (style: string, t: number) => art('asterisk', m, STYLES.find((s) => s.id === style)!, { t })!.svg;
+  const scene = (style: string, t: number) => art('asterisk', m,
+    ['cinema', 'playbill'].includes(style) ? bridgeStyle(THEMES.find((s) => s.id === style)!) : STYLES.find((s) => s.id === style)!, { t })!.svg;
   const cyber = scene('cyber', 0.24), cutout = scene('cutout', 0.24);
   // 墨色变化不能靠矩形裁切花瓣，任意中间帧仍应有完整圆头。
   for (const style of ['ink', 'woodblock']) for (const t of [0.12, 0.38, 0.72]) {
@@ -104,7 +107,7 @@ test('星号各材质保持完整瓣形，显示的贡献比例始终不变', ()
   // 临时描线和纸片变换复用最终瓣形；样例五瓣每瓣都有 26 个 M/L 顶点。
   const petals = (svg: string) => [...svg.matchAll(/<path\b[^>]*d="([^"]+)"/g)]
     .map((match) => match[1]).filter((d) => (d.match(/[ML]/g) ?? []).length === 26 && d.endsWith('Z'));
-  for (const style of ['ink', 'woodblock', 'cyber', 'cutout', 'grimoire', 'meadow']) {
+  for (const style of ['ink', 'woodblock', 'cyber', 'cutout', 'grimoire', 'meadow', 'cinema', 'playbill']) {
     const final = scene(style, 1), finalPetals = new Set(petals(final));
     assert.equal(finalPetals.size, 5, style);
     for (const t of [0.12, 0.38, 0.72]) {

@@ -1610,10 +1610,17 @@ export function clock(m: Model, t: Theme): Out | null {
     : top ? hex(famColor(top.key, t)) : t.dark ? '240,238,233' : '22,21,20';
   const cr = t.family === 'glass' ? 9 : t.barRadius ? 7 : 0;
   const ff = t.family === 'terminal' ? MONO_FONT : t.sans;
+  // 同一日相邻的真实活跃小时构成一段；霓虹按整段接通，不凭空加线路或伪造强度。
+  let runCount = 0;
+  const runs = c.map(row => { let run = -1; return row.map(v => { if (!v) { run = -1; return -1; } if (run < 0) run = runCount++; return run; }); });
   const grid = col({ gap: G, justifyContent: 'center', flex: 1 },
     ...c.map((row, i) => box({ alignItems: 'center', gap: G },
       txt({ width: 40, fontSize: 14, color: t.soft, fontFamily: ff }, `周${wd[i]}`),
-      ...row.map((v, hr) => motion(box({ width: S, height: S, borderRadius: cr, backgroundColor: v ? `rgba(${base},${(0.12 + 0.88 * Math.pow(v / max, 0.9)).toFixed(3)})` : t.track }), 'intensity', hr, 24)))),
+      ...row.map((v, hr) => {
+        const cell = motion(box({ width: S, height: S, borderRadius: cr, backgroundColor: v ? `rgba(${base},${(0.12 + 0.88 * Math.pow(v / max, 0.9)).toFixed(3)})` : t.track }), 'intensity', hr, 24);
+        Object.assign(cell.motionCue!, { row: i, column: hr, rows: c.length, columns: row.length, level: max ? v / max : 0, run: runs[i][hr], runs: runCount });
+        return cell;
+      }))),
     box({ marginLeft: 40 + G, gap: G, marginTop: 6 },
       ...Array.from({ length: 24 }, (_, hr) => txt({ width: S, justifyContent: 'center', fontSize: 13, color: t.soft, fontFamily: ff }, hr % 6 === 0 ? `${hr}时` : ''))));
   return frame(m, t, 1200, 620, `${fmt(m.commits)} 次提交`, grid, false);
@@ -1652,7 +1659,7 @@ export function versions(m: Model, t: Theme): Out | null {
   const bars = order.map((v, i) => col({ alignItems: 'center', width: 200, flexShrink: 0 },
     t.family === 'terminal' ? (() => {
       const glyphs = termBar(v, i), node = motion(box({ height: BH, alignItems: 'flex-end' }, glyphs), 'bar-y', i, order.length);
-      node.motionCue.grid = TG; node.motionCue.travel = glyphs.props.height; return node;
+      node.motionCue.grid = TG; node.motionCue.travel = glyphs.props.width; return node;
     })() : motion(box({ height: BH, alignItems: 'flex-end' },
       // 霓虹：每根柱子整体一圈光晕（光晕按柱子算，不按每一段，出图不慢）
       col({ width: 96, height: (totals[i] / max) * BH, borderRadius: t.family === 'glass' ? 10 : t.barRadius ? 8 : 0, overflow: 'hidden', flexDirection: 'column-reverse', gap: 2, boxShadow: t.family === 'neon' ? `0 0 16px ${famColor(stack.find((k) => by[v][k]) ?? '', t, 0)}88` : undefined },

@@ -2,19 +2,14 @@
 import { Scene, rect, line, path, circle, el, g, r, measure, capOf, mix, lum } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
 import { pct, fmt, hanzi } from '../data.ts';
-import type { Style, Box } from '../style.ts';
+import type { Style } from '../style.ts';
 import { chamfer } from '../style.ts';
 import { measureV } from './common.ts';
 import { T, zh, colorOf, sign, fillOf, tip, modelLine, handLine, handTip, summary, range, canvas, type PieceOpts } from './common.ts';
 import { inkSeal } from '../styles/east.ts';
-import { phase, styleProgress, type RevealDirection } from '../motion.ts';
+import { phase, styleProgress } from '../motion.ts';
 import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
-
-// 字符格的条本身就是字形，必须整格印出；其他条才有可展开的图形边界。
-function barReveal(s: Scene, st: Style, k: number, b: Pick<Box, 'x' | 'y' | 'w' | 'h'>, direction: RevealDirection, draw: () => void): void {
-  if (st.cells || st.id === 'terminal') materialEnter(s, st, k, b, draw, 'data');
-  else materialReveal(s, st, k, b, direction, draw);
-}
+import { valueBar } from './value-bar.ts';
 
 
 export const TIER_VARIANTS = ['rows', 'center', 'podium', 'vertical', 'hud', 'stats', 'split', 'grouped'];
@@ -58,7 +53,7 @@ function rows(m: Model, st: Style, o: PieceOpts): Scene {
     const by = y + 70, bw = x1 - nx, bh = 9;
     st.track(s, nx, by, bw, bh);
     const w = Math.max(a.pct > 0 ? 3 : 0, (bw * a.pct) / 100);
-    barReveal(s, st, k, { x: nx - 12, y: by - 12, w: w + 24, h: bh + 24 }, 'right', () => {
+    valueBar(s, st, k, { x: nx - 12, y: by - 12, w: w + 24, h: bh + 24 }, 'x', () => {
       if (a.key === 'unattributed') s.add(rect(nx, by, w, bh, { fill: st.hatch(s), rx: Math.min(st.radius, bh / 2) }));
       else st.bar(s, nx, by, w, bh, color, i);
     });
@@ -112,10 +107,10 @@ function vertical(m: Model, st: Style, o: PieceOpts): Scene {
     const ptxt = zh(m) ? `${hanzi(Math.floor(p))}${Math.round((p % 1) * 10) ? '點' + hanzi(Math.round((p % 1) * 10)) : ''}` : pct(p);
     s.vtext(ptxt, x + 24, top + 84, { font: st.f.body, size: 17, fill: st.c.soft, gap: 0.02 });
     }, 'data');
-    // 竖条：从底往上
+    // 竖条保留真实高度，材质沿条的厚度形成。
     const bh = Math.max(4, (bottom - top - 120 - nh) * (a.pct / 100) * 1.0);
     const bx = x - 7;
-    barReveal(s, st, k, { x: bx - 6, y: bottom - 26 - bh, w: 26, h: bh + 12 }, 'up', () => {
+    valueBar(s, st, k, { x: bx - 6, y: bottom - 26 - bh, w: 26, h: bh + 12 }, 'y', () => {
       if (a.key === 'unattributed') s.add(rect(bx, bottom - 20 - bh, 14, bh, { fill: st.hatch(s) }));
       else st.bar(s, bx, bottom - 20 - bh, 14, bh, colorOf(st, a), i);
     });
@@ -162,7 +157,7 @@ function hud(m: Model, st: Style, o: PieceOpts): Scene {
     }, 'data');
     const bx = cx + 20, bw = cw - 40;
     st.track(s, bx, cy + 128, bw, 8);
-    barReveal(s, st, styleProgress(st, t, start + 0.3, start + 0.68), { x: bx - 12, y: cy + 116, w: bw + 24, h: 32 }, 'right', () => {
+    valueBar(s, st, styleProgress(st, t, start + 0.3, start + 0.68), { x: bx - 12, y: cy + 116, w: bw + 24, h: 32 }, 'x', () => {
       if (a.key === 'unattributed') s.add(rect(bx, cy + 128, (bw * a.pct) / 100, 8, { fill: st.hatch(s) }));
       else st.bar(s, bx, cy + 128, Math.max(8, (bw * a.pct) / 100), 8, color, i);
     });
@@ -261,7 +256,7 @@ function center(m: Model, st: Style, o: PieceOpts): Scene {
     const w = Math.max(4, (half * a.pct) / 100 * 1.6);
     const by = y + 70;
     st.track(s, cx - half, by, half * 2, 8);
-    barReveal(s, st, k, { x: cx - w / 2 - 12, y: by - 12, w: w + 24, h: 32 }, 'center-x', () => {
+    valueBar(s, st, k, { x: cx - w / 2 - 12, y: by - 12, w: w + 24, h: 32 }, 'x', () => {
       if (a.key === 'unattributed') s.add(rect(cx - w / 2, by, w, 8, { fill: st.hatch(s) }));
       else st.bar(s, cx - Math.min(w, half * 2) / 2, by, Math.min(w, half * 2), 8, colorOf(st, a), i);
     });
@@ -388,7 +383,7 @@ function split(m: Model, st: Style, o: PieceOpts): Scene {
     const full = Math.max(a.pct > 0 ? 3 : 0, (bw * a.pct) / 100);
     const gap = segs.length > 1 ? 3 : 0;
     let x = nx;
-    barReveal(s, st, k, { x: nx - 12, y: by - 12, w: full + 24, h: bh + 24 }, 'right', () => segs.forEach((q, j) => {
+    valueBar(s, st, k, { x: nx - 12, y: by - 12, w: full + 24, h: bh + 24 }, 'x', () => segs.forEach((q, j) => {
       const w = Math.max(0, (full * q.lines) / Math.max(1, a.lines) - (j < segs.length - 1 ? gap : 0));
       if (a.key === 'unattributed') s.add(rect(x, by, w, bh, { fill: st.hatch(s), rx: Math.min(st.radius, bh / 2) }));
       else st.bar(s, x, by, w, bh, q.color, i);
@@ -447,7 +442,7 @@ function grouped(m: Model, st: Style, o: PieceOpts): Scene {
       const start = row++ / Math.max(1, total - 1) * 0.5;
       const k = styleProgress(st, t, start + 0.1, start + 0.45);
       st.track(s, nx, y - 4, bw, 8);
-      barReveal(s, st, k, { x: nx - 12, y: y - 16, w: bw + 24, h: 32 }, 'right', () => {
+      valueBar(s, st, k, { x: nx - 12, y: y - 16, w: bw + 24, h: 32 }, 'x', () => {
         if (a.key === 'unattributed') s.add(rect(nx, y - 4, (bw * a.pct) / 100, 8, { fill: st.hatch(s) }));
         else st.bar(s, nx, y - 4, Math.max(3, (bw * a.pct) / 100), 8, segs[0]?.color ?? colorOf(st, a), i);
       });
@@ -466,7 +461,7 @@ function grouped(m: Model, st: Style, o: PieceOpts): Scene {
       st.num(s, pct(q.pct), x1, y + 14, 20, 'end', { fill: st.c.soft });
       }, 'data');
       st.track(s, nx, y + 26, bw, 7);
-      barReveal(s, st, k, { x: nx - 12, y: y + 14, w: bw + 24, h: 31 }, 'right', () => st.bar(s, nx, y + 26, Math.max(3, (bw * q.pct) / 100), 7, q.color, i));
+      valueBar(s, st, k, { x: nx - 12, y: y + 14, w: bw + 24, h: 31 }, 'x', () => st.bar(s, nx, y + 26, Math.max(3, (bw * q.pct) / 100), 7, q.color, i));
       if (k > 0) s.hit(nx - 6, y - 8, x1 - nx + 12, subH - 6, segTip(m, a, q));
       y += subH;
     }

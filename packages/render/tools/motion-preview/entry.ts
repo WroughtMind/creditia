@@ -26,6 +26,7 @@ document.head.append(css);
 let worker: Worker | undefined, seq = 0, pending = false, animation: any[] = [], stillArt: any;
 let playing = false, time = 0, origin = 0, request = 0, duration = 1600, last = -1;
 let scroll: Animation | undefined, resize: ResizeObserver | undefined;
+let frameImages: HTMLImageElement[] = [], frameUrls: string[] = [];
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const workerUrl = URL.createObjectURL(new Blob([workerSource], { type: 'application/javascript' }));
 function namespace(svg: string, prefix: string) {
@@ -35,8 +36,27 @@ function namespace(svg: string, prefix: string) {
 function resetScroll() {
   scroll?.cancel(); scroll = undefined; resize?.disconnect(); resize = undefined;
 }
+function resetFrameImages() {
+  frameImages = [];
+  for (const url of frameUrls) URL.revokeObjectURL(url);
+  frameUrls = [];
+}
+async function prepareFrameImages(frames: any[], job: number) {
+  const images = frames.map(frame => {
+    const image = new Image(), url = URL.createObjectURL(new Blob([frame.svg], { type: 'image/svg+xml' }));
+    frameUrls.push(url);
+    image.alt = ''; image.draggable = false;
+    image.style.cssText = 'display:block;width:100%;height:100%;object-fit:contain';
+    image.src = url;
+    return image;
+  });
+  // 与 App 一样，先解码完整 SVG（含内嵌 image），再复用同一图片元素播放。
+  // 逐帧重建内联 SVG 会让图片解码落后于时间线，在负载下闪出空图。
+  await Promise.all(images.map(image => image.decode()));
+  if (job === seq) frameImages = images;
+}
 function showStill() {
-  resetScroll();
+  resetScroll(); resetFrameImages();
   if (stillArt) stage.innerHTML = namespace(stillArt.svg, 'motion-');
   time = 1; timeline.value = '1000'; progress.value = '100%';
 }
@@ -59,7 +79,11 @@ function paint(force = false) {
   if (scroll) scroll.currentTime = time * duration;
   else if (animation.length) {
     const i = Math.min(animation.length - 1, Math.floor(time * (animation.length - 1)));
-    if (force || i !== last) { stage.innerHTML = namespace(animation[i].svg, 'motion-'); last = i; }
+    if (force || i !== last) {
+      if (frameImages.length) stage.replaceChildren(frameImages[i]);
+      else stage.innerHTML = namespace(animation[i].svg, 'motion-');
+      last = i;
+    }
   }
   timeline.value = String(Math.round(time * 1000)); progress.value = `${Math.round(time * 100)}%`;
 }
@@ -94,6 +118,15 @@ function makeWorker() {
     animation = data.animation ?? [];
     await document.fonts.ready;
     if (w !== worker || job !== seq) return;
+    // Satori 已将字转为路径；这些独立图片无需继承页面字体。仍含文字的作品保持内联。
+    if (!reduced.matches && animation.length && animation.every(frame => !/<text\b/.test(frame.svg))) {
+      try { await prepareFrameImages(animation, job); }
+      catch (error) {
+        if (w === worker && job === seq) fail(`图片准备失败：${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
+      if (w !== worker || job !== seq) return;
+    }
     pending = false; time = 0; last = -1;
     status.textContent = piece.value === 'blame' ? '溯源使用明确标注的演示记录。' : '';
     document.documentElement.dataset.state = 'ready';
@@ -132,7 +165,7 @@ function pieces(preferred?: string) {
   variants();
 }
 function load() {
-  play(false); resetScroll(); seq++; animation = []; stillArt = undefined; last = -1; time = 0;
+  play(false); resetScroll(); resetFrameImages(); seq++; animation = []; stillArt = undefined; last = -1; time = 0;
   still.replaceChildren(); stage.replaceChildren(); timeline.value = '0'; progress.value = '0%';
   if (pending) { worker?.terminate(); worker = undefined; }
   worker ??= makeWorker(); pending = true;

@@ -14,6 +14,26 @@ const b = { x: 20, y: 20, w: 180, h: 50 };
 const plain = (s: Scene) => { s.add(rect(b.x, b.y, b.w, b.h, { fill: '#292322' })); s.hit(b.x, b.y, b.w, b.h, { t: 'data' }); };
 const normalize = (s: string) => s.replace(/\bc[0-9a-z]+-/g, 'scene-');
 
+test('数据轮廓从初现起保留每个归属色，不把份额统染为强调色', () => {
+  for (const id of ['neon', 'mono', 'grimoire']) {
+    const st = styles.find(s => s.id === id)!;
+    for (const k of [.15, .25, .5]) {
+      const s = new Scene(240, 100);
+      materialEnter(s, st, k, b, () => {
+        s.add(rect(20, 20, 86, 50, { fill: '#ff0000' }), rect(114, 20, 86, 50, { fill: '#00ff00' }));
+      }, 'data');
+      const { data } = raster.rgba(s.toString(), 240);
+      let red = 0, green = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 12) continue;
+        if (data[i] > data[i + 1] * 3 && data[i] > 8) red++;
+        if (data[i + 1] > data[i] * 3 && data[i + 1] > 8) green++;
+      }
+      assert.ok(red > 20 && green > 20, `${id}/${k}: both real ownership colors must remain visible`);
+    }
+  }
+});
+
 test('每个可选风格有明确的材质动作，终点直接回到原始作品', () => {
   assert.deepEqual(styles.map(s => s.id).sort(), Object.keys(MATERIAL_MOTIONS).sort());
   for (const st of styles) {

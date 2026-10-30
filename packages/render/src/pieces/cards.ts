@@ -2,19 +2,12 @@
 import { Scene, rect, line, path, circle, el, g, r, measure, rng, hash, mix, alpha } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
 import { fmt, compact, pct, modelName, tzOf } from '../data.ts';
-import type { Style, Box } from '../style.ts';
+import type { Style } from '../style.ts';
 import { T, zh, colorOf, tip, handFacts, handTip, canvas, range, summary, modelLine, type PieceOpts } from './common.ts';
 import { segsOf, segTip } from './tier.ts';
-import { styleProgress, type RevealDirection } from '../motion.ts';
+import { drawGroup, styleProgress } from '../motion.ts';
 import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
-
-// 字符格的条本身就是字形，必须整格印出；其他条才有可展开的图形边界。
-function barReveal(s: Scene, st: Style, k: number, b: Pick<Box, 'x' | 'y' | 'w' | 'h'>, direction: RevealDirection, draw: () => void): void {
-  // 堆叠份额沿厚度共同出现；舞台开窗、聚光和分段扫描会暂时遮去整份数据，改为整图显影。
-  const shares = direction === 'down' && ['baroque', 'playbill', 'gala', 'arcade', 'cyber'].includes(st.id);
-  if (st.cells || st.id === 'terminal' || shares) materialEnter(s, st, k, b, draw, 'data');
-  else materialReveal(s, st, k, b, direction, draw);
-}
+import { valueBar } from './value-bar.ts';
 
 
 // 印章只压下完整的字/标记；描边按真实轮廓走，均不靠裁切字身完成进场。
@@ -191,7 +184,7 @@ export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
   // 份额是一个整体：沿条的厚度揭示，所有段保持相同进度与真实宽度。
   const by = c.y + c.h - 196, bw = x1 - x0, bh = 30;
   let x = x0;
-  barReveal(s, st, styleProgress(st, t, 0.2, 0.68), { x: x0, y: by, w: bw, h: bh }, 'down', () => m.rows.forEach((a, i) => {
+  valueBar(s, st, styleProgress(st, t, 0.2, 0.68), { x: x0, y: by, w: bw, h: bh }, 'x', () => m.rows.forEach((a, i) => {
     const w = (bw * a.pct) / 100;
       if (a.key === 'unattributed') s.add(rect(x, by, w, bh, { fill: st.hatch(s) }));
       else st.bar(s, x, by, Math.max(0, w - 2), bh, colorOf(st, a), i);
@@ -245,7 +238,7 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     stamp(s, st, styleProgress(st, t, 0.3, 0.8), S / 2, S / 2 - 6, () => st.mark(s, lead[0].key, S / 2, S / 2 - 6, 48));
     materialEnter(s, st, styleProgress(st, t, 0.42, 0.9), { x: S / 2 - 40, y: S / 2 + 26, w: 80, h: 26 }, () => st.num(s, pct(lead[0].pct), S / 2, S / 2 + 48, 18, 'middle'));
     st.track(s, 48, S / 2 + 70, S - 96, 9);
-    barReveal(s, st, styleProgress(st, t, 0.5, 0.96), { x: 48, y: S / 2 + 70, w: S - 96, h: 9 }, 'right', () => st.bar(s, 48, S / 2 + 70, ((S - 96) * lead[0].pct) / 100, 9, colorOf(st, lead[0]), 0));
+    valueBar(s, st, styleProgress(st, t, 0.5, 0.96), { x: 48, y: S / 2 + 70, w: S - 96, h: 9 }, 'x', () => st.bar(s, 48, S / 2 + 70, ((S - 96) * lead[0].pct) / 100, 9, colorOf(st, lead[0]), 0));
     if (t > 0.3) s.hit(18, 18, S - 36, S - 36, tip(m, lead[0]));
     return s;
   }
@@ -261,7 +254,8 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     const id = s.def('ring', (id2) => el('path', { id: id2, d: `M${S / 2} ${S / 2}m-${R0} 0a${R0} ${R0} 0 1 1 ${2 * R0} 0a${R0} ${R0} 0 1 1 ${-2 * R0} 0` }));
     const rim = styleProgress(st, t, 0.16, 0.8);
     const lettering = () => s.add(el('text', { fontFamily: st.f.label.family, fontWeight: st.f.label.weight ?? 500, fontSize: 15, fill: st.c.ink, letterSpacing: 3 }, el('textPath', { href: `#${id}`, startOffset: '0' }, txt)));
-    materialEnter(s, st, rim, { x: S / 2 - R0 - 18, y: S / 2 - R0 - 18, w: R0 * 2 + 36, h: R0 * 2 + 36 }, lettering);
+    // 圆弧题字没有水平基线；排版与手稿的通用直线批注会穿出圆章，不能套在这里。
+    materialEnter(s, st, rim, { x: S / 2 - R0 - 18, y: S / 2 - R0 - 18, w: R0 * 2 + 36, h: R0 * 2 + 36 }, lettering, ['manuscript', 'editorial'].includes(st.id) ? 'data' : 'content');
     stamp(s, st, styleProgress(st, t, 0.3, 0.82), S / 2, S / 2 - 10, () => st.mark(s, lead[0].key, S / 2, S / 2 - 10, 48));
     materialEnter(s, st, styleProgress(st, t, 0.46, 0.96), { x: S / 2 - 40, y: S / 2 + 18, w: 80, h: 26 }, () => st.num(s, pct(lead[0].pct), S / 2, S / 2 + 40, 18, 'middle'));
     if (t > 0.3) s.hit(40, 40, S - 80, S - 80, tip(m, lead[0]));
@@ -275,7 +269,7 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.add(rect(0.5, 0.5, W - 1, H - 1, { fill: st.c.paper, stroke: st.c.ink, strokeOpacity: 0.25, rx: Math.min(st.radius, 14) }));
     materialEnter(s, st, styleProgress(st, t, 0, 0.25), { x: 18, y: 12, w: 128, h: 20 }, () => s.text(T(m, 'AI 参与编写', 'Written with AI'), 18, 28, { font: st.f.label, size: 13, fill: st.c.soft }));
     let x = 18;
-    barReveal(s, st, styleProgress(st, t, 0, 0.9), { x: 18, y: 42, w: W - 36, h: 14 }, 'down', () => m.rows.forEach((a, i) => {
+    valueBar(s, st, styleProgress(st, t, 0, 0.9), { x: 18, y: 42, w: W - 36, h: 14 }, 'x', () => m.rows.forEach((a, i) => {
       const w = ((W - 36) * a.pct) / 100;
       // 字符格风格：条是一排方块字
       if (st.cells) st.bar(s, x, 42, w, 14, a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a), i);
@@ -320,7 +314,7 @@ function splitBadge(m: Model, st: Style, t: number): Scene | null {
   s.text(`${top.name} ${Math.round(top.pct)}%`, W - 18, 28, { font: st.f.body, size: 13, fill: st.c.ink, anchor: 'end', maxW: W - 160 });
   let x = 18;
   const bw = W - 36;
-  barReveal(s, st, styleProgress(st, t, 0, 0.72), { x: 18, y: 40, w: bw, h: 14 }, 'down', () => {
+  valueBar(s, st, styleProgress(st, t, 0, 0.72), { x: 18, y: 40, w: bw, h: 14 }, 'x', () => {
   for (const a of tools) {
     const w = (bw * a.pct) / 100;
     let sx = x;
@@ -371,17 +365,65 @@ export function byline(m: Model, st: Style, o: PieceOpts): Scene | null {
   const subOf = (a: Agent) => { const segs = segsOf(m, st, a).filter((q) => !q.unknown); return segs.length > 1 ? segs.slice(0, 3).map((q) => q.name).join(' · ') : modelLine(a); };
   const more = (k: number) => T(m, `等 ${k} 个`, `+${k} more`);
   const plan = bylinePlan(lead, models ? 3 : 4, st, x, end, tail, more, models ? subOf : null);
-  // 一段署名作为一个排字单元依次归位；模型作为次行跟上，不拆开工具名或百分比。
+  // 署名的材质以真实内容单元展开；小横幅不依赖全画布的微位移。
+  const compose = (k: number, x: number, y: number, angle: number, cx: number, cy: number, draw: () => void) => {
+    const first = s.hits.length;
+    drawGroup(s, k <= 0 ? { visibility: 'hidden' } : { transform: `translate(${r(x)} ${r(y)}) rotate(${r(angle)} ${r(cx)} ${r(cy)})` }, draw);
+    if (k <= 0) { s.hits.splice(first); return; }
+    const a = angle * Math.PI / 180, co = Math.cos(a), si = Math.sin(a);
+    for (const hit of s.hits.slice(first)) {
+      const pts = [[hit.x, hit.y], [hit.x + hit.w, hit.y], [hit.x, hit.y + hit.h], [hit.x + hit.w, hit.y + hit.h]]
+        .map(([px, py]) => [cx + (px - cx) * co - (py - cy) * si + x, cy + (px - cx) * si + (py - cy) * co + y]);
+      hit.x = r(Math.min(...pts.map(p => p[0]))); hit.y = r(Math.min(...pts.map(p => p[1])));
+      hit.w = r(Math.max(...pts.map(p => p[0])) - hit.x); hit.h = r(Math.max(...pts.map(p => p[1])) - hit.y);
+    }
+  };
   for (const [i, it] of plan.items.entries()) {
     const a = it.a;
-    const start = materialOrder(st, i, plan.items.length, plan.items.length) * 0.4;
-    materialEnter(s, st, styleProgress(st, t, start, start + 0.48), { x: it.x - 4, y: models ? 38 : 44, w: it.w + 34, h: models ? 60 : 40 }, () => {
-    st.mark(s, a.key, it.x + 12, nameY - 8, 22);
-    s.text(it.name, it.x + 30, nameY, { font: st.f.body, size: plan.size, fill: st.c.ink });
-    s.hit(it.x - 4, models ? 38 : 44, it.w + 34, models ? 60 : 40, tip(m, a));
-    });
+    // 连续署名按实际阅读方向展开，模型说明跟随所属工具，不沿用图形的中心序。
+    const start = i / Math.max(1, plan.items.length - 1) * 0.4;
+    const k = styleProgress(st, t, start, start + 0.48), rest = 1 - k;
+    const mark = () => st.mark(s, a.key, it.x + 12, nameY - 8, 22);
+    const name = () => s.text(it.name, it.x + 30, nameY, { font: st.f.body, size: plan.size, fill: st.c.ink });
+    const sub = () => { if (it.sub) s.text(it.sub, it.x + 30, 90, { font: st.f.body, size: 13, fill: st.c.soft, maxW: it.subW, overflow: 'clip' }); };
+    const hit = () => s.hit(it.x - 4, models ? 38 : 44, it.w + 34, models ? 60 : 40, tip(m, a));
+    const markHit = () => s.hit(it.x, nameY - 20, 24, 24, tip(m, a));
+    const nameHit = () => s.hit(it.x + 28, nameY - plan.size, measure(it.name, st.f.body, plan.size) + 4, plan.size + 4, tip(m, a));
+    const subHit = () => { if (it.sub) s.hit(it.x + 28, 76, it.subW + 4, 18, tip(m, a)); };
+    if (t < 1 && ['pastel', 'cutout', 'meadow', 'manga', 'cyber'].includes(st.id)) {
+      const cx = it.x + 12, cy = nameY - 8;
+      if (st.id === 'cutout') {
+        // 图标、名称、次行是一张刚性纸条，绕左端压下，不让每行各漂一次。
+        compose(k, -8 * rest, -12 * rest, -7 * rest, cx, cy, () => { mark(); name(); sub(); hit(); });
+      } else if (st.id === 'cyber') {
+        // 模块先落入横向槽位，再逐格对准基线；文字始终是完整模块。
+        const horizontal = Math.max(0, 1 - k / 0.55), vertical = Math.max(0, 1 - Math.max(0, k - 0.55) / 0.45);
+        compose(k, Math.ceil(horizontal * 4) * 8, -Math.ceil(vertical * 2) * 8, 0, cx, cy, () => { mark(); name(); sub(); hit(); });
+      } else if (st.id === 'manga') {
+        const mk = styleProgress(st, t, start, start + 0.18), nk = styleProgress(st, t, start + 0.1, start + 0.4);
+        compose(mk, 0, -12 * (1 - mk), 0, cx, cy, () => { mark(); markHit(); });
+        compose(nk, -22 * (1 - nk), 10 * (1 - nk), 0, cx, cy, () => { name(); nameHit(); });
+        const sk = styleProgress(st, t, start + 0.28, Math.min(0.98, start + 0.6));
+        compose(sk, 0, -6 * (1 - sk), 0, cx, cy, () => { sub(); subHit(); });
+      } else {
+        // 标记先形成锚点；成对的署名轻扇开，草地署名从锚点下方沿弧线抬起。
+        const mk = styleProgress(st, t, start, start + 0.2);
+        compose(mk, 0, 6 * (1 - mk), 0, cx, cy, () => { mark(); markHit(); });
+        const nk = styleProgress(st, t, start + 0.1, start + 0.58), q = 1 - nk;
+        const side = i < (plan.items.length - 1) / 2 ? -1 : 1;
+        compose(nk, st.id === 'meadow' ? -10 * Math.sin(Math.PI * nk) : 0,
+          st.id === 'meadow' ? 14 * q * q : 0,
+          st.id === 'meadow' ? 5 * q : side * 6 * q, cx, cy, () => { name(); nameHit(); if (st.id === 'pastel') { sub(); subHit(); } });
+        if (st.id === 'meadow') {
+          const sk = styleProgress(st, t, start + 0.3, Math.min(0.98, start + 0.62));
+          compose(sk, 0, -6 * (1 - sk), 0, cx, cy, () => { sub(); subHit(); });
+        }
+      }
+      continue;
+    }
+    materialEnter(s, st, k, { x: it.x - 4, y: models ? 38 : 44, w: it.w + 34, h: models ? 60 : 40 }, () => { mark(); name(); hit(); });
     // 次行跟随所属工具，单独落位，避免外层和内层叠加两次滤镜/位移。
-    if (it.sub) materialEnter(s, st, styleProgress(st, t, start + 0.16, start + 0.58), { x: it.x + 30, y: 74, w: it.subW, h: 20 }, () => s.text(it.sub, it.x + 30, 90, { font: st.f.body, size: 13, fill: st.c.soft, maxW: it.subW, overflow: 'clip' }));
+    if (it.sub) materialEnter(s, st, styleProgress(st, t, start + 0.16, start + 0.58), { x: it.x + 30, y: 74, w: it.subW, h: 20 }, sub);
   }
   let tx = plan.end;
   materialEnter(s, st, styleProgress(st, t, 0.5, 0.98), { x: tx, y: nameY - 22, w: Math.max(20, end - tx), h: 28 }, () => {
@@ -455,7 +497,7 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
     const bx = cx - w / 2;
     const col = mix(st.c.accent2.startsWith('#') ? st.c.accent2 : '#888888', st.dark ? '#000000' : '#FFFFFF', 0.15 + i * 0.25);
     const k = styleProgress(st, t, i * 0.16, 0.42 + i * 0.16);
-    barReveal(s, st, k, { x: bx, y, w, h: 64 }, 'center-x', () => st.bar(s, bx, y, w, 64, col, i));
+    valueBar(s, st, k, { x: bx, y, w, h: 64 }, 'x', () => st.bar(s, bx, y, w, 64, col, i));
     s.text(q.k, x0, y - 14, { font: st.f.label, size: 15, fill: st.c.soft });
     st.num(s, fmt(q.v), x1, y - 12, 22, 'end');
     s.hit(x0, y - 40, x1 - x0, 110, { k: 'human', t: q.k, d: [T(m, `${fmt(q.v)} 行`, `${fmt(q.v)} lines`), ...(i ? [T(m, `是上一项的 ${Math.round((q.v / steps[i - 1].v) * 100)}%`, `${Math.round((q.v / steps[i - 1].v) * 100)}% of the previous step`)] : [])] });
