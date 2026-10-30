@@ -2,10 +2,24 @@
 import { Scene, rect, line, path, circle, el, g, r, measure, rng, hash, mix, alpha } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
 import { fmt, compact, pct, modelName, tzOf } from '../data.ts';
-import type { Style } from '../style.ts';
+import type { Style, Box } from '../style.ts';
 import { T, zh, colorOf, tip, handFacts, handTip, canvas, range, summary, modelLine, type PieceOpts } from './common.ts';
 import { segsOf, segTip } from './tier.ts';
-import { styleProgress, reveal } from '../motion.ts';
+import { styleProgress, type RevealDirection } from '../motion.ts';
+import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
+
+// 字符格的条本身就是字形，必须整格印出；其他条才有可展开的图形边界。
+function barReveal(s: Scene, st: Style, k: number, b: Pick<Box, 'x' | 'y' | 'w' | 'h'>, direction: RevealDirection, draw: () => void): void {
+  if (st.cells || st.id === 'terminal') materialEnter(s, st, k, b, draw, 'data');
+  else materialReveal(s, st, k, b, direction, draw);
+}
+
+
+// 印章只压下完整的字/标记；描边按真实轮廓走，均不靠裁切字身完成进场。
+function stamp(s: Scene, st: Style, k: number, cx: number, cy: number, draw: () => void, size = 48): void {
+  materialEnter(s, st, k, { x: cx - size / 2, y: cy - size / 2, w: size, h: size }, draw, 'mark');
+}
+const tracing = (k: number, length: number) => k >= 1 ? {} : { strokeDasharray: length, strokeDashoffset: length * (1 - k) };
 
 // ───────────────────────── 精力小票 ─────────────────────────
 
@@ -44,60 +58,72 @@ function slip(m: Model, st: Style, itemized: boolean, o: PieceOpts): Scene {
   const px = c.x + 30, pw = c.w - 60, py = c.y + 10, ph = c.h - 20;
   const paper = st.dark ? mix(st.c.paper, '#FFFFFF', 0.04) : st.c.paper;
   const t = o.t ?? 1;
-  // 纸从打印口逐行送出，字与数字保持完整尺寸。
-  reveal(s, styleProgress(st, t, 0, 0.96), { x: px - 12, y: py - 12, w: pw + 24, h: ph + 28 }, 'down', () => {
+  const print = (bottom: number, height: number, draw: () => void, role: 'content' | 'title' = 'content') => {
+    const start = 0.1 + Math.max(0, (bottom - py) / ph) * 0.68;
+    materialEnter(s, st, styleProgress(st, t, start, Math.min(0.98, start + 0.18)), { x: px + 30, y: bottom - height, w: pw - 60, h: height }, draw, role);
+  };
+  // 纸张先完整落位，再逐行印字；纸与文字分别采用当前风格的材质。
+  materialEnter(s, st, styleProgress(st, t, 0, 0.3), { x: px - 12, y: py - 12, w: pw + 24, h: ph + 28 }, () => {
   let d = `M${r(px)} ${r(py)}`;
   for (let x = px; x < px + pw - 1; x += 14) d += `L${r(Math.min(x + 7, px + pw))} ${r(py - 8)}L${r(Math.min(x + 14, px + pw))} ${r(py)}`;
   d += `L${r(px + pw)} ${r(py + ph)}`;
   for (let x = px + pw; x > px + 1; x -= 14) d += `L${r(Math.max(x - 7, px))} ${r(py + ph + 8)}L${r(Math.max(x - 14, px))} ${r(py + ph)}`;
   s.add(path(d + 'Z', { fill: paper, opacity: st.dark ? 0.92 : 0.96 }));
+  }, 'paper');
   const x0 = px + P - 30, x1 = px + pw - P + 30, cx = W / 2;
   let y = py + 70;
-  st.label(s, T(m, '小票', 'RECEIPT'), cx, y, { anchor: 'middle', size: 14 });
-  st.title(s, m.project || 'Untitled', cx, y + 66, 46, 'middle', { maxW: pw - 80 });
+  print(y + 14, 32, () => st.label(s, T(m, '小票', 'RECEIPT'), cx, y, { anchor: 'middle', size: 14 }));
+  print(y + 90, 72, () => st.title(s, m.project || 'Untitled', cx, y + 66, 46, 'middle', { maxW: pw - 80 }), 'title');
   y += 108;
-  const dash = (yy: number) => s.add(line(x0, yy, x1, yy, { stroke: st.c.ink, strokeOpacity: 0.35, strokeDasharray: '5 5' }));
+  const dash = (yy: number) => print(yy + 1, 2, () => s.add(line(x0, yy, x1, yy, { stroke: st.c.ink, strokeOpacity: 0.35, strokeDasharray: '5 5' })));
   dash(y); y += 44;
   const mono = st.f.mono;
   for (const it of items) {
-    s.text(it.k, x0, y, { font: st.f.body, size: 19, fill: st.c.soft });
-    st.num(s, it.v, x1, y, 22, 'end');
-    if (it.d) s.text(it.d, x1, y + 22, { font: mono, size: 12, fill: st.c.faint, anchor: 'end' });
-    s.hit(x0 - 8, y - 28, x1 - x0 + 16, 40, { t: it.k, d: [it.v, ...(it.d ? [it.d] : [])] });
+    print(y + (it.d ? 22 : 0) + 12, it.d ? 64 : 42, () => {
+      s.text(it.k, x0, y, { font: st.f.body, size: 19, fill: st.c.soft });
+      st.num(s, it.v, x1, y, 22, 'end');
+      if (it.d) s.text(it.d, x1, y + 22, { font: mono, size: 12, fill: st.c.faint, anchor: 'end' });
+      s.hit(x0 - 8, y - 28, x1 - x0 + 16, 40, { t: it.k, d: [it.v, ...(it.d ? [it.d] : [])] });
+    });
     y += it.d ? lh + 16 : lh;
   }
   dash(y - 14); y += 30;
   // 分项：各工具
   for (const a of list) {
-    st.mark(s, a.key, x0 + 12, y - 7, 20);
-    s.text(a.name, x0 + 34, y, { font: st.f.body, size: 17, fill: st.c.ink, maxW: 260 });
-    s.text(`× ${fmt(a.lines)}`, x1 - 110, y, { font: mono, size: 15, fill: st.c.soft, anchor: 'end' });
-    st.num(s, pct(a.pct), x1, y, 17, 'end');
-    s.hit(x0 - 8, y - 24, x1 - x0 + 16, 36, tip(m, a));
+    print(y + 12, 40, () => {
+      st.mark(s, a.key, x0 + 12, y - 7, 20);
+      s.text(a.name, x0 + 34, y, { font: st.f.body, size: 17, fill: st.c.ink, maxW: 260 });
+      s.text(`× ${fmt(a.lines)}`, x1 - 110, y, { font: mono, size: 15, fill: st.c.soft, anchor: 'end' });
+      st.num(s, pct(a.pct), x1, y, 17, 'end');
+      s.hit(x0 - 8, y - 24, x1 - x0 + 16, 36, tip(m, a));
+    });
     y += 40;
     // 明细：模型一行，缩进，小一号
     for (const q of subs(a)) {
-      s.text(`· ${q.name}`, x0 + 34, y - 6, { font: mono, size: 13, fill: st.c.soft, maxW: 300, overflow: 'clip' });
-      s.text(`× ${fmt(q.lines)}`, x1 - 110, y - 6, { font: mono, size: 13, fill: st.c.faint, anchor: 'end' });
-      s.text(pct(q.pct), x1, y - 6, { font: mono, size: 13, fill: st.c.soft, anchor: 'end' });
-      s.hit(x0 + 24, y - 26, x1 - x0 - 16, 28, segTip(m, a, q));
+      print(y + 6, 32, () => {
+        s.text(`· ${q.name}`, x0 + 34, y - 6, { font: mono, size: 13, fill: st.c.soft, maxW: 300, overflow: 'clip' });
+        s.text(`× ${fmt(q.lines)}`, x1 - 110, y - 6, { font: mono, size: 13, fill: st.c.faint, anchor: 'end' });
+        s.text(pct(q.pct), x1, y - 6, { font: mono, size: 13, fill: st.c.soft, anchor: 'end' });
+        s.hit(x0 + 24, y - 26, x1 - x0 - 16, 28, segTip(m, a, q));
+      });
       y += 30;
     }
   }
   dash(y - 8); y += 40;
-  s.text(T(m, '合计', 'TOTAL'), x0, y, { font: st.f.display, size: 24, fill: st.c.ink });
-  st.num(s, T(m, `${fmt(m.linesAdded)} 行`, `${fmt(m.linesAdded)} lines`), x1, y, 26, 'end');
+  print(y + 14, 46, () => {
+    s.text(T(m, '合计', 'TOTAL'), x0, y, { font: st.f.display, size: 24, fill: st.c.ink });
+    st.num(s, T(m, `${fmt(m.linesAdded)} 行`, `${fmt(m.linesAdded)} lines`), x1, y, 26, 'end');
+  });
   y += 50;
   // 条形码：由项目名和数字决定，不是装饰性的随机
   const rnd = rng(hash(m.project + m.commits + m.linesAdded));
   let bx = cx - 150;
   const bars: string[] = [];
   while (bx < cx + 150) { const w = 1 + Math.floor(rnd() * 3.2); bars.push(rect(bx, y, w, 54, { fill: st.c.ink })); bx += w + 1 + Math.floor(rnd() * 3); }
-  s.add(g({ opacity: 0.85 }, ...bars));
-  s.text(`${m.project.toUpperCase()}-${m.commits}-${m.linesAdded}`, cx, y + 76, { font: mono, size: 12, fill: st.c.soft, anchor: 'middle', track: 0.2 });
+  materialReveal(s, st, styleProgress(st, t, 0.72, 0.94), { x: cx - 150, y, w: 300, h: 54 }, 'right', () => s.add(g({ opacity: 0.85 }, ...bars)));
+  print(y + 88, 28, () => s.text(`${m.project.toUpperCase()}-${m.commits}-${m.linesAdded}`, cx, y + 76, { font: mono, size: 12, fill: st.c.soft, anchor: 'middle', track: 0.2 }));
   const hf = handFacts(m);
-  if (hf.length) { s.text(hf.slice(0, 2).map((f) => f.text).join(T(m, '，', ', ')), cx, y + 112, { font: st.f.body, size: 14, fill: st.c.soft, anchor: 'middle', maxW: pw - 80 }); s.hit(x0, y + 92, x1 - x0, 28, handTip(m)); }
-  });
+  if (hf.length) print(y + 126, 36, () => { s.text(hf.slice(0, 2).map((f) => f.text).join(T(m, '，', ', ')), cx, y + 112, { font: st.f.body, size: 14, fill: st.c.soft, anchor: 'middle', maxW: pw - 80 }); s.hit(x0, y + 92, x1 - x0, 28, handTip(m)); });
   return s;
 }
 
@@ -112,7 +138,8 @@ function ticket(m: Model, st: Style, o: PieceOpts): Scene {
   const notch = 22;
   s.add(path(`M${r(x)} ${r(y)}H${r(x + w - stub - notch)}a${notch} ${notch} 0 0 0 ${notch * 2} 0H${r(x + w)}V${r(y + h)}H${r(x + w - stub + notch)}a${notch} ${notch} 0 0 0 ${-notch * 2} 0H${r(x)}Z`, { fill: paper, stroke: st.c.ink, strokeOpacity: 0.2 }));
   s.add(line(x + w - stub, y + notch + 6, x + w - stub, y + h - notch - 6, { stroke: st.c.ink, strokeOpacity: 0.4, strokeDasharray: '6 6' }));
-  reveal(s, styleProgress(st, t, 0, 0.65), { x, y, w: w - stub, h }, 'right', () => {
+  // 票面文字作为完整印版落位；条形码另按条落墨，不用扫描线横穿字身。
+  materialEnter(s, st, styleProgress(st, t, 0, 0.65), { x: x + 40, y: y + 30, w: w - stub - 80, h: h - 60 }, () => {
   st.label(s, 'ADMIT ONE', x + 50, y + 62, { size: 14 });
   st.title(s, m.project || 'Untitled', x + 50, y + 150, 76, 'start', { maxW: w - stub - 100 });
   const lead = m.rows.filter((a) => a.kind === 'agent').slice(0, 3);
@@ -127,12 +154,13 @@ function ticket(m: Model, st: Style, o: PieceOpts): Scene {
   });
   // 票根
   const sx = x + w - stub / 2;
-  reveal(s, styleProgress(st, t, 0.38, 0.96), { x: x + w - stub, y, w: stub, h }, 'down', () => {
+  materialEnter(s, st, styleProgress(st, t, 0.38, 0.96), { x: sx - 120, y: y + 35, w: 240, h: h - 65 }, () => {
   st.label(s, 'STUB', sx, y + 62, { anchor: 'middle', size: 12 });
   st.num(s, range(m).split(' — ')[1] ?? '', sx, y + 110, 22, 'middle');
   const rnd = rng(hash(m.project));
   const bars: string[] = [];
-  for (let k = 0; k < 44; k++) { const bw = 1 + Math.floor(rnd() * 3); bars.push(rect(sx - 110 + k * 5, y + 150, bw, 90, { fill: st.c.ink })); }
+  const ink = styleProgress(st, t, 0.42, 0.92);
+  for (let k = 0; k < 44; k++) { const bw = 1 + Math.floor(rnd() * 3); if (ink >= 1 || ink > materialOrder(st, k, 44, 44)) bars.push(rect(sx - 110 + k * 5, y + 150, bw, 90, { fill: st.c.ink })); }
   s.add(g({ opacity: 0.8 }, ...bars));
   const hf = handFacts(m);
   if (hf[0]) { s.text(hf[0].text, sx, y + h - 46, { font: st.f.body, size: 16, fill: st.c.soft, anchor: 'middle' }); s.hit(sx - 120, y + h - 70, 240, 36, handTip(m)); }
@@ -161,12 +189,12 @@ export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
   let x = x0;
   m.rows.forEach((a, i) => {
     const w = (bw * a.pct) / 100;
-    const k = styleProgress(st, t, i / Math.max(1, m.rows.length - 1) * 0.4, 0.55 + i / Math.max(1, m.rows.length - 1) * 0.4);
-    reveal(s, k, { x: x - 12, y: by - 12, w: w + 24, h: bh + 24 }, 'up', () => {
+    const k = styleProgress(st, t, materialOrder(st, i, m.rows.length, st.id === 'manuscript' ? 1 : m.rows.length) * 0.66, 0.32 + materialOrder(st, i, m.rows.length, st.id === 'manuscript' ? 1 : m.rows.length) * 0.66);
+    barReveal(s, st, k, { x, y: by, w, h: bh }, 'right', () => {
       if (a.key === 'unattributed') s.add(rect(x, by, w, bh, { fill: st.hatch(s) }));
       else st.bar(s, x, by, Math.max(0, w - 2), bh, colorOf(st, a), i);
+      s.hit(x, by - 6, w, bh + 12, tip(m, a));
     });
-    s.hit(x, by - 6, w, bh + 12, tip(m, a));
     x += w;
   });
   // 图例：色块 + 标志 + 名字 + 占比，按各自的宽度从左往右排，色块和上面条里的颜色一一对应
@@ -197,6 +225,7 @@ export const BADGE_VARIANTS = ['flat', 'stack', 'emblem', 'split'];
 
 export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
   const v = o.variant ?? 'flat';
+  const t = o.t ?? 1;
   const lead = m.rows.filter((a) => a.kind === 'agent').slice(0, 3);
   if (!lead.length) return null;
   if (v === 'emblem' && st.grid) {
@@ -207,32 +236,34 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.add(rect(4, 4, S - 8, S - 8, { fill: st.c.paper }));
     const head = T(m, ` ${m.project} · AI 参与编写 `, ` ${m.project} · written with AI `);
     const hw = Math.min(measure(head, st.f.mono, 14), S - 56);
-    s.add(path(`M${r(S / 2 - hw / 2 - 4)} 18H18V${S - 18}H${S - 18}V18H${r(S / 2 + hw / 2 + 4)}`, { fill: 'none', stroke: st.c.ink, strokeOpacity: 0.55, strokeWidth: 1.5 }));
-    s.text(head, S / 2, 23, { font: st.f.mono, size: 14, fill: st.c.ink, anchor: 'middle', maxW: S - 56 });
-    st.mark(s, lead[0].key, S / 2, S / 2 - 6, 48);
-    st.num(s, pct(lead[0].pct), S / 2, S / 2 + 48, 18, 'middle');
+    s.add(path(`M${r(S / 2 - hw / 2 - 4)} 18H18V${S - 18}H${S - 18}V18H${r(S / 2 + hw / 2 + 4)}`, { fill: 'none', stroke: st.c.ink, strokeOpacity: 0.55, strokeWidth: 1.5, ...tracing(styleProgress(st, t, 0, 0.65), 4 * (S - 36) - hw - 8) }));
+    materialEnter(s, st, styleProgress(st, t, 0.08, 0.5), { x: (S - hw) / 2, y: 9, w: hw, h: 18 }, () => s.text(head, S / 2, 23, { font: st.f.mono, size: 14, fill: st.c.ink, anchor: 'middle', maxW: S - 56 }));
+    stamp(s, st, styleProgress(st, t, 0.3, 0.8), S / 2, S / 2 - 6, () => st.mark(s, lead[0].key, S / 2, S / 2 - 6, 48));
+    materialEnter(s, st, styleProgress(st, t, 0.42, 0.9), { x: S / 2 - 40, y: S / 2 + 26, w: 80, h: 26 }, () => st.num(s, pct(lead[0].pct), S / 2, S / 2 + 48, 18, 'middle'));
     st.track(s, 48, S / 2 + 70, S - 96, 9);
-    st.bar(s, 48, S / 2 + 70, ((S - 96) * lead[0].pct) / 100, 9, colorOf(st, lead[0]), 0);
-    s.hit(18, 18, S - 36, S - 36, tip(m, lead[0]));
+    barReveal(s, st, styleProgress(st, t, 0.5, 0.96), { x: 48, y: S / 2 + 70, w: S - 96, h: 9 }, 'right', () => st.bar(s, 48, S / 2 + 70, ((S - 96) * lead[0].pct) / 100, 9, colorOf(st, lead[0]), 0));
+    if (t > 0.3) s.hit(18, 18, S - 36, S - 36, tip(m, lead[0]));
     return s;
   }
   if (v === 'emblem') {
     const S = 260;
     const s = new Scene(S, S);
     s.bg = st.c.bg;
-    s.add(circle(S / 2, S / 2, S / 2 - 4, { fill: st.c.paper, stroke: st.c.ink, strokeWidth: 3 }));
-    s.add(circle(S / 2, S / 2, S / 2 - 16, { fill: 'none', stroke: st.c.ink, strokeWidth: 1, strokeOpacity: 0.5 }));
+    s.add(circle(S / 2, S / 2, S / 2 - 4, { fill: st.c.paper, stroke: st.c.ink, strokeWidth: 3, ...tracing(styleProgress(st, t, 0, 0.64), 2 * Math.PI * (S / 2 - 4)) }));
+    s.add(circle(S / 2, S / 2, S / 2 - 16, { fill: 'none', stroke: st.c.ink, strokeWidth: 1, strokeOpacity: 0.5, ...tracing(styleProgress(st, t, 0.12, 0.76), 2 * Math.PI * (S / 2 - 16)) }));
     // 外圈一圈字
     const txt = T(m, `· ${m.project} · AI 参与编写 `, `· ${m.project.toUpperCase()} · WRITTEN WITH AI `);
     const R0 = S / 2 - 46;
     const id = s.def('ring', (id2) => el('path', { id: id2, d: `M${S / 2} ${S / 2}m-${R0} 0a${R0} ${R0} 0 1 1 ${2 * R0} 0a${R0} ${R0} 0 1 1 ${-2 * R0} 0` }));
-    s.add(el('text', { fontFamily: st.f.label.family, fontWeight: st.f.label.weight ?? 500, fontSize: 15, fill: st.c.ink, letterSpacing: 3 }, el('textPath', { href: `#${id}`, startOffset: '0' }, txt)));
-    st.mark(s, lead[0].key, S / 2, S / 2 - 10, 48);
-    st.num(s, pct(lead[0].pct), S / 2, S / 2 + 40, 18, 'middle');
-    s.hit(40, 40, S - 80, S - 80, tip(m, lead[0]));
+    const rim = styleProgress(st, t, 0.16, 0.8);
+    const lettering = () => s.add(el('text', { fontFamily: st.f.label.family, fontWeight: st.f.label.weight ?? 500, fontSize: 15, fill: st.c.ink, letterSpacing: 3 }, el('textPath', { href: `#${id}`, startOffset: '0' }, txt)));
+    materialEnter(s, st, rim, { x: S / 2 - R0 - 18, y: S / 2 - R0 - 18, w: R0 * 2 + 36, h: R0 * 2 + 36 }, lettering);
+    stamp(s, st, styleProgress(st, t, 0.3, 0.82), S / 2, S / 2 - 10, () => st.mark(s, lead[0].key, S / 2, S / 2 - 10, 48));
+    materialEnter(s, st, styleProgress(st, t, 0.46, 0.96), { x: S / 2 - 40, y: S / 2 + 18, w: 80, h: 26 }, () => st.num(s, pct(lead[0].pct), S / 2, S / 2 + 40, 18, 'middle'));
+    if (t > 0.3) s.hit(40, 40, S - 80, S - 80, tip(m, lead[0]));
     return s;
   }
-  if (v === 'split') return splitBadge(m, st);
+  if (v === 'split') return splitBadge(m, st, t);
   if (v === 'stack') {
     const W = 420, H = 76;
     const s = new Scene(W, H);
@@ -242,13 +273,15 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     let x = 18;
     m.rows.forEach((a, i) => {
       const w = ((W - 36) * a.pct) / 100;
+      const start = materialOrder(st, i, m.rows.length, st.id === 'manuscript' ? 1 : m.rows.length) * 0.66;
+      barReveal(s, st, styleProgress(st, t, start, start + 0.32), { x, y: 42, w, h: 14 }, 'right', () => {
       // 字符格风格：条是一排方块字
       if (st.cells) st.bar(s, x, 42, w, 14, a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a), i);
       else if (a.key === 'unattributed') s.add(rect(x, 42, w, 14, { fill: st.hatch(s) }));
       else s.add(rect(x, 42, Math.max(0, w - 1.5), 14, { fill: colorOf(st, a) }));
       s.hit(x, 36, w, 26, tip(m, a));
+      });
       x += w;
-      void i;
     });
     s.text(lead.map((a) => `${a.name} ${Math.round(a.pct)}%`).join('  '), W - 18, 28, { font: st.f.body, size: 13, fill: st.c.ink, anchor: 'end', maxW: W - 160 });
     return s;
@@ -264,15 +297,17 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
   const dark = st.dark ? st.c.paper : st.c.ink;
   s.add(rect(0, 0, W, H, { fill: dark, rx: 6 }), rect(lw, 0, rw, H, { fill: colorOf(st, lead[0]) }), rect(W - 6, 0, 6, H, { fill: colorOf(st, lead[0]), rx: 0 }));
   s.add(rect(lw, 0, rw, H, { fill: colorOf(st, lead[0]), rx: 6 }), rect(lw, 0, 8, H, { fill: colorOf(st, lead[0]) }));
-  st.mark(s, lead[0].key, 18, H / 2, 16, st.dark ? st.c.ink : st.c.paper);
-  s.text(left, 32, 20, { font: f, size: 13, fill: st.dark ? st.c.ink : st.c.paper });
-  s.text(right, lw + 12, 20, { font: f, size: 13, fill: st.on(colorOf(st, lead[0])) });
-  s.hit(0, 0, W, H, tip(m, lead[0]));
+  stamp(s, st, styleProgress(st, t, 0, 0.56), 18, H / 2, () => st.mark(s, lead[0].key, 18, H / 2, 16, st.dark ? st.c.ink : st.c.paper), 16);
+  materialEnter(s, st, styleProgress(st, t, 0.1, 0.64), { x: 32, y: 5, w: lw - 32, h: 22 }, () => s.text(left, 32, 20, { font: f, size: 13, fill: st.dark ? st.c.ink : st.c.paper }));
+  materialEnter(s, st, styleProgress(st, t, 0.34, 0.96), { x: lw + 10, y: 5, w: rw - 20, h: 22 }, () => {
+    s.text(right, lw + 12, 20, { font: f, size: 13, fill: st.on(colorOf(st, lead[0])) });
+  });
+  if (t > 0.34) s.hit(0, 0, W, H, tip(m, lead[0]));
   return s;
 }
 
 /** 分段徽章：条按工具分块、块里按模型分深浅；文字写第一的工具和它的前两个模型 */
-function splitBadge(m: Model, st: Style): Scene | null {
+function splitBadge(m: Model, st: Style, t: number): Scene | null {
   const tools = m.tools.filter((a) => a.lines > 0);
   const top = tools.find((a) => a.kind === 'agent');
   if (!top) return null;
@@ -284,15 +319,19 @@ function splitBadge(m: Model, st: Style): Scene | null {
   s.text(`${top.name} ${Math.round(top.pct)}%`, W - 18, 28, { font: st.f.body, size: 13, fill: st.c.ink, anchor: 'end', maxW: W - 160 });
   let x = 18;
   const bw = W - 36;
-  for (const a of tools) {
+  for (const [i, a] of tools.entries()) {
     const w = (bw * a.pct) / 100;
     let sx = x;
-    for (const q of segsOf(m, st, a)) {
+    const segs = segsOf(m, st, a);
+    for (const [j, q] of segs.entries()) {
       const qw = (w * q.lines) / Math.max(1, a.lines);
+      const start = (materialOrder(st, i, tools.length, tools.length) * 0.4 + materialOrder(st, j, segs.length, segs.length) * 0.1);
+      barReveal(s, st, styleProgress(st, t, start, start + 0.46), { x: sx, y: 40, w: qw, h: 14 }, 'right', () => {
       if (st.cells) st.bar(s, sx, 40, qw, 14, a.key === 'unattributed' ? st.hatch(s) : q.color, 0);
       else if (a.key === 'unattributed') s.add(rect(sx, 40, qw, 14, { fill: st.hatch(s) }));
       else s.add(rect(sx, 40, Math.max(0, qw - 0.75), 14, { fill: q.color }));
       s.hit(sx, 34, qw, 26, segTip(m, a, q));
+      });
       sx += qw;
     }
     // 工具之间留一道缝，比模型之间宽
@@ -301,7 +340,7 @@ function splitBadge(m: Model, st: Style): Scene | null {
   }
   const segs = segsOf(m, st, top).filter((q) => !q.unknown).slice(0, 2);
   const sub = segs.length > 1 ? segs.map((q) => `${q.name} ${Math.round(q.pct)}%`).join(' · ') : modelLine(top);
-  if (sub) s.text(sub, 18, 78, { font: st.f.body, size: 13, fill: st.c.soft, maxW: W - 36, overflow: 'clip' });
+  if (sub) materialEnter(s, st, styleProgress(st, t, 0.42, 0.96), { x: 18, y: 62, w: W - 36, h: 20 }, () => s.text(sub, 18, 78, { font: st.f.body, size: 13, fill: st.c.soft, maxW: W - 36, overflow: 'clip' }));
   return s;
 }
 
@@ -311,6 +350,7 @@ export const BYLINE_VARIANTS = ['line', 'models'];
 
 export function byline(m: Model, st: Style, o: PieceOpts): Scene | null {
   const models = o.variant === 'models';
+  const t = o.t ?? 1;
   const lead = (models ? m.tools : m.rows).filter((a) => a.kind === 'agent');
   if (!lead.length) return null;
   const W = 1200, H = 120;
@@ -324,23 +364,29 @@ export function byline(m: Model, st: Style, o: PieceOpts): Scene | null {
   const nameY = models ? 66 : 72;
   let x = 48;
   x += st.title(s, m.project, x, 74, 34, 'start', { maxW: 300 }) + 26;
-  s.add(line(x, 44, x, 80, { stroke: st.c.ink, strokeOpacity: 0.3 }));
+  s.add(line(x, 44, x, 80, { stroke: st.c.ink, strokeOpacity: 0.3, ...tracing(styleProgress(st, t, 0, 0.42), 36) }));
   x += 26;
   x += s.text(T(m, '用', 'with'), x, nameY, { font: st.f.body, size: 20, fill: st.c.soft }) + 16;
   const end = W - 48 - sumW - 36;
   const subOf = (a: Agent) => { const segs = segsOf(m, st, a).filter((q) => !q.unknown); return segs.length > 1 ? segs.slice(0, 3).map((q) => q.name).join(' · ') : modelLine(a); };
   const more = (k: number) => T(m, `等 ${k} 个`, `+${k} more`);
   const plan = bylinePlan(lead, models ? 3 : 4, st, x, end, tail, more, models ? subOf : null);
-  for (const it of plan.items) {
+  // 一段署名作为一个排字单元依次归位；模型作为次行跟上，不拆开工具名或百分比。
+  for (const [i, it] of plan.items.entries()) {
     const a = it.a;
+    const start = materialOrder(st, i, plan.items.length, plan.items.length) * 0.4;
+    materialEnter(s, st, styleProgress(st, t, start, start + 0.48), { x: it.x - 4, y: models ? 38 : 44, w: it.w + 34, h: models ? 60 : 40 }, () => {
     st.mark(s, a.key, it.x + 12, nameY - 8, 22);
     s.text(it.name, it.x + 30, nameY, { font: st.f.body, size: plan.size, fill: st.c.ink });
-    if (it.sub) s.text(it.sub, it.x + 30, 90, { font: st.f.body, size: 13, fill: st.c.soft, maxW: it.subW, overflow: 'clip' });
+    if (it.sub) materialEnter(s, st, styleProgress(st, t, start + 0.16, start + 0.58), { x: it.x + 30, y: 74, w: it.subW, h: 20 }, () => s.text(it.sub, it.x + 30, 90, { font: st.f.body, size: 13, fill: st.c.soft, maxW: it.subW, overflow: 'clip' }));
     s.hit(it.x - 4, models ? 38 : 44, it.w + 34, models ? 60 : 40, tip(m, a));
+    });
   }
   let tx = plan.end;
+  materialEnter(s, st, styleProgress(st, t, 0.5, 0.98), { x: tx, y: nameY - 22, w: Math.max(20, end - tx), h: 28 }, () => {
   if (plan.more) tx += s.text(more(plan.more), tx, nameY, { font: st.f.body, size: plan.size, fill: st.c.soft }) + 10;
   if (tail) s.text(tail, tx, nameY, { font: st.f.body, size: plan.size, fill: st.c.soft });
+  });
   s.text(sum, W - 48, 72, { font: st.f.label, size: 14, fill: st.c.faint, anchor: 'end' });
   return s;
 }
@@ -408,7 +454,7 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
     const bx = cx - w / 2;
     const col = mix(st.c.accent2.startsWith('#') ? st.c.accent2 : '#888888', st.dark ? '#000000' : '#FFFFFF', 0.15 + i * 0.25);
     const k = styleProgress(st, t, i * 0.16, 0.42 + i * 0.16);
-    reveal(s, k, { x: bx - 12, y: y - 12, w: w + 24, h: 88 }, 'down', () => st.bar(s, bx, y, w, 64, col, i));
+    barReveal(s, st, k, { x: bx, y, w, h: 64 }, 'center-x', () => st.bar(s, bx, y, w, 64, col, i));
     s.text(q.k, x0, y - 14, { font: st.f.label, size: 15, fill: st.c.soft });
     st.num(s, fmt(q.v), x1, y - 12, 22, 'end');
     s.hit(x0, y - 40, x1 - x0, 110, { k: 'human', t: q.k, d: [T(m, `${fmt(q.v)} 行`, `${fmt(q.v)} lines`), ...(i ? [T(m, `是上一项的 ${Math.round((q.v / steps[i - 1].v) * 100)}%`, `${Math.round((q.v / steps[i - 1].v) * 100)}% of the previous step`)] : [])] });
@@ -423,7 +469,7 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
     const step = (x1 - x0) / (weekly.vals.length - 1);
     let d = '';
     weekly.vals.forEach((v, i) => { const px = x0 + i * step, py = top + ph - (v / maxv) * ph; d += `${i ? 'L' : 'M'}${r(px)} ${r(py)}`; });
-    reveal(s, styleProgress(st, t, 0.4, 0.96), { x: x0 - 2, y: top - 2, w: x1 - x0 + 4, h: ph + 4 }, 'right', () => s.add(path(d + `L${r(x1)} ${r(top + ph)}L${r(x0)} ${r(top + ph)}Z`, { fill: st.c.accent2, opacity: 0.12 }), path(d, { fill: 'none', stroke: st.c.accent2, strokeWidth: 2.4, strokeLinejoin: 'round' })));
+    materialReveal(s, st, styleProgress(st, t, 0.4, 0.96), { x: x0 - 2, y: top - 2, w: x1 - x0 + 4, h: ph + 4 }, 'right', () => s.add(path(d + `L${r(x1)} ${r(top + ph)}L${r(x0)} ${r(top + ph)}Z`, { fill: st.c.accent2, opacity: 0.12 }), path(d, { fill: 'none', stroke: st.c.accent2, strokeWidth: 2.4, strokeLinejoin: 'round' })));
     st.rule(s, x0, top + ph, x1 - x0, 'thin');
     s.hit(x0, top, x1 - x0, ph, { k: 'human', t: weekly.label, d: [T(m, `${weekly.vals.length} 周，最多一周 ${fmt(maxv)}`, `${weekly.vals.length} weeks, peak ${fmt(maxv)}`)] });
     y = top + ph + 50;
@@ -435,9 +481,12 @@ export function hand(m: Model, st: Style, o: PieceOpts): Scene | null {
   const fw = (x1 - x0) / Math.max(1, facts.length);
   facts.forEach(([k, v], i) => {
     const fx = x0 + i * fw;
+    const start = 0.5 + i / Math.max(1, facts.length - 1) * 0.12;
+    materialEnter(s, st, styleProgress(st, t, start, start + 0.36), { x: fx - 6, y, w: fw - 10, h: 86 }, () => {
     st.num(s, fmt(v), fx, y + 40, 40, 'start');
     s.text(k, fx, y + 72, { font: st.f.body, size: 16, fill: st.c.soft });
     s.hit(fx - 6, y, fw - 10, 86, handTip(m));
+    });
   });
   y += 120;
   // 这张说的是本机日志里的提示词与审阅：只写用户自己填的署名，其他贡献者在排名和「贡献者」卡片里

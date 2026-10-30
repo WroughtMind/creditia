@@ -1,4 +1,5 @@
 import type { Art } from '../../../packages/render/src/export.ts';
+import { scrollTransforms } from '../../../packages/render/src/scroll-motion.ts';
 
 /** 一次播放只拥有自己的图层、URL 和线程；静态图始终留在下面。 */
 export function playFocusMotion(
@@ -41,8 +42,7 @@ export function playFocusMotion(
       screen.style.background = art.bg;
       screen.appendChild(image); active = screen;
       root.classList.add('motion-playing', 'motion-scroll'); root.appendChild(screen);
-      const travel = Math.max(0, art.h - motion.viewH) / art.h * 100;
-      animation = image.animate([{ transform: 'translateY(0)' }, { transform: `translateY(-${travel}%)` }], { duration: motion.secs * 1000, easing: 'linear', fill: 'forwards' });
+      animation = image.animate(scrollTransforms(motion.keys, art.h), { duration: motion.secs * 1000, easing: 'linear', fill: 'forwards' });
       animation.onfinish = () => {
         if (stopped) return;
         stop();

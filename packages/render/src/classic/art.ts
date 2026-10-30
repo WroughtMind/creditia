@@ -20,7 +20,7 @@ const tidy = (svg: string, w: number, h: number) => svg.replace(/satori_/g, `s${
   // satori 给 1px 高的虚线边框算出负高度的遮罩，浏览器会报错；归零
   .replace(/ (width|height)="-[\d.]+"/g, ' $1="0"')
   // 阴影滤镜的区域是元素的好几倍，栅格化时很吃内存；画布外本来看不见，收到画布以内
-  .replace(/<filter id="([^"]+)" x="[^"]*" y="[^"]*" width="[^"]*" height="[^"]*"/g, `<filter id="$1" filterUnits="userSpaceOnUse" x="0" y="0" width="${w}" height="${h}"`);
+  .replace(/<filter\b([^>]*)>/g, (_, attrs: string) => `<filter${attrs.replace(/\s(?:x|y|width|height|filterUnits)="[^"]*"/g, '')} filterUnits="userSpaceOnUse" x="0" y="0" width="${w}" height="${h}">`);
 
 /** 按 key 找节点 */
 function findKey(n: any, key: string): any {
@@ -164,14 +164,19 @@ export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, sator
   return { w: out.w, h: out.h, svg, hits: hitsOf(seen, m, t, ctx.lang, out.w, out.h), bg: t.bg, title };
 }
 
-/** 会动的作品：徽章是单独的小 SVG，不做动画；其余原版作品都能出帧 */
-export const animatedClassic = (id: string) => id !== 'badge' && (!!FORMS[id] || BRIDGED.includes(id));
+/** 原版形式、原生 SVG 徽章和桥接作品都能出帧。 */
+export const animatedClassic = (id: string) => id === 'badge' || !!FORMS[id] || BRIDGED.includes(id);
 
 /** 动画帧：t 从 0 到 1。排版（统一宽度、放大）只量一次，每帧在排好的树上按作品标出的内容组改绘制属性，再出一遍图 */
 export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, satori: Satori, fonts: any[], n = 24): Promise<Art[]> {
   if (isBridged(id, ctx.variant)) return bridgeFrames(id, m, t, ctx, n);
+  if (id === 'badge') {
+    const still = (await classicArt(id, m, t, ctx, satori, fonts))!;
+    const frameDelay = motionDuration(id, ctx.variant, t.id) / n;
+    return Array.from({ length: n + 1 }, (_, i) => ({ ...still, svg: ctx.lang === 'en' ? enSvg(badge(m, t, i / n)) : badge(m, t, i / n), frameDelay }));
+  }
   const f = FORMS[id];
-  if (!f || id === 'badge') return [];
+  if (!f) return [];
   const out = f.render(m, t, ctx);
   if (!out) return [];
   if (ctx.lang === 'en') enTree(out.tree);

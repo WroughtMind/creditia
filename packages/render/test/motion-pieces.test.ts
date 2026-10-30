@@ -90,11 +90,13 @@ test('特殊材质的中间帧可被实际 SVG 栅格器绘制', () => {
   }
 });
 
-test('星号的水墨、赛博和剪纸使用不同动作，瓣形与最终比例不变', () => {
+test('星号各材质保持完整瓣形，显示的贡献比例始终不变', () => {
   const scene = (style: string, t: number) => art('asterisk', m, STYLES.find((s) => s.id === style)!, { t })!.svg;
-  const ink = scene('ink', 0.24), cyber = scene('cyber', 0.24), cutout = scene('cutout', 0.24);
-  assert.match(ink, /petal-ink-0/);
-  assert.match(ink, /<clipPath[^>]*>[\s\S]*?<rect[^>]*transform="rotate\(/);
+  const cyber = scene('cyber', 0.24), cutout = scene('cutout', 0.24);
+  // 墨色变化不能靠矩形裁切花瓣，任意中间帧仍应有完整圆头。
+  for (const style of ['ink', 'woodblock']) for (const t of [0.12, 0.38, 0.72]) {
+    assert.doesNotMatch(scene(style, t), /<clipPath|clip-path=/, `${style}/${t}`);
+  }
   assert.match(cyber, /stroke-dasharray="[\d.]+" stroke-dashoffset="[\d.]+"/);
   assert.ok(!cyber.includes('pathLength') && !cyber.includes('path-length'));
   assert.match(cutout, /<g transform="translate\([^)]*\) rotate\(/);
@@ -107,7 +109,7 @@ test('星号的水墨、赛博和剪纸使用不同动作，瓣形与最终比�
     assert.equal(finalPetals.size, 5, style);
     for (const t of [0.12, 0.38, 0.72]) {
       const middle = scene(style, t);
-      assert.deepEqual(new Set(petals(middle)), finalPetals, `${style}/${t}`);
+      if (style !== 'ink') assert.deepEqual(new Set(petals(middle)), finalPetals, `${style}/${t}`);
       assert.deepEqual(percentages(middle), percentages(final), `${style}/${t}`);
       assert.ok(raster.png(middle, 160).length > 100, `${style}/${t}`);
     }

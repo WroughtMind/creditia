@@ -6,13 +6,14 @@ const G: any = (gifenc as any).GIFEncoder ? gifenc : (gifenc as any).default;
 const { GIFEncoder, quantize, applyPalette } = G;
 import { INTERACT_CSS, mountHits } from './interact.ts';
 import type { Hit } from './svg.ts';
+import { scrollTransforms, type ScrollMotion } from './scroll-motion.ts';
 
 /** 一张可导出的作品 */
 export interface Art { w: number; h: number; svg: string; hits: Hit[]; bg: string; title: string; motion?: Motion; crop?: Crop; /** 动画采样帧的持续时间（毫秒） */ frameDelay?: number }
 /** 滚动片尾字幕的一帧：整卷 svg 里从 y 开始、高 h 的一段 */
 export interface Crop { svg: string; w: number; h: number; y: number }
 /** HTML 里的动态：scroll = 片尾字幕在银幕里滚动 */
-export interface Motion { kind: 'scroll'; viewW: number; viewH: number; secs: number }
+export type Motion = ScrollMotion;
 
 export interface Raster {
   png(svg: string, width?: number): Uint8Array;
@@ -78,15 +79,17 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
     const enc = GIFEncoder();
     const delay = Math.round(1000 / (o.fps ?? 20));
     const width = o.width ?? Math.min(frames[0].w, 960);
-    // 滚动字幕：整卷栅格化一次，逐帧裁行
+    // 滚动长卷只栅格化一次；逐帧只裁取可见行。
     const c0 = frames[0].crop;
-    const whole = c0 && frames.every((f) => f.crop?.svg === c0.svg) ? R.rgba(c0.svg, (width * c0.w) / frames[0].w) : null;
-    const cut = (f: Art) => {
-      const k = whole!.w / f.crop!.w, top = Math.round(f.crop!.y * k), h = Math.min(Math.round(f.h * k), whole!.h - top);
-      return { w: whole!.w, h, data: whole!.data.subarray(top * whole!.w * 4, (top + h) * whole!.w * 4) };
+    if (c0 && frames.some(f => f.crop?.svg !== c0.svg)) throw new Error('Scroll frames must share one static reel');
+    const whole = c0 ? R.rgba(c0.svg, (width * c0.w) / frames[0].w) : null;
+    const cut = (f: Art, reel: ReturnType<Raster['rgba']>) => {
+      const k = reel.w / f.crop!.w, h = Math.round(f.h * k);
+      const top = Math.min(Math.round(f.crop!.y * k), reel.h - h);
+      return { w: reel.w, h, data: reel.data.subarray(top * reel.w * 4, (top + h) * reel.w * 4) };
     };
     frames.forEach((f, i) => {
-      const img = whole ? cut(f) : R.rgba(f.svg, width);
+      const img = f.crop ? cut(f, whole!) : R.rgba(f.svg, width);
       const palette = quantize(img.data, 256, { format: 'rgb565' });
       const index = applyPalette(img.data, palette, 'rgb565');
       enc.writeFrame(index, img.w, img.h, { palette, delay: i === frames.length - 1 ? (o.hold ?? 2400) : o.fps === undefined ? f.frameDelay ?? delay : delay, repeat: 0 });
@@ -102,7 +105,8 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
       const flat = svg(a);
       if (a.motion?.kind === 'scroll') {
         const m = a.motion;
-        return `<figure class="screen" style="--vw:${m.viewW}px;aspect-ratio:${m.viewW}/${m.viewH};--secs:${m.secs}s;--travel:${((a.h + m.viewH) / m.viewH * 100).toFixed(2)}%"><div class="reel"><div class="ct-art" id="a${i}" style="width:100%">${flat}</div></div><button class="replay" aria-label="replay">↻</button></figure>`;
+        const keys = scrollTransforms(m.keys, a.h).map(key => `${key.offset * 100}%{transform:${key.transform};animation-timing-function:${key.easing ?? 'linear'}}`).join('');
+        return `<style>@keyframes roll${i}{${keys}}</style><figure class="screen" style="--vw:${m.viewW}px;aspect-ratio:${m.viewW}/${m.viewH};--secs:${m.secs}s;--roll:roll${i}"><div class="reel"><div class="ct-art" id="a${i}" style="width:100%">${flat}</div></div><button class="replay" aria-label="replay">↻</button></figure>`;
       }
       return `<figure class="piece${arts.length > 1 && a.w / a.h > 1.7 ? ' wide' : ''}" style="max-width:${a.w}px"><div class="ct-art" id="a${i}">${flat}</div></figure>`;
     }).join('\n');
@@ -125,11 +129,11 @@ body.wall .piece.wide{column-span:all;max-width:100%!important}
 .piece{animation:rise .9s cubic-bezier(.2,.7,.2,1) both}
 .piece .ct-art{width:100%;border-radius:6px;overflow:hidden}
 .screen{position:relative;max-width:var(--vw);overflow:hidden;border-radius:4px;background:${bg};box-shadow:0 30px 80px rgba(0,0,0,.35)}
-.screen .reel{position:absolute;inset:0;animation:roll var(--secs) linear infinite}
-.screen .reel .ct-art{position:absolute;left:0;top:100%}
-.screen:hover .reel{animation-play-state:paused}
+.screen .reel{position:absolute;inset:0}
+.screen .reel .ct-art{position:absolute;left:0;top:0;animation:var(--roll) var(--secs) linear forwards}
+.screen:hover .ct-art{animation-play-state:paused}
 .replay{position:absolute;right:12px;bottom:12px;border:0;border-radius:99px;width:32px;height:32px;background:rgba(255,255,255,.14);color:#fff;font-size:16px;cursor:pointer;backdrop-filter:blur(8px)}
-@keyframes roll{from{transform:translateY(0)}to{transform:translateY(calc(-1 * var(--travel)))}}
+@media(prefers-reduced-motion:reduce){.screen{overflow-y:auto}.screen .reel,.screen .reel .ct-art{position:relative}.screen .reel .ct-art,.piece{animation:none}.replay{display:none}}
 @keyframes rise{from{opacity:0;transform:translateY(16px) scale(.985);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
 footer{font:12px/1.4 Inter,-apple-system,"PingFang SC",sans-serif;color:${lumOf(bg) > 0.5 ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.45)'};text-align:center}
 ${INTERACT_CSS}
@@ -142,7 +146,7 @@ ${wall ? `<main>${blocks}</main>` : blocks}
 const DATA=${JSON.stringify(data)};
 ${mountHits.toString()}
 DATA.forEach((d,i)=>{const el=document.getElementById('a'+i);if(el)mountHits(el,d.hits,d.w,d.h)});
-document.querySelectorAll('.replay').forEach(b=>b.onclick=()=>{const r=b.parentElement.querySelector('.reel');r.style.animation='none';r.offsetHeight;r.style.animation=''});
+document.querySelectorAll('.replay').forEach(b=>b.onclick=()=>{const r=b.parentElement.querySelector('.ct-art');r.style.animation='none';r.offsetHeight;r.style.animation=''});
 </script>
 </body>
 </html>

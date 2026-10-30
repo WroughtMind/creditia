@@ -6,6 +6,7 @@ const ts = require('typescript');
 const tick = () => new Promise(setImmediate);
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 const source = fs.readFileSync(require.resolve('../src/focus-motion.ts'), 'utf8').replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
+const scrollSource = fs.readFileSync(require.resolve('../../../packages/render/src/scroll-motion.ts'), 'utf8').replace(/^export /gm, '');
 const art = { w: 100, h: 100, bg: '#000' };
 function scene({ reduced = false, decode = async () => {} } = {}) {
   const classes = new Set(), children = [], urls = new Set(), revoked = [], tasks = new Map(), errors = [], placed = [], animations = [];
@@ -19,7 +20,7 @@ function scene({ reduced = false, decode = async () => {} } = {}) {
     document: { createElement: element },
     requestAnimationFrame: f => { const id = ++seq; tasks.set(id, f); return id; }, cancelAnimationFrame: id => tasks.delete(id),
   });
-  vm.runInContext(ts.transpile(source, { target: ts.ScriptTarget.ES2022 }), ctx);
+  vm.runInContext(ts.transpile(scrollSource + '\n' + source, { target: ts.ScriptTarget.ES2022 }), ctx);
   return { ctx, root, classes, children, urls, revoked, errors, listeners, media, animations, placed,
     play: (frames, a = art) => ctx.playFocusMotion(root, a, {}, frames, 1600, size => placed.push(size), e => errors.push(e)),
     frame(now) { const entries = [...tasks.values()]; tasks.clear(); entries.forEach(f => f(now)); },
@@ -75,10 +76,12 @@ test('reduced motion never requests frames and changing the preference stops an 
 });
 
 test('scrolling credits use the existing long image and authored duration without generating frames', async () => {
-  const s = scene(), scroll = { ...art, h: 500, motion: { kind: 'scroll', viewW: 100, viewH: 150, secs: 12 } };
+  const s = scene(), scroll = { ...art, h: 500, motion: { kind: 'scroll', viewW: 100, viewH: 150, secs: 12, keys: [{ offset: 0, y: 0 }, { offset: 0.3, y: 100 }, { offset: 0.5, y: 100 }, { offset: 1, y: 350 }] } };
   s.play(() => { throw new Error('scroll must not generate frames'); }, scroll); await tick();
   assert.equal(s.animations[0].options.duration, 12000);
-  assert.equal(s.animations[0].keys[1].transform, 'translateY(-70%)');
+  assert.equal(s.animations[0].keys.at(-1).transform, 'translateY(-70%)');
+  assert.equal(s.animations[0].keys[1].transform, s.animations[0].keys[2].transform);
+  assert.equal(s.animations[0].keys[2].offset, 0.5);
   assert(s.classes.has('motion-scroll')); assert.equal(s.urls.size, 1);
   s.animations[0].onfinish();
   assert.equal(s.urls.size, 0); assert.equal(s.children.length, 0); assert.equal(s.placed.at(-1), scroll);
@@ -86,7 +89,7 @@ test('scrolling credits use the existing long image and authored duration withou
 });
 
 test('a queued scroll finish cannot move a replacement artwork after cancellation', async () => {
-  const s = scene(), scroll = { ...art, h: 500, motion: { kind: 'scroll', viewW: 100, viewH: 150, secs: 12 } };
+  const s = scene(), scroll = { ...art, h: 500, motion: { kind: 'scroll', viewW: 100, viewH: 150, secs: 12, keys: [{ offset: 0, y: 0 }, { offset: 0.3, y: 100 }, { offset: 0.5, y: 100 }, { offset: 1, y: 350 }] } };
   const stop = s.play(async () => [], scroll); await tick();
   const finish = s.animations[0].onfinish;
   stop(); finish();

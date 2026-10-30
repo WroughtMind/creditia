@@ -34,3 +34,17 @@ test('GIF 使用作品节奏，明确传入 fps 时仍尊重调用方的选择',
   assert.equal(delay(exporter.gif([art, art])), 160);
   assert.equal(delay(exporter.gif([art, art], { fps: 25 })), 40);
 });
+
+test('滚动字幕只裁同一张静态长卷，拒绝逐帧替换长卷', () => {
+  const sampled: string[] = [];
+  const exporter = makeExporter({
+    rgba: (svg) => { sampled.push(svg); return { w: 2, h: 4, data: new Uint8Array(Array.from({ length: 8 }, (_, i) => [i * 20, 40, 60, 255]).flat()) }; },
+    flat: svg => svg, png: () => new Uint8Array(),
+  });
+  const sample: Art = { w: 2, h: 2, svg: 'viewport A', hits: [], bg: '#fff', title: 'Scroll', crop: { svg: 'reel A', w: 2, h: 4, y: 0 } };
+  assert.throws(() => exporter.gif([sample, { ...sample, svg: 'viewport B', crop: { svg: 'reel B', w: 2, h: 4, y: 2 } }]), /one static reel/);
+  assert.deepEqual(sampled, []);
+  sampled.length = 0;
+  exporter.gif([sample, { ...sample, crop: { ...sample.crop!, y: 2 } }]);
+  assert.deepEqual(sampled, ['reel A']);
+});

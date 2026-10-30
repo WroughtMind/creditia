@@ -7,7 +7,9 @@ import type { Style } from '../style.ts';
 import { T, zh, tip, handFacts, handTip, canvas, range, measureV, type PieceOpts } from './common.ts';
 import { segsOf, segTip } from './tier.ts';
 import { inkSeal } from '../styles/east.ts';
-import { phase, styleProgress, reveal, move } from '../motion.ts';
+import { phase, styleProgress } from '../motion.ts';
+import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
+import { scrollMotion } from '../scroll-motion.ts';
 
 export const ROLL_VARIANTS = ['classic', 'scroll', 'card', 'vertical', 'ed', 'billing', 'terminal', 'troupe'];
 
@@ -91,7 +93,7 @@ export function roll(m: Model, st: Style, o: PieceOpts): Scene | null {
 
 /** 双栏：职务右对齐、名字左对齐，中线对称 */
 function classic(m: Model, st: Style, secs: Section[], scroll: boolean, o: PieceOpts): Scene {
-  const t = scroll ? 1 : o.t ?? 1;
+  const t = o.t ?? 1;
   const W = 1080, gut = 28;
   const lineH = 54, subH = 24, gapH = 46;
   let inner = 340;
@@ -102,34 +104,42 @@ function classic(m: Model, st: Style, secs: Section[], scroll: boolean, o: Piece
   const view = scroll ? Math.round((W * 9) / 16) : 0;
   const { s, c } = canvas(m, st, W, inner + (scroll ? view * 0.15 : 0), 40);
   const cx = W / 2;
+  const sections: { y: number; h: number }[] = [], lines: number[] = [];
   let y = c.y + 110;
   st.label(s, T(m, '片尾字幕', 'END CREDITS'), cx, y, { anchor: 'middle', size: 14 });
   st.title(s, m.project || 'Untitled', cx, y + 92, 78, 'middle', { maxW: c.w - 120 });
   st.rule(s, cx - 140, y + 140, 280, 'orn');
+  lines.push(y + 4, y + 112);
   y += 240;
   for (const [i, sc] of secs.entries()) {
     y += gapH;
     const y0 = y;
-    const sectionH = Math.max(sc.credits.reduce((h, cr) => h + lineH + (cr.sub ? subH : 0), 0), headLines(sc).length * 26);
-    // 角色与姓名作为一对，从字幕中线向两侧开幕。
-    reveal(s, styleProgress(st, t, i / Math.max(1, secs.length - 1) * 0.65, 0.3 + i / Math.max(1, secs.length - 1) * 0.65), { x: c.x + 30, y: y0 - 34, w: c.w - 60, h: sectionH + 44 }, 'center-x', () => {
-    headLines(sc).forEach((h, j) => st.label(s, h, cx - gut, y0 + 4 + j * 26, { anchor: 'end', size: 17, fill: st.c.soft, maxW: c.w / 2 - gut - 50 }));
-    sc.credits.forEach((cr) => {
-      s.text(cr.name, cx + gut, y + 6, { font: st.f.display, size: 30, fill: st.c.ink, maxW: c.w / 2 - 70 });
-      let hh = lineH;
-      if (cr.sub) { s.text(cr.sub, cx + gut, y + 34, { font: st.f.body, size: 16, fill: st.c.soft, maxW: c.w / 2 - 70, overflow: 'clip' }); hh += subH; }
-      s.hit(c.x + 40, y - 34, c.w - 80, hh, tipFor(m, cr, sc.head));
-      y += hh;
-    });
-    y = Math.max(y, y0 + headLines(sc).length * 26);
-    });
+    const k = scroll ? 1 : styleProgress(st, t, materialOrder(st, i, secs.length) * 0.65, 0.3 + materialOrder(st, i, secs.length) * 0.65);
+    // 角色与姓名作为完整排版单元，进入方式服从纸墨、光学或屏幕材质。
+    const draw = () => {
+      headLines(sc).forEach((h, j) => { lines.push(y0 + 10 + j * 26); st.label(s, h, cx - gut, y0 + 4 + j * 26, { anchor: 'end', size: 17, fill: st.c.soft, maxW: c.w / 2 - gut - 50 }); });
+      sc.credits.forEach((cr) => {
+        lines.push(y + 14);
+        if (cr.sub) lines.push(y + 38);
+        s.text(cr.name, cx + gut, y + 6, { font: st.f.display, size: 30, fill: st.c.ink, maxW: c.w / 2 - 70 });
+        let hh = lineH;
+        if (cr.sub) { s.text(cr.sub, cx + gut, y + 34, { font: st.f.body, size: 16, fill: st.c.soft, maxW: c.w / 2 - 70, overflow: 'clip' }); hh += subH; }
+        s.hit(c.x + 40, y - 34, c.w - 80, hh, tipFor(m, cr, sc.head));
+        y += hh;
+      });
+      y = Math.max(y, y0 + headLines(sc).length * 26);
+    };
+    materialEnter(s, st, k, { x: c.x + 40, y: y0 - 34, w: c.w - 80, h: Math.max(sc.credits.reduce((h, cr) => h + lineH + (cr.sub ? subH : 0), 0), headLines(sc).length * 26) + 34 }, draw);
+    sections.push({ y: y0 - 34, h: y - y0 + 34 });
   }
   y += 120;
   st.rule(s, cx - 60, y - 40, 120, 'thin');
   s.text(closing(m), cx, y + 10, { font: st.f.body, size: 18, fill: st.c.soft, anchor: 'middle' });
   s.text(range(m), cx, y + 44, { font: st.f.label, size: 14, fill: st.c.faint, anchor: 'middle', track: 0.2 });
   if (m.sign) st.title(s, m.sign, cx, y + 120, 34, 'middle');
-  if (scroll) (s as any).motion = { kind: 'scroll', viewW: W, viewH: view, secs: Math.max(14, Math.round(s.h / 90)) };
+  lines.push(y + 15, y + 48);
+  if (m.sign) lines.push(y + 129);
+  if (scroll) (s as any).motion = scrollMotion(st.id, W, view, s.h, sections, lines);
   return s;
 }
 
@@ -144,15 +154,16 @@ function card(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   st.label(s, T(m, '主要作者', 'WRITTEN BY'), cx, y, { anchor: 'middle', size: 15 });
   y += 70;
   lead.credits.forEach((cr, i) => {
-    const k = styleProgress(st, t, i / Math.max(1, lead.credits.length - 1) * 0.5, 0.45 + i / Math.max(1, lead.credits.length - 1) * 0.5);
+    const k = styleProgress(st, t, materialOrder(st, i, lead.credits.length) * 0.5, 0.45 + materialOrder(st, i, lead.credits.length) * 0.5);
     const a = m.agents.find((x) => x.key === cr.key);
-    reveal(s, k, { x: c.x + 40, y: y - 10, w: c.w - 80, h: 270 }, 'center-x', () => {
+    const draw = () => {
     st.mark(s, cr.key ?? '', cx, y + 36, 64);
     st.title(s, cr.name, cx, y + 150, 64, 'middle', { maxW: c.w - 140 });
     if (cr.sub) s.text(cr.sub, cx, y + 190, { font: st.f.body, size: 20, fill: st.c.soft, anchor: 'middle' });
     if (a) st.num(s, pct(a.pct), cx, y + 236, 26, 'middle', { fill: st.c.accent });
     s.hit(c.x + 60, y - 10, c.w - 120, 260, tipFor(m, cr, lead.head));
-    });
+    };
+    materialEnter(s, st, k, { x: c.x + 60, y: y - 10, w: c.w - 120, h: 260 }, draw, 'title');
     y += 290;
   });
   st.rule(s, cx - 200, y, 400, 'orn');
@@ -198,16 +209,18 @@ function vertical(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   s.vtext(zh(m) ? '署名' : 'Credits', tx - 74, c.y + 80, { font: st.f.label, size: 22, fill: st.c.soft });
   let x = tx - titleW + 30;
   cols.forEach((col, i) => {
-    const k = styleProgress(st, t, i / Math.max(1, cols.length - 1) * 0.65, 0.3 + i / Math.max(1, cols.length - 1) * 0.65);
+    const k = styleProgress(st, t, materialOrder(st, cols.length - i - 1, cols.length, cols.length) * 0.65, 0.3 + materialOrder(st, cols.length - i - 1, cols.length, cols.length) * 0.65);
     const cx = x - col.w / 2;
-    reveal(s, k, { x: x - col.w, y: c.y + 60, w: col.w, h: col.h + 170 }, 'down', () => {
+    const draw = () => {
       if (col.kind === 'head') s.vtext(col.text, cx, c.y + 90, { font: st.f.label, size: HS, fill: st.c.accent2, gap: 0.2 });
       else {
         s.vtext(col.text, cx + (col.sub ? 16 : 0), c.y + 200, { font: st.f.display, size: NS, fill: st.c.ink });
         if (col.sub) s.vtext(col.sub, cx - 30, c.y + 212, { font: st.f.body, size: SS, fill: st.c.soft });
         s.hit(x - col.w, c.y + 180, col.w, col.h + 40, tipFor(m, col.cr!, col.head));
       }
-    });
+    };
+    // 列坐标从右往左生成；铺版顺序按真实位置计算，水墨仍从右起笔。
+    materialEnter(s, st, k, { x: x - col.w, y: c.y + (col.kind === 'head' ? 70 : 180), w: col.w, h: col.h + 40 }, draw);
     x -= col.w;
   });
   const foot = c.y + c.h - 40;
@@ -233,8 +246,8 @@ function ed(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   st.title(s, m.project || '', x0, y, 60, 'start', { maxW: w });
   y += 64;
   flat.forEach((sc, si) => {
-    const k = styleProgress(st, t, si / Math.max(1, flat.length - 1) * 0.6, 0.35 + si / Math.max(1, flat.length - 1) * 0.6);
-    move(s, k, 36, 0, () => {
+    const k = styleProgress(st, t, materialOrder(st, si, flat.length) * 0.6, 0.35 + materialOrder(st, si, flat.length) * 0.6);
+    materialEnter(s, st, k, { x: x0 - 10, y, w: w + 20, h: (38 + sc.credits.length * 46 + 16) * k0 }, () => {
     s.text(sc.head, x0, y + 26 * k0, { font: st.f.label, size: 20 * k0, fill: st.c.soft, opacity: 1 });
     y += 38 * k0;
     for (const cr of sc.credits) {
@@ -261,8 +274,8 @@ function billing(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   const lead = secs[0];
   st.label(s, lead.credits.map((x) => x.name).join('  ·  ').toUpperCase(), cx, c.y + 120, { anchor: 'middle', size: 22, fill: st.c.ink });
   s.hit(c.x + 40, c.y + 90, c.w - 80, 44, { t: lead.head, d: lead.credits.map((x) => x.name) });
-  // 海报标题像一整片剪纸落位，底部署名块再逐行排印。
-  move(s, styleProgress(st, t, 0, 0.45), -70, 0, () => st.title(s, m.project || 'Untitled', cx, c.y + 560, 220, 'middle', { maxW: c.w - 80 }));
+  // 海报标题完整落位，底部署名块再逐行排印；材质由所选风格决定。
+  materialEnter(s, st, styleProgress(st, t, 0, 0.45), { x: c.x + 40, y: c.y + 340, w: c.w - 80, h: 250 }, () => st.title(s, m.project || 'Untitled', cx, c.y + 560, 220, 'middle', { maxW: c.w - 80 }), 'title');
   // 署名块
   const cond = { family: 'Oswald, Anton, Noto Sans SC', weight: 400 };
   const lines: [string, string][] = secs.filter((x) => x.head !== T(m, '模型', 'Models')).map((sc) => [sc.head.toUpperCase(), sc.credits.map((x) => x.name.toUpperCase()).join('  ·  ')]);
@@ -271,10 +284,11 @@ function billing(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   let y = bl;
   for (const [i, [h, names]] of lines.slice(0, 6).entries()) {
     const start = 0.3 + i / Math.max(1, Math.min(6, lines.length) - 1) * 0.45;
-    reveal(s, styleProgress(st, t, start, start + 0.2), { x: c.x + 40, y: y - 18, w: c.w - 80, h: 60 }, 'right', () => {
-    s.text(h, cx, y, { font: cond, size: 13, fill: st.c.soft, track: 0.24, anchor: 'middle', maxW: c.w - 140 });
-    s.text(names, cx, y + 30, { font: cond, size: 26, fill: st.c.ink, track: 0.04, anchor: 'middle', maxW: c.w - 140 });
-    s.hit(c.x + 60, y - 18, c.w - 120, 56, { t: h, d: [names] });
+    // 排印以整行为单位落下，不让扫描边缘切过姓名。
+    materialEnter(s, st, styleProgress(st, t, start, start + 0.2), { x: c.x + 60, y: y - 18, w: c.w - 120, h: 56 }, () => {
+      s.text(h, cx, y, { font: cond, size: 13, fill: st.c.soft, track: 0.24, anchor: 'middle', maxW: c.w - 140 });
+      s.text(names, cx, y + 30, { font: cond, size: 26, fill: st.c.ink, track: 0.04, anchor: 'middle', maxW: c.w - 140 });
+      s.hit(c.x + 60, y - 18, c.w - 120, 56, { t: h, d: [names] });
     });
     y += 62;
   }
@@ -298,29 +312,30 @@ function terminalRoll(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene
   const total = secs.reduce((n, sc) => n + sc.credits.length + 1, 0);
   let i = 0;
   let cursorY: number | undefined;
-  const printed = () => {
-    const ready = t >= 1 || i < phase(t, 0, 0.9) * total;
+  const print = (draw: () => void) => {
+    const start = i / Math.max(1, total - 1) * 0.78;
+    const k = styleProgress(st, t, start, start + 0.16);
     i++;
-    if (!ready && cursorY === undefined) cursorY = y;
-    return ready;
+    if (k < 1 && cursorY === undefined) cursorY = y;
+    materialEnter(s, st, k, { x: x - 10, y: y - 24, w: c.w - 80, h: lh }, draw, st.id === 'terminal' ? 'data' : 'content');
   };
   for (const sc of secs) {
-    if (printed()) s.text(`# ${sc.head}`, x, y, { font: mono, size: 18, fill: st.c.accent2 });
+    print(() => s.text(`# ${sc.head}`, x, y, { font: mono, size: 18, fill: st.c.accent2 }));
     y += lh;
     for (const cr of sc.credits) {
-      if (printed()) {
+      print(() => {
       const a = m.agents.find((q) => q.key === cr.key);
       const col = a ? st.color(a.key, a.rank) : st.c.ink;
       s.text('  ' + cr.name.padEnd(22, ' '), x, y, { font: mono, size: 18, fill: col });
       if (cr.sub) s.text(cr.sub, x + measure('  ' + ''.padEnd(24, ' '), mono, 18), y, { font: mono, size: 16, fill: st.c.soft, maxW: c.w - 400, overflow: 'clip' });
       s.hit(x - 10, y - 24, c.w - 80, lh, tipFor(m, cr, sc.head));
-      }
+      });
       y += lh;
     }
     y += lh * 0.6;
   }
   if (t >= 0.94) s.text(`-- ${closing(m)} --`, x, y + 20, { font: mono, size: 16, fill: st.c.faint });
-  else if (Math.floor(t * 16) % 2 === 0) s.add(rect(x, (cursorY ?? y + 20) - 17, 11, 20, { fill: st.c.accent2 }));
+  else if (['terminal', 'crt', 'arcade', 'cyber'].includes(st.id) && Math.floor(t * 16) % 2 === 0) s.add(rect(x, (cursorY ?? y + 20) - 17, 11, 20, { fill: st.c.accent2 }));
   return s;
 }
 
@@ -343,14 +358,17 @@ function troupe(m: Model, st: Style, o: PieceOpts): Scene | null {
   st.rule(s, cx - 140, y + 140, 280, 'orn');
   y += 240;
   list.forEach((a, i) => {
-    const k = styleProgress(st, t, i / Math.max(1, list.length - 1) * 0.55, 0.4 + i / Math.max(1, list.length - 1) * 0.55);
+    const k = styleProgress(st, t, materialOrder(st, i, list.length) * 0.55, 0.4 + materialOrder(st, i, list.length) * 0.55);
     y += gapH;
+    // 一个工具及其模型是完整分部，先后进场时不会留下无主的模型名。
+    materialEnter(s, st, k, { x: c.x + 60, y: y - 40, w: c.w - 120, h: headH + segsFor(a).length * subH + 40 }, () => {
     // 部名：标志 + 工具名，居中；占比写在下面
     const nw = measure(a.name, st.f.display, 34);
-    reveal(s, k, { x: c.x + 60, y: y - 40, w: c.w - 120, h: 48 }, 'center-x', () => {
+    const heading = () => {
     st.mark(s, a.key, cx - nw / 2 - 26, y - 12, 34);
     s.text(a.name, cx + 4, y, { font: st.f.display, size: 34, fill: st.c.ink, anchor: 'middle', maxW: c.w - 240, opacity: 1 });
-    });
+    };
+    heading();
     s.text(T(m, `${pct(a.pct)} 的代码`, `${pct(a.pct)} of the code`), cx, y + 36, { font: st.f.label, size: 15, fill: st.c.soft, anchor: 'middle', track: 0.08 });
     s.hit(c.x + 60, y - 40, c.w - 120, headH - 10, tip(m, a));
     y += headH;
@@ -358,11 +376,12 @@ function troupe(m: Model, st: Style, o: PieceOpts): Scene | null {
       // 模型 ······ 占比
       const nwq = s.text(q.name, x0, y, { font: st.f.body, size: 22, fill: q.unknown ? st.c.soft : st.c.ink, maxW: x1 - x0 - 120 });
       const pw = measure(pct(q.pct), st.f.body, 20);
-      reveal(s, k, { x: x0 + nwq + 10, y: y - 10, w: Math.max(0, x1 - pw - x0 - nwq - 20), h: 8 }, 'right', () => s.add(line(x0 + nwq + 14, y - 6, x1 - pw - 14, y - 6, { stroke: st.c.ink, strokeOpacity: 0.3, strokeDasharray: '1.5 7', strokeLinecap: 'round', strokeWidth: 2 })));
+      materialReveal(s, st, k, { x: x0 + nwq + 10, y: y - 10, w: Math.max(0, x1 - pw - x0 - nwq - 20), h: 8 }, 'right', () => s.add(line(x0 + nwq + 14, y - 6, x1 - pw - 14, y - 6, { stroke: st.c.ink, strokeOpacity: 0.3, strokeDasharray: '1.5 7', strokeLinecap: 'round', strokeWidth: 2 })));
       s.text(pct(q.pct), x1, y, { font: st.f.body, size: 20, fill: st.c.soft, anchor: 'end' });
       s.hit(x0 - 10, y - 30, x1 - x0 + 20, subH, segTip(m, a, q));
       y += subH;
     }
+    });
   });
   y += 110;
   st.rule(s, cx - 60, y - 40, 120, 'thin');

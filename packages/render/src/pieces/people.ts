@@ -1,7 +1,8 @@
 // 贡献者：按贡献者看。每位提交者一行，条形按他的提交里各工具、没有 AI 记录、未确认分段。
 // 只说是谁提交的，不说是谁手写的；只有一位提交者时没有这张（和署名榜一样）
 import { Scene, rect } from '../svg.ts';
-import { styleProgress, reveal } from '../motion.ts';
+import { styleProgress } from '../motion.ts';
+import { materialReveal, materialOrder } from '../material-motion.ts';
 import type { Model, Agent } from '../data.ts';
 import { pct, fmt } from '../data.ts';
 import type { Style } from '../style.ts';
@@ -26,13 +27,14 @@ export function people(m: Model, st: Style, o: PieceOpts): Scene | null {
   const max = Math.max(...m.authors.map((a) => a.pct), 1e-9);
   let y = c.y + 196;
   m.authors.forEach((a, i) => {
-    const k = styleProgress(st, t, i / Math.max(1, m.authors.length - 1) * 0.35, 0.6 + i / Math.max(1, m.authors.length - 1) * 0.35);
+    const order = materialOrder(st, i, m.authors.length);
+    const k = styleProgress(st, t, order * 0.35, 0.6 + order * 0.35);
     s.text(a.name, x0, y, { font: st.f.body, size: 22, fill: st.c.ink, maxW: (x1 - x0) * 0.62 });
     st.num(s, pct(a.pct), x1, y, 22, 'end');
     st.track(s, x0, y + 16, x1 - x0, 14);
     const bw = (x1 - x0) * (a.pct / max);
     let bx = x0;
-    reveal(s, k, { x: x0, y: y + 16, w: bw, h: 14 }, 'right', () => {
+    materialReveal(s, st, k, { x: x0, y: y + 16, w: bw, h: 14 }, 'right', () => {
     for (const p of a.parts) {
       const w = a.lines ? (bw * p.lines) / a.lines : 0;
       if (w > 0) s.add(rect(bx, y + 16, w, 14, { fill: fill(p.key) }));

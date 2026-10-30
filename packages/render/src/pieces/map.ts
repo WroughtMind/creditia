@@ -1,5 +1,5 @@
 // 代码地图：现在的代码一行一道线，按文件顺序排成一列列（像编辑器的缩略图），颜色是写它的工具。
-// 动画：先是一片灰，一道光从左扫到右，扫过的行染上颜色。
+// 动画：每行保持完整，依材质的铺版顺序染色；终端输出、扫描余辉和纸面压印各有自己的动作。
 // 线的颜色是真实归属；线的长短、缩进只是为了像代码（档案里没有代码），按文件路径固定生成，每次画都一样。
 import { Scene, rect, path, r } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
@@ -7,6 +7,7 @@ import { fmt } from '../data.ts';
 import type { Style } from '../style.ts';
 import { T, colorOf, canvas, tip, type PieceOpts } from './common.ts';
 import { styleProgress } from '../motion.ts';
+import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
 
 const PITCH = 4.5, CW = 56, GAP = 22, FILE_GAP = 2, SHADE = [1, 0.78, 0.6];
 
@@ -53,8 +54,7 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
   const layers = new Map<string, string[]>();
   const base: string[] = [];
   const progress = styleProgress(st, t, 0, 0.85);
-  const sweepX = x0 - 2 + (pw + 4) * progress;
-  const typed = !!st.grid || ['terminal', 'crt', 'arcade', 'manuscript'].includes(st.id);
+  let cursor = { col: 0, row: 0, distance: Infinity };
   let col = 0, row = 0;
   for (const f of files) {
     const all = linesOf(f);
@@ -82,12 +82,15 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
         ind = i === 0 ? 0 : Math.max(0, Math.min(4, ind + (R() < 0.22 ? 1 : R() < 0.25 ? -1 : 0)));
         const step = cw / 11, lx = x0 + col * (cw + GAP) + ind * step, end = lx + Math.max(3, (cw - ind * step) * (0.25 + R() * 0.75));
         const y = r(py + row * PITCH + 1);
+        const order = materialOrder(st, row * cols + col, rows * cols, cols);
+        const distance = Math.abs(progress - order);
+        if (distance < cursor.distance) cursor = { col, row, distance };
         for (let x = lx, first = true; x < end - 1.5; first = false) {
           const w = Math.min(end - x, cw / 7 + R() * (cw / 2.2));
           const shade = first ? 0 : R() < 0.45 ? 1 : R() < 0.5 ? 2 : 0;
           const d = `M${r(x)} ${y}h${r(w)}`;
           base.push(d);
-          if (typed ? (col * rows + row) / (cols * rows) < progress : x < sweepX) {
+          if (progress >= 1 || order < progress) {
             const lk = `${key}|${shade}`;
             (layers.get(lk) ?? layers.set(lk, []).get(lk)!).push(d);
           }
@@ -99,18 +102,21 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
     flushHit();
     row += FILE_GAP;
   }
-  // 底：全部的线，淡淡一层；扫过的部分盖上颜色
+  // 底：全部的线，淡淡一层。已出现的整行保持原来的长度和归属。
   s.add(path(base.join(''), { fill: 'none', stroke: st.c.ink, strokeOpacity: 0.14, strokeWidth: 2 }));
-  for (const [lk, ds] of layers) {
-    const [key, sh] = lk.split('|');
-    s.add(path(ds.join(''), { fill: 'none', stroke: color(key), strokeOpacity: r(SHADE[+sh] * (neutral(key) ? 0.55 : 1)), strokeWidth: 2 }));
-  }
-  // 扫描线
+  materialEnter(s, st, styleProgress(st, t, 0, 0.3), { x: x0 - 2, y: py - 2, w: pw + 4, h: plotH + 4 }, () => {
+    for (const [lk, ds] of layers) {
+      const [key, sh] = lk.split('|');
+      s.add(path(ds.join(''), { fill: 'none', stroke: color(key), strokeOpacity: r(SHADE[+sh] * (neutral(key) ? 0.55 : 1)), strokeWidth: 2 }));
+    }
+  }, 'data');
+  // 游标属于屏幕/书写语义，不给所有纸面作品套同一道扫描线。
   if (t > 0 && t < 0.85) {
-    if (typed) {
-      const at = Math.min(cols * rows - 1, Math.floor(progress * cols * rows));
-      s.add(rect(x0 + Math.floor(at / rows) * (cw + GAP), py + (at % rows) * PITCH, cw, 2, { fill: st.c.ink, opacity: 0.8 }));
-    } else s.add(rect(sweepX - 1, py - 10, 2, plotH + 14, { fill: st.c.ink, opacity: 0.8 }));
+    const x = x0 + cursor.col * (cw + GAP), y = py + cursor.row * PITCH;
+    if (['terminal', 'arcade'].includes(st.id)) s.add(rect(x, y, Math.min(8, cw), 3, { fill: st.c.accent, opacity: 0.8 }));
+    if (st.id === 'crt') s.add(rect(x0, y, pw, 2, { fill: st.c.accent, opacity: 0.65 }));
+    if (['manuscript', 'editorial'].includes(st.id)) s.add(rect(x, y + 2, cw, 0.8, { fill: st.c.ink, opacity: 0.65 }));
+    if (st.id === 'cyber') s.add(rect(x, y - 2, cw, PITCH + 2, { fill: 'none', stroke: st.c.accent, strokeWidth: 0.8, opacity: 0.7 }));
   }
 
   // 占比条与图例：按图里画的这些行（现在的代码）算，只在 AI 和未确认之间分
@@ -125,12 +131,13 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
   s.add(rect(x0, by, pw, 5, { fill: st.c.ink, fillOpacity: 0.1 }));
   let bx = x0;
   const reveal = styleProgress(st, t, 0.1, 0.85);
-  for (const { a, pct } of shown) {
-    const w = (pct / 100) * pw;
-    const vis = Math.max(0, Math.min(w, x0 + pw * reveal - bx));
-    if (vis > 0) s.add(rect(bx, by, Math.max(0, vis - 3), 5, { fill: a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a) }));
-    bx += w;
-  }
+  materialReveal(s, st, reveal, { x: x0, y: by, w: pw, h: 5 }, 'right', () => {
+    for (const { a, pct } of shown) {
+      const w = (pct / 100) * pw;
+      if (w > 0) s.add(rect(bx, by, Math.max(0, w - 3), 5, { fill: a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a) }));
+      bx += w;
+    }
+  });
   let lx = x0;
   for (const { a, pct } of shown) {
     if (lx > x1 - 140) break;

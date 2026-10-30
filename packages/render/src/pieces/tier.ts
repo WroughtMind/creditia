@@ -2,12 +2,20 @@
 import { Scene, rect, line, path, circle, el, g, r, measure, capOf, mix, lum } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
 import { pct, fmt, hanzi } from '../data.ts';
-import type { Style } from '../style.ts';
+import type { Style, Box } from '../style.ts';
 import { chamfer } from '../style.ts';
 import { measureV } from './common.ts';
 import { T, zh, colorOf, sign, fillOf, tip, modelLine, handLine, handTip, summary, range, canvas, type PieceOpts } from './common.ts';
 import { inkSeal } from '../styles/east.ts';
-import { phase, styleProgress, reveal } from '../motion.ts';
+import { phase, styleProgress, type RevealDirection } from '../motion.ts';
+import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
+
+// 字符格的条本身就是字形，必须整格印出；其他条才有可展开的图形边界。
+function barReveal(s: Scene, st: Style, k: number, b: Pick<Box, 'x' | 'y' | 'w' | 'h'>, direction: RevealDirection, draw: () => void): void {
+  if (st.cells || st.id === 'terminal') materialEnter(s, st, k, b, draw, 'data');
+  else materialReveal(s, st, k, b, direction, draw);
+}
+
 
 export const TIER_VARIANTS = ['rows', 'center', 'podium', 'vertical', 'hud', 'stats', 'split', 'grouped'];
 
@@ -39,7 +47,7 @@ function rows(m: Model, st: Style, o: PieceOpts): Scene {
   y += 132;
   const n = m.rows.length;
   m.rows.forEach((a, i) => {
-    const k = styleProgress(st, t, i / Math.max(1, n - 1) * 0.35, 0.6 + i / Math.max(1, n - 1) * 0.35);
+    const k = styleProgress(st, t, materialOrder(st, i, n) * 0.35, 0.6 + materialOrder(st, i, n) * 0.35);
     const color = colorOf(st, a);
     const mx = x0 + 20, nx = x0 + 58;
     st.mark(s, a.key, mx, y + 24, 34, a.key === 'unattributed' ? undefined : undefined);
@@ -50,7 +58,7 @@ function rows(m: Model, st: Style, o: PieceOpts): Scene {
     const by = y + 70, bw = x1 - nx, bh = 9;
     st.track(s, nx, by, bw, bh);
     const w = Math.max(a.pct > 0 ? 3 : 0, (bw * a.pct) / 100);
-    reveal(s, k, { x: nx - 12, y: by - 12, w: w + 24, h: bh + 24 }, 'right', () => {
+    barReveal(s, st, k, { x: nx - 12, y: by - 12, w: w + 24, h: bh + 24 }, 'right', () => {
       if (a.key === 'unattributed') s.add(rect(nx, by, w, bh, { fill: st.hatch(s), rx: Math.min(st.radius, bh / 2) }));
       else st.bar(s, nx, by, w, bh, color, i);
     });
@@ -93,21 +101,25 @@ function vertical(m: Model, st: Style, o: PieceOpts): Scene {
   list.forEach((a, i) => {
     const k = styleProgress(st, t, i / Math.max(1, list.length - 1) * 0.5, 0.45 + i / Math.max(1, list.length - 1) * 0.5);
     const x = xs(i);
-    reveal(s, k, { x: x - colW / 2, y: top, w: colW, h: bottom - top }, 'down', () => {
+    // 文字按整列显现，避免竖向裁切把名字和占比截成半个字。
+    let nh = 0;
+    materialEnter(s, st, k, { x: x - colW / 2, y: top, w: colW, h: bottom - top }, () => {
     st.mark(s, a.key, x, top + 40, 36);
     const name = a.key === 'unattributed' ? T(m, '未确认', 'Unattributed') : a.name;
-    const nh = s.vtext(name, x - 16, top + 80, { font: st.f.display, size: 30, fill: st.c.ink, gap: 0.05 });
+    nh = s.vtext(name, x - 16, top + 80, { font: st.f.display, size: 30, fill: st.c.ink, gap: 0.05 });
     // 占比：汉字竖写（五十六点二）
     const p = Math.round(a.pct * 10) / 10;
     const ptxt = zh(m) ? `${hanzi(Math.floor(p))}${Math.round((p % 1) * 10) ? '點' + hanzi(Math.round((p % 1) * 10)) : ''}` : pct(p);
     s.vtext(ptxt, x + 24, top + 84, { font: st.f.body, size: 17, fill: st.c.soft, gap: 0.02 });
+    }, 'data');
     // 竖条：从底往上
     const bh = Math.max(4, (bottom - top - 120 - nh) * (a.pct / 100) * 1.0);
     const bx = x - 7;
-    if (a.key === 'unattributed') s.add(rect(bx, bottom - 20 - bh, 14, bh, { fill: st.hatch(s) }));
-    else st.bar(s, bx, bottom - 20 - bh, 14, bh, colorOf(st, a), i);
-    s.hit(x - colW / 2, top, colW, bottom - top, tip(m, a));
+    barReveal(s, st, k, { x: bx - 6, y: bottom - 26 - bh, w: 26, h: bh + 12 }, 'up', () => {
+      if (a.key === 'unattributed') s.add(rect(bx, bottom - 20 - bh, 14, bh, { fill: st.hatch(s) }));
+      else st.bar(s, bx, bottom - 20 - bh, 14, bh, colorOf(st, a), i);
     });
+    if (k > 0) s.hit(x - colW / 2, top, colW, bottom - top, tip(m, a));
   });
   // 落款：人的部分
   const hl = handLine(m);
@@ -133,10 +145,10 @@ function hud(m: Model, st: Style, o: PieceOpts): Scene {
   st.label(s, range(m), x1, y + 6, { size: 12, anchor: 'end' });
   y += 130;
   list.forEach((a, i) => {
-    const k = styleProgress(st, t, i / Math.max(1, list.length - 1) * 0.3, 0.55 + i / Math.max(1, list.length - 1) * 0.3);
+    const k = styleProgress(st, t, materialOrder(st, i, list.length, cols) * 0.3, 0.55 + materialOrder(st, i, list.length, cols) * 0.3);
     const cx = x0 + (i % cols) * (cw + gap), cy = y + Math.floor(i / cols) * (ch + gap);
     const color = a.key === 'unattributed' ? st.c.faint : colorOf(st, a);
-    reveal(s, k, { x: cx - 3, y: cy - 3, w: cw + 6, h: ch + 6 }, 'center-x', () => s.add(path(chamfer(cx, cy, cw, ch, 16), { fill: st.c.paper, fillOpacity: 0.9, stroke: color, strokeOpacity: 0.7, strokeWidth: 1.2 })));
+    materialReveal(s, st, k, { x: cx - 3, y: cy - 3, w: cw + 6, h: ch + 6 }, 'center-x', () => s.add(path(chamfer(cx, cy, cw, ch, 16), { fill: st.c.paper, fillOpacity: 0.9, stroke: color, strokeOpacity: 0.7, strokeWidth: 1.2 })));
     s.add(rect(cx + 16, cy - 1.5, 38, 3, { fill: color }));
     s.text(String(i + 1).padStart(2, '0'), cx + cw - 18, cy + 30, { font: st.f.mono, size: 13, fill: st.c.faint, anchor: 'end' });
     st.mark(s, a.key, cx + 38, cy + 42, 36, color);
@@ -146,7 +158,7 @@ function hud(m: Model, st: Style, o: PieceOpts): Scene {
     st.num(s, pct(a.pct), cx + 20, cy + 118, 46, 'start', { fill: color });
     const bx = cx + 20, bw = cw - 40;
     st.track(s, bx, cy + 128, bw, 8);
-    reveal(s, styleProgress(st, t, 0.2, 0.95), { x: bx - 12, y: cy + 116, w: bw + 24, h: 32 }, 'right', () => {
+    barReveal(s, st, styleProgress(st, t, 0.2, 0.95), { x: bx - 12, y: cy + 116, w: bw + 24, h: 32 }, 'right', () => {
       if (a.key === 'unattributed') s.add(rect(bx, cy + 128, (bw * a.pct) / 100, 8, { fill: st.hatch(s) }));
       else st.bar(s, bx, cy + 128, Math.max(8, (bw * a.pct) / 100), 8, color, i);
     });
@@ -180,12 +192,13 @@ function podium(m: Model, st: Style, o: PieceOpts): Scene {
   order.forEach((idx, slot) => {
     const a = top3[idx];
     if (!a) return;
-    // 从第三名到第一名揭幕，台座尺寸与真实名次保持不变。
-    const k = styleProgress(st, t, (2 - idx) * 0.2, 0.55 + (2 - idx) * 0.2);
+    // 台座保持完整；风格决定按列、从中轴或成对铺开，不改变真实名次。
+    const start = materialOrder(st, slot, top3.length, top3.length) * 0.4;
+    const k = styleProgress(st, t, start, 0.55 + start);
     const cx = W / 2 + (slot - 1) * (pw + 24);
     const h = hs[idx];
     const color = colorOf(st, a);
-    reveal(s, k, { x: cx - pw / 2 - 12, y: base - h - 158, w: pw + 24, h: h + 166 }, 'up', () => {
+    const draw = () => {
     // 台座：平顶方块，顶上一道亮边
     s.add(rect(cx - pw / 2, base - h, pw, h, { fill: color, opacity: 0.92 }));
     s.add(rect(cx - pw / 2, base - h, pw, 6, { fill: st.c.ink, opacity: 0.18 }));
@@ -195,7 +208,9 @@ function podium(m: Model, st: Style, o: PieceOpts): Scene {
     s.text(a.name, cx, base - h - 58, { font: st.f.display, size: 28, fill: st.c.ink, anchor: 'middle', maxW: pw + 10 });
     st.num(s, pct(a.pct), cx, base - h - 22, 22, 'middle', { fill: st.c.soft });
     s.hit(cx - pw / 2, base - h - 150, pw, h + 150, tip(m, a));
-    });
+    };
+    // 姓名和标记留在各自台座上方，命中区也始终守住基线。
+    materialEnter(s, st, k, { x: cx - pw / 2, y: base - h - 150, w: pw, h: h + 150 }, draw, 'data');
   });
   st.rule(s, c.x + 60, base, c.w - 120, 'thin');
   let x = c.x + 60;
@@ -231,13 +246,13 @@ function center(m: Model, st: Style, o: PieceOpts): Scene {
   y += 190;
   const half = (c.w - 140) / 2;
   m.rows.forEach((a, i) => {
-    const k = styleProgress(st, t, i / Math.max(1, m.rows.length - 1) * 0.3, 0.6 + i / Math.max(1, m.rows.length - 1) * 0.3);
+    const k = styleProgress(st, t, materialOrder(st, i, m.rows.length) * 0.3, 0.6 + materialOrder(st, i, m.rows.length) * 0.3);
     st.mark(s, a.key, cx, y + 4, 30);
     s.text(a.name, cx, y + 54, { font: st.f.display, size: 22, fill: st.c.ink, anchor: 'middle', track: 0.08, upper: st.labelUpper });
     const w = Math.max(4, (half * a.pct) / 100 * 1.6);
     const by = y + 70;
     st.track(s, cx - half, by, half * 2, 8);
-    reveal(s, k, { x: cx - w / 2 - 12, y: by - 12, w: w + 24, h: 32 }, 'center-x', () => {
+    barReveal(s, st, k, { x: cx - w / 2 - 12, y: by - 12, w: w + 24, h: 32 }, 'center-x', () => {
       if (a.key === 'unattributed') s.add(rect(cx - w / 2, by, w, 8, { fill: st.hatch(s) }));
       else st.bar(s, cx - Math.min(w, half * 2) / 2, by, Math.min(w, half * 2), 8, colorOf(st, a), i);
     });
@@ -293,23 +308,20 @@ function stats(m: Model, st: Style, o: PieceOpts): Scene {
   list.forEach((a, i) => {
     const x = c.x + 30 + (i % 2) * (cw + 24), y = c.y + 170 + Math.floor(i / 2) * (ch + 24);
     s.add(rect(x, y, cw, ch, { fill: st.c.paper, stroke: st.c.ink, strokeWidth: 3 }));
+    const start = i / Math.max(1, list.length - 1) * 0.4;
+    materialEnter(s, st, styleProgress(st, t, Math.max(0, start - 0.12), start + 0.2), { x: x + 20, y: y + 20, w: cw - 40, h: 50 }, () => {
     st.mark(s, a.key, x + 40, y + 42, 40);
     s.text(a.name, x + 74, y + 54, { font: st.f.display, size: 28, fill: st.c.ink, maxW: cw - 180 });
     st.num(s, pct(a.pct), x + cw - 20, y + 56, 30, 'end', { fill: colorOf(st, a) });
+    });
     const ab = abilities(m, a);
     const R = 120, rx = x + cw / 2, ry = y + 250;
     const pt = (k: number, v: number) => [rx + Math.sin((k / 6) * Math.PI * 2) * R * v, ry - Math.cos((k / 6) * Math.PI * 2) * R * v];
     for (const lv of [1, 0.8, 0.6, 0.4, 0.2]) s.add(path('M' + [0, 1, 2, 3, 4, 5].map((k) => pt(k, lv).map(r).join(' ')).join('L') + 'Z', { fill: lv === 1 ? st.c.paper : 'none', stroke: st.c.ink, strokeOpacity: lv === 1 ? 1 : 0.22, strokeWidth: lv === 1 ? 2 : 1 }));
     for (let k = 0; k < 6; k++) { const [px, py] = pt(k, 1); s.add(line(rx, ry, px, py, { stroke: st.c.ink, strokeOpacity: 0.22 })); }
-    const kk = styleProgress(st, t, i / Math.max(1, list.length - 1) * 0.25, 0.65 + i / Math.max(1, list.length - 1) * 0.25);
-    const points = ab.map((q, k) => pt(k, Math.max(0.06, q.v)));
-    const shape = 'M' + points.map((p) => p.map(r).join(' ')).join('L') + 'Z';
-    if (t >= 1) s.add(path(shape, { fill: colorOf(st, a), fillOpacity: 0.55, stroke: st.c.ink, strokeWidth: 2.4 }));
-    else {
-      const length = points.reduce((n, p, j) => { const next = points[(j + 1) % points.length]; return n + Math.hypot(next[0] - p[0], next[1] - p[1]); }, 0);
-      reveal(s, phase(kk, 0.5, 1), { x: rx - R, y: ry - R, w: R * 2, h: R * 2 }, 'down', () => s.add(path(shape, { fill: colorOf(st, a), fillOpacity: 0.55, stroke: 'none' })));
-      s.add(path(shape, { fill: 'none', stroke: st.c.ink, strokeWidth: 2.4, strokeDasharray: length, strokeDashoffset: length * (1 - phase(kk, 0, 0.7)) }));
-    }
+    // 雷达沿各轴从中心展开，轮廓与填色作为同一个完整图形运动。
+    const kk = 1 - Math.pow(1 - phase(t, start, start + 0.6), 3);
+    s.add(path('M' + ab.map((q, k) => pt(k, Math.max(0.06, q.v) * kk).map(r).join(' ')).join('L') + 'Z', { fill: colorOf(st, a), fillOpacity: 0.55, stroke: st.c.ink, strokeWidth: 2.4 }));
     ab.forEach((q, k) => {
       const [px, py] = pt(k, 1.32);
       const anchor = Math.abs(px - rx) < 4 ? 'middle' : px > rx ? 'start' : 'end';
@@ -357,7 +369,7 @@ function split(m: Model, st: Style, o: PieceOpts): Scene {
   st.title(s, m.project || 'Untitled', x0, y + 78, 56, 'start', { maxW: x1 - x0 });
   y += 132;
   list.forEach((a, i) => {
-    const k = styleProgress(st, t, i / Math.max(1, list.length - 1) * 0.35, 0.6 + i / Math.max(1, list.length - 1) * 0.35);
+    const k = styleProgress(st, t, materialOrder(st, i, list.length) * 0.35, 0.6 + materialOrder(st, i, list.length) * 0.35);
     const nx = x0 + 58, bw = x1 - nx, bh = 12, by = y + 68;
     st.mark(s, a.key, x0 + 20, y + 24, 34);
     s.text(a.name, nx, y + 33, { font: st.f.display, size: 27, fill: st.c.ink, maxW: x1 - nx - 140 });
@@ -367,7 +379,7 @@ function split(m: Model, st: Style, o: PieceOpts): Scene {
     const full = Math.max(a.pct > 0 ? 3 : 0, (bw * a.pct) / 100);
     const gap = segs.length > 1 ? 3 : 0;
     let x = nx;
-    reveal(s, k, { x: nx - 12, y: by - 12, w: full + 24, h: bh + 24 }, 'right', () => segs.forEach((q, j) => {
+    barReveal(s, st, k, { x: nx - 12, y: by - 12, w: full + 24, h: bh + 24 }, 'right', () => segs.forEach((q, j) => {
       const w = Math.max(0, (full * q.lines) / Math.max(1, a.lines) - (j < segs.length - 1 ? gap : 0));
       if (a.key === 'unattributed') s.add(rect(x, by, w, bh, { fill: st.hatch(s), rx: Math.min(st.radius, bh / 2) }));
       else st.bar(s, x, by, w, bh, q.color, i);
@@ -422,7 +434,7 @@ function grouped(m: Model, st: Style, o: PieceOpts): Scene {
       // 只有一个模型：一条细条，模型名写在条后
       const k = styleProgress(st, t, row / Math.max(1, total - 1) * 0.5, 0.45 + row++ / Math.max(1, total - 1) * 0.5);
       st.track(s, nx, y - 4, bw, 8);
-      reveal(s, k, { x: nx - 12, y: y - 16, w: bw + 24, h: 32 }, 'right', () => {
+      barReveal(s, st, k, { x: nx - 12, y: y - 16, w: bw + 24, h: 32 }, 'right', () => {
         if (a.key === 'unattributed') s.add(rect(nx, y - 4, (bw * a.pct) / 100, 8, { fill: st.hatch(s) }));
         else st.bar(s, nx, y - 4, Math.max(3, (bw * a.pct) / 100), 8, segs[0]?.color ?? colorOf(st, a), i);
       });
@@ -437,7 +449,7 @@ function grouped(m: Model, st: Style, o: PieceOpts): Scene {
       s.text(q.name, nx + 18, y + 12, { font: st.f.body, size: 18, fill: q.unknown ? st.c.soft : st.c.ink, maxW: bw - 18 });
       st.num(s, pct(q.pct), x1, y + 14, 20, 'end', { fill: st.c.soft });
       st.track(s, nx, y + 26, bw, 7);
-      reveal(s, k, { x: nx - 12, y: y + 14, w: bw + 24, h: 31 }, 'right', () => st.bar(s, nx, y + 26, Math.max(3, (bw * q.pct) / 100), 7, q.color, i));
+      barReveal(s, st, k, { x: nx - 12, y: y + 14, w: bw + 24, h: 31 }, 'right', () => st.bar(s, nx, y + 26, Math.max(3, (bw * q.pct) / 100), 7, q.color, i));
       s.hit(nx - 6, y - 8, x1 - nx + 12, subH - 6, segTip(m, a, q));
       y += subH;
     }

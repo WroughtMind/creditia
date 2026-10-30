@@ -13,6 +13,7 @@ import { asterisk } from './pieces/asterisk.ts';
 import { people } from './pieces/people.ts';
 import { historyLabels } from './history.ts';
 import { motionDuration } from './motion.ts';
+import { scrollY } from './scroll-motion.ts';
 
 export interface PieceDef {
   name: string;
@@ -33,8 +34,8 @@ export const PIECES: Record<string, PieceDef> = {
   hand: { name: '开发者', en: 'Developers', q: '提示词与审阅', qEn: 'Prompts and reviews', animated: true, render: hand },
   people: { name: '贡献者', en: 'Contributors', q: '每位提交者的提交里各工具占多少', qEn: 'What each committer\'s commits were written with', animated: true, render: people },
   receipt: { name: '小票', en: 'Receipt', q: '工期、会话与 Token', qEn: 'Time, sessions, and tokens spent', variants: RECEIPT_VARIANTS, animated: true, render: receipt },
-  badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', qEn: 'README, profile page', variants: BADGE_VARIANTS, render: badge },
-  byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', variants: BYLINE_VARIANTS, render: byline },
+  badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', qEn: 'README, profile page', variants: BADGE_VARIANTS, animated: true, render: badge },
+  byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', variants: BYLINE_VARIANTS, animated: true, render: byline },
   roll: { name: '片尾字幕', en: 'Credits Roll', q: '分工与角色表', qEn: 'Contributors and roles', variants: ROLL_VARIANTS, animated: true, render: roll },
   donut: { name: '环形图', en: 'Donut', q: '代码占比', qEn: 'Shares', variants: DONUT_VARIANTS, animated: true, render: donut },
   waffle: { name: '华夫饼图', en: 'Waffle', q: '百格占比', qEn: 'One square is 1%', variants: WAFFLE_VARIANTS, animated: true, render: waffle },
@@ -80,12 +81,11 @@ export function frames(id: string, m: Model, st: Style, o: PieceOpts = {}, n = 2
   if (full?.motion?.kind === 'scroll') {
     const { viewW, viewH } = full.motion;
     const steps = Math.max(n, 60);
-    const travel = Math.max(0, full.h - viewH);
     const inner = full.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
     return Array.from({ length: steps + 1 }, (_, i) => {
-      const y = Math.round((travel * i) / steps);
+      const y = Math.round(scrollY(full.motion!.keys, i / steps));
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewW}" height="${viewH}" viewBox="0 ${y} ${viewW} ${viewH}"><rect y="${y}" width="${viewW}" height="${viewH}" fill="${full.bg}"/>${inner}</svg>`;
-      // crop：导出 GIF 时整卷只栅格化一次，再按 y 裁出每一帧（逐帧裁 viewBox 会碰到 resvg 的滤镜区域 bug，也慢）
+      // 同一张静态长图，按共享阅读时间线裁窗。
       return { ...full, w: viewW, h: viewH, svg, hits: [], motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y }, frameDelay: full.motion!.secs * 1000 / steps };
     });
   }

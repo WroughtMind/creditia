@@ -1,7 +1,8 @@
 // 统计图：环形、华夫饼、周河流图、会话泳道、作息打卡、版本、留存、文件马赛克、日历、出处、板块。
 // 颜色、条形、标记都走风格钩子，所以每张图在每个风格里都是那个风格的样子。
-import { Scene, rect, line, path, circle, el, g, r, arc, mix, alpha } from '../svg.ts';
-import { phase, styleProgress, reveal, move, drawGroup } from '../motion.ts';
+import { Scene, rect, line, path, circle, el, g, r, ease, arc, mix, alpha } from '../svg.ts';
+import { phase, styleProgress, drawGroup, type RevealDirection } from '../motion.ts';
+import { materialReveal, materialEnter, materialOrder } from '../material-motion.ts';
 import type { Model, Agent } from '../data.ts';
 import { fmt, pct, compact, nameOf } from '../data.ts';
 import type { Style, Box } from '../style.ts';
@@ -41,14 +42,24 @@ const fillKey = (s: Scene, st: Style, m: Model, k: string) => (k === 'unattribut
 const tipKey = (m: Model, k: string) => { const a = agentOf(m, k); return a ? tip(m, a) : k === 'human' ? handTip(m) : { k, t: k }; };
 /** 一组数据里出现的 key，按排名排序；按模型分组时同一工具的模型挨在一起（堆叠图里成一整块，深浅相邻） */
 const orderKeys = (m: Model, keys: Iterable<string>) => [...new Set(keys)].sort((a, b) => keyRank(m, a) - keyRank(m, b));
+/** 现代终端的条是整串方块字；桥接终端的 cells 则已是对齐的格子图形。 */
+function barReveal(s: Scene, st: Style, k: number, box: Box, direction: RevealDirection, draw: () => void) {
+  if (st.id === 'terminal' && !st.cells) materialEnter(s, st, k, box, draw, 'data');
+  else materialReveal(s, st, k, box, direction, draw);
+}
 
 // ───────────────────────── 环形 ─────────────────────────
 
 export const DONUT_VARIANTS = ['ring', 'nested'];
 
 /** 表盘扫过已定型的扇区：后面的份额不追着前面的份额挪位置。 */
-function sweepReveal(s: Scene, k: number, cx: number, cy: number, radius: number, draw: () => void) {
+function sweepReveal(s: Scene, st: Style, k: number, cx: number, cy: number, radius: number, draw: () => void) {
   if (k >= 1) { draw(); return; }
+  // 极简保留表盘的读数动作；其余材质在同一组真实扇区上完成自己的显影。
+  if (!['minimal', 'minimal-light'].includes(st.id)) {
+    materialReveal(s, st, k, { x: cx - radius, y: cy - radius, w: radius * 2, h: radius * 2 }, 'center-x', draw);
+    return;
+  }
   const clipPath = s.url(`sweep-${radius}`, (id) => el('clipPath', { id },
     path(arc(cx, cy, radius, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, k)))));
   drawGroup(s, { clipPath }, draw);
@@ -62,7 +73,8 @@ export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
   const cx = p.x + p.w * 0.36, cy = p.y + p.h / 2, R1 = 270, R0 = 170;
   let a0 = -Math.PI / 2;
   const cellSegs: { a0: number; a1: number; fill: string }[] = [];
-  sweepReveal(s, styleProgress(st, t, 0.05, 0.88), cx, cy, R1 + 2, () => {
+  const progress = styleProgress(st, t, 0.05, 0.88);
+  const ring = () => {
   m.rows.forEach((a, i) => {
     const sweep = (a.pct / 100) * Math.PI * 2;
     const gap = Math.min(0.012, sweep / 4);
@@ -72,8 +84,9 @@ export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.hit(cx + Math.cos(mid) * (R0 + R1) / 2 - 30, cy + Math.sin(mid) * (R0 + R1) / 2 - 30, 60, 60, tip(m, a));
     a0 += sweep;
   });
-  if (cellSegs.length) gridRing(s, st, cx, cy, R0, R1, cellSegs);
-  });
+  if (cellSegs.length) gridRing(s, st, cx, cy, R0, R1, cellSegs, progress);
+  };
+  if (st.grid && st.cells) ring(); else sweepReveal(s, st, progress, cx, cy, R1 + 2, ring);
   st.num(s, fmt(m.linesAdded), cx, cy + 6, 46, 'middle');
   s.text(T(m, '行', 'lines'), cx, cy + 44, { font: st.f.body, size: 18, fill: st.c.soft, anchor: 'middle' });
   // 右侧名单
@@ -89,8 +102,10 @@ export function donut(m: Model, st: Style, o: PieceOpts): Scene | null {
 }
 
 /** 字符格风格（原版终端）：环落到格子上——格子中心在环里的，按角度归到那一段；同一行里挨着的同色格子合成一段画 */
-function gridRing(s: Scene, st: Style, cx: number, cy: number, R0: number, R1: number, segs: { a0: number; a1: number; fill: string }[]) {
+function gridRing(s: Scene, st: Style, cx: number, cy: number, R0: number, R1: number, segs: { a0: number; a1: number; fill: string }[], progress = 1) {
   const G = st.grid!;
+  const left = Math.floor((cx - R1) / G), top = Math.floor((cy - R1) / G);
+  const columns = Math.floor((cx + R1) / G) - left + 1, rows = Math.floor((cy + R1) / G) - top + 1;
   for (let ky = Math.floor((cy - R1) / G); ky * G <= cy + R1; ky++) {
     let x0 = 0, n = 0, cur = '';
     const flush = () => { if (n) st.cells!(s, x0, ky * G, n * G, G, cur); n = 0; };
@@ -98,7 +113,8 @@ function gridRing(s: Scene, st: Style, cx: number, cy: number, R0: number, R1: n
       const dx = (kx + 0.5) * G - cx, dy = (ky + 0.5) * G - cy, d = Math.hypot(dx, dy);
       let a = Math.atan2(dy, dx);
       if (a < -Math.PI / 2) a += Math.PI * 2;
-      const f = d >= R0 && d <= R1 ? segs.find((q) => a >= q.a0 && a < q.a1)?.fill ?? '' : '';
+      const appeared = progress >= 1 || progress > materialOrder(st, (ky - top) * columns + kx - left, columns * rows, columns);
+      const f = appeared && d >= R0 && d <= R1 ? segs.find((q) => a >= q.a0 && a < q.a1)?.fill ?? '' : '';
       if (n && f === cur) { n++; continue; }
       flush();
       if (f) { x0 = kx * G; n = 1; cur = f; }
@@ -123,7 +139,7 @@ function nested(m: Model, st: Style, o: PieceOpts): Scene | null {
     const gap = Math.min(0.012, sweep / 4);
     const unk = a.key === 'unattributed';
     if (grid) inner.push({ a0, a1: a0 + sweep, fill: unk ? st.hatch(s) : colorOf(st, a) });
-    else if (sweep > 0) sweepReveal(s, styleProgress(st, t, 0, 0.55), cx, cy, Ri1 + 1, () => s.add(path(arc(cx, cy, Ri1, Ri0, a0 + gap, a0 + sweep - gap), { fill: unk ? st.hatch(s) : colorOf(st, a) })));
+    else if (sweep > 0) sweepReveal(s, st, styleProgress(st, t, 0, 0.55), cx, cy, Ri1 + 1, () => s.add(path(arc(cx, cy, Ri1, Ri0, a0 + gap, a0 + sweep - gap), { fill: unk ? st.hatch(s) : colorOf(st, a) })));
     const mid = a0 + sweep / 2;
     s.hit(cx + Math.cos(mid) * (Ri0 + Ri1) / 2 - 26, cy + Math.sin(mid) * (Ri0 + Ri1) / 2 - 26, 52, 52, tip(m, a));
     // 外环：这一段按模型再切
@@ -132,7 +148,7 @@ function nested(m: Model, st: Style, o: PieceOpts): Scene | null {
       const sw = sweep * (q.lines / Math.max(1, a.lines));
       const gg = Math.min(0.01, sw / 4);
       if (grid) outer.push({ a0: b0, a1: b0 + sw, fill: unk ? st.hatch(s) : q.color });
-      else if (sw > 0) sweepReveal(s, styleProgress(st, t, 0.3, 0.95), cx, cy, Ro1 + 1, () => s.add(path(arc(cx, cy, Ro1, Ro0, b0 + gg, b0 + sw - gg), { fill: unk ? st.hatch(s) : q.color })));
+      else if (sw > 0) sweepReveal(s, st, styleProgress(st, t, 0.3, 0.95), cx, cy, Ro1 + 1, () => s.add(path(arc(cx, cy, Ro1, Ro0, b0 + gg, b0 + sw - gg), { fill: unk ? st.hatch(s) : q.color })));
       const qm = b0 + sw / 2;
       if (sw > 0.04) s.hit(cx + Math.cos(qm) * (Ro0 + Ro1) / 2 - 22, cy + Math.sin(qm) * (Ro0 + Ro1) / 2 - 22, 44, 44, segTip(m, a, q));
       b0 += sw;
@@ -140,8 +156,8 @@ function nested(m: Model, st: Style, o: PieceOpts): Scene | null {
     a0 += sweep;
   });
   if (grid) {
-    sweepReveal(s, styleProgress(st, t, 0, 0.55), cx, cy, Ri1 + 1, () => gridRing(s, st, cx, cy, Ri0, Ri1, inner));
-    sweepReveal(s, styleProgress(st, t, 0.3, 0.95), cx, cy, Ro1 + 1, () => gridRing(s, st, cx, cy, Ro0, Ro1, outer));
+    gridRing(s, st, cx, cy, Ri0, Ri1, inner, styleProgress(st, t, 0, 0.55));
+    gridRing(s, st, cx, cy, Ro0, Ro1, outer, styleProgress(st, t, 0.3, 0.95));
   }
   st.num(s, fmt(m.linesAdded), cx, cy + 6, 40, 'middle');
   s.text(T(m, '行', 'lines'), cx, cy + 40, { font: st.f.body, size: 17, fill: st.c.soft, anchor: 'middle' });
@@ -192,12 +208,15 @@ export function waffle(m: Model, st: Style, o: PieceOpts): Scene | null {
   cells.forEach((a, i) => {
     const col = Math.floor(i / 10), row = i % 10;
     const x = gx + col * (size + gap), y = p.y + row * (size + gap);
-    // 一格始终等于 1%；按列点数，不把格子缩成另一种面积编码。
-    const k = phase(styleProgress(st, t), i / 100, (i + 1) / 100);
+    // 一格始终等于 1%；材质决定铺版顺序，不把格子缩成另一种面积编码。
+    const at = materialOrder(st, row * 10 + col, 100, 10);
+    const k = phase(styleProgress(st, t), at * 0.84, at * 0.84 + 0.16);
     if (k <= 0) return;
     const ss = size;
-    if (a.key === 'unattributed') s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill: st.hatch(s), rx: Math.min(st.radius, ss / 4) }));
-    else s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill: colorOf(st, a), rx: Math.min(st.radius, ss / 4) }));
+    materialEnter(s, st, k, { x, y, w: size, h: size }, () => {
+      if (a.key === 'unattributed') s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill: st.hatch(s), rx: Math.min(st.radius, ss / 4) }));
+      else s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill: colorOf(st, a), rx: Math.min(st.radius, ss / 4) }));
+    }, 'data');
     s.hit(x, y, size, size, tip(m, a));
   });
   return s;
@@ -231,17 +250,27 @@ function blocks(m: Model, st: Style, o: PieceOpts): Scene | null {
   const size = Math.min(p.h / rows - gap, (gw - breaks.length * split) / cols - gap);
   const gx = p.x, gy = p.y + (p.h - rows * (size + gap)) / 2;
   const colX = (col: number) => gx + col * (size + gap) + breaks.filter((b) => b <= col).length * split;
+  const toolCells = m.tools.map((a) => cells.filter((c) => c?.a === a).length);
+  const placed = m.tools.map(() => 0);
+  // 偶数个工具/格子的对称次序也从最靠近中轴的单元开始，不留一段空白等待。
+  const normalizeOrder = (orders: number[]) => { const lo = Math.min(...orders), span = Math.max(...orders) - lo; return orders.map((n) => span > 0 ? (n - lo) / span : 0); };
+  const toolOrders = normalizeOrder(m.tools.map((_, i) => materialOrder(st, i, m.tools.length)));
+  const cellOrders = toolCells.map((count) => normalizeOrder(Array.from({ length: count }, (_, i) => materialOrder(st, i, count))));
   cells.forEach((c, i) => {
     if (!c) return;
     const col = Math.floor(i / rows), row = i % rows;
     const x = colX(col), y = gy + row * (size + gap);
     // 分块版先认出工具，再铺开其内部模型，节奏按工具块走。
     const toolAt = m.tools.indexOf(c.a);
-    const k = phase(styleProgress(st, t), toolAt / m.tools.length, (toolAt + 1) / m.tools.length);
-    if (k <= 0) return;
+    const toolOrder = toolOrders[toolAt];
+    const k = phase(styleProgress(st, t), toolOrder * 0.65, toolOrder * 0.65 + 0.35);
+    const cellAt = placed[toolAt]++;
+    const cellOrder = cellOrders[toolAt][cellAt];
+    const cellProgress = phase(k, cellOrder * 0.8, cellOrder * 0.8 + 0.2);
+    if (cellProgress <= 0) return;
     const ss = size;
     const fill = c.a.key === 'unattributed' ? st.hatch(s) : c.q.color;
-    s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill, rx: Math.min(st.radius, ss / 4) }));
+    materialEnter(s, st, cellProgress, { x, y, w: size, h: size }, () => s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill, rx: Math.min(st.radius, ss / 4) })), 'data');
     s.hit(x, y, size, size, segsOf(m, st, c.a).length > 1 ? segTip(m, c.a, c.q) : tip(m, c.a));
   });
   toolLegend(s, m, st, p.x + p.w * 0.68, p.x + p.w, p.y + 40, p.y + p.h);
@@ -260,8 +289,11 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
   const n = m.weeks.length;
   const X = (i: number) => p.x + (i / (n - 1)) * p.w;
   const mid = p.y + p.h / 2;
-  // 河流：以中线对称
-  const base = m.weeks.map((_, i) => mid - (tot[i] / max) * (p.h / 2));
+  // 逐周从中线展开，前端自然收成细流；同一周各层共用进度，保留真实占比。
+  const flowAt = (i: number) => st.id === 'ink' ? ease(t, i, n, 0.5)
+    : ease(styleProgress(st, t), materialOrder(st, i, n, n) * (n - 1), n, 0.5);
+  const flow = m.weeks.map((_, i) => flowAt(i));
+  const base = m.weeks.map((_, i) => mid - (tot[i] / max) * (p.h / 2) * flow[i]);
   const acc = [...base];
   const smooth = (pts: [number, number][]) => pts.map(([x, y], i) => {
     if (i === 0) return `M${r(x)} ${r(y)}`;
@@ -271,14 +303,14 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
   }).join('');
   // 字符格风格（原版终端）：每一列按两周之间插值的数堆起来，落到格子上，一格一个方块字；算法和平滑的河流一样，只是笔触不同
   const G = st.grid;
-  // 时间从左往右读；波峰、波谷和各层厚度始终是真实值。
-  reveal(s, styleProgress(st, t, 0.02, 0.92), p, 'right', () => {
+  const drawRiver = () => {
   if (G && st.cells) {
     const r0 = Math.ceil(p.y / G), nr = Math.floor((p.y + p.h) / G) - r0;
     for (let c = Math.ceil((p.x - G / 2) / G); (c + 0.5) * G <= p.x + p.w; c++) {
       const u = Math.min(n - 1, Math.max(0, (((c + 0.5) * G - p.x) / p.w) * (n - 1))), i = Math.min(n - 2, Math.floor(u)), f = u - i;
+      const e = flowAt(u);
       let cum = 0;
-      const b = keys.map((k) => (cum += (m.weeks[i].by[k] ?? 0) * (1 - f) + (m.weeks[i + 1].by[k] ?? 0) * f, Math.round((cum / max) * nr)));
+      const b = keys.map((k) => (cum += (m.weeks[i].by[k] ?? 0) * (1 - f) + (m.weeks[i + 1].by[k] ?? 0) * f, Math.round((cum / max) * nr * e)));
       const top = r0 + Math.floor((nr - b[b.length - 1]) / 2);
       keys.forEach((k, j) => {
         const a = j ? b[j - 1] : 0;
@@ -288,12 +320,15 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
   }
   for (const k of G && st.cells ? [] : keys) {
     const top = acc.map((y, i) => [X(i), y] as [number, number]);
-    const bot = acc.map((y, i) => [X(i), y + (((m.weeks[i].by[k] ?? 0) / max) * p.h)] as [number, number]);
+    const bot = acc.map((y, i) => [X(i), y + (((m.weeks[i].by[k] ?? 0) / max) * p.h) * flow[i]] as [number, number]);
     bot.forEach(([, y], i) => (acc[i] = y));
     const d = smooth(top) + smooth([...bot].reverse()).replace(/^M/, 'L') + 'Z';
     s.add(path(d, { fill: fillKey(s, st, m, k), opacity: 0.92, stroke: st.c.bg, strokeWidth: 0.6 }));
   }
-  });
+  };
+  // 水墨保留原来的完整运动；其余材质只作用于已按真实比例展开的色层。
+  if (st.id === 'ink') drawRiver();
+  else materialEnter(s, st, phase(t, 0, 0.7), p, drawRiver, 'data');
   // 每周的悬停区
   m.weeks.forEach((w, i) => {
     const lines = keys.filter((k) => w.by[k]).sort((a, b) => w.by[b] - w.by[a]).slice(0, 4).map((k) => `${agentOf(m, k)?.name ?? (k === 'human' ? nameOf('people', m.lang) : k)} ${fmt(w.by[k])}`);
@@ -323,7 +358,7 @@ export function lanes(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.text(a?.name ?? k, p.x + 38, y + laneH / 2 + 6, { font: st.f.body, size: 16, fill: st.c.ink, maxW: 125 });
     st.track(s, p.x + 170, y + laneH / 2 - 1, p.w - 170, 2);
     const mine = ss.filter((x) => x.key === k);
-    reveal(s, styleProgress(st, t), { x: p.x + 170, y, w: p.w - 170 + 3, h: laneH }, 'right', () => mine.forEach((x) => {
+    materialReveal(s, st, styleProgress(st, t), { x: p.x + 170, y, w: p.w - 170 + 3, h: laneH }, 'right', () => mine.forEach((x) => {
       const x0 = X(x.start), w = Math.max(3, X(x.end) - x0);
       const col = a ? colorOf(st, m.rows.find((q) => q.key === k) ?? a) : st.c.soft;
       s.add(rect(x0, y + 16, w, laneH - 32, { fill: x.review ? 'none' : col, stroke: x.review ? col : 'none', strokeWidth: 1.4, rx: Math.min(st.radius, 4), opacity: 0.9 }));
@@ -350,8 +385,9 @@ export function clock(m: Model, st: Style, o: PieceOpts): Scene | null {
     row.forEach((v, hr) => {
       const cx = p.x + 60 + hr * cw + cw / 2, cy = p.y + d * ch + ch / 2;
       const rr = Math.sqrt(v / max) * Math.min(cw, ch) * 0.46;
-      // 同一小时的七天一起点亮，圆的大小和浓度仍只表示提交数量。
-      if (v && (t >= 1 || styleProgress(st, t) > hr / 24)) s.add(circle(cx, cy, Math.max(1.5, rr), { fill: st.c.accent, opacity: 0.25 + 0.75 * (v / max) }));
+      // 按各材质的扫描/铺版次序点亮；圆的大小和浓度仍只表示提交数量。
+      const at = materialOrder(st, d * 24 + hr, 7 * 24, 24);
+      if (v && (t >= 1 || styleProgress(st, t) > at)) s.add(circle(cx, cy, Math.max(1.5, rr), { fill: st.c.accent, opacity: 0.25 + 0.75 * (v / max) }));
       else s.add(circle(cx, cy, 1.2, { fill: st.c.faint, opacity: 0.5 }));
       if (v) s.hit(cx - cw / 2, cy - ch / 2, cw, ch, { t: `${m.lang === 'zh' ? '周' + days[d] : days[d]} ${hr}:00`, d: [T(m, `${v} 次提交`, `${v} commits`)] });
     });
@@ -378,7 +414,7 @@ export function versions(m: Model, st: Style, o: PieceOpts): Scene | null {
     const x = p.x + (i + 0.5) * (p.w / n) - bw / 2;
     let y = p.y + p.h;
     const k = styleProgress(st, t, i / (n + 1), (i + 2) / (n + 1));
-    reveal(s, k, { x, y: p.y - 35, w: bw, h: p.h + 35 }, 'up', () => {
+    materialReveal(s, st, k, { x, y: p.y - 35, w: bw, h: p.h + 35 }, 'up', () => {
     for (const key of keys) {
       const h = ((v.by[key] ?? 0) / max) * p.h;
       if (h <= 0) continue;
@@ -411,14 +447,14 @@ export function survival(m: Model, st: Style, o: PieceOpts): Scene | null {
     const x0 = p.x + 230, w = p.w - 330;
     const wa = (a.lines / max) * w, ws = (a.surviving / max) * w;
     // 字符格风格：写过、已经不在的那一截是一排点（原版的 ···）
-    reveal(s, styleProgress(st, t, 0, 0.45), { x: x0, y: y + 8, w: wa + 2, h: 30 }, 'right', () => {
+    barReveal(s, st, styleProgress(st, t, 0, 0.45), { x: x0, y: y + 8, w: wa + 2, h: 30 }, 'right', () => {
     if (st.cells) st.track(s, x0, y + 10, wa, 26);
     else s.add(rect(x0, y + 10, wa, 26, { fill: colorOf(st, a), opacity: 0.25, rx: Math.min(st.radius, 6) }));
     });
     // 先说明写入总量，再从右端退去已删除部分，停在留存量。
     const retained = styleProgress(st, t, 0.45, 0.95);
     const solid = t >= 1 ? ws : wa + (ws - wa) * retained;
-    reveal(s, styleProgress(st, t, 0, 0.45), { x: x0, y: y + 8, w: wa + 2, h: 30 }, 'right', () => st.bar(s, x0, y + 10, Math.max(2, solid), 26, colorOf(st, a), i));
+    barReveal(s, st, styleProgress(st, t, 0, 0.45), { x: x0, y: y + 8, w: wa + 2, h: 30 }, 'right', () => st.bar(s, x0, y + 10, Math.max(2, solid), 26, colorOf(st, a), i));
     if (retained >= 1) st.num(s, `${Math.round(a.survival * 100)}%`, p.x + p.w, y + 32, 22, 'end');
     s.hit(p.x, y, p.w, rowH - 6, { ...tip(m, a), d: [T(m, `新增 ${fmt(a.lines)} 行，留存 ${fmt(a.surviving)} 行`, `${fmt(a.lines)} added, ${fmt(a.surviving)} retained`), ...tip(m, a).d.slice(1)] });
   });
@@ -437,10 +473,10 @@ export function mosaic(m: Model, st: Style, o: PieceOpts): Scene | null {
   rects.forEach((b, i) => {
     const f = files[i];
     // 文件从空间中的所属位置拼合，保留各文件面积；不是按排名同时闪入。
-    const at = ((b.x - p.x) / p.w + (b.y - p.y) / p.h) / 2;
+    const at = materialOrder(st, i, rects.length);
     const k = styleProgress(st, t, at * 0.55, at * 0.55 + 0.45);
     const keys = orderKeys(m, Object.keys(f.by));
-    move(s, k, (b.x + b.w / 2 < p.x + p.w / 2 ? -1 : 1) * Math.min(22, b.w / 4), 0, () => {
+    materialEnter(s, st, k, b, () => {
     // 每个文件内部按贡献方竖切
     let x = b.x;
     for (const key of keys) {
@@ -451,8 +487,8 @@ export function mosaic(m: Model, st: Style, o: PieceOpts): Scene | null {
     // 文件全画：很小的格子描边跟着变细，不然整格被边线盖住
     s.add(rect(b.x, b.y, b.w, b.h, { fill: 'none', stroke: st.c.bg, strokeWidth: Math.min(2, b.w / 4, b.h / 4) }));
     if (b.w > 120 && b.h > 34 && f.path) s.text(f.path.split('/').pop()!, b.x + 10, b.y + 22, { font: st.f.mono, size: 13, fill: st.on(fillKey(s, st, m, keys[0])), maxW: b.w - 20, overflow: 'clip' });
-    });
     s.hit(b.x, b.y, b.w, b.h, { t: f.path || T(m, '文件', 'file'), d: [T(m, `${fmt(f.lines)} 行`, `${fmt(f.lines)} lines`), ...keys.filter((q) => f.by[q]).slice(0, 4).map((q) => `${agentOf(m, q)?.name ?? (q === 'human' ? nameOf('people', m.lang) : q)} ${Math.round((f.by[q] / f.lines) * 100)}%`)] });
+    });
   });
   return s;
 }
@@ -502,8 +538,8 @@ export function calendar(m: Model, st: Style, o: PieceOpts): Scene | null {
     const tot = by ? Object.values(by).reduce((a, b) => a + b, 0) : 0;
     if (!tot) { s.add(rect(x, y, cell, cell, { fill: st.c.ink, opacity: 0.05, rx: Math.min(st.radius, 4) })); continue; }
     const top = Object.entries(by!).sort((a, b) => b[1] - a[1])[0][0];
-    // 日期逐个盖印。颜色浓淡只编码当日活动量，不拿来做淡入。
-    if (t >= 1 || styleProgress(st, t) > (w * 7 + d) / (weeks * 7)) s.add(rect(x, y, cell, cell, { fill: fillKey(s, st, m, top), opacity: 0.3 + 0.7 * Math.sqrt(tot / max), rx: Math.min(st.radius, 4) }));
+    // 日期逐个盖印；扫描、对称排印、分栏铺版各有顺序。浓淡只编码活动量。
+    if (t >= 1 || styleProgress(st, t) > materialOrder(st, d * weeks + w, weeks * 7, weeks)) s.add(rect(x, y, cell, cell, { fill: fillKey(s, st, m, top), opacity: 0.3 + 0.7 * Math.sqrt(tot / max), rx: Math.min(st.radius, 4) }));
     s.hit(x, y, cell, cell, { k: top, t: day, d: [T(m, `${fmt(tot)} 行`, `${fmt(tot)} lines`), ...Object.entries(by!).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([q, v]) => `${agentOf(m, q)?.name ?? (q === 'human' ? nameOf('people', m.lang) : q === 'unattributed' ? T(m, '未确认', 'Unattributed') : q)} ${fmt(v)}`)] });
   }
   return s;
@@ -528,7 +564,8 @@ export function evidence(m: Model, st: Style, o: PieceOpts): Scene | null {
   const head = 150;
   const { s, p } = frame(m, st, 1200, head + list.length * rowH + 40, T(m, '出处', 'EVIDENCE'), T(m, '归因依据', 'Attribution evidence'), false);
   // 头条：全部 AI 行里有逐行证据的比例
-  reveal(s, styleProgress(st, t, 0.72, 1), { x: p.x, y: p.y, w: p.w, h: 78 }, 'right', () => st.num(s, `${Math.round(m.verifiedShare * 100)}%`, p.x, p.y + 64, 64, 'start'));
+  // 核验结论整枚落位，避免扫到一半时只留下半个数字。
+  materialEnter(s, st, styleProgress(st, t, 0.72, 1), { x: p.x, y: p.y, w: 220, h: 78 }, () => st.num(s, `${Math.round(m.verifiedShare * 100)}%`, p.x, p.y + 64, 64, 'start'));
   s.text(T(m, '的代码行有完整日志记录', 'of lines have matching session logs'), p.x, p.y + 104, { font: st.f.body, size: 17, fill: st.c.soft, maxW: p.w });
   const max = Math.max(...list.map((a) => a.lines));
   const x0 = p.x + 230, w = p.w - 330;
@@ -538,7 +575,7 @@ export function evidence(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.text(a.name, p.x + 36, y + 30, { font: st.f.body, size: 17, fill: st.c.ink, maxW: 170 });
     const full = (a.lines / max) * w;
     if (a.key === 'unattributed') {
-      reveal(s, styleProgress(st, t, 0.05, 0.4), { x: x0, y: y + 8, w: full + 2, h: 30 }, 'right', () => {
+      barReveal(s, st, styleProgress(st, t, 0.05, 0.4), { x: x0, y: y + 8, w: full + 2, h: 30 }, 'right', () => {
       if (st.cells) st.bar(s, x0, y + 10, Math.max(2, full), 26, st.hatch(s), i);
       else s.add(rect(x0, y + 10, Math.max(2, full), 26, { fill: st.hatch(s), rx: Math.min(st.radius, 6) }));
       });
@@ -554,7 +591,7 @@ export function evidence(m: Model, st: Style, o: PieceOpts): Scene | null {
       if (ww <= 0) return;
       // 从较弱的依据到有日志的证据，最后才揭示总的核验比例。
       const start = j === 0 ? 0.45 : j === 1 ? 0.2 : 0;
-      reveal(s, styleProgress(st, t, start, start + 0.5), { x, y: y + 8, w: ww + 2, h: 30 }, 'up', () => {
+      barReveal(s, st, styleProgress(st, t, start, start + 0.5), { x, y: y + 8, w: ww + 2, h: 30 }, 'up', () => {
       if (j === 0) st.bar(s, x, y + 10, Math.max(2, ww), 26, colorOf(st, a), i);
       // 字符格风格：浅的两层也是方块字，按浓淡调透明
       else if (st.cells) st.bar(s, x, y + 10, ww, 26, alpha(colorOf(st, a), q.o), i);
@@ -598,20 +635,20 @@ export function areas(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.text(r.name, p.x, y + 30, { font: st.f.body, size: 19, fill: st.c.ink, maxW: 180 });
     s.text(T(m, `${fmt(r.tot)} 行`, `${fmt(r.tot)} lines`), p.x, y + 54, { font: st.f.body, size: 14, fill: st.c.faint });
     let x = x0;
-    reveal(s, k, { x: x0, y: y + 8, w, h: 68 }, 'right', () => {
     for (const key of orderKeys(m, r.by.map(([key]) => key))) {
       const v = r.by.find(([kk]) => kk === key)![1];
       const ww = (v / r.tot) * w;
       if (ww < 0.5) continue;
+      materialReveal(s, st, k, { x: x0, y: y + 8, w, h: 46 }, 'right', () => {
       if (st.block && (key !== 'unattributed' || st.cells)) st.block(s, x, y + 12, Math.max(1, ww - 2), 38, fillKey(s, st, m, key));
       else s.add(rect(x, y + 12, Math.max(1, ww - 2), 38, { fill: fillKey(s, st, m, key), rx: Math.min(st.radius, 6) }));
-      // 百分比写在色块下面：色块的颜色由风格定，字压在上面不一定看得清
-      if (ww > 52) s.text(`${Math.round((v / r.tot) * 100)}%`, x + 2, y + 70, { font: st.f.body, size: 13, fill: st.c.soft });
       const tk = tipKey(m, key);
       s.hit(x, y + 8, ww, 46, { ...tk, d: [T(m, `${r.name}里 ${fmt(v)} 行，占 ${Math.round((v / r.tot) * 100)}%`, `${fmt(v)} lines in ${r.name}, ${Math.round((v / r.tot) * 100)}%`), ...(tk.d ?? []).slice(1)] });
+      });
+      // 材质可能从中轴或分栏展开，完整落版后再报百分比，不假定边界总是左扫。
+      if (ww > 52 && k >= 1) s.text(`${Math.round((v / r.tot) * 100)}%`, x + 2, y + 70, { font: st.f.body, size: 13, fill: st.c.soft });
       x += ww;
     }
-    });
   });
   return s;
 }
