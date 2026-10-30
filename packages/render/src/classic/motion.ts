@@ -128,7 +128,10 @@ function columnStyle(style: Record<string, any>, cue: MotionCue, p: number, them
     case 'glass':
       style.maskImage = `linear-gradient(90deg, black 0%, black ${round(Math.max(0, pct - Math.min(16, rest)))}%, transparent ${pct}%)`;
       style.filter = `brightness(${round(1 + .4 * (1 - p))})`; break;
-    case 'film': edgeInk(p, 8); style.filter = `brightness(${round(.45 + .55 * p)})`; break;
+    case 'film':
+      // 单次曝光从右侧进入；两侧各显一条会把同一版本误看成两根柱。
+      style.maskImage = `linear-gradient(270deg, black 0%, black ${round(Math.max(0, pct - Math.min(8, rest)))}%, transparent ${pct}%)`;
+      style.filter = `brightness(${round(.45 + .55 * p)})`; break;
     case 'cinema': fromCenter(); style.filter = `brightness(${round(.65 + .35 * p)})`; break;
     case 'editorial': fromLeft(); break;
     case 'broadsheet':

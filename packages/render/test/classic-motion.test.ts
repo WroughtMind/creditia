@@ -325,6 +325,20 @@ test('native horizontal shares and time intervals retain both true endpoints thr
   }
 });
 
+test('film exposes each version as one connected column rather than two false parallel columns', async () => {
+  const { default: satori } = await import('satori');
+  for (const time of [.08, .23, .4, .55]) {
+    const tree = motion({ type: 'div', props: { style: { display: 'flex', width: 96, height: 120, backgroundColor: '#ffffff' }, children: [] } }, 'bar-y');
+    animate(tree, time, themeById('film')!);
+    const frame = raster.rgba(await satori(tree as any, { width: 96, height: 120, fonts: [] }), 96);
+    const visible = Array.from({ length: 96 }, (_, x) => frame.data[(60 * 96 + x) * 4 + 3] > 0);
+    const first = visible.indexOf(true), last = visible.lastIndexOf(true);
+    assert.ok(first >= 0 && last === 95, `${time}: exposure must reach the original right edge`);
+    assert.ok(visible.slice(first, last + 1).every(Boolean), `${time}: one version must not split into two visible columns`);
+    assert.equal(tree.props.style.width, 96); assert.equal(tree.props.style.height, 120);
+  }
+});
+
 test('horizontal interval surfaces retain their original alpha when material formation completes', () => {
   for (const theme of THEMES) for (const time of [.2, .559999, .639999, 1]) {
     const bar = motion({ type: 'div', props: { style: { width: 120, height: 20, opacity: .9 }, children: [] } }, 'bar-x');
