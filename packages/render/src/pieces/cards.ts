@@ -402,7 +402,7 @@ export function byline(m: Model, st: Style, o: PieceOpts): Scene | null {
       } else if (st.id === 'manga') {
         const mk = styleProgress(st, t, start, start + 0.18), nk = styleProgress(st, t, start + 0.1, start + 0.4);
         compose(mk, 0, -12 * (1 - mk), 0, cx, cy, () => { mark(); markHit(); });
-        compose(nk, -22 * (1 - nk), 10 * (1 - nk), 0, cx, cy, () => { name(); nameHit(); });
+        compose(nk, 12 * (1 - nk), 10 * (1 - nk), 0, cx, cy, () => { name(); nameHit(); });
         const sk = styleProgress(st, t, start + 0.28, Math.min(0.98, start + 0.6));
         compose(sk, 0, -6 * (1 - sk), 0, cx, cy, () => { sub(); subHit(); });
       } else {
@@ -411,7 +411,7 @@ export function byline(m: Model, st: Style, o: PieceOpts): Scene | null {
         compose(mk, 0, 6 * (1 - mk), 0, cx, cy, () => { mark(); markHit(); });
         const nk = styleProgress(st, t, start + 0.1, start + 0.58), q = 1 - nk;
         const side = i < (plan.items.length - 1) / 2 ? -1 : 1;
-        compose(nk, st.id === 'meadow' ? -10 * Math.sin(Math.PI * nk) : 0,
+        compose(nk, st.id === 'meadow' ? 10 * Math.sin(Math.PI * nk) : 0,
           st.id === 'meadow' ? 14 * q * q : 0,
           st.id === 'meadow' ? 5 * q : side * 6 * q, cx, cy, () => { name(); nameHit(); if (st.id === 'pastel') { sub(); subHit(); } });
         if (st.id === 'meadow') {
