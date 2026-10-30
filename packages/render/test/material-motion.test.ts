@@ -63,3 +63,26 @@ test('不同材质的实际中间像素有区别，全部风格可被导出器�
     assert.equal(new Set(family.map(id => hashes.get(id))).size, family.length, family.join('/'));
   }
 });
+
+test('纹理在缩小画幅仍可见，接近终帧不残留整片孔洞', () => {
+  for (const id of ['film', 'broadsheet', 'woodblock', 'grimoire']) {
+    const st = styles.find(s => s.id === id)!;
+    const sample = (k: number, width: number) => {
+      const s = new Scene(240, 100);
+      materialReveal(s, st, k, b, 'right', () => plain(s));
+      return raster.rgba(s.toString(), width);
+    };
+    for (const width of [60, 240]) {
+      const mid = sample(0.45, width), near = sample(0.999, width), end = sample(1, width), scale = width / 240;
+      let visible = 0;
+      for (let y = Math.ceil((b.y + 4) * scale); y < Math.floor((b.y + b.h - 4) * scale); y++) {
+        for (let x = Math.ceil((b.x + 4) * scale); x < Math.floor((b.x + b.w - 4) * scale); x++) {
+          const alpha = (y * width + x) * 4 + 3;
+          visible += mid.data[alpha] > 0 ? 1 : 0;
+          assert.ok(end.data[alpha] - near.data[alpha] <= 1, `${id}/${width} retained a hole at ${x},${y}`);
+        }
+      }
+      assert.ok(visible > 0, `${id}/${width} disappeared before its final frame`);
+    }
+  }
+});

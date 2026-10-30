@@ -782,7 +782,8 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
   const v = variant ?? ROLL_DEFAULT[t.family] ?? 'classic';
   const scrolling = v === 'crawl' || v === 'scroll';
   const kind = scrolling ? 'credits' : ['cards'].includes(v) ? 'card' : ['program', 'columns', 'block', 'billing'].includes(v) ? 'print' : 'title';
-  return stage(rollScene(m, t, v), kind, scrolling ? 280 : undefined);
+  const out = rollScene(m, t, v);
+  return v === 'cards' ? out : stage(out, kind, scrolling ? 280 : undefined);
 }
 function rollScene(m: Model, t: Theme, variant?: string): Out {
   const v = variant ?? ROLL_DEFAULT[t.family] ?? 'classic';
@@ -908,15 +909,17 @@ function rollScene(m: Model, t: Theme, variant?: string): Out {
     const rad = Math.min(t.radius, 14);
     const card = (b: { role: string; people: RollPerson[] }) => col({ width: 440, padding: '26px 30px', ...surface(t, { borderRadius: rad }), gap: 14 },
       label(t, b.role, 12, { letterSpacing: 4 }),
-      ...b.people.map((p) => box({ alignItems: 'baseline', gap: 12, flexWrap: 'wrap' },
+      ...sequence(b.people.map((p) => box({ alignItems: 'baseline', gap: 12, flexWrap: 'wrap' },
         p.key ? mark(p.key, t, 24) : null,
         txt({ fontFamily: t.display, fontSize: 32 * fs, fontWeight: t.displayWeight, color: t.ink }, p.name),
-        p.model ? txt({ fontFamily: MONO_FONT, fontSize: 13, color: t.faint }, p.model) : null)));
+        p.model ? txt({ fontFamily: MONO_FONT, fontSize: 13, color: t.faint }, p.model) : null)), 'print'));
+    const cards = sequence(blocks.map(card), 'card');
+    for (const node of cards) node.motionCue.columns = 2;
     return { w: W, h: H, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', gap: 24, padding: '0 80px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
       col({ width: 904, padding: '34px 40px', ...surface(t, { borderRadius: rad }), alignItems: 'center', gap: 10 },
         label(t, 'credits', 12, { letterSpacing: 6 }),
         txt({ fontFamily: t.display, fontSize: 56 * fs, fontWeight: t.displayWeight, textAlign: 'center' }, m.project)),
-      box({ flexWrap: 'wrap', gap: 24, justifyContent: 'center', width: 904 }, ...sequence(blocks.map(card), 'card')),
+      box({ flexWrap: 'wrap', gap: 24, justifyContent: 'center', width: 904 }, ...cards),
       label(t, totals, 11, { marginTop: 8 })) };
   }
 
@@ -1610,7 +1613,7 @@ export function clock(m: Model, t: Theme): Out | null {
   const grid = col({ gap: G, justifyContent: 'center', flex: 1 },
     ...c.map((row, i) => box({ alignItems: 'center', gap: G },
       txt({ width: 40, fontSize: 14, color: t.soft, fontFamily: ff }, `周${wd[i]}`),
-      ...row.map((v, hr) => motion(box({ width: S, height: S, borderRadius: cr, backgroundColor: v ? `rgba(${base},${(0.12 + 0.88 * Math.pow(v / max, 0.9)).toFixed(3)})` : t.track }), 'cell', hr, 24)))),
+      ...row.map((v, hr) => motion(box({ width: S, height: S, borderRadius: cr, backgroundColor: v ? `rgba(${base},${(0.12 + 0.88 * Math.pow(v / max, 0.9)).toFixed(3)})` : t.track }), 'intensity', hr, 24)))),
     box({ marginLeft: 40 + G, gap: G, marginTop: 6 },
       ...Array.from({ length: 24 }, (_, hr) => txt({ width: S, justifyContent: 'center', fontSize: 13, color: t.soft, fontFamily: ff }, hr % 6 === 0 ? `${hr}时` : ''))));
   return frame(m, t, 1200, 620, `${fmt(m.commits)} 次提交`, grid, false);
@@ -1647,7 +1650,10 @@ export function versions(m: Model, t: Theme): Out | null {
     return svgImage(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="${nr * TG}">${glyphSvg(t, runs)}</svg>`, 96, nr * TG);
   };
   const bars = order.map((v, i) => col({ alignItems: 'center', width: 200, flexShrink: 0 },
-    t.family === 'terminal' ? motion(box({ height: BH, alignItems: 'flex-end' }, termBar(v, i)), 'bar-y', i, order.length) : motion(box({ height: BH, alignItems: 'flex-end' },
+    t.family === 'terminal' ? (() => {
+      const glyphs = termBar(v, i), node = motion(box({ height: BH, alignItems: 'flex-end' }, glyphs), 'bar-y', i, order.length);
+      node.motionCue.grid = TG; node.motionCue.travel = glyphs.props.height; return node;
+    })() : motion(box({ height: BH, alignItems: 'flex-end' },
       // 霓虹：每根柱子整体一圈光晕（光晕按柱子算，不按每一段，出图不慢）
       col({ width: 96, height: (totals[i] / max) * BH, borderRadius: t.family === 'glass' ? 10 : t.barRadius ? 8 : 0, overflow: 'hidden', flexDirection: 'column-reverse', gap: 2, boxShadow: t.family === 'neon' ? `0 0 16px ${famColor(stack.find((k) => by[v][k]) ?? '', t, 0)}88` : undefined },
         ...stack.map((k, j) => (by[v][k] ? box({ height: `${(by[v][k] / totals[i]) * 100}%`, minHeight: 2, ...fill({ key: k }, t, j, 3) }) : null)))), 'bar-y', i, order.length),
@@ -1675,8 +1681,10 @@ export function settle(m: Model, t: Theme): Out | null {
         txt({ fontFamily: MONO_FONT, fontSize: 18 }, 'creditia survive'),
         txt({ fontFamily: MONO_FONT, fontSize: 15, color: t.faint }, '# 新增与留存对比')),
       col({ flex: 1, justifyContent: 'center', gap: 36 },
-        row('新增', bar(100, t.ink), fmt(m.linesAdded)),
-        row('留存', bar(keep, t.accent), `${fmt(m.linesSurviving)}  ·  ${Math.round(keep)}%`))) };
+        ...sequence([
+          row('新增', bar(100, t.ink), fmt(m.linesAdded)),
+          row('留存', bar(keep, t.accent), `${fmt(m.linesSurviving)}  ·  ${Math.round(keep)}%`),
+        ], 'print'))) };
   }
   const step = (k: string, v: string, p: number, solid: boolean) => col({ gap: 16 },
     box({ justifyContent: 'space-between', alignItems: 'baseline' },

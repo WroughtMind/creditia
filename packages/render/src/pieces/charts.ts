@@ -203,6 +203,9 @@ function toolLegend(s: Scene, m: Model, st: Style, lx: number, rx: number, y: nu
 
 export const WAFFLE_VARIANTS = ['grid', 'blocks'];
 
+// 百分比格是可计数的完整单位。纸片、排字和像素可以刚性入位，绝不缩小成不足 1% 的格子。
+const placedCells = new Set(['minimal', 'minimal-light', 'cutout', 'arcade', 'pastel', 'playbill', 'manga', 'editorial', 'baroque', 'meadow']);
+
 export function waffle(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (o.variant === 'blocks') return blocks(m, st, o);
   if (!m.rows.length) return null;
@@ -228,8 +231,8 @@ export function waffle(m: Model, st: Style, o: PieceOpts): Scene | null {
     materialEnter(s, st, k, { x, y, w: size, h: size }, () => {
       if (a.key === 'unattributed') s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill: st.hatch(s), rx: Math.min(st.radius, ss / 4) }));
       else s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill: colorOf(st, a), rx: Math.min(st.radius, ss / 4) }));
-    }, 'data');
-    s.hit(x, y, size, size, tip(m, a));
+      s.hit(x, y, size, size, tip(m, a));
+    }, placedCells.has(st.id) ? 'paper' : 'data');
   });
   return s;
 }
@@ -282,8 +285,10 @@ function blocks(m: Model, st: Style, o: PieceOpts): Scene | null {
     if (cellProgress <= 0) return;
     const ss = size;
     const fill = c.a.key === 'unattributed' ? st.hatch(s) : c.q.color;
-    materialEnter(s, st, cellProgress, { x, y, w: size, h: size }, () => s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill, rx: Math.min(st.radius, ss / 4) })), 'data');
-    s.hit(x, y, size, size, segsOf(m, st, c.a).length > 1 ? segTip(m, c.a, c.q) : tip(m, c.a));
+    materialEnter(s, st, cellProgress, { x, y, w: size, h: size }, () => {
+      s.add(rect(x + (size - ss) / 2, y + (size - ss) / 2, ss, ss, { fill, rx: Math.min(st.radius, ss / 4) }));
+      s.hit(x, y, size, size, segsOf(m, st, c.a).length > 1 ? segTip(m, c.a, c.q) : tip(m, c.a));
+    }, placedCells.has(st.id) ? 'paper' : 'data');
   });
   toolLegend(s, m, st, p.x + p.w * 0.68, p.x + p.w, p.y + 40, p.y + p.h);
   return s;
@@ -301,9 +306,11 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
   const n = m.weeks.length;
   const X = (i: number) => p.x + (i / (n - 1)) * p.w;
   const mid = p.y + p.h / 2;
-  // 逐周从中线展开，前端自然收成细流；同一周各层共用进度，保留真实占比。
+  // 水墨和草木的流线从中线生长；印版、屏幕与投影保留完整曲线，按各自的载体成形。
+  // 不再让所有材质都使用同一套“河面变高”，仅调换各周的进度。
+  const organic = ['ink', 'meadow'].includes(st.id);
   const flowAt = (i: number) => st.id === 'ink' ? ease(t, i, n, 0.5)
-    : ease(styleProgress(st, t), materialOrder(st, i, n, n) * (n - 1), n, 0.5);
+    : st.id === 'meadow' ? ease(styleProgress(st, t), materialOrder(st, i, n, n) * (n - 1), n, 0.5) : 1;
   const flow = m.weeks.map((_, i) => flowAt(i));
   const base = m.weeks.map((_, i) => mid - (tot[i] / max) * (p.h / 2) * flow[i]);
   const acc = [...base];
@@ -330,17 +337,37 @@ export function stream(m: Model, st: Style, o: PieceOpts): Scene | null {
       });
     }
   }
-  for (const k of G && st.cells ? [] : keys) {
+  const colorPlates = ['ukiyoe', 'woodblock', 'poster', 'broadsheet', 'manuscript', 'grimoire'].includes(st.id);
+  const opticalLayers = ['glass', 'neon', 'mono', 'pastel'].includes(st.id);
+  for (const [index, k] of (G && st.cells ? [] : keys).entries()) {
     const top = acc.map((y, i) => [X(i), y] as [number, number]);
     const bot = acc.map((y, i) => [X(i), y + (((m.weeks[i].by[k] ?? 0) / max) * p.h) * flow[i]] as [number, number]);
     bot.forEach(([, y], i) => (acc[i] = y));
     const d = smooth(top) + smooth([...bot].reverse()).replace(/^M/, 'L') + 'Z';
-    s.add(path(d, { fill: fillKey(s, st, m, k), opacity: 0.92, stroke: st.c.bg, strokeWidth: 0.6 }));
+    const draw = () => s.add(path(d, { fill: fillKey(s, st, m, k), opacity: 0.92, stroke: st.c.bg, strokeWidth: 0.6 }));
+    // 色版的单元是贡献方的整条河带；玻璃/灯管的单元也是曲线自身，而非整张图淡入。
+    // 柔粉色让相邻的真实色带成对显现；不以两个抽象圆泡割裂同一条河带。
+    const order = st.id === 'pastel' ? Math.floor(index / 2) / Math.max(1, Math.ceil(keys.length / 2) - 1)
+      : index / Math.max(1, keys.length - 1);
+    const layer = styleProgress(st, t, order * 0.3, 0.7 + order * 0.3);
+    if (t < 1 && colorPlates) materialReveal(s, st, layer, p, 'right', draw);
+    else if (t < 1 && opticalLayers) materialEnter(s, st, layer, p, draw, 'data');
+    else draw();
   }
   };
-  // 水墨保留原来的完整运动；其余材质只作用于已按真实比例展开的色层。
-  if (st.id === 'ink') drawRiver();
-  else materialEnter(s, st, phase(t, 0, 0.7), p, drawRiver, 'data');
+  if (st.id === 'editorial' && t < 1) {
+    // 排版按真实周列逐栏落版；每栏一次露出完整河流截面，不从底端切出孤岛和平顶。
+    const at = phase(t, 0, 0.92), half = p.w / (n - 1) / 2;
+    const columns = m.weeks.flatMap((_, i) => {
+      if (at <= i / n) return [];
+      const left = Math.max(p.x, X(i) - half), right = Math.min(p.x + p.w, X(i) + half);
+      return [rect(left, p.y, right - left + 0.02, p.h)];
+    });
+    const clipPath = s.url('stream-columns', (id) => el('clipPath', { id }, columns.join('')));
+    drawGroup(s, { clipPath }, drawRiver);
+  }
+  else if (organic || ['ukiyoe', 'woodblock', 'poster', 'broadsheet', 'manuscript', 'glass', 'neon', 'mono', 'grimoire', 'pastel'].includes(st.id)) drawRiver();
+  else materialReveal(s, st, styleProgress(st, t), p, 'right', drawRiver);
   // 每周的悬停区
   m.weeks.forEach((w, i) => {
     const lines = keys.filter((k) => w.by[k]).sort((a, b) => w.by[b] - w.by[a]).slice(0, 4).map((k) => `${agentOf(m, k)?.name ?? (k === 'human' ? nameOf('people', m.lang) : k)} ${fmt(w.by[k])}`);
@@ -370,11 +397,16 @@ export function lanes(m: Model, st: Style, o: PieceOpts): Scene | null {
     s.text(a?.name ?? k, p.x + 38, y + laneH / 2 + 6, { font: st.f.body, size: 16, fill: st.c.ink, maxW: 125 });
     st.track(s, p.x + 170, y + laneH / 2 - 1, p.w - 170, 2);
     const mine = ss.filter((x) => x.key === k);
-    materialReveal(s, st, styleProgress(st, t), { x: p.x + 170, y, w: p.w - 170 + 3, h: laneH }, 'right', () => mine.forEach((x) => {
+    mine.forEach((x) => {
       const x0 = X(x.start), w = Math.max(3, X(x.end) - x0);
       const col = a ? colorOf(st, m.rows.find((q) => q.key === k) ?? a) : st.c.soft;
-      s.add(rect(x0, y + 16, w, laneH - 32, { fill: x.review ? 'none' : col, stroke: x.review ? col : 'none', strokeWidth: 1.4, rx: Math.min(st.radius, 4), opacity: 0.9 }));
-    }));
+      // 会话是已发生的完整区间，扫描边不能伪造一个不断移动的结束时刻。
+      // 时间决定区间先后，材质决定整枚区间的压印、通电或聚焦。
+      const start = ((x.start - t0) / Math.max(1, t1 - t0)) * 0.65;
+      materialEnter(s, st, styleProgress(st, t, start, start + 0.35), { x: x0, y: y + 16, w, h: laneH - 32 }, () => {
+        s.add(rect(x0, y + 16, w, laneH - 32, { fill: x.review ? 'none' : col, stroke: x.review ? col : 'none', strokeWidth: 1.4, rx: Math.min(st.radius, 4), opacity: 0.9 }));
+      }, 'data');
+    });
     s.hit(p.x, y, p.w, laneH, a ? tip(m, a) : { t: k });
   });
   const d = (v: number) => new Date(v * 1000).toISOString().slice(0, 10);
@@ -384,6 +416,30 @@ export function lanes(m: Model, st: Style, o: PieceOpts): Scene | null {
 }
 
 // ───────────────────────── 作息打卡 ─────────────────────────
+
+/** 屏幕标记先寻址/扫描/接通轮廓；完整真值随后落定，不缩放或稀释活动量。
+ * 纸面小热力标记保留整枚落定：额外定位角、压印边会变成无意义的装饰。 */
+function activityCue(s: Scene, st: Style, k: number, b: Box, round: boolean) {
+  if (k <= 0 || k >= 1 || !['terminal', 'crt', 'neon'].includes(st.id)) return;
+  const x = b.x - 1.5, y = b.y - 1.5, w = b.w + 3, h = b.h + 3;
+  const cx = x + w / 2, a = Math.sin(Math.PI * k) * 0.42;
+  let d = '', dash: string | undefined;
+  if (st.id === 'terminal') d = `M${r(x)} ${r(y + h)}h${r(Math.min(w, 5))}`;
+  if (st.id === 'crt') d = `M${r(x)} ${r(y + h * k)}h${r(w)}`;
+  if (st.id === 'neon') {
+    d = round ? `M${r(cx)} ${r(y)}A${r(w / 2)} ${r(h / 2)} 0 1 1 ${r(cx - 0.001)} ${r(y)}Z`
+      : `M${r(x)} ${r(y)}h${r(w)}v${r(h)}h${r(-w)}Z`;
+    const length = round ? Math.PI * w : 2 * (w + h);
+    dash = `${r(length * k)} ${r(length)}`;
+  }
+  s.add(path(d, { fill: 'none', stroke: st.c.accent, strokeWidth: 0.8, strokeOpacity: a, strokeDasharray: dash }));
+}
+function activityPhase(st: Style, t: number, at: number): number {
+  const progress = styleProgress(st, t);
+  return ['terminal', 'crt', 'neon'].includes(st.id)
+    ? phase(progress, at * 0.82, at * 0.82 + 0.18)
+    : t >= 1 || progress > at ? 1 : 0;
+}
 
 export function clock(m: Model, st: Style, o: PieceOpts): Scene | null {
   if (m.clock.length !== 7) return null;
@@ -397,9 +453,11 @@ export function clock(m: Model, st: Style, o: PieceOpts): Scene | null {
     row.forEach((v, hr) => {
       const cx = p.x + 60 + hr * cw + cw / 2, cy = p.y + d * ch + ch / 2;
       const rr = Math.sqrt(v / max) * Math.min(cw, ch) * 0.46;
-      // 按各材质的扫描/铺版次序点亮；圆的大小和浓度仍只表示提交数量。
+      // 屏幕材质先准备外缘，其余整枚落定；大小和浓度不参与插值。
       const at = materialOrder(st, d * 24 + hr, 7 * 24, 24);
-      if (v && (t >= 1 || styleProgress(st, t) > at)) s.add(circle(cx, cy, Math.max(1.5, rr), { fill: st.c.accent, opacity: 0.25 + 0.75 * (v / max) }));
+      const k = activityPhase(st, t, at), radius = Math.max(1.5, rr);
+      if (v) activityCue(s, st, k, { x: cx - radius, y: cy - radius, w: radius * 2, h: radius * 2 }, true);
+      if (v && (t >= 1 || k >= 0.4)) s.add(circle(cx, cy, radius, { fill: st.c.accent, opacity: 0.25 + 0.75 * (v / max) }));
       else s.add(circle(cx, cy, 1.2, { fill: st.c.faint, opacity: 0.5 }));
       if (v) s.hit(cx - cw / 2, cy - ch / 2, cw, ch, { t: `${m.lang === 'zh' ? '周' + days[d] : days[d]} ${hr}:00`, d: [T(m, `${v} 次提交`, `${v} commits`)] });
     });
@@ -425,7 +483,8 @@ export function versions(m: Model, st: Style, o: PieceOpts): Scene | null {
   buckets.forEach((v, i) => {
     const x = p.x + (i + 0.5) * (p.w / n) - bw / 2;
     let y = p.y + p.h;
-    const k = styleProgress(st, t, i / (n + 1), (i + 2) / (n + 1));
+    const unit = st.id === 'pastel' ? Math.floor(i / 2) : i, units = st.id === 'pastel' ? Math.ceil(n / 2) : n;
+    const k = styleProgress(st, t, unit / (units + 1), (unit + 2) / (units + 1));
     materialReveal(s, st, k, { x, y: p.y - 35, w: bw, h: p.h + 35 }, 'up', () => {
     for (const key of keys) {
       const h = ((v.by[key] ?? 0) / max) * p.h;
@@ -549,8 +608,11 @@ export function calendar(m: Model, st: Style, o: PieceOpts): Scene | null {
     const tot = by ? Object.values(by).reduce((a, b) => a + b, 0) : 0;
     if (!tot) { s.add(rect(x, y, cell, cell, { fill: st.c.ink, opacity: 0.05, rx: Math.min(st.radius, 4) })); continue; }
     const top = Object.entries(by!).sort((a, b) => b[1] - a[1])[0][0];
-    // 日期逐个盖印；扫描、对称排印、分栏铺版各有顺序。浓淡只编码活动量。
-    if (t >= 1 || styleProgress(st, t) > materialOrder(st, d * weeks + w, weeks * 7, weeks)) s.add(rect(x, y, cell, cell, { fill: fillKey(s, st, m, top), opacity: 0.3 + 0.7 * Math.sqrt(tot / max), rx: Math.min(st.radius, 4) }));
+    // 屏幕日期先寻址/扫描/接通边线，其余整枚落定；格子始终承载真实活动量。
+    const at = materialOrder(st, d * weeks + w, weeks * 7, weeks);
+    const k = activityPhase(st, t, at);
+    activityCue(s, st, k, { x, y, w: cell, h: cell }, false);
+    if (t >= 1 || k >= 0.4) s.add(rect(x, y, cell, cell, { fill: fillKey(s, st, m, top), opacity: 0.3 + 0.7 * Math.sqrt(tot / max), rx: Math.min(st.radius, 4) }));
     s.hit(x, y, cell, cell, { k: top, t: day, d: [T(m, `${fmt(tot)} 行`, `${fmt(tot)} lines`), ...Object.entries(by!).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([q, v]) => `${agentOf(m, q)?.name ?? (q === 'human' ? nameOf('people', m.lang) : q === 'unattributed' ? T(m, '未确认', 'Unattributed') : q)} ${fmt(v)}`)] });
   }
   return s;
@@ -642,7 +704,9 @@ export function areas(m: Model, st: Style, o: PieceOpts): Scene | null {
   const x0 = p.x + 200, w = p.w - 200;
   rows.forEach((r, i) => {
     const y = p.y + i * rowH;
-    const k = styleProgress(st, t, i / (rows.length + 1), (i + 2) / (rows.length + 1));
+    // 同一模块的各份额一起出现；柔粉色按成对模块排入，完整横条不被圆窗切成碎块。
+    const unit = st.id === 'pastel' ? Math.floor(i / 2) : i, units = st.id === 'pastel' ? Math.ceil(rows.length / 2) : rows.length;
+    const k = styleProgress(st, t, unit / (units + 1), (unit + 2) / (units + 1));
     s.text(r.name, p.x, y + 30, { font: st.f.body, size: 19, fill: st.c.ink, maxW: 180 });
     s.text(T(m, `${fmt(r.tot)} 行`, `${fmt(r.tot)} lines`), p.x, y + 54, { font: st.f.body, size: 14, fill: st.c.faint });
     let x = x0;

@@ -48,7 +48,7 @@ test('华夫饼逐格点数，分块版也在工具块内部继续铺开，格�
   for (const st of STYLES) for (const variant of ['grid', 'blocks']) {
     const full = art('waffle', model, st, { variant })!;
     const size = Math.min(...full.hits.map((h) => h.w));
-    const cells = (t: number) => art('waffle', model, st, { variant, t })!.hits.filter((h) => h.w === size && h.h === size);
+    const cells = (t: number) => art('waffle', model, st, { variant, t })!.hits.filter((h) => h.w < size * 1.1 && h.h < size * 1.1);
     assert.equal(cells(0).length, 0, `${st.id}/${variant}: starts empty`);
     assert.equal(cells(1).length, 100, `${st.id}/${variant}: one hundred percent`);
     const earlier = cells(0.15), later = cells(0.5);
@@ -59,8 +59,18 @@ test('华夫饼逐格点数，分块版也在工具块内部继续铺开，格�
       assert.ok(first.length > 0 && next.length > first.length);
       assert.ok(next.every((h) => h.k === model.tools[0].key || h.k?.startsWith(`${model.tools[0].key}/`)));
     }
-    const finalByPosition = new Map(cells(1).map((h) => [`${h.x}/${h.y}`, h]));
-    for (const cell of [...earlier, ...later, ...cells(0.5)]) assert.deepEqual(cell, finalByPosition.get(`${cell.x}/${cell.y}`));
+    const finalCells = cells(1);
+    const tiles = (svg: string) => [...normalized(svg).replace(/<defs>[\s\S]*?<\/defs>/g, '').matchAll(/<rect\b[^>]*width="([\d.]+)" height="([\d.]+)"[^>]*\/>/g)]
+      .filter((m) => Math.abs(Number(m[1]) - size) < 0.02 && Math.abs(Number(m[2]) - size) < 0.02).map((m) => m[0]);
+    const finalTiles = new Set(tiles(full.svg));
+    for (const t of [0.15, 0.5]) {
+      const frame = art('waffle', model, st, { variant, t })!;
+      assert.ok(tiles(frame.svg).every((tile) => finalTiles.has(tile)), `${st.id}/${variant}: full-size one-percent tiles`);
+      const scaled = (svg: string) => [...normalized(svg).matchAll(/<g[^>]*transform="[^"]*scale\([^>]*>/g)].map((m) => m[0]);
+      assert.deepEqual(scaled(frame.svg), scaled(full.svg), `${st.id}: only pre-existing static ornament scales`);
+    }
+    for (const cell of [...earlier, ...later]) assert.ok(finalCells.some((final) => final.k === cell.k && final.t === cell.t
+      && JSON.stringify(final.d) === JSON.stringify(cell.d) && Math.abs(final.x - cell.x) < 16 && Math.abs(final.y - cell.y) < 16), `${st.id}: hit follows its complete tile`);
   }
 });
 
@@ -154,7 +164,7 @@ test('环形材质沿圆心显现，不用条形扫描窗切出直角断面', ()
   }
 });
 
-test('河流逐周从中线展开，同一周各层占比不变，文字和悬停数据保持真值', () => {
+test('河流材质成形时各周比例保持真值，水墨仍从中线自然生长', () => {
   const bands = (svg: string) => [...svg.matchAll(/<path d="([^"]+)"[^>]*opacity="0\.92"[^>]*stroke-width="0\.6"/g)].map((m) =>
     [...m[1].matchAll(/[MLC]([^MLCZ]+)/g)].map((segment) => segment[1].trim().split(/[ ,]+/).map(Number).slice(-2)));
   const text = (svg: string) => [...normalized(svg).matchAll(/<text\b[^>]*>[\s\S]*?<\/text>/g)].map((m) => m[0]);
@@ -213,17 +223,28 @@ test('日历中已出现的日期沿用最终活动强度，不把淡入程度�
   }
 });
 
-test('泳道的所有工具共用时间扫描边界，时间段和热区保持完整', () => {
-  const style = STYLES[0];
-  const full = art('lanes', model, style)!;
-  const halfway = art('lanes', model, style, { t: 0.5 })!;
-  assert.deepEqual(halfway.hits, full.hits);
-  const widths = [...halfway.svg.matchAll(/<clipPath id="[^"]*material-[^"]*"[^>]*><path d="([^"]+)"/g)].map((m) => {
-    const numbers = m[1].match(/-?[\d.]+/g)!.map(Number), x = numbers.filter((_, i) => i % 2 === 0);
-    return Math.max(...x) - Math.min(...x);
-  });
-  assert.ok(widths.length > 1);
-  assert.equal(new Set(widths).size, 1);
+test('泳道按完整会话成形，不用扫描边伪造会话的结束时刻', () => {
   const segments = (svg: string) => [...svg.replace(/<defs>[\s\S]*?<\/defs>/g, '').matchAll(/<rect\b[^>]*stroke-width="1\.4"[^>]*>/g)].map((m) => m[0]);
-  assert.deepEqual(segments(halfway.svg), segments(full.svg));
+  for (const style of STYLES) {
+    const full = art('lanes', model, style)!;
+    for (const t of [0.15, 0.5, 0.8]) {
+      const current = art('lanes', model, style, { t })!;
+      assert.deepEqual(current.hits, full.hits);
+      assert.deepEqual(segments(current.svg), segments(full.svg), `${style.id}/${t}: true start/end`);
+      assert.doesNotMatch(current.svg, /<clipPath[^>]*material-/, `${style.id}/${t}: whole sessions`);
+    }
+  }
+});
+
+test('柔粉色按完整河带与数据条配对显现，不以圆泡裁碎真实轮廓', () => {
+  const style = STYLES.find((s) => s.id === 'pastel')!;
+  const geometry = (svg: string) => [...normalized(svg).replace(/<defs>[\s\S]*?<\/defs>/g, '').matchAll(/<(?:path|rect)\b[^>]*>/g)].map((m) => m[0]);
+  for (const id of ['stream', 'areas', 'versions']) {
+    const full = geometry(art(id, model, style)!.svg);
+    for (const t of [0.15, 0.5, 0.8]) {
+      const svg = art(id, model, style, { t })!.svg;
+      assert.deepEqual(geometry(svg), full, `${id}/${t}: complete true outlines`);
+      assert.doesNotMatch(svg, /<g[^>]+(?:clip-path|mask|transform)=/, `${id}/${t}: no bubble crop or displaced data`);
+    }
+  }
 });

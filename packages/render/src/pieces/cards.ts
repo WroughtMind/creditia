@@ -10,7 +10,9 @@ import { materialEnter, materialReveal, materialOrder } from '../material-motion
 
 // 字符格的条本身就是字形，必须整格印出；其他条才有可展开的图形边界。
 function barReveal(s: Scene, st: Style, k: number, b: Pick<Box, 'x' | 'y' | 'w' | 'h'>, direction: RevealDirection, draw: () => void): void {
-  if (st.cells || st.id === 'terminal') materialEnter(s, st, k, b, draw, 'data');
+  // 堆叠份额沿厚度共同出现；舞台开窗、聚光和分段扫描会暂时遮去整份数据，改为整图显影。
+  const shares = direction === 'down' && ['baroque', 'playbill', 'gala', 'arcade', 'cyber'].includes(st.id);
+  if (st.cells || st.id === 'terminal' || shares) materialEnter(s, st, k, b, draw, 'data');
   else materialReveal(s, st, k, b, direction, draw);
 }
 
@@ -177,6 +179,7 @@ export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
   const x0 = c.x + 56, x1 = c.x + c.w - 56;
   // 顶上的小标签和底下一行贴着四角：底板角上有装饰（巴洛克的卷草）时往里让开
   const kx = Math.max(0, (c.corner ?? 0) + 14 - 56);
+  materialEnter(s, st, styleProgress(st, t, 0, 0.32), { x: x0, y: c.y + 40, w: x1 - x0, h: 214 }, () => {
   st.label(s, T(m, '署名', 'CREDITS'), x0 + kx, c.y + 70, { size: 14 });
   st.title(s, m.project || 'Untitled', x0, c.y + 170, 96, 'start', { maxW: x1 - x0 });
   // 工具数、模型数不随分组方式变
@@ -184,33 +187,34 @@ export function share(m: Model, st: Style, o: PieceOpts): Scene | null {
   const models = [...new Set(m.agents.filter((a) => a.kind === 'agent').flatMap((a) => (a.model ? [modelName(a.model)] : a.models.map((q) => q.name))))];
   s.text(T(m, `${ag.length} 个 AI 工具 · ${models.length} 个模型 · ${fmt(m.linesAdded)} 行${m.spanDays ? ` · ${m.spanDays} 天` : ''}`, `${ag.length} AI tools · ${models.length} models · ${fmt(m.linesAdded)} lines${m.spanDays ? ` · ${m.spanDays} days` : ''}`), x0, c.y + 228, { font: st.f.body, size: 24, fill: st.c.soft, maxW: x1 - x0 });
   s.hit(x0, c.y + 200, x1 - x0, 40, { t: T(m, '模型', 'Models'), d: models });
-  // 一条贯穿的堆叠条
+  }, 'title');
+  // 份额是一个整体：沿条的厚度揭示，所有段保持相同进度与真实宽度。
   const by = c.y + c.h - 196, bw = x1 - x0, bh = 30;
   let x = x0;
-  m.rows.forEach((a, i) => {
+  barReveal(s, st, styleProgress(st, t, 0.2, 0.68), { x: x0, y: by, w: bw, h: bh }, 'down', () => m.rows.forEach((a, i) => {
     const w = (bw * a.pct) / 100;
-    const k = styleProgress(st, t, materialOrder(st, i, m.rows.length, st.id === 'manuscript' ? 1 : m.rows.length) * 0.66, 0.32 + materialOrder(st, i, m.rows.length, st.id === 'manuscript' ? 1 : m.rows.length) * 0.66);
-    barReveal(s, st, k, { x, y: by, w, h: bh }, 'right', () => {
       if (a.key === 'unattributed') s.add(rect(x, by, w, bh, { fill: st.hatch(s) }));
       else st.bar(s, x, by, Math.max(0, w - 2), bh, colorOf(st, a), i);
       s.hit(x, by - 6, w, bh + 12, tip(m, a));
-    });
     x += w;
-  });
+  }));
   // 图例：色块 + 标志 + 名字 + 占比，按各自的宽度从左往右排，色块和上面条里的颜色一一对应
   const top = m.rows.filter((a) => a.kind === 'agent').slice(0, 4);
   let lx = x0;
   const ly = c.y + c.h - 110;
-  for (const a of top) {
+  for (const [i, a] of top.entries()) {
     // 有的风格字体比度量表宽一点，留出余量
     const nw = measure(a.name, st.f.display, 22) * 1.06, pw = measure(pct(a.pct), st.f.num, 22) * 1.06;
     const w = 14 + 10 + 26 + 8 + nw + 14 + pw;
     if (lx + w > x1) break;
+    const start = 0.48 + materialOrder(st, i, top.length, top.length) * 0.18;
+    materialEnter(s, st, styleProgress(st, t, start, start + 0.3), { x: lx, y: ly - 30, w, h: 44 }, () => {
     st.bar(s, lx, ly - 15, 14, 14, colorOf(st, a), a.rank);
     st.mark(s, a.key, lx + 24 + 13, ly - 8, 24);
     s.text(a.name, lx + 24 + 26 + 8, ly, { font: st.f.display, size: 22, fill: st.c.ink });
     st.num(s, pct(a.pct), lx + w, ly, 22, 'end', { fill: st.c.soft });
     s.hit(lx, ly - 30, w, 44, tip(m, a));
+    });
     lx += w + 40;
   }
   s.text(summary(m), x0 + kx, c.y + c.h - 50, { font: st.f.body, size: 17, fill: st.c.soft });
@@ -269,21 +273,18 @@ export function badge(m: Model, st: Style, o: PieceOpts): Scene | null {
     const s = new Scene(W, H);
     s.bg = st.c.paper;
     s.add(rect(0.5, 0.5, W - 1, H - 1, { fill: st.c.paper, stroke: st.c.ink, strokeOpacity: 0.25, rx: Math.min(st.radius, 14) }));
-    s.text(T(m, 'AI 参与编写', 'Written with AI'), 18, 28, { font: st.f.label, size: 13, fill: st.c.soft });
+    materialEnter(s, st, styleProgress(st, t, 0, 0.25), { x: 18, y: 12, w: 128, h: 20 }, () => s.text(T(m, 'AI 参与编写', 'Written with AI'), 18, 28, { font: st.f.label, size: 13, fill: st.c.soft }));
     let x = 18;
-    m.rows.forEach((a, i) => {
+    barReveal(s, st, styleProgress(st, t, 0, 0.9), { x: 18, y: 42, w: W - 36, h: 14 }, 'down', () => m.rows.forEach((a, i) => {
       const w = ((W - 36) * a.pct) / 100;
-      const start = materialOrder(st, i, m.rows.length, st.id === 'manuscript' ? 1 : m.rows.length) * 0.66;
-      barReveal(s, st, styleProgress(st, t, start, start + 0.32), { x, y: 42, w, h: 14 }, 'right', () => {
       // 字符格风格：条是一排方块字
       if (st.cells) st.bar(s, x, 42, w, 14, a.key === 'unattributed' ? st.hatch(s) : colorOf(st, a), i);
       else if (a.key === 'unattributed') s.add(rect(x, 42, w, 14, { fill: st.hatch(s) }));
       else s.add(rect(x, 42, Math.max(0, w - 1.5), 14, { fill: colorOf(st, a) }));
       s.hit(x, 36, w, 26, tip(m, a));
-      });
       x += w;
-    });
-    s.text(lead.map((a) => `${a.name} ${Math.round(a.pct)}%`).join('  '), W - 18, 28, { font: st.f.body, size: 13, fill: st.c.ink, anchor: 'end', maxW: W - 160 });
+    }));
+    materialEnter(s, st, styleProgress(st, t, 0.34, 0.96), { x: 142, y: 12, w: W - 160, h: 20 }, () => s.text(lead.map((a) => `${a.name} ${Math.round(a.pct)}%`).join('  '), W - 18, 28, { font: st.f.body, size: 13, fill: st.c.ink, anchor: 'end', maxW: W - 160 }));
     return s;
   }
   // flat：shields 式
@@ -319,25 +320,24 @@ function splitBadge(m: Model, st: Style, t: number): Scene | null {
   s.text(`${top.name} ${Math.round(top.pct)}%`, W - 18, 28, { font: st.f.body, size: 13, fill: st.c.ink, anchor: 'end', maxW: W - 160 });
   let x = 18;
   const bw = W - 36;
-  for (const [i, a] of tools.entries()) {
+  barReveal(s, st, styleProgress(st, t, 0, 0.72), { x: 18, y: 40, w: bw, h: 14 }, 'down', () => {
+  for (const a of tools) {
     const w = (bw * a.pct) / 100;
     let sx = x;
     const segs = segsOf(m, st, a);
-    for (const [j, q] of segs.entries()) {
+    for (const q of segs) {
       const qw = (w * q.lines) / Math.max(1, a.lines);
-      const start = (materialOrder(st, i, tools.length, tools.length) * 0.4 + materialOrder(st, j, segs.length, segs.length) * 0.1);
-      barReveal(s, st, styleProgress(st, t, start, start + 0.46), { x: sx, y: 40, w: qw, h: 14 }, 'right', () => {
       if (st.cells) st.bar(s, sx, 40, qw, 14, a.key === 'unattributed' ? st.hatch(s) : q.color, 0);
       else if (a.key === 'unattributed') s.add(rect(sx, 40, qw, 14, { fill: st.hatch(s) }));
       else s.add(rect(sx, 40, Math.max(0, qw - 0.75), 14, { fill: q.color }));
       s.hit(sx, 34, qw, 26, segTip(m, a, q));
-      });
       sx += qw;
     }
     // 工具之间留一道缝，比模型之间宽
     x += w;
     if (w > 3 && !st.cells) s.add(rect(x - 2, 40, 2, 14, { fill: st.c.paper }));
   }
+  });
   const segs = segsOf(m, st, top).filter((q) => !q.unknown).slice(0, 2);
   const sub = segs.length > 1 ? segs.map((q) => `${q.name} ${Math.round(q.pct)}%`).join(' · ') : modelLine(top);
   if (sub) materialEnter(s, st, styleProgress(st, t, 0.42, 0.96), { x: 18, y: 62, w: W - 36, h: 20 }, () => s.text(sub, 18, 78, { font: st.f.body, size: 13, fill: st.c.soft, maxW: W - 36, overflow: 'clip' }));
@@ -378,9 +378,10 @@ export function byline(m: Model, st: Style, o: PieceOpts): Scene | null {
     materialEnter(s, st, styleProgress(st, t, start, start + 0.48), { x: it.x - 4, y: models ? 38 : 44, w: it.w + 34, h: models ? 60 : 40 }, () => {
     st.mark(s, a.key, it.x + 12, nameY - 8, 22);
     s.text(it.name, it.x + 30, nameY, { font: st.f.body, size: plan.size, fill: st.c.ink });
-    if (it.sub) materialEnter(s, st, styleProgress(st, t, start + 0.16, start + 0.58), { x: it.x + 30, y: 74, w: it.subW, h: 20 }, () => s.text(it.sub, it.x + 30, 90, { font: st.f.body, size: 13, fill: st.c.soft, maxW: it.subW, overflow: 'clip' }));
     s.hit(it.x - 4, models ? 38 : 44, it.w + 34, models ? 60 : 40, tip(m, a));
     });
+    // 次行跟随所属工具，单独落位，避免外层和内层叠加两次滤镜/位移。
+    if (it.sub) materialEnter(s, st, styleProgress(st, t, start + 0.16, start + 0.58), { x: it.x + 30, y: 74, w: it.subW, h: 20 }, () => s.text(it.sub, it.x + 30, 90, { font: st.f.body, size: 13, fill: st.c.soft, maxW: it.subW, overflow: 'clip' }));
   }
   let tx = plan.end;
   materialEnter(s, st, styleProgress(st, t, 0.5, 0.98), { x: tx, y: nameY - 22, w: Math.max(20, end - tx), h: 28 }, () => {

@@ -1,7 +1,7 @@
 // 星号：这个项目自己的 *。瓣长是各家写了多少，下面是项目名、一行份额、一行出处——官网页尾 creditia 给自己署名的那一张。
 import { Scene, rect, ease, measure, path, r } from '../svg.ts';
 import { phase, styleProgress, drawGroup } from '../motion.ts';
-import { materialEnter, materialOrder } from '../material-motion.ts';
+import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
 import type { Model } from '../data.ts';
 import { pct } from '../data.ts';
 import type { Style } from '../style.ts';
@@ -48,7 +48,7 @@ export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
       // 星号是绕中轴排的瓣，成对揭幕从顶瓣向两侧展开，不把列表的中间项当作画面中心。
       const pair = Math.min(i, petals.length - i) / Math.max(1, Math.floor(petals.length / 2));
       const scan = (1 - Math.cos(i / petals.length * Math.PI * 2)) / 2;
-      const order = st.id === 'crt' ? scan
+      const order = st.id === 'grimoire' ? i / Math.max(1, petals.length - 1) : st.id === 'crt' ? scan
         : ['cinema', 'playbill', 'gala', 'baroque', 'pastel', 'glass'].includes(st.id) ? pair
         : materialOrder(st, i, petals.length, st.id === 'manuscript' ? 1 : petals.length);
       const k = styleProgress(st, t, order * 0.35, 0.62 + order * 0.35);
@@ -59,7 +59,7 @@ export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
       const draw = () => drawGroup(s, { transform }, () => s.add(p));
       const a = -Math.PI / 2 + i / petals.length * Math.PI * 2;
       if (k >= 1) { draw(); return; }
-      if (['cyber', 'neon'].includes(st.id)) {
+      if (['cyber', 'neon', 'grimoire'].includes(st.id)) {
         // markPaths 输出的是封闭折线路径，按实际线段求周长，resvg 无须支持 pathLength。
         const length = points.reduce((sum, [x, y], j) => {
           const next = points[(j + 1) % points.length];
@@ -74,6 +74,13 @@ export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
           strokeDasharray: length, strokeDashoffset: length * (1 - phase(k, 0, 0.64)),
           visibility: k <= 0 ? 'hidden' : undefined }));
         }), 'mark');
+      } else if (['film', 'broadsheet', 'woodblock'].includes(st.id)) {
+        // 乳剂、网线、木纹在每瓣的真实轮廓内成像，不把瓣长当作播放进度。
+        materialReveal(s, st, k, bounds, 'up', draw);
+      } else if (st.id === 'meadow') {
+        // 花瓣从花心轻轻舒展，保留每瓣的完整形状与份额；不是整张卡片上浮。
+        const turn = (i % 2 ? -1 : 1) * 7 * (1 - k) ** 2;
+        drawGroup(s, { transform }, () => drawGroup(s, { transform: `rotate(${r(turn)} 12 12)`, opacity: phase(k, 0, 0.22), visibility: k <= 0 ? 'hidden' : undefined }, () => s.add(p)));
       } else if (st.id === 'cutout') {
         const rest = 1 - k;
         // 每瓣是一张完整纸片，绕自身落位，保持轮廓和面积不变。

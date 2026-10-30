@@ -30,6 +30,38 @@ test('代码地图以完整代码笔画铺版，已出现笔画与最终归属�
   assert.notDeepEqual(positions(ink), positions(glass));
 });
 
+test('代码地图拼贴按完整文件片段入位，套版按完整归属色层显现', () => {
+  const cutout = STYLES.find((s) => s.id === 'cutout')!;
+  const full = art('codemap', model, cutout)!, all = codeStrokes(full.svg);
+  const current = new Set(codeStrokes(art('codemap', model, cutout, { t: 0.35 })!.svg));
+  const fileHits = full.hits.filter((h) => model.files.some((f) => f.path === h.t));
+  let visible = 0, pending = 0;
+  for (const hit of fileHits) {
+    const strokes = all.filter((stroke) => {
+      const [, x, y] = /M([-\d.]+) ([-\d.]+)h/.exec(stroke)!;
+      return +x >= hit.x && +x < hit.x + hit.w && +y >= hit.y && +y < hit.y + hit.h;
+    });
+    if (!strokes.length) continue;
+    const shown = strokes.filter((stroke) => current.has(stroke)).length;
+    assert.ok(shown === 0 || shown === strokes.length, `${hit.t}: complete file fragment`);
+    if (shown) visible++; else pending++;
+  }
+  assert.ok(visible > 0 && pending > 0);
+
+  const ukiyoe = STYLES.find((s) => s.id === 'ukiyoe')!;
+  const colors = (svg: string) => {
+    const map = new Map<string, Set<string>>();
+    for (const stroke of codeStrokes(svg)) {
+      const color = stroke.slice(0, stroke.indexOf('/'));
+      (map.get(color) ?? map.set(color, new Set()).get(color)!).add(stroke);
+    }
+    return map;
+  };
+  const complete = colors(art('codemap', model, ukiyoe)!.svg), partial = colors(art('codemap', model, ukiyoe, { t: 0.25 })!.svg);
+  assert.ok(partial.size > 0 && partial.size < complete.size);
+  for (const [color, strokes] of partial) assert.deepEqual(strokes, complete.get(color), `${color}: complete color plate`);
+});
+
 test('贡献者的文字与比例保持真值，材质展开不改变分段宽度', () => {
   const bars = (svg: string) => [...normalized(svg).replace(/<defs>[\s\S]*?<\/defs>/g, '').matchAll(/<rect x="[^"]+" y="[^"]+" width="[^"]+" height="14"[^>]*\/>/g)].map((m) => m[0]);
   for (const st of STYLES) {

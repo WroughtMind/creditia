@@ -104,7 +104,7 @@ test('星号各材质保持完整瓣形，显示的贡献比例始终不变', ()
   // 临时描线和纸片变换复用最终瓣形；样例五瓣每瓣都有 26 个 M/L 顶点。
   const petals = (svg: string) => [...svg.matchAll(/<path\b[^>]*d="([^"]+)"/g)]
     .map((match) => match[1]).filter((d) => (d.match(/[ML]/g) ?? []).length === 26 && d.endsWith('Z'));
-  for (const style of ['ink', 'woodblock', 'cyber', 'cutout']) {
+  for (const style of ['ink', 'woodblock', 'cyber', 'cutout', 'grimoire', 'meadow']) {
     const final = scene(style, 1), finalPetals = new Set(petals(final));
     assert.equal(finalPetals.size, 5, style);
     for (const t of [0.12, 0.38, 0.72]) {

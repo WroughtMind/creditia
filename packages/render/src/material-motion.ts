@@ -51,13 +51,18 @@ export function materialOrder(st: Pick<Style, 'id'>, index: number, total: numbe
 }
 
 /** 滤镜只覆盖当前内容及光晕，长字幕不会为每一行分配整张画布。 */
-function optical(s: Scene, st: Style, k: number, kind: 'ink' | 'focus' | 'outline' | 'neon' | 'crt' | 'press', b: Bounds, solid = false): string {
+function optical(s: Scene, st: Style, k: number, kind: 'ink' | 'focus' | 'outline' | 'neon' | 'crt' | 'press' | 'paper' | 'register', b: Bounds, solid = false): string {
   const rest = 1 - k;
   let primitives = '';
   if (kind === 'ink') primitives = (solid ? el('feMorphology', { operator: 'dilate', radius: r(0.28 * rest) }) : '') + el('feGaussianBlur', { stdDeviation: r(0.12 * rest) });
   if (kind === 'focus') primitives = el('feGaussianBlur', { stdDeviation: r(2.4 * rest * rest) });
   if (kind === 'crt') primitives = el('feGaussianBlur', { stdDeviation: r(1.6 * rest), result: 'glow' }) + el('feMerge', {}, el('feMergeNode', { in: 'glow' }), el('feMergeNode', { in: 'SourceGraphic' }));
   if (kind === 'press') primitives = solid ? el('feMorphology', { operator: 'dilate', radius: r(0.25 * Math.sin(Math.PI * k)) }) : el('feGaussianBlur', { stdDeviation: r(0.12 * (1 - k)) });
+  if (kind === 'paper') primitives = el('feDropShadow', { dx: r(3 * rest), dy: r(5 * rest), stdDeviation: r(2 * rest), floodColor: st.c.ink, floodOpacity: r(0.3 * rest) });
+  if (kind === 'register') primitives = el('feOffset', { in: 'SourceAlpha', dx: r(-3 * rest), dy: r(rest), result: 'plate' })
+    + el('feFlood', { floodColor: st.c.accent, floodOpacity: r(rest * 0.5), result: 'ink' })
+    + el('feComposite', { in: 'ink', in2: 'plate', operator: 'in', result: 'underprint' })
+    + el('feMerge', {}, el('feMergeNode', { in: 'underprint' }), el('feMergeNode', { in: 'SourceGraphic' }));
   if (kind === 'outline' || kind === 'neon') {
     primitives = el('feMorphology', { in: 'SourceAlpha', operator: 'erode', radius: kind === 'neon' ? 0.8 : 0.55, result: 'core' })
       + el('feComposite', { in: 'SourceAlpha', in2: 'core', operator: 'out', result: 'edge' })
@@ -100,19 +105,19 @@ export function materialEnter(s: Scene, st: Style, value: number, b: Bounds, dra
     case 'neon': attrs.opacity = phase(k, 0, 0.22); attrs.filter = optical(s, st, k, 'neon', b); break;
     case 'arcade': x = Math.round(dx * rest / 4) * -4; attrs.opacity = k > 0.06 ? 1 : 0; break;
     case 'ink': attrs.opacity = Math.sqrt(k); attrs.filter = optical(s, st, k, 'ink', b, role === 'mark'); break;
-    case 'ukiyoe': x = -dx * rest; attrs.opacity = phase(k, 0, 0.28); break;
+    case 'ukiyoe': attrs.opacity = phase(k, 0, 0.28); if (!data) attrs.filter = optical(s, st, k, 'register', b); break;
     case 'woodblock': attrs.opacity = phase(k, 0, 0.2); attrs.filter = optical(s, st, k, 'press', b, role === 'mark'); y = -2 * rest; break;
     case 'baroque': y = -dy * rest; angle = (cx < s.w / 2 ? -1 : 1) * lean * rest; break;
     case 'grimoire': attrs.opacity = phase(k, 0.06, 0.5); attrs.filter = optical(s, st, k, 'outline', b); break;
     case 'manuscript': attrs.opacity = phase(k, 0.08, 0.24); x = -3 * rest; break;
     case 'pastel': x = (cx < s.w / 2 ? -1 : 1) * dx * rest; y = -2 * Math.sin(k * Math.PI); break;
-    case 'cutout': x = (cx < s.w / 2 ? -1 : 1) * dx * rest; y = -dy * rest; angle = lean * rest; attrs.opacity = 1; break;
+    case 'cutout': x = (cx < s.w / 2 ? -1 : 1) * dx * rest; y = -dy * rest; angle = lean * rest; attrs.opacity = 1; attrs.filter = optical(s, st, k, 'paper', b); break;
     case 'meadow': x = dx * Math.sin(k * Math.PI) * rest * 0.35; y = dy * rest; break;
     case 'manga': x = -dx * rest; y = dy * rest * 0.4; attrs.opacity = phase(k, 0, 0.15); break;
     case 'cyber': x = Math.round(dx * rest / 3) * 3; attrs.opacity = phase(k, 0, 0.25); break;
   }
   if (data) { x = y = angle = 0; }
-  if (role === 'paper') delete attrs.filter; // 纸上的行另有自己的落墨，避免整页与文字叠加两次滤镜。
+  if (role === 'paper' && id !== 'cutout') delete attrs.filter; // 纸上的行另有落墨；整张纸仅保留自己的投影。
   if (x || y || angle) attrs.transform = `translate(${r(x)} ${r(y)})${angle ? ` rotate(${r(angle)} ${r(cx)} ${r(cy)})` : ''}`;
   const first = s.hits.length;
   drawGroup(s, attrs, draw);
@@ -134,10 +139,6 @@ export function materialEnter(s: Scene, st: Style, value: number, b: Bounds, dra
   if (id === 'film') s.add(stroke(b.x, b.y + b.h * rest / 2, b.x + b.w, b.y + b.h * rest / 2));
   if (id === 'crt') s.add(stroke(b.x, b.y + b.h * k, b.x + b.w, b.y + b.h * k));
   if (id === 'terminal' && role !== 'mark') s.add(rect(b.x + b.w - Math.min(6, b.h * 0.16), b.y + b.h * 0.82, Math.min(6, b.h * 0.16), Math.min(3, b.h * 0.08), { fill: st.c.accent, opacity: rest }));
-  if (['gala', 'baroque', 'grimoire'].includes(id) && role === 'title') {
-    const rr = Math.min(b.w, b.h) * (0.36 + k * 0.18);
-    s.add(el('circle', { cx, cy, r: rr, fill: 'none', stroke: st.c.accent, strokeWidth: 0.8, opacity: fade, strokeDasharray: id === 'grimoire' ? `${r(rr * 0.22)} ${r(rr * 0.12)}` : `${r(2 * Math.PI * rr * k)} ${r(2 * Math.PI * rr)}` }));
-  }
 }
 
 /** 图形的材质展开。文字应调用 materialEnter；这里允许纸、墨、光、像素各自形成边界。 */
@@ -146,7 +147,7 @@ export function materialReveal(s: Scene, st: Style, value: number, b: Bounds, di
   if (k >= 1) { draw(); return; }
   if (k <= 0) { const first = s.hits.length; drawGroup(s, { visibility: 'hidden' }, draw); s.hits.splice(first); return; }
   const id = identity(st);
-  if (['mono', 'neon', 'poster', 'woodblock', 'grimoire', 'manuscript'].includes(id)) {
+  if (['mono', 'neon', 'poster', 'manuscript', 'cutout'].includes(id)) {
     materialEnter(s, st, k, b, draw, 'data'); return;
   }
   const vertical = direction === 'down' || direction === 'up';
@@ -163,7 +164,16 @@ export function materialReveal(s: Scene, st: Style, value: number, b: Bounds, di
   };
   const band = (u: number, v: number, w: number, h: number) => polygon([[u, v], [u + w, v], [u + w, v + h], [u, v + h]]);
   const center = () => band(primary * (1 - k) / 2, 0, primary * k, secondary);
-  let shape = '', soft = false;
+  let shape = '', soft = false, mask = false;
+  // 整幅材质成形保持图形外廓，不把印刷、曝光都做成同一种横向裁窗。
+  const surface = (width: number, height: number, marks: string) => {
+    mask = true; windows.push({ ...b });
+    const fill = s.url(unique(s, `${id}-surface`), pid => el('pattern', { id: pid, patternUnits: 'userSpaceOnUse', width, height }, marks));
+    // 最后一段墨面填实；避免缩小栅格的纹样缝隙一直留到 t=1 才突然补齐。
+    const exposure = id === 'film';
+    return rect(b.x, b.y, b.w, b.h, { fill: '#fff', opacity: exposure ? phase(k, 0, 0.92) : phase(k, 0.65, 1) })
+      + rect(b.x, b.y, b.w, b.h, { fill, opacity: exposure ? 0.32 * Math.sin(Math.PI * k) : 1 });
+  };
 
   switch (id) {
     case 'terminal': case 'arcade': {
@@ -190,14 +200,42 @@ export function materialReveal(s: Scene, st: Style, value: number, b: Bounds, di
       }
       edge.push([0, secondary]); shape = polygon(edge); soft = id === 'ink'; break;
     }
-    case 'ukiyoe': case 'broadsheet': case 'film': {
-      const strips = id === 'broadsheet' ? 4 : id === 'film' ? 3 : 5;
-      shape = Array.from({ length: strips }, (_, i) => {
-        const v = secondary * i / strips, width = primary * phase(k, i * 0.035, 0.84 + i * 0.035);
-        return band(0, v, width, secondary / strips + 0.2);
-      }).join(''); break;
+    case 'film': {
+      // 曝光在整幅乳剂上同时成像；固定颗粒位置，避免每帧噪声闪烁。
+      const unit = Math.max(7, Math.min(12, Math.min(b.w, b.h) / 3));
+      const noise = (i: number) => { const x = Math.sin((i + 1) * 127.1) * 43758.5453; return x - Math.floor(x); };
+      const tile = unit * 6;
+      const marks = Array.from({ length: 36 }, (_, i) => {
+        const cx = unit * (i % 6 + 0.1 + noise(i * 3) * 0.8), cy = unit * (Math.floor(i / 6) + 0.1 + noise(i * 3 + 1) * 0.8);
+        const radius = unit * k * (0.5 + noise(i * 3 + 2) * 0.7);
+        // 边界颗粒跨 tile 连续，不能在曝光中留下周期性方框接缝。
+        return [-tile, 0, tile].flatMap(dx => [-tile, 0, tile].map(dy => [cx + dx, cy + dy]))
+          .filter(([x, y]) => x + radius >= 0 && x - radius <= tile && y + radius >= 0 && y - radius <= tile)
+          .map(([x, y]) => el('circle', { cx: x, cy: y, r: radius, fill: '#fff' })).join('');
+      }).join('');
+      shape = surface(tile, tile, marks); break;
     }
-    case 'cutout': case 'manga': case 'cyber': {
+    case 'broadsheet': {
+      // 网线先接触纸面，再填实整版；不是几条不同延迟的扫窗。
+      const pitch = Math.max(4, Math.min(12, b.h / 4));
+      shape = surface(pitch, pitch, rect(0, 0, pitch, pitch * k, { fill: '#fff' })); break;
+    }
+    case 'woodblock': {
+      const pitch = Math.max(7, Math.min(18, b.w / 8)), h = 36;
+      const edge = pitch * k, cut = pitch * k * (1 - k) * 0.35;
+      shape = surface(pitch, h, path(`M0 0H${r(edge)}L${r(edge - cut)} 12L${r(edge)} 25L${r(edge - cut / 2)} ${h}H0Z`, { fill: '#fff' })); break;
+    }
+    case 'grimoire': {
+      const pitch = Math.max(10, Math.min(22, Math.min(b.w, b.h) / 2));
+      const marks = el('path', { d: `M${-pitch} ${-pitch}L${pitch * 2} ${pitch * 2}`, stroke: '#fff', strokeWidth: pitch * k, fill: 'none' })
+        + el('path', { d: `M${-pitch} ${pitch * 2}L${pitch * 2} ${-pitch}`, stroke: '#fff', strokeWidth: pitch * phase(k, 0.3, 0.9), fill: 'none' });
+      shape = surface(pitch, pitch, marks); break;
+    }
+    case 'ukiyoe': {
+      // 真实色层由作品分组交出；每一版是完整接触面，不伪造任意五个分色条。
+      shape = band(0, 0, primary * k, secondary); break;
+    }
+    case 'manga': case 'cyber': {
       const skew = Math.min(primary * 0.18, secondary * (id === 'manga' ? 0.8 : 0.35)) * Math.sin(Math.PI * k);
       const front = primary * k;
       shape = polygon([[0, 0], [Math.max(0, front - skew), 0], [Math.min(primary, front + skew), secondary], [0, secondary]]);
@@ -205,15 +243,31 @@ export function materialReveal(s: Scene, st: Style, value: number, b: Bounds, di
       break;
     }
     case 'crt': shape = windowRect(b.x, b.y, b.w, Math.min(b.h, Math.ceil(b.h * k / 4) * 4)); break;
-    case 'pastel': case 'playbill': case 'cinema': shape = vertical ? band(0, 0, primary * k, secondary) : center(); soft = id === 'cinema'; break;
-    case 'baroque': case 'gala': if (vertical) { shape = band(0, 0, primary * k, secondary); soft = true; break; } windows.push({ x: b.x + b.w * (0.5 - k * 0.74), y: b.y + b.h * (0.5 - k * 0.74), w: b.w * k * 1.48, h: b.h * k * 1.48 }); shape = el('ellipse', { cx: b.x + b.w / 2, cy: b.y + b.h / 2, rx: b.w * k * 0.74, ry: b.h * k * 0.74, fill: '#fff' }); break;
+    case 'pastel': {
+      // 配对的单元来自作品本身；不拿两个抽象圆泡割裂曲线或真实份额。
+      materialEnter(s, st, k, b, draw, 'data'); return;
+    }
+    case 'playbill': shape = windowRect(b.x, b.y, b.w * k / 2, b.h) + windowRect(b.x + b.w * (1 - k / 2), b.y, b.w * k / 2, b.h); break;
+    case 'cinema': shape = vertical ? band(0, 0, primary * k, secondary) : center(); soft = true; break;
+    case 'baroque': shape = windowRect(b.x + b.w * (1 - k) / 2, b.y, b.w * k, b.h); break;
+    case 'gala': {
+      mask = true;
+      const radius = 0.72 * Math.min(1, k * 1.4);
+      windows.push({ x: b.x + b.w * (0.5 - radius), y: b.y + b.h * (0.5 - radius), w: b.w * radius * 2, h: b.h * radius * 2 });
+      const light = s.url(unique(s, 'spotlight'), gid => el('radialGradient', { id: gid, cx: 0.5, cy: 0.5, r: 0.72 },
+        el('stop', { offset: clamp(k * 1.4 - 0.35), stopColor: '#fff' }),
+        el('stop', { offset: Math.min(1, k * 1.4), stopColor: '#000' })));
+      shape = rect(b.x, b.y, b.w, b.h, { fill: light }); break;
+    }
     case 'editorial': shape = windowRect(b.x, b.y + b.h * (1 - k), b.w, b.h * k); break;
     case 'glass': soft = true; shape = band(0, 0, primary * k, secondary); break;
     default: shape = direction === 'center-x' ? center() : band(0, 0, primary * k, secondary);
   }
-  const name = unique(s, id), clip = s.url(name, cid => el('clipPath', { id: cid, clipPathUnits: 'userSpaceOnUse' }, shape || rect(b.x, b.y, 0, 0)));
+  const name = unique(s, id), clip = s.url(name, cid => mask
+    ? el('mask', { id: cid, maskUnits: 'userSpaceOnUse', x: b.x, y: b.y, width: b.w, height: b.h }, shape)
+    : el('clipPath', { id: cid, clipPathUnits: 'userSpaceOnUse' }, shape || rect(b.x, b.y, 0, 0)));
   const first = s.hits.length;
-  drawGroup(s, { clipPath: clip, opacity: k <= 0 ? 0 : undefined, filter: soft ? optical(s, st, k, id === 'ink' ? 'ink' : 'focus', b) : undefined }, draw);
+  drawGroup(s, { ...(mask ? { mask: clip } : { clipPath: clip }), opacity: k <= 0 ? 0 : undefined, filter: soft ? optical(s, st, k, id === 'ink' ? 'ink' : 'focus', b) : undefined }, draw);
   // 命中区跟随已经出现的窗口，斜边与曲线取可见部分的外接框。
   for (let i = s.hits.length - 1; i >= first; i--) {
     const hit = s.hits[i], intersections = windows.map(w => ({

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { art, buildModel, STYLES, raster } from '../src/index.ts';
+import { THEMES } from '../src/classic/themes.ts';
+import { bridgeStyle } from '../src/classic/bridge.ts';
 
 const raw = JSON.parse(readFileSync(new URL('../fixtures/catnap.json', import.meta.url), 'utf8'));
 const model = buildModel(raw);
@@ -103,5 +105,19 @@ test('终端署名条的越界代码雨不会使静态或动画导出崩溃', ()
     const a = art('byline', model, st, { variant, t })!;
     const png = raster.png(a.svg, 430);
     assert.deepEqual([...png.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  }
+});
+
+test('分享图和堆叠徽章沿厚度揭示整张份额图，不逐段改写中间比例', () => {
+  for (const st of [...STYLES, ...THEMES.map(bridgeStyle)]) for (const [id, variant, finalHeight] of [['share', '', 42], ['badge', 'stack', 26], ['badge', 'split', 26]] as const) {
+    const final = art(id, model, st, { variant: variant || undefined, t: 1 })!;
+    const bars = final.hits.filter(hit => hit.h === finalHeight);
+    assert.ok(bars.length > 1);
+    const middle = art(id, model, st, { variant: variant || undefined, t: .4 })!;
+    for (const end of bars) {
+      const visible = middle.hits.find(hit => hit.k === end.k && hit.t === end.t && Math.abs(hit.x - end.x) < .01);
+      assert.ok(visible, `${st.id}/${id}/${variant}/${end.t}: all shares enter together`);
+      assert.equal(visible.w, end.w, `${st.id}/${id}/${variant}/${end.t}: horizontal data width stays true`);
+    }
   }
 });

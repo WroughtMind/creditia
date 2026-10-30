@@ -2,8 +2,8 @@
 import type { Node, Out } from './ui.ts';
 import type { Theme } from './themes.ts';
 
-export type MotionKind = 'row' | 'title' | 'bar-x' | 'bar-y' | 'cell' | 'area' | 'radial' | 'print' | 'sheet' | 'signature' | 'card' | 'credits' | 'clap';
-export interface MotionCue { kind: MotionKind; order?: number; total?: number; travel?: number; grid?: number }
+export type MotionKind = 'row' | 'title' | 'bar-x' | 'bar-y' | 'cell' | 'intensity' | 'area' | 'radial' | 'print' | 'sheet' | 'signature' | 'card' | 'credits' | 'clap';
+export interface MotionCue { kind: MotionKind; order?: number; total?: number; travel?: number; grid?: number; columns?: number }
 
 /** 只加非渲染元数据；静态树的 props、尺寸、顺序均不变。 */
 export function motion(node: Node, kind: MotionKind, order = 0, total = 1): Node {
@@ -31,11 +31,14 @@ const cinematic = (t: Theme) => ['film', 'cinema', 'gala'].includes(t.family);
 function phase(time: number, cue: MotionCue, theme: Theme): number {
   if (time >= 1) return 1;
   const count = cue.total ?? 1, order = cue.order ?? 0;
-  const span = cue.kind === 'cell' ? 0.18 : cue.kind === 'print' ? 0.22 : cinematic(theme) ? 0.64 : 0.56;
+  const span = ['cell', 'intensity'].includes(cue.kind) ? 0.18 : cue.kind === 'print' ? 0.22 : cinematic(theme) ? 0.64 : 0.56;
   // 动作顺序属于材质：剧场两侧、颁奖礼中心和街机交错格，不能只换缓动曲线。
   let rank = count > 1 ? order / (count - 1) : 0;
   if (count > 1 && Number.isInteger(order) && Number.isInteger(count)) {
-    if (['playbill', 'gala'].includes(theme.family) || theme.id === 'minimal-dark') {
+    if (cue.kind === 'card' && cue.columns && ['playbill', 'gala'].includes(theme.family)) {
+      rank = Math.floor(order / cue.columns) / Math.max(1, Math.ceil(count / cue.columns) - 1);
+    }
+    else if (['playbill', 'gala'].includes(theme.family) || theme.id === 'minimal-dark') {
       const middle = (count - 1) / 2, nearest = count % 2 ? 0 : 0.5;
       rank = (Math.abs(order - middle) - nearest) / Math.max(1, middle - nearest);
     }
@@ -94,7 +97,7 @@ function entryStyle(style: Record<string, any>, cue: MotionCue, p: number, theme
 function graphicStyle(style: Record<string, any>, cue: MotionCue, p: number, theme: Theme) {
   const rest = round((1 - p) * 100), pct = round(p * 100), vertical = cue.kind === 'bar-y';
   const forward = () => { style.clipPath = vertical ? `inset(${rest}% 0 0 0)` : `inset(0 ${rest}% 0 0)`; };
-  const aperture = () => { style.clipPath = vertical ? `inset(${rest / 2}% 0 ${rest / 2}% 0)` : `inset(0 ${rest / 2}% 0 ${rest / 2}%)`; };
+  const aperture = () => { style.clipPath = vertical ? `inset(${rest}% 0 0 0)` : `inset(0 ${rest / 2}% 0 ${rest / 2}%)`; };
   switch (theme.family) {
     case 'minimal': if (theme.dark) { aperture(); style.opacity = 0.3 + 0.7 * p; } else forward(); break;
     case 'glass':
@@ -131,6 +134,12 @@ function graphicStyle(style: Record<string, any>, cue: MotionCue, p: number, the
       }
       break;
   }
+  // 柱形始终立在数据基线上。材质改变表面如何出现，不把柱子悬在中央或移离坐标。
+  if (vertical) {
+    forward();
+    if (theme.family === 'editorial' || theme.family === 'poster') delete style.transform;
+    if (cue.grid && cue.travel) style.clipPath = `inset(${round(Number(style.height) - Math.floor(p * cue.travel / cue.grid) * cue.grid)}px 0 0 0)`;
+  }
 }
 
 function imageSource(src: string, edit: (svg: string) => string): string {
@@ -155,6 +164,23 @@ function ringMotion(svg: string, p: number, theme: Theme): string {
       return cells.join('');
     });
   }
+  if (['glass', 'mono', 'broadsheet'].includes(theme.family)) {
+    // 光学表面沿环的厚度凝结；黑白版先显内外轮廓；报刊按网线压印。
+    // 数据弧的半径、角度和起点始终不动，mask 只露出其现有墨迹。
+    const circle = /<circle\b[^>]*stroke-dasharray="[^"]+"[^>]*\/>/.exec(svg)?.[0];
+    if (!circle) return svg;
+    const attr = (name: string) => Number(new RegExp(`\\b${name}="([\\d.]+)"`).exec(circle)?.[1]);
+    const cx = attr('cx'), cy = attr('cy'), radius = attr('r'), width = attr('stroke-width');
+    let defs = '', mask = '';
+    if (theme.family === 'glass') mask = `<circle cx="${cx}" cy="${cy}" r="${round(radius + width * (1 - p) / 2)}" fill="none" stroke="white" stroke-width="${round(width * p)}"/>`;
+    else if (theme.family === 'mono') mask = `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="white" stroke-width="${width}"/><circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="black" stroke-width="${round(width * (1 - p))}"/>`;
+    else {
+      defs = `<pattern id="cm-ring-print" patternUnits="userSpaceOnUse" width="6" height="6"><rect width="6" height="${round(p * 6)}" fill="white"/></pattern>`;
+      mask = `<rect width="${cx * 2}" height="${cy * 2}" fill="url(#cm-ring-print)"/>`;
+    }
+    const definition = `<defs>${defs}<mask id="cm-ring" maskUnits="userSpaceOnUse" x="0" y="0" width="${cx * 2}" height="${cy * 2}">${mask}</mask></defs>`;
+    return svg.replace(/(<svg[^>]*>)/, '$1' + definition).replace(/<circle\b[^>]*stroke-dasharray="[^"]+"[^>]*\/>/g, c => c.replace('<circle ', '<circle mask="url(#cm-ring)" '));
+  }
   // 每条弧保留自己的圆心、半径和粗细；从弧段本身成形，不用矩形窗口切圆环。
   const count = (svg.match(/stroke-dasharray=/g) ?? []).length / (theme.family === 'neon' ? 2 : 1);
   let i = 0;
@@ -164,12 +190,13 @@ function ringMotion(svg: string, p: number, theme: Theme): string {
     let local = clamp(p * 1.5 - order * 0.5), opacity = 1, center = false;
     switch (theme.family) {
       case 'minimal': center = theme.dark; if (theme.dark) local = p; break;
-      case 'glass': opacity = local; local = 1; break;
-      case 'film': opacity = local * local; local = 1; break;
+      case 'film': {
+        // 每段胶片从两端的切口向内曝光，不让整根弧仅变透明度。
+        const end = span * local / 2;
+        return circle.replace(/stroke-dasharray="[^"]+"/, `stroke-dasharray="${round(end)} ${round(span - 2 * end)} ${round(end)} ${circumference}"`);
+      }
       case 'cinema': center = true; break;
       case 'editorial': local = clamp(p * count - index); break;
-      case 'broadsheet': opacity = clamp(local * 3); local = Math.ceil(local * 12) / 12; break;
-      case 'mono': local = Math.floor(local * 20) / 20; break;
       case 'poster': opacity = local > 0 ? 1 : 0; local = 1; break;
       case 'playbill': center = true; local = clamp(p * 1.5 - Math.abs(order - 0.5)); break;
       case 'gala': center = true; local = p; opacity = Math.min(1, p * 2); break;
@@ -287,7 +314,15 @@ export function animate(tree: Node, time: number, theme: Theme): void {
       const translate = (x: number, y: number) => { style.transform = [style.transform, `translate(${round(x)}px, ${round(y)}px)`].filter(Boolean).join(' '); };
       // 到达终点时连临时样式也移除；避免 inset(0) 裁掉光晕、边框和描边。
       if (p < 1) switch (cue.kind) {
-        case 'bar-x': case 'bar-y': graphicStyle(style, cue, p, theme); break;
+        case 'bar-x': case 'bar-y':
+          // 字符条是完整文字，不能用连续裁窗切出半个方块字。
+          if (typeof node.props.children === 'string') style.opacity = p > 0 ? (style.opacity ?? 1) : 0;
+          else graphicStyle(style, cue, p, theme);
+          break;
+        case 'intensity':
+          // 透明度就是数据；扫描到一个格子时，按最终强度整格显示。
+          style.opacity = p > 0 ? (style.opacity ?? 1) : 0;
+          break;
         case 'area':
           if (typeof node.props.src === 'string') node.props = { ...node.props, src: imageSource(node.props.src, (svg) => areaMotion(svg, Number(node.props.width), Number(node.props.height), p, theme, cue.grid)) };
           break;

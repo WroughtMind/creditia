@@ -145,10 +145,13 @@ function hud(m: Model, st: Style, o: PieceOpts): Scene {
   st.label(s, range(m), x1, y + 6, { size: 12, anchor: 'end' });
   y += 130;
   list.forEach((a, i) => {
-    const k = styleProgress(st, t, materialOrder(st, i, list.length, cols) * 0.3, 0.55 + materialOrder(st, i, list.length, cols) * 0.3);
+    const start = materialOrder(st, i, list.length, cols) * 0.3;
+    const k = styleProgress(st, t, start, 0.2 + start);
     const cx = x0 + (i % cols) * (cw + gap), cy = y + Math.floor(i / cols) * (ch + gap);
     const color = a.key === 'unattributed' ? st.c.faint : colorOf(st, a);
     materialReveal(s, st, k, { x: cx - 3, y: cy - 3, w: cw + 6, h: ch + 6 }, 'center-x', () => s.add(path(chamfer(cx, cy, cw, ch, 16), { fill: st.c.paper, fillOpacity: 0.9, stroke: color, strokeOpacity: 0.7, strokeWidth: 1.2 })));
+    // 面板先接通，再显出完整身份与读数；文字不悬在尚未出现的面板上。
+    materialEnter(s, st, styleProgress(st, t, start + 0.2, start + 0.5), { x: cx + 12, y: cy, w: cw - 24, h: 124 }, () => {
     s.add(rect(cx + 16, cy - 1.5, 38, 3, { fill: color }));
     s.text(String(i + 1).padStart(2, '0'), cx + cw - 18, cy + 30, { font: st.f.mono, size: 13, fill: st.c.faint, anchor: 'end' });
     st.mark(s, a.key, cx + 38, cy + 42, 36, color);
@@ -156,13 +159,14 @@ function hud(m: Model, st: Style, o: PieceOpts): Scene {
     const ml = modelLine(a, 2);
     if (ml) s.text(ml, cx + 70, cy + 60, { font: st.f.mono, size: 12, fill: st.c.soft, maxW: cw - 100, overflow: 'clip' });
     st.num(s, pct(a.pct), cx + 20, cy + 118, 46, 'start', { fill: color });
+    }, 'data');
     const bx = cx + 20, bw = cw - 40;
     st.track(s, bx, cy + 128, bw, 8);
-    barReveal(s, st, styleProgress(st, t, 0.2, 0.95), { x: bx - 12, y: cy + 116, w: bw + 24, h: 32 }, 'right', () => {
+    barReveal(s, st, styleProgress(st, t, start + 0.3, start + 0.68), { x: bx - 12, y: cy + 116, w: bw + 24, h: 32 }, 'right', () => {
       if (a.key === 'unattributed') s.add(rect(bx, cy + 128, (bw * a.pct) / 100, 8, { fill: st.hatch(s) }));
       else st.bar(s, bx, cy + 128, Math.max(8, (bw * a.pct) / 100), 8, color, i);
     });
-    s.hit(cx, cy, cw, ch, tip(m, a));
+    if (k > 0) s.hit(cx, cy, cw, ch, tip(m, a));
   });
   y += nr * (ch + gap) + 10;
   if (hl) {
@@ -192,25 +196,30 @@ function podium(m: Model, st: Style, o: PieceOpts): Scene {
   order.forEach((idx, slot) => {
     const a = top3[idx];
     if (!a) return;
-    // 台座保持完整；风格决定按列、从中轴或成对铺开，不改变真实名次。
+    // 台座先成形，再落完整的名次与姓名；固定高度始终表示原名次。
     const start = materialOrder(st, slot, top3.length, top3.length) * 0.4;
     const k = styleProgress(st, t, start, 0.55 + start);
     const cx = W / 2 + (slot - 1) * (pw + 24);
     const h = hs[idx];
     const color = colorOf(st, a);
-    const draw = () => {
-    // 台座：平顶方块，顶上一道亮边
-    s.add(rect(cx - pw / 2, base - h, pw, h, { fill: color, opacity: 0.92 }));
-    s.add(rect(cx - pw / 2, base - h, pw, 6, { fill: st.c.ink, opacity: 0.18 }));
-    s.add(rect(cx - pw / 2, base - h, pw, h, { fill: 'none', stroke: st.c.ink, strokeOpacity: 0.25, strokeWidth: 1 }));
+    const box = { x: cx - pw / 2, y: base - h, w: pw, h };
+    const surface = () => s.add(rect(box.x, box.y, pw, h, { fill: color, opacity: 0.92 }));
+    // 印刷与曝光在整块表面形成，轮廓不会被裁成临时锯齿或另一座矮台。
+    if (['film', 'broadsheet', 'woodblock', 'grimoire'].includes(st.id)) materialReveal(s, st, k, box, 'up', surface);
+    else materialEnter(s, st, k, box, surface, 'data');
+    materialEnter(s, st, styleProgress(st, t, start + 0.16, start + 0.4), box, () => {
+      s.add(rect(box.x, box.y, pw, 6, { fill: st.c.ink, opacity: 0.18 }));
+    }, 'data');
+    const outline = styleProgress(st, t, start, start + 0.3);
+    s.add(rect(box.x, box.y, pw, h, { fill: 'none', stroke: st.c.ink, strokeOpacity: 0.25, strokeWidth: 1,
+      ...(outline < 1 ? { strokeDasharray: 2 * (pw + h), strokeDashoffset: 2 * (pw + h) * (1 - outline), visibility: outline > 0 ? undefined : 'hidden' } : {}) }));
+    materialEnter(s, st, styleProgress(st, t, start + 0.24, start + 0.58), { x: box.x, y: box.y - 150, w: pw, h: 230 }, () => {
     s.text(['1', '2', '3'][idx], cx, base - h + 72, { font: st.f.num, size: 64, fill: st.on(color), anchor: 'middle', opacity: 0.9 });
     st.mark(s, a.key, cx, base - h - 120, 54);
     s.text(a.name, cx, base - h - 58, { font: st.f.display, size: 28, fill: st.c.ink, anchor: 'middle', maxW: pw + 10 });
     st.num(s, pct(a.pct), cx, base - h - 22, 22, 'middle', { fill: st.c.soft });
-    s.hit(cx - pw / 2, base - h - 150, pw, h + 150, tip(m, a));
-    };
-    // 姓名和标记留在各自台座上方，命中区也始终守住基线。
-    materialEnter(s, st, k, { x: cx - pw / 2, y: base - h - 150, w: pw, h: h + 150 }, draw, 'data');
+    }, 'data');
+    if (k > 0) s.hit(cx - pw / 2, base - h - 150, pw, h + 150, tip(m, a));
   });
   st.rule(s, c.x + 60, base, c.w - 120, 'thin');
   let x = c.x + 60;
@@ -423,34 +432,42 @@ function grouped(m: Model, st: Style, o: PieceOpts): Scene {
   const total = list.reduce((n2, a) => n2 + Math.max(1, segsOf(m, st, a).length), 0);
   list.forEach((a, i) => {
     const segs = segsOf(m, st, a);
+    const start = row / Math.max(1, total - 1) * 0.5;
+    materialEnter(s, st, styleProgress(st, t, start, start + 0.18), { x: x0 - 8, y: y - 4, w: x1 - x0 + 16, h: headH - 8 }, () => {
     st.mark(s, a.key, x0 + 18, y + 22, 30);
     s.text(a.name, x0 + 50, y + 32, { font: st.f.display, size: 25, fill: st.c.ink, maxW: x1 - x0 - 200 });
     st.num(s, pct(a.pct), x1, y + 32, 26, 'end');
     s.hit(x0 - 8, y - 4, x1 - x0 + 16, headH - 8, tip(m, a));
+    }, 'data');
     st.rule(s, x0, y + 50, x1 - x0, 'thin');
     y += headH;
     const nx = x0 + 50, bw = x1 - nx - 110;
     if (segs.length <= 1) {
       // 只有一个模型：一条细条，模型名写在条后
-      const k = styleProgress(st, t, row / Math.max(1, total - 1) * 0.5, 0.45 + row++ / Math.max(1, total - 1) * 0.5);
+      const start = row++ / Math.max(1, total - 1) * 0.5;
+      const k = styleProgress(st, t, start + 0.1, start + 0.45);
       st.track(s, nx, y - 4, bw, 8);
       barReveal(s, st, k, { x: nx - 12, y: y - 16, w: bw + 24, h: 32 }, 'right', () => {
         if (a.key === 'unattributed') s.add(rect(nx, y - 4, (bw * a.pct) / 100, 8, { fill: st.hatch(s) }));
         else st.bar(s, nx, y - 4, Math.max(3, (bw * a.pct) / 100), 8, segs[0]?.color ?? colorOf(st, a), i);
       });
       const ml = modelLine(a);
-      if (ml) s.text(ml, x1, y + 4, { font: st.f.body, size: 14, fill: st.c.soft, anchor: 'end', maxW: 100, overflow: 'clip' });
+      if (ml) materialEnter(s, st, k, { x: x1 - 100, y: y - 14, w: 100, h: 24 }, () => s.text(ml, x1, y + 4, { font: st.f.body, size: 14, fill: st.c.soft, anchor: 'end', maxW: 100, overflow: 'clip' }), 'data');
       y += 26 + 22;
       return;
     }
     for (const q of segs) {
-      const k = styleProgress(st, t, row / Math.max(1, total - 1) * 0.5, 0.45 + row++ / Math.max(1, total - 1) * 0.5);
+      const start = row++ / Math.max(1, total - 1) * 0.5;
+      const k = styleProgress(st, t, start + 0.1, start + 0.45);
+      // 模型名和真值同时出现，之后在同一行显示对应量条。
+      materialEnter(s, st, styleProgress(st, t, start + 0.06, start + 0.3), { x: nx - 6, y: y - 8, w: x1 - nx + 12, h: 30 }, () => {
       s.add(rect(nx, y + 2, 10, 10, { fill: q.color, rx: Math.min(2, st.radius) }));
       s.text(q.name, nx + 18, y + 12, { font: st.f.body, size: 18, fill: q.unknown ? st.c.soft : st.c.ink, maxW: bw - 18 });
       st.num(s, pct(q.pct), x1, y + 14, 20, 'end', { fill: st.c.soft });
+      }, 'data');
       st.track(s, nx, y + 26, bw, 7);
       barReveal(s, st, k, { x: nx - 12, y: y + 14, w: bw + 24, h: 31 }, 'right', () => st.bar(s, nx, y + 26, Math.max(3, (bw * q.pct) / 100), 7, q.color, i));
-      s.hit(nx - 6, y - 8, x1 - nx + 12, subH - 6, segTip(m, a, q));
+      if (k > 0) s.hit(nx - 6, y - 8, x1 - nx + 12, subH - 6, segTip(m, a, q));
       y += subH;
     }
     y += 22;

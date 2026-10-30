@@ -1,12 +1,12 @@
 // 代码地图：现在的代码一行一道线，按文件顺序排成一列列（像编辑器的缩略图），颜色是写它的工具。
 // 动画：每行保持完整，依材质的铺版顺序染色；终端输出、扫描余辉和纸面压印各有自己的动作。
 // 线的颜色是真实归属；线的长短、缩进只是为了像代码（档案里没有代码），按文件路径固定生成，每次画都一样。
-import { Scene, rect, path, r } from '../svg.ts';
+import { Scene, rect, path, r, el, type Attrs } from '../svg.ts';
 import type { Model, Agent } from '../data.ts';
 import { fmt } from '../data.ts';
 import type { Style } from '../style.ts';
 import { T, colorOf, canvas, tip, type PieceOpts } from './common.ts';
-import { styleProgress } from '../motion.ts';
+import { styleProgress, phase, drawGroup } from '../motion.ts';
 import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
 
 const PITCH = 4.5, CW = 56, GAP = 22, FILE_GAP = 2, SHADE = [1, 0.78, 0.6];
@@ -15,6 +15,88 @@ function rng(seed: number) {
   return () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 const hash = (s: string) => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h | 0; };
+
+interface CodeStroke { d: string; key: string; shade: number; file: number; col: number; row: number; x: number; y: number; w: number }
+
+/** 文件缩略图有自己的运动单元：排版/拼贴用文件，打印用整行，套色用归属色版。 */
+function codeUnits(s: Scene, st: Style, progress: number, strokes: CodeStroke[], columns: number, rows: number, color: (key: string) => string, neutral: (key: string) => boolean) {
+  const id = st.id === 'minimal' ? 'minimal-light' : st.id === 'noir' ? 'minimal-dark' : st.id;
+  const mode = id === 'ukiyoe' ? 'plate' : id === 'broadsheet' ? 'column'
+    : ['terminal', 'crt', 'ink', 'manuscript', 'neon'].includes(id) ? 'line' : 'file';
+  const units = new Map<string, CodeStroke[]>();
+  for (const q of strokes) {
+    const key = mode === 'plate' ? color(q.key) : mode === 'column' ? `${q.col}` : mode === 'line' ? `${q.col}/${q.row}` : `${q.file}/${q.col}`;
+    (units.get(key) ?? units.set(key, []).get(key)!).push(q);
+  }
+  const draw = (part: CodeStroke[]) => {
+    const layers = new Map<string, string[]>();
+    for (const q of part) { const key = `${q.key}|${q.shade}`; (layers.get(key) ?? layers.set(key, []).get(key)!).push(q.d); }
+    for (const [key, ds] of layers) { const [who, shade] = key.split('|'); s.add(path(ds.join(''), { fill: 'none', stroke: color(who), strokeOpacity: r(SHADE[+shade] * (neutral(who) ? 0.55 : 1)), strokeWidth: 2 })); }
+  };
+  const settled: CodeStroke[] = [];
+  const parts = [...units.values()];
+  const orders = parts.map((part, i) => mode === 'plate' ? i / Math.max(1, parts.length - 1)
+    : materialOrder(st, Math.round((part[0].row + part.at(-1)!.row) / 2) * columns + part[0].col, rows * columns, columns));
+  const firstOrder = Math.min(...orders), orderSpan = Math.max(...orders) - firstOrder;
+  let index = 0;
+  for (const part of parts) {
+    const first = part[0];
+    // 文件可能跨越大半列；按实际存在的单元归一，避免前半段一直只有底稿。
+    const order = orderSpan > 0 ? (orders[index] - firstOrder) / orderSpan : 0;
+    const k = phase(progress, order * 0.68, order * 0.68 + 0.32), unit = index++;
+    if (k <= 0) continue;
+    if (k >= 1) { settled.push(...part); continue; }
+    const x = Math.min(...part.map(q => q.x)), y = Math.min(...part.map(q => q.y));
+    const w = Math.max(...part.map(q => q.x + q.w)) - x, h = Math.max(...part.map(q => q.y)) - y + PITCH;
+    const rest = 1 - k, side = first.col < columns / 2 ? -1 : 1;
+    const a: Attrs = { 'data-code-unit': mode };
+    let dx = 0, dy = 0, angle = 0, optics = '';
+    // 真实笔画整组入位；不借助图表矩形裁窗，也不把行长/归属随进度重算。
+    switch (id) {
+      case 'minimal-light': dx = -4 * rest; break;
+      case 'minimal-dark': optics = 'edge'; break;
+      case 'glass': optics = 'focus'; dy = -2 * rest; break;
+      case 'film': optics = 'exposure'; dy = k < 0.3 ? 2 * (1 - k / 0.3) : 0; break;
+      case 'editorial': dx = -Math.min(12, w / 5) * rest; break;
+      case 'mono': optics = 'edge'; dx = -2 * rest; break;
+      case 'cinema': dy = 6 * rest; a.opacity = Math.min(1, k * 2); break;
+      case 'playbill': dx = side * 8 * rest; break;
+      case 'gala': optics = 'light'; dy = 3 * rest; break;
+      case 'broadsheet': optics = 'press'; break;
+      case 'crt': optics = 'phosphor'; break;
+      case 'arcade': dy = -Math.ceil(rest * 3) * 2; break;
+      case 'neon': optics = 'tube'; break;
+      case 'poster': dy = -3 * rest; angle = -0.7 * rest; break;
+      case 'ink': optics = 'wet'; break;
+      case 'ukiyoe': dx = (unit % 2 ? 1 : -1) * 2.5 * rest; optics = 'press'; break;
+      case 'woodblock': optics = 'press'; dy = -1.5 * rest; break;
+      case 'baroque': dx = side * 4 * rest; angle = side * 0.6 * rest; break;
+      case 'grimoire': optics = 'engrave'; break;
+      case 'manuscript': dx = -2 * rest; break;
+      case 'pastel': dx = side * 4 * rest; dy = -Math.sin(k * Math.PI); break;
+      case 'cutout': dx = side * 4 * rest; dy = -3 * rest; angle = side * 1.4 * rest; break;
+      case 'meadow': angle = side * Math.min(1.3, 120 / h) * rest; break;
+      case 'manga': dx = 8 * rest; break;
+      case 'cyber': dx = (unit % 2 ? 1 : -1) * Math.ceil(rest * 3) * 2; break;
+    }
+    if (dx || dy || angle) a.transform = `translate(${r(dx)} ${r(dy)})${angle ? ` rotate(${r(angle)} ${r(x)} ${r(y + h)})` : ''}`;
+    if (optics) {
+      const blur = optics === 'focus' ? 1.8 * rest * rest : optics === 'wet' ? 0.35 * rest : 0;
+      let effect = blur ? el('feGaussianBlur', { stdDeviation: r(blur) }) : '';
+      if (optics === 'press') effect = el('feMorphology', { operator: 'dilate', radius: r(0.32 * rest) });
+      if (optics === 'edge') effect = el('feMorphology', { operator: 'erode', radius: r(0.68 * rest) });
+      if (optics === 'engrave') effect = el('feMorphology', { in: 'SourceGraphic', operator: 'erode', radius: 0.7, result: 'inside' })
+        + el('feComposite', { in: 'SourceGraphic', in2: 'inside', operator: 'out', result: 'edge' })
+        + el('feComponentTransfer', { in: 'SourceGraphic', result: 'ink' }, el('feFuncA', { type: 'linear', slope: r(k) }))
+        + el('feMerge', {}, el('feMergeNode', { in: 'edge' }), el('feMergeNode', { in: 'ink' }));
+      if (optics === 'exposure' || optics === 'light') effect = el('feComponentTransfer', {}, ...['R', 'G', 'B'].map(c => el(`feFunc${c}`, { type: 'linear', slope: r(optics === 'light' ? 1 + 0.5 * Math.sin(Math.PI * k) : 0.55 + 0.45 * k) })));
+      if (optics === 'phosphor' || optics === 'tube') effect = el('feGaussianBlur', { stdDeviation: r((optics === 'tube' ? 2 : 0.8) * rest), result: 'halo' }) + el('feMerge', {}, el('feMergeNode', { in: 'halo' }), el('feMergeNode', { in: 'SourceGraphic' }));
+      a.filter = s.url(`code-${unit}`, fid => el('filter', { id: fid, filterUnits: 'userSpaceOnUse', x: x - 6, y: y - 6, width: w + 12, height: h + 12 }, effect));
+    }
+    drawGroup(s, a, () => draw(part));
+  }
+  draw(settled);
+}
 
 /** 每个文件按行展开成分组 key；旧档案没有 runs 时按 by 的比例排成连续的几段 */
 function linesOf(f: Model['files'][number]): string[] {
@@ -52,11 +134,12 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
   const neutral = (key: string) => key === 'unattributed' || key === 'human';
   // 按颜色 × 深浅归并成少数几条 path，文件小
   const layers = new Map<string, string[]>();
+  const code: CodeStroke[] = [];
   const base: string[] = [];
   const progress = styleProgress(st, t, 0, 0.85);
   let cursor = { col: 0, row: 0, distance: Infinity };
   let col = 0, row = 0;
-  for (const f of files) {
+  for (const [file, f] of files.entries()) {
     const all = linesOf(f);
     const n = Math.ceil(all.length / k);
     if (row > 0 && row + Math.min(n, 6) > rows) { col++; row = 0; }
@@ -90,7 +173,8 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
           const shade = first ? 0 : R() < 0.45 ? 1 : R() < 0.5 ? 2 : 0;
           const d = `M${r(x)} ${y}h${r(w)}`;
           base.push(d);
-          if (progress >= 1 || order < progress) {
+          code.push({ d, key, shade, file, col, row, x, y, w });
+          if (t >= 1) {
             const lk = `${key}|${shade}`;
             (layers.get(lk) ?? layers.set(lk, []).get(lk)!).push(d);
           }
@@ -104,7 +188,8 @@ export function codemap(m: Model, st: Style, o: PieceOpts): Scene | null {
   }
   // 底：全部的线，淡淡一层。已出现的整行保持原来的长度和归属。
   s.add(path(base.join(''), { fill: 'none', stroke: st.c.ink, strokeOpacity: 0.14, strokeWidth: 2 }));
-  materialEnter(s, st, styleProgress(st, t, 0, 0.3), { x: x0 - 2, y: py - 2, w: pw + 4, h: plotH + 4 }, () => {
+  if (t < 1) codeUnits(s, st, progress, code, cols, rows, color, neutral);
+  else materialEnter(s, st, 1, { x: x0 - 2, y: py - 2, w: pw + 4, h: plotH + 4 }, () => {
     for (const [lk, ds] of layers) {
       const [key, sh] = lk.split('|');
       s.add(path(ds.join(''), { fill: 'none', stroke: color(key), strokeOpacity: r(SHADE[+sh] * (neutral(key) ? 0.55 : 1)), strokeWidth: 2 }));

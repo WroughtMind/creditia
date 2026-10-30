@@ -2,7 +2,7 @@
 // 只说是谁提交的，不说是谁手写的；只有一位提交者时没有这张（和署名榜一样）
 import { Scene, rect } from '../svg.ts';
 import { styleProgress } from '../motion.ts';
-import { materialReveal, materialOrder } from '../material-motion.ts';
+import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
 import type { Model, Agent } from '../data.ts';
 import { pct, fmt } from '../data.ts';
 import type { Style } from '../style.ts';
@@ -29,20 +29,31 @@ export function people(m: Model, st: Style, o: PieceOpts): Scene | null {
   m.authors.forEach((a, i) => {
     const order = materialOrder(st, i, m.authors.length);
     const k = styleProgress(st, t, order * 0.35, 0.6 + order * 0.35);
-    s.text(a.name, x0, y, { font: st.f.body, size: 22, fill: st.c.ink, maxW: (x1 - x0) * 0.62 });
-    st.num(s, pct(a.pct), x1, y, 22, 'end');
+    // 先识别整位贡献者，再形成其贡献构成；名字和真值百分比是同一个阅读单元。
+    materialEnter(s, st, styleProgress(st, t, order * 0.35, 0.3 + order * 0.35), { x: x0, y: y - 26, w: x1 - x0, h: 30 }, () => {
+      s.text(a.name, x0, y, { font: st.f.body, size: 22, fill: st.c.ink, maxW: (x1 - x0) * 0.62 });
+      st.num(s, pct(a.pct), x1, y, 22, 'end');
+    });
     st.track(s, x0, y + 16, x1 - x0, 14);
     const bw = (x1 - x0) * (a.pct / max);
     let bx = x0;
-    materialReveal(s, st, k, { x: x0, y: y + 16, w: bw, h: 14 }, 'right', () => {
+    // 14px 的细条不是纸片大面；从基线形成厚度，始终保留各贡献段的真实水平长度。
+    // 剪贴的单元则是整条已切好的纸条，绝不把线性比例削成斜角。
+    const drawBar = () => {
     for (const p of a.parts) {
       const w = a.lines ? (bw * p.lines) / a.lines : 0;
       if (w > 0) s.add(rect(bx, y + 16, w, 14, { fill: fill(p.key) }));
       bx += w;
     }
-    });
+    }
+    const bar = { x: x0, y: y + 16, w: bw, h: 14 };
+    if (['cutout', 'playbill'].includes(st.id)) materialEnter(s, st, k, bar, drawBar, 'paper');
+    else if (['terminal', 'baroque', 'gala'].includes(st.id)) materialEnter(s, st, k, bar, drawBar, 'data');
+    else materialReveal(s, st, k, bar, 'up', drawBar);
     const parts = a.parts.map((p) => `${p.name} ${pct(p.pct)}`);
-    s.text(parts.join(' · '), x0, y + 56, { font: st.f.mono, size: 13, fill: st.c.soft, maxW: x1 - x0, overflow: 'clip' });
+    materialEnter(s, st, styleProgress(st, t, 0.2 + order * 0.35, 0.65 + order * 0.35), { x: x0, y: y + 40, w: x1 - x0, h: 20 }, () => {
+      s.text(parts.join(' · '), x0, y + 56, { font: st.f.mono, size: 13, fill: st.c.soft, maxW: x1 - x0, overflow: 'clip' });
+    });
     s.hit(x0, y - 28, x1 - x0, rowH - 8, { k: a.key, t: a.name, d: [T(m, `${fmt(a.lines)} 行 · ${pct(a.pct)}`, `${fmt(a.lines)} lines · ${pct(a.pct)}`), ...parts] });
     y += rowH;
   });

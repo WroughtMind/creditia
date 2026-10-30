@@ -35,7 +35,7 @@ test('every classic form and layout declares content groups; sampling leaves lay
 });
 
 test('chart motion follows the represented quantity and leaves headings and decoration static', () => {
-  const expected = { donut: 'radial', area: 'area', versions: 'bar-y', clock: 'cell', ribbon: 'cell', mosaic: 'cell', lanes: 'bar-x', settle: 'bar-x' };
+  const expected = { donut: 'radial', area: 'area', versions: 'bar-y', clock: 'intensity', ribbon: 'cell', mosaic: 'cell', lanes: 'bar-x', settle: 'bar-x' };
   for (const [id, kind] of Object.entries(expected)) {
     const out = FORMS[id].render(m, theme, { lang: 'en' })!;
     assert.ok(cues(out.tree).some((node) => node.motionCue.kind === kind), id);
@@ -201,4 +201,55 @@ test('rasterized neon area lights the tubes along the timeline before filling th
   assert.ok(lit(early, 0, 200) > 0, 'the first tube section must actually paint');
   assert.equal(lit(early, 300, 500), 0, 'the unlit end must not already show the complete tube');
   assert.ok(lit(end, 300, 500) > 0, 'the final tube must reach the end of the timeline');
+});
+
+test('clock reveals complete cells at their true intensity, terminal bars never cut text, and columns retain their baseline', () => {
+  for (const theme of THEMES) {
+    const out = FORMS.clock.render(m, theme, { lang: 'en' })!;
+    const cells = cues(out.tree).filter(n => n.motionCue.kind === 'intensity');
+    const colors = cells.map(n => n.props.style.backgroundColor);
+    animate(out.tree, .25, theme);
+    assert.deepEqual(cells.map(n => n.props.style.backgroundColor), colors);
+    assert.ok(cells.every(n => [0, 1, undefined].includes(n.props.style.opacity)), theme.id);
+    assert.ok(cells.every(n => !n.props.style.transform && !n.props.style.filter && !n.props.style.maskImage));
+    const column = motion({ type: 'div', props: { style: { height: 340 }, children: [] } }, 'bar-y');
+    animate(column, .2, theme);
+    assert.match(column.props.style.clipPath, /^inset\([\d.]+% 0 0 0\)$/);
+    assert.equal(column.props.style.transform, undefined, theme.id);
+  }
+  const terminal = themeById('terminal')!;
+  const bar = motion({ type: 'div', props: { style: {}, children: '■■■■■' } }, 'bar-x');
+  animate(bar, .13, terminal);
+  assert.equal(bar.props.children, '■■■■■');
+  assert.equal(bar.props.style.clipPath, undefined);
+  assert.equal(bar.props.style.opacity, 1);
+  const versions = FORMS.versions.render(m, terminal, { lang: 'en' })!;
+  animate(versions.tree, .26, terminal);
+  for (const node of cues(versions.tree)) if (node.motionCue.kind === 'bar-y' && node.props.style.clipPath) {
+    const top = Number(/inset\(([\d.]+)px/.exec(node.props.style.clipPath)![1]);
+    assert.equal((340 - top) % 12, 0, 'terminal cuts between complete glyph rows');
+  }
+});
+
+test('glass, monochrome and newspaper rings reveal existing arc surfaces, while role cards print complete people independently', () => {
+  for (const id of ['glass', 'mono', 'broadsheet']) {
+    const theme = themeById(id)!;
+    const out = FORMS.donut.render(m, theme, { lang: 'en' })!;
+    const ring = cues(out.tree).find(n => n.motionCue.kind === 'radial');
+    const decode = () => Buffer.from(ring.props.src.split(',')[1], 'base64').toString();
+    const before = decode();
+    const blankTree = structuredClone(out.tree); animate(blankTree, 0, theme);
+    const blankRing = cues(blankTree).find(n => n.motionCue.kind === 'radial');
+    const blank = Buffer.from(blankRing.props.src.split(',')[1], 'base64').toString();
+    animate(out.tree, .22, theme); const after = decode();
+    const arcs = (s: string) => [...s.matchAll(/<circle[^>]*stroke-dasharray="([^"]+)"[^>]*stroke-dashoffset="([^"]+)"/g)].map(x => [x[1], x[2]]);
+    assert.deepEqual(arcs(after), arcs(before), id + ' preserves every final angular share');
+    assert.match(after, /mask="url\(#cm-ring\)"/);
+    assert.notDeepEqual(raster.png(after, 210), raster.png(blank, 210), id + ' must visibly print before its final frame');
+  }
+  const cards = FORMS.roll.render(m, theme, { lang: 'en', variant: 'cards' })!;
+  assert.ok(cues(cards.tree).filter(n => n.motionCue.kind === 'card').every(n => n.motionCue.columns === 2));
+  const paired = (order: number) => progress(.2, { kind: 'card', order, total: 4, columns: 2 }, themeById('playbill')!);
+  assert.equal(paired(0), paired(1)); assert.equal(paired(2), paired(3)); assert.ok(paired(0) > paired(2));
+  assert.ok(cues(cards.tree).some(n => n.motionCue.kind === 'print'));
 });

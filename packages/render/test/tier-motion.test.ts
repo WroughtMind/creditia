@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { art, buildModel, styleById } from '../src/index.ts';
+import { art, buildModel, styleById, STYLES } from '../src/index.ts';
+import { THEMES } from '../src/classic/themes.ts';
+import { bridgeStyle } from '../src/classic/bridge.ts';
 
 const model = buildModel(JSON.parse(readFileSync(new URL('../fixtures/catnap.json', import.meta.url), 'utf8')));
 
@@ -36,20 +38,24 @@ test('竖排榜单按完整列显现，姓名和占比不经过裁剪边界', ()
 });
 
 test('领奖台材质展开，完整名次和姓名不侵入下方的补充名单', () => {
-  const st = styleById('baroque');
-  const final = art('tier', model, st, { variant: 'podium' })!;
-  for (const t of [0.15, 0.33, 0.5, 0.8]) {
-    const frame = art('tier', model, st, { variant: 'podium', t })!;
-    const stack: boolean[] = [];
-    for (const [tag] of frame.svg.matchAll(/<\/?g\b[^>]*>|<text\b[^>]*>/g)) {
-      if (tag.startsWith('</g')) stack.pop();
-      else if (tag.startsWith('<g')) { if (!tag.endsWith('/>')) stack.push(/clip-path=/.test(tag)); }
-      else assert.ok(!stack.some(Boolean), 'podium numbers and names must be complete');
-    }
-    for (const hit of frame.hits) {
-      const end = final.hits.find((h) => h.k === hit.k && h.t === hit.t)!;
-      assert.equal(hit.h, end.h);
-      assert.ok(hit.y + hit.h <= end.y + end.h, hit.t);
+  for (const st of [...STYLES, ...THEMES.map(bridgeStyle)]) {
+    const final = art('tier', model, st, { variant: 'podium' })!;
+    // 赛博标题自带静态切片装饰；只检查动画有没有额外裁切字组。
+    const clipName = (tag: string) => tag.match(/clip-path="([^"]+)"/)?.[1].replace(/\bc[0-9a-z]+-/g, 'scene-');
+    const staticClips = new Set([...final.svg.matchAll(/<g\b[^>]*>/g)].map(([tag]) => clipName(tag)));
+    for (const t of [0.15, 0.33, 0.5, 0.8]) {
+      const frame = art('tier', model, st, { variant: 'podium', t })!;
+      const stack: boolean[] = [];
+      for (const [tag] of frame.svg.matchAll(/<\/?g\b[^>]*>|<text\b[^>]*>/g)) {
+        if (tag.startsWith('</g')) stack.pop();
+        else if (tag.startsWith('<g')) { if (!tag.endsWith('/>')) stack.push(/clip-path=/.test(tag) && !staticClips.has(clipName(tag))); }
+        else assert.ok(!stack.some(Boolean), 'podium numbers and names must be complete');
+      }
+      for (const hit of frame.hits) {
+        const end = final.hits.find((h) => h.k === hit.k && h.t === hit.t)!;
+        assert.equal(hit.h, end.h);
+        assert.ok(hit.y + hit.h <= end.y + end.h, hit.t);
+      }
     }
   }
 });
