@@ -6,6 +6,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Superseded PR commits can stop; main and manual runs keep unique groups.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   command-windows:
     runs-on: windows-latest
@@ -32,7 +37,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 24 }
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            packages/render/package-lock.json
+            packages/cli/package-lock.json
       - run: npm ci
         working-directory: packages/render
       - run: node --test packaging/*.test.mjs site/*.test.mjs
@@ -69,7 +79,12 @@ jobs:
             . -> target
             apps/desktop/src-tauri -> target
       - uses: actions/setup-node@v4
-        with: { node-version: 24 }
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            packages/render/package-lock.json
+            apps/desktop/package-lock.json
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: pip install fonttools brotli
