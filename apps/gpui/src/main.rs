@@ -3,7 +3,7 @@
 mod renderer;
 
 use creditia_desktop_service as service;
-use creditia_gpui::{Appearance, Language, Preferences, Project, contributions, progress_text};
+use creditia_gpui::{Appearance, Language, Preferences, Project, contributions, export_filename, export_snapshot, progress_text};
 use gpui_kit::component::{ActiveTheme, Disableable, Theme, ThemeMode};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::FluentBuilder;
@@ -12,7 +12,10 @@ use serde_json::{Value, json};
 use std::path::Path;
 use std::sync::Arc;
 
-actions!(creditia, [Quit, OpenProject, Refresh, Analyze, CancelAnalysis, CopyArchive, RevealProject, ToggleLanguage, CycleAppearance, ToggleMotion]);
+actions!(creditia, [Quit, OpenProject, Refresh, Analyze, CancelAnalysis, CancelCurrent, CopyArchive, RevealProject, ToggleLanguage, CycleAppearance, ToggleMotion, ExportArtwork, CancelExport]);
+
+#[derive(Clone, Copy)]
+enum ExportStage { ChoosePath, Rendering, Writing }
 
 enum JobEvent {
     Progress(Value),
@@ -48,6 +51,13 @@ struct Creditia {
     preview_generation: u64,
     preview_task: Option<Task<()>>,
     preview_cancellation: Option<renderer::Cancellation>,
+    export_format: String,
+    export_size: String,
+    export_label: String,
+    export_stage: Option<ExportStage>,
+    export_cancel_requested: bool,
+    export_task: Option<Task<()>>,
+    export_cancellation: Option<renderer::Cancellation>,
 }
 
 impl Creditia {
@@ -68,6 +78,8 @@ impl Creditia {
             catalog: None, style_index: 0, piece_index: 0, variant_index: 0,
             preview: None, preview_busy: false, preview_generation: 0,
             preview_task: None, preview_cancellation: None,
+            export_format: "png".into(), export_size: "native".into(), export_label: String::new(), export_stage: None,
+            export_cancel_requested: false, export_task: None, export_cancellation: None,
         };
         view.refresh(cx);
         view
@@ -391,12 +403,138 @@ impl Creditia {
         }
         self.preview_artwork(cx);
     }
+
+    fn selected_piece(&self) -> Option<&Value> {
+        self.catalog.as_ref().and_then(|catalog| catalog["styles"].as_array())
+            .and_then(|styles| styles.get(self.style_index))
+            .and_then(|style| style["pieces"].as_array())
+            .and_then(|pieces| pieces.get(self.piece_index))
+    }
+
+    fn can_export(&self) -> bool {
+        self.raw.is_some() && self.catalog.is_some() && self.export_stage.is_none()
+            && (self.export_format != "gif" || self.selected_piece().is_some_and(|piece| piece["animated"] == true))
+    }
+
+    fn next_export_size(&mut self, cx: &mut Context<Self>) {
+        if let Some(sizes) = self.catalog.as_ref().and_then(|catalog| catalog["sizes"].as_array()) {
+            if !sizes.is_empty() {
+                let next = (sizes.iter().position(|size| size["id"] == self.export_size).unwrap_or(0) + 1) % sizes.len();
+                if let Some(id) = sizes[next]["id"].as_str() { self.export_size = id.into(); }
+            }
+        }
+        cx.notify();
+    }
+
+    fn export_artwork(&mut self, _: &ExportArtwork, _: &mut Window, cx: &mut Context<Self>) {
+        if !self.can_export() { return; }
+        let Some(raw) = self.raw.as_ref() else { return; };
+        let Some(catalog) = self.catalog.as_ref() else { return; };
+        // Everything describing the artwork is owned before the modal opens.
+        let snapshot = match export_snapshot(raw, catalog,
+            (self.style_index, self.piece_index, self.variant_index),
+            &self.preferences.language, &self.export_format, &self.export_size) {
+            Ok(snapshot) => snapshot,
+            Err(error) => { self.error = Some(error); cx.notify(); return; }
+        };
+        let directory = match service::export_dir() {
+            Ok(directory) => directory,
+            Err(error) => { self.error = Some(error.to_string()); cx.notify(); return; }
+        };
+        let filename = export_filename(&snapshot);
+        self.export_label = filename.clone();
+        let format = self.export_format.clone();
+        let prompt = cx.prompt_for_new_path(&directory, Some(&filename));
+        let cancellation = renderer::Cancellation::default();
+        self.export_cancellation = Some(cancellation.clone());
+        self.export_stage = Some(ExportStage::ChoosePath);
+        self.export_cancel_requested = false;
+        self.error = None;
+        self.notice = None;
+        self.export_task = Some(cx.spawn(async move |this, cx| {
+            let choice = prompt.await;
+            let path = match choice {
+                Ok(Ok(Some(path))) => path,
+                other => {
+                    let _ = this.update(cx, |view, cx| {
+                        view.export_stage = None;
+                        view.export_cancellation = None;
+                        match other {
+                            Ok(Ok(None)) => {},
+                            Ok(Err(error)) => view.error = Some(error.to_string()),
+                            Err(error) => view.error = Some(error.to_string()),
+                            Ok(Ok(Some(_))) => unreachable!(),
+                        }
+                        cx.notify();
+                    });
+                    return;
+                }
+            };
+            let Ok(proceed) = this.update(cx, |view, cx| {
+                if view.export_cancel_requested {
+                    view.export_stage = None;
+                    view.export_cancellation = None;
+                    view.notice = Some(view.text("已取消导出", "Export cancelled").into());
+                    cx.notify();
+                    return false;
+                }
+                view.export_stage = Some(ExportStage::Rendering);
+                cx.notify();
+                true
+            }) else { cancellation.cancel(); return; };
+            if !proceed { return; }
+            let render_cancellation = cancellation.clone();
+            let result = cx.background_spawn(async move {
+                let output = renderer::request(snapshot, render_cancellation)?;
+                renderer::decode_export(&output, &format)
+            }).await;
+            let result = match result {
+                Ok(bytes) => {
+                    if this.update(cx, |view, cx| {
+                        view.export_stage = Some(ExportStage::Writing);
+                        cx.notify();
+                    }).is_err() { cancellation.cancel(); return; }
+                    let output_path = path.clone();
+                    cx.background_spawn(async move { renderer::write_export(&output_path, &bytes, cancellation) }).await
+                }
+                Err(error) => Err(error),
+            };
+            let _ = this.update(cx, |view, cx| {
+                view.export_stage = None;
+                view.export_cancellation = None;
+                match result {
+                    // A successful atomic commit remains success if cancellation
+                    // happened just after the final replacement.
+                    Ok(()) => view.notice = Some(format!("{} {}", view.text("已保存", "Saved"), path.display())),
+                    Err(_) if view.export_cancel_requested => view.notice = Some(view.text("已取消导出", "Export cancelled").into()),
+                    Err(error) => view.error = Some(error),
+                }
+                view.export_cancel_requested = false;
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
+
+    fn cancel_export(&mut self, _: &CancelExport, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some(cancellation) = &self.export_cancellation {
+            cancellation.cancel();
+            self.export_cancel_requested = true;
+            cx.notify();
+        }
+    }
+
+    fn cancel_current(&mut self, _: &CancelCurrent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.export_stage.is_some() { self.cancel_export(&CancelExport, window, cx); }
+        else { self.cancel(&CancelAnalysis, window, cx); }
+    }
 }
 
 impl Drop for Creditia {
     fn drop(&mut self) {
         if let Some(cancellation) = &self.analysis_cancellation { cancellation.cancel(); }
         if let Some(cancellation) = &self.preview_cancellation { cancellation.cancel(); }
+        if let Some(cancellation) = &self.export_cancellation { cancellation.cancel(); }
     }
 }
 
@@ -447,6 +585,42 @@ impl Render for Creditia {
                     .object_fit(ObjectFit::Contain)
                     .with_loading(|| div().child("…").into_any_element())
                     .with_fallback(|| div().child("Unable to decode artwork").into_any_element()));
+            }
+            if let Some(catalog) = &self.catalog {
+                let animated = piece.is_some_and(|piece| piece["animated"] == true);
+                let format_buttons: Vec<_> = catalog["formats"].as_array().into_iter().flatten()
+                    .filter_map(|item| item["id"].as_str())
+                    .filter(|id| ["png", "svg", "pdf", "gif", "html"].contains(id))
+                    .enumerate().map(|(index, id)| {
+                        let id = id.to_string();
+                        let selected = self.export_format == id;
+                        Button::new(("export-format", index)).ghost().label(id.to_uppercase())
+                            .when(selected, |button| button.bg(selected_bg))
+                            .disabled(self.export_stage.is_some() || (id == "gif" && !animated))
+                            .on_click(cx.listener(move |view, _, _, cx| { view.export_format = id.clone(); cx.notify(); }))
+                    }).collect();
+                let size = catalog["sizes"].as_array().and_then(|sizes| sizes.iter().find(|size| size["id"] == self.export_size));
+                let size_name = if self.export_size == "native" {
+                    self.text("原尺寸", "Native size").to_string()
+                } else if self.preferences.language == Language::Zh {
+                    size.and_then(|size| size["name"].as_str()).unwrap_or(&self.export_size).to_string()
+                } else {
+                    size.map(|size| format!("{} {}×{}", self.export_size,
+                        size["w"].as_u64().unwrap_or(0), size["h"].as_u64().unwrap_or(0)))
+                        .unwrap_or_else(|| self.export_size.clone())
+                };
+                content = content.child(div().flex().flex_wrap().items_center().gap_2()
+                    .children(format_buttons)
+                    .child(Button::new("export-size").ghost().label(size_name)
+                        .disabled(self.export_stage.is_some())
+                        .on_click(cx.listener(|view, _, _, cx| view.next_export_size(cx))))
+                    .child(Button::new("export-artwork").primary().label(self.text("导出…", "Export…"))
+                        .disabled(!self.can_export())
+                        .on_click(cx.listener(|view, _, window, cx| view.export_artwork(&ExportArtwork, window, cx)))));
+                if self.export_format == "gif" {
+                    content = content.child(div().text_sm().text_color(muted)
+                        .child(self.text("GIF 按所选画幅缩放，最大宽度 800 px", "GIF uses the selected aspect ratio, up to 800 px wide")));
+                }
             }
             let totals = &raw["totals"];
             let stats = [
@@ -506,7 +680,17 @@ impl Render for Creditia {
             .child(Button::new("reveal").ghost().label(self.text("打开所在位置", "Reveal folder")).disabled(self.selected.is_none())
                 .on_click(cx.listener(|view, _, window, cx| view.reveal_project(&RevealProject, window, cx))));
         let mut status = div().flex().items_center().justify_between().gap_4().p_4().border_t_1().border_color(border).text_sm();
-        if self.job_busy {
+        if let Some(stage) = self.export_stage {
+            let text = if self.export_cancel_requested { self.text("正在取消导出…", "Cancelling export…") }
+                else { match stage {
+                    ExportStage::ChoosePath => self.text("选择保存位置…", "Choose a save location…"),
+                    ExportStage::Rendering => self.text("正在生成导出文件…", "Generating export…"),
+                    ExportStage::Writing => self.text("正在保存文件…", "Saving file…"),
+                }};
+            status = status.child(format!("{text} · {}", self.export_label)).child(Button::new("cancel-export").ghost().label(self.text("取消导出", "Cancel export"))
+                .disabled(self.export_cancel_requested)
+                .on_click(cx.listener(|view, _, window, cx| view.cancel_export(&CancelExport, window, cx))));
+        } else if self.job_busy {
             let text = if self.cancelling { self.text("正在取消…", "Cancelling…").into() }
                 else { self.progress.as_ref().map(|p| progress_text(p, &self.preferences.language))
                     .unwrap_or_else(|| self.text("正在分析…", "Analyzing…").into()) };
@@ -527,6 +711,8 @@ impl Render for Creditia {
             .on_action(cx.listener(Self::copy_archive)).on_action(cx.listener(Self::reveal_project))
             .on_action(cx.listener(Self::toggle_language)).on_action(cx.listener(Self::cycle_appearance))
             .on_action(cx.listener(Self::toggle_motion))
+            .on_action(cx.listener(Self::export_artwork)).on_action(cx.listener(Self::cancel_export))
+            .on_action(cx.listener(Self::cancel_current))
             .child(sidebar)
             .child(div().flex().flex_col().flex_1().min_w_0().child(toolbar)
                 .child(div().id("archive").flex_1().min_h_0().overflow_y_scroll().child(content))
@@ -559,6 +745,9 @@ fn install_menus(language: &Language, cx: &mut App) {
             MenuItem::separator(),
             MenuItem::action(language.text("复制档案", "Copy archive"), CopyArchive),
             MenuItem::action(language.text("打开所在位置", "Reveal folder"), RevealProject),
+            MenuItem::separator(),
+            MenuItem::action(language.text("导出作品…", "Export artwork…"), ExportArtwork),
+            MenuItem::action(language.text("取消导出", "Cancel export"), CancelExport),
         ]},
     ]);
 }
@@ -572,8 +761,9 @@ fn main() {
             KeyBinding::new("secondary-o", OpenProject, Some("Creditia")),
             KeyBinding::new("secondary-r", Refresh, Some("Creditia")),
             KeyBinding::new("secondary-enter", Analyze, Some("Creditia")),
-            KeyBinding::new("escape", CancelAnalysis, Some("Creditia")),
+            KeyBinding::new("escape", CancelCurrent, Some("Creditia")),
             KeyBinding::new("secondary-shift-c", CopyArchive, Some("Creditia")),
+            KeyBinding::new("secondary-e", ExportArtwork, Some("Creditia")),
         ]);
         open_window(WindowOptions {
             titlebar: Some(TitlebarOptions { title: Some("creditia".into()), ..Default::default() }),

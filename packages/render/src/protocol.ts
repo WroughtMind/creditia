@@ -134,10 +134,12 @@ export async function dispatchRender(input: unknown, backend: RenderBackend): Pr
     };
     const a = await render(t);
     if (op === 'render') {
-      if (a && flatten) a.svg = backend.raster.flat(a.svg);
+      // Match desktop preview semantics: preserve already outlined Satori SVGs.
+      if (a && flatten && a.svg.includes('<text')) a.svg = backend.raster.flat(a.svg);
       return bounded({ version: 1, id, ok: true, result: { art: a } });
     }
     if (!a) fail('missing_data', 'This archive does not contain enough data for the selected piece');
+    if (format === 'html' && size!.w && a.motion) fail('unsupported_size', 'Scrolling HTML currently requires native size');
     const fit = (x: Art) => size!.w ? sized(x, size!.w, size!.h) : x;
     const ex = makeExporter(boundedRaster(backend.raster), backend.deflate);
     let bytes: Uint8Array, mime: string;
@@ -145,7 +147,7 @@ export async function dispatchRender(input: unknown, backend: RenderBackend): Pr
       case 'png': bytes = ex.png(fit(a), size!.w ? 1 : 2); mime = 'image/png'; break;
       case 'svg': bytes = encoder.encode(ex.svg(fit(a))); mime = 'image/svg+xml'; break;
       case 'pdf': bytes = await ex.pdf(fit(a), size!.id === 'a4' ? 1 : Math.min(3, 4000 / Math.max(a.w, a.h))); mime = 'application/pdf'; break;
-      case 'html': bytes = encoder.encode(ex.html([a], { title: a.title, lang })); mime = 'text/html'; break;
+      case 'html': bytes = encoder.encode(ex.html([fit(a)], { title: a.title, lang })); mime = 'text/html'; break;
       case 'gif': {
         if (!piece.animated) fail('not_animated', 'This piece does not support GIF animation');
         const generated = !theme || bridged ? frames(pieceId, svgModel, style, { variant }, n) : await backend.classicFrames(pieceId, model as ClassicModel, theme, ctx, n);

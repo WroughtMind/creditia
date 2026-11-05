@@ -100,6 +100,62 @@ pub fn progress_text(progress: &Value, language: &Language) -> String {
     else { label.to_string() }
 }
 
+/// Capture owned renderer inputs before displaying a save dialog. Subsequent
+/// project, style, layout, or language changes cannot alter the pending export.
+pub fn export_snapshot(
+    raw: &Value,
+    catalog: &Value,
+    selection: (usize, usize, usize),
+    language: &Language,
+    format: &str,
+    size: &str,
+) -> Result<Value, String> {
+    use serde_json::json;
+    if !["png", "svg", "pdf", "gif", "html"].contains(&format)
+        || !catalog["formats"].as_array().is_some_and(|formats| formats.iter().any(|item| item["id"] == format)) {
+        return Err("The selected export format is unavailable".into());
+    }
+    if !catalog["sizes"].as_array().is_some_and(|sizes| sizes.iter().any(|item| item["id"] == size)) {
+        return Err("The selected export size is unavailable".into());
+    }
+    let (style_index, piece_index, variant_index) = selection;
+    let style = catalog["styles"].as_array().and_then(|styles| styles.get(style_index))
+        .ok_or("The selected style is unavailable")?;
+    let piece = style["pieces"].as_array().and_then(|pieces| pieces.get(piece_index))
+        .ok_or("The selected piece is unavailable")?;
+    if format == "gif" && piece["animated"].as_bool() != Some(true) {
+        return Err("This piece does not support GIF animation".into());
+    }
+    let style_id = style["id"].as_str().ok_or("The selected style has no id")?;
+    let piece_id = piece["id"].as_str().ok_or("The selected piece has no id")?;
+    let mut request = json!({
+        "version":1,"id":"native-export","op":"export","raw":raw,
+        "style":style_id,"piece":piece_id,"lang":language.code(),
+        "group":"auto","named":true,"format":format,"size":size,
+    });
+    if let Some(variants) = piece["variants"].as_array().filter(|items| !items.is_empty()) {
+        let variant = variants.get(variant_index).and_then(|item| item["id"].as_str())
+            .ok_or("The selected layout is unavailable")?;
+        request["variant"] = json!(variant);
+    }
+    Ok(request)
+}
+
+pub fn export_filename(request: &Value) -> String {
+    let component = |value: &str| {
+        let cleaned: String = value.chars().take(60).map(|c| {
+            if c.is_control() || "<>:\"/\\|?*".contains(c) { '_' } else { c }
+        }).collect();
+        let cleaned = cleaned.trim_matches(['.', ' ']);
+        if cleaned.is_empty() { "creditia".to_string() } else { cleaned.to_string() }
+    };
+    format!("{}-{}-{}.{}",
+        component(request["raw"]["project"]["name"].as_str().unwrap_or("creditia")),
+        component(request["piece"].as_str().unwrap_or("artwork")),
+        component(request["style"].as_str().unwrap_or("style")),
+        request["format"].as_str().unwrap_or("png"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,5 +191,35 @@ mod tests {
     #[test]
     fn unknown_progress_total_is_not_reported_as_completion() {
         assert_eq!(progress_text(&json!({"stage":"logs","done":8,"total":0}), &Language::En), "Reading tool logs · 8");
+    }
+
+    #[test]
+    fn export_captures_archive_and_selection_before_user_changes_them() {
+        let mut raw = json!({"project":{"name":"../项目:a"}, "totals":{"linesAdded":12}});
+        let catalog = json!({
+            "formats":[{"id":"png"},{"id":"gif"}], "sizes":[{"id":"square"}],
+            "styles":[{"id":"ink","pieces":[{"id":"tier","animated":true,"variants":[{"id":"rows"},{"id":"center"}]}]}]
+        });
+        let request = export_snapshot(&raw, &catalog, (0,0,1), &Language::En, "png", "square").unwrap();
+        raw["totals"]["linesAdded"] = json!(99);
+        assert_eq!(request["raw"]["totals"]["linesAdded"], 12);
+        assert_eq!(request["variant"], "center");
+        assert_eq!(request["lang"], "en");
+        assert_eq!(request["size"], "square");
+        assert_eq!(request["group"], "auto");
+        assert_eq!(request["named"], true);
+        assert!(!export_filename(&request).contains('/'));
+        assert!(!export_filename(&request).contains(':'));
+    }
+
+    #[test]
+    fn export_rejects_unavailable_animation_and_stale_layout() {
+        let catalog = json!({
+            "formats":[{"id":"png"},{"id":"gif"}], "sizes":[{"id":"native"}],
+            "styles":[{"id":"ink","pieces":[{"id":"receipt","animated":false,"variants":[{"id":"slip"}]}]}]
+        });
+        assert!(export_snapshot(&json!({}), &catalog, (0,0,0), &Language::Zh, "gif", "native").is_err());
+        assert!(export_snapshot(&json!({}), &catalog, (0,0,4), &Language::Zh, "png", "native").is_err());
+        assert!(export_snapshot(&json!({}), &catalog, (0,0,0), &Language::Zh, "png", "unknown").is_err());
     }
 }

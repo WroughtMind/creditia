@@ -49,8 +49,13 @@ export function sized(a: Art, W: number, H: number, pad = 0.06): Art {
   if (!W || !H) return a;
   const k = Math.min((W * (1 - pad * 2)) / a.w, (H * (1 - pad * 2)) / a.h);
   const dx = (W - a.w * k) / 2, dy = (H - a.h * k) / 2;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${a.bg}"/><g transform="translate(${dx.toFixed(2)} ${dy.toFixed(2)}) scale(${k.toFixed(4)})">${strip(a.svg)}</g></svg>`;
-  return { ...a, w: W, h: H, svg, hits: a.hits.map((x) => ({ ...x, x: dx + x.x * k, y: dy + x.y * k, w: x.w * k, h: x.h * k })) };
+  // A scrolling frame has a nonzero viewBox origin. Keep that nested viewport:
+  // stripping it would put every resized frame back at the top of the reel.
+  const content = a.crop ? a.svg : strip(a.svg);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${a.bg}"/><g transform="translate(${dx.toFixed(2)} ${dy.toFixed(2)}) scale(${k.toFixed(4)})">${content}</g></svg>`;
+  // The old crop describes the unsized reel, so it cannot shortcut this padded,
+  // transformed image. Rasterize this frame's SVG instead.
+  return { ...a, w: W, h: H, svg, crop: undefined, hits: a.hits.map((x) => ({ ...x, x: dx + x.x * k, y: dy + x.y * k, w: x.w * k, h: x.h * k })) };
 }
 
 export function makeExporter(R: Raster, deflate?: Deflate) {

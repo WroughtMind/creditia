@@ -15,6 +15,7 @@ creditia-desktop-service = { path = "../../crates/desktop-service" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 async-channel = "2"
+base64 = "0.22"
 
 [profile.release]
 debug = false

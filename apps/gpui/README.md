@@ -54,13 +54,27 @@ preferences have not yet been imported.
   Preview requests are cancelled when the selection changes, old results are
   rejected, and replaced image assets are evicted. Context-only pieces requiring
   cross-project or blame input are omitted from this single-archive preview.
+- Native save-dialog export for PNG, SVG, PDF, GIF and HTML, using the same
+  renderer and catalog sizes. Non-animated pieces disable GIF. Each click captures
+  an owned archive/style/piece/layout/language/group/naming/size request before the
+  dialog opens; changing the UI later does not change that export. Cancel and
+  failure leave an existing destination intact; completed bytes replace it from
+  a synchronized temporary file on the same filesystem.
 - Cmd/Ctrl+O: open, Cmd/Ctrl+R: refresh, Cmd/Ctrl+Enter: analyze,
-  Escape: cancel, Cmd/Ctrl+Shift+C: copy archive, Cmd/Ctrl+Q: quit.
+  Escape: cancel the active export or analysis, Cmd/Ctrl+E: export,
+  Cmd/Ctrl+Shift+C: copy archive, Cmd/Ctrl+Q: quit.
+
+PNG/SVG/PDF and static HTML artwork use the selected dimensions. As in the
+shared exporter, GIF uses the selected aspect ratio with a maximum width of
+800 px. Scrolling HTML currently requires native size; selecting another size
+returns the renderer's explicit `unsupported_size` error without writing a file.
+Export progress reports choosing a location,
+rendering and writing; the shared synchronous encoder does not report percentages.
 
 ## Still required before cutover
 
 The full exhibition wall and final artwork/style/layout selectors, zoom/roam/hit
-regions, animation playback, all export UIs, full project
+regions, animation playback, export dock/drag interactions, text/embed export UIs, full project
 settings/integrations and background collection UI remain migration work. The
 reduced-motion preference is persisted for that work; this foundation does not
 animate artwork. System appearance is applied when selected and at startup;
@@ -79,3 +93,7 @@ The single-image preview has a bounded SVG surface and a renderer process
 deadline. GPUI rasterizes an SVG preview at its intrinsic scale; this does not
 meet the future deep-zoom acceptance requirement. The full wall needs visible
 region scheduling and scale-aware caching before cutover.
+
+The current renderer protocol does not offer transparency override or selectable
+font-embedding modes. These remain explicit migration gaps; vector exports use
+the shared renderer's existing outlined-font behavior.

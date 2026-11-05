@@ -77,7 +77,9 @@ For an export, use the same artwork selection with `op: "export"` and:
 ```
 
 Formats are `png`, `svg`, `pdf`, `gif`, and `html`. Sizes are `native`, `og`,
-`square`, `portrait`, `story`, and `a4`. `frameCount` is a count of intervals
+`square`, `portrait`, `story`, and `a4`. Static HTML uses the requested canvas;
+scrolling HTML currently accepts `native` only and returns `unsupported_size`
+for another size instead of silently ignoring it. `frameCount` is a count of intervals
 between animation samples (1–120, default 24); scrolling credits retain their
 existing minimum of 60 intervals. `t` and `flatten` are render-only options.
 GIF is rejected for a nonanimated piece. The result is:
@@ -88,7 +90,13 @@ GIF is rejected for a nonanimated piece. The result is:
 
 The host owns the file dialog and file writing. The renderer accepts no input
 SVG, paths, shell commands or output filenames. PNG/SVG/PDF/HTML/GIF use the same
-`makeExporter` as CLI and desktop. Existing HTML behavior is preserved: a
+`makeExporter` as CLI and desktop. The native raster follows the CLI's choice
+between outlined classic SVG and SVG that needs fonts. PDF retains the desktop's
+4,000-pixel scale cap; the existing CLI currently defaults to scale 3. HTML
+sets the requested document language; the existing desktop currently defaults
+its HTML document tag to Chinese. These existing differences must be reconciled
+before claiming byte/pixel equality across every frontend. HTML animation
+behavior is preserved: a
 scrolling credits artwork retains its CSS motion; other pieces use the existing
 HTML entrance effect. HTML is not yet an arbitrary sampled timeline container.
 Markdown, text and archive export remain in the existing text/CLI/schema modules.
