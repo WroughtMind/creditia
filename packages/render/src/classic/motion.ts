@@ -32,6 +32,12 @@ export function reveal(tree: Node, t: number, style = 'minimal-light', piece = '
     const numericW = Number(s.width), numericH = Number(s.height);
     // Cells assemble in reading order without changing their layout footprint.
     const cell = filled(s) && numericW > 0 && numericH > 0 && numericW <= 64 && numericH <= 64;
+    const text = kidsOf(n).some(child => typeof child === 'string' || typeof child === 'number');
+    const rule = numericW > 160 && numericH <= 3 || numericH > 160 && numericW <= 3;
+    const chart = ['mosaic', 'waffle', 'area', 'versions', 'lanes', 'clock', 'settle'].includes(piece);
+    // Blank plate/frame/rule nodes are structural. Moving those makes a sound
+    // card look broken into shards while its data is still arriving.
+    if (!text && n.type !== 'img' && !cell && w === null && h === null && (rule || !chart)) return;
     // 条形：宽（或高）按百分比的色块，从零长出来
     if (filled(s) && (w !== null || h !== null)) {
       if (w !== null && w < 100) { s.width = `${Math.round(w * e * 100) / 100}%`; if (typeof s.minWidth === 'number') s.minWidth = s.minWidth * e; }

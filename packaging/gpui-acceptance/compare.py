@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run matching production workloads sequentially on the same X11 desktop."""
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -22,6 +23,11 @@ def run(args):
         if not binary.is_file():
             raise ValueError(f"Missing native executable: {binary}")
     scenarios = args.scenarios.split(",")
+    matrix = HERE.parent.parent / "docs/gpui-migration/matrix.tsv"
+    with matrix.open() as stream:
+        expected_artworks = sum(row["style"] == "minimal-light" and row["renderer"] == "classic" and row["desktop"] == "true" for row in csv.DictReader(stream, delimiter="\t"))
+    if args.artworks is not None and args.artworks != expected_artworks:
+        raise ValueError(f"The complete minimal-light wall contains {expected_artworks} layout slots, not {args.artworks}")
     failures = []
     with tempfile.TemporaryDirectory(prefix="creditia-benchmark-profiles-") as temporary:
         for scenario_index, scenario in enumerate(scenarios):
@@ -45,7 +51,7 @@ def run(args):
                                 "--fixture", str(fixture), "--commit", args.candidate_sha,
                                 "--measured-commit", args.baseline_sha if role == "baseline" else args.candidate_sha,
                                 "--comparison-role", role, "--scenario", selected_scenario, "--cache", cache,
-                                "--styles", "1", "--artworks", str(args.artworks), "--window", "1360x880", "--dpi", "1",
+                                "--styles", "1", "--artworks", str(expected_artworks), "--window", "1360x880", "--dpi", "1",
                                 "--seconds", "180", "--interval", ".25", "--",
                                 *base, "--scenario", selected_scenario, "--", *command]
                     if cache == "warm":
@@ -95,7 +101,7 @@ def parser():
     p = argparse.ArgumentParser(description=__doc__)
     for option in ["output", "fixture", "baseline-bin", "candidate-bin", "baseline-sha", "candidate-sha", "baseline-overlay"]:
         p.add_argument("--" + option, required=True)
-    p.add_argument("--artworks", type=int, default=27)
+    p.add_argument("--artworks", type=int, help="Optional assertion; defaults to the actual complete wall count in matrix.tsv")
     p.add_argument("--scenarios", default="startup,scroll,roam,zoom,idle,hidden-idle")
     return p
 

@@ -124,7 +124,7 @@ def run(args):
                 "comparison_role": args.comparison_role,
                 "provenance": {"candidate_sha": args.commit, "environment": {"platform": sys.platform,
                     "arch": platform.machine(), "release": platform.release(), "cpu": platform.processor(),
-                    "logical_cpus": os.cpu_count(), "machine_id_sha256": hashlib.sha256(platform.node().encode()).hexdigest()},
+                    "logical_cpus": os.cpu_count(), "rendering": {key: os.environ.get(key) for key in ["LIBGL_ALWAYS_SOFTWARE", "WEBKIT_DISABLE_COMPOSITING_MODE", "GDK_BACKEND", "WGPU_BACKEND", "VK_ICD_FILENAMES"]}, "machine_id_sha256": hashlib.sha256(platform.node().encode()).hexdigest()},
                     "measured_commit": args.measured_commit or args.commit,
                     "fixture": {"sha256": sha256(fixture), "name": fixture.name},
                     "workload": {"styles": args.styles, "artworks": args.artworks, "window": args.window, "dpi": args.dpi}},

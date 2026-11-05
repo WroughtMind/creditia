@@ -137,6 +137,22 @@ fn existing_library_live_archive_and_snapshot_keep_their_contract() {
 }
 
 #[test]
+fn unavailable_integration_worker_is_distinct_from_disabled_integrations() {
+    let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
+    let fixture = Fixture::new("integration-error");
+    let project = fixture.project();
+    Library::open().unwrap().upsert_project(&project).unwrap();
+    std::env::set_var("CREDITIA_CORE", fixture.root.join("missing-core"));
+
+    let details = service::project_details(project.id.clone()).unwrap();
+    assert_eq!(details["project"]["id"], project.id);
+    assert_eq!(details["project"]["exists"], true);
+    assert!(details["integrations"].is_null());
+    assert!(details["integrationsError"]["code"].is_string());
+    assert!(details["integrationsError"]["detail"].is_string());
+}
+
+#[test]
 fn settings_and_project_display_preserve_existing_fields() {
     let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
     let fixture = Fixture::new("settings");

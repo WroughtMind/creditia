@@ -275,4 +275,24 @@ mod tests {
             .is_err()
         );
     }
+
+    #[test]
+    fn deep_zoom_crops_keep_physical_pixel_density_and_separate_resolution_cache_keys() {
+        let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect x="512.5" width="0.25" height="800" fill="#000"/></svg>"##;
+        let crop = (500., 200., 100., 100.);
+        // A 100-unit viewport at 8x corresponds to a 9600px full artwork, but
+        // only this 800x800 viewport is allocated. The quarter-unit stroke must
+        // occupy two physical pixels, not a rescaled low-resolution thumbnail.
+        let sharp = rasterize_region(svg, crop, 800, &Cancellation::default()).unwrap();
+        let pixels = resvg::tiny_skia::Pixmap::decode_png(&sharp.png).unwrap();
+        assert_eq!((sharp.width, sharp.height), (800, 800));
+        assert_eq!(pixels.pixel(99, 100).unwrap().alpha(), 0);
+        assert_eq!(pixels.pixel(100, 100).unwrap().alpha(), 255);
+        assert_eq!(pixels.pixel(101, 100).unwrap().alpha(), 255);
+        assert_eq!(pixels.pixel(102, 100).unwrap().alpha(), 0);
+        let smaller = rasterize_region(svg, crop, 400, &Cancellation::default()).unwrap();
+        assert!(!Arc::ptr_eq(&sharp, &smaller));
+        let again = rasterize_region(svg, crop, 800, &Cancellation::default()).unwrap();
+        assert!(Arc::ptr_eq(&sharp, &again));
+    }
 }

@@ -87,6 +87,7 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
   }
   const fontsRoot = path.join(destination, 'node_modules/@expo-google-fonts');
   const fontFiles = [];
+  const retainedFaces = new Set();
   for (const entry of await fs.readdir(fontsRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const pkgRoot = path.join(fontsRoot, entry.name), faces = required.get(entry.name);
@@ -101,8 +102,10 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
       if (!ttf) throw new Error(`Required font is missing: ${entry.name}/${face}`);
       for(const name of names)if(!/\.(ttf|otf)$/i.test(name)&&!/^(license|ofl|fontlog|copying|notice)([._-]|$)/i.test(name))await fs.rm(path.join(pkgRoot,face,name),{recursive:true,force:true});
       fontFiles.push(path.relative(root, path.join(pkgRoot, face, ttf)).split(path.sep).join('/'));
+      retainedFaces.add(`${entry.name}/${face}`);
     }
   }
+  for(const [pkg,faces] of required)for(const face of faces)if(!retainedFaces.has(`${pkg}/${face}`))throw new Error(`Required font package or face is missing: ${pkg}/${face}`);
   const licenseCandidates = ['LICENSE', 'LICENSE.md'];
   for (const name of licenseCandidates) {
     try { await copyFile(path.join(source, name), path.join(paths.resources, `licenses/Creditia-${name}`)); break; }

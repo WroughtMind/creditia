@@ -45,6 +45,7 @@ async function creditiaAcceptanceStart() {
   const schedule = () => { if (!queued) { queued = true; requestAnimationFrame(inspect); } };
   // Mutation and actual input observations avoid a periodic idle polling load.
   new MutationObserver(schedule).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'class', 'hidden'] });
-  for (const event of ['scroll', 'wheel', 'keydown', 'keyup', 'pointerup', 'load', 'visibilitychange', 'resize']) addEventListener(event, schedule, true);
+  for (const event of ['scroll', 'wheel', 'keydown', 'keyup', 'pointerup', 'load', 'resize']) addEventListener(event, schedule, true);
+  document.addEventListener('visibilitychange', inspect); // rAF is paused while hidden.
   await boot(); schedule();
 }

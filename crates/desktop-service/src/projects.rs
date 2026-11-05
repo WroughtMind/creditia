@@ -36,13 +36,16 @@ pub fn project_details(project_id: String) -> Res<Value> {
     let library = Library::open()?;
     let project = crate::project(&library, &project_id)?;
     let archive = crate::credits(project_id.clone()).unwrap_or(Value::Null);
-    let integrations = crate::integrations(project_id.clone()).unwrap_or(Value::Null);
+    let (integrations, integrations_error) = match crate::integrations(project_id.clone()) {
+        Ok(value) => (value, None),
+        Err(error) => (Value::Null, Some(error)),
+    };
     Ok(json!({
         "project": {"id":project.id,"name":project.name,"path":project.path,"exists":Path::new(&project.path).is_dir(),"lastHead":project.last_head,"lastAnalyzed":project.last_analyzed},
         "config":crate::config_of(project_id.clone())?,
         "paths":library.paths(&project_id)?.into_iter().map(|(path,kind)|json!({"path":path,"kind":kind})).collect::<Vec<_>>(),
         "archive":archive,"evidence":library.evidence_count(&project_id),
-        "sessions":archive["sessions"],"integrations":integrations,
+        "sessions":archive["sessions"],"integrations":integrations,"integrationsError":integrations_error,
         "snapshots":library.snapshots(&project_id)?.into_iter().map(|(head,generated)|json!({"head":head,"generatedAt":generated})).collect::<Vec<_>>()
     }))
 }
@@ -269,7 +272,7 @@ pub fn import_evidence(
 pub fn doctor() -> Value {
     match crate::run_core(&["doctor"]) {
         Ok(value) => {
-            json!({"sources":value["sources"],"git":value["git"],"gh":value["gh"],"library":value["library"],"summary":value["summary"]})
+            json!({"sources":value["sources"],"git":value["git"],"gh":value["gh"],"library":value["library"],"summary":value["summary"],"warnings":value["warnings"]})
         }
         Err(error) => json!({"sources":[],"error":error}),
     }

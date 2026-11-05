@@ -4,8 +4,10 @@
 import { Scene, el, rect, circle, path, r } from './svg.ts';
 import { motionProfile, materialProgress, unit } from './motion-profiles.ts';
 
-export function materialSvg(scene: Scene, style: string, time?: number): string {
-  if (time === undefined || time >= 1) return scene.toString();
+export function materialSvg(scene: Scene, style: string, time?: number, piece?: string): string {
+  // Asterisks apply the material to each petal. A second whole-card mask would
+  // hide their early growth, particularly behind glass's rising panes.
+  if (time === undefined || time >= 1 || piece === 'asterisk') return scene.toString();
   const t = unit(time), profile = motionProfile(style), kind = profile.material;
   const W = scene.w, H = scene.h, cx = W / 2, cy = H / 2, diagonal = Math.hypot(W, H);
   const progress = (i = 0, n = 1) => materialProgress(profile, t, i, n);
@@ -115,17 +117,10 @@ export function materialSvg(scene: Scene, style: string, time?: number): string 
       break;
     }
   }
+  const soft = kind === 'glass' ? scene.def('material-frost', id => el('filter', { id, x: '-10%', y: '-10%', width: '120%', height: '120%' },
+    el('feGaussianBlur', { stdDeviation: 14 * (1 - t) }))) : undefined;
   const mask = scene.def('material-unfold', id => el('mask', { id, maskUnits: 'userSpaceOnUse', x: 0, y: 0, width: W, height: H },
-    el('g', { filter: brush ? `url(#${brush})` : undefined, opacity: t === 0 ? 0 : 1 }, shapes)));
+    el('g', { filter: brush || soft ? `url(#${brush ?? soft})` : undefined, opacity: t === 0 ? 0 : 1 }, shapes)));
   return scene.toString(content => el('g', { mask: `url(#${mask})`, transform }, content));
 }
 
-/** Classic Satori trees own their plate; a stable canvas sits behind the reveal. */
-export function materialFrame(svg: string, w: number, h: number, style: string, t: number, bg: string): string {
-  if (t >= 1) return svg;
-  const scene = new Scene(w, h);
-  if (bg !== 'transparent') scene.add(rect(0, 0, w, h, { fill: bg }));
-  scene.markContent();
-  scene.add(svg.replace(/^<svg\b[^>]*>/, '').replace(/<\/svg>\s*$/, ''));
-  return materialSvg(scene, style, t);
-}

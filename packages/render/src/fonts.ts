@@ -66,6 +66,11 @@ export const familiesIn = (stack: string) => stack.split(',').map((s) => s.trim(
 /** Legacy badges named system fonts. Pin their existing native fallback so a
  * browser, offline SVG and the native renderer never pick different OS fonts. */
 export function portableFontFamilies(svg: string): string {
+  // The legacy terminal prompt's chevron is absent from Noto Sans SC; native
+  // fallback shapes that whole prompt in JetBrains Mono, including its spaces.
+  svg = svg.replace(/<text\b([^>]*)>([\s\S]*?)<\/text>/g, (element, attributes: string, content: string) =>
+    content.includes('❯') && /font-family="(?:Menlo|Consolas)[^"]*"/.test(attributes)
+      ? `<text${attributes.replace(/font-family="[^"]*"/, 'font-family="JetBrains Mono"')}>${content}</text>` : element);
   return svg.replace(/\bfont-family="([^"]+)"/g, (attribute, value: string) =>
     familiesIn(value.replaceAll('&quot;', '"').replaceAll('&apos;', "'")).some(name => facesOf(name).length)
       ? attribute : 'font-family="Noto Sans SC"');

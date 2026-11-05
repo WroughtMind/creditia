@@ -80,6 +80,7 @@ enum Panel {
 }
 #[derive(Clone)]
 struct Tile {
+    identity: String,
     spec: TileSpec,
     art: Option<Arc<Artwork>>,
     image: Option<Arc<Image>>,
@@ -116,6 +117,13 @@ impl Tween {
         self.started.elapsed() >= Duration::from_millis(160)
     }
 }
+#[derive(Clone)]
+struct ViewBookmark {
+    viewport: Viewport,
+    selected_key: Option<String>,
+    focused: bool,
+    saved_viewport: Option<Viewport>,
+}
 struct FocusTransition {
     from: Rect,
     started: Instant,
@@ -138,9 +146,17 @@ pub struct Fixture {
     pub appearance: Appearance,
     #[serde(default)]
     pub reduced_motion: bool,
+    #[serde(default)]
+    pub state: String,
+    #[serde(default)]
+    pub message: String,
+    #[serde(default)]
+    pub progress: Value,
 }
 
 pub struct Creditia {
+    live_mark: crate::live_mark::LiveMark,
+    center_mark: crate::live_mark::LiveMark,
     platform_ui: crate::platform_ui::PlatformUi,
     platform_error: Option<String>,
     focus: FocusHandle,
@@ -154,6 +170,8 @@ pub struct Creditia {
     dock_target: f32,
     focus_transition: Option<FocusTransition>,
     saved_viewport: Option<Viewport>,
+    pending_view: Option<ViewBookmark>,
+    mode_viewports: BTreeMap<String, Viewport>,
     preferences: Preferences,
     preference_writer: Option<crate::preference_writer::PreferenceWriter>,
     preference_task: Option<Task<()>>,
@@ -191,6 +209,8 @@ pub struct Creditia {
     dimensions: BTreeMap<String, (f32, f32)>,
     rects: Vec<Rect>,
     wall_height: f32,
+    roam_layout: Option<crate::roam::RoamLayout>,
+    roam_dimensions: BTreeMap<String, (f32, f32)>,
     viewport: Viewport,
     viewport_size: (f32, f32),
     selected_tile: Option<usize>,
@@ -225,6 +245,7 @@ pub struct Creditia {
     blame: Option<Value>,
     all_archives: Arc<Vec<Value>>,
     export_queue: crate::export_jobs::Queue,
+    export_history_error: Option<String>,
     export_journal: Option<crate::export_jobs::Journal>,
     export_journal_task: Option<Task<()>>,
     export_dialog_task: Option<Task<()>>,
@@ -297,6 +318,8 @@ impl Creditia {
         };
         let logo_image = logo_image(&preferences.logo);
         Self {
+            live_mark: crate::live_mark::LiveMark::new(),
+            center_mark: crate::live_mark::LiveMark::new(),
             platform_ui: crate::platform_ui::PlatformUi::new(),
             platform_error: None,
             focus,
@@ -310,6 +333,8 @@ impl Creditia {
             dock_target: 0.,
             focus_transition: None,
             saved_viewport: None,
+            pending_view: None,
+            mode_viewports: BTreeMap::new(),
             preference_writer,
             preference_task,
             subscriptions,
@@ -349,6 +374,8 @@ impl Creditia {
             dimensions: BTreeMap::new(),
             rects: vec![],
             wall_height: 0.,
+            roam_layout: None,
+            roam_dimensions: BTreeMap::new(),
             viewport: Viewport::default(),
             viewport_size: (1000., 700.),
             selected_tile: None,
@@ -383,6 +410,7 @@ impl Creditia {
             blame: None,
             all_archives: Arc::new(vec![]),
             export_queue: crate::export_jobs::Queue::default(),
+            export_history_error: None,
             export_journal: None,
             export_journal_task: None,
             export_dialog_task: None,
@@ -493,6 +521,36 @@ impl Creditia {
             view.fixture_artworks.insert((piece, variant), art);
         }
         view.restore_fixture_artworks();
+        match fixture.state.as_str() {
+            "empty" => {
+                view.raw = None;
+                view.projects.clear();
+                view.selected = None;
+                view.clear_preview(cx);
+            }
+            "loading" => view.loading = true,
+            "error" => {
+                view.error = Some(if fixture.message.is_empty() {
+                    view.text("无法读取项目档案", "Unable to read project archive")
+                        .into()
+                } else {
+                    fixture.message
+                })
+            }
+            "analyzing" => {
+                view.job_busy = true;
+                view.progress = Some(if fixture.progress.is_null() {
+                    json!({"stage":"logs","done":2,"total":5})
+                } else {
+                    fixture.progress
+                });
+            }
+            "exporting" => {
+                view.export_stage = Some(ExportStage::Rendering);
+                view.export_label = "creditia-minimal-light-tier-native.png".into();
+            }
+            _ => {}
+        }
         view
     }
     fn restore_fixture_artworks(&mut self) {
@@ -500,6 +558,9 @@ impl Creditia {
             return;
         }
         for tile in &mut self.tiles {
+            if tile.image.is_some() || tile.error.is_some() {
+                continue;
+            }
             if let Some(art) = self.fixture_artworks.get(&(
                 tile.spec.piece.clone(),
                 tile.spec.variant.clone().unwrap_or_default(),
@@ -513,8 +574,18 @@ impl Creditia {
                     tile.art = Some(art.clone());
                     self.dimensions
                         .insert(tile.spec.key.clone(), (art.w, art.h));
+                    self.roam_dimensions.insert(
+                        crate::roam::canonical_key(&tile.spec.piece, tile.spec.variant.as_deref()),
+                        (art.w, art.h),
+                    );
                 } else {
                     tile.error = Some("__empty__".into());
+                    if let Some(roam) = &mut self.roam_layout {
+                        roam.mark_empty(&crate::roam::canonical_key(
+                            &tile.spec.piece,
+                            tile.spec.variant.as_deref(),
+                        ));
+                    }
                 }
             }
         }
@@ -621,6 +692,8 @@ impl Creditia {
             }
         }
         self.tiles.clear();
+        self.roam_layout = None;
+        self.roam_dimensions.clear();
         self.rects.clear();
         self.hover = None;
     }
@@ -631,6 +704,7 @@ impl Creditia {
             self.tiles = wall_tiles(style, &prefs.variants, &prefs.order)
                 .into_iter()
                 .map(|spec| Tile {
+                    identity: spec.key.clone(),
                     spec,
                     art: None,
                     image: None,
@@ -643,10 +717,44 @@ impl Creditia {
                 .collect();
         }
         self.selected_tile = (!self.tiles.is_empty()).then_some(0);
-        self.viewport.reset();
+        self.viewport = if self.preferences.view == "roam" {
+            crate::roam::home(self.viewport_size)
+        } else {
+            Viewport::default()
+        };
         self.focused = false;
         self.restore_fixture_artworks();
         cx.notify();
+    }
+    fn bookmark(&self) -> ViewBookmark {
+        ViewBookmark {
+            viewport: self.viewport,
+            selected_key: self.current_tile().map(|tile| tile.identity.clone()),
+            focused: self.focused,
+            saved_viewport: self.saved_viewport,
+        }
+    }
+    fn restore_bookmark(&mut self, bookmark: ViewBookmark) {
+        let selected = bookmark
+            .selected_key
+            .as_ref()
+            .and_then(|key| self.tiles.iter().position(|tile| &tile.identity == key));
+        self.viewport = bookmark.viewport;
+        self.focused = bookmark.focused && selected.is_some();
+        if selected.is_some() {
+            self.selected_tile = selected;
+        }
+        self.saved_viewport = bookmark.saved_viewport;
+    }
+    fn rebuild_preserving_view(&mut self, cx: &mut Context<Self>) {
+        let bookmark = self.bookmark();
+        self.rebuild_tiles(cx);
+        self.restore_bookmark(bookmark);
+    }
+    fn restore_pending_view(&mut self) {
+        if let Some(bookmark) = self.pending_view.take() {
+            self.restore_bookmark(bookmark);
+        }
     }
     fn refresh(&mut self, cx: &mut Context<Self>) {
         self.list_generation = self.list_generation.wrapping_add(1);
@@ -694,6 +802,11 @@ impl Creditia {
     }
 
     fn select(&mut self, id: String, cx: &mut Context<Self>) {
+        self.pending_view = if self.selected.as_ref() == Some(&id) && self.raw.is_some() {
+            Some(self.bookmark())
+        } else {
+            None
+        };
         self.clear_preview(cx);
         self.archive_generation = self.archive_generation.wrapping_add(1);
         let generation = self.archive_generation;
@@ -827,7 +940,9 @@ impl Creditia {
     fn start_job_mode(&mut self, add_path: Option<String>, resume: bool, cx: &mut Context<Self>) {
         if self.job_busy
             || self.automatic_job.is_some()
-            || (!resume && add_path.is_none() && self.selected.is_none())
+            || (!resume
+                && add_path.is_none()
+                && self.current().is_none_or(|project| !project.exists))
         {
             return;
         }
@@ -959,6 +1074,7 @@ impl Creditia {
         if self.catalog.is_some() {
             self.resolve_style();
             self.rebuild_tiles(cx);
+            self.restore_pending_view();
             return;
         }
         let cancellation = renderer::Cancellation::default();
@@ -984,6 +1100,7 @@ impl Creditia {
                         view.catalog = Some(catalog);
                         view.resolve_style();
                         view.rebuild_tiles(cx);
+                        view.restore_pending_view();
                     }
                     Err(error) => view.error = Some(error),
                 }
@@ -1008,22 +1125,103 @@ impl Creditia {
         }
         Some(request)
     }
-    fn compute_layout(&mut self, width: f32, height: f32) {
+    fn sync_roam(&mut self, cx: &mut Context<Self>) {
+        if self.roam_layout.is_none() {
+            let prefs = self.project_preferences();
+            if let Some(style) = self.style() {
+                match crate::roam::RoamLayout::new(style, &prefs.variants) {
+                    Ok(layout) => self.roam_layout = Some(layout),
+                    Err(error) => {
+                        self.error = Some(error);
+                        return;
+                    }
+                }
+            } else {
+                return;
+            }
+        }
+        let specs = self.roam_layout.as_mut().unwrap().layout(
+            &mut self.viewport,
+            self.viewport_size,
+            &self.roam_dimensions,
+        );
+        let selected = self.current_tile().map(|tile| tile.identity.clone());
+        let mut old = std::mem::take(&mut self.tiles)
+            .into_iter()
+            .map(|tile| (tile.identity.clone(), tile))
+            .collect::<BTreeMap<_, _>>();
+        let canonical = old
+            .values()
+            .filter(|tile| tile.art.is_some())
+            .map(|tile| {
+                (
+                    crate::roam::canonical_key(&tile.spec.piece, tile.spec.variant.as_deref()),
+                    tile.clone(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        self.rects.clear();
+        for slot in specs {
+            self.rects.push(slot.rect);
+            let mut tile = old.remove(&slot.slot_key).unwrap_or_else(|| {
+                let mut tile = canonical.get(&slot.spec.key).cloned().unwrap_or(Tile {
+                    identity: slot.slot_key.clone(),
+                    spec: slot.spec.clone(),
+                    art: None,
+                    image: None,
+                    image_region: None,
+                    pixels: 0,
+                    texture_bytes: 0,
+                    error: None,
+                    loading: false,
+                });
+                tile.loading = false;
+                tile
+            });
+            tile.identity = slot.slot_key;
+            tile.spec = slot.spec;
+            self.tiles.push(tile);
+        }
+        let retained = self
+            .tiles
+            .iter()
+            .filter_map(|tile| tile.image.as_ref().map(|image| Arc::as_ptr(image) as usize))
+            .collect::<std::collections::BTreeSet<_>>();
+        for (_, tile) in old {
+            if tile.loading {
+                if let Some(cancel) = &self.preview_cancellation {
+                    cancel.cancel();
+                }
+            }
+            if let Some(image) = tile.image {
+                if !retained.contains(&(Arc::as_ptr(&image) as usize)) {
+                    ImageSource::Image(image).remove_asset(cx);
+                }
+            }
+        }
+        self.selected_tile = selected
+            .and_then(|identity| self.tiles.iter().position(|tile| tile.identity == identity))
+            .or_else(|| (!self.tiles.is_empty()).then_some(0));
+        self.restore_fixture_artworks();
+    }
+    fn compute_layout(&mut self, width: f32, height: f32, cx: &mut Context<Self>) {
         self.viewport_size = (width, height);
-        let world_width = if self.preferences.view == "roam" {
-            1440.
-        } else {
-            width
-        };
+        if self.preferences.view == "roam" && !self.focused {
+            self.sync_roam(cx);
+            return;
+        }
+        if self.preferences.view == "roam" {
+            return;
+        }
         let specs = self
             .tiles
             .iter()
-            .map(|t| t.spec.clone())
+            .map(|tile| tile.spec.clone())
             .collect::<Vec<_>>();
-        let (rects, total) = masonry(&specs, &self.dimensions, world_width);
+        let (rects, total) = masonry(&specs, &self.dimensions, width);
         self.rects = rects;
         self.wall_height = total;
-        if self.preferences.view == "wall" && !self.focused {
+        if !self.focused {
             self.viewport.x = 0.;
             self.viewport.zoom = 1.;
             self.viewport.y = self.viewport.y.clamp(-(total - height).max(0.), 0.);
@@ -1072,7 +1270,7 @@ impl Creditia {
     }
     fn crop_for_art(&self, art: &Artwork, r: Rect, pixels: u32, margin: f32) -> Option<Rect> {
         let height = pixels as f32 * art.h / art.w;
-        if pixels as f32 * height < 16_000_000. && height < 16384. {
+        if pixels as f32 * height < 16_000_000. && height < 16384. && pixels < 16384 {
             return None;
         }
         let scale = r.w / art.w;
@@ -1146,7 +1344,7 @@ impl Creditia {
         let archive = self.render_archive.clone();
         let projects = self.all_archives.clone();
         let existing = self.tiles[index].art.clone();
-        let key = self.tiles[index].spec.key.clone();
+        let key = self.tiles[index].identity.clone();
         let generation = self.preview_generation;
         let viewport = self.viewport_size;
         self.tiles[index].loading = true;
@@ -1191,7 +1389,10 @@ impl Creditia {
                         }
                     };
                     let height = pixels as f32 * art.h / art.w;
-                    let region = if pixels as f32 * height >= 16_000_000. || height >= 16384. {
+                    let region = if pixels as f32 * height >= 16_000_000.
+                        || height >= 16384.
+                        || pixels >= 16384
+                    {
                         let scale = screen.w / art.w;
                         let x = ((-screen.x - 180.) / scale).clamp(0., art.w);
                         let y = ((-screen.y - 240.) / scale).clamp(0., art.h);
@@ -1225,14 +1426,13 @@ impl Creditia {
                 }
                 view.preview_busy = false;
                 view.preview_cancellation = None;
-                if let Some(tile) = view.tiles.iter_mut().find(|t| t.spec.key == key) {
+                let mut retired_image = None;
+                if let Some(tile) = view.tiles.iter_mut().find(|t| t.identity == key) {
                     tile.loading = false;
                     match result {
                         Ok((art, raster, region, archive)) => {
                             view.render_archive = Some(archive);
-                            if let Some(image) = tile.image.take() {
-                                ImageSource::Image(image).remove_asset(cx);
-                            }
+                            retired_image = tile.image.take();
                             tile.image = Some(Arc::new(Image::from_bytes(
                                 ImageFormat::Png,
                                 raster.png.clone(),
@@ -1240,10 +1440,37 @@ impl Creditia {
                             tile.image_region = region;
                             tile.pixels = pixels;
                             tile.texture_bytes = raster.width as usize * raster.height as usize * 4;
-                            view.dimensions.insert(key, (art.w, art.h));
+                            view.dimensions
+                                .insert(tile.spec.key.clone(), (art.w, art.h));
+                            view.roam_dimensions.insert(
+                                crate::roam::canonical_key(
+                                    &tile.spec.piece,
+                                    tile.spec.variant.as_deref(),
+                                ),
+                                (art.w, art.h),
+                            );
                             tile.art = Some(art);
                         }
-                        Err(error) => tile.error = Some(error),
+                        Err(error) => {
+                            if error == "__empty__" {
+                                if let Some(roam) = &mut view.roam_layout {
+                                    roam.mark_empty(&crate::roam::canonical_key(
+                                        &tile.spec.piece,
+                                        tile.spec.variant.as_deref(),
+                                    ));
+                                }
+                            }
+                            tile.error = Some(error);
+                        }
+                    }
+                }
+                if let Some(image) = retired_image {
+                    if !view.tiles.iter().any(|tile| {
+                        tile.image
+                            .as_ref()
+                            .is_some_and(|kept| Arc::ptr_eq(kept, &image))
+                    }) {
+                        ImageSource::Image(image).remove_asset(cx);
                     }
                 }
                 view.evict_distant(cx);
@@ -1310,21 +1537,39 @@ impl Creditia {
         if let Some(id) = self.selected.clone() {
             self.preferences.projects.entry(id).or_default().group = group.into();
             self.persist();
-            self.rebuild_tiles(cx);
+            self.rebuild_preserving_view(cx);
         }
     }
     fn set_names(&mut self, cx: &mut Context<Self>) {
         self.preferences.named = !self.preferences.named;
         self.persist();
-        self.rebuild_tiles(cx);
+        self.rebuild_preserving_view(cx);
     }
     fn set_view(&mut self, mode: &str, cx: &mut Context<Self>) {
+        let previous = if self.focused {
+            self.saved_viewport.unwrap_or_default()
+        } else {
+            self.viewport
+        };
+        self.mode_viewports
+            .insert(self.preferences.view.clone(), previous);
+        let changed = self.preferences.view != mode;
         self.preferences.view = mode.into();
-        self.focused = false;
-        self.viewport.reset();
-        if mode == "roam" {
-            self.viewport.zoom = 0.62;
+        if changed && mode == "wall" {
+            self.rebuild_tiles(cx);
+        } else if changed {
+            self.roam_layout = None;
         }
+        self.focused = false;
+        self.viewport = self.mode_viewports.get(mode).copied().unwrap_or_else(|| {
+            if mode == "roam" {
+                crate::roam::home(self.viewport_size)
+            } else {
+                Viewport::default()
+            }
+        });
+        self.saved_viewport = None;
+        self.focus_transition = None;
         self.stop_playback(cx);
         self.persist();
         cx.notify();
@@ -1423,6 +1668,7 @@ impl Creditia {
         } else if let Some(def) = self.piece(&piece) {
             let variant = default_variant(def);
             self.tiles.push(Tile {
+                identity: format!("{}#{}", piece, variant.as_deref().unwrap_or("")),
                 spec: TileSpec {
                     key: format!("{}#{}", piece, variant.as_deref().unwrap_or("")),
                     piece,
@@ -1456,11 +1702,7 @@ impl Creditia {
         let prefs = self.preferences.projects.entry(id).or_default();
         if swap_variant(&specs, &mut prefs.variants, &key, &variant) {
             self.persist();
-            let selected = self.selected_tile;
-            let focus = self.focused;
-            self.rebuild_tiles(cx);
-            self.selected_tile = selected;
-            self.focused = focus;
+            self.rebuild_preserving_view(cx);
         }
     }
     fn move_piece(&mut self, delta: isize, cx: &mut Context<Self>) {
@@ -1493,7 +1735,7 @@ impl Creditia {
         };
         self.persist();
         install_menus(&self.preferences.language, cx);
-        self.rebuild_tiles(cx);
+        self.rebuild_preserving_view(cx);
     }
     fn cycle_appearance(
         &mut self,
@@ -1719,36 +1961,71 @@ impl Creditia {
         cx.notify();
     }
     pub fn fixture_images_ready(&self, window: &mut Window, cx: &mut App) -> bool {
+        if self.fixture && !self.benchmark && (self.raw.is_none() || self.loading) {
+            return true;
+        }
+        if self
+            .focus_transition
+            .as_ref()
+            .is_some_and(|transition| transition.started.elapsed() < Duration::from_millis(180))
+        {
+            return false;
+        }
         let visible = Rect {
             x: 0.,
             y: 0.,
             w: self.viewport_size.0,
             h: self.viewport_size.1,
         };
-        let tiles = self
-            .tiles
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| {
-                (!self.focused || self.selected_tile == Some(*i))
-                    && self.screen_rect(*i).intersects(visible)
-            })
-            .map(|(_, tile)| tile)
-            .collect::<Vec<_>>();
-        !tiles.is_empty()
-            && tiles.into_iter().all(|tile| {
-                tile.error.as_deref() == Some("__empty__")
-                    || tile
-                        .image
-                        .as_ref()
-                        .is_some_and(|image| image.clone().get_render_image(window, cx).is_some())
-            })
+        let mut count = 0;
+        for (index, tile) in self.tiles.iter().enumerate() {
+            if (self.focused && self.selected_tile != Some(index))
+                || !self.screen_rect(index).intersects(visible)
+            {
+                continue;
+            }
+            count += 1;
+            if tile.error.as_deref() == Some("__empty__") {
+                continue;
+            }
+            let r = self.screen_rect(index);
+            let pixels = texture_width(r.w, window.scale_factor());
+            if tile.loading || tile.pixels < pixels {
+                return false;
+            }
+            if let Some(required) = tile
+                .art
+                .as_deref()
+                .and_then(|art| self.crop_for_art(art, r, pixels, 0.))
+            {
+                if tile.image_region.is_none_or(|have| {
+                    have.x > required.x + 1.
+                        || have.y > required.y + 1.
+                        || have.x + have.w < required.x + required.w - 1.
+                        || have.y + have.h < required.y + required.h - 1.
+                }) {
+                    return false;
+                }
+            }
+            if tile
+                .image
+                .as_ref()
+                .is_none_or(|image| image.clone().get_render_image(window, cx).is_none())
+            {
+                return false;
+            }
+        }
+        count > 0
     }
     fn start_background(&mut self, cx: &mut Context<Self>) {
         self.pending_analysis = service::analysis_status();
         let (tx, rx) = async_channel::bounded(64);
         let sink: service::ProgressSink = Arc::new(move |event| {
-            let _ = tx.try_send(event);
+            if event["kind"] == "analysis-progress" {
+                let _ = tx.try_send(event);
+            } else {
+                let _ = tx.send_blocking(event);
+            }
         });
         self.background = Some(service::BackgroundService::start(sink));
         self.background_task = Some(cx.spawn(async move |this, cx| {
@@ -1794,7 +2071,20 @@ impl Creditia {
                                         && event["generation"].as_u64() == Some(*generation)
                                 }) {
                                     view.automatic_job = None;
+                                    view.warnings =
+                                        crate::ui_reports::analysis_warnings(&event["result"]);
+                                    view.start_next_project(cx);
                                     view.cancelling = false;
+                                    if !event["error"].is_null() {
+                                        if event["error"]["code"] == "cancelled" {
+                                            view.notice = Some(
+                                                view.text("已取消分析", "Analysis cancelled")
+                                                    .into(),
+                                            );
+                                        } else {
+                                            view.notice = Some(event["error"].to_string());
+                                        }
+                                    }
                                     if !view.job_busy {
                                         view.progress = None;
                                         view.refresh(cx);
@@ -1965,7 +2255,21 @@ impl Creditia {
             let choice = prompt.await;
             let path = match choice {
                 Ok(Ok(Some(path))) => path,
-                _ => return,
+                Ok(Ok(None)) => return,
+                Ok(Err(error)) => {
+                    let _ = this.update(cx, |view, cx| {
+                        view.error = Some(error.to_string());
+                        cx.notify();
+                    });
+                    return;
+                }
+                Err(error) => {
+                    let _ = this.update(cx, |view, cx| {
+                        view.error = Some(error.to_string());
+                        cx.notify();
+                    });
+                    return;
+                }
             };
             let result = cx
                 .background_spawn(async move {
@@ -2003,7 +2307,21 @@ impl Creditia {
                     Some(path) => path,
                     None => return,
                 },
-                _ => return,
+                Ok(Ok(None)) => return,
+                Ok(Err(error)) => {
+                    let _ = this.update(cx, |view, cx| {
+                        view.error = Some(error.to_string());
+                        cx.notify();
+                    });
+                    return;
+                }
+                Err(error) => {
+                    let _ = this.update(cx, |view, cx| {
+                        view.error = Some(error.to_string());
+                        cx.notify();
+                    });
+                    return;
+                }
             };
             let cancellation = service::AnalysisCancellation::default();
             let worker = cancellation.clone();
@@ -2065,9 +2383,9 @@ impl Creditia {
             let result = cx.background_spawn(async move { work() }).await;
             let _ = this.update(cx, |view, cx| {
                 view.operation_busy = false;
+                view.collect = service::collect_info();
                 match result {
                     Ok(_) => {
-                        view.collect = service::collect_info();
                         view.notice = Some(view.text("已更新", "Updated").into());
                         view.fetch_details(cx);
                     }
@@ -2102,7 +2420,7 @@ impl Creditia {
                     Ok(details) => {
                         if view.selected.as_ref() == Some(&selection) {
                             view.details = Some(details);
-                            view.rebuild_tiles(cx);
+                            view.rebuild_preserving_view(cx);
                         }
                         view.notice =
                             Some(view.text("显示设置已保存", "Display settings saved").into());
@@ -2197,6 +2515,11 @@ impl Creditia {
         if self.fixture {
             return;
         }
+        self.pending_view = if self.selected.as_deref() == Some("__all__") && self.raw.is_some() {
+            Some(self.bookmark())
+        } else {
+            None
+        };
         self.clear_preview(cx);
         self.archive_generation = self.archive_generation.wrapping_add(1);
         let generation = self.archive_generation;
@@ -2219,7 +2542,10 @@ impl Creditia {
     }
     fn can_export(&self) -> bool {
         self.raw.is_some()
-            && self.current_tile().is_some()
+            && self.current_tile().is_some_and(|tile| {
+                ["txt", "md", "json", "embed"].contains(&self.export_format.as_str())
+                    || (tile.art.is_some() && tile.error.is_none())
+            })
             && !self.export_prompt_busy
             && (self.export_format != "gif"
                 || self.selected_piece().is_some_and(|p| p["animated"] == true))
@@ -2279,6 +2605,7 @@ impl Creditia {
         let snapshot = match result {
             Ok(value) => value,
             Err(error) => {
+                self.export_history_error = Some(error.to_string());
                 self.error = Some(error.to_string());
                 return;
             }
@@ -2286,10 +2613,12 @@ impl Creditia {
         match crate::export_jobs::Queue::from_snapshot(snapshot["queue"].clone()) {
             Ok(queue) => self.export_queue = queue,
             Err(error) => {
+                self.export_history_error = Some(error.clone());
                 self.error = Some(error);
                 return;
             }
         }
+        self.export_history_error = None;
         let (tx, rx) = async_channel::bounded(1);
         self.export_journal = Some(crate::export_jobs::Journal::new(
             snapshot["revision"].as_u64().unwrap_or(0),
@@ -2306,6 +2635,7 @@ impl Creditia {
                             .as_ref()
                             .and_then(|journal| journal.take_error())
                         {
+                            view.export_history_error = Some(error.clone());
                             view.error = Some(error);
                             cx.notify();
                         }
@@ -2316,6 +2646,43 @@ impl Creditia {
                 }
             }
         }));
+    }
+    fn reload_export_history(&mut self, cx: &mut Context<Self>) {
+        if self.fixture
+            || self
+                .export_queue
+                .jobs()
+                .iter()
+                .any(|job| job.state.pending())
+        {
+            return;
+        }
+        self.report_task = Some(cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async { service::load_export_jobs() })
+                .await;
+            let _ = this.update(cx, |view, cx| {
+                view.load_export_history(result, cx);
+                cx.notify();
+            });
+        }));
+    }
+    fn set_collection_mode(&mut self, mode: &str, cx: &mut Context<Self>) {
+        let on = mode != "off";
+        let always = mode == "always";
+        let supported = self.collect["agent"]["supported"]
+            .as_bool()
+            .unwrap_or(false);
+        self.operation(
+            move || {
+                service::set_collect(on)?;
+                if supported {
+                    service::set_collect_agent(always)?;
+                }
+                Ok(service::collect_info())
+            },
+            cx,
+        );
     }
     fn persist_exports(&self) {
         if let Some(journal) = &self.export_journal {
@@ -2744,7 +3111,11 @@ impl Creditia {
                 cx.listener(move |view, event: &MouseDownEvent, _, cx| {
                     view.selected_tile = Some(index);
                     view.drag = Some(DragState {
-                        tile: if view.focused { None } else { Some(index) },
+                        tile: if view.focused || view.preferences.view == "roam" {
+                            None
+                        } else {
+                            Some(index)
+                        },
                         start: view.pointer,
                         last: view.pointer,
                         moved: false,
@@ -2875,7 +3246,7 @@ impl Creditia {
         }
         card.into_any_element()
     }
-    fn render_stage(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_stage(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let visible = Rect {
             x: -50.,
             y: -80.,
@@ -2910,6 +3281,17 @@ impl Creditia {
                     .flex()
                     .items_center()
                     .justify_center()
+                    .flex_col()
+                    .gap_4()
+                    .child(self.center_mark.render(
+                        self.progress.as_ref().and_then(analysis_fraction),
+                        true,
+                        false,
+                        self.preferences.reduced_motion,
+                        64.,
+                        window,
+                        cx,
+                    ))
                     .child(self.text("正在读取作品库…", "Loading project library…")),
             );
         } else if self.raw.is_none() {
@@ -3028,25 +3410,10 @@ impl Creditia {
             .border_t_1()
             .border_color(border);
         if !self.export_open {
-            return dock
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(muted)
-                        .child(self.text("拖动作品到这里导出", "Drag an artwork here to export")),
-                )
-                .child(
-                    Button::new("open-export-dock")
-                        .ghost()
-                        .label(self.text("导出坞", "Exports"))
-                        .on_click(cx.listener(|view, _, _, cx| {
-                            view.export_open = true;
-                            cx.notify();
-                        })),
-                )
+            return div()
+                .h(px(self.dock_height))
+                .flex_shrink_0()
+                .overflow_hidden()
                 .into_any_element();
         }
         let formats = self
@@ -3379,6 +3746,19 @@ impl Creditia {
                 }
             }
             Panel::Exports => {
+                if let Some(error) = &self.export_history_error {
+                    body = body.child(div().text_sm().child(error.clone())).child(
+                        Button::new("reload-export-history")
+                            .label(self.text("重新读取导出历史", "Reload export history"))
+                            .disabled(
+                                self.export_queue
+                                    .jobs()
+                                    .iter()
+                                    .any(|job| job.state.pending()),
+                            )
+                            .on_click(cx.listener(|view, _, _, cx| view.reload_export_history(cx))),
+                    );
+                }
                 if self.export_queue.jobs().is_empty() {
                     body = body.child(self.text("尚无导出任务", "No export jobs yet"));
                 }
@@ -3600,39 +3980,38 @@ impl Creditia {
                 let supported = self.collect["agent"]["supported"]
                     .as_bool()
                     .unwrap_or(false);
-                body = body
-                    .child(
-                        Button::new("collect-toggle")
+                let mode = if agent {
+                    "always"
+                } else if on {
+                    "open"
+                } else {
+                    "off"
+                };
+                let mut modes = div().flex().gap_1();
+                for (id, label) in [
+                    ("off", self.text("关闭", "Off")),
+                    ("open", self.text("应用打开时", "While open")),
+                    ("always", self.text("始终采集", "Always")),
+                ] {
+                    modes = modes.child(
+                        Button::new(id)
                             .ghost()
-                            .label(format!(
-                                "{} {}",
-                                self.text("自动采集日志", "Collect logs automatically"),
-                                if on { "✓" } else { "○" }
-                            ))
-                            .disabled(self.operation_busy)
-                            .on_click(cx.listener(move |view, _, _, cx| {
-                                view.operation(move || service::set_collect(!on), cx)
-                            })),
-                    )
+                            .label(label)
+                            .when(mode == id, |b| b.bg(cx.theme().muted))
+                            .disabled(self.operation_busy || (id == "always" && !supported))
+                            .on_click(
+                                cx.listener(move |view, _, _, cx| view.set_collection_mode(id, cx)),
+                            ),
+                    );
+                }
+                body = body
+                    .child(modes)
                     .child(
                         Button::new("collect-now")
                             .label(self.text("立即采集", "Collect now"))
                             .disabled(self.operation_busy)
                             .on_click(cx.listener(|view, _, _, cx| {
                                 view.operation(service::collect_now, cx)
-                            })),
-                    )
-                    .child(
-                        Button::new("collect-agent")
-                            .ghost()
-                            .label(format!(
-                                "{} {}",
-                                self.text("退出后继续采集", "Continue after quitting"),
-                                if agent { "✓" } else { "○" }
-                            ))
-                            .disabled(!supported || self.operation_busy)
-                            .on_click(cx.listener(move |view, _, _, cx| {
-                                view.operation(move || service::set_collect_agent(!agent), cx)
                             })),
                     )
                     .child(
@@ -3755,6 +4134,11 @@ impl Creditia {
                     ("hook", "提交时记录证据", "Record evidence on commit"),
                     ("release", "发布时生成作品", "Generate artwork on release"),
                 ] {
+                    let known = self
+                        .details
+                        .as_ref()
+                        .is_some_and(|d| d["integrations"][which].is_object());
+                    let exists = self.current().is_some_and(|project| project.exists);
                     let on = self
                         .details
                         .as_ref()
@@ -3772,13 +4156,42 @@ impl Creditia {
                                 self.text(zh, en),
                                 if on { "✓" } else { "○" }
                             ))
-                            .disabled(self.operation_busy)
+                            .disabled(self.operation_busy || !known || !exists)
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 view.set_integration(which, !on, cx)
                             })),
                     );
+                    if let Some(details) = &self.details {
+                        if let Some(path) = details["integrations"][which]["path"].as_str() {
+                            body = body
+                                .child(div().text_xs().text_color(muted).child(path.to_string()));
+                        }
+                        if which == "release" && known {
+                            body = body.child(div().text_xs().text_color(muted).child(
+                                if details["integrations"][which]["github"] == true {
+                                    self.text("GitHub 发版工作流", "GitHub release workflow")
+                                } else {
+                                    self.text("需要 GitHub 远端仓库", "A GitHub remote is required")
+                                },
+                            ));
+                        }
+                    }
                 }
                 if let Some(details) = &self.details {
+                    if !details["integrationsError"].is_null() {
+                        body = body
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .child(details["integrationsError"].to_string()),
+                            )
+                            .child(
+                                Button::new("retry-integrations")
+                                    .ghost()
+                                    .label(self.text("重新检查接入", "Check integrations again"))
+                                    .on_click(cx.listener(|view, _, _, cx| view.fetch_details(cx))),
+                            );
+                    }
                     body = body.child(div().text_sm().text_color(muted).child(format!(
                         "{} {} · {} {}",
                         self.text("证据", "Evidence"),
@@ -4045,9 +4458,25 @@ impl Render for Creditia {
         } else {
             self.focus_transition = None;
         }
+        let status_height = if self.error.is_some()
+            || self.notice.is_some()
+            || self.job_busy
+            || self.automatic_job.is_some()
+            || self.export_stage.is_some()
+            || self.animation_busy
+            || !self.warnings.is_empty()
+            || matches!(
+                self.pending_analysis["state"].as_str(),
+                Some("interrupted" | "failed" | "cancelled")
+            ) {
+            24.
+        } else {
+            8.
+        };
         self.compute_layout(
             width.max(300.),
-            (height - 60. - 56. - 24. - dock_height).max(200.),
+            (height - 60. - 56. - status_height - dock_height).max(200.),
+            cx,
         );
         if !self.fixture {
             if crate::platform_ui::dynamic_logo_supported() {
@@ -4281,6 +4710,22 @@ impl Render for Creditia {
                     })),
             );
         }
+        let mark = if self.preferences.logo == "star" {
+            self.live_mark.render(
+                self.progress.as_ref().and_then(analysis_fraction),
+                self.loading || self.job_busy || self.automatic_job.is_some(),
+                self.error.is_some(),
+                self.preferences.reduced_motion,
+                24.,
+                window,
+                cx,
+            )
+        } else {
+            img(self.logo_image.clone())
+                .w(px(24.))
+                .h(px(24.))
+                .into_any_element()
+        };
         let toolbar = div()
             .h(px(60.))
             .flex_shrink_0()
@@ -4288,7 +4733,7 @@ impl Render for Creditia {
             .items_center()
             .gap_2()
             .px_5()
-            .child(img(self.logo_image.clone()).w(px(24.)).h(px(24.)))
+            .child(mark)
             .child(Button::new("switch-project").ghost().label(title).on_click(
                 cx.listener(|view, _, window, cx| view.open_panel(Panel::Projects, window, cx)),
             ))
@@ -4459,7 +4904,7 @@ impl Render for Creditia {
                 );
         }
         let mut status = div()
-            .h(px(24.))
+            .h(px(status_height))
             .flex_shrink_0()
             .flex()
             .items_center()
@@ -4527,20 +4972,6 @@ impl Render for Creditia {
             status = status.child(self.text("正在准备动画…", "Preparing animation…"));
         } else if let Some(notice) = &self.notice {
             status = status.child(notice.clone());
-        } else {
-            let loaded = self.tiles.iter().filter(|t| t.art.is_some()).count();
-            status = status
-                .child(format!(
-                    "{} / {} {}",
-                    loaded,
-                    self.tiles.len(),
-                    self.text("件作品", "artworks")
-                ))
-                .child(div().flex_1())
-                .child(self.text(
-                    "双击放大 · 拖动调整顺序",
-                    "Double-click to open · Drag to reorder",
-                ));
         }
         if !self.warnings.is_empty() {
             status = status.child(
@@ -4556,7 +4987,7 @@ impl Render for Creditia {
                     })),
             );
         }
-        let stage = self.render_stage(cx);
+        let stage = self.render_stage(window, cx);
         let export = self.render_export_dock(cx);
         let modal = self.render_panel(cx);
         div()
@@ -4633,6 +5064,7 @@ fn apply_appearance(appearance: &Appearance, window: &mut Window, cx: &mut App) 
         Appearance::Light => Theme::change(ThemeMode::Light, Some(window), cx),
         Appearance::Dark => Theme::change(ThemeMode::Dark, Some(window), cx),
     }
+    Theme::update(cx, |theme| theme.font_family = "Inter".into());
 }
 fn install_menus(language: &Language, cx: &mut App) {
     cx.set_menus(vec![
@@ -4796,6 +5228,22 @@ fn key_bindings(modifier: &str) -> Vec<KeyBinding> {
         KeyBinding::new("right", NextPiece, Some("Creditia && !CreditiaModal")),
     ]
 }
+pub fn init_fonts(cx: &mut App) -> Result<(), String> {
+    let files = renderer::ui_font_files()?;
+    let bytes = files
+        .into_iter()
+        .map(|path| {
+            std::fs::read(&path)
+                .map(std::borrow::Cow::Owned)
+                .map_err(|error| format!("Cannot load {}: {error}", path.display()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    cx.text_system()
+        .add_fonts(bytes)
+        .map_err(|error| error.to_string())?;
+    Theme::update(cx, |theme| theme.font_family = "Inter".into());
+    Ok(())
+}
 pub fn run() {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     if args.iter().any(|s| s == "--version") {
@@ -4871,6 +5319,7 @@ pub fn run() {
     let acceptance = benchmark.is_some() || args.iter().any(|s| s == "--acceptance-fixture");
     application().with_assets(assets::Assets).run(move |cx| {
         init(cx);
+        let font_error = init_fonts(cx).err();
         cx.on_action(|_: &Quit, cx| {
             service::cancel_analyze();
             cx.quit();
@@ -4895,7 +5344,7 @@ pub fn run() {
             cx,
             move |window, cx| {
                 cx.new(|cx| {
-                    if let Some(raw) = benchmark {
+                    let mut view = if let Some(raw) = benchmark {
                         Creditia::benchmark(raw, window, cx)
                     } else {
                         match fixture {
@@ -4906,7 +5355,11 @@ pub fn run() {
                             }
                             None => Creditia::new(window, cx),
                         }
+                    };
+                    if let Some(error) = font_error {
+                        view.error = Some(error);
                     }
+                    view
                 })
             },
         )

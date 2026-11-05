@@ -27,8 +27,15 @@ export function fontFiles(): string[] {
 
 const paths = new Map<string, string>();
 function selectedFontFiles(svg: string): string[] {
-  const faces = referencedFonts(svg);
-  if (!faces.length) return [];
+  const referenced = referencedFonts(svg);
+  if (!referenced.length) return [];
+  const wanted = new Set(referenced.map(face => `${face.pkg}/${face.dir}`));
+  // usvg can replace an entire run when its first family misses one symbol.
+  // Preserve the baseline database's fallback order (Inter, JetBrains, Noto),
+  // rather than allowing an earlier picture label to become the fallback font.
+  const faces = FONTS.filter(face => wanted.has(`${face.pkg}/${face.dir}`)
+    || face.family === 'Inter' || face.family === 'JetBrains Mono'
+    || face.family === 'Noto Sans SC' && face.weight === 400);
   return faces.map(face => {
     const key = `${face.pkg}/${face.dir}`;
     let file = paths.get(key);

@@ -84,6 +84,8 @@ test('staging preserves schema and required fonts while pruning previews and unu
     assert.equal(await fs.readFile(path.join(result.resources,'schema/agents.json'),'utf8'),'{"test":true}');
     assert.equal(await fs.readFile(path.join(result.resources,'legacy/creditia-migrate'),'utf8'),'app');
     await assert.rejects(stage({target:'test-platform',output:path.join(root,'output'),appBin:app,coreBin:core,nodeLicense:license,source:path.join(root,'source'),platform:'linux'}),/nonempty/);
+    await fs.rm(path.join(root,'source/packages/render/node_modules/@expo-google-fonts/sample'),{recursive:true});
+    await assert.rejects(stage({target:'missing-font',output:path.join(root,'output'),appBin:app,coreBin:core,nodeLicense:license,source:path.join(root,'source'),platform:'linux'}),/Required font package or face is missing/);
   }finally{await fs.rm(root,{recursive:true,force:true});}
 });
 

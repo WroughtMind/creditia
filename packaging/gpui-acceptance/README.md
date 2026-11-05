@@ -14,7 +14,7 @@ deliberately separate from comparing two APIs in the candidate checkout.
 ```sh
 node packaging/gpui-acceptance/render-matrix.mjs \
   --baseline-root ../creditia-baseline --candidate-root . \
-  --output evidence/artworks --profile full --motion --exports
+  --output evidence/artworks --profile full --preferences all --motion --exports
 ```
 
 `full` covers all 1,738 distinct renderer/style/piece/layout rows, including the
@@ -37,9 +37,9 @@ change. Font-file hashes must be identical before any artwork comparison starts.
 
 `--motion` checks that explicit time samples match frame results and that reduced
 motion returns the final frame. `--exports` checks all applicable graphical
-formats with a selected square size and selected language. Native playback,
-interruption, GIF timing inspection, browser execution, CLI invocation and save
-dialogs still need their own tests; these checks make no claim to cover them.
+formats against a declared 320×240 transformed artwork, including decoded pixel
+content and GIF timing. Native playback, interruption, browser execution, CLI
+invocation and save dialogs still need their own tests.
 
 Each case is checkpointed to `manifest.json`. A failed or interrupted run preserves
 its partial evidence; only a finished run has `complete: true`. Matched thumbnails

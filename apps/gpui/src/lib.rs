@@ -281,7 +281,7 @@ pub fn export_filename(request: &Value) -> String {
             })
             .scan(0usize, |bytes, c| {
                 *bytes += c.len_utf8();
-                (*bytes <= 60).then_some(c)
+                (*bytes <= 40).then_some(c)
             })
             .collect();
         let cleaned = cleaned.trim_matches(['.', ' ']);
@@ -292,7 +292,7 @@ pub fn export_filename(request: &Value) -> String {
         }
     };
     format!(
-        "{}-{}-{}.{}",
+        "{}-{}-{}-{}-{}.{}",
         component(
             request["raw"]["project"]["name"]
                 .as_str()
@@ -300,6 +300,8 @@ pub fn export_filename(request: &Value) -> String {
         ),
         component(request["piece"].as_str().unwrap_or("artwork")),
         component(request["style"].as_str().unwrap_or("style")),
+        component(request["variant"].as_str().unwrap_or("default")),
+        component(request["size"].as_str().unwrap_or("native")),
         request["format"].as_str().unwrap_or("png")
     )
 }
@@ -420,9 +422,11 @@ mod tests {
 pub mod animation;
 pub mod app;
 pub mod export_jobs;
+pub mod live_mark;
 pub mod native_preview;
 pub mod platform_ui;
 pub mod preference_writer;
 pub mod renderer;
+pub mod roam;
 pub mod ui_model;
 pub mod ui_reports;

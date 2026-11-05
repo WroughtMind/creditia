@@ -102,7 +102,16 @@ def run(args):
         time.sleep(.1)  # Allow the verified render to reach the X11 compositor.
         file = event_path.with_name(f"{label}.png")
         subprocess.run(["import", "-window", str(window), str(file)], capture_output=True, check=True)
-        journal.write("screenshot", path=file.name, sha256=hashlib.sha256(file.read_bytes()).hexdigest(), bytes=file.stat().st_size)
+        # DOM/image readiness can precede (or never reach) an X11 paint, notably
+        # with WebKitGTK software compositing. Reject the blank initial shell.
+        pixels = subprocess.run(["convert", str(file), "-crop", "1200x680+80+100", "+repage", "-depth", "8", "rgb:-"], capture_output=True, check=True).stdout
+        dark = sum(max(pixels[i:i + 3]) < 180 for i in range(0, len(pixels), 3))
+        luma_levels = len({sum(pixels[i:i + 3]) // 3 for i in range(0, len(pixels), 3)})
+        painted = dark >= 200 and luma_levels >= 16
+        journal.write("screenshot", path=file.name, sha256=hashlib.sha256(file.read_bytes()).hexdigest(), bytes=file.stat().st_size,
+                      content_pixels_verified=painted, dark_content_pixels=dark, luminance_levels=luma_levels)
+        if not painted:
+            raise AssertionError(f"Actual {label} window is blank or lacks rendered artwork: dark={dark}, luminance_levels={luma_levels}")
 
     def action(label, operation, predicate):
         before = observed()[-1]["state"]
@@ -174,12 +183,28 @@ def run(args):
             wait_state(lambda s: s.get("ready") is True, "visible idle remains ready")
             journal.write("idle-end")
         elif args.scenario == "hidden-idle":
-            action("hide-window", lambda: xdo("windowminimize", window), lambda b, s: s.get("active") is False or s.get("visible") is False)
+            def os_state():
+                props = subprocess.run(["xprop", "-id", str(window), "WM_STATE", "_NET_WM_STATE"], check=True, text=True, capture_output=True).stdout
+                geometry = subprocess.run(["xwininfo", "-id", str(window)], check=True, text=True, capture_output=True).stdout
+                return {"mapped": "Map State: IsViewable" in geometry, "iconic": "Iconic" in props or "_NET_WM_STATE_HIDDEN" in props}
+            def window_action(label, operation, predicate):
+                before = os_state(); journal.write("action-start", action=label, before=before, observation_source="x11-window-manager")
+                operation(); deadline = time.monotonic() + 15
+                while time.monotonic() < deadline:
+                    after = os_state()
+                    if predicate(after):
+                        journal.write("action-observed", action=label, before=before, after=after, observation_source="x11-window-manager")
+                        return
+                    time.sleep(.1)
+                raise TimeoutError(f"Window manager did not observe {label}: {after}")
+            # Minimized applications intentionally stop drawing/requestAnimationFrame;
+            # waiting for render-time telemetry here would reject correct pausing.
+            window_action("hide-window", lambda: xdo("windowminimize", window), lambda s: s["iconic"] or not s["mapped"])
             journal.write("idle-start", seconds=args.idle_seconds)
             time.sleep(args.idle_seconds)
             journal.write("idle-end")
-            action("restore-window", lambda: (xdo("windowmap", window), xdo("windowactivate", "--sync", window)),
-                   lambda b, s: s.get("active") is True or s.get("visible") is True)
+            window_action("restore-window", lambda: (xdo("windowmap", window), xdo("windowactivate", "--sync", window)),
+                          lambda s: s["mapped"] and not s["iconic"])
         elif args.scenario == "continuous-zoom":
             if args.application != "gpui":
                 raise ValueError("The baseline has no continuous zoom; do not invent a comparable workload")

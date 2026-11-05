@@ -71,7 +71,7 @@ export function art(id: string, m: Model, st: Style, o: PieceOpts = {}): Art | n
   const s = p.render(m, st, o);
   if (!s) return null;
   const name = id === 'versions' ? historyLabels(m.history.basis, m.lang).name : m.lang === 'en' ? p.en : p.name;
-  return { w: s.w, h: s.h, svg: materialSvg(s, st.id, o.t), hits: s.hits, bg: s.bg, title: `${m.project} · ${name}`, motion: (s as any).motion, selection: { style: st.id, piece: id, lang: m.lang } };
+  return { w: s.w, h: s.h, svg: materialSvg(s, st.id, o.t, id), hits: s.hits, bg: s.bg, title: `${m.project} · ${name}`, motion: (s as any).motion, selection: { style: st.id, piece: id, lang: m.lang } };
 }
 /** 桌面播放和导出使用同一时刻采样；full 可复用已经排好的长卷。 */
 export function frame(id: string, m: Model, st: Style, o: PieceOpts = {}, t = 1, full = art(id, m, st, o)): Art | null {

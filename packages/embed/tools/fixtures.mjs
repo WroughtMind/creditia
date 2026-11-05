@@ -18,6 +18,16 @@ for (const style of catalog.result.styles) {
     cases.push({ selection, art: result.result.art });
   }
 }
+for (const style of catalog.result.styles.filter(style => ['minimal-light','ink'].includes(style.id))) {
+  for (const lang of ['zh','en']) {
+    const request = { version:1,id:`${style.id}-${lang}-named-tool`,op:'render',style:style.id,
+      renderer:style.renderer,piece:'tier',lang,group:'tool',named:true,sign:'Creditia · 共同创作',raw };
+    const result = await renderRequest(request);
+    if (!result.ok || !result.result.art) throw new Error(`Preference case failed: ${request.id}`);
+    const { raw: _, ...selection } = request;
+    cases.push({ selection, art: result.result.art });
+  }
+}
 mkdirSync(resolve(root, 'dist/acceptance'), { recursive: true });
 writeFileSync(resolve(root, 'dist/acceptance/fixture.json'), input);
 writeFileSync(resolve(root, 'dist/acceptance/cases.json'), JSON.stringify({

@@ -44,7 +44,8 @@ try {
       document.querySelector('creditia-card')?.remove();
       const card = document.createElement('creditia-card');
       for (const [key, value] of Object.entries({ src:'/acceptance/fixture.json', theme:selection.style,
-        renderer:selection.renderer, piece:selection.piece, lang:selection.lang, group:selection.group })) card.setAttribute(key, value);
+        renderer:selection.renderer, piece:selection.piece, lang:selection.lang, group:selection.group,
+        named:String(selection.named), sign:selection.sign || '' })) card.setAttribute(key, value);
       const timer = setTimeout(() => reject(new Error(`Timed out: ${selection.style}`)), 60000);
       card.addEventListener('creditia-ready', event => { clearTimeout(timer); resolve(event.detail.art); }, { once:true });
       card.addEventListener('creditia-error', event => { clearTimeout(timer); reject(new Error(String(event.detail))); }, { once:true });
@@ -55,7 +56,7 @@ try {
     assert.equal(normalize(art.svg), normalize(item.art.svg), `Native/web SVG mismatch: ${item.selection.id}`);
     report.cases.push({ id: item.selection.id, status: 'passed' });
     if (item.selection.lang === 'zh') {
-      const file = `${item.selection.style}.png`;
+      const file = `${item.selection.id}.png`;
       await page.locator('creditia-card').screenshot({ path: resolve(output, file) }); report.screenshots.push(file);
     }
   }
@@ -85,6 +86,25 @@ try {
   assert.equal(await page.locator('creditia-card .ct-play').isVisible(),false);
   await page.emulateMedia({ reducedMotion:'no-preference' });
   await page.waitForTimeout(400); assert.notEqual(await svg(),reduced,'Animation must recover when reduced motion is disabled');
+  await page.emulateMedia({ reducedMotion:'reduce' });
+  const initialReduced = await page.evaluate(() => new Promise((resolve,reject) => {
+    const card = document.querySelector('creditia-card');
+    const timeout = setTimeout(() => reject(new Error('Reduced initial playback timed out')),60000);
+    card.addEventListener('creditia-animation-ready', event => { clearTimeout(timeout); resolve(event.detail); },{once:true});
+    // Consecutive attribute changes must discard intermediate paint results.
+    card.setAttribute('theme','minimal-light'); card.setAttribute('renderer','classic');
+  }));
+  assert.equal(initialReduced.frameCount,1); assert.equal(initialReduced.timeline.durationMs,0);
+  await page.evaluate(() => {
+    const card = document.querySelector('creditia-card');
+    window.creditiaResumed = new Promise((resolve,reject) => {
+      const timeout=setTimeout(() => reject(new Error('Playback did not resume after reduced motion')),60000);
+      card.addEventListener('creditia-animation-ready',event => { clearTimeout(timeout); resolve(event.detail); },{once:true});
+    });
+  });
+  await page.emulateMedia({ reducedMotion:'no-preference' });
+  const resumed = await page.evaluate(() => window.creditiaResumed);
+  assert(resumed.frameCount > 1 && resumed.timeline.durationMs > 0);
   report.motion = { controls:'passed', reducedMotion:'passed', frameCount:motion.frameCount, timeline:motion.timeline };
   assert.deepEqual(errors, []); assert(requests.every(url => url.startsWith(base)), 'Web renderer requested an external asset');
   report.status = 'passed';

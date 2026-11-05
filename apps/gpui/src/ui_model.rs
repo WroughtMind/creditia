@@ -267,10 +267,13 @@ pub fn masonry(
 
 pub fn texture_width(logical: f32, dpi: f32) -> u32 {
     let target = (logical * dpi).ceil().max(128.) as u32;
-    [256, 512, 768, 1024, 1536, 2048, 3072, 4096]
-        .into_iter()
-        .find(|w| *w >= target)
-        .unwrap_or(4096)
+    [
+        256, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192, 12288, 16384, 24576, 32768, 49152,
+        65536, 98304, 131072,
+    ]
+    .into_iter()
+    .find(|w| *w >= target)
+    .unwrap_or(131072)
 }
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]

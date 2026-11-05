@@ -38,7 +38,7 @@ pub fn load_export_jobs() -> Res<Value> {
 }
 
 fn save_in(directory: &Path, expected_revision: u64, queue: &Value) -> Res<u64> {
-    if queue["schema"] != 1
+    if queue["schema"] != 2
         || !queue["archives"].is_object()
         || !queue["jobs"]
             .as_array()
@@ -102,7 +102,7 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
-        let queue = json!({"schema":1,"nextId":0,"archives":{},"jobs":[]});
+        let queue = json!({"schema":2,"nextId":0,"archives":{},"jobs":[]});
         assert_eq!(save_in(&directory, 0, &queue).unwrap(), 1);
         let path = directory.join("export-jobs.json");
         let first = std::fs::read(&path).unwrap();

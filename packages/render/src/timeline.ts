@@ -40,19 +40,32 @@ export function timeAt(elapsedMs: number, timeline: Timeline): number {
 /** Material-specific petal growth; t=1 always returns the exact resting geometry. */
 export function petalMotion(style: string, t: number, i: number, count: number): { growth: number; turn: number; opacity: number } {
   if (t >= 1) return { growth: 1, turn: 0, opacity: 1 };
-  const stagger = count > 1 ? (i / (count - 1)) * 0.42 : 0;
+  const profile = motionProfile(style), kind = profile.material;
+  const order = kind === 'split' ? (i % 2 ? Math.ceil(count / 2) + Math.floor(i / 2) : Math.floor(i / 2)) : i;
+  const stagger = count > 1 ? (order / (count - 1)) * profile.stagger : 0;
   const u = clamp((t - stagger) / (1 - stagger));
   const smooth = u * u * (3 - 2 * u);
-  if (['ink', 'ukiyoe', 'woodblock', 'manuscript'].includes(style)) {
+  const turn = Math.min(.018, .22 / Math.max(1, count));
+  if (['ink', 'bands', 'press', 'writing'].includes(kind)) {
     const wash = 1 - Math.pow(1 - u, 2.4);
-    return { growth: wash, turn: Math.sin(u * Math.PI) * Math.sin(i * 1.7 + 0.6) * 0.012, opacity: Math.min(1, u * 3) };
+    return { growth: profile.steps ? Math.floor(wash * profile.steps) / profile.steps : wash,
+      turn: Math.sin(u * Math.PI) * Math.sin(i * 1.7 + 0.6) * turn * .65, opacity: Math.min(1, u * 3) };
   }
-  if (['terminal', 'crt', 'arcade', 'cyber'].includes(style)) {
-    return { growth: Math.floor(u * 12) / 12, turn: 0, opacity: u > 0 ? 1 : 0 };
+  if (['scan', 'pixels', 'slices'].includes(kind)) {
+    const steps = profile.steps ?? 12;
+    return { growth: Math.floor(u * steps) / steps, turn: 0, opacity: u > 0 ? 1 : 0 };
   }
-  if (['meadow', 'pastel', 'glass', 'neon'].includes(style)) {
+  if (['leaves', 'bubbles', 'glass'].includes(kind)) {
     return { growth: smooth + Math.sin(u * Math.PI * 2) * (1 - u) * u * 0.22,
-      turn: Math.sin(u * Math.PI) * Math.sin(i * 2.2) * 0.018, opacity: Math.min(1, u * 4) };
+      turn: Math.sin(u * Math.PI) * Math.sin(i * 2.2) * turn, opacity: Math.min(1, u * 4) };
   }
-  return { growth: 1 - Math.pow(1 - u, 3), turn: 0, opacity: Math.min(1, u * 4) };
+  if (['folds', 'blocks', 'panels', 'page'].includes(kind)) return {
+    growth: 1 - Math.pow(1 - u, 3), turn: (1 - smooth) * (i % 2 ? 1 : -1) * turn * .7, opacity: u > 0 ? 1 : 0,
+  };
+  if (['iris', 'curtain', 'shutter'].includes(kind)) return {
+    growth: smooth, turn: (1 - smooth) * turn * .6, opacity: Math.min(1, u * 5),
+  };
+  if (kind === 'neon') return { growth: smooth, turn: 0, opacity: smooth * smooth };
+  const growth = 1 - Math.pow(1 - u, 3);
+  return { growth: profile.steps ? Math.floor(growth * profile.steps) / profile.steps : growth, turn: 0, opacity: Math.min(1, u * 4) };
 }

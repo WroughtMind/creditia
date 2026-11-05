@@ -12,8 +12,11 @@ const expected = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '.
 const repo = path.resolve(o.repo), output = path.resolve(o.output), core = path.resolve(o.core);
 if (commitOf(repo) !== expected) throw Error('Fixture checkout is not the immutable migration baseline');
 fs.mkdirSync(path.dirname(output), { recursive: true });
+const library = path.join(path.dirname(output), 'isolated-library');
+if (fs.existsSync(library)) throw Error('Public fixture capture requires a fresh isolated library directory');
 const command = ['analyze', '--repo', repo, '--fresh', '--json', '--lang', 'en', '--out', output];
-const result = spawnSync(core, command, { env: { ...process.env, CREDITIA_HOME: path.join(path.dirname(output), 'isolated-library') }, encoding: 'utf8' });
+const result = spawnSync(core, command, { env: { ...process.env, CREDITIA_HOME: library }, encoding: 'utf8' });
+fs.rmSync(library, { recursive: true, force: true });
 fs.writeFileSync(output + '.analysis.log', (result.stdout ?? '') + '\n' + (result.stderr ?? ''));
 if (![0, 2].includes(result.status)) throw Error(`Public project analysis failed: ${result.status}`);
 const raw = JSON.parse(fs.readFileSync(output, 'utf8'));

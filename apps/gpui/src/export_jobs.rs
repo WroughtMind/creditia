@@ -66,7 +66,9 @@ impl Request {
     /// Call in the renderer's background task, not during a window redraw.
     pub fn materialize(&self) -> Value {
         let mut request = (*self.parameters).clone();
-        request["raw"] = (*self.archive).clone();
+        for (key, value) in self.archive.as_object().expect("validated input bundle") {
+            request[key] = value.clone();
+        }
         request
     }
     pub fn format(&self) -> &str {
@@ -169,6 +171,20 @@ impl Queue {
 
     pub fn enqueue(
         &mut self,
+        request: Value,
+        path: PathBuf,
+        label: String,
+    ) -> Result<Enqueued, String> {
+        // Validation can fail after considering a history eviction. Commit the
+        // candidate only on success so a rejected request never removes a job.
+        let mut candidate = self.clone();
+        let queued = candidate.enqueue_inner(request, path, label)?;
+        *self = candidate;
+        Ok(queued)
+    }
+
+    fn enqueue_inner(
+        &mut self,
         mut request: Value,
         path: PathBuf,
         label: String,
@@ -183,6 +199,16 @@ impl Queue {
             .remove("raw")
             .filter(Value::is_object)
             .ok_or("Queued export requires an archive")?;
+        let mut inputs = serde_json::Map::new();
+        inputs.insert("raw".into(), raw);
+        // Aggregate/profile and blame data can be larger than the main archive.
+        // Intern them with it so each format does not duplicate that same input.
+        for key in ["projects", "blame"] {
+            if let Some(value) = object.remove(key) {
+                inputs.insert(key.into(), value);
+            }
+        }
+        let raw = Value::Object(inputs);
         object.remove("id"); // Transport sequence IDs are not export options.
         for job in &self.jobs {
             if job.state.pending()
@@ -354,11 +380,12 @@ impl Queue {
         if self.jobs.iter().filter(|job| job.state.pending()).count() >= MAX_PENDING {
             return Err("The export queue is full".into());
         }
-        let job = self
+        let index = self
             .jobs
-            .iter_mut()
-            .find(|job| job.id == id)
+            .iter()
+            .position(|job| job.id == id)
             .ok_or("Unknown export job")?;
+        let job = &self.jobs[index];
         if !matches!(
             job.state,
             State::Failed | State::Cancelled | State::Interrupted
@@ -366,6 +393,17 @@ impl Queue {
         {
             return Err("This export cannot be retried".into());
         }
+        let input = job.request.as_ref().expect("retry input checked");
+        if self.jobs.iter().any(|other| {
+            other.state.pending()
+                && other.path == job.path
+                && other.request.as_ref().is_some_and(|request| {
+                    *request.parameters == *input.parameters && *request.archive == *input.archive
+                })
+        }) {
+            return Err("An identical export is already queued".into());
+        }
+        let job = &mut self.jobs[index];
         job.state = State::Queued;
         job.error = None;
         Ok(())
@@ -388,7 +426,7 @@ impl Queue {
             .iter()
             .map(|(key, (value, _))| (key.to_string(), (**value).clone()))
             .collect();
-        json!({"schema":1,"nextId":self.next_id,"archives":archives,"jobs":self.jobs.iter().map(|job| json!({
+        json!({"schema":2,"nextId":self.next_id,"archives":archives,"jobs":self.jobs.iter().map(|job| json!({
             "id":job.id,"attempt":job.attempt,"label":job.label,"format":job.format,"path":job.path,
             "state":job.state.as_str(),"error":job.error,"request":job.request.as_ref().map(|request| &*request.parameters),
             "archive":job.request.as_ref().map(|request| request.archive_key.to_string())
@@ -398,7 +436,8 @@ impl Queue {
         if value.is_null() {
             return Ok(Self::default());
         }
-        if value["schema"] != 1 {
+        let schema = value["schema"].as_u64().unwrap_or(0);
+        if ![1, 2].contains(&schema) {
             return Err("Unsupported export queue schema".into());
         }
         let saved = value["jobs"].as_array().ok_or("Invalid export history")?;
@@ -416,12 +455,28 @@ impl Queue {
             if !raw.is_object() {
                 return Err("Invalid saved export archive".into());
             }
+            // Schema 1 was the initial development journal and stored only raw.
+            // Read it without dropping any recovery state; all new writes use 2.
+            let input = if schema == 1 {
+                json!({"raw":raw})
+            } else {
+                raw.clone()
+            };
+            if !input["raw"].is_object()
+                || input.as_object().is_none_or(|entries| {
+                    entries
+                        .keys()
+                        .any(|key| !["raw", "projects", "blame"].contains(&key.as_str()))
+                })
+            {
+                return Err("Invalid saved export input bundle".into());
+            }
             let key = key.parse::<u64>().map_err(|_| "Invalid archive ID")?;
-            let bytes = encoded_bytes(raw)?;
+            let bytes = encoded_bytes(&input)?;
             if bytes > MAX_REQUEST_BYTES {
                 return Err("Saved export archive exceeds 8 MiB".into());
             }
-            queue.archives.insert(key, (Arc::new(raw.clone()), bytes));
+            queue.archives.insert(key, (Arc::new(input), bytes));
         }
         for record in saved {
             let id = record["id"].as_u64().ok_or("Invalid export ID")?;
@@ -453,7 +508,9 @@ impl Queue {
                     .get(&key)
                     .ok_or("Missing archived export input")?;
                 let parameter_bytes = encoded_bytes(&record["request"])?;
-                if bytes.saturating_add(parameter_bytes).saturating_add(7) > MAX_REQUEST_BYTES {
+                // Two nonempty JSON objects merge with one comma, removing one
+                // brace pair: the resulting request is exactly sum minus one.
+                if bytes.saturating_add(parameter_bytes).saturating_sub(1) > MAX_REQUEST_BYTES {
                     return Err("Saved export request exceeds 8 MiB".into());
                 }
                 Some(Request {
@@ -530,6 +587,7 @@ impl Journal {
             changed: std::sync::Condvar::new(),
         });
         let work = shared.clone();
+        let notify_failure = notify.clone();
         let worker = std::thread::Builder::new()
             .name("creditia-export-journal".into())
             .spawn(move || {
@@ -595,6 +653,7 @@ impl Journal {
                 state.error = Some(message.clone());
                 state.unread_error = Some(message);
                 drop(state);
+                notify_failure();
                 Self {
                     shared,
                     worker: None,
@@ -726,8 +785,64 @@ mod tests {
         assert!(restored.start_next().is_some());
     }
     #[test]
+    fn retry_does_not_duplicate_a_newer_pending_export() {
+        let mut queue = Queue::default();
+        let old = queue.enqueue(request("png"), path("same.png"), "Old".into()).unwrap();
+        let active = queue.start_next().unwrap();
+        queue.finish(active.id, active.attempt, Err("disk full".into()));
+        let newer = queue.enqueue(request("png"), path("same.png"), "New".into()).unwrap();
+        assert!(queue.retry(old.id).is_err());
+        assert_eq!(queue.job(old.id).unwrap().state, State::Failed);
+        assert_eq!(queue.jobs().iter().filter(|job| job.state.pending()).count(), 1);
+        assert!(queue.cancel_queued(newer.id));
+        queue.retry(old.id).unwrap();
+        assert_eq!(queue.start_next().unwrap().id, old.id);
+    }
+    #[test]
+    fn aggregate_and_blame_inputs_are_shared_across_formats_and_legacy_history_loads() {
+        let mut queue = Queue::default();
+        let mut first = request("png");
+        first["projects"] = json!([{"project":{"name":"Other project"}}]);
+        first["blame"] = json!({"file":"src/main.rs","line":12});
+        let mut second = first.clone();
+        second["format"] = json!("svg");
+        queue
+            .enqueue(first.clone(), path("a.png"), "A".into())
+            .unwrap();
+        queue.enqueue(second, path("a.svg"), "B".into()).unwrap();
+        let snapshot = queue.snapshot();
+        assert_eq!(snapshot["archives"].as_object().unwrap().len(), 1);
+        assert!(snapshot["jobs"][0]["request"].get("projects").is_none());
+        assert!(snapshot["jobs"][1]["request"].get("blame").is_none());
+        let restored = Queue::from_snapshot(snapshot).unwrap();
+        let input = restored.jobs()[0].request.as_ref().unwrap().materialize();
+        assert_eq!(input["projects"], first["projects"]);
+        assert_eq!(input["blame"], first["blame"]);
+
+        let mut legacy = queue.snapshot();
+        legacy["schema"] = json!(1);
+        for input in legacy["archives"].as_object_mut().unwrap().values_mut() {
+            *input = input["raw"].clone();
+        }
+        for job in legacy["jobs"].as_array_mut().unwrap() {
+            job["request"]["projects"] = first["projects"].clone();
+            job["request"]["blame"] = first["blame"].clone();
+        }
+        let legacy = Queue::from_snapshot(legacy).unwrap();
+        assert!(
+            legacy
+                .jobs()
+                .iter()
+                .all(|job| job.state == State::Interrupted)
+        );
+        assert_eq!(
+            legacy.jobs()[0].request.as_ref().unwrap().materialize()["projects"],
+            first["projects"]
+        );
+    }
+    #[test]
     fn invalid_future_or_incomplete_state_is_rejected_without_an_overwrite() {
-        assert!(Queue::from_snapshot(json!({"schema":2})).is_err());
+        assert!(Queue::from_snapshot(json!({"schema":3})).is_err());
         let mut queue = Queue::default();
         queue
             .enqueue(request("png"), path("a.png"), "A".into())
@@ -740,6 +855,25 @@ mod tests {
                 .enqueue(request("png"), PathBuf::from("relative.png"), "A".into())
                 .is_err()
         );
+    }
+    #[test]
+    fn rejected_enqueue_preserves_the_full_recovery_history() {
+        let mut queue = Queue::default();
+        for index in 0..MAX_JOBS {
+            queue
+                .enqueue(request("png"), path(&format!("{index}.png")), "A".into())
+                .unwrap();
+            let job = queue.start_next().unwrap();
+            assert!(queue.finish(job.id, job.attempt, Ok(())));
+        }
+        queue.next_id = u64::MAX;
+        let before = queue.snapshot();
+        assert!(
+            queue
+                .enqueue(request("png"), path("new.png"), "New".into())
+                .is_err()
+        );
+        assert_eq!(queue.snapshot(), before);
     }
     #[test]
     fn journal_advances_only_successful_revisions_and_stops_after_conflict() {

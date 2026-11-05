@@ -221,7 +221,13 @@ if(process.argv.includes('--write')) {
     } else if(file==='inventory.json') {
       // Body changes during migration are allowed. Check catalog semantics, not
       // snapshot hashes or line shifts; at() above still verifies every anchor.
-      const semantic=(_key,value)=>['candidateSourceFingerprints','source','variantSource'].includes(_key)?undefined:value;
+      const semantic=function(key,value){
+        if(['candidateSourceFingerprints','source','variantSource'].includes(key))return undefined;
+        // observedOutputDifferences uses an array named `sources`. Its path and
+        // anchor remain semantic, but line shifts are still snapshot metadata.
+        if(key==='line'&&typeof this?.path==='string'&&typeof this?.anchor==='string')return undefined;
+        return value;
+      };
       const saved=JSON.parse(fs.readFileSync(path.join(here,file),'utf8'));
       if(JSON.stringify(saved,semantic)!==JSON.stringify(inventory,semantic)) throw new Error(`${file} catalog drift; review and run --write`);
     }

@@ -195,6 +195,9 @@ jobs:
           node packaging/gpui/licenses.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --metadata "$RUNNER_TEMP/gpui-dependencies.json"
           cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --features tauri/custom-protocol --locked --format-version 1 --filter-platform '${{ matrix.target }}' > "$RUNNER_TEMP/gpui-migration-dependencies.json"
           node packaging/gpui/licenses.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --metadata "$RUNNER_TEMP/gpui-migration-dependencies.json"
+      - name: Record Windows PE dependencies and include required redistributable runtimes
+        if: runner.os == 'Windows'
+        run: node packaging/gpui/windows-runtime.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --output evidence
       - name: Ad-hoc sign the complete macOS application
         if: runner.os == 'macOS'
         run: |
@@ -245,6 +248,7 @@ jobs:
             evidence/package-installed/**
             evidence/fixtures/fixture-manifest.json
             evidence/system-libraries.txt
+            evidence/windows-dependencies.*
             ${{ runner.temp }}/gpui-*.log
             ${{ runner.temp }}/gpui-rustfmt.patch
             ${{ runner.temp }}/core-build.log

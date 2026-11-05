@@ -133,7 +133,7 @@ async function motionChecks(request, row) {
     limitation: 'Checks shared sampling only; native playback, interruption and style motion direction require separate UI and visual evidence.' };
 }
 
-let ordinal = 0;
+let ordinal = 0, diagnosticFailures = 0;
 for (const [rowIndex, row] of selected.entries()) {
   const prefs = options.preferences === 'all' ? preferences : [preferences[(rowIndex * shards + shard) % preferences.length]];
   for (const fixture of fixtures) for (const pref of prefs) {
@@ -169,6 +169,12 @@ for (const [rowIndex, row] of selected.entries()) {
     } catch (error) { record.status = 'error'; record.error = error instanceof Error ? error.stack : String(error); }
     record.duration_ms = Math.round((performance.now() - start) * 100) / 100;
     manifest.cases.push(record);
+    if (['different', 'error'].includes(record.status) && diagnosticFailures++ < 20) console.warn(JSON.stringify({
+      case: record.key, status: record.status, data_equal: record.comparison?.data_equal,
+      svg_equal: record.comparison?.svg_equal, pixels_equal: record.comparison?.pixels?.equal,
+      motion: record.motion?.status, export_failures: record.exports?.formats.filter(format => !format.passed).map(format => format.format),
+      error: record.error?.slice(0, 500),
+    }));
     // Checkpoint after every case; an interrupted CI run still has honest partial evidence.
     manifest.summary = countBy(manifest.cases, c => c.status);
     fs.writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');

@@ -97,6 +97,50 @@ fn resource_roots(executable: &Path) -> Vec<PathBuf> {
     roots.push(directory.join("resources"));
     roots
 }
+
+const UI_FONTS: [&str; 4] = [
+    "inter/400Regular/Inter_400Regular.ttf",
+    "inter/600SemiBold/Inter_600SemiBold.ttf",
+    "noto-sans-sc/400Regular/NotoSansSC_400Regular.ttf",
+    "noto-sans-sc/700Bold/NotoSansSC_700Bold.ttf",
+];
+
+/// The application shell and artwork renderer share the same packaged font
+/// files. Resolve/read these on a background executor before adding font bytes
+/// to GPUI's text system; no second copy of the CJK family is shipped.
+pub fn ui_font_files() -> Result<Vec<PathBuf>, String> {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("Cannot locate application fonts: {error}"))?;
+    let mut roots = Vec::new();
+    if let Some(bridge) = std::env::var_os("CREDITIA_RENDER_BRIDGE").map(PathBuf::from) {
+        if let Some(root) = bridge.parent().and_then(Path::parent) {
+            roots.push(root.to_path_buf());
+        }
+    }
+    roots.extend(
+        resource_roots(&executable)
+            .into_iter()
+            .map(|root| root.join("render")),
+    );
+    if cfg!(debug_assertions) {
+        roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../packages/render"));
+    }
+    ui_font_files_in(&roots)
+}
+
+fn ui_font_files_in(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+    for root in roots {
+        let fonts = root.join("node_modules/@expo-google-fonts");
+        let paths = UI_FONTS
+            .iter()
+            .map(|name| fonts.join(name))
+            .collect::<Vec<_>>();
+        if paths.iter().all(|path| path.is_file()) {
+            return Ok(paths);
+        }
+    }
+    Err("Bundled interface fonts are incomplete (Inter Regular/Semibold and Noto Sans SC Regular/Bold). Reinstall Creditia, or point CREDITIA_RENDER_BRIDGE to a complete development renderer.".into())
+}
 /// Release builds always use the bundled runtime. Overrides are deliberate;
 /// source checkout and PATH fallback are available only in development builds.
 fn renderer_command() -> Result<Command, String> {
@@ -1320,6 +1364,29 @@ for await (const line of createInterface({input:process.stdin})) {
         assert_eq!(
             resource_roots(Path::new("/opt/creditia/creditia-gpui"))[0],
             Path::new("/opt/creditia/resources")
+        );
+    }
+
+    #[test]
+    fn interface_fonts_use_one_complete_runtime_and_reject_partial_sets() {
+        let directory = TestDirectory::new();
+        let root = directory.0.join("render");
+        let fonts = root.join("node_modules/@expo-google-fonts");
+        for name in &UI_FONTS[..3] {
+            let path = fonts.join(name);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, b"fixture font").unwrap();
+        }
+        assert!(ui_font_files_in(&[root.clone()]).is_err());
+        let final_font = fonts.join(UI_FONTS[3]);
+        fs::create_dir_all(final_font.parent().unwrap()).unwrap();
+        fs::write(final_font, b"fixture font").unwrap();
+        assert_eq!(
+            ui_font_files_in(&[directory.0.join("missing"), root]).unwrap(),
+            UI_FONTS
+                .iter()
+                .map(|name| fonts.join(name))
+                .collect::<Vec<_>>()
         );
     }
 }

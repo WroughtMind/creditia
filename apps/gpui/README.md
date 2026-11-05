@@ -64,7 +64,10 @@ node packaging/gpui/seal-evidence.mjs evidence/native
 ```
 
 The default fixture scope covers 26 desktop styles in Chinese and English,
-captured with light and dark application themes. Pass `--profile smoke` to the
+captured with light and dark application themes. Empty, loading, failure,
+analysis-progress and export-progress states are also captured in both languages
+and themes. The input case opens an artwork and changes its actual layout.
+Pass `--profile smoke` to the
 fixture generator for the four representative styles during development. The
 synthetic render fixture is labeled as such in every evidence manifest. Windows
 uses the packaged executable in a real window: four language/theme cases wait
@@ -94,6 +97,9 @@ archive SHA-256 verified), shared renderer and fonts. License files and a file
 checksum manifest travel with it. A smoke test runs from a temporary directory
 outside the checkout, checks all five graphical export formats, then calls the
 native executable's `--check-resources` entry point.
+Windows PE imports are recorded. Required Visual C++ release runtime DLLs are
+copied unmodified from the builder's redistributable directory beside the
+relevant executables, with Microsoft's runtime license and provenance retained.
 Every archive/installer is then extracted or installed into a fresh directory,
 its payload is checked and its installed executables are launched. The Windows
 installer's uninstall path is also checked for preserving the user library.

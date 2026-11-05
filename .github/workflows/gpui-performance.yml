@@ -23,6 +23,9 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_BUILD_JOBS: 2
   LIBGL_ALWAYS_SOFTWARE: '1'
+  # WebKitGTK's accelerated compositor can leave a blank Xvfb shell even with
+  # a fully loaded DOM: https://github.com/tauri-apps/tauri/issues/15936
+  WEBKIT_DISABLE_COMPOSITING_MODE: '1'
   GDK_BACKEND: x11
   WINIT_UNIX_BACKEND: x11
   WGPU_BACKEND: vulkan
