@@ -11,6 +11,7 @@ import { BRIDGED, BRIDGED_LAYOUTS, isBridged, bridgeArt, bridgeFrames } from './
 import { reveal, rise, RISING } from './motion.ts';
 import { hitsOf, type Seen } from './hits.ts';
 import { portableFontFamilies } from '../fonts.ts';
+import { materialFrame } from '../material-motion.ts';
 
 export type Satori = (tree: any, o: { width: number; height: number; fonts: any[]; onNodeDetected?: (n: any) => void; embedFont?: boolean }) => Promise<string>;
 
@@ -216,8 +217,9 @@ export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, sa
   for (const k of times ?? Array.from({ length: n + 1 }, (_, i) => i / n)) {
     let tree = JSON.parse(layout.tree);
     if (rising) tree = rise(tree, k, layout.w, layout.h, ctx.transparent ? 'transparent' : t.bg);
-    else reveal(tree, k, t.family);
-    const svg = tidy(await satori(tree, { width: layout.w, height: layout.h, fonts }), layout.w, layout.h);
+    else reveal(tree, k, t.id, id);
+    const drawn = tidy(await satori(tree, { width: layout.w, height: layout.h, fonts }), layout.w, layout.h);
+    const svg = rising ? drawn : materialFrame(drawn, layout.w, layout.h, t.id, k, ctx.transparent ? 'transparent' : t.bg);
     frames.push({ w: layout.w, h: layout.h, svg, hits: [], bg: ctx.transparent ? 'transparent' : t.bg, title, selection: { style: t.id, piece: id, lang: ctx.lang } });
   }
   return frames;

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { FONTS, referencedFonts } from './fonts.ts';
 import { makeExporter, type Raster } from './export.ts';
+import { straightRgba } from './pixels.ts';
 
 const require = createRequire(import.meta.url);
 const { Resvg } = require('@resvg/resvg-js');
@@ -48,7 +49,7 @@ const opts = (svg: string, width?: number) => ({
 
 export const raster: Raster = {
   png(svg, width) { return new Uint8Array(new Resvg(svg, opts(svg, width)).render().asPng()); },
-  rgba(svg, width) { const img = new Resvg(svg, opts(svg, width)).render(); return { w: img.width, h: img.height, data: new Uint8Array(img.pixels) }; },
+  rgba(svg, width) { const img = new Resvg(svg, opts(svg, width)).render(); return { w: img.width, h: img.height, data: straightRgba(img.pixels) }; },
   flat(svg) { return new Resvg(svg, opts(svg)).toString(); },
 };
 

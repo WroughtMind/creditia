@@ -67,8 +67,10 @@ The default fixture scope covers 26 desktop styles in Chinese and English,
 captured with light and dark application themes. Pass `--profile smoke` to the
 fixture generator for the four representative styles during development. The
 synthetic render fixture is labeled as such in every evidence manifest. Windows
-has no headless renderer in the pinned GPUI platform and requires native-window
-pixel acceptance separately; portable unit and packaged runtime checks still run.
+uses the packaged executable in a real window: four language/theme cases wait
+for decoded artwork, send keyboard input, assert view state and retain screenshots.
+This requires an interactive desktop and a working graphics driver; unavailable
+native rendering fails the acceptance gate.
 
 These captures establish rendering and the interactions asserted in the test.
 They do not by themselves establish visual equivalence of every offscreen
@@ -92,6 +94,14 @@ archive SHA-256 verified), shared renderer and fonts. License files and a file
 checksum manifest travel with it. A smoke test runs from a temporary directory
 outside the checkout, checks all five graphical export formats, then calls the
 native executable's `--check-resources` entry point.
+Every archive/installer is then extracted or installed into a fresh directory,
+its payload is checked and its installed executables are launched. The Windows
+installer's uninstall path is also checked for preserving the user library.
+
+The `gpui-artworks` workflow compares all 1,738 catalog combinations and all
+declared preference cases against the pinned original renderer. It also analyzes
+the original public Git repository and compares representative artworks from that
+real archive. Neither input is relabeled as private agent-log evidence.
 
 `packaging/gpui/INSTALL.md` documents installation and reversible upgrades.
 Candidate artifacts are not a published stable release. macOS candidate signing

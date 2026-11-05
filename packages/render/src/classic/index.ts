@@ -11,6 +11,7 @@ import type { Out } from './ui.ts';
 import { fontsFor } from './fonts.ts';
 import { classicArt, classicFrames } from './art.ts';
 import type { Raster } from '../export.ts';
+import { straightRgba } from '../pixels.ts';
 
 
 const require = createRequire(import.meta.url);
@@ -65,7 +66,7 @@ export async function renderSized(form: string, m: Model, theme: Theme, w: numbe
 const ropts = (width?: number) => ({ font: { loadSystemFonts: false }, fitTo: width ? { mode: 'width' as const, value: Math.round(width) } : undefined });
 export const raster: Raster = {
   png(svg, width) { return new Uint8Array(new Resvg(svg, ropts(width)).render().asPng()); },
-  rgba(svg, width) { const img = new Resvg(svg, ropts(width)).render(); return { w: img.width, h: img.height, data: new Uint8Array(img.pixels) }; },
+  rgba(svg, width) { const img = new Resvg(svg, ropts(width)).render(); return { w: img.width, h: img.height, data: straightRgba(img.pixels) }; },
   flat(svg) { return new Resvg(svg, ropts()).toString(); },
 };
 

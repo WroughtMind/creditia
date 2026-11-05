@@ -71,6 +71,27 @@ coverage. Derived stress fixtures always retain a synthetic label even when thei
 source archive was real. No private logs, prompt text or machine paths should be
 committed as public visual fixtures.
 
+## Export checks
+
+The full matrix compares all four language/group/name preferences. It runs
+motion and all graphical encoders once per row using a rotated representative
+preference, a declared 320×240 canvas and 160-pixel GIF width. Half the rows request
+transparency. This controls cost without omitting any row or format.
+
+PNG and GIF are independently decoded. PNG pixels and PDF RGB/alpha streams must
+match the expected transformed artwork exactly. PDF cross-reference offsets,
+page dimensions and linked image objects are validated. SVG and HTML are
+rasterized and compared; HTML also checks transformed hover areas, selected
+language, offline content and every exported motion sample against the shared
+timeline. GIF delays and alpha masks must agree; RGB quantization has an explicit
+maximum mean error of 12/255 per channel, with actual mean and maximum recorded.
+Failed encoded files and reference SVGs are retained in addition to hashes.
+
+Static old/new pixel comparison decodes actual PNG bytes on both sides, so an
+internal change from premultiplied to straight alpha cannot masquerade as a
+visible artwork regression. Encoder checks are independent of CLI invocation,
+browser rendering and native save dialogs, which have their own acceptance tests.
+
 ## Native window evidence
 
 The native UI tests render the production view, exercise input and write their
@@ -106,34 +127,54 @@ The sampler launches a program directly, observes descendants and retains childr
 after reparenting. It records process identity as well as PID to avoid attributing
 a reused PID to Creditia. It writes raw samples, logs and a summary.
 
+The `gpui-performance.yml` job builds the original Tauri app at the immutable
+baseline and the GPUI candidate, then runs both on one Xvfb/software Vulkan host.
+`instrument-tauri.mjs` records hashes before and after adding fixture access and
+passive state observation to the old build. Original rendering, layout and input
+handlers remain in use. Background collection and project writes are disabled
+for both benchmark constructors. The release app does not include the baseline
+overlay.
+
+`public-fixture.mjs` analyzes the public pinned Git checkout on a fresh hosted
+runner before instrumentation. It verifies zero local-log sessions, tokens and
+written-line evidence; otherwise it deletes the archive and fails. This is a real
+Git project fixture, not evidence that private agent logs have been verified.
+
 ```sh
-python3 packaging/gpui-acceptance/resources.py \
-  --output evidence/perf/gpui-idle-cold --fixture evidence/real-credits.json \
-  --commit CANDIDATE_SHA --comparison-role candidate \
-  --scenario idle --cache cold --styles 1 --artworks 27 \
-  --window 1360x880 --dpi 1 --seconds 30 -- /path/to/creditia-gpui
+dbus-run-session -- xvfb-run -a -s '-screen 0 1600x1000x24' \
+  python3 packaging/gpui-acceptance/x11-session.py -- \
+  python3 packaging/gpui-acceptance/compare.py \
+    --output evidence/performance --fixture evidence/public-creditia.json \
+    --baseline-bin /path/to/original/creditia-app \
+    --candidate-bin /path/to/current/creditia-gpui \
+    --baseline-sha BASELINE_SHA --candidate-sha CANDIDATE_SHA \
+    --baseline-overlay evidence/baseline-overlay.json
 ```
 
-For the old app use `--comparison-role baseline --measured-commit BASELINE_SHA`
-while keeping `--commit CANDIDATE_SHA` as the target of the comparison. Run both
-programs on the same machine with identical data, style/work counts, window, DPI,
-scenario and cache preparation. Run startup, scroll, zoom, idle and hidden-animation
-in cold and warm conditions. The script does not flush system caches; preparation
-must be documented by the driver.
+The driver sends actual X11 wheel, keyboard and pointer input and waits for
+observed production UI state changes. It captures real window screenshots. App
+state events and the driver's hash-chained action records are retained alongside
+raw process samples. A lone `scenario-complete` claim without the complete valid
+chain is rejected. Hashes provide artifact integrity, not a security attestation
+against a malicious application or runner.
 
-The driver/app receives `CREDITIA_PERF_EVENTS`. It appends JSONL events only after
-performing the intended workload, including:
+The common scenarios are startup, wall scrolling, roam panning, focus enlargement,
+visible idle and hidden idle, each with cold/warm app profiles. The original app
+has no continuous zoom or artwork playback, so `zoom` explicitly means opening
+and closing its enlarged focus view. GPUI's continuous zoom is an additional
+candidate-only scenario; it must not be presented as a matched old capability.
+Cold means a fresh isolated app profile; the OS page cache is uncontrolled. Warm
+means the same profile after a successful first-viewport launch, with process
+memory reset. Warmup action evidence is retained.
 
-```json
-{"event":"scenario-complete","scenario":"scroll","success":true,"operations":40}
-```
-
-Without a matching successful completion event the workload is **unverified**, so
-the report does not accept it as a matched performance scenario. Include actual
-event timing if a driver measures interaction latency; the sampler never derives
-latency from CPU usage. Its sums are RSS (shared pages may be counted more than
-once), not PSS. Short-lived processes can be missed between samples, making CPU a
-lower bound. GPU memory and unmeasured latency stay `null`, never zero.
+Both measured process groups include the same driver and its X11 input utilities.
+Startup and idle phase summaries are separate from overall resource summaries.
+Observation latency includes driver polling and is not input-to-photon latency.
+RSS sums may count shared pages more than once; they are not PSS. Short-lived
+children can be missed between samples, making observed CPU a lower bound. GPU
+memory and unmeasured interaction latency stay `null`. The sampler refuses hosts
+whose process IDs and `/proc` use different namespaces. No local values from
+such an executor are accepted.
 
 ## Consolidation and review
 
@@ -149,7 +190,7 @@ Performance results are comparable only when machine/data/workload identities
 match and both workloads actually completed.
 
 The final gate additionally requires four platform package acceptance records,
-ten matched performance scenarios and a detailed review file, supplied with
+twelve matched scenario/cache combinations and a detailed review file, supplied with
 `--manual-review review.json`. The review records reviewer, timestamp and candidate,
 every artwork's `visual`/`motion` verdict, and every named check of all 37 feature
 groups. Each verdict links to a concrete `manifest.json#case-key` from this run.
@@ -159,6 +200,7 @@ Blanket boolean statements such as “all visuals passed” do not satisfy this 
 Tooling checks require no renderer dependencies:
 
 ```sh
-node --test packaging/gpui-acceptance/common.test.mjs
+node --test packaging/gpui-acceptance/*.test.mjs
 python3 packaging/gpui-acceptance/test_resources.py
+python3 packaging/gpui-acceptance/test_scenario.py
 ```

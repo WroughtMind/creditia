@@ -1,5 +1,8 @@
 //! Shared evidence collection and native background-agent integration.
-use crate::{Fail, Res, AnalysisCancellation, analysis_running, app_settings, core_bin, home, run_core_job_with_cancel};
+use crate::{
+    analysis_running, app_settings, core_bin, home, run_core_job_with_cancel, AnalysisCancellation,
+    Fail, Res,
+};
 use creditia_store::Library;
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -8,10 +11,14 @@ use std::process::Command;
 pub const COLLECT_EVERY: i64 = 3600;
 /// 同一时间只跑一轮（定时的和「现在采集」不叠在一起）
 static COLLECTING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-static ACTIVE_COLLECTION: std::sync::Mutex<Option<(bool, AnalysisCancellation)>> = std::sync::Mutex::new(None);
+static ACTIVE_COLLECTION: std::sync::Mutex<Option<(bool, AnalysisCancellation)>> =
+    std::sync::Mutex::new(None);
 
 pub fn now() -> i64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 pub fn collect_on() -> bool {
@@ -20,22 +27,31 @@ pub fn collect_on() -> bool {
 
 fn save_collection_field(key: &str, value: Value) -> Res<()> {
     crate::settings::edit_app_settings_checked(|settings| {
-        if !settings["collect"].is_null() && !settings["collect"].is_object() { return Err(Fail::with("settings_invalid", "collect")); }
+        if !settings["collect"].is_null() && !settings["collect"].is_object() {
+            return Err(Fail::with("settings_invalid", "collect"));
+        }
         settings["collect"][key] = value;
         Ok(())
     })
 }
 
 /// 跑一轮：一个项目一个核心进程，有分析在跑就等它跑完再接着收。定时的一轮在关着时不跑，中途被关掉就停下
-pub fn collect_round(timed: bool) -> Res<Value> { collect_round_with_cancel(timed, AnalysisCancellation::default()) }
+pub fn collect_round(timed: bool) -> Res<Value> {
+    collect_round_with_cancel(timed, AnalysisCancellation::default())
+}
 
 pub fn collect_round_with_cancel(timed: bool, cancellation: AnalysisCancellation) -> Res<Value> {
     use std::sync::atomic::Ordering;
-    if cancellation.is_cancelled() { return Err(Fail::new("cancelled")); }
+    if cancellation.is_cancelled() {
+        return Err(Fail::new("cancelled"));
+    }
     if timed && !collect_on() {
         return Err(Fail::new("off"));
     }
-    if COLLECTING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+    if COLLECTING
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
         return Err(Fail::new("busy"));
     }
     struct Done;
@@ -48,31 +64,66 @@ pub fn collect_round_with_cancel(timed: bool, cancellation: AnalysisCancellation
     let _done = Done;
     let directory = creditia_store::data_dir();
     std::fs::create_dir_all(&directory).map_err(|e| Fail::with("io", e))?;
-    let lease = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false)
-        .open(directory.join("desktop-collection.lock")).map_err(|e| Fail::with("io", e))?;
+    let lease = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(directory.join("desktop-collection.lock"))
+        .map_err(|e| Fail::with("io", e))?;
     lease.try_lock().map_err(|_| Fail::new("busy"))?;
-    *ACTIVE_COLLECTION.lock().unwrap_or_else(|e| e.into_inner()) = Some((timed, cancellation.clone()));
-    let repos: Vec<String> = Library::open()?.projects()?.into_iter().map(|p| p.path).filter(|p| PathBuf::from(p).is_dir()).collect();
+    *ACTIVE_COLLECTION.lock().unwrap_or_else(|e| e.into_inner()) =
+        Some((timed, cancellation.clone()));
+    let repos: Vec<String> = Library::open()?
+        .projects()?
+        .into_iter()
+        .map(|p| p.path)
+        .filter(|p| PathBuf::from(p).is_dir())
+        .collect();
     let (mut ok, mut failed, mut new) = (0, 0, 0);
     for repo in repos {
         while analysis_running() {
-            if cancellation.is_cancelled() { return Err(Fail::new("cancelled")); }
+            if cancellation.is_cancelled() {
+                return Err(Fail::new("cancelled"));
+            }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        if cancellation.is_cancelled() { return Err(Fail::new("cancelled")); }
+        if cancellation.is_cancelled() {
+            return Err(Fail::new("cancelled"));
+        }
         if timed && !collect_on() {
             break;
         }
         let result = loop {
-            let result = run_core_job_with_cancel(&["collect", "--repo", repo.as_str()], None, None, cancellation.clone());
-            if result.as_ref().err().is_none_or(|error| error.code != "busy") { break result; }
-            if cancellation.is_cancelled() || timed && !collect_on() { return Err(Fail::new("cancelled")); }
+            let result = run_core_job_with_cancel(
+                &["collect", "--repo", repo.as_str()],
+                None,
+                None,
+                cancellation.clone(),
+            );
+            if result
+                .as_ref()
+                .err()
+                .is_none_or(|error| error.code != "busy")
+            {
+                break result;
+            }
+            if cancellation.is_cancelled() || timed && !collect_on() {
+                return Err(Fail::new("cancelled"));
+            }
             std::thread::sleep(std::time::Duration::from_millis(100));
         };
         match result {
             Ok(v) => {
                 ok += 1;
-                new += v["collected"].as_array().map(|a| a.iter().filter_map(|c| c["newEvidence"].as_u64()).sum::<u64>()).unwrap_or(0);
+                new += v["collected"]
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|c| c["newEvidence"].as_u64())
+                            .sum::<u64>()
+                    })
+                    .unwrap_or(0);
             }
             Err(error) if error.code == "cancelled" => return Err(error),
             Err(_) => failed += 1,
@@ -95,7 +146,9 @@ pub fn last_collect() -> Value {
 }
 
 pub fn collect_info() -> Value {
-    let other_process = std::fs::OpenOptions::new().read(true).write(true)
+    let other_process = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
         .open(creditia_store::data_dir().join("desktop-collection.lock"))
         .is_ok_and(|file| file.try_lock().is_err());
     json!({
@@ -107,12 +160,20 @@ pub fn collect_info() -> Value {
 pub fn set_collect(on: bool) -> Res<Value> {
     save_collection_field("on", json!(on))?;
     if !on {
-        if let Some((true, token)) = ACTIVE_COLLECTION.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { token.cancel(); }
+        if let Some((true, token)) = ACTIVE_COLLECTION
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
+            token.cancel();
+        }
     }
     Ok(collect_info())
 }
 
-pub fn collect_now() -> Res<Value> { collect_round(false) }
+pub fn collect_now() -> Res<Value> {
+    collect_round(false)
+}
 
 // ───────────────────────── App 关着时也收：macOS 的 launchd 后台任务 ─────────────────────────
 // 装在 ~/Library/LaunchAgents，登录后每小时跑一次 App 里带的核心 `collect --all`，结果写进作品库目录的 collect-agent.json。
@@ -129,8 +190,17 @@ pub fn agent_out() -> PathBuf {
 /// 后台任务上一轮的结果：时间取文件的修改时间，数字从核心的输出里数
 pub fn agent_last() -> Value {
     let p = agent_out();
-    let Some(at) = std::fs::metadata(&p).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()) else { return Value::Null };
-    let v: Value = std::fs::read_to_string(&p).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let Some(at) = std::fs::metadata(&p)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+    else {
+        return Value::Null;
+    };
+    let v: Value = std::fs::read_to_string(&p)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
     let c = v["collected"].as_array().cloned().unwrap_or_default();
     let failed = c.iter().filter(|x| x["error"].is_string()).count();
     let new: u64 = c.iter().filter_map(|x| x["newEvidence"].as_u64()).sum();
@@ -138,13 +208,22 @@ pub fn agent_last() -> Value {
 }
 
 fn xml(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 /// launchd 任务的 plist。launchd 的 PATH 很短，补上 Homebrew 的位置，核心才找得到 git
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub fn agent_plist(core: &std::path::Path, lib: &std::path::Path, creditia_home: Option<&str>) -> String {
-    let home = creditia_home.map(|h| format!("\n    <key>CREDITIA_HOME</key><string>{}</string>", xml(h))).unwrap_or_default();
+pub fn agent_plist(
+    core: &std::path::Path,
+    lib: &std::path::Path,
+    creditia_home: Option<&str>,
+) -> String {
+    let home = creditia_home
+        .map(|h| format!("\n    <key>CREDITIA_HOME</key><string>{}</string>", xml(h)))
+        .unwrap_or_default();
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -179,7 +258,11 @@ pub fn agent_plist(core: &std::path::Path, lib: &std::path::Path, creditia_home:
 }
 
 fn agent_plist_path() -> Option<PathBuf> {
-    Some(home()?.join("Library/LaunchAgents").join(format!("{AGENT_LABEL}.plist")))
+    Some(
+        home()?
+            .join("Library/LaunchAgents")
+            .join(format!("{AGENT_LABEL}.plist")),
+    )
 }
 
 fn agent_installed() -> bool {
@@ -193,13 +276,30 @@ fn agent_wanted() -> Res<String> {
     if !core.is_absolute() || !core.exists() {
         return Err(Fail::with("core_missing", core.display()));
     }
-    Ok(agent_plist(&core, &creditia_store::data_dir(), std::env::var("CREDITIA_HOME").ok().filter(|h| !h.is_empty()).as_deref()))
+    Ok(agent_plist(
+        &core,
+        &creditia_store::data_dir(),
+        std::env::var("CREDITIA_HOME")
+            .ok()
+            .filter(|h| !h.is_empty())
+            .as_deref(),
+    ))
 }
 
 #[cfg(target_os = "macos")]
 fn launchctl(args: &[&str]) -> Res<()> {
-    let o = Command::new("/bin/launchctl").args(args).output().map_err(|e| Fail::with("agent_failed", e))?;
-    if o.status.success() { Ok(()) } else { Err(Fail::with("agent_failed", String::from_utf8_lossy(&o.stderr).trim())) }
+    let o = Command::new("/bin/launchctl")
+        .args(args)
+        .output()
+        .map_err(|e| Fail::with("agent_failed", e))?;
+    if o.status.success() {
+        Ok(())
+    } else {
+        Err(Fail::with(
+            "agent_failed",
+            String::from_utf8_lossy(&o.stderr).trim(),
+        ))
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -216,10 +316,16 @@ fn agent_install() -> Res<()> {
 
 #[cfg(target_os = "macos")]
 fn agent_uninstall() -> Res<()> {
-    let Some(p) = agent_plist_path() else { return Ok(()) };
+    let Some(p) = agent_plist_path() else {
+        return Ok(());
+    };
     if p.exists() {
         // SAFETY: 只读当前用户的 uid
-        let _ = launchctl(&["bootout", &format!("gui/{}", unsafe { libc::getuid() }), &p.display().to_string()]);
+        let _ = launchctl(&[
+            "bootout",
+            &format!("gui/{}", unsafe { libc::getuid() }),
+            &p.display().to_string(),
+        ]);
         std::fs::remove_file(&p).map_err(|e| Fail::with("io", e))?;
     }
     Ok(())
@@ -242,7 +348,11 @@ pub fn agent_refresh() {
 pub fn set_collect_agent(on: bool) -> Res<Value> {
     #[cfg(target_os = "macos")]
     {
-        if on { agent_install()? } else { agent_uninstall()? }
+        if on {
+            agent_install()?
+        } else {
+            agent_uninstall()?
+        }
         Ok(collect_info())
     }
     #[cfg(not(target_os = "macos"))]
@@ -251,4 +361,3 @@ pub fn set_collect_agent(on: bool) -> Res<Value> {
         Err(Fail::new("unsupported"))
     }
 }
-

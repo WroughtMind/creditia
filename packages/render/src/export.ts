@@ -16,6 +16,7 @@ export interface Motion { kind: 'scroll'; viewW: number; viewH: number; secs: nu
 
 export interface Raster {
   png(svg: string, width?: number): Uint8Array;
+  /** Straight (unpremultiplied) RGBA, matching decoded PNG bytes. */
   rgba(svg: string, width?: number): { w: number; h: number; data: Uint8Array };
   /** 文字转路径后的 SVG */
   flat(svg: string): string;
@@ -69,7 +70,7 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
       `<svg${attributes.replace(/\s+(?:role|aria-label)="[^"]*"/g, '')} role="img" aria-label="${attr(a.title)}">`);
   };
 
-  async function pdf(a: Art, scale = 3): Promise<Uint8Array> {
+  async function pdf(a: Art, scale = 3, pagePoints?: { w: number; h: number }): Promise<Uint8Array> {
     if (!deflate) throw new Error('PDF 需要压缩函数');
     const img = R.rgba(a.svg, a.w * scale);
     const n = img.w * img.h;
@@ -81,7 +82,7 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
       alpha[i] = img.data[i * 4 + 3];
       if (alpha[i] !== 255) opaque = false;
     }
-    const pw = a.w * 0.75, ph = a.h * 0.75; // px → pt
+    const pw = pagePoints?.w ?? a.w * 0.75, ph = pagePoints?.h ?? a.h * 0.75; // CSS px → pt; print presets use their paper dimensions
     return buildPdf(a.title, pw, ph, img.w, img.h, await deflate(rgb), opaque ? null : await deflate(alpha));
   }
 

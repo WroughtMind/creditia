@@ -9,6 +9,8 @@ import { performance } from 'node:perf_hooks';
 import { args, artifact, caseKey, cleanCheckout, commitOf, countBy, environment, fileHash,
   normalizedArt, parseMatrix, pixelDiff, positiveInteger, safeName, sha256, stable } from './common.mjs';
 import { contexts, fixtureCases, preferences } from './fixtures.mjs';
+import { exportChecks } from './export-checks.mjs';
+import { decodePng } from './export-validation.mjs';
 
 const options = args();
 if (options.help) {
@@ -106,7 +108,10 @@ function compareArt(a, b) {
   const visibleData = art => ({ w: art.w, h: art.h, bg: art.bg, title: art.title, hits: art.hits });
   const adata = visibleData(a), bdata = visibleData(b);
   const pixelWidth = Math.max(1, Math.floor(Math.min(width, 4096 * a.w / a.h, 4096 * b.w / b.h)));
-  const ar = baseline.raster(a.svg).rgba(a.svg, pixelWidth), br = candidate.raster(b.svg).rgba(b.svg, pixelWidth);
+  // Compare actual PNG pixels across revisions. The old raw resvg buffer uses
+  // premultiplied alpha; comparing adapter memory conventions would falsely
+  // label a corrected export contract as a visible artwork regression.
+  const ar = decodePng(baseline.raster(a.svg).png(a.svg, pixelWidth)), br = decodePng(candidate.raster(b.svg).png(b.svg, pixelWidth));
   return { data_equal: stable(adata) === stable(bdata), svg_equal: asvg === bsvg, crop_equal: stable(acrop) === stable(bcrop),
     pixels: pixelDiff(ar, br), empty: false, raster_width: pixelWidth,
     baseline_rgba_sha256: sha256(ar.data), candidate_rgba_sha256: sha256(br.data) };
@@ -127,20 +132,7 @@ async function motionChecks(request, row) {
     reduced_motion_final_frame: reduced.frames?.length === 1 && stable(normalizedArt(reduced.frames[0])) === stable(normalizedArt(final)),
     limitation: 'Checks shared sampling only; native playback, interruption and style motion direction require separate UI and visual evidence.' };
 }
-async function exportChecks(request, row) {
-  const formats = ['png', 'svg', 'pdf', 'html', ...(row.animated === 'true' ? ['gif'] : [])];
-  const results = [];
-  for (const format of formats) {
-    const exported = unwrap(await candidate.native.renderRequest({ ...request, op: 'export', format, size: 'square', frameCount: 4 }));
-    const bytes = Buffer.from(exported.bytes, 'base64');
-    const magic = { png: '\x89PNG', svg: '<svg', pdf: '%PDF', html: '<!doctype html>', gif: 'GIF8' }[format];
-    const signature = bytes.subarray(0, magic.length).toString('latin1') === magic;
-    const language = format !== 'html' || bytes.toString().includes(`<html lang="${request.lang}">`);
-    results.push({ format, size: 'square', valid_signature: signature, selected_language: language, bytes: bytes.length, sha256: sha256(bytes) });
-  }
-  return { status: results.every(r => r.valid_signature && r.selected_language) ? 'matched' : 'different', formats: results,
-    limitation: 'Format/signature/option contract checks; CLI invocation, browser encoder and native save dialogs are separate tests.' };
-}
+
 let ordinal = 0;
 for (const [rowIndex, row] of selected.entries()) {
   const prefs = options.preferences === 'all' ? preferences : [preferences[(rowIndex * shards + shard) % preferences.length]];
@@ -167,8 +159,11 @@ for (const [rowIndex, row] of selected.entries()) {
         if (record.status !== 'matched' || options['save-all-svg']) {
           record.artifacts.push(artifact(output, `svg/${name}-baseline.svg`, a.svg), artifact(output, `svg/${name}-candidate.svg`, b.svg));
         }
-        if (options.motion) record.motion = await motionChecks(request, row);
-        if (options.exports) record.exports = await exportChecks(request, row);
+        const representative = fixture.id === fixtures[0].id && pref.id === prefs[(rowIndex * shards + shard) % prefs.length].id;
+        if (options.motion && representative) record.motion = await motionChecks(request, row);
+        if (options.exports && representative) record.exports = await exportChecks(candidate, request, row, rowIndex * shards + shard, (filename, bytes) => {
+          const file = artifact(output, `exports/${name}-${filename}`, bytes); record.artifacts.push(file); return file;
+        });
         if (record.motion?.status === 'different' || record.exports?.status === 'different') record.status = 'different';
       }
     } catch (error) { record.status = 'error'; record.error = error instanceof Error ? error.stack : String(error); }

@@ -15,6 +15,7 @@ import { timelineFor, sampleTimes, type Animation } from './timeline.ts';
 import { CLASSIC_BOARD, V2_BOARD } from './boards.ts';
 import { creditsBlock, fetchSegs, embedSnippet } from './text.ts';
 import { mergeCredits } from './merge.ts';
+import { motionProfile } from './motion-profiles.ts';
 
 export const PROTOCOL_VERSION = 1;
 export const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
@@ -94,7 +95,7 @@ export function renderCatalog() {
   const classicIds = [...new Set([...Object.keys(FORMS), 'badge', ...BRIDGED])];
   const sharedStyles = STYLES.map(s => ({
     id: s.id, name: s.name, en: s.en, renderer: 'svg', visible: !SKIP_STYLES.has(s.id),
-    dot: s.dot(), colors: [s.c.bg, s.c.ink, s.c.accent], board: V2_BOARD,
+    dot: s.dot(), colors: [s.c.bg, s.c.ink, s.c.accent], board: V2_BOARD, motion: motionProfile(s.id),
     pieces: Object.entries(PIECES).map(([id, p]) => ({ id, name: p.name, en: p.en, q: p.q, qEn: p.qEn,
       variants: (p.variants ?? []).map(v => ({ id: v, name: variantName(v, 'zh'), en: variantName(v, 'en') })),
       defaultVariant: s.prefer[id] ?? p.variants?.[0] ?? null, animated: !!p.animated, requires: [],
@@ -102,7 +103,7 @@ export function renderCatalog() {
   }));
   const styles = [
     ...ORDERED_THEMES.map(t => ({ id: t.id, name: themeName(t, 'zh'), en: themeName(t, 'en'), renderer: 'classic', visible: true,
-      dot: themeDot(t), colors: [t.bg, t.ink, t.accent], board: CLASSIC_BOARD,
+      dot: themeDot(t), colors: [t.bg, t.ink, t.accent], board: CLASSIC_BOARD, motion: motionProfile(t.id),
       pieces: classicIds.map(id => ({ id, name: pieceName(id, 'zh'), en: pieceName(id, 'en'), q: pieceQ(id, 'zh'), qEn: pieceQ(id, 'en'),
         variants: variantsOf(id).map(v => ({ id: v, name: classicVariantName(v, 'zh'), en: classicVariantName(v, 'en') })),
         defaultVariant: defaultVariant(id, t) ?? variantsOf(id)[0] ?? null, animated: animatedClassic(id),

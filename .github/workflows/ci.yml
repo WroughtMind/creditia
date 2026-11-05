@@ -86,23 +86,45 @@ jobs:
           npm ci --prefix packages/embed
           npm run build --prefix packages/embed
           node packages/embed/tools/fixtures.mjs
+      - name: Exercise the real browser against native artwork and animation output
+        run: |
+          npm install --prefix "$RUNNER_TEMP/creditia-browser-qa" --no-audit --no-fund playwright@1.62.1
+          "$RUNNER_TEMP/creditia-browser-qa/node_modules/.bin/playwright" install --with-deps chromium
+          CREDITIA_PLAYWRIGHT_MODULES="$RUNNER_TEMP/creditia-browser-qa/node_modules" node packages/embed/tools/browser-acceptance.mjs
       - name: Retain the web rendering build for browser acceptance
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: creditia-web-renderer
           path: |
             packages/embed/dist
+            packages/embed/browser-evidence
             packages/render/fixtures/catnap.json
           retention-days: 7
 
       - name: Retain exact renderer dependencies for reproducing failed acceptance
         if: always()
         run: tar -czf "$RUNNER_TEMP/creditia-render-runtime.tar.gz" packages/render/node_modules packages/embed/node_modules
+      - name: Retain the exact browser binary for local reproduction
+        if: always()
+        run: |
+          if [ -d "$HOME/.cache/ms-playwright" ]; then
+            python - <<'PYTHON'
+          import os,pathlib,tarfile
+          root=pathlib.Path.home()/'.cache/ms-playwright'
+          browsers=list(root.glob('chromium_headless_shell-*'))
+          if browsers:
+              with tarfile.open(pathlib.Path(os.environ['RUNNER_TEMP'])/'creditia-browser-runtime.tar.gz','w:gz') as archive:
+                  for browser in browsers: archive.add(browser,arcname=browser.name)
+          PYTHON
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: creditia-render-debug-runtime
-          path: ${{ runner.temp }}/creditia-render-runtime.tar.gz
+          path: |
+            ${{ runner.temp }}/creditia-render-runtime.tar.gz
+            ${{ runner.temp }}/creditia-browser-runtime.tar.gz
           retention-days: 3
 
   desktop-macos:

@@ -103,7 +103,7 @@ jobs:
           npm run build --prefix baseline/apps/desktop
           mkdir -p baseline/apps/desktop/src-tauri/binaries
           cp candidate/target/release/creditia-core baseline/apps/desktop/src-tauri/binaries/creditia-core-x86_64-unknown-linux-gnu
-          cargo build --manifest-path baseline/apps/desktop/src-tauri/Cargo.toml --release --locked
+          cargo build --manifest-path baseline/apps/desktop/src-tauri/Cargo.toml --release --locked --features tauri/custom-protocol
       - name: Drive both production windows and sample every descendant process
         env:
           ACCEPTANCE_CANDIDATE_SHA: ${{ github.sha }}

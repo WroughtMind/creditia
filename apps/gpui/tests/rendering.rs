@@ -10,24 +10,12 @@ fn main() {
 #[cfg(any(target_os="macos",target_os="linux"))]
 mod native {
     use creditia_gpui::{Appearance,app::{Creditia,Fixture}};
-    use gpui_kit::{AppContext,Bounds,HeadlessAppContext,WindowBounds,WindowOptions,assets::Assets,px,size};
+    use gpui_kit::{AnyWindowHandle,AppContext,Bounds,Entity,HeadlessAppContext,WindowBounds,WindowOptions,assets::Assets,px,size};
     use gpui_kit::test::{TestWindowExt,TestQueryExt};
     use serde_json::{Value,json};
     use std::{collections::HashSet,fs,path::{Path,PathBuf},sync::Arc,time::{Duration,Instant}};
 
-    fn case(input:&Path,theme:Appearance,key:&str,output:&Path,interact:bool)->Value {
-        let mut fixture:Fixture=serde_json::from_slice(&fs::read(input).expect("fixture exists")).expect("valid native fixture");
-        fixture.appearance=theme;
-        fixture.reduced_motion=true;
-        let mut cx=HeadlessAppContext::with_platform(
-            gpui_kit::platform::current_platform(true).text_system(),
-            Arc::new(Assets),gpui_kit::platform::current_headless_renderer);
-        cx.update(gpui_kit::init);
-        cx.update(|cx|cx.set_reduce_motion(true));
-        let(handle,view)=cx.update(|cx|gpui_kit::open_window(WindowOptions{
-            window_bounds:Some(WindowBounds::Windowed(Bounds{origin:Default::default(),size:size(px(1440.),px(1000.))})),
-            show:false,focus:false,..Default::default()
-        },cx,|window,cx|cx.new(|cx|Creditia::fixture(fixture,window,cx)))).expect("production window opens");
+    fn wait_assets(cx:&mut HeadlessAppContext,handle:AnyWindowHandle,view:&Entity<Creditia>){
         let start=Instant::now();
         loop {
             cx.run_until_parked();
@@ -39,6 +27,31 @@ mod native {
             assert!(start.elapsed()<Duration::from_secs(45),"production artwork assets did not decode");
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    fn case(input:&Path,theme:Appearance,key:&str,output:&Path,interact:bool)->Value {
+        let mut fixture:Fixture=serde_json::from_slice(&fs::read(input).expect("fixture exists")).expect("valid native fixture");
+        fixture.appearance=theme;
+        fixture.reduced_motion=true;
+        let layout_choice=if interact{
+            let style=fixture.catalog["styles"].as_array().unwrap().iter().find(|style|style["id"]=="minimal-light").unwrap();
+            let pieces=style["pieces"].as_array().unwrap();
+            let piece_index=pieces.iter().position(|piece|piece["id"]=="tier").unwrap();
+            let piece=&pieces[piece_index];let variants=piece["variants"].as_array().unwrap();
+            let current=piece["defaultVariant"].as_str().or_else(||variants[0]["id"].as_str()).unwrap();
+            let (variant_index,variant)=variants.iter().enumerate().find(|(_,variant)|variant["id"]!=current).unwrap();
+            Some((piece_index,variant_index,variant["id"].as_str().unwrap().to_owned()))
+        }else{None};
+        let mut cx=HeadlessAppContext::with_platform(
+            gpui_kit::platform::current_platform(true).text_system(),
+            Arc::new(Assets),gpui_kit::platform::current_headless_renderer);
+        cx.update(gpui_kit::init);
+        cx.update(|cx|cx.set_reduce_motion(true));
+        let(handle,view)=cx.update(|cx|gpui_kit::open_window(WindowOptions{
+            window_bounds:Some(WindowBounds::Windowed(Bounds{origin:Default::default(),size:size(px(1440.),px(1000.))})),
+            show:false,focus:false,..Default::default()
+        },cx,|window,cx|cx.new(|cx|Creditia::fixture(fixture,window,cx)))).expect("production window opens");
+        wait_assets(&mut cx,handle,&view);
         let mut checks=vec![];
         cx.update_window(handle,|_,window,cx|{
             window.render_frame(cx);
@@ -76,6 +89,28 @@ mod native {
                 window.render_frame(cx);
             }).unwrap();
             checks.push(json!({"id":"native-input-roam-zoom-settings","passed":true}));
+            let (piece_index,variant_index,variant)=layout_choice.unwrap();
+            cx.update_window(handle,|_,window,cx|{
+                window.click("panel-close",cx);
+                window.click("pieces",cx);
+                window.click(("piece",piece_index),cx);
+                assert_eq!(view.read(cx).diagnostic_state()["selected_piece"],"tier");
+                assert_eq!(view.read(cx).diagnostic_state()["focused"],true);
+                window.render_frame(cx);
+            }).unwrap();
+            wait_assets(&mut cx,handle,&view);
+            let before=cx.capture_screenshot(handle).unwrap();
+            cx.update_window(handle,|_,window,cx|{
+                window.click("layouts",cx);
+                window.click(("variant",variant_index),cx);
+                assert_eq!(view.read(cx).diagnostic_state()["selected_variant"],variant.as_str());
+                window.render_frame(cx);
+            }).unwrap();
+            wait_assets(&mut cx,handle,&view);
+            let after=cx.capture_screenshot(handle).unwrap();
+            assert!(before!=after,"changing a layout must change the focused artwork pixels");
+            let name=format!("{key}-layout.png");after.save(output.join(&name)).unwrap();artifacts.push(json!({"path":name}));
+            checks.push(json!({"id":"native-artwork-layout-selection","passed":true,"piece":"tier","variant":variant}));
         }
         json!({"key":key,"status":"passed","window":{"width":1440,"height":1000,"pixel_width":dimensions.0,"pixel_height":dimensions.1,"dpi_scale":dimensions.0 as f64/1440.0},"checks":checks,"artifacts":artifacts})
     }
@@ -93,7 +128,7 @@ mod native {
                 let input=fixtures.join(entry["path"].as_str().unwrap());
                 let interact=entry["style"]=="minimal-light"&&entry["language"]=="en"&&label=="light";
                 let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||case(&input,theme,&key,&output,interact)));
-                cases.push(match result {Ok(case)=>case,Err(_)=>json!({"key":key,"status":"failed","checks":[],"artifacts":[]})});
+                cases.push(match result {Ok(case)=>case,Err(error)=>{let message=error.downcast_ref::<String>().cloned().or_else(||error.downcast_ref::<&str>().map(|s|s.to_string())).unwrap_or_else(||"Native case panicked".into());json!({"key":key,"status":"failed","error":message,"checks":[],"artifacts":[]})}});
             }
         }
         let complete=cases.iter().all(|c|c["status"]=="passed");

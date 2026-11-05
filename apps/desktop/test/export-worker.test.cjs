@@ -103,6 +103,8 @@ function renderer(failAt, cleanupFails = false) {
   });
   // Exercise the production normalization/clock, keeping only the codec and
   // WASM objects instrumented so ownership failures remain observable.
+  load(sharedSource('motion-profiles.ts'), ctx);
+  load(sharedSource('pixels.ts'), ctx);
   load(sharedSource('timeline.ts'), ctx);
   load(sharedSource('export-job.ts'), ctx);
   load(source('export-worker.ts'), ctx);

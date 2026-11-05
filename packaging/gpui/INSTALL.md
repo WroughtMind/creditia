@@ -21,8 +21,9 @@ whose contributor names were previously hidden.
   and `creditia-core.exe` must remain beside the application.
 - Linux x64: extract the archive and run `./creditia-gpui`. The build baseline is
   Ubuntu 24.04 with Wayland or X11, fontconfig, xkbcommon and a Vulkan driver.
-  The DEB package installs system libraries, including WebKit for the one-time
-  legacy preference importer; it does not install Node globally.
+  Install the DEB with `sudo apt install ./creditia-gpui-*.deb` so required system
+  libraries are resolved, including WebKit for the one-time legacy preference
+  importer; it does not install Node globally.
   The bundled desktop file may be installed into the user's applications folder
   with an absolute `Exec` path. Runtime system libraries are recorded by CI.
 

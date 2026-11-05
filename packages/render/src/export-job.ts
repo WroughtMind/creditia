@@ -34,7 +34,11 @@ export async function exportArtwork(a: Art, o: ExportOptions, raster: Raster, de
   switch (o.format) {
     case 'svg': bytes = enc.encode(ex.svg(fit(a), fontMode)); mime = 'image/svg+xml'; break;
     case 'png': bytes = ex.png(fit(a), scale); mime = 'image/png'; break;
-    case 'pdf': bytes = await ex.pdf(fit(a), size.id === 'a4' ? 1 : Math.min(3, 4000 / Math.max(a.w, a.h))); mime = 'application/pdf'; break;
+    case 'pdf': {
+      const canvas = fit(a);
+      bytes = await ex.pdf(canvas, size.id === 'a4' ? 1 : Math.min(3, 4000 / Math.max(canvas.w, canvas.h)), size.id === 'a4' ? { w: 595.28, h: 841.89 } : undefined);
+      mime = 'application/pdf'; break;
+    }
     case 'gif': {
       if (!animation?.frames.length) throw new Error('This piece has no animation');
       const frames = animation.frames.map(fit);

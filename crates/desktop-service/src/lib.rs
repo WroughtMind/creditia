@@ -9,16 +9,28 @@ use std::path::PathBuf;
 use std::process::Command;
 
 mod analysis;
-mod process;
-mod settings;
-pub mod collection;
 mod background;
+pub mod collection;
+mod export_tasks;
+mod process;
 mod projects;
-pub use projects::{project_archives, project_details, set_project_config, blame, evidence_archive, import_evidence, doctor};
+mod settings;
+pub use analysis::{
+    analysis_running, analysis_status, cancel_analyze, recover_interrupted_analysis,
+    resume_analysis, run_analysis, run_analysis_with_cancel, run_core_job_with_cancel,
+    AnalysisCancellation, ProgressSink,
+};
 pub use background::BackgroundService;
 pub use collection::{collect_info, collect_now, collect_round, set_collect, set_collect_agent};
-pub use settings::{app_settings, edit_app_settings, ui_preferences, patch_ui_preferences, import_legacy_preferences, set_legacy_preference, legacy_preferences, migrate_legacy_with_helper};
-pub use analysis::{analysis_running, cancel_analyze, run_analysis, run_analysis_with_cancel, run_core_job_with_cancel, analysis_status, recover_interrupted_analysis, resume_analysis, AnalysisCancellation, ProgressSink};
+pub use export_tasks::{load_export_jobs, save_export_jobs};
+pub use projects::{
+    blame, doctor, evidence_archive, import_evidence, project_archives, project_details,
+    set_project_config,
+};
+pub use settings::{
+    app_settings, edit_app_settings, import_legacy_preferences, legacy_preferences,
+    migrate_legacy_with_helper, patch_ui_preferences, set_legacy_preference, ui_preferences,
+};
 
 /// 给界面的错误：只带代码和原始细节，文案由界面按当前语言写
 #[derive(serde::Serialize, Debug)]
@@ -32,7 +44,10 @@ impl Fail {
         Fail { code, detail: None }
     }
     pub fn with(code: &'static str, detail: impl ToString) -> Self {
-        Fail { code, detail: Some(detail.to_string()) }
+        Fail {
+            code,
+            detail: Some(detail.to_string()),
+        }
     }
 }
 /// 作品库（creditia-store）报的错
@@ -44,13 +59,26 @@ impl From<String> for Fail {
 pub type Res<T> = Result<T, Fail>;
 
 pub fn project(lib: &Library, project_id: &str) -> Res<creditia_store::Project> {
-    lib.projects()?.into_iter().find(|p| p.id == project_id).ok_or(Fail::new("not_in_library"))
+    lib.projects()?
+        .into_iter()
+        .find(|p| p.id == project_id)
+        .ok_or(Fail::new("not_in_library"))
 }
 
-fn path_kinds(lib: &Library, p: &creditia_store::Project) -> std::collections::BTreeMap<String, String> {
-    let mut kinds: std::collections::BTreeMap<String, String> = lib.paths(&p.id).unwrap_or_default().into_iter().collect();
+fn path_kinds(
+    lib: &Library,
+    p: &creditia_store::Project,
+) -> std::collections::BTreeMap<String, String> {
+    let mut kinds: std::collections::BTreeMap<String, String> =
+        lib.paths(&p.id).unwrap_or_default().into_iter().collect();
     let mut cmd = Command::new("git");
-    cmd.arg("-C").arg(&p.path).args(["-c", "core.quotepath=false", "worktree", "list", "--porcelain"]);
+    cmd.arg("-C").arg(&p.path).args([
+        "-c",
+        "core.quotepath=false",
+        "worktree",
+        "list",
+        "--porcelain",
+    ]);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -58,13 +86,24 @@ fn path_kinds(lib: &Library, p: &creditia_store::Project) -> std::collections::B
     }
     if let Ok(out) = cmd.output() {
         if out.status.success() {
-            for path in String::from_utf8_lossy(&out.stdout).lines().filter_map(|l| l.strip_prefix("worktree ")) {
+            for path in String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .filter_map(|l| l.strip_prefix("worktree "))
+            {
                 kinds.insert(path.to_string(), "worktree".into());
             }
         }
     }
-    let cfg: Value = std::fs::read_to_string(PathBuf::from(&p.path).join(".creditia/config.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-    for path in cfg["paths"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+    let cfg: Value = std::fs::read_to_string(PathBuf::from(&p.path).join(".creditia/config.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    for path in cfg["paths"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
         kinds.insert(path.to_string(), "config".into());
     }
     kinds
@@ -130,30 +169,51 @@ pub fn stamp(project_id: String) -> Res<String> {
 pub fn head(project_id: String) -> Res<String> {
     let lib = Library::open()?;
     let p = project(&lib, &project_id)?;
-    let cfg: Value = std::fs::read_to_string(PathBuf::from(&p.path).join(".creditia/config.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let cfg: Value = std::fs::read_to_string(PathBuf::from(&p.path).join(".creditia/config.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
     let rev = |r: &str| -> String {
         let mut c = Command::new("git");
-        c.arg("-C").arg(&p.path).args(["rev-parse", "--verify", "-q", r]);
+        c.arg("-C")
+            .arg(&p.path)
+            .args(["rev-parse", "--verify", "-q", r]);
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
             c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         }
-        c.output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default()
+        c.output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default()
     };
-    let h = cfg["branch"].as_str().map(rev).filter(|h| !h.is_empty()).unwrap_or_else(|| rev("HEAD"));
+    let h = cfg["branch"]
+        .as_str()
+        .map(rev)
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| rev("HEAD"));
     Ok(h)
 }
 
 pub fn config_of(project_id: String) -> Res<Value> {
     let lib = Library::open()?;
-    let Some(p) = lib.projects()?.into_iter().find(|p| p.id == project_id) else { return Ok(json!({})) };
+    let Some(p) = lib.projects()?.into_iter().find(|p| p.id == project_id) else {
+        return Ok(json!({}));
+    };
     let path = PathBuf::from(&p.path).join(".creditia/config.json");
-    Ok(std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({})))
+    Ok(std::fs::read_to_string(path)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_else(|| json!({})))
 }
 
 pub fn set_display(project_id: String, hide_names: bool, sign: String) -> Res<()> {
-    set_project_config(project_id, json!({"display":{"hideNames":hide_names,"sign":sign}}))?;
+    set_project_config(
+        project_id,
+        json!({"display":{"hideNames":hide_names,"sign":sign}}),
+    )?;
     Ok(())
 }
 
@@ -162,8 +222,15 @@ pub fn core_bin() -> PathBuf {
     if let Ok(p) = std::env::var("CREDITIA_CORE") {
         return PathBuf::from(p);
     }
-    let exe = if cfg!(windows) { "creditia-core.exe" } else { "creditia-core" };
-    if let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
+    let exe = if cfg!(windows) {
+        "creditia-core.exe"
+    } else {
+        "creditia-core"
+    };
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+    {
         let cand = dir.join(exe);
         if cand.exists() {
             return cand;
@@ -190,18 +257,24 @@ pub fn core_cmd(args: &[&str]) -> Command {
 }
 
 pub fn run_core(args: &[&str]) -> Res<Value> {
-    let out = core_cmd(args).output().map_err(|e| Fail::with("core_missing", e))?;
+    let out = core_cmd(args)
+        .output()
+        .map_err(|e| Fail::with("core_missing", e))?;
     core_result(out.status, &out.stdout, &out.stderr)
 }
 
 /// 核心的退出码：0 成功，2 成功但有警告，1 出错（JSON 里带 error）
 pub fn core_result(status: std::process::ExitStatus, stdout: &[u8], stderr: &[u8]) -> Res<Value> {
-    let v: Value = serde_json::from_slice(stdout).map_err(|_| Fail::with("core_failed", String::from_utf8_lossy(stderr).trim()))?;
+    let v: Value = serde_json::from_slice(stdout)
+        .map_err(|_| Fail::with("core_failed", String::from_utf8_lossy(stderr).trim()))?;
     if let Some(e) = v["error"].as_str() {
         return Err(Fail::with("core_failed", e));
     }
     if !matches!(status.code(), Some(0) | Some(2)) {
-        return Err(Fail::with("core_failed", String::from_utf8_lossy(stderr).trim()));
+        return Err(Fail::with(
+            "core_failed",
+            String::from_utf8_lossy(stderr).trim(),
+        ));
     }
     Ok(v)
 }
@@ -217,7 +290,12 @@ pub fn integrations(project_id: String) -> Res<Value> {
 }
 
 /// 开或关一项：交给核心的 hook / release install|uninstall，它会把决定记进项目的 .creditia/config.json
-pub fn set_integration(project_id: String, which: String, on: bool, lang: Option<String>) -> Res<Value> {
+pub fn set_integration(
+    project_id: String,
+    which: String,
+    on: bool,
+    lang: Option<String>,
+) -> Res<Value> {
     if which != "hook" && which != "release" {
         return Err(Fail::with("switch_failed", which));
     }
@@ -225,7 +303,18 @@ pub fn set_integration(project_id: String, which: String, on: bool, lang: Option
     let p = project(&lib, &project_id)?;
     let lang = lang.unwrap_or_else(|| "zh".into());
     let _lock = projects::config_lock(std::path::Path::new(&p.path))?;
-    run_core(&[which.as_str(), if on { "install" } else { "uninstall" }, "--repo", p.path.as_str(), "--lang", lang.as_str()]).map_err(|e| Fail { code: "switch_failed", detail: e.detail })
+    run_core(&[
+        which.as_str(),
+        if on { "install" } else { "uninstall" },
+        "--repo",
+        p.path.as_str(),
+        "--lang",
+        lang.as_str(),
+    ])
+    .map_err(|e| Fail {
+        code: "switch_failed",
+        detail: e.detail,
+    })
 }
 
 /// 从作品库里移除一个项目。只删项目这一行：证据、会话、路径、快照和缓存都留着，以后加回同一个仓库就直接接上
@@ -235,20 +324,40 @@ pub fn remove_project(project_id: String) -> Res<()> {
 }
 
 /// 关联或取消关联一个路径（搬过家的旧目录、别处的克隆）：交给核心的 link / unlink，它会确认是同一个仓库
-pub fn link_path(project_id: String, path: String, unlink: Option<bool>, lang: Option<String>) -> Res<Value> {
+pub fn link_path(
+    project_id: String,
+    path: String,
+    unlink: Option<bool>,
+    lang: Option<String>,
+) -> Res<Value> {
     let lib = Library::open()?;
     let p = project(&lib, &project_id)?;
     let lang = lang.unwrap_or_else(|| "zh".into());
-    let cmd = if unlink.unwrap_or(false) { "unlink" } else { "link" };
+    let cmd = if unlink.unwrap_or(false) {
+        "unlink"
+    } else {
+        "link"
+    };
     let _lock = projects::config_lock(std::path::Path::new(&p.path))?;
-    run_core(&[cmd, path.as_str(), "--repo", p.path.as_str(), "--lang", lang.as_str()])
+    run_core(&[
+        cmd,
+        path.as_str(),
+        "--repo",
+        p.path.as_str(),
+        "--lang",
+        lang.as_str(),
+    ])
 }
 
 pub fn embed_snippet(project_id: String, piece: String, theme: String) -> Res<String> {
     let lib = Library::open()?;
     let p = project(&lib, &project_id)?;
     let rel = PathBuf::from(&p.path).join(".creditia/credits.json");
-    let src = if rel.exists() { "/.creditia/credits.json" } else { "credits.json" };
+    let src = if rel.exists() {
+        "/.creditia/credits.json"
+    } else {
+        "credits.json"
+    };
     Ok(format!("<script type=\"module\" src=\"https://cdn.jsdelivr.net/npm/@creditia/embed@0/dist/creditia-card.js\"></script>\n<creditia-card src=\"{src}\" piece=\"{piece}\" theme=\"{theme}\"></creditia-card>\n"))
 }
 
@@ -258,9 +367,13 @@ pub fn library_path() -> String {
 
 pub fn home() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
-    { std::env::var_os("USERPROFILE").map(PathBuf::from) }
+    {
+        std::env::var_os("USERPROFILE").map(PathBuf::from)
+    }
     #[cfg(not(target_os = "windows"))]
-    { std::env::var_os("HOME").map(PathBuf::from) }
+    {
+        std::env::var_os("HOME").map(PathBuf::from)
+    }
 }
 
 // ───────────────────────── App 自己的设置（作品库目录里的 app.json） ─────────────────────────
@@ -277,7 +390,6 @@ pub fn export_dir() -> Res<PathBuf> {
     }
 }
 
-
 impl std::fmt::Display for Fail {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.detail {
@@ -293,11 +405,20 @@ pub fn discover() -> Res<Value> {
     run_core(&["discover"])
 }
 
-pub fn analyze(project_id: String, lang: Option<String>, progress: Option<ProgressSink>) -> Res<Value> {
+pub fn analyze(
+    project_id: String,
+    lang: Option<String>,
+    progress: Option<ProgressSink>,
+) -> Res<Value> {
     analyze_with_cancel(project_id, lang, progress, AnalysisCancellation::default())
 }
 
-pub fn analyze_with_cancel(project_id: String, lang: Option<String>, progress: Option<ProgressSink>, cancellation: AnalysisCancellation) -> Res<Value> {
+pub fn analyze_with_cancel(
+    project_id: String,
+    lang: Option<String>,
+    progress: Option<ProgressSink>,
+    cancellation: AnalysisCancellation,
+) -> Res<Value> {
     let p = project(&Library::open()?, &project_id)?;
     if !PathBuf::from(&p.path).is_dir() {
         return Err(Fail::with("dir_missing", p.path));
@@ -305,22 +426,38 @@ pub fn analyze_with_cancel(project_id: String, lang: Option<String>, progress: O
     run_analysis_with_cancel(&p.path, lang.as_deref(), progress, cancellation)
 }
 
-pub fn add_project(path: String, lang: Option<String>, progress: Option<ProgressSink>) -> Res<Value> {
+pub fn add_project(
+    path: String,
+    lang: Option<String>,
+    progress: Option<ProgressSink>,
+) -> Res<Value> {
     add_project_with_cancel(path, lang, progress, AnalysisCancellation::default())
 }
 
-pub fn add_project_with_cancel(path: String, lang: Option<String>, progress: Option<ProgressSink>, cancellation: AnalysisCancellation) -> Res<Value> {
+pub fn add_project_with_cancel(
+    path: String,
+    lang: Option<String>,
+    progress: Option<ProgressSink>,
+    cancellation: AnalysisCancellation,
+) -> Res<Value> {
     let result = run_analysis_with_cancel(&path, lang.as_deref(), progress, cancellation)?;
     let lib = Library::open()?;
     let path = PathBuf::from(path);
     let repo = path.canonicalize().unwrap_or(path);
-    let id = lib.projects()?.into_iter().find(|p| std::path::Path::new(&p.path) == repo).map(|p| p.id).unwrap_or_default();
+    let id = lib
+        .projects()?
+        .into_iter()
+        .find(|p| std::path::Path::new(&p.path) == repo)
+        .map(|p| p.id)
+        .unwrap_or_default();
     Ok(json!({ "id": id, "result": result }))
 }
 
 pub fn reset_export_dir() -> Res<String> {
     edit_app_settings(|v| {
-        if let Some(o) = v.as_object_mut() { o.remove("exportDir"); }
+        if let Some(o) = v.as_object_mut() {
+            o.remove("exportDir");
+        }
     })?;
     Ok(default_export_dir()?.display().to_string())
 }

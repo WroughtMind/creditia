@@ -23,8 +23,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare-fixture:
+    name: Capture the pinned public project archive
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: 0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+      - uses: actions/checkout@v4
+        with:
+          ref: ac82a574b0747bc5651571a3f169f4a893442f88
+          path: baseline
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: candidate -> target
+          cache-on-failure: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+      - name: Build the exact analysis worker
+        run: cargo build --manifest-path candidate/Cargo.toml -p creditia-cli --release --locked
+      - name: Analyze public Git history without private session evidence
+        run: node candidate/packaging/gpui-acceptance/public-fixture.mjs --core candidate/target/release/creditia-core --repo baseline --output real-fixture/public-creditia.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gpui-public-project-fixture
+          path: |
+            real-fixture/public-creditia.json
+            real-fixture/public-creditia.json.provenance.json
+            real-fixture/public-creditia.json.analysis.log
+          if-no-files-found: error
+          retention-days: 14
   compare:
     name: Artwork parity ${{ matrix.shard }} of 8
+    needs: prepare-fixture
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:
@@ -49,6 +86,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: gpui-public-project-fixture
+          path: real-fixture
       - name: Install both pinned renderers
         run: |
           npm ci --prefix baseline/packages/render
@@ -57,6 +98,13 @@ jobs:
         run: |
           node --test candidate/packaging/gpui-acceptance/common.test.mjs
           python candidate/packaging/gpui-acceptance/test_resources.py
+      - name: Compare the actual public project on both renderers
+        run: |
+          node candidate/packaging/gpui-acceptance/render-matrix.mjs \
+            --baseline-root baseline --candidate-root candidate \
+            --output "evidence/real-shard-${{ matrix.shard }}" --profile smoke \
+            --fixture real-fixture/public-creditia.json --fixture-kind real_public_git_archive \
+            --shards 8 --shard '${{ matrix.shard }}' --motion
       - name: Compare complete artwork scope against the original desktop renderer
         env:
           ALL_EXPORTS: ${{ github.event.inputs.all_exports || 'true' }}

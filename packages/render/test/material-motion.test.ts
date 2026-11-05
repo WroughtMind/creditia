@@ -6,6 +6,7 @@ import { art, frame } from '../src/registry.ts';
 import { STYLES } from '../src/styles/index.ts';
 import { ORDERED_THEMES } from '../src/classic/catalog.ts';
 import { bridgeStyle } from '../src/classic/bridge.ts';
+import { MOTION_PROFILES } from '../src/motion-profiles.ts';
 
 const raw = JSON.parse(readFileSync(new URL('../fixtures/catnap.json', import.meta.url), 'utf8'));
 const model = buildModel(raw, { lang: 'zh', group: 'model', named: false, sign: '' });
@@ -15,6 +16,7 @@ test('every desktop asterisk material has finite changing samples and exact rest
   const hidden = new Set(['minimal', 'noir', 'glass', 'cinema', 'terminal']);
   const styles = [...ORDERED_THEMES.map(bridgeStyle), ...STYLES.filter(style => !hidden.has(style.id))];
   assert.equal(styles.length, 26);
+  assert.deepEqual(new Set(Object.keys(MOTION_PROFILES)), new Set(styles.map(style => style.id)));
   for (const style of styles) {
     const resting = art('asterisk', model, style)!;
     const samples = [0, .3, .7, 1].map(t => frame('asterisk', model, style, {}, t, resting)!);

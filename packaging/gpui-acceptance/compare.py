@@ -40,25 +40,26 @@ def run(args):
                         command += ["--benchmark-archive", str(fixture)]
                     base = [sys.executable, str(HERE / "scenario.py"), "--application", application,
                             "--fixture", str(fixture), "--cache", cache]
+                    def resource_command(destination, selected_scenario):
+                        return [sys.executable, str(HERE / "resources.py"), "--output", str(destination),
+                                "--fixture", str(fixture), "--commit", args.candidate_sha,
+                                "--measured-commit", args.baseline_sha if role == "baseline" else args.candidate_sha,
+                                "--comparison-role", role, "--scenario", selected_scenario, "--cache", cache,
+                                "--styles", "1", "--artworks", str(args.artworks), "--window", "1360x880", "--dpi", "1",
+                                "--seconds", "180", "--interval", ".25", "--",
+                                *base, "--scenario", selected_scenario, "--", *command]
                     if cache == "warm":
                         warmup = profile / "warmup"
-                        warmup.mkdir()
-                        env["CREDITIA_PERF_EVENTS"] = str(warmup / "events.jsonl")
-                        result = subprocess.run(base + ["--scenario", "startup", "--", *command], env=env)
+                        # Warmup uses the same process-group cleanup as the
+                        # measured run; orphan workers must not contaminate it.
+                        result = subprocess.run(resource_command(warmup, "startup"), env=env)
                         if result.returncode:
                             failures.append({"role": role, "scenario": scenario, "cache": cache, "phase": "warmup", "exit_code": result.returncode})
                             continue
-                        del env["CREDITIA_PERF_EVENTS"]
                     destination = output / f"{role}-{scenario}-{cache}"
                     if destination.exists():
                         raise ValueError(f"Refusing to reuse evidence directory: {destination}")
-                    resource = [sys.executable, str(HERE / "resources.py"), "--output", str(destination),
-                                "--fixture", str(fixture), "--commit", args.candidate_sha,
-                                "--measured-commit", args.baseline_sha if role == "baseline" else args.candidate_sha,
-                                "--comparison-role", role, "--scenario", scenario, "--cache", cache,
-                                "--styles", "1", "--artworks", str(args.artworks), "--window", "1360x880", "--dpi", "1",
-                                "--seconds", "180", "--interval", ".25", "--",
-                                *base, "--scenario", scenario, "--", *command]
+                    resource = resource_command(destination, scenario)
                     result = subprocess.run(resource, env=env)
                     if result.returncode:
                         failures.append({"role": role, "scenario": scenario, "cache": cache, "phase": "measurement", "exit_code": result.returncode})
@@ -72,10 +73,10 @@ def run(args):
                             target.write_bytes(overlay.read_bytes())
                             data["artifacts"].append({"path": target.name, "sha256": hashlib.sha256(target.read_bytes()).hexdigest(), "bytes": target.stat().st_size})
                         if cache == "warm":
-                            for name in ["events.jsonl", "application-events.jsonl"]:
+                            for name in ["events.jsonl", "application-events.jsonl", "manifest.json"]:
                                 original = profile / "warmup" / name
                                 if original.exists():
-                                    target = destination / f"warmup-{name}"
+                                    target = destination / ("warmup-report.json" if name == "manifest.json" else f"warmup-{name}")
                                     target.write_bytes(original.read_bytes())
                                     data["artifacts"].append({"path": target.name, "sha256": hashlib.sha256(target.read_bytes()).hexdigest(), "bytes": target.stat().st_size})
                         manifest.write_text(json.dumps(data, indent=2) + "\n")

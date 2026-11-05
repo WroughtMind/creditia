@@ -99,6 +99,7 @@ def run(args):
         raise TimeoutError(f"No observed UI state for {description}; latest={observed()[-1:]}")
 
     def snapshot(label):
+        time.sleep(.1)  # Allow the verified render to reach the X11 compositor.
         file = event_path.with_name(f"{label}.png")
         subprocess.run(["import", "-window", str(window), str(file)], capture_output=True, check=True)
         journal.write("screenshot", path=file.name, sha256=hashlib.sha256(file.read_bytes()).hexdigest(), bytes=file.stat().st_size)

@@ -108,6 +108,8 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
     try { await copyFile(path.join(source, name), path.join(paths.resources, `licenses/Creditia-${name}`)); break; }
     catch (e) { if (e.code !== 'ENOENT') throw e; }
   }
+  try { await copyFile(path.join(render,'assets/logos/SOURCES.md'),path.join(paths.resources,'licenses/Logo-SOURCES.md')); }
+  catch (error) { if(error.code!=='ENOENT')throw error; }
   await copyFile(path.join(source, 'packaging/gpui/INSTALL.md'), path.join(root, 'INSTALL.md'));
   if (platform === 'darwin') {
     const plist = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>CFBundleExecutable</key><string>creditia-gpui</string><key>CFBundleIdentifier</key><string>dev.creditia.gpui</string><key>CFBundleName</key><string>Creditia</string><key>CFBundleDisplayName</key><string>Creditia</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>${xml(version)}</string><key>CFBundleVersion</key><string>${xml(version)}</string><key>LSMinimumSystemVersion</key><string>15.0</string><key>NSHighResolutionCapable</key><true/><key>NSPrincipalClass</key><string>NSApplication</string></dict></plist>\n`;
@@ -203,6 +205,16 @@ export async function smoke(root, fixture, output) {
     await artifact('native-resource-check.txt',execFileSync(paths.gui, ['--check-resources'], { cwd: temporary, env, timeout: 90_000, stdio: 'pipe' }));
     await artifact('package-info.json',await fs.readFile(path.join(root,'package-info.json')));
     report.tests.push({ name: 'native-executable-resource-discovery', status: 'passed' });
+    if(info.legacyMigrationHelper){
+      const helper=info.platform==='darwin'?path.join(paths.resources,'legacy/Creditia Migration.app/Contents/MacOS/creditia'):path.join(paths.resources,`legacy/creditia-migrate${info.platform==='win32'?'.exe':''}`);
+      const command=info.platform==='linux'?'xvfb-run':helper;
+      const args=info.platform==='linux'?['-a','dbus-run-session','--',helper,'--migrate-ui-settings']:['--migrate-ui-settings'];
+      await artifact('legacy-helper-startup.txt',execFileSync(command,args,{cwd:temporary,env,timeout:65_000,stdio:'pipe'}));
+      const migrated=await fs.readFile(path.join(env.CREDITIA_HOME,'app.json'));
+      if(JSON.parse(migrated).ui?.legacyImported!==true)throw new Error('Legacy helper did not complete preference import');
+      await artifact('legacy-helper-imported-settings.json',migrated);
+      report.tests.push({name:'bundled-legacy-helper-embedded-page-and-import',status:'passed'});
+    }
     report.status = 'passed';
     report.acceptance.passed=true;report.complete=true;
   } catch (error) { report.status = 'failed'; report.error = error.message; throw error; }

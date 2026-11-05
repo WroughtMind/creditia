@@ -4,9 +4,10 @@ import { timelineFor, sampleTimes, frameDelays, timeAt, petalMotion } from '../s
 
 test('GIF delays and native/HTML clocks share duration independently of sample count', () => {
   const timeline = { durationMs: 2600, holdMs: 1600, fps: 20, loop: true };
-  for (const count of [4, 24, 60]) {
+  for (const count of [4, 24, 40, 60, 120]) {
     const times = sampleTimes(count), delays = frameDelays(times, timeline);
-    assert.ok(Math.abs(delays.slice(0, -1).reduce((a, b) => a + b, 0) - 2600) <= count / 2);
+    assert.equal(delays.slice(0, -1).reduce((a, b) => a + b, 0), 2600);
+    assert.ok(delays.every(delay => delay % 10 === 0));
     assert.equal(delays.at(-1), 1600);
   }
   assert.equal(timeAt(1300, timeline), .5);

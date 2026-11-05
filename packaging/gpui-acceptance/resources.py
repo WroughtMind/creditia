@@ -245,7 +245,7 @@ def run(args):
         if p.exists():
             metadata["artifacts"].append({"path": name, "sha256": sha256(p), "bytes": p.stat().st_size})
     (output / "manifest.json").write_text(json.dumps(metadata, indent=2) + "\n")
-    print(json.dumps({"output": str(output), "summary": metadata["summary"], "exit_code": process.returncode}))
+    print(json.dumps({"output": str(output), "workload_verified": workload_verified, "summary": {k: v for k, v in metadata["summary"].items() if k != "app_events"}, "exit_code": process.returncode}))
     # Stopping a still-running UI at the configured deadline is expected.
     return 0 if workload_verified and process.returncode == 0 and not timed_out else 1
 

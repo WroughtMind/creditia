@@ -45,6 +45,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
       - name: Record the compiler shared by every platform
         id: toolchain
         run: |
@@ -101,6 +103,7 @@ jobs:
         with:
           toolchain: ${{ needs.resolve.outputs.rust-version }}
           targets: ${{ matrix.target }}
+          components: rustfmt
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -120,7 +123,7 @@ jobs:
             gcc g++ clang cmake pkg-config libfontconfig-dev libwayland-dev \
             libwebkit2gtk-4.1-dev libxkbcommon-x11-dev libx11-xcb-dev \
             libssl-dev libzstd-dev libasound2-dev vulkan-validationlayers libvulkan1 \
-            mesa-vulkan-drivers fonts-noto-core fonts-noto-cjk
+            mesa-vulkan-drivers fonts-noto-core fonts-noto-cjk xvfb xauth dbus-x11
           mkdir -p "$RUNNER_TEMP/xdg-runtime"
           chmod 700 "$RUNNER_TEMP/xdg-runtime"
           printf 'XDG_RUNTIME_DIR=%s\n' "$RUNNER_TEMP/xdg-runtime" >> "$GITHUB_ENV"
@@ -151,7 +154,7 @@ jobs:
         run: |
           mkdir -p apps/desktop/dist
           printf '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>\n' > apps/desktop/dist/index.html
-          cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --release --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-migration-build.log"
+          cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --features tauri/custom-protocol --release --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-migration-build.log"
       - name: Record formatting changes for review
         if: always()
         run: |
@@ -190,7 +193,7 @@ jobs:
         run: |
           cargo metadata --manifest-path apps/gpui/Cargo.toml --locked --format-version 1 --filter-platform '${{ matrix.target }}' > "$RUNNER_TEMP/gpui-dependencies.json"
           node packaging/gpui/licenses.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --metadata "$RUNNER_TEMP/gpui-dependencies.json"
-          cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --format-version 1 --filter-platform '${{ matrix.target }}' > "$RUNNER_TEMP/gpui-migration-dependencies.json"
+          cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --features tauri/custom-protocol --locked --format-version 1 --filter-platform '${{ matrix.target }}' > "$RUNNER_TEMP/gpui-migration-dependencies.json"
           node packaging/gpui/licenses.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --metadata "$RUNNER_TEMP/gpui-migration-dependencies.json"
       - name: Ad-hoc sign the complete macOS application
         if: runner.os == 'macOS'
@@ -236,7 +239,12 @@ jobs:
         with:
           name: gpui-evidence-${{ matrix.target }}
           path: |
-            evidence/**
+            evidence/native/**
+            evidence/native-window/**
+            evidence/package-runtime/**
+            evidence/package-installed/**
+            evidence/fixtures/fixture-manifest.json
+            evidence/system-libraries.txt
             ${{ runner.temp }}/gpui-*.log
             ${{ runner.temp }}/gpui-rustfmt.patch
             ${{ runner.temp }}/core-build.log

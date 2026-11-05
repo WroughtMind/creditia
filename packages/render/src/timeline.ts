@@ -1,5 +1,6 @@
 // The same clock describes native playback, GIF delays and standalone HTML.
 import type { Art } from './export.ts';
+import { motionProfile } from './motion-profiles.ts';
 
 export interface Timeline { durationMs: number; holdMs: number; fps: number; loop: boolean }
 export interface Animation { frames: Art[]; times: number[]; timeline: Timeline }
@@ -7,10 +8,9 @@ export const clamp = (t: number) => Math.max(0, Math.min(1, t));
 
 export function timelineFor(style: string, piece: string, art: Art, reducedMotion = false): Timeline {
   if (reducedMotion) return { durationMs: 0, holdMs: 0, fps: 20, loop: false };
+  const profile = motionProfile(style);
   const durationMs = art.motion?.kind === 'scroll' ? Math.round(art.motion.secs * 1000)
-    : piece === 'asterisk' ? (['ink', 'ukiyoe', 'woodblock'].includes(style) ? 2600 : 1800)
-    : ['terminal', 'crt', 'arcade', 'cyber'].includes(style) ? 1400
-    : ['film', 'cinema', 'gala', 'baroque', 'grimoire'].includes(style) ? 2200 : 1700;
+    : piece === 'asterisk' ? profile.starMs : profile.durationMs;
   return { durationMs, holdMs: 1600, fps: 20, loop: true };
 }
 
@@ -22,8 +22,11 @@ export function sampleTimes(count: number, reducedMotion = false): number[] {
 }
 
 export function frameDelays(times: readonly number[], timeline: Timeline): number[] {
-  return times.map((t, i) => Math.max(10, Math.round(i + 1 < times.length
-    ? (times[i + 1] - t) * timeline.durationMs : timeline.holdMs || 10)));
+  // GIF stores centiseconds. Quantize cumulative endpoints, so rounding never
+  // speeds up a long clip when many small intervals round in the same direction.
+  return times.map((t, i) => 10 * Math.max(1, i + 1 < times.length
+    ? Math.round(times[i + 1] * timeline.durationMs / 10) - Math.round(t * timeline.durationMs / 10)
+    : Math.round(timeline.holdMs / 10)));
 }
 
 /** Resolve a playback clock. Paused/interrupted players retain elapsedMs themselves. */
