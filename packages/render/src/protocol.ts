@@ -34,7 +34,7 @@ export type RequestId = string | number | null;
 export type RenderResponse =
   | { version: 1; id: RequestId; ok: true; result: unknown }
   | { version: 1; id: RequestId; ok: false; error: { code: string; message: string } };
-class ProtocolError extends Error { constructor(readonly code: string, message: string) { super(message); } }
+class ProtocolError extends Error { readonly code: string; constructor(code: string, message: string) { super(message); this.code = code; } }
 const fail = (code: string, message: string): never => { throw new ProtocolError(code, message); };
 const object = (x: unknown): x is Record<string, any> => x !== null && typeof x === 'object' && !Array.isArray(x);
 const string = (x: unknown, name: string, limit = 128): string =>
@@ -49,7 +49,8 @@ export class RenderSession {
   private pictureBytes = 0;
   private rawIds = new WeakMap<object, number>();
   private seq = 0;
-  constructor(readonly backend: RenderBackend) {}
+  readonly backend: RenderBackend;
+  constructor(backend: RenderBackend) { this.backend = backend; }
   dispatch(input: unknown) { return dispatchRender(input, this.backend, this); }
   register(id: string, raw: any) {
     const bytes = encoder.encode(JSON.stringify(raw)).byteLength;

@@ -70,7 +70,7 @@ mod native {
                 window.click("settings",cx);
                 assert!(window.find("names-settings").visible());
                 let before=view.read(cx).diagnostic_state()["named"].as_bool().unwrap();
-                window.click("names",cx);
+                window.click("names-settings",cx);
                 assert_eq!(view.read(cx).diagnostic_state()["named"],!before);
                 window.render_frame(cx);
             }).unwrap();
