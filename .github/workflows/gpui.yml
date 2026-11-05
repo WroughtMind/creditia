@@ -272,7 +272,7 @@ jobs:
     timeout-minutes: 120
     env:
       CREDITIA_NATIVE_CATALOG: ${{ github.workspace }}/evidence/catalog-inputs
-      CREDITIA_NATIVE_CATALOG_CAPTURE: ${{ runner.temp }}/native-catalog-captures
+      CREDITIA_NATIVE_CATALOG_CAPTURE: ${{ github.workspace }}/evidence/catalog-captures
     defaults:
       run:
         shell: bash
