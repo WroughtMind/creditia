@@ -1,0 +1,141 @@
+name: gpui
+
+on:
+  pull_request:
+    paths:
+      - 'apps/gpui/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/gpui.yml'
+  push:
+    branches: [codex/gpui-migration]
+    paths:
+      - 'apps/gpui/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/gpui.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: never
+
+jobs:
+  resolve:
+    name: Resolve one dependency graph
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      rust-version: ${{ steps.toolchain.outputs.version }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/gpui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Record the compiler used by every platform
+        id: toolchain
+        run: |
+          rustc --version --verbose
+          cargo --version
+          printf 'version=%s\n' "$(rustc --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      # Bootstrap only until the generated lockfile has been reviewed and committed.
+      # Once present, cargo check --locked below rejects any unresolved manifest change.
+      - name: Preserve the lockfile, or generate its first revision
+        run: |
+          if [ ! -f Cargo.lock ]; then
+            cargo generate-lockfile
+          fi
+          test -s Cargo.lock
+      - name: Retain the exact resolution for review and all matrix jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpui-cargo-lock
+          path: apps/gpui/Cargo.lock
+          if-no-files-found: error
+          retention-days: 14
+
+  check:
+    name: Check ${{ matrix.platform }}
+    needs: resolve
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            runner: macos-15
+            target: aarch64-apple-darwin
+          - platform: macos-intel
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - platform: windows-msvc
+            runner: windows-2022
+            target: x86_64-pc-windows-msvc
+          - platform: linux-x64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/gpui
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the shared lockfile
+        uses: actions/download-artifact@v4
+        with:
+          name: gpui-cargo-lock
+          path: apps/gpui
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ needs.resolve.outputs.rust-version }}
+          targets: ${{ matrix.target }}
+      # Official GPUI Kit installation requirements, verified on Ubuntu 24.04:
+      # https://gpui-kit.com/docs/installation/
+      - name: Install Linux native development libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            gcc g++ clang cmake pkg-config libfontconfig-dev libwayland-dev \
+            libwebkit2gtk-4.1-dev libxkbcommon-x11-dev libx11-xcb-dev \
+            libssl-dev libzstd-dev libasound2-dev vulkan-validationlayers libvulkan1
+      - name: Check macOS developer tools
+        if: runner.os == 'macOS'
+        run: |
+          xcode-select -p
+          printf 'MACOSX_DEPLOYMENT_TARGET=15.0\n' >> "$GITHUB_ENV"
+      - name: Check Windows native tools
+        if: runner.os == 'Windows'
+        run: |
+          cmake --version
+          rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/gpui -> target
+          key: gpui-${{ matrix.target }}
+      - name: Check all application targets with the shared resolution
+        run: |
+          rustc --version --verbose
+          cargo check --all-targets --locked --target '${{ matrix.target }}' 2>&1 \
+            | tee "$RUNNER_TEMP/gpui-check-${{ matrix.platform }}.log"
+      # cargo check proves type/build-script compatibility, not linking, pixels,
+      # native interaction or packaging. Keep its diagnostics; there is no app to upload.
+      - name: Retain platform check diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpui-check-${{ matrix.platform }}
+          path: ${{ runner.temp }}/gpui-check-${{ matrix.platform }}.log
+          if-no-files-found: ignore
+          retention-days: 14

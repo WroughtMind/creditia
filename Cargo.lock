@@ -179,6 +179,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "creditia-desktop-service"
+version = "0.1.0"
+dependencies = [
+ "creditia-store",
+ "libc",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "creditia-store"
 version = "0.1.0"
 dependencies = [

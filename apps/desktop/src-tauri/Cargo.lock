@@ -435,6 +435,7 @@ name = "creditia-app"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "creditia-desktop-service",
  "creditia-store",
  "libc",
  "objc2",
@@ -453,6 +454,16 @@ name = "creditia-core"
 version = "0.1.0"
 dependencies = [
  "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "creditia-desktop-service"
+version = "0.1.0"
+dependencies = [
+ "creditia-store",
+ "libc",
  "serde",
  "serde_json",
 ]
