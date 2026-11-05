@@ -72,23 +72,25 @@ export function art(id: string, m: Model, st: Style, o: PieceOpts = {}): Art | n
   const name = id === 'versions' ? historyLabels(m.history.basis, m.lang).name : m.lang === 'en' ? p.en : p.name;
   return { w: s.w, h: s.h, svg: s.toString(), hits: s.hits, bg: s.bg, title: `${m.project} · ${name}`, motion: (s as any).motion };
 }
+/** 桌面播放和导出使用同一时刻采样；full 可复用已经排好的长卷。 */
+export function frame(id: string, m: Model, st: Style, o: PieceOpts = {}, t = 1, full = art(id, m, st, o)): Art | null {
+  // 银幕滚动：一个固定大小的取景框从上往下扫过整张字幕。
+  if (full?.motion?.kind === 'scroll') {
+    const { viewW, viewH } = full.motion;
+    const travel = Math.max(0, full.h - viewH);
+    const inner = full.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
+    const y = Math.round(travel * t);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewW}" height="${viewH}" viewBox="0 ${y} ${viewW} ${viewH}"><rect y="${y}" width="${viewW}" height="${viewH}" fill="${full.bg}"/>${inner}</svg>`;
+    // GIF 仍然只栅格化一次整卷，逐帧按 y 裁图。
+    return { ...full, w: viewW, h: viewH, svg, hits: [], motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y } };
+  }
+  return art(id, m, st, { ...o, t });
+}
 /** 动画帧：t 从 0 到 1 */
 export function frames(id: string, m: Model, st: Style, o: PieceOpts = {}, n = 28): Art[] {
   const full = art(id, m, st, o);
-  // 银幕滚动：一个固定大小的取景框从上往下扫过整张字幕
-  if (full?.motion?.kind === 'scroll') {
-    const { viewW, viewH } = full.motion;
-    const steps = Math.max(n, 60);
-    const travel = Math.max(0, full.h - viewH);
-    const inner = full.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
-    return Array.from({ length: steps + 1 }, (_, i) => {
-      const y = Math.round((travel * i) / steps);
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewW}" height="${viewH}" viewBox="0 ${y} ${viewW} ${viewH}"><rect y="${y}" width="${viewW}" height="${viewH}" fill="${full.bg}"/>${inner}</svg>`;
-      // crop：导出 GIF 时整卷只栅格化一次，再按 y 裁出每一帧（逐帧裁 viewBox 会碰到 resvg 的滤镜区域 bug，也慢）
-      return { ...full, w: viewW, h: viewH, svg, hits: [], motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y } };
-    });
-  }
+  const steps = full?.motion?.kind === 'scroll' ? Math.max(n, 60) : n;
   const out: Art[] = [];
-  for (let i = 0; i <= n; i++) { const a = art(id, m, st, { ...o, t: i / n }); if (a) out.push(a); }
+  for (let i = 0; i <= steps; i++) { const a = frame(id, m, st, o, i / steps, full); if (a) out.push(a); }
   return out;
 }

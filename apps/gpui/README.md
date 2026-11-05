@@ -22,8 +22,16 @@ Set `CREDITIA_CORE` to the absolute path of the built `creditia-core` executable
 
 ```sh
 cargo run --manifest-path apps/gpui/Cargo.toml
-cargo test --manifest-path apps/gpui/Cargo.toml --lib
+cargo test --manifest-path apps/gpui/Cargo.toml --all-targets
 ```
+
+For artwork preview, install Node 22.18 or later and run `npm ci` in
+`packages/render`. The application starts the shared JSONL renderer on a
+background worker when Preview artwork is pressed. `CREDITIA_NODE` may select a
+Node executable; `CREDITIA_RENDER_BRIDGE` may select the absolute bridge script
+path. Development defaults point to `packages/render/tools/bridge.mjs` relative
+to the build checkout. Packaged renderer discovery and bundled Node are still
+release work.
 
 The sidecar is the existing Rust analysis CLI. No model API or separate analysis
 implementation is introduced. The application reads the existing project library
@@ -41,22 +49,33 @@ preferences have not yet been imported.
   archive request rejection. Closing the view requests worker cancellation.
 - Chinese/English UI, light/dark/system appearance selection, remembered project,
   archive copy and project-folder reveal.
+- Full-color single artwork preview from the shared renderer, with catalog-driven
+  style, piece and layout cycling. Fonts are outlined by the shared renderer.
+  Preview requests are cancelled when the selection changes, old results are
+  rejected, and replaced image assets are evicted. Context-only pieces requiring
+  cross-project or blame input are omitted from this single-archive preview.
 - Cmd/Ctrl+O: open, Cmd/Ctrl+R: refresh, Cmd/Ctrl+Enter: analyze,
   Escape: cancel, Cmd/Ctrl+Shift+C: copy archive, Cmd/Ctrl+Q: quit.
 
 ## Still required before cutover
 
-The full exhibition wall, artwork/style/layout controls, zoom/roam/hit regions,
-shared artwork preview and animation playback, all export UIs, full project
+The full exhibition wall and final artwork/style/layout selectors, zoom/roam/hit
+regions, animation playback, all export UIs, full project
 settings/integrations and background collection UI remain migration work. The
 reduced-motion preference is persisted for that work; this foundation does not
 animate artwork. System appearance is applied when selected and at startup;
 live OS appearance changes need their own acceptance test.
 
-Native dependencies have not been resolved or compiled in the authoring
-environment, which has no Rust toolchain. No `Cargo.lock` has been fabricated.
-The first successful native dependency resolution must produce and commit the
-lockfile before this application can become a release candidate. Unit tests are
-provided but must run in CI or a configured native environment. Screenshot,
+The native dependency lockfile was resolved by CI. The authoring environment has
+no Rust toolchain; the dedicated GPUI workflow checks all application and test
+targets on four platforms. Type checking does not execute the unit tests or
+prove that an application links and launches. Run the test command above in a
+configured native environment and inspect the workflow's actual result.
+Screenshot,
 keyboard/accessibility, native dialogs, GPU, font and platform package validation
 are all still pending; source implementation is not a completed acceptance gate.
+
+The single-image preview has a bounded SVG surface and a renderer process
+deadline. GPUI rasterizes an SVG preview at its intrinsic scale; this does not
+meet the future deep-zoom acceptance requirement. The full wall needs visible
+region scheduling and scale-aware caching before cutover.

@@ -48,6 +48,8 @@ jobs:
       - run: node --test packaging/*.test.mjs site/*.test.mjs
       - run: npm test
         working-directory: packages/render
+      - name: Check GPUI migration catalog coverage
+        run: node docs/gpui-migration/capture.mjs --check
       - run: node --test test/*.test.ts
         working-directory: packages/cli
       - name: Install CLI build dependencies

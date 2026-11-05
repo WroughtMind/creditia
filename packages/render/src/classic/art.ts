@@ -167,8 +167,8 @@ export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, sator
 export const animatedClassic = (id: string) => id !== 'badge' && (!!FORMS[id] || BRIDGED.includes(id));
 
 /** 动画帧：t 从 0 到 1。排版（统一宽度、放大）只量一次，每帧在排好的树上改透明度和条形长度，再出一遍图 */
-export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, satori: Satori, fonts: any[], n = 24): Promise<Art[]> {
-  if (isBridged(id, ctx.variant)) return bridgeFrames(id, m, t, ctx, n);
+export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, satori: Satori, fonts: any[], n = 24, times?: readonly number[]): Promise<Art[]> {
+  if (isBridged(id, ctx.variant)) return bridgeFrames(id, m, t, ctx, n, times);
   const f = FORMS[id];
   if (!f || id === 'badge') return [];
   const out = f.render(m, t, ctx);
@@ -180,8 +180,7 @@ export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, sa
   const rising = id === 'roll' && RISING.has(variant ?? '');
   const title = `${m.project || 'credits'} · ${pieceName(id, ctx.lang, m.raw)}`;
   const frames: Art[] = [];
-  for (let i = 0; i <= n; i++) {
-    const k = i / n;
+  for (const k of times ?? Array.from({ length: n + 1 }, (_, i) => i / n)) {
     let tree = JSON.parse(laid);
     if (rising) tree = rise(tree, k, out.w, out.h, t.bg);
     else reveal(tree, k);

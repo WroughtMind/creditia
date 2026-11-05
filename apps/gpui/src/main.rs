@@ -1,12 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod renderer;
+
 use creditia_desktop_service as service;
 use creditia_gpui::{Appearance, Language, Preferences, Project, contributions, progress_text};
 use gpui_kit::component::{ActiveTheme, Disableable, Theme, ThemeMode};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -29,6 +31,7 @@ struct Creditia {
     progress: Option<Value>,
     job_busy: bool,
     cancelling: bool,
+    analysis_cancellation: Option<service::AnalysisCancellation>,
     list_generation: u64,
     archive_generation: u64,
     list_task: Option<Task<()>>,
@@ -36,6 +39,15 @@ struct Creditia {
     dialog_task: Option<Task<()>>,
     job_task: Option<Task<()>>,
     job_worker: Option<Task<()>>,
+    catalog: Option<Value>,
+    style_index: usize,
+    piece_index: usize,
+    variant_index: usize,
+    preview: Option<(Arc<Image>, f32, f32)>,
+    preview_busy: bool,
+    preview_generation: u64,
+    preview_task: Option<Task<()>>,
+    preview_cancellation: Option<renderer::Cancellation>,
 }
 
 impl Creditia {
@@ -49,10 +61,13 @@ impl Creditia {
         let mut view = Self {
             focus, preferences, selected, projects: Vec::new(), raw: None,
             loading: true, error: None, notice: None, progress: None,
-            job_busy: false, cancelling: false,
+            job_busy: false, cancelling: false, analysis_cancellation: None,
             list_generation: 0, archive_generation: 0,
             list_task: None, archive_task: None, dialog_task: None,
             job_task: None, job_worker: None,
+            catalog: None, style_index: 0, piece_index: 0, variant_index: 0,
+            preview: None, preview_busy: false, preview_generation: 0,
+            preview_task: None, preview_cancellation: None,
         };
         view.refresh(cx);
         view
@@ -87,7 +102,13 @@ impl Creditia {
                                 .filter(|id| view.projects.iter().any(|p| &p.id == id))
                                 .or_else(|| view.projects.first().map(|p| p.id.clone()));
                             if let Some(id) = id { view.select(id, cx); }
-                            else { view.selected = None; view.raw = None; }
+                            else {
+                                view.archive_generation = view.archive_generation.wrapping_add(1);
+                                view.archive_task = None;
+                                view.clear_preview(cx);
+                                view.selected = None;
+                                view.raw = None;
+                            }
                         }
                         Err(error) => view.error = Some(error.to_string()),
                     },
@@ -100,13 +121,14 @@ impl Creditia {
     }
 
     fn select(&mut self, id: String, cx: &mut Context<Self>) {
+        self.clear_preview(cx);
         self.archive_generation = self.archive_generation.wrapping_add(1);
         let generation = self.archive_generation;
         self.selected = Some(id.clone());
         self.preferences.last_project = Some(id.clone());
+        self.error = None;
         self.persist();
         self.raw = None;
-        self.error = None;
         self.loading = true;
         self.archive_task = Some(cx.spawn(async move |this, cx| {
             let result = cx.background_spawn(async move { service::credits(id) }).await;
@@ -160,6 +182,8 @@ impl Creditia {
         let selection_at_start = selected.clone();
         let lang = self.preferences.language.code().to_string();
         let adding = add_path.is_some();
+        let cancellation = service::AnalysisCancellation::default();
+        self.analysis_cancellation = Some(cancellation.clone());
         // Progress is bounded and disposable; completion is always delivered.
         let (sender, receiver) = async_channel::bounded(32);
         let progress_sender = sender.clone();
@@ -168,8 +192,8 @@ impl Creditia {
         });
         self.job_worker = Some(cx.background_spawn(async move {
             let result = match add_path {
-                Some(path) => service::add_project(path, Some(lang), Some(sink)),
-                None => service::analyze(selected.expect("selected project"), Some(lang), Some(sink)),
+                Some(path) => service::add_project_with_cancel(path, Some(lang), Some(sink), cancellation),
+                None => service::analyze_with_cancel(selected.expect("selected project"), Some(lang), Some(sink), cancellation),
             };
             let _ = sender.send(JobEvent::Finished(result)).await;
         }));
@@ -181,6 +205,7 @@ impl Creditia {
                         JobEvent::Progress(value) => view.progress = Some(value),
                         JobEvent::Finished(result) => {
                             view.job_busy = false;
+                            view.analysis_cancellation = None;
                             view.progress = None;
                             match result {
                                 Ok(value) => {
@@ -212,7 +237,7 @@ impl Creditia {
 
     fn cancel(&mut self, _: &CancelAnalysis, _: &mut Window, cx: &mut Context<Self>) {
         if self.job_busy {
-            service::cancel_analyze();
+            if let Some(cancellation) = &self.analysis_cancellation { cancellation.cancel(); }
             self.cancelling = true;
             cx.notify();
         }
@@ -243,6 +268,7 @@ impl Creditia {
         self.preferences.language = match self.preferences.language { Language::Zh => Language::En, Language::En => Language::Zh };
         self.persist();
         install_menus(&self.preferences.language, cx);
+        self.clear_preview(cx);
         cx.notify();
     }
 
@@ -258,13 +284,119 @@ impl Creditia {
     fn toggle_motion(&mut self, _: &ToggleMotion, _: &mut Window, cx: &mut Context<Self>) {
         self.preferences.reduced_motion = !self.preferences.reduced_motion;
         self.persist();
+        self.notice = Some(if self.preferences.reduced_motion {
+            self.text("已减少动态效果", "Reduced motion enabled")
+        } else { self.text("已恢复动态效果", "Reduced motion disabled") }.into());
         cx.notify();
+    }
+
+    fn clear_preview(&mut self, cx: &mut Context<Self>) {
+        if let Some(cancellation) = self.preview_cancellation.take() { cancellation.cancel(); }
+        self.preview_generation = self.preview_generation.wrapping_add(1);
+        self.preview_task = None;
+        self.preview_busy = false;
+        if let Some((image, _, _)) = self.preview.take() { ImageSource::Image(image).remove_asset(cx); }
+    }
+
+    fn preview_artwork(&mut self, cx: &mut Context<Self>) {
+        let Some(raw) = self.raw.clone() else { return; };
+        self.clear_preview(cx);
+        let generation = self.preview_generation;
+        let cancellation = renderer::Cancellation::default();
+        self.preview_cancellation = Some(cancellation.clone());
+        self.preview_busy = true;
+        self.error = None;
+        let cached_catalog = self.catalog.clone();
+        let (style_index, piece_index, variant_index) = (self.style_index, self.piece_index, self.variant_index);
+        let language = self.preferences.language.code().to_string();
+        self.preview_task = Some(cx.spawn(async move |this, cx| {
+            let result: Result<(Value, usize, Value), String> = cx.background_spawn(async move {
+                let first_catalog = cached_catalog.is_none();
+                let mut catalog = match cached_catalog {
+                    Some(catalog) => catalog,
+                    None => renderer::request(json!({"version":1,"id":1,"op":"catalog"}), cancellation.clone())?,
+                };
+                // Context-only pieces need project collections or blame inputs;
+                // the single archive preview does not claim those are present.
+                if let Some(styles) = catalog["styles"].as_array_mut() {
+                    for style in styles {
+                        if let Some(pieces) = style["pieces"].as_array_mut() {
+                            pieces.retain(|piece| piece["requires"].as_array().is_none_or(Vec::is_empty));
+                        }
+                    }
+                }
+                let styles = catalog["styles"].as_array().ok_or("Renderer catalog lacks styles")?;
+                let index = if first_catalog {
+                    styles.iter().position(|style| style["id"] == "minimal-light").unwrap_or(0)
+                } else { style_index };
+                let style = styles.get(index).ok_or("Renderer style is unavailable")?;
+                let piece = style["pieces"].as_array().and_then(|pieces| pieces.get(piece_index)).ok_or("Renderer piece is unavailable")?;
+                let variant = piece["variants"].as_array().and_then(|variants| variants.get(variant_index))
+                    .and_then(|variant| variant["id"].as_str());
+                let mut request = json!({"version":1,"id":2,"op":"render","raw":raw,
+                    "style":style["id"],"piece":piece["id"],"lang":language,
+                    "group":"auto","named":true,"flatten":true});
+                if let Some(variant) = variant { request["variant"] = json!(variant); }
+                let rendered = renderer::request(request, cancellation)?;
+                Ok((catalog, index, rendered["art"].clone()))
+            }).await;
+            let _ = this.update(cx, |view, cx| {
+                if view.preview_generation != generation { return; }
+                view.preview_busy = false;
+                view.preview_cancellation = None;
+                match result {
+                    Ok((catalog, index, art)) => {
+                        view.catalog = Some(catalog);
+                        view.style_index = index;
+                        if art.is_null() {
+                            view.notice = Some(view.text("这份档案没有该作品所需的数据", "This archive has no data for this piece").into());
+                        } else if let (Some(svg), Some(w), Some(h)) = (art["svg"].as_str(), art["w"].as_f64(), art["h"].as_f64()) {
+                            if w > 0.0 && h > 0.0 && w <= 16384.0 && h <= 16384.0 && w * h <= 8_000_000.0 {
+                                view.preview = Some((Arc::new(Image::from_bytes(ImageFormat::Svg, svg.as_bytes().to_vec())), w as f32, h as f32));
+                            } else {
+                                view.error = Some(view.text("作品过大，暂不能在单图预览中显示", "This piece exceeds the single-image preview limit").into());
+                            }
+                        } else {
+                            view.error = Some("Invalid renderer artwork response".into());
+                        }
+                    }
+                    Err(error) => view.error = Some(error),
+                }
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
+
+    fn next_style(&mut self, cx: &mut Context<Self>) {
+        if let Some(styles) = self.catalog.as_ref().and_then(|c| c["styles"].as_array()) {
+            if !styles.is_empty() { self.style_index = (self.style_index + 1) % styles.len(); }
+        }
+        self.piece_index = 0;
+        self.variant_index = 0;
+        self.preview_artwork(cx);
+    }
+
+    fn next_piece(&mut self, cx: &mut Context<Self>) {
+        if let Some(pieces) = self.catalog.as_ref().and_then(|c| c["styles"][self.style_index]["pieces"].as_array()) {
+            if !pieces.is_empty() { self.piece_index = (self.piece_index + 1) % pieces.len(); }
+        }
+        self.variant_index = 0;
+        self.preview_artwork(cx);
+    }
+
+    fn next_variant(&mut self, cx: &mut Context<Self>) {
+        if let Some(variants) = self.catalog.as_ref().and_then(|c| c["styles"][self.style_index]["pieces"][self.piece_index]["variants"].as_array()) {
+            if !variants.is_empty() { self.variant_index = (self.variant_index + 1) % variants.len(); }
+        }
+        self.preview_artwork(cx);
     }
 }
 
 impl Drop for Creditia {
     fn drop(&mut self) {
-        if self.job_busy { service::cancel_analyze(); }
+        if let Some(cancellation) = &self.analysis_cancellation { cancellation.cancel(); }
+        if let Some(cancellation) = &self.preview_cancellation { cancellation.cancel(); }
     }
 }
 
@@ -293,6 +425,29 @@ impl Render for Creditia {
         if self.loading {
             content = content.child(self.text("正在读取作品库…", "Loading library…"));
         } else if let Some(raw) = &self.raw {
+            let name_key = if self.preferences.language == Language::En { "en" } else { "name" };
+            let style = self.catalog.as_ref().map(|catalog| &catalog["styles"][self.style_index]);
+            let piece = style.map(|style| &style["pieces"][self.piece_index]);
+            let style_name = style.and_then(|style| style[name_key].as_str()).unwrap_or(self.text("风格", "Style")).to_string();
+            let piece_name = piece.and_then(|piece| piece[name_key].as_str()).unwrap_or(self.text("作品", "Piece")).to_string();
+            let variant_name = piece.and_then(|piece| piece["variants"][self.variant_index][name_key].as_str()).unwrap_or(self.text("版式", "Layout")).to_string();
+            content = content.child(div().flex().flex_wrap().gap_2()
+                .child(Button::new("preview").label(self.text("预览作品", "Preview artwork")).disabled(self.preview_busy)
+                    .on_click(cx.listener(|view, _, _, cx| view.preview_artwork(cx))))
+                .child(Button::new("next-style").ghost().label(style_name).disabled(self.catalog.is_none())
+                    .on_click(cx.listener(|view, _, _, cx| view.next_style(cx))))
+                .child(Button::new("next-piece").ghost().label(piece_name).disabled(self.catalog.is_none())
+                    .on_click(cx.listener(|view, _, _, cx| view.next_piece(cx))))
+                .child(Button::new("next-variant").ghost().label(variant_name).disabled(self.catalog.is_none())
+                    .on_click(cx.listener(|view, _, _, cx| view.next_variant(cx)))));
+            if self.preview_busy {
+                content = content.child(self.text("正在生成作品…", "Rendering artwork…"));
+            } else if let Some((image, width, height)) = &self.preview {
+                content = content.child(img(image.clone()).id("artwork-preview").w_full().h(px((height / width * 780.).min(680.)))
+                    .object_fit(ObjectFit::Contain)
+                    .with_loading(|| div().child("…").into_any_element())
+                    .with_fallback(|| div().child("Unable to decode artwork").into_any_element()));
+            }
             let totals = &raw["totals"];
             let stats = [
                 (self.text("新增代码行", "Lines added"), "linesAdded"),

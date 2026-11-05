@@ -36,6 +36,19 @@ struct Running {
 
 static RUNNING: Mutex<Option<Running>> = Mutex::new(None);
 
+// Keep the operation reserved until its output has drained. Git descendants can
+// outlive the worker while retaining a pipe, and cancellation must still be able
+// to kill that process group after the worker itself has exited.
+struct RunningGuard(Arc<AtomicBool>);
+impl Drop for RunningGuard {
+    fn drop(&mut self) {
+        let mut slot = RUNNING.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.as_ref().is_some_and(|running| Arc::ptr_eq(&self.0, &running.cancelled)) {
+            *slot = None;
+        }
+    }
+}
+
 pub fn analysis_running() -> bool {
     RUNNING.lock().unwrap_or_else(|e| e.into_inner()).is_some()
 }
@@ -96,6 +109,7 @@ pub fn run_analysis_with_cancel(repo: &str, lang: Option<&str>, progress: Option
         *slot = Some(Running { child, cancelled: cancelled.clone() });
         pipes
     };
+    let _running = RunningGuard(cancelled.clone());
     // Poll the process rather than joining pipes first: child Git processes may
     // hold a pipe open until the entire process group is cancelled.
     let status = loop {
@@ -103,10 +117,7 @@ pub fn run_analysis_with_cancel(repo: &str, lang: Option<&str>, progress: Option
             let mut slot = RUNNING.lock().unwrap_or_else(|e| e.into_inner());
             match slot.as_mut().map(|running| running.child.try_wait()) {
                 Some(Ok(None)) => {}
-                Some(Ok(Some(status))) => {
-                    *slot = None;
-                    break status;
-                }
+                Some(Ok(Some(status))) => break status,
                 Some(Err(error)) => {
                     if let Some(mut running) = slot.take() {
                         stop(&mut running.child);
@@ -124,6 +135,9 @@ pub fn run_analysis_with_cancel(repo: &str, lang: Option<&str>, progress: Option
     }
     let stdout = out.and_then(|t| t.join().ok()).unwrap_or_default();
     let stderr = err.and_then(|t| t.join().ok()).unwrap_or_default();
+    if cancelled.load(Ordering::SeqCst) {
+        return Err(Fail::new("cancelled"));
+    }
     core_result(status, &stdout, &stderr)
 }
 

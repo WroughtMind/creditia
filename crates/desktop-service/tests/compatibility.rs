@@ -65,10 +65,12 @@ fn existing_library_live_archive_and_snapshot_keep_their_contract() {
     let live = Path::new(&project.path).join(".creditia/credits.json");
     std::fs::write(&live, r#"{"project":{"name":"live"}}"#).unwrap();
 
+    // Snapshot persistence advances project metadata in the existing store.
+    let stored = lib.projects().unwrap().into_iter().find(|p| p.id == project.id).unwrap();
     let list = service::projects().unwrap();
     assert_eq!(list[0]["id"], project.id);
-    assert_eq!(list[0]["lastHead"], "previous-head");
-    assert_eq!(list[0]["lastAnalyzed"], 42);
+    assert_eq!(list[0]["lastHead"], json!(stored.last_head));
+    assert_eq!(list[0]["lastAnalyzed"], json!(stored.last_analyzed));
     assert_eq!(list[0]["pathKinds"]["/previous/project"], "linked");
     assert_eq!(list[0]["exists"], true);
     assert_eq!(list[0]["hasCredits"], true);
@@ -78,7 +80,7 @@ fn existing_library_live_archive_and_snapshot_keep_their_contract() {
     std::fs::write(&live, "interrupted write").unwrap();
     assert_eq!(service::credits(project.id.clone()).unwrap()["project"]["name"], "snapshot");
     std::fs::remove_file(&live).unwrap();
-    assert_eq!(service::stamp(project.id.clone()).unwrap(), "0:42");
+    assert_eq!(service::stamp(project.id.clone()).unwrap(), format!("0:{}", stored.last_analyzed.unwrap_or(0)));
     assert_eq!(service::credits("missing".into()).unwrap_err().code, "no_credits");
     assert_eq!(service::config_of("missing".into()).unwrap(), json!({}));
 
@@ -142,16 +144,27 @@ exit 2
     fixture.core("echo invalid-json; echo 'worker diagnostic' >&2; exit 1");
     assert_eq!(service::run_analysis("/tmp", None, None).unwrap_err().detail.as_deref(), Some("worker diagnostic"));
 
+    // Cancellation from the UI can precede worker dispatch. It must not launch
+    // even a missing worker or affect a different operation started afterwards.
+    let cancelled_before_dispatch = service::AnalysisCancellation::default();
+    cancelled_before_dispatch.cancel();
+    std::env::set_var("CREDITIA_CORE", fixture.root.join("missing"));
+    assert_eq!(service::run_analysis_with_cancel("/tmp", None, None, cancelled_before_dispatch.clone()).unwrap_err().code, "cancelled");
+
     fixture.core("sleep 30; echo '{}'");
-    let worker = std::thread::spawn(|| service::run_analysis("/tmp", None, None));
+    let running_cancel = service::AnalysisCancellation::default();
+    let worker_cancel = running_cancel.clone();
+    let worker = std::thread::spawn(move || service::run_analysis_with_cancel("/tmp", None, None, worker_cancel));
     let start = std::time::Instant::now();
     while !service::analysis_running() && start.elapsed() < std::time::Duration::from_secs(5) {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     assert!(service::analysis_running());
     assert_eq!(service::run_analysis("/tmp", None, None).unwrap_err().code, "busy");
+    cancelled_before_dispatch.cancel();
+    assert!(!running_cancel.is_cancelled(), "an old token cannot cancel the new job");
     let cancel_at = std::time::Instant::now();
-    service::cancel_analyze();
+    running_cancel.cancel();
     assert_eq!(worker.join().unwrap().unwrap_err().code, "cancelled");
     assert!(cancel_at.elapsed() < std::time::Duration::from_secs(5));
     assert!(!service::analysis_running());

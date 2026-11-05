@@ -1,0 +1,3792 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "ac82a574b0747bc5651571a3f169f4a893442f88",
+  "baselineMeaning": "migration scope reference; current source locations and fingerprints are captured separately and are not asserted to be byte-identical to this commit",
+  "sourceLocationBasis": "working_tree_at_capture",
+  "baselineStatus": "source_recorded",
+  "visualBaseline": "not_captured",
+  "gpuiAcceptance": "pending",
+  "counts": {
+    "styles": 26,
+    "classicStyles": 15,
+    "svgStyles": 11,
+    "desktopUniquePieces": 25,
+    "sharedUniquePieces": 28,
+    "stylePieceLayoutRows": 1738,
+    "desktopStylePieceLayoutRows": 1482,
+    "features": 37,
+    "globalShortcuts": 10,
+    "nativeCommands": 31
+  },
+  "styles": [
+    {
+      "id": "minimal-light",
+      "name": "极简",
+      "renderer": "classic",
+      "family": "minimal",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 7,
+        "anchor": "'minimal-light':"
+      }
+    },
+    {
+      "id": "minimal-dark",
+      "name": "极简 · 暗",
+      "renderer": "classic",
+      "family": "minimal",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 8,
+        "anchor": "'minimal-dark':"
+      }
+    },
+    {
+      "id": "glass",
+      "name": "玻璃",
+      "renderer": "classic",
+      "family": "glass",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 9,
+        "anchor": "  glass:"
+      }
+    },
+    {
+      "id": "film",
+      "name": "胶片",
+      "renderer": "classic",
+      "family": "film",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 10,
+        "anchor": "  film:"
+      }
+    },
+    {
+      "id": "cinema",
+      "name": "影院",
+      "renderer": "classic",
+      "family": "cinema",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 11,
+        "anchor": "  cinema:"
+      }
+    },
+    {
+      "id": "editorial",
+      "name": "杂志",
+      "renderer": "classic",
+      "family": "editorial",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 12,
+        "anchor": "  editorial:"
+      }
+    },
+    {
+      "id": "broadsheet",
+      "name": "报纸",
+      "renderer": "classic",
+      "family": "broadsheet",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 13,
+        "anchor": "  broadsheet:"
+      }
+    },
+    {
+      "id": "playbill",
+      "name": "节目单",
+      "renderer": "classic",
+      "family": "playbill",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 14,
+        "anchor": "  playbill:"
+      }
+    },
+    {
+      "id": "gala",
+      "name": "颁奖礼",
+      "renderer": "classic",
+      "family": "gala",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 15,
+        "anchor": "  gala:"
+      }
+    },
+    {
+      "id": "mono",
+      "name": "单色",
+      "renderer": "classic",
+      "family": "mono",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 16,
+        "anchor": "  mono:"
+      }
+    },
+    {
+      "id": "poster",
+      "name": "海报",
+      "renderer": "classic",
+      "family": "poster",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 17,
+        "anchor": "  poster:"
+      }
+    },
+    {
+      "id": "terminal",
+      "name": "终端",
+      "renderer": "classic",
+      "family": "terminal",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 18,
+        "anchor": "  terminal:"
+      }
+    },
+    {
+      "id": "crt",
+      "name": "磷光屏",
+      "renderer": "classic",
+      "family": "crt",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 19,
+        "anchor": "  crt:"
+      }
+    },
+    {
+      "id": "neon",
+      "name": "霓虹",
+      "renderer": "classic",
+      "family": "neon",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 20,
+        "anchor": "  neon:"
+      }
+    },
+    {
+      "id": "arcade",
+      "name": "街机",
+      "renderer": "classic",
+      "family": "arcade",
+      "source": {
+        "path": "packages/render/src/classic/catalog.ts",
+        "line": 21,
+        "anchor": "  arcade:"
+      }
+    },
+    {
+      "id": "ink",
+      "name": "水墨",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "vertical"
+      },
+      "source": {
+        "path": "packages/render/src/styles/east.ts",
+        "line": 65,
+        "anchor": "id: 'ink'"
+      }
+    },
+    {
+      "id": "ukiyoe",
+      "name": "浮世绘",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "vertical"
+      },
+      "source": {
+        "path": "packages/render/src/styles/east.ts",
+        "line": 139,
+        "anchor": "id: 'ukiyoe'"
+      }
+    },
+    {
+      "id": "woodblock",
+      "name": "古籍",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "vertical",
+        "roll": "vertical"
+      },
+      "source": {
+        "path": "packages/render/src/styles/east.ts",
+        "line": 212,
+        "anchor": "id: 'woodblock'"
+      }
+    },
+    {
+      "id": "baroque",
+      "name": "巴洛克",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "podium",
+        "roll": "classic"
+      },
+      "source": {
+        "path": "packages/render/src/styles/west.ts",
+        "line": 84,
+        "anchor": "id: 'baroque'"
+      }
+    },
+    {
+      "id": "grimoire",
+      "name": "魔典",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "classic"
+      },
+      "source": {
+        "path": "packages/render/src/styles/west.ts",
+        "line": 177,
+        "anchor": "id: 'grimoire'"
+      }
+    },
+    {
+      "id": "manuscript",
+      "name": "手稿",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "classic"
+      },
+      "source": {
+        "path": "packages/render/src/styles/story.ts",
+        "line": 12,
+        "anchor": "id: 'manuscript'"
+      }
+    },
+    {
+      "id": "pastel",
+      "name": "对称",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "center",
+        "roll": "card"
+      },
+      "source": {
+        "path": "packages/render/src/styles/story.ts",
+        "line": 140,
+        "anchor": "id: 'pastel'"
+      }
+    },
+    {
+      "id": "cutout",
+      "name": "剪纸",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "billing"
+      },
+      "source": {
+        "path": "packages/render/src/styles/story.ts",
+        "line": 194,
+        "anchor": "id: 'cutout'"
+      }
+    },
+    {
+      "id": "meadow",
+      "name": "夏日",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "ed"
+      },
+      "source": {
+        "path": "packages/render/src/styles/story.ts",
+        "line": 84,
+        "anchor": "id: 'meadow'"
+      }
+    },
+    {
+      "id": "manga",
+      "name": "漫画",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "stats",
+        "roll": "card"
+      },
+      "source": {
+        "path": "packages/render/src/styles/pop.ts",
+        "line": 29,
+        "anchor": "id: 'manga'"
+      }
+    },
+    {
+      "id": "cyber",
+      "name": "赛博",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "hud",
+        "roll": "terminal"
+      },
+      "source": {
+        "path": "packages/render/src/styles/cyber.ts",
+        "line": 9,
+        "anchor": "id: 'cyber'"
+      }
+    }
+  ],
+  "sharedSvgStyles": [
+    {
+      "id": "minimal",
+      "name": "极简",
+      "renderer": "svg",
+      "prefer": {},
+      "source": {
+        "path": "packages/render/src/styles/base.ts",
+        "line": 8,
+        "anchor": "id: 'minimal'"
+      },
+      "desktop": false
+    },
+    {
+      "id": "noir",
+      "name": "暗室",
+      "renderer": "svg",
+      "prefer": {},
+      "source": {
+        "path": "packages/render/src/styles/base.ts",
+        "line": 31,
+        "anchor": "id: 'noir'"
+      },
+      "desktop": false
+    },
+    {
+      "id": "glass",
+      "name": "液态玻璃",
+      "renderer": "svg",
+      "prefer": {},
+      "source": {
+        "path": "packages/render/src/styles/base.ts",
+        "line": 53,
+        "anchor": "id: 'glass'"
+      },
+      "desktop": false
+    },
+    {
+      "id": "ink",
+      "name": "水墨",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "vertical"
+      },
+      "source": {
+        "path": "packages/render/src/styles/east.ts",
+        "line": 65,
+        "anchor": "id: 'ink'"
+      },
+      "desktop": true
+    },
+    {
+      "id": "ukiyoe",
+      "name": "浮世绘",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "vertical"
+      },
+      "source": {
+        "path": "packages/render/src/styles/east.ts",
+        "line": 139,
+        "anchor": "id: 'ukiyoe'"
+      },
+      "desktop": true
+    },
+    {
+      "id": "woodblock",
+      "name": "古籍",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "vertical",
+        "roll": "vertical"
+      },
+      "source": {
+        "path": "packages/render/src/styles/east.ts",
+        "line": 212,
+        "anchor": "id: 'woodblock'"
+      },
+      "desktop": true
+    },
+    {
+      "id": "cinema",
+      "name": "黄金时代",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "classic"
+      },
+      "source": {
+        "path": "packages/render/src/styles/west.ts",
+        "line": 9,
+        "anchor": "id: 'cinema'"
+      },
+      "desktop": false
+    },
+    {
+      "id": "baroque",
+      "name": "巴洛克",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "podium",
+        "roll": "classic"
+      },
+      "source": {
+        "path": "packages/render/src/styles/west.ts",
+        "line": 84,
+        "anchor": "id: 'baroque'"
+      },
+      "desktop": true
+    },
+    {
+      "id": "grimoire",
+      "name": "魔典",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "classic"
+      },
+      "source": {
+        "path": "packages/render/src/styles/west.ts",
+        "line": 177,
+        "anchor": "id: 'grimoire'"
+      },
+      "desktop": true
+    },
+    {
+      "id": "manuscript",
+      "name": "手稿",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "classic"
+      },
+      "source": {
+        "path": "packages/render/src/styles/story.ts",
+        "line": 12,
+        "anchor": "id: 'manuscript'"
+      },
+      "desktop": true
+    },
+    {
+      "id": "pastel",
+      "name": "对称",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "center",
+        "roll": "card"
+      },
+      "source": {
+        "path": "packages/render/src/styles/story.ts",
+        "line": 140,
+        "anchor": "id: 'pastel'"
+      },
+      "desktop": true
+    },
+    {
+      "id": "cutout",
+      "name": "剪纸",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "billing"
+      },
+      "source": {
+        "path": "packages/render/src/styles/story.ts",
+        "line": 194,
+        "anchor": "id: 'cutout'"
+      },
+      "desktop": true
+    },
+    {
+      "id": "meadow",
+      "name": "夏日",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "ed"
+      },
+      "source": {
+        "path": "packages/render/src/styles/story.ts",
+        "line": 84,
+        "anchor": "id: 'meadow'"
+      },
+      "desktop": true
+    },
+    {
+      "id": "manga",
+      "name": "漫画",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "stats",
+        "roll": "card"
+      },
+      "source": {
+        "path": "packages/render/src/styles/pop.ts",
+        "line": 29,
+        "anchor": "id: 'manga'"
+      },
+      "desktop": true
+    },
+    {
+      "id": "cyber",
+      "name": "赛博",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "hud",
+        "roll": "terminal"
+      },
+      "source": {
+        "path": "packages/render/src/styles/cyber.ts",
+        "line": 9,
+        "anchor": "id: 'cyber'"
+      },
+      "desktop": true
+    },
+    {
+      "id": "terminal",
+      "name": "终端",
+      "renderer": "svg",
+      "prefer": {
+        "tier": "rows",
+        "roll": "terminal"
+      },
+      "source": {
+        "path": "packages/render/src/styles/pop.ts",
+        "line": 101,
+        "anchor": "id: 'terminal'"
+      },
+      "desktop": false
+    }
+  ],
+  "excludedSvgStyleAliases": [
+    "minimal",
+    "noir",
+    "glass",
+    "cinema",
+    "terminal"
+  ],
+  "boards": {
+    "classic": [
+      {
+        "id": "share",
+        "span": 2
+      },
+      {
+        "id": "tier"
+      },
+      {
+        "id": "people"
+      },
+      {
+        "id": "roll"
+      },
+      {
+        "id": "receipt"
+      },
+      {
+        "id": "donut"
+      },
+      {
+        "id": "asterisk"
+      },
+      {
+        "id": "ribbon",
+        "span": 2
+      },
+      {
+        "id": "waffle"
+      },
+      {
+        "id": "mosaic"
+      },
+      {
+        "id": "versions"
+      },
+      {
+        "id": "area"
+      },
+      {
+        "id": "stream",
+        "span": 2
+      },
+      {
+        "id": "survival"
+      },
+      {
+        "id": "evidence"
+      },
+      {
+        "id": "areas"
+      },
+      {
+        "id": "lanes"
+      },
+      {
+        "id": "clock"
+      },
+      {
+        "id": "settle"
+      },
+      {
+        "id": "app"
+      },
+      {
+        "id": "fetch"
+      },
+      {
+        "id": "codemap",
+        "span": 2
+      },
+      {
+        "id": "calendar",
+        "span": 2
+      },
+      {
+        "id": "byline",
+        "span": 2
+      },
+      {
+        "id": "badge"
+      },
+      {
+        "id": "badge",
+        "variant": "emblem"
+      },
+      {
+        "id": "badge",
+        "variant": "stack"
+      }
+    ],
+    "svg": [
+      {
+        "id": "share",
+        "span": 2
+      },
+      {
+        "id": "tier"
+      },
+      {
+        "id": "people"
+      },
+      {
+        "id": "roll"
+      },
+      {
+        "id": "receipt"
+      },
+      {
+        "id": "donut"
+      },
+      {
+        "id": "asterisk"
+      },
+      {
+        "id": "stream",
+        "span": 2
+      },
+      {
+        "id": "waffle"
+      },
+      {
+        "id": "survival"
+      },
+      {
+        "id": "evidence"
+      },
+      {
+        "id": "versions"
+      },
+      {
+        "id": "areas"
+      },
+      {
+        "id": "lanes",
+        "span": 2
+      },
+      {
+        "id": "clock",
+        "span": 2
+      },
+      {
+        "id": "mosaic"
+      },
+      {
+        "id": "codemap",
+        "span": 2
+      },
+      {
+        "id": "calendar",
+        "span": 2
+      },
+      {
+        "id": "badge",
+        "variant": "emblem"
+      },
+      {
+        "id": "badge",
+        "variant": "stack"
+      },
+      {
+        "id": "badge",
+        "variant": "flat"
+      },
+      {
+        "id": "byline",
+        "span": 2
+      }
+    ]
+  },
+  "pieces": {
+    "classic": [
+      {
+        "id": "tier",
+        "name": "署名榜",
+        "variants": [
+          "original",
+          "rows",
+          "center",
+          "podium",
+          "vertical",
+          "hud",
+          "stats",
+          "split",
+          "grouped"
+        ],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 13,
+          "anchor": "  tier: { name: 'Tier', q: '工具与模型占比', size: '800×自适应', render: (m, t) => F.tier(m, t) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "share",
+        "name": "分享图",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 14,
+          "anchor": "  share: { name: '分享图', q: '链接预览、社交媒体', size: '1200×630', render: (m, t) => F.share(m, t) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "byline",
+        "name": "署名行",
+        "variants": [
+          "original",
+          "models"
+        ],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 15,
+          "anchor": "  byline: { name: '署名行', q: '页脚、关于页', size: '1200×120', render: (m, t, c) => F.byline(m, t, c.lang) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "receipt",
+        "name": "小票",
+        "variants": [
+          "slip",
+          "thermal",
+          "folio",
+          "stub",
+          "ticket",
+          "ledger",
+          "scroll",
+          "themed",
+          "itemized"
+        ],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 16,
+          "anchor": "  receipt: { name: '小票', q: '工期、会话与 Token', size: '1080×1350', variants: F.RECEIPT_VARIANTS, def: (t) => F.RECEIPT_DEFAULT[t.family] ?? 'slip', render: (m, t, c) => F.receipt(m, t, c.variant) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "roll",
+        "name": "片尾字幕",
+        "variants": [
+          "classic",
+          "columns",
+          "billing",
+          "title",
+          "crawl",
+          "cast",
+          "scroll",
+          "cards",
+          "end",
+          "block",
+          "program",
+          "opening",
+          "production",
+          "slate",
+          "crew",
+          "card",
+          "vertical",
+          "ed",
+          "terminal",
+          "troupe"
+        ],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 18,
+          "anchor": "  roll: { name: '片尾字幕', q: '分工与角色表', size: '1080×1350', variants: [...F.ROLL_VARIANTS, ...ROLL_NEW], def: (t) => F.ROLL_DEFAULT[t.family] ?? 'classic', render: (m, t, c) => (ROLL_NEW.includes(c.variant ?? '') ? rollNew(m, t, c.variant!) : F.roll(m, t, c.variant)) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "ribbon",
+        "name": "时间织带",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 19,
+          "anchor": "  ribbon: { name: '时间织带', q: '时间线', size: '1200×500', render: (m, t) => F.ribbon(m, t) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "mosaic",
+        "name": "代码马赛克",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 20,
+          "anchor": "  mosaic: { name: '代码马赛克', q: '各文件代码归属', size: '1200×860', render: (m, t) => F.mosaic(m, t) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "profile",
+        "name": "个人履历卡",
+        "variants": [],
+        "animated": true,
+        "desktop": false,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 21,
+          "anchor": "  profile: { name: '个人履历卡', q: '我和 AI 一起做了什么', size: '1200×自适应', render: (m, t, c) => (c.projects?.length ? F.profile(c.person ?? m.director, c.projects, t) : null) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": "projects and person"
+      },
+      {
+        "id": "fetch",
+        "name": "终端名片",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 22,
+          "anchor": "  fetch: { name: '终端名片', q: 'creditia fetch', size: '1200×自适应', render: (m, t) => F.term('creditia fetch', fetchSegs(m), t, m) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "blame",
+        "name": "溯源",
+        "variants": [],
+        "animated": true,
+        "desktop": false,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 23,
+          "anchor": "  blame: { name: '溯源', q: 'creditia blame', size: '1200×自适应', render: (m, t, c) => (c.blame ? F.term(`creditia blame ${c.blame.file.split('/').pop()}:${c.blame.line}`, blameSegs(c.blame), t, m) : null) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": "blame result"
+      },
+      {
+        "id": "app",
+        "name": "App 致谢页",
+        "variants": [
+          "ios",
+          "themed"
+        ],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 24,
+          "anchor": "  app: { name: 'App 内致谢页', q: '原生 App 的 credits', size: '780×自适应', variants: F.APP_VARIANTS, def: () => 'themed', render: (m, t, c) => F.appPage(m, t, c.variant) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "waffle",
+        "name": "华夫饼图",
+        "variants": [
+          "original",
+          "blocks"
+        ],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 25,
+          "anchor": "  waffle: { name: '华夫饼图', q: '百格占比', size: '1200×680', render: (m, t) => F.waffle(m, t) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "donut",
+        "name": "环形图",
+        "variants": [
+          "original",
+          "nested"
+        ],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 26,
+          "anchor": "  donut: { name: '环形图', q: '代码占比', size: '1200×630', render: (m, t) => F.donut(m, t) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "area",
+        "name": "堆叠面积图",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 27,
+          "anchor": "  area: { name: '堆叠面积图', q: '每周新增', size: '1200×700', render: (m, t) => F.area(m, t) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "lanes",
+        "name": "泳道图",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 28,
+          "anchor": "  lanes: { name: '泳道图', q: '会话时间线', size: '1200×自适应', render: (m, t) => F.lanes(m, t) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "clock",
+        "name": "作息图",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 29,
+          "anchor": "  clock: { name: '作息打卡图', q: '活跃时段', size: '1200×600', render: (m, t) => F.clock(m, t) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "versions",
+        "name": "版本柱状图",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 30,
+          "anchor": "  versions: { name: '版本柱状图', q: '各版本贡献', size: '1200×720', render: (m, t) => F.versions(m, t) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "settle",
+        "name": "沉淀",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/registry.ts",
+          "line": 31,
+          "anchor": "  settle: { name: '沉淀', q: '新增与留存对比', size: '1200×560', render: (m, t) => F.settle(m, t) },"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "badge",
+        "name": "徽章",
+        "variants": [
+          "original",
+          "flat",
+          "stack",
+          "emblem",
+          "split"
+        ],
+        "animated": false,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/bridge.ts",
+          "line": 188,
+          "anchor": "  badge: BADGE_VARIANTS"
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "stream",
+        "name": "河流图",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/bridge.ts",
+          "line": 183,
+          "anchor": "export const BRIDGED ="
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "survival",
+        "name": "留存",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/bridge.ts",
+          "line": 183,
+          "anchor": "export const BRIDGED ="
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "evidence",
+        "name": "出处",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/bridge.ts",
+          "line": 183,
+          "anchor": "export const BRIDGED ="
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "areas",
+        "name": "板块",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/bridge.ts",
+          "line": 183,
+          "anchor": "export const BRIDGED ="
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "codemap",
+        "name": "代码地图",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/bridge.ts",
+          "line": 183,
+          "anchor": "export const BRIDGED ="
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "calendar",
+        "name": "日历",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/bridge.ts",
+          "line": 183,
+          "anchor": "export const BRIDGED ="
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "asterisk",
+        "name": "星号",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/bridge.ts",
+          "line": 183,
+          "anchor": "export const BRIDGED ="
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      },
+      {
+        "id": "people",
+        "name": "贡献者",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/classic/bridge.ts",
+          "line": 183,
+          "anchor": "export const BRIDGED ="
+        },
+        "variantSource": {
+          "path": "packages/render/src/classic/art.ts",
+          "line": 141,
+          "anchor": "export const variantsOf ="
+        },
+        "needsContext": null
+      }
+    ],
+    "svg": [
+      {
+        "id": "tier",
+        "name": "署名榜",
+        "variants": [
+          "rows",
+          "center",
+          "podium",
+          "vertical",
+          "hud",
+          "stats",
+          "split",
+          "grouped"
+        ],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 29,
+          "anchor": "  tier: { name: '署名榜', en: 'Credits', q: '工具与模型占比', qEn: 'Contribution shares by tool and model', variants: TIER_VARIANTS, animated: true, render: tier },"
+        }
+      },
+      {
+        "id": "asterisk",
+        "name": "星号",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 30,
+          "anchor": "  asterisk: { name: '星号', en: 'Asterisk', q: '各家份额长成的 *', qEn: 'Shares grown into an asterisk', animated: true, render: asterisk },"
+        }
+      },
+      {
+        "id": "share",
+        "name": "分享图",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 31,
+          "anchor": "  share: { name: '分享图', en: 'Share Card', q: '链接预览、社交媒体', qEn: 'Link previews, social posts', animated: true, render: share },"
+        }
+      },
+      {
+        "id": "hand",
+        "name": "开发者",
+        "variants": [],
+        "animated": true,
+        "desktop": false,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 32,
+          "anchor": "  hand: { name: '开发者', en: 'Developers', q: '提示词与审阅', qEn: 'Prompts and reviews', animated: true, render: hand },"
+        }
+      },
+      {
+        "id": "people",
+        "name": "贡献者",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 33,
+          "anchor": "  people: { name: '贡献者', en: 'Contributors', q: '每位提交者的提交里各工具占多少', qEn: 'What each committer\\'s commits were written with', animated: true, render: people },"
+        }
+      },
+      {
+        "id": "receipt",
+        "name": "小票",
+        "variants": [
+          "slip",
+          "ticket",
+          "itemized"
+        ],
+        "animated": false,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 34,
+          "anchor": "  receipt: { name: '小票', en: 'Receipt', q: '工期、会话与 Token', qEn: 'Time, sessions, and tokens spent', variants: RECEIPT_VARIANTS, render: receipt },"
+        }
+      },
+      {
+        "id": "badge",
+        "name": "徽章",
+        "variants": [
+          "flat",
+          "stack",
+          "emblem",
+          "split"
+        ],
+        "animated": false,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 35,
+          "anchor": "  badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', qEn: 'README, profile page', variants: BADGE_VARIANTS, render: badge },"
+        }
+      },
+      {
+        "id": "byline",
+        "name": "署名行",
+        "variants": [
+          "line",
+          "models"
+        ],
+        "animated": false,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 36,
+          "anchor": "  byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', variants: BYLINE_VARIANTS, render: byline },"
+        }
+      },
+      {
+        "id": "roll",
+        "name": "片尾字幕",
+        "variants": [
+          "classic",
+          "scroll",
+          "card",
+          "vertical",
+          "ed",
+          "billing",
+          "terminal",
+          "troupe"
+        ],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 37,
+          "anchor": "  roll: { name: '片尾字幕', en: 'Credits Roll', q: '分工与角色表', qEn: 'Contributors and roles', variants: ROLL_VARIANTS, animated: true, render: roll },"
+        }
+      },
+      {
+        "id": "donut",
+        "name": "环形图",
+        "variants": [
+          "ring",
+          "nested"
+        ],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 38,
+          "anchor": "  donut: { name: '环形图', en: 'Donut', q: '代码占比', qEn: 'Shares', variants: DONUT_VARIANTS, animated: true, render: donut },"
+        }
+      },
+      {
+        "id": "waffle",
+        "name": "华夫饼图",
+        "variants": [
+          "grid",
+          "blocks"
+        ],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 39,
+          "anchor": "  waffle: { name: '华夫饼图', en: 'Waffle', q: '百格占比', qEn: 'One square is 1%', variants: WAFFLE_VARIANTS, animated: true, render: waffle },"
+        }
+      },
+      {
+        "id": "stream",
+        "name": "河流图",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 40,
+          "anchor": "  stream: { name: '河流图', en: 'Stream', q: '每周新增', qEn: 'New code each week', animated: true, render: stream },"
+        }
+      },
+      {
+        "id": "lanes",
+        "name": "会话泳道",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 41,
+          "anchor": "  lanes: { name: '会话泳道', en: 'Sessions', q: '会话时间线', qEn: 'Session timeline by tool', animated: true, render: lanes },"
+        }
+      },
+      {
+        "id": "clock",
+        "name": "作息打卡",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 42,
+          "anchor": "  clock: { name: '作息打卡', en: 'Punch Card', q: '活跃时段', qEn: 'Weekday × hour', animated: true, render: clock },"
+        }
+      },
+      {
+        "id": "versions",
+        "name": "版本柱状图",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 43,
+          "anchor": "  versions: { name: '版本柱状图', en: 'Releases', q: '各版本贡献', qEn: 'Code contributions per release', animated: true, render: versions },"
+        }
+      },
+      {
+        "id": "survival",
+        "name": "留存",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 44,
+          "anchor": "  survival: { name: '留存', en: 'Retention', q: '新增与留存对比', qEn: 'Code retention comparison', animated: true, render: survival },"
+        }
+      },
+      {
+        "id": "mosaic",
+        "name": "文件马赛克",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 45,
+          "anchor": "  mosaic: { name: '文件马赛克', en: 'File Mosaic', q: '各文件代码归属', qEn: 'Current codebase composition', animated: true, render: mosaic },"
+        }
+      },
+      {
+        "id": "calendar",
+        "name": "日历",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 46,
+          "anchor": "  calendar: { name: '日历', en: 'Calendar', q: '活跃日历', qEn: 'Daily activity calendar', animated: true, render: calendar },"
+        }
+      },
+      {
+        "id": "evidence",
+        "name": "出处",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 47,
+          "anchor": "  evidence: { name: '出处', en: 'Evidence', q: '归因依据', qEn: 'Evidence levels for each line', animated: true, render: evidence },"
+        }
+      },
+      {
+        "id": "areas",
+        "name": "板块",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 48,
+          "anchor": "  areas: { name: '板块', en: 'Areas', q: '各模块代码归属', qEn: 'Contributions by area and folder', animated: true, render: areas },"
+        }
+      },
+      {
+        "id": "codemap",
+        "name": "代码地图",
+        "variants": [],
+        "animated": true,
+        "desktop": true,
+        "source": {
+          "path": "packages/render/src/registry.ts",
+          "line": 49,
+          "anchor": "  codemap: { name: '代码地图', en: 'Code Map', q: '代码归属地图', qEn: 'Line-by-line attribution map', animated: true, render: codemap },"
+        }
+      }
+    ]
+  },
+  "variantNames": {
+    "classic": {
+      "rows": [
+        "条形",
+        "Rows"
+      ],
+      "center": [
+        "对称",
+        "Centered"
+      ],
+      "podium": [
+        "领奖台",
+        "Podium"
+      ],
+      "vertical": [
+        "竖排",
+        "Vertical"
+      ],
+      "hud": [
+        "面板",
+        "HUD"
+      ],
+      "stats": [
+        "能力",
+        "Stats"
+      ],
+      "classic": [
+        "居中",
+        "Centered"
+      ],
+      "scroll": [
+        "长卷",
+        "Scroll"
+      ],
+      "card": [
+        "终卡",
+        "End card"
+      ],
+      "ed": [
+        "动画片尾",
+        "Anime ED"
+      ],
+      "billing": [
+        "海报署名",
+        "Billing"
+      ],
+      "terminal": [
+        "终端",
+        "Terminal"
+      ],
+      "split": [
+        "分段",
+        "Split"
+      ],
+      "grouped": [
+        "分组",
+        "Grouped"
+      ],
+      "nested": [
+        "内外环",
+        "Nested"
+      ],
+      "ring": [
+        "单环",
+        "Ring"
+      ],
+      "troupe": [
+        "分部",
+        "Troupe"
+      ],
+      "itemized": [
+        "明细",
+        "Itemized"
+      ],
+      "grid": [
+        "方阵",
+        "Grid"
+      ],
+      "blocks": [
+        "分块",
+        "Blocks"
+      ],
+      "line": [
+        "一行",
+        "One line"
+      ],
+      "models": [
+        "带模型",
+        "With models"
+      ],
+      "slip": [
+        "收银条",
+        "Slip"
+      ],
+      "ticket": [
+        "电影票",
+        "Ticket"
+      ],
+      "flat": [
+        "扁平",
+        "Flat"
+      ],
+      "stack": [
+        "条形",
+        "Stack"
+      ],
+      "emblem": [
+        "徽记",
+        "Emblem"
+      ],
+      "columns": [
+        "双栏",
+        "Two columns"
+      ],
+      "title": [
+        "标题卡",
+        "Title card"
+      ],
+      "crawl": [
+        "滚字",
+        "Crawl"
+      ],
+      "cast": [
+        "演员表",
+        "Cast"
+      ],
+      "cards": [
+        "字卡",
+        "Cards"
+      ],
+      "end": [
+        "终",
+        "The End"
+      ],
+      "block": [
+        "署名块",
+        "Billing block"
+      ],
+      "program": [
+        "节目单",
+        "Programme"
+      ],
+      "opening": [
+        "片头",
+        "Opening titles"
+      ],
+      "production": [
+        "出品",
+        "Production card"
+      ],
+      "slate": [
+        "场记板",
+        "Clapperboard"
+      ],
+      "crew": [
+        "部门",
+        "Departments"
+      ],
+      "thermal": [
+        "热敏纸",
+        "Thermal"
+      ],
+      "folio": [
+        "账页",
+        "Folio"
+      ],
+      "stub": [
+        "票根",
+        "Stub"
+      ],
+      "ledger": [
+        "账本",
+        "Ledger"
+      ],
+      "themed": [
+        "随风格",
+        "In theme"
+      ],
+      "ios": [
+        "iOS 设置页",
+        "iOS Settings"
+      ],
+      "original": [
+        "原版",
+        "Original"
+      ]
+    },
+    "svg": {
+      "rows": [
+        "条形",
+        "Rows"
+      ],
+      "center": [
+        "对称",
+        "Centered"
+      ],
+      "podium": [
+        "领奖台",
+        "Podium"
+      ],
+      "vertical": [
+        "竖排",
+        "Vertical"
+      ],
+      "hud": [
+        "面板",
+        "HUD"
+      ],
+      "stats": [
+        "能力",
+        "Stats"
+      ],
+      "classic": [
+        "双栏",
+        "Classic"
+      ],
+      "scroll": [
+        "银幕滚动",
+        "Scrolling"
+      ],
+      "card": [
+        "终卡",
+        "End card"
+      ],
+      "ed": [
+        "动画片尾",
+        "Anime ED"
+      ],
+      "billing": [
+        "海报",
+        "Billing"
+      ],
+      "terminal": [
+        "终端",
+        "Terminal"
+      ],
+      "split": [
+        "分段",
+        "Split"
+      ],
+      "grouped": [
+        "分组",
+        "Grouped"
+      ],
+      "nested": [
+        "内外环",
+        "Nested"
+      ],
+      "ring": [
+        "单环",
+        "Ring"
+      ],
+      "troupe": [
+        "分部",
+        "Troupe"
+      ],
+      "itemized": [
+        "明细",
+        "Itemized"
+      ],
+      "grid": [
+        "方阵",
+        "Grid"
+      ],
+      "blocks": [
+        "分块",
+        "Blocks"
+      ],
+      "line": [
+        "一行",
+        "One line"
+      ],
+      "models": [
+        "带模型",
+        "With models"
+      ],
+      "slip": [
+        "小票",
+        "Slip"
+      ],
+      "ticket": [
+        "电影票",
+        "Ticket"
+      ],
+      "flat": [
+        "扁平",
+        "Flat"
+      ],
+      "stack": [
+        "条形",
+        "Stack"
+      ],
+      "emblem": [
+        "徽记",
+        "Emblem"
+      ]
+    }
+  },
+  "features": [
+    {
+      "id": "welcome",
+      "stage": 4,
+      "name": "首次打开与项目发现",
+      "checks": [
+        "扫描本地含 AI 记录的 Git 仓库",
+        "默认选择前三个候选项目",
+        "逐个选择或批量分析",
+        "手动选择文件夹",
+        "扫描中、无候选、扫描失败与重试",
+        "逐项运行、完成、失败、取消状态"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1838,
+        "anchor": "function welcome()"
+      }
+    },
+    {
+      "id": "project-switcher",
+      "stage": 4,
+      "name": "项目切换与搜索",
+      "checks": [
+        "按名称和路径搜索",
+        "已加入、尚未添加、全部项目分区",
+        "目录丢失和上次分析日期",
+        "后台发现与星号补齐时保留焦点及更多菜单",
+        "方向键选择、回车打开、点击外部关闭"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1571,
+        "anchor": "function toggleMenu()"
+      }
+    },
+    {
+      "id": "project-row-menu",
+      "stage": 4,
+      "name": "项目更多菜单",
+      "checks": [
+        "重新分析",
+        "在系统文件管理器中打开",
+        "项目设置",
+        "移除前确认",
+        "已删除目录禁用不适用操作",
+        "菜单边缘避让"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1673,
+        "anchor": "function rowMenu("
+      }
+    },
+    {
+      "id": "project-open",
+      "stage": 3,
+      "name": "打开和切换档案",
+      "checks": [
+        "读取项目档案及版本戳",
+        "丢弃过期项目请求",
+        "释放旧漫游预览与排版任务",
+        "未分析提示与立即分析",
+        "读取失败可理解的错误状态",
+        "保留项目名称与星号缓存"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 313,
+        "anchor": "async function openProject("
+      }
+    },
+    {
+      "id": "aggregate",
+      "stage": 3,
+      "name": "全部项目汇总",
+      "checks": [
+        "多个项目时显示全部项目入口",
+        "合并档案且文件和 PR 带项目名",
+        "无法读取的档案遵循现有跳过规则",
+        "工具和模型分组",
+        "汇总名称跟随语言"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 366,
+        "anchor": "async function creditsOf("
+      }
+    },
+    {
+      "id": "refresh",
+      "stage": 3,
+      "name": "外部变更和自动增量更新",
+      "checks": [
+        "窗口回到前台、可见性变化和定时检查",
+        "比较档案版本和 Git HEAD",
+        "新提交触发增量分析",
+        "保持滚动位置与已选版式",
+        "后台任务避免重复运行",
+        "项目级设置覆盖全局默认"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 373,
+        "anchor": "async function refreshIfChanged("
+      }
+    },
+    {
+      "id": "grouping",
+      "stage": 4,
+      "name": "工具与模型切换",
+      "checks": [
+        "自动、工具、模型分组语义",
+        "没有模型记录时隐藏切换",
+        "逐项目记住偏好",
+        "作品、文字输出、星号与悬停数据一致"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 474,
+        "anchor": "function renderGroup()"
+      }
+    },
+    {
+      "id": "wall",
+      "stage": 4,
+      "name": "展墙",
+      "checks": [
+        "保持两套作品顺序、重复徽章版式和跨列布局",
+        "占位与首屏渐进绘制",
+        "只发布当前项目和风格的结果",
+        "空作品和排版错误处理",
+        "交互区域及无障碍标签",
+        "中英文尺寸缓存"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 546,
+        "anchor": "async function paint()"
+      }
+    },
+    {
+      "id": "layout",
+      "stage": 4,
+      "name": "响应式展墙排版",
+      "checks": [
+        "窗口改变尺寸后重新排版",
+        "宽作品 span",
+        "按作品原始纵横比排布",
+        "最小窗口尺寸",
+        "滚动与标题区状态"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 669,
+        "anchor": "function layout("
+      }
+    },
+    {
+      "id": "variant",
+      "stage": 4,
+      "name": "版式切换",
+      "checks": [
+        "前后版式循环",
+        "风格默认版式",
+        "连续点击只应用最后一次",
+        "同作品相关墙砖同步",
+        "失败保持可用旧作品"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 755,
+        "anchor": "async function changeVariant("
+      }
+    },
+    {
+      "id": "hover",
+      "stage": 4,
+      "name": "作品悬停详情",
+      "checks": [
+        "文字和图形命中区域",
+        "比例与值的语义保持",
+        "屏幕边缘避让",
+        "平移和缩放后命中准确",
+        "失焦和销毁时清理浮层"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1216,
+        "anchor": "function mountRoamHits("
+      }
+    },
+    {
+      "id": "focus",
+      "stage": 4,
+      "name": "作品放大视图",
+      "checks": [
+        "点击及 Enter/Space 打开",
+        "上下切作品、左右切版式",
+        "局部试用其它支持该作品的风格",
+        "设为全局风格",
+        "输出正在看的作品和版式",
+        "加载时禁用导出",
+        "失败重试",
+        "关闭后恢复原键盘焦点"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 997,
+        "anchor": "function openFocus("
+      }
+    },
+    {
+      "id": "roam",
+      "stage": 4,
+      "name": "漫游画布",
+      "checks": [
+        "鼠标拖动、滚轮和触控板双轴移动",
+        "Shift 滚轮横移",
+        "惯性滑动与中断",
+        "每轮切换作品版式",
+        "仅挂载可见区附近作品",
+        "点击放大及悬停导出",
+        "方向键移动、Home/0 回原点",
+        "重进漫游和窗口缩放的位置保持"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1321,
+        "anchor": "function wireRoam()"
+      }
+    },
+    {
+      "id": "style-picker",
+      "stage": 4,
+      "name": "风格选择",
+      "checks": [
+        "26 个桌面风格及顺序",
+        "15 个经典主题与新风格间分隔",
+        "逐个前后切换",
+        "风格圆点和名称",
+        "关闭及边缘定位",
+        "记住上次风格"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1424,
+        "anchor": "function toggleStyles()"
+      }
+    },
+    {
+      "id": "export-menu",
+      "stage": 7,
+      "name": "作品导出菜单",
+      "checks": [
+        "PNG/SVG/PDF/GIF/HTML 与复制 Markdown",
+        "仅动画作品可选 GIF",
+        "记住格式和尺寸",
+        "原尺寸、横图、方图、竖图、竖屏",
+        "复制失败可另存 Markdown 文件"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 801,
+        "anchor": "function toggleFormats("
+      }
+    },
+    {
+      "id": "export-jobs",
+      "stage": 7,
+      "name": "导出任务",
+      "checks": [
+        "运行、已保存、失败计数",
+        "相同输入和选项去重",
+        "任务名包含作品、版式、风格与尺寸",
+        "切换项目后任务仍完成到原请求",
+        "显示保存位置、系统定位、关闭完成任务",
+        "错误不吞掉、允许再次发起"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 833,
+        "anchor": "function renderExports()"
+      }
+    },
+    {
+      "id": "drag-export",
+      "stage": 4,
+      "name": "拖放导出坞",
+      "checks": [
+        "拖起作品显示预览和导出坞",
+        "PNG/SVG/PDF/HTML 目标",
+        "拖动中选择尺寸",
+        "格式按钮间缝隙按最近目标",
+        "取消和释放清理",
+        "轻点仍打开放大视图"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 935,
+        "anchor": "function startDrag("
+      }
+    },
+    {
+      "id": "analysis",
+      "stage": 3,
+      "name": "分析任务与取消",
+      "checks": [
+        "真实 Rust 核心分析与结构化进度",
+        "等待、分析中、取消中、完成、失败",
+        "前台阻塞与后台分析区分",
+        "停止子进程及收尾",
+        "不允许重入",
+        "取消后可再次分析"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1748,
+        "anchor": "async function withProgress"
+      }
+    },
+    {
+      "id": "analysis-status",
+      "stage": 4,
+      "name": "分析状态与星号",
+      "checks": [
+        "300ms 和 2s 的延迟呈现",
+        "顶部与中央星号位置",
+        "每瓣份额与加载、进度、错误动作",
+        "程序坞或任务栏进度同步",
+        "完成提示与警告入口"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 195,
+        "anchor": "function syncStatus()"
+      }
+    },
+    {
+      "id": "warnings",
+      "stage": 4,
+      "name": "分析警告",
+      "checks": [
+        "结构化警告数量",
+        "逐条查看分析问题",
+        "关闭和语言同步"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1896,
+        "anchor": "function showWarnings("
+      }
+    },
+    {
+      "id": "project-settings",
+      "stage": 4,
+      "name": "项目设置",
+      "checks": [
+        "上次分析及重新分析",
+        "跟随默认、自动跟上、关闭",
+        "Git 提交盖章和发版/PR 工作流接入",
+        "接入状态失败重试",
+        "主目录、自动发现、手动关联路径",
+        "关联和解除关联文件夹",
+        "移除前确认"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1914,
+        "anchor": "function projectSettings("
+      }
+    },
+    {
+      "id": "integrations",
+      "stage": 3,
+      "name": "提交与发布接入",
+      "checks": [
+        "安装及卸载提交 hook",
+        "安装及卸载发布工作流",
+        "显示实际会修改的位置",
+        "非 GitHub 仓库状态",
+        "已发布档案与 hook 依赖提示",
+        "忙碌和失败恢复"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 457,
+        "anchor": "async function setPlug("
+      }
+    },
+    {
+      "id": "remove-readd",
+      "stage": 3,
+      "name": "移除及重新加入",
+      "checks": [
+        "只移除列表记录",
+        "保留本地证据、缓存和仓库文件",
+        "可立即加回来",
+        "当前项目和全部项目视图正确更新",
+        "最后一个项目移除后回首次打开"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1703,
+        "anchor": "async function removeProject("
+      }
+    },
+    {
+      "id": "settings-general",
+      "stage": 2,
+      "name": "通用设置",
+      "checks": [
+        "中英文",
+        "程序坞图标选择",
+        "自动跟上新提交默认值",
+        "偏好持久化"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1985,
+        "anchor": "async function settings("
+      }
+    },
+    {
+      "id": "settings-export",
+      "stage": 7,
+      "name": "导出设置",
+      "checks": [
+        "选择保存目录",
+        "恢复默认目录",
+        "打开导出目录",
+        "是否显示其他贡献者姓名",
+        "默认目录不可用时的错误"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1985,
+        "anchor": "async function settings("
+      }
+    },
+    {
+      "id": "settings-data",
+      "stage": 3,
+      "name": "数据设置",
+      "checks": [
+        "显示并打开项目库位置",
+        "关闭、App 打开时、一直备份三档",
+        "macOS 后台任务支持范围",
+        "备份运行和最近结果",
+        "AI 工具诊断及不同来源状态",
+        "诊断失败可重试"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1985,
+        "anchor": "async function settings("
+      }
+    },
+    {
+      "id": "settings-about",
+      "stage": 2,
+      "name": "关于",
+      "checks": [
+        "应用版本",
+        "项目说明",
+        "本机运行说明"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1985,
+        "anchor": "async function settings("
+      }
+    },
+    {
+      "id": "native-menu",
+      "stage": 2,
+      "name": "系统菜单与窗口",
+      "checks": [
+        "macOS 应用、编辑、项目、显示、窗口菜单",
+        "剪切、复制、粘贴、全选及撤销重做",
+        "系统隐藏、退出、全屏、最小化、关闭",
+        "菜单快捷键与 UI 命令共用",
+        "语言切换重建菜单"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1532,
+        "anchor": "async function installMenu()"
+      }
+    },
+    {
+      "id": "keyboard",
+      "stage": 2,
+      "name": "快捷键与焦点",
+      "checks": [
+        "十个 Cmd/Ctrl 命令",
+        "局部方向键与 Escape",
+        "输入框不被漫游方向键抢占",
+        "对话框关闭后焦点返回",
+        "欢迎页只允许可用命令"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1522,
+        "anchor": "function wireKeys()"
+      }
+    },
+    {
+      "id": "language",
+      "stage": 2,
+      "name": "中英文切换",
+      "checks": [
+        "菜单、设置、导出、错误、提示同步",
+        "作品文字与历史标签同步",
+        "数字和日期格式",
+        "中文字体覆盖"
+      ],
+      "baseline": "source_recorded",
+      "migration": "pending",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1481,
+        "anchor": "async function setLang("
+      }
+    },
+    {
+      "id": "new-zoom",
+      "stage": 4,
+      "name": "连续缩放与像素密度",
+      "baseline": "target_requirement",
+      "checks": [
+        "GPUI 画布连续缩放",
+        "缩放锚点和拖动坐标一致",
+        "不同 DPI 字体及纹理清晰",
+        "缓存按缩放档和像素密度失效"
+      ],
+      "migration": "pending"
+    },
+    {
+      "id": "new-theme",
+      "stage": 2,
+      "name": "系统明暗主题",
+      "baseline": "target_requirement",
+      "checks": [
+        "应用外壳跟随系统或用户选择",
+        "外壳主题与作品风格分别持久化",
+        "原生标题栏及控件规范"
+      ],
+      "migration": "pending"
+    },
+    {
+      "id": "new-reduced-motion",
+      "stage": 6,
+      "name": "完整动作定义与减少动态效果",
+      "baseline": "target_requirement",
+      "checks": [
+        "26 风格逐件动作审定",
+        "星号逐瓣、有机形变、水墨展开、片尾滚动",
+        "桌面与动画导出同一时间轴",
+        "连续操作、中断、重播",
+        "遵循系统及应用减少动态效果设置",
+        "不可见动画暂停"
+      ],
+      "migration": "pending"
+    },
+    {
+      "id": "new-export-options",
+      "stage": 7,
+      "name": "透明背景、字体与失败恢复",
+      "baseline": "target_requirement",
+      "checks": [
+        "明确各格式透明背景支持",
+        "字体嵌入或转路径策略及许可证",
+        "导出进度与可重试失败",
+        "恢复不覆盖错误输入或旧任务",
+        "桌面、CLI、网页的尺寸和数据一致"
+      ],
+      "migration": "pending"
+    },
+    {
+      "id": "new-resume",
+      "stage": 3,
+      "name": "中断后恢复",
+      "baseline": "target_requirement",
+      "checks": [
+        "进程退出后恢复持久任务状态",
+        "部分结果和事务的一致性",
+        "取消后不继续写入",
+        "已有数据库和配置可回退"
+      ],
+      "migration": "pending"
+    },
+    {
+      "id": "new-performance",
+      "stage": 8,
+      "name": "性能与资源基准",
+      "baseline": "target_requirement",
+      "checks": [
+        "相同设备、数据、作品和布局规模",
+        "冷/热启动、滚动、缩放、交互延迟",
+        "整组进程 RSS、CPU、GPU 资源",
+        "空闲 CPU 与不可见动画",
+        "后台排版和渲染",
+        "纹理缓存上限和释放",
+        "请求去重及过期任务丢弃"
+      ],
+      "migration": "pending"
+    },
+    {
+      "id": "new-release",
+      "stage": 9,
+      "name": "跨平台发布",
+      "baseline": "target_requirement",
+      "checks": [
+        "macOS Apple Silicon 与 Intel",
+        "Windows 与 Linux",
+        "最低系统和图形依赖",
+        "独立安装包与升级",
+        "签名、公证和发布 CI",
+        "升级备份及回退",
+        "完整验收报告和维护文档"
+      ],
+      "migration": "pending"
+    }
+  ],
+  "globalShortcuts": [
+    {
+      "id": "switch",
+      "key": "CmdOrCtrl+K",
+      "name": "切换项目…",
+      "en": "Switch Project…",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1501,
+        "anchor": "{ id: 'switch', key: 'K', label: () => L('切换项目…', 'Switch Project…')"
+      }
+    },
+    {
+      "id": "add",
+      "key": "CmdOrCtrl+O",
+      "name": "添加文件夹…",
+      "en": "Add Folder…",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1502,
+        "anchor": "{ id: 'add', key: 'O', label: () => L('添加文件夹…', 'Add Folder…')"
+      }
+    },
+    {
+      "id": "reanalyze",
+      "key": "CmdOrCtrl+R",
+      "name": "重新分析",
+      "en": "Re-analyze",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1503,
+        "anchor": "{ id: 'reanalyze', key: 'R', label: () => L('重新分析', 'Re-analyze')"
+      }
+    },
+    {
+      "id": "project",
+      "key": "CmdOrCtrl+I",
+      "name": "项目设置…",
+      "en": "Project Settings…",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1504,
+        "anchor": "{ id: 'project', key: 'I', label: () => L('项目设置…', 'Project Settings…')"
+      }
+    },
+    {
+      "id": "settings",
+      "key": "CmdOrCtrl+,",
+      "name": "设置…",
+      "en": "Settings…",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1505,
+        "anchor": "{ id: 'settings', key: ',', label: () => L('设置…', 'Settings…')"
+      }
+    },
+    {
+      "id": "wall",
+      "key": "CmdOrCtrl+1",
+      "name": "墙",
+      "en": "Wall",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1506,
+        "anchor": "{ id: 'wall', key: '1', label: () => L('墙', 'Wall')"
+      }
+    },
+    {
+      "id": "roam",
+      "key": "CmdOrCtrl+2",
+      "name": "漫游",
+      "en": "Roam",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1507,
+        "anchor": "{ id: 'roam', key: '2', label: () => L('漫游', 'Roam')"
+      }
+    },
+    {
+      "id": "prevstyle",
+      "key": "CmdOrCtrl+[",
+      "name": "上一种风格",
+      "en": "Previous Style",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1508,
+        "anchor": "{ id: 'prevstyle', key: '[', label: () => L('上一种风格', 'Previous Style')"
+      }
+    },
+    {
+      "id": "nextstyle",
+      "key": "CmdOrCtrl+]",
+      "name": "下一种风格",
+      "en": "Next Style",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1509,
+        "anchor": "{ id: 'nextstyle', key: ']', label: () => L('下一种风格', 'Next Style')"
+      }
+    },
+    {
+      "id": "export",
+      "key": "CmdOrCtrl+E",
+      "name": "导出…",
+      "en": "Export…",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1510,
+        "anchor": "{ id: 'export', key: 'E', label: () => L('导出…', 'Export…')"
+      }
+    }
+  ],
+  "localShortcuts": [
+    {
+      "key": "Escape",
+      "action": "close topmost popup/dialog/export list",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 985,
+        "anchor": "function closeTop()"
+      }
+    },
+    {
+      "key": "Enter / Space",
+      "action": "open focused wall artwork",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 733,
+        "anchor": "artEl.addEventListener('keydown'"
+      }
+    },
+    {
+      "key": "ArrowLeft / ArrowRight",
+      "action": "previous/next layout in focus",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1113,
+        "anchor": "  focusKeys = (e) =>"
+      }
+    },
+    {
+      "key": "ArrowUp / ArrowDown",
+      "action": "previous/next artwork in focus",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1113,
+        "anchor": "  focusKeys = (e) =>"
+      }
+    },
+    {
+      "key": "Arrow keys",
+      "action": "pan roam viewport",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1321,
+        "anchor": "function wireRoam()"
+      }
+    },
+    {
+      "key": "Home / 0",
+      "action": "return roam viewport home",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1321,
+        "anchor": "function wireRoam()"
+      }
+    },
+    {
+      "key": "ArrowUp / ArrowDown / Enter",
+      "action": "select/open searched project",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1646,
+        "anchor": "  q.onkeydown ="
+      }
+    },
+    {
+      "key": "Shift + wheel",
+      "action": "horizontal roam scroll",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1321,
+        "anchor": "function wireRoam()"
+      }
+    }
+  ],
+  "nativeCommands": [
+    {
+      "id": "projects",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 15,
+        "anchor": "#[tauri::command]\nfn projects("
+      }
+    },
+    {
+      "id": "credits",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 17,
+        "anchor": "#[tauri::command]\nfn credits("
+      }
+    },
+    {
+      "id": "stamp",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 19,
+        "anchor": "#[tauri::command]\nfn stamp("
+      }
+    },
+    {
+      "id": "head",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 21,
+        "anchor": "#[tauri::command]\nfn head("
+      }
+    },
+    {
+      "id": "config_of",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 23,
+        "anchor": "#[tauri::command]\nfn config_of("
+      }
+    },
+    {
+      "id": "set_display",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 25,
+        "anchor": "#[tauri::command]\nfn set_display("
+      }
+    },
+    {
+      "id": "cancel_analyze",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 36,
+        "anchor": "#[tauri::command]\nfn cancel_analyze("
+      }
+    },
+    {
+      "id": "analyze",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 40,
+        "anchor": "#[tauri::command]\nasync fn analyze("
+      }
+    },
+    {
+      "id": "discover",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 46,
+        "anchor": "#[tauri::command]\nasync fn discover("
+      }
+    },
+    {
+      "id": "pick_folder",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 52,
+        "anchor": "#[tauri::command]\nasync fn pick_folder("
+      }
+    },
+    {
+      "id": "add_project",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 60,
+        "anchor": "#[tauri::command]\nasync fn add_project("
+      }
+    },
+    {
+      "id": "integrations",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 65,
+        "anchor": "#[tauri::command]\nfn integrations("
+      }
+    },
+    {
+      "id": "set_integration",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 67,
+        "anchor": "#[tauri::command]\nfn set_integration("
+      }
+    },
+    {
+      "id": "remove_project",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 69,
+        "anchor": "#[tauri::command]\nfn remove_project("
+      }
+    },
+    {
+      "id": "link_path",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 71,
+        "anchor": "#[tauri::command]\nfn link_path("
+      }
+    },
+    {
+      "id": "embed_snippet",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 73,
+        "anchor": "#[tauri::command]\nfn embed_snippet("
+      }
+    },
+    {
+      "id": "library_path",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 75,
+        "anchor": "#[tauri::command]\nfn library_path("
+      }
+    },
+    {
+      "id": "app_info",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 78,
+        "anchor": "#[tauri::command]\nfn app_info("
+      }
+    },
+    {
+      "id": "choose_export_dir",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 90,
+        "anchor": "#[tauri::command]\nasync fn choose_export_dir("
+      }
+    },
+    {
+      "id": "reset_export_dir",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 99,
+        "anchor": "#[tauri::command]\nfn reset_export_dir("
+      }
+    },
+    {
+      "id": "collect_info",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 182,
+        "anchor": "#[tauri::command]\nfn collect_info("
+      }
+    },
+    {
+      "id": "set_collect",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 190,
+        "anchor": "#[tauri::command]\nfn set_collect("
+      }
+    },
+    {
+      "id": "collect_now",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 196,
+        "anchor": "#[tauri::command]\nasync fn collect_now("
+      }
+    },
+    {
+      "id": "set_collect_agent",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 326,
+        "anchor": "#[tauri::command]\nfn set_collect_agent("
+      }
+    },
+    {
+      "id": "open_folder",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 341,
+        "anchor": "#[tauri::command]\nfn open_folder("
+      }
+    },
+    {
+      "id": "save_file",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 361,
+        "anchor": "#[tauri::command]\nfn save_file("
+      }
+    },
+    {
+      "id": "reveal",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 392,
+        "anchor": "#[tauri::command]\nfn reveal("
+      }
+    },
+    {
+      "id": "doctor",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 423,
+        "anchor": "#[tauri::command]\nfn doctor("
+      }
+    },
+    {
+      "id": "set_logo",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 495,
+        "anchor": "#[tauri::command]\nfn set_logo("
+      }
+    },
+    {
+      "id": "logo",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 505,
+        "anchor": "#[tauri::command]\nfn logo("
+      }
+    },
+    {
+      "id": "render_preview",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/preview.rs",
+        "line": 19,
+        "anchor": "#[tauri::command]\npub async fn render_preview("
+      }
+    }
+  ],
+  "settingsKeys": [
+    {
+      "key": "creditia.logo",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 76,
+        "anchor": "'logo'"
+      }
+    },
+    {
+      "key": "creditia.theme",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 94,
+        "anchor": "'theme'"
+      }
+    },
+    {
+      "key": "creditia.lang",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 95,
+        "anchor": "'lang'"
+      }
+    },
+    {
+      "key": "creditia.size",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 99,
+        "anchor": "'size'"
+      }
+    },
+    {
+      "key": "creditia.mark.full.{projectId}",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 112,
+        "anchor": "'mark.full.'"
+      }
+    },
+    {
+      "key": "creditia.project",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 292,
+        "anchor": "'project'"
+      }
+    },
+    {
+      "key": "creditia.autofresh",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 391,
+        "anchor": "'autofresh'"
+      }
+    },
+    {
+      "key": "creditia.autofresh.{projectId}",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 392,
+        "anchor": "'autofresh.'"
+      }
+    },
+    {
+      "key": "creditia.names",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 472,
+        "anchor": "'names'"
+      }
+    },
+    {
+      "key": "creditia.group.{projectId}",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 473,
+        "anchor": "'group.'"
+      }
+    },
+    {
+      "key": "creditia.dims",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 523,
+        "anchor": "'dims'"
+      }
+    },
+    {
+      "key": "creditia.fmt",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 807,
+        "anchor": "'fmt'"
+      }
+    },
+    {
+      "key": "creditia.view",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 1135,
+        "anchor": "'view'"
+      }
+    }
+  ],
+  "errors": [
+    {
+      "id": "not_in_library",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 127,
+        "anchor": "  not_in_library:"
+      }
+    },
+    {
+      "id": "no_credits",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 128,
+        "anchor": "  no_credits:"
+      }
+    },
+    {
+      "id": "dir_missing",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 129,
+        "anchor": "  dir_missing:"
+      }
+    },
+    {
+      "id": "core_missing",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 130,
+        "anchor": "  core_missing:"
+      }
+    },
+    {
+      "id": "core_failed",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 131,
+        "anchor": "  core_failed:"
+      }
+    },
+    {
+      "id": "busy",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 132,
+        "anchor": "  busy:"
+      }
+    },
+    {
+      "id": "cancelled",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 133,
+        "anchor": "  cancelled:"
+      }
+    },
+    {
+      "id": "no_home",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 134,
+        "anchor": "  no_home:"
+      }
+    },
+    {
+      "id": "io",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 135,
+        "anchor": "  io:"
+      }
+    },
+    {
+      "id": "store",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 136,
+        "anchor": "  store:"
+      }
+    },
+    {
+      "id": "not_allowed",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 137,
+        "anchor": "  not_allowed:"
+      }
+    },
+    {
+      "id": "switch_failed",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 138,
+        "anchor": "  switch_failed:"
+      }
+    },
+    {
+      "id": "agent_failed",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 139,
+        "anchor": "  agent_failed:"
+      }
+    },
+    {
+      "id": "unsupported",
+      "source": {
+        "path": "apps/desktop/src/main.ts",
+        "line": 140,
+        "anchor": "  unsupported:"
+      }
+    }
+  ],
+  "logos": [
+    {
+      "id": "star",
+      "source": {
+        "path": "apps/desktop/src/logo.ts",
+        "line": 16,
+        "anchor": "  star: { svg:"
+      }
+    },
+    {
+      "id": "star-mono",
+      "source": {
+        "path": "apps/desktop/src/logo.ts",
+        "line": 17,
+        "anchor": "  'star-mono': { svg:"
+      }
+    },
+    {
+      "id": "orb",
+      "source": {
+        "path": "apps/desktop/src/logo.ts",
+        "line": 18,
+        "anchor": "  orb: { svg:"
+      }
+    },
+    {
+      "id": "ring",
+      "source": {
+        "path": "apps/desktop/src/logo.ts",
+        "line": 19,
+        "anchor": "  ring: { svg:"
+      }
+    },
+    {
+      "id": "color",
+      "source": {
+        "path": "apps/desktop/src/logo.ts",
+        "line": 20,
+        "anchor": "  color: { svg:"
+      }
+    },
+    {
+      "id": "mono",
+      "source": {
+        "path": "apps/desktop/src/logo.ts",
+        "line": 21,
+        "anchor": "  mono: { svg:"
+      }
+    }
+  ],
+  "formats": [
+    {
+      "id": "png",
+      "name": "PNG",
+      "desktop": true,
+      "dragDock": true,
+      "condition": null,
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 26,
+        "anchor": "{ id: 'png'"
+      }
+    },
+    {
+      "id": "svg",
+      "name": "SVG",
+      "desktop": true,
+      "dragDock": true,
+      "condition": null,
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 27,
+        "anchor": "{ id: 'svg'"
+      }
+    },
+    {
+      "id": "pdf",
+      "name": "PDF",
+      "desktop": true,
+      "dragDock": true,
+      "condition": null,
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 28,
+        "anchor": "{ id: 'pdf'"
+      }
+    },
+    {
+      "id": "gif",
+      "name": "GIF",
+      "desktop": true,
+      "dragDock": false,
+      "condition": "animated artwork only",
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 29,
+        "anchor": "{ id: 'gif'"
+      }
+    },
+    {
+      "id": "html",
+      "name": "HTML",
+      "desktop": true,
+      "dragDock": true,
+      "condition": null,
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 30,
+        "anchor": "{ id: 'html'"
+      }
+    },
+    {
+      "id": "md",
+      "name": "Markdown",
+      "desktop": true,
+      "dragDock": false,
+      "condition": "clipboard with file fallback",
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 31,
+        "anchor": "{ id: 'md'"
+      }
+    },
+    {
+      "id": "embed",
+      "name": "嵌入",
+      "desktop": false,
+      "dragDock": false,
+      "condition": "shared declaration; hidden in desktop/CLI list",
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 32,
+        "anchor": "{ id: 'embed'"
+      }
+    }
+  ],
+  "sizes": [
+    {
+      "id": "native",
+      "name": "原尺寸",
+      "w": 0,
+      "h": 0,
+      "desktop": true,
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 37,
+        "anchor": "{ id: 'native'"
+      }
+    },
+    {
+      "id": "og",
+      "name": "链接预览 1200×630",
+      "w": 1200,
+      "h": 630,
+      "desktop": true,
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 38,
+        "anchor": "{ id: 'og'"
+      }
+    },
+    {
+      "id": "square",
+      "name": "方图 1080×1080",
+      "w": 1080,
+      "h": 1080,
+      "desktop": true,
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 39,
+        "anchor": "{ id: 'square'"
+      }
+    },
+    {
+      "id": "portrait",
+      "name": "竖图 1080×1350",
+      "w": 1080,
+      "h": 1350,
+      "desktop": true,
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 40,
+        "anchor": "{ id: 'portrait'"
+      }
+    },
+    {
+      "id": "story",
+      "name": "竖屏 1080×1920",
+      "w": 1080,
+      "h": 1920,
+      "desktop": true,
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 41,
+        "anchor": "{ id: 'story'"
+      }
+    },
+    {
+      "id": "a4",
+      "name": "A4 2480×3508",
+      "w": 2480,
+      "h": 3508,
+      "desktop": false,
+      "source": {
+        "path": "packages/render/src/export.ts",
+        "line": 42,
+        "anchor": "{ id: 'a4'"
+      }
+    }
+  ],
+  "additionalOutputs": [
+    {
+      "id": "json",
+      "entry": "creditia export --format json / summary / publish",
+      "source": {
+        "path": "packages/cli/src/cli.ts",
+        "line": 424,
+        "anchor": "if (format === 'json')"
+      }
+    },
+    {
+      "id": "markdown-document",
+      "entry": "creditia doc",
+      "source": {
+        "path": "packages/cli/src/cli.ts",
+        "line": 333,
+        "anchor": "case 'doc':"
+      }
+    },
+    {
+      "id": "release-notes",
+      "entry": "creditia release-notes",
+      "source": {
+        "path": "packages/cli/src/cli.ts",
+        "line": 343,
+        "anchor": "case 'release-notes':"
+      }
+    },
+    {
+      "id": "pr-comment",
+      "entry": "creditia pr-comment / --commits",
+      "source": {
+        "path": "packages/cli/src/cli.ts",
+        "line": 355,
+        "anchor": "case 'pr-comment':"
+      }
+    },
+    {
+      "id": "badge-json",
+      "entry": "creditia badge-json",
+      "source": {
+        "path": "packages/cli/src/cli.ts",
+        "line": 381,
+        "anchor": "case 'badge-json':"
+      }
+    },
+    {
+      "id": "terminal",
+      "entry": "creditia fetch",
+      "source": {
+        "path": "packages/cli/src/cli.ts",
+        "line": 391,
+        "anchor": "case 'fetch':"
+      }
+    },
+    {
+      "id": "html-board",
+      "entry": "creditia board",
+      "source": {
+        "path": "packages/cli/src/cli.ts",
+        "line": 388,
+        "anchor": "case 'board':"
+      }
+    },
+    {
+      "id": "site",
+      "entry": "creditia site",
+      "source": {
+        "path": "packages/cli/src/cli.ts",
+        "line": 389,
+        "anchor": "case 'site':"
+      }
+    }
+  ],
+  "fonts": {
+    "families": [
+      "Inter",
+      "JetBrains Mono",
+      "Noto Sans SC",
+      "Noto Serif SC",
+      "Cinzel",
+      "Cormorant Garamond",
+      "Pinyon Script",
+      "Pirata One",
+      "UnifrakturMaguntia",
+      "IM FELL English",
+      "Courier Prime",
+      "Jost",
+      "Anton",
+      "Oswald",
+      "Rajdhani",
+      "Chakra Petch",
+      "Share Tech Mono",
+      "Bangers",
+      "Instrument Serif",
+      "Newsreader",
+      "Cinzel Decorative",
+      "Playfair Display",
+      "Libre Baskerville",
+      "Poiret One",
+      "Limelight",
+      "VT323",
+      "Press Start 2P",
+      "Monoton",
+      "Archivo Black",
+      "Ma Shan Zheng",
+      "Zhi Mang Xing",
+      "Long Cang",
+      "ZCOOL XiaoWei",
+      "Klee One",
+      "Shippori Mincho B1",
+      "Dela Gothic One",
+      "Zen Maru Gothic",
+      "Zen Antique",
+      "DotGothic16",
+      "ZCOOL QingKe HuangYou"
+    ],
+    "classicFamilies": [
+      "Inter",
+      "JetBrains Mono",
+      "Instrument Serif",
+      "Newsreader",
+      "Noto Sans SC",
+      "Noto Serif SC",
+      "Cinzel",
+      "Cinzel Decorative",
+      "Playfair Display",
+      "Libre Baskerville",
+      "Oswald",
+      "Poiret One",
+      "Limelight",
+      "UnifrakturMaguntia",
+      "VT323",
+      "Press Start 2P",
+      "Monoton",
+      "Archivo Black",
+      "Anton",
+      "ZCOOL XiaoWei",
+      "ZCOOL QingKe HuangYou",
+      "Ma Shan Zheng"
+    ],
+    "fontFilesCaptured": false,
+    "licenseAudit": "pending"
+  },
+  "fixtures": [
+    {
+      "path": "packages/render/fixtures/catnap.json",
+      "kind": "synthetic_render_sample",
+      "limits": "Rendering sample only; not a real project.",
+      "sha256": "db57342009bad5c2c14d2b6d850b55fffd7b0d7f2d31140a0800009add8fb5a5"
+    },
+    {
+      "path": "crates/core/tests/fixtures/real/multi-tool.json",
+      "kind": "sanitized_observational_replay",
+      "limits": "Real bounded attribution replay; decoded engine input, not a complete visual credits archive.",
+      "sha256": "74bb52e23a145097df47dd3779cb27c4748bb55292bdae17b910cbbaedf1d683"
+    },
+    {
+      "path": "crates/core/tests/fixtures/real/multi-tool.expected.json",
+      "kind": "observational_expected",
+      "limits": "Regression baseline; not independently labeled accuracy ground truth.",
+      "sha256": "655340a3b9e4bd4403b27e8f29afd746d6093e21464401ef75692a108b501573"
+    }
+  ],
+  "observedOutputDifferences": [
+    {
+      "id": "html-language",
+      "detail": "Desktop export worker calls html without lang (defaults zh); CLI supplies LANG(). Normalize in the shared contract and validate both languages.",
+      "sources": [
+        {
+          "path": "apps/desktop/src/export-worker.ts",
+          "line": 43,
+          "anchor": "case 'html':"
+        },
+        {
+          "path": "packages/cli/src/cli.ts",
+          "line": 441,
+          "anchor": "case 'html':"
+        }
+      ]
+    },
+    {
+      "id": "pdf-raster-scale",
+      "detail": "Desktop caps the default PDF raster scale using 4000/max artwork dimension; CLI uses scale 3 unless A4. Match explicit export parameters before pixel comparisons.",
+      "sources": [
+        {
+          "path": "apps/desktop/src/export-worker.ts",
+          "line": 42,
+          "anchor": "case 'pdf':"
+        },
+        {
+          "path": "packages/cli/src/cli.ts",
+          "line": 440,
+          "anchor": "case 'pdf':"
+        }
+      ]
+    }
+  ],
+  "candidateSourceFingerprints": [
+    {
+      "path": "apps/desktop/src-tauri/src/main.rs",
+      "sha256": "e0922383dd2524ac582080c03d32b169ee54132fe2a833f104c6691379247e8b"
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/preview.rs",
+      "sha256": "197bfb23110592d8aaf35a6b4c8bcb85b9038d697e54b6ad488b24c7e22dc201"
+    },
+    {
+      "path": "apps/desktop/src/engine.ts",
+      "sha256": "14aaa1791e14656b5438b03291b3e37bf1255fe6819da9ebd4fade6dc22f710c"
+    },
+    {
+      "path": "apps/desktop/src/export-worker.ts",
+      "sha256": "b9c59f96ce2cd21d2cbd8df841cf69f6edf5d12677c66c00b640a675e3c6e7b8"
+    },
+    {
+      "path": "apps/desktop/src/fonts.ts",
+      "sha256": "9bc380e0811364465460db91239ffaf47f01c5f708396e5b123595cc648fe797"
+    },
+    {
+      "path": "apps/desktop/src/kits.ts",
+      "sha256": "8558737d73873d4c9cd685581c0a6200c8e347c61e6196b35d890e96fb2f2609"
+    },
+    {
+      "path": "apps/desktop/src/live-mark.ts",
+      "sha256": "6d5d2a8cc66629d575971c3961044e953a30a81197d49d97e07df82063d75719"
+    },
+    {
+      "path": "apps/desktop/src/logo.ts",
+      "sha256": "602d390f1d0b3fd6c620506ab4338f8dc607dc7997d50240b28a713385f45cb2"
+    },
+    {
+      "path": "apps/desktop/src/main.ts",
+      "sha256": "51a679cae36e8876fd4d014e11f98c966ba87b3c4edb62f96a39ec311f7245c6"
+    },
+    {
+      "path": "apps/desktop/src/roam-preview.ts",
+      "sha256": "b5127ac45883320d56f80d923c649b044275c7aea708244b587bf0fd8dd5f54b"
+    },
+    {
+      "path": "apps/desktop/src/style.css",
+      "sha256": "61260c450095466fbdc939db0a5adeae437ad987a17c12486548798efb9658f7"
+    },
+    {
+      "path": "apps/desktop/src/wall.ts",
+      "sha256": "6e827b022a8b2974567b94d14394fe8d5dcb6d64791de4bb8353c08dbae4e977"
+    },
+    {
+      "path": "crates/core/src/config.rs",
+      "sha256": "d8e516153847ee193beb4706aa5c8f917a186b3a0d91d91ca8cf3073862e6059"
+    },
+    {
+      "path": "crates/core/tests/fixtures/real/multi-tool.expected.json",
+      "sha256": "655340a3b9e4bd4403b27e8f29afd746d6093e21464401ef75692a108b501573"
+    },
+    {
+      "path": "crates/core/tests/fixtures/real/multi-tool.json",
+      "sha256": "74bb52e23a145097df47dd3779cb27c4748bb55292bdae17b910cbbaedf1d683"
+    },
+    {
+      "path": "crates/core/tests/fixtures/real/README.md",
+      "sha256": "5df66b77d61b840dbb6f73106e2f5e04a67022b1c4d189dfd8fce67833e5635f"
+    },
+    {
+      "path": "packages/cli/src/cli.ts",
+      "sha256": "bba71039eeae33b4163490e5751bdd087601d7cb61423d4929682a9f902a05cc"
+    },
+    {
+      "path": "packages/render/fixtures/catnap.json",
+      "sha256": "db57342009bad5c2c14d2b6d850b55fffd7b0d7f2d31140a0800009add8fb5a5"
+    },
+    {
+      "path": "packages/render/README.md",
+      "sha256": "0ef86914cdbda4fc776e7a76ff85fe6a97c75ceb6fd3adf0feb2eb3d1bab490f"
+    },
+    {
+      "path": "packages/render/src/classic/art.ts",
+      "sha256": "59ae9452c7ff2c50260fc7c18838ac33c49a26f36849fee8f6d9fce4d0caa491"
+    },
+    {
+      "path": "packages/render/src/classic/bridge.ts",
+      "sha256": "e5636f26a63761d47318b6489d5ea8944ff4440a26986cbfa5580b077c505ce5"
+    },
+    {
+      "path": "packages/render/src/classic/catalog.ts",
+      "sha256": "4821647c0b88e4e4ee94b91e89a456b98487ec767ffe926889f338bbe0b16cfe"
+    },
+    {
+      "path": "packages/render/src/classic/fonts.ts",
+      "sha256": "7359ab93711da8ba4268b146d766a98a93158dee37e4a46d05a23bd5ef1f5dea"
+    },
+    {
+      "path": "packages/render/src/classic/forms.ts",
+      "sha256": "d4cdff98bb40759c06187d7e822fc32031ecbf78801963e7dad0aa12bf5dfe71"
+    },
+    {
+      "path": "packages/render/src/classic/motion.ts",
+      "sha256": "aabf0d5c0601266a79d62209d5abfd2c8ee6cada933e958943af1e39dbd88be8"
+    },
+    {
+      "path": "packages/render/src/classic/registry.ts",
+      "sha256": "14814a2bc0bc5d7c18e39861786e4c34af49efc32e133859c6e8f5231586fbc7"
+    },
+    {
+      "path": "packages/render/src/classic/rolls.ts",
+      "sha256": "3d862b28485e05747ac6224a65e6ee20124631b7846e382ef154f004b73ab084"
+    },
+    {
+      "path": "packages/render/src/classic/themes.ts",
+      "sha256": "746019bce032a75296aeaa8a2c307a94a259b458fa59234efbccca9ee99f5d49"
+    },
+    {
+      "path": "packages/render/src/export.ts",
+      "sha256": "223dab1f3864f4c947498a54663071d9838c5a8bca6bfdcb574d58b499bd1469"
+    },
+    {
+      "path": "packages/render/src/fonts.ts",
+      "sha256": "d893dd582af7ae60bed172b3f93a4828952dce6bc713357a45f0410ac6f21cd3"
+    },
+    {
+      "path": "packages/render/src/mark.ts",
+      "sha256": "2909475690623c86ef1cf1325ad04869e004e402bef34b5097e56ba21dde5d2e"
+    },
+    {
+      "path": "packages/render/src/pieces/cards.ts",
+      "sha256": "e18770876d17c0c2fa2a624a731b6a27fe81c1a2737cdfb2bc62a5ebf76d1057"
+    },
+    {
+      "path": "packages/render/src/pieces/charts.ts",
+      "sha256": "6eeb200692c8096793329eeb86189333e9f860bc739ee4b521fb4dc8d724f600"
+    },
+    {
+      "path": "packages/render/src/pieces/roll.ts",
+      "sha256": "313c5af3123a3fd571c3f8adf13c931b3a5f6ee65bd28d27226067e26fd2658d"
+    },
+    {
+      "path": "packages/render/src/pieces/tier.ts",
+      "sha256": "d8419ea63a3ea262f6ad15ac1d134aacb13da8f83e3c3e3526d02071bf9aef28"
+    },
+    {
+      "path": "packages/render/src/registry.ts",
+      "sha256": "d4185fb5777c2dcbc187f07be9b53c9e01433ee243811fd043b27004b3b8e399"
+    },
+    {
+      "path": "packages/render/src/styles/base.ts",
+      "sha256": "f610c8b1f6e55a443bf1816a873fd6c6cb25b5e797c99fdb54cbfb42f9c0a991"
+    },
+    {
+      "path": "packages/render/src/styles/cyber.ts",
+      "sha256": "f4cb4f3caef23d786ab5990eafaba57d6d61491827c538f26b7c43d211381482"
+    },
+    {
+      "path": "packages/render/src/styles/east.ts",
+      "sha256": "acad3fa06adf2498b3a9d5eff2a1f8a65b37f684d82e1f4fb48ae22fcd2745fe"

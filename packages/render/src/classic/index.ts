@@ -70,8 +70,8 @@ export function art(form: string, m: Model, theme: Theme, ctx: Ctx = { lang: 'zh
   return classicArt(form, m, theme, ctx, satori as any, fonts(theme));
 }
 /** 动画帧（GIF） */
-export function frames(form: string, m: Model, theme: Theme, ctx: Ctx = { lang: 'zh' }, n = 24) {
-  return classicFrames(form, m, theme, ctx, satori as any, fonts(theme), n);
+export function frames(form: string, m: Model, theme: Theme, ctx: Ctx = { lang: 'zh' }, n = 24, times?: readonly number[]) {
+  return classicFrames(form, m, theme, ctx, satori as any, fonts(theme), n, times);
 }
 export { animatedClassic } from './art.ts';
 

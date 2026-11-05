@@ -8,14 +8,6 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/gpui.yml'
-  push:
-    branches: [codex/gpui-migration]
-    paths:
-      - 'apps/gpui/**'
-      - 'crates/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - '.github/workflows/gpui.yml'
   workflow_dispatch:
 
 permissions:
@@ -129,6 +121,11 @@ jobs:
           rustc --version --verbose
           cargo check --all-targets --locked --target '${{ matrix.target }}' 2>&1 \
             | tee "$RUNNER_TEMP/gpui-check-${{ matrix.platform }}.log"
+      - name: Run archive and renderer contract tests
+        if: runner.os == 'Linux'
+        run: |
+          cargo test --all-targets --locked --target '${{ matrix.target }}' 2>&1 \
+            | tee "$RUNNER_TEMP/gpui-tests-${{ matrix.platform }}.log"
       # cargo check proves type/build-script compatibility, not linking, pixels,
       # native interaction or packaging. Keep its diagnostics; there is no app to upload.
       - name: Retain platform check diagnostics
@@ -136,6 +133,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gpui-check-${{ matrix.platform }}
-          path: ${{ runner.temp }}/gpui-check-${{ matrix.platform }}.log
+          path: |
+            ${{ runner.temp }}/gpui-check-${{ matrix.platform }}.log
+            ${{ runner.temp }}/gpui-tests-${{ matrix.platform }}.log
           if-no-files-found: ignore
           retention-days: 14
