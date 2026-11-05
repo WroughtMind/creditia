@@ -28,6 +28,9 @@ class Journal:
         self.started = time.monotonic()
 
     def write(self, event, **fields):
+        reserved = {"event", "sequence", "elapsed_seconds", "previous_sha256", "monotonic_seconds", "sha256"}
+        if reserved.intersection(fields):
+            raise ValueError("Journal payload must not overwrite integrity or timing fields")
         self.sequence += 1
         value = {"event": event, "sequence": self.sequence, "elapsed_seconds": time.monotonic() - self.started,
                  "previous_sha256": self.previous, "monotonic_seconds": time.monotonic(), **fields}
@@ -99,17 +102,38 @@ def run(args):
         raise TimeoutError(f"No observed UI state for {description}; latest={observed()[-1:]}")
 
     def snapshot(label):
-        time.sleep(.1)  # Allow the verified render to reach the X11 compositor.
         file = event_path.with_name(f"{label}.png")
-        subprocess.run(["import", "-window", str(window), str(file)], capture_output=True, check=True)
         # DOM/image readiness can precede (or never reach) an X11 paint, notably
-        # with WebKitGTK software compositing. Reject the blank initial shell.
-        pixels = subprocess.run(["convert", str(file), "-crop", "1200x680+80+100", "+repage", "-depth", "8", "rgb:-"], capture_output=True, check=True).stdout
-        dark = sum(max(pixels[i:i + 3]) < 180 for i in range(0, len(pixels), 3))
-        luma_levels = len({sum(pixels[i:i + 3]) // 3 for i in range(0, len(pixels), 3)})
-        painted = dark >= 200 and luma_levels >= 16
-        journal.write("screenshot", path=file.name, sha256=hashlib.sha256(file.read_bytes()).hexdigest(), bytes=file.stat().st_size,
-                      content_pixels_verified=painted, dark_content_pixels=dark, luminance_levels=luma_levels)
+        # with WebKitGTK software compositing. Wait for actual first paint and
+        # CSS reveal, bounded independently of decoded-image readiness. Only
+        # the final image is journaled, so each retained file has one hash.
+        capture_started, attempts, capture_error = time.monotonic(), 0, None
+        while True:
+            time.sleep(.1)
+            attempts += 1
+            try:
+                subprocess.run(["import", "-window", str(window), str(file)], capture_output=True, check=True)
+                pixels = subprocess.run(["convert", str(file), "-crop", "1200x680+80+100", "+repage", "-depth", "8", "rgb:-"], capture_output=True, check=True).stdout
+            except subprocess.CalledProcessError as error:
+                # WM restoration can precede a capturable backing pixmap.
+                # Retry observation; never replace the real screenshot with
+                # cached imagery or count a capture failure as a painted frame.
+                capture_error = (error.stderr or b"").decode(errors="replace")[-1000:]
+                if time.monotonic() - capture_started >= 5:
+                    journal.write("screenshot-failed", path=file.name, capture_attempts=attempts,
+                                  capture_duration_ms=(time.monotonic() - capture_started) * 1000,
+                                  capture_error=capture_error)
+                    raise
+                continue
+            dark = sum(max(pixels[i:i + 3]) < 180 for i in range(0, len(pixels), 3))
+            luma_levels = len({sum(pixels[i:i + 3]) // 3 for i in range(0, len(pixels), 3)})
+            painted = dark >= 200 and luma_levels >= 16
+            if painted or time.monotonic() - capture_started >= 5:
+                break
+        journal.write("screenshot", path=file.name, image_sha256=hashlib.sha256(file.read_bytes()).hexdigest(), bytes=file.stat().st_size,
+                      content_pixels_verified=painted, dark_content_pixels=dark, luminance_levels=luma_levels,
+                      capture_attempts=attempts, capture_duration_ms=(time.monotonic() - capture_started) * 1000,
+                      previous_capture_error=capture_error)
         if not painted:
             raise AssertionError(f"Actual {label} window is blank or lacks rendered artwork: dark={dark}, luminance_levels={luma_levels}")
 
@@ -172,7 +196,7 @@ def run(args):
                     raise AssertionError("The app did not expose a visible artwork hit target")
                 def focus():
                     xdo("mousemove", "--window", window, round(point["x"]), round(point["y"]))
-                    xdo("click", "--repeat", 2 if args.application == "gpui" else 1, "--delay", 90, 1)
+                    xdo("click", 1)
                 action(f"focus-open-{step}", focus, lambda b, s: s.get("focused") is True and s.get("focus_ready") is True)
                 if step == 0:
                     snapshot("focus")
@@ -203,7 +227,10 @@ def run(args):
             journal.write("idle-start", seconds=args.idle_seconds)
             time.sleep(args.idle_seconds)
             journal.write("idle-end")
-            window_action("restore-window", lambda: (xdo("windowmap", window), xdo("windowactivate", "--sync", window)),
+            # Ask the window manager to restore the application. Raw XMapWindow
+            # can expose an iconic client's empty backing pixmap before its WM
+            # state is restored; EWMH activation follows the normal user path.
+            window_action("restore-window", lambda: xdo("windowactivate", "--sync", window),
                           lambda s: s["mapped"] and not s["iconic"])
         elif args.scenario == "continuous-zoom":
             if args.application != "gpui":

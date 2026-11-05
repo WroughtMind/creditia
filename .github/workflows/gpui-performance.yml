@@ -87,8 +87,7 @@ jobs:
       - name: Verify measurement and provenance tools
         run: |
           node --test candidate/packaging/gpui-acceptance/common.test.mjs candidate/packaging/gpui-acceptance/instrument-tauri.test.mjs
-          python candidate/packaging/gpui-acceptance/test_resources.py
-          python candidate/packaging/gpui-acceptance/test_scenario.py
+          python -m unittest discover -s candidate/packaging/gpui-acceptance -p 'test_*.py'
       - name: Build current native app and analysis core
         run: |
           cargo build --manifest-path candidate/apps/gpui/Cargo.toml --release --locked

@@ -14,8 +14,10 @@ whose contributor names were previously hidden.
 ## Install
 
 - macOS 15 or later: open the DMG and copy `Creditia.app` to Applications. Apple
-  Silicon and Intel packages are separate. Candidate builds are ad-hoc signed;
-  public distribution requires Developer ID signing and notarization.
+  Silicon and Intel packages are separate. Builds use the repository's existing
+  ad-hoc signing policy and are not notarized. After verifying the download and
+  trying to open it, macOS may require **System Settings → Privacy & Security →
+  Open Anyway** for this app. See [Apple's installation guidance](https://support.apple.com/102445).
 - Windows 10 or later, x64: run the installer, or extract the complete portable
   ZIP to a writable location and run `creditia-gpui.exe`. The `resources` folder
   and `creditia-core.exe` must remain beside the application.
@@ -26,6 +28,14 @@ whose contributor names were previously hidden.
   importer; it does not install Node globally.
   The bundled desktop file may be installed into the user's applications folder
   with an absolute `Exec` path. Runtime system libraries are recorded by CI.
+
+These are the GPUI Kit platform minimums, not a claim that every OS version has
+been tested. The automated runners are macOS 15 on both architectures, Windows
+Server 2022 x64, and Ubuntu 24.04 x64; their actual versions and execution evidence
+travel with the build. Windows packages are unsigned and may show the system's
+publisher/trust prompt. Developer ID/notarization and Windows code signing are
+optional distribution choices; certificates are not required to build these
+installable packages.
 
 The first launch reuses the existing Creditia library and archives. Preferences
 are versioned separately from the archive data. Keep a backup of the library

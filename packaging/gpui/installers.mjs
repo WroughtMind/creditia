@@ -12,7 +12,7 @@ const root = path.resolve(options.root), output = path.resolve(options.output);
 const info = await verify(root), name = path.basename(root);
 await fs.mkdir(output, { recursive: true });
 const run = (program, args, settings = {}) => execFileSync(program, args, { stdio: 'inherit', ...settings });
-const notes = { target: info.target, candidate_sha: info.commit, installers: [], signing: info.platform === 'darwin' ? 'ad-hoc; Developer ID notarization required for public release' : 'unsigned candidate' };
+const notes = { target: info.target, candidate_sha: info.commit, installers: [], signing: info.platform === 'darwin' ? 'ad-hoc macOS signature; not notarized' : 'unsigned candidate' };
 
 if (info.platform === 'darwin') {
   const archive = path.join(output, `${name}.zip`);

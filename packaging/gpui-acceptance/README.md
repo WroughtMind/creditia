@@ -190,10 +190,16 @@ Performance results are comparable only when machine/data/workload identities
 match and both workloads actually completed.
 
 The final gate additionally requires four platform package acceptance records,
-twelve matched scenario/cache combinations and a detailed review file, supplied with
-`--manual-review review.json`. The review records reviewer, timestamp and candidate,
-every artwork's `visual`/`motion` verdict, and every named check of all 37 feature
-groups. Each verdict links to a concrete `manifest.json#case-key` from this run.
+twelve matched scenario/cache combinations, 1,482 actual native decoded catalog rows,
+1,738 browser component catalog rows, and native UI captures on all four platform architectures,
+and a recorded visual/interaction review supplied with `--review review.json`
+(`--manual-review` remains an alias). The review records the actual reviewer
+including an agent identity, timestamp and candidate. Representative visual reviews
+cover all 26 desktop styles and all artwork families, and sampled-motion reviews
+cover all 26 styles. Exhaustive per-row machine evidence remains mandatory; the
+review never claims every combination was manually viewed. Every named check of
+all 37 feature groups has an explicit behavior verdict. Each verdict links to a
+concrete `manifest.json#case-key` from this run.
 Blanket boolean statements such as “all visuals passed” do not satisfy this gate.
 `--require-complete` exits nonzero until every gate is met.
 
@@ -201,6 +207,33 @@ Tooling checks require no renderer dependencies:
 
 ```sh
 node --test packaging/gpui-acceptance/*.test.mjs
-python3 packaging/gpui-acceptance/test_resources.py
-python3 packaging/gpui-acceptance/test_scenario.py
+python3 -m unittest discover -s packaging/gpui-acceptance -p 'test_*.py'
 ```
+
+Baseline equivalence is limited to two explicitly recorded rules: known legacy
+badge font stacks pinned to their existing bundled fallback, and terminal rain
+glyphs lying more than 20px below the canvas (a resvg nonintersecting-text abort in
+the original). Raw SVG hashes and differences remain recorded. These cases must
+match data/hit regions and exact decoded pixels at native 1x and 2x sizes. The latter
+rule records that the original raster needed an accommodation; it does not claim
+the original crashing raster succeeded. Other geometry or XML differences fail.
+
+For CI, use `matrix-batches.mjs` with the same options as `render-matrix.mjs`.
+It expands each configured shard into eight disjoint, sequential child processes
+(default `--batches 8`). Every row and preference remains covered, while exiting
+each child releases resvg native font allocations. Each batch has its own complete
+manifest and gallery; `orchestration.json` records exit codes and case counts.
+An interrupted or failed batch keeps the overall run failed.
+
+After the production browser run, seal its exhaustive catalog evidence with:
+
+```sh
+node packaging/gpui-acceptance/browser-evidence.mjs \
+  --browser-report packages/embed/browser-evidence/report.json \
+  --catalog-root packages/embed/dist/acceptance \
+  --candidate-sha "$GITHUB_SHA" --output evidence/browser-catalog
+```
+
+The wrapper checks all catalog, source and bundle hashes and refuses a partial,
+failed or differently tagged run. The tested GitHub merge commit remains explicit;
+PR-head and merge-commit identities are not silently interchanged.

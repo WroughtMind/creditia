@@ -57,6 +57,32 @@ impl Viewport {
         *self = Self::default();
     }
 }
+/// Fit a focused artwork in the stage, then apply center-relative pan and zoom.
+/// Static previews and animated viewport tiles share this exact transform.
+pub fn focused_rect(art_width: f32, art_height: f32, viewport: Viewport, size: (f32, f32)) -> Rect {
+    let w = art_width.max(1.);
+    let h = art_height.max(1.);
+    // Original focus place(a): preserve native dimensions, cap at1100px,
+    // fit ordinary art vertically, retain a readable320px strip for tall art.
+    let fitted = w
+        .min(1100.)
+        .min((size.1 - 180.).max(1.) * w / h)
+        .max(320.)
+        .min((size.0 - 168.).max(1.));
+    let scale = fitted / w * viewport.zoom;
+    let height = h * scale;
+    let top = if height > (size.1 - 170.).max(1.) {
+        16.
+    } else {
+        (size.1 - 64. - height) / 2.
+    };
+    Rect {
+        x: (size.0 - w * scale) / 2. + viewport.x,
+        y: top + viewport.y,
+        w: w * scale,
+        h: height,
+    }
+}
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct Hit {
     #[serde(default)]

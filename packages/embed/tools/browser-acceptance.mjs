@@ -3,6 +3,9 @@
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { readFile, stat, mkdir, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { createInterface } from 'node:readline';
+import { createHash } from 'node:crypto';
 import { resolve, extname, sep } from 'node:path';
 import { strict as assert } from 'node:assert';
 const require = createRequire(import.meta.url);
@@ -34,31 +37,72 @@ function normalize(svg) {
     .replace(/url\(#([^)]+)\)/g, (_, id) => `url(#${ids.get(id) ?? id})`)
     .replace(/(href|xlink:href)="#([^"]+)"/g, (_, attr, id) => `${attr}="#${ids.get(id) ?? id}"`);
 }
-const report = { fixtureKind: 'synthetic_render_sample', cases: [], screenshots: [], errors };
+const report = { fixtureKind: 'synthetic_render_sample', candidateSha:process.env.GITHUB_SHA || null,
+  bundleSha256:createHash('sha256').update(await readFile(resolve(root,'creditia-card.js'))).digest('hex'),
+  cases: [], screenshots: [], errors };
 try {
   await page.goto(base); await page.waitForFunction(() => !!customElements.get('creditia-card'));
   const fixture = JSON.parse(await readFile(resolve(root, 'acceptance/cases.json'), 'utf8'));
   report.fixtureHash = fixture.fixtureHash;
-  for (const item of fixture.cases) {
-    const art = await page.evaluate(selection => new Promise((resolve, reject) => {
+  let source = null;
+  try { source = JSON.parse(await readFile(resolve(root,'acceptance/source.json'),'utf8')); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (source) await page.evaluate(value => { window.creditiaAcceptanceSource = value; }, source);
+  const catalogMeta = source ? JSON.parse(await readFile(resolve(root,'acceptance/catalog-meta.json'),'utf8')) : null;
+  if (source) assert.equal(createHash('sha256').update(await readFile(resolve(root,'acceptance/source.json'))).digest('hex'),catalogMeta.sourceSha256);
+  let catalogRows = 0;
+  const catalogDigest = createHash('sha256');
+  async function* cases() {
+    yield* fixture.cases;
+    if (source) for await (const line of createInterface({input:createReadStream(resolve(root,'acceptance/catalog.jsonl')),crlfDelay:Infinity})) {
+      if (line) { catalogRows++; catalogDigest.update(line + '\n'); yield JSON.parse(line); }
+    }
+  }
+  for await (const item of cases()) {
+    const {art,painted} = await page.evaluate(({selection,context}) => new Promise((resolve, reject) => {
       document.querySelector('creditia-card')?.remove();
       const card = document.createElement('creditia-card');
       for (const [key, value] of Object.entries({ src:'/acceptance/fixture.json', theme:selection.style,
         renderer:selection.renderer, piece:selection.piece, lang:selection.lang, group:selection.group,
-        named:String(selection.named), sign:selection.sign || '' })) card.setAttribute(key, value);
+        named:String(selection.named), sign:selection.sign || '', variant:selection.variant || '',
+        transparent:String(!!selection.transparent) })) card.setAttribute(key, value);
+      if (context) card.data = window.creditiaAcceptanceSource;
       const timer = setTimeout(() => reject(new Error(`Timed out: ${selection.style}`)), 60000);
-      card.addEventListener('creditia-ready', event => { clearTimeout(timer); resolve(event.detail.art); }, { once:true });
+      card.addEventListener('creditia-ready', event => {
+        clearTimeout(timer);
+        const svg = card.querySelector('svg'), rect = svg?.getBoundingClientRect();
+        resolve({art:event.detail.art,painted:rect ? {width:rect.width,height:rect.height,hits:card.querySelectorAll('.ct-hit').length} : null});
+      }, { once:true });
       card.addEventListener('creditia-error', event => { clearTimeout(timer); reject(new Error(String(event.detail))); }, { once:true });
       document.body.appendChild(card);
-    }), item.selection);
-    assert.equal(art.w, item.art.w); assert.equal(art.h, item.art.h);
-    assert.deepEqual(art.hits, item.art.hits); assert.equal(art.title, item.art.title);
-    assert.equal(normalize(art.svg), normalize(item.art.svg), `Native/web SVG mismatch: ${item.selection.id}`);
-    report.cases.push({ id: item.selection.id, status: 'passed' });
-    if (item.selection.lang === 'zh') {
+    }), {selection:item.selection,context:item.context});
+    if (!item.art) assert.equal(art,null,`Expected empty artwork: ${item.selection.id}`);
+    else {
+      assert(art,`Expected visible artwork: ${item.selection.id}`);
+      assert.equal(art.w, item.art.w); assert.equal(art.h, item.art.h);
+      // The native transport is JSON; an optional undefined key has the same
+      // wire representation as an absent key. Compare that actual contract.
+      assert.deepEqual(JSON.parse(JSON.stringify(art.hits)), item.art.hits,`Hover regions: ${item.selection.id}`);
+      assert.equal(art.title, item.art.title); assert.equal(art.bg,item.art.bg);
+      assert.deepEqual(art.crop,item.art.crop,`Crop: ${item.selection.id}`);
+      assert.equal(normalize(art.svg), normalize(item.art.svg), `Native/web SVG mismatch: ${item.selection.id}`);
+      assert(painted?.width > 0 && painted.height > 0,`Artwork did not occupy the browser layout: ${item.selection.id}`);
+      assert(Math.abs(painted.height - painted.width * art.h / art.w) < 0.1,`Browser aspect ratio: ${item.selection.id}`);
+      assert.equal(painted.hits,art.hits.length,`Mounted hover regions: ${item.selection.id}`);
+    }
+    report.cases.push({ id: item.selection.id, status: 'passed', rendered:!!art, catalog:!!item.context,
+      row:{renderer:item.selection.renderer,style:item.selection.style,piece:item.selection.piece,variant:item.selection.variant || 'default'},
+      checks:['canonical-svg','dimensions','title','background','crop','hover-data','actual-dom-bounds','mounted-hover-regions'].map(name=>({name,passed:true})) });
+    if (item.selection.lang === 'zh' && !item.context) {
       const file = `${item.selection.id}.png`;
       await page.locator('creditia-card').screenshot({ path: resolve(output, file) }); report.screenshots.push(file);
     }
+    if (report.cases.length % 100 === 0) console.log(`Browser catalog: ${report.cases.length} passed`);
+  }
+  if (catalogMeta) {
+    assert.equal(catalogRows,catalogMeta.rows,'Incomplete browser catalog');
+    assert.equal(catalogDigest.digest('hex'),catalogMeta.sha256,'Catalog fixture bytes changed');
+    report.catalog = {...catalogMeta,checkedRows:catalogRows};
   }
   // Exercise the public animation controls and the OS motion preference in the
   // actual custom element; timer mocks would miss its visibility/RAF lifecycle.

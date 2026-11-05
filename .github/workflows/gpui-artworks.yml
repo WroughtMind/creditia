@@ -111,7 +111,7 @@ jobs:
         run: |
           extra=()
           if [ "$ALL_EXPORTS" = true ]; then extra+=(--preferences all --exports); fi
-          node candidate/packaging/gpui-acceptance/render-matrix.mjs \
+          node candidate/packaging/gpui-acceptance/matrix-batches.mjs \
             --baseline-root baseline --candidate-root candidate \
             --output "evidence/shard-${{ matrix.shard }}" --profile full \
             --shards 8 --shard '${{ matrix.shard }}' --motion "${extra[@]}"

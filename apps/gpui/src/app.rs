@@ -51,13 +51,15 @@ actions!(
         Replay,
         PreviousPiece,
         NextPiece,
+        PreviousLayout,
+        NextLayout,
+        FocusArtwork,
         MinimizeWindow,
         FullScreen
     ]
 );
 #[derive(Clone, Copy)]
 enum ExportStage {
-    ChoosePath,
     Rendering,
     Writing,
 }
@@ -90,8 +92,24 @@ struct Tile {
     error: Option<String>,
     loading: bool,
 }
+struct PlaybackFrame {
+    epoch: u64,
+    ready: bool,
+    art: Arc<Artwork>,
+    tiles: Vec<(Option<Rect>, Arc<Image>)>,
+    pixels: u32,
+    decoded_bytes: usize,
+}
+impl PlaybackFrame {
+    fn release(self, cx: &mut App) {
+        for (_, image) in self.tiles {
+            ImageSource::Image(image).remove_asset(cx);
+        }
+    }
+}
 struct Playback {
-    frames: BTreeMap<usize, (Arc<Artwork>, Arc<Image>)>,
+    frames: BTreeMap<usize, PlaybackFrame>,
+    previous: Option<PlaybackFrame>,
     times: Vec<f64>,
     timeline: Timeline,
     started: Instant,
@@ -101,6 +119,14 @@ struct Playback {
     requested: usize,
     epoch: u64,
     started_once: bool,
+}
+impl Playback {
+    fn displayed(&self) -> Option<&PlaybackFrame> {
+        self.frames
+            .get(&self.index)
+            .filter(|frame| frame.ready)
+            .or(self.previous.as_ref())
+    }
 }
 #[derive(Clone, Copy)]
 struct Tween {
@@ -121,6 +147,7 @@ impl Tween {
 struct ViewBookmark {
     viewport: Viewport,
     selected_key: Option<String>,
+    selected_spec: Option<TileSpec>,
     focused: bool,
     saved_viewport: Option<Viewport>,
 }
@@ -130,6 +157,8 @@ struct FocusTransition {
 }
 struct DragState {
     tile: Option<usize>,
+    clicked_tile: Option<usize>,
+    source: Option<Rect>,
     start: (f32, f32),
     last: (f32, f32),
     moved: bool,
@@ -152,6 +181,12 @@ pub struct Fixture {
     pub message: String,
     #[serde(default)]
     pub progress: Value,
+    #[serde(default)]
+    pub projects: Vec<Value>,
+    #[serde(default)]
+    pub person: String,
+    #[serde(default)]
+    pub blame: Option<Value>,
 }
 
 pub struct Creditia {
@@ -173,9 +208,13 @@ pub struct Creditia {
     pending_view: Option<ViewBookmark>,
     mode_viewports: BTreeMap<String, Viewport>,
     preferences: Preferences,
-    preference_writer: Option<crate::preference_writer::PreferenceWriter>,
-    preference_task: Option<Task<()>>,
-    subscriptions: Vec<Subscription>,
+    preference_writer: Option<Arc<crate::preference_writer::PreferenceWriter>>,
+    migration_error: Option<String>,
+    migration_busy: bool,
+    migration_task: Option<Task<()>>,
+    // These handles retain background notifications and input subscriptions.
+    _preference_task: Option<Task<()>>,
+    _subscriptions: Vec<Subscription>,
     logo_image: Arc<Image>,
     projects: Vec<Project>,
     discovered: Option<Vec<Value>>,
@@ -213,9 +252,12 @@ pub struct Creditia {
     roam_dimensions: BTreeMap<String, (f32, f32)>,
     viewport: Viewport,
     viewport_size: (f32, f32),
+    display_scale: f32,
+    window_visible: bool,
     selected_tile: Option<usize>,
     focused: bool,
     hover: Option<Hit>,
+    hovered_tile: Option<usize>,
     pointer: (f32, f32),
     drag: Option<DragState>,
     preview_generation: u64,
@@ -243,6 +285,7 @@ pub struct Creditia {
     blame_file: Entity<InputState>,
     blame_line: Entity<InputState>,
     blame: Option<Value>,
+    profile_person: Option<String>,
     all_archives: Arc<Vec<Value>>,
     export_queue: crate::export_jobs::Queue,
     export_history_error: Option<String>,
@@ -262,7 +305,7 @@ pub struct Creditia {
     export_cancellation: Option<renderer::Cancellation>,
     export_open: bool,
     fixture: bool,
-    fixture_artworks: BTreeMap<(String, String), Option<Arc<Artwork>>>,
+    fixture_artworks: BTreeMap<(String, String, String), Option<Arc<Artwork>>>,
     benchmark: bool,
     ready_emitted: bool,
     telemetry_state: Option<Value>,
@@ -288,7 +331,16 @@ impl Creditia {
             cx.new(|cx| InputState::new(window, cx).placeholder("搜索项目 / Search projects"));
         let blame_file = cx.new(|cx| InputState::new(window, cx).placeholder("src/main.rs"));
         let blame_line = cx.new(|cx| InputState::new(window, cx).default_value("1"));
-        let subscriptions = vec![cx.observe(&search_input, |_, _, cx| cx.notify())];
+        let subscriptions = vec![
+            cx.observe(&search_input, |_, _, cx| cx.notify()),
+            cx.observe_window_activation(window, |view, window, cx| {
+                view.window_activity(window, cx)
+            }),
+            cx.observe_window_visibility(window, |view, visibility, window, cx| {
+                view.window_visible = visibility.is_visible();
+                view.window_activity(window, cx);
+            }),
+        ];
         let (preference_writer, preference_task) = if fixture {
             (None, None)
         } else {
@@ -314,7 +366,7 @@ impl Creditia {
                     }
                 }
             });
-            (Some(writer), Some(task))
+            (Some(Arc::new(writer)), Some(task))
         };
         let logo_image = logo_image(&preferences.logo);
         Self {
@@ -336,8 +388,11 @@ impl Creditia {
             pending_view: None,
             mode_viewports: BTreeMap::new(),
             preference_writer,
-            preference_task,
-            subscriptions,
+            migration_error: None,
+            migration_busy: false,
+            migration_task: None,
+            _preference_task: preference_task,
+            _subscriptions: subscriptions,
             logo_image,
             selected: preferences.last_project.clone(),
             export_format: preferences.export_format.clone(),
@@ -378,9 +433,12 @@ impl Creditia {
             roam_dimensions: BTreeMap::new(),
             viewport: Viewport::default(),
             viewport_size: (1000., 700.),
+            display_scale: 1.,
+            window_visible: true,
             selected_tile: None,
             focused: false,
             hover: None,
+            hovered_tile: None,
             pointer: (0., 0.),
             drag: None,
             preview_generation: 0,
@@ -408,6 +466,7 @@ impl Creditia {
             blame_file,
             blame_line,
             blame: None,
+            profile_person: None,
             all_archives: Arc::new(vec![]),
             export_queue: crate::export_jobs::Queue::default(),
             export_history_error: None,
@@ -455,6 +514,7 @@ impl Creditia {
                 match result {
                     Ok(settings) => view.preferences = Preferences::read(&settings),
                     Err(error) => {
+                        view.migration_error = Some(error.to_string());
                         view.notice = Some(format!(
                             "{}: {}",
                             view.text("旧设置尚未导入", "Previous settings have not been imported"),
@@ -468,6 +528,7 @@ impl Creditia {
                     Appearance::Light => Theme::change(ThemeMode::Light, None, cx),
                     Appearance::Dark => Theme::change(ThemeMode::Dark, None, cx),
                 }
+                Theme::update(cx, |theme| theme.font_family = "Inter".into());
                 view.load_export_history(jobs, cx);
                 view.logo_image = logo_image(&view.preferences.logo);
                 view.selected = view.preferences.last_project.clone();
@@ -504,11 +565,18 @@ impl Creditia {
             has_credits: true,
             evidence: 0,
         });
+        view.all_archives = Arc::new(fixture.projects);
+        view.profile_person = (!fixture.person.is_empty()).then_some(fixture.person);
+        view.blame = fixture.blame;
         view.raw = Some(Arc::new(fixture.raw));
         view.catalog = Some(fixture.catalog);
         view.resolve_style();
         view.rebuild_tiles(cx);
         for value in fixture.artworks {
+            let style = value["style"]
+                .as_str()
+                .unwrap_or(&view.preferences.style)
+                .to_string();
             let piece = value["piece"].as_str().unwrap_or("").to_string();
             let variant = value["variant"].as_str().unwrap_or("").to_string();
             let art = if value["art"].is_null() {
@@ -518,7 +586,7 @@ impl Creditia {
                     .ok()
                     .map(Arc::new)
             };
-            view.fixture_artworks.insert((piece, variant), art);
+            view.fixture_artworks.insert((style, piece, variant), art);
         }
         view.restore_fixture_artworks();
         match fixture.state.as_str() {
@@ -562,6 +630,7 @@ impl Creditia {
                 continue;
             }
             if let Some(art) = self.fixture_artworks.get(&(
+                self.preferences.style.clone(),
                 tile.spec.piece.clone(),
                 tile.spec.variant.clone().unwrap_or_default(),
             )) {
@@ -618,10 +687,90 @@ impl Creditia {
         view.load_catalog(cx);
         view
     }
+    fn window_activity(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let active = window.is_window_active() && self.window_visible;
+        if let Some(background) = &self.background {
+            background.set_active(active);
+        }
+        if !active {
+            if let Some(control) = &self.animation_control {
+                control.set_visible(false);
+                control.pause();
+            }
+            if let Some(play) = &mut self.playback {
+                if play.playing {
+                    play.elapsed = play.started.elapsed();
+                    play.playing = false;
+                }
+            }
+        }
+        if telemetry_enabled() {
+            let mut state = self.diagnostic_state();
+            state["active"] = json!(active);
+            state["visible"] = json!(self.window_visible);
+            write_performance_event(
+                json!({"event":"visibility","visible":self.window_visible,"active":active,"state":state}),
+            );
+            self.telemetry_state = None;
+        }
+        cx.notify();
+    }
     fn text(&self, zh: &'static str, en: &'static str) -> &'static str {
         self.preferences.language.text(zh, en)
     }
+    fn retry_migration(&mut self, cx: &mut Context<Self>) {
+        if self.fixture || self.migration_busy {
+            return;
+        }
+        self.migration_busy = true;
+        let writer = self.preference_writer.clone();
+        self.migration_task = Some(cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    if let Some(writer) = writer {
+                        writer.flush().map_err(|error| error.to_string())?;
+                    }
+                    service::migrate_legacy_with_helper().map_err(|error| error.to_string())
+                })
+                .await;
+            let _ = this.update(cx, |view, cx| {
+                view.migration_busy = false;
+                match result {
+                    Ok(value) => {
+                        view.preferences = Preferences::read(&value);
+                        view.migration_error = None;
+                        view.notice = Some(
+                            view.text("已导入原有桌面设置", "Previous desktop settings imported")
+                                .into(),
+                        );
+                        cx.set_reduce_motion(view.preferences.reduced_motion);
+                        match view.preferences.appearance {
+                            Appearance::System => Theme::sync_system_appearance(None, cx),
+                            Appearance::Light => Theme::change(ThemeMode::Light, None, cx),
+                            Appearance::Dark => Theme::change(ThemeMode::Dark, None, cx),
+                        }
+                        Theme::update(cx, |theme| theme.font_family = "Inter".into());
+                        install_menus(&view.preferences.language, cx);
+                        view.logo_image = logo_image(&view.preferences.logo);
+                        view.export_format = view.preferences.export_format.clone();
+                        view.export_size = view.preferences.export_size.clone();
+                        view.selected = view.preferences.last_project.clone();
+                        view.refresh(cx);
+                    }
+                    Err(error) => {
+                        view.migration_error = Some(error.clone());
+                        view.error = Some(error);
+                    }
+                }
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
     fn persist(&mut self) {
+        if self.migration_busy {
+            return;
+        }
         if let Some(writer) = &self.preference_writer {
             writer.submit(self.preferences.shared_patch());
         }
@@ -673,8 +822,11 @@ impl Creditia {
         self.animation_task = None;
         self.animation_busy = false;
         if let Some(play) = self.playback.take() {
-            for (_, (_, image)) in play.frames {
-                ImageSource::Image(image).remove_asset(cx);
+            if let Some(frame) = play.previous {
+                frame.release(cx);
+            }
+            for (_, frame) in play.frames {
+                frame.release(cx);
             }
         }
     }
@@ -730,21 +882,44 @@ impl Creditia {
         ViewBookmark {
             viewport: self.viewport,
             selected_key: self.current_tile().map(|tile| tile.identity.clone()),
+            selected_spec: self.current_tile().map(|tile| tile.spec.clone()),
             focused: self.focused,
             saved_viewport: self.saved_viewport,
         }
     }
     fn restore_bookmark(&mut self, bookmark: ViewBookmark) {
-        let selected = bookmark
+        let mut selected = bookmark
             .selected_key
             .as_ref()
             .and_then(|key| self.tiles.iter().position(|tile| &tile.identity == key));
+        // Focused roam slots and context-dependent artworks are absent from the
+        // rebuilt wall. Retain their real selection while replacing its data.
+        if selected.is_none() && bookmark.focused {
+            if let Some(mut spec) = bookmark.selected_spec {
+                if let Some(variant) = self.project_preferences().variants.get(&spec.key) {
+                    spec.variant = Some(variant.clone());
+                }
+                self.tiles.push(Tile {
+                    identity: bookmark.selected_key.unwrap_or_else(|| spec.key.clone()),
+                    spec,
+                    art: None,
+                    image: None,
+                    image_region: None,
+                    pixels: 0,
+                    texture_bytes: 0,
+                    error: None,
+                    loading: false,
+                });
+                selected = Some(self.tiles.len() - 1);
+            }
+        }
         self.viewport = bookmark.viewport;
         self.focused = bookmark.focused && selected.is_some();
         if selected.is_some() {
             self.selected_tile = selected;
         }
         self.saved_viewport = bookmark.saved_viewport;
+        self.restore_fixture_artworks();
     }
     fn rebuild_preserving_view(&mut self, cx: &mut Context<Self>) {
         let bookmark = self.bookmark();
@@ -802,6 +977,15 @@ impl Creditia {
     }
 
     fn select(&mut self, id: String, cx: &mut Context<Self>) {
+        let same_project = self.selected.as_ref() == Some(&id);
+        let refresh_projects = same_project && !self.all_archives.is_empty();
+        let refresh_blame = same_project
+            .then(|| {
+                self.blame.as_ref().and_then(|blame| {
+                    Some((blame["file"].as_str()?.to_string(), blame["line"].as_u64()?))
+                })
+            })
+            .flatten();
         self.pending_view = if self.selected.as_ref() == Some(&id) && self.raw.is_some() {
             Some(self.bookmark())
         } else {
@@ -829,9 +1013,17 @@ impl Creditia {
         self.render_archive = None;
         self.loading = true;
         self.archive_task = Some(cx.spawn(async move |this, cx| {
-            let (result, details) = cx
+            let (result, details, projects, blame) = cx
                 .background_spawn(async move {
-                    (service::credits(id.clone()), service::project_details(id))
+                    let projects = refresh_projects.then(service::project_archives);
+                    let blame =
+                        refresh_blame.map(|(file, line)| service::blame(id.clone(), file, line));
+                    (
+                        service::credits(id.clone()),
+                        service::project_details(id),
+                        projects,
+                        blame,
+                    )
                 })
                 .await;
             let _ = this.update(cx, |view, cx| {
@@ -840,6 +1032,27 @@ impl Creditia {
                     return;
                 }
                 view.loading = false;
+                if let Some(projects) = projects {
+                    match projects {
+                        Ok(projects) => {
+                            view.all_archives = Arc::new(
+                                projects
+                                    .as_array()
+                                    .into_iter()
+                                    .flatten()
+                                    .filter_map(|project| project.get("raw").cloned())
+                                    .collect(),
+                            )
+                        }
+                        Err(error) => view.notice = Some(error.to_string()),
+                    }
+                }
+                if let Some(blame) = blame {
+                    match blame {
+                        Ok(blame) => view.blame = Some(blame),
+                        Err(error) => view.notice = Some(error.to_string()),
+                    }
+                }
                 match details {
                     Ok(details) => view.details = Some(details),
                     Err(error) => view.notice = Some(error.to_string()),
@@ -1123,6 +1336,9 @@ impl Creditia {
         if let Some(blame) = &self.blame {
             request["blame"] = blame.clone();
         }
+        if let Some(person) = &self.profile_person {
+            request["person"] = json!(person);
+        }
         Some(request)
     }
     fn sync_roam(&mut self, cx: &mut Context<Self>) {
@@ -1232,20 +1448,11 @@ impl Creditia {
             let art = self
                 .playback
                 .as_ref()
-                .and_then(|p| p.frames.get(&p.index))
-                .map(|f| f.0.as_ref())
+                .and_then(Playback::displayed)
+                .map(|f| f.art.as_ref())
                 .or_else(|| self.tiles.get(index).and_then(|t| t.art.as_deref()));
             let (w, h) = art.map(|a| (a.w, a.h)).unwrap_or((640., 480.));
-            let scale = ((self.viewport_size.0 - 100.) / w)
-                .min((self.viewport_size.1 - 100.) / h)
-                .max(0.01)
-                * self.viewport.zoom;
-            Rect {
-                x: (self.viewport_size.0 - w * scale) / 2. + self.viewport.x,
-                y: (self.viewport_size.1 - h * scale) / 2. + self.viewport.y,
-                w: w * scale,
-                h: h * scale,
-            }
+            focused_rect(w, h, self.viewport, self.viewport_size)
         } else {
             self.rects
                 .get(index)
@@ -1294,7 +1501,7 @@ impl Creditia {
                 && self
                     .playback
                     .as_ref()
-                    .is_some_and(|p| p.frames.contains_key(&p.index)))
+                    .is_some_and(|play| play.displayed().is_some()))
         {
             return;
         }
@@ -1364,12 +1571,8 @@ impl Creditia {
                 .background_spawn(async move {
                     let archive = match archive {
                         Some(archive) => archive,
-                        None => renderer::RenderArchive::new(raw)?,
+                        None => renderer::RenderArchive::with_projects(raw, projects)?,
                     };
-                    let mut request = request;
-                    if !projects.is_empty() {
-                        request["projects"] = json!(projects.as_ref());
-                    }
                     let art = match existing {
                         Some(art) => art,
                         None => {
@@ -1479,7 +1682,16 @@ impl Creditia {
         }));
     }
     fn evict_distant(&mut self, cx: &mut Context<Self>) {
-        let mut bytes = self.tiles.iter().map(|t| t.texture_bytes).sum::<usize>();
+        let mut textures = BTreeMap::<usize, (usize, usize)>::new();
+        for tile in &self.tiles {
+            if let Some(image) = &tile.image {
+                let entry = textures
+                    .entry(Arc::as_ptr(image) as usize)
+                    .or_insert((tile.texture_bytes, 0));
+                entry.1 += 1;
+            }
+        }
+        let mut bytes = textures.values().map(|entry| entry.0).sum::<usize>();
         if bytes < 128 * 1024 * 1024 {
             return;
         }
@@ -1498,8 +1710,14 @@ impl Creditia {
             }
             let tile = &mut self.tiles[index];
             if let Some(image) = tile.image.take() {
-                ImageSource::Image(image).remove_asset(cx);
-                bytes = bytes.saturating_sub(tile.texture_bytes);
+                if let Some((size, references)) = textures.get_mut(&(Arc::as_ptr(&image) as usize))
+                {
+                    *references -= 1;
+                    if *references == 0 {
+                        bytes = bytes.saturating_sub(*size);
+                        ImageSource::Image(image).remove_asset(cx);
+                    }
+                }
                 tile.texture_bytes = 0;
                 tile.pixels = 0;
                 tile.image_region = None;
@@ -1653,6 +1871,16 @@ impl Creditia {
                             if view.all_archives.is_empty() {
                                 view.error = Some("No project archives are available".into());
                             } else {
+                                if let Some(cancel) = view.preview_cancellation.take() {
+                                    cancel.cancel();
+                                }
+                                view.preview_task = None;
+                                view.preview_busy = false;
+                                view.preview_generation = view.preview_generation.wrapping_add(1);
+                                for tile in &mut view.tiles {
+                                    tile.loading = false;
+                                }
+                                view.render_archive = None;
                                 view.select_piece(piece, cx);
                             }
                         }
@@ -1683,7 +1911,34 @@ impl Creditia {
                 error: None,
                 loading: false,
             });
+            self.restore_fixture_artworks();
             self.select_tile(self.tiles.len() - 1, true, cx);
+        }
+    }
+    fn step_variant(&mut self, delta: isize, cx: &mut Context<Self>) {
+        if !self.focused {
+            self.move_piece(delta, cx);
+            return;
+        }
+        let Some(tile) = self.current_tile() else {
+            return;
+        };
+        let Some(variants) = self
+            .piece(&tile.spec.piece)
+            .and_then(|piece| piece["variants"].as_array())
+        else {
+            return;
+        };
+        if variants.is_empty() {
+            return;
+        }
+        let current = variants
+            .iter()
+            .position(|variant| variant["id"].as_str() == tile.spec.variant.as_deref())
+            .unwrap_or(0);
+        let next = (current as isize + delta).rem_euclid(variants.len() as isize) as usize;
+        if let Some(id) = variants[next]["id"].as_str() {
+            self.choose_variant(id.to_string(), cx);
         }
     }
     fn choose_variant(&mut self, variant: String, cx: &mut Context<Self>) {
@@ -1691,18 +1946,47 @@ impl Creditia {
             return;
         };
         let key = tile.spec.key.clone();
-        let specs = self
-            .tiles
-            .iter()
-            .map(|t| t.spec.clone())
-            .collect::<Vec<_>>();
+        let piece = tile.spec.piece.clone();
         let Some(id) = self.selected.clone() else {
             return;
         };
-        let prefs = self.preferences.projects.entry(id).or_default();
-        if swap_variant(&specs, &mut prefs.variants, &key, &variant) {
+        if self.preferences.view == "roam" {
+            let base = self
+                .style()
+                .and_then(|style| style["board"].as_array())
+                .and_then(|board| board.iter().find(|entry| entry["id"] == piece))
+                .and_then(|entry| entry["variant"].as_str().map(str::to_owned))
+                .or_else(|| self.piece(&piece).and_then(default_variant));
+            let base_key = crate::roam::canonical_key(&piece, base.as_deref());
+            self.preferences
+                .projects
+                .entry(id)
+                .or_default()
+                .variants
+                .insert(base_key, variant.clone());
+            let mut bookmark = self.bookmark();
+            if let Some(spec) = &mut bookmark.selected_spec {
+                spec.variant = Some(variant.clone());
+                spec.key = crate::roam::canonical_key(&piece, Some(&variant));
+            }
             self.persist();
-            self.rebuild_preserving_view(cx);
+            self.rebuild_tiles(cx);
+            self.restore_bookmark(bookmark);
+        } else {
+            let specs = self
+                .tiles
+                .iter()
+                .map(|tile| tile.spec.clone())
+                .collect::<Vec<_>>();
+            if swap_variant(
+                &specs,
+                &mut self.preferences.projects.entry(id).or_default().variants,
+                &key,
+                &variant,
+            ) {
+                self.persist();
+                self.rebuild_preserving_view(cx);
+            }
         }
     }
     fn move_piece(&mut self, delta: isize, cx: &mut Context<Self>) {
@@ -1714,12 +1998,53 @@ impl Creditia {
         self.select_tile(next, self.focused, cx);
     }
     fn zoom_at(&mut self, factor: f32, x: f32, y: f32) {
-        let (x, y) = if self.focused {
-            (x - self.viewport_size.0 / 2., y - self.viewport_size.1 / 2.)
-        } else {
-            (x, y)
-        };
+        if self.focused {
+            let art = self
+                .playback
+                .as_ref()
+                .and_then(Playback::displayed)
+                .map(|frame| frame.art.as_ref())
+                .or_else(|| self.current_tile().and_then(|tile| tile.art.as_deref()));
+            if let Some(art) = art {
+                let (w, h) = (art.w, art.h);
+                let old = focused_rect(w, h, self.viewport, self.viewport_size);
+                let zoom = (self.viewport.zoom * factor).clamp(0.15, 6.);
+                let ratio = zoom / self.viewport.zoom;
+                let base = focused_rect(w, h, Viewport { x: 0., y: 0., zoom }, self.viewport_size);
+                self.viewport = Viewport {
+                    x: x - (x - old.x) * ratio - base.x,
+                    y: y - (y - old.y) * ratio - base.y,
+                    zoom,
+                };
+                return;
+            }
+        }
         self.viewport.zoom_at(factor, x, y);
+    }
+    fn reset_viewport(&mut self, cx: &mut Context<Self>) {
+        self.viewport = if self.preferences.view == "roam" && !self.focused {
+            crate::roam::home(self.viewport_size)
+        } else {
+            Viewport::default()
+        };
+        cx.notify();
+    }
+    fn keyboard_navigation(&mut self, horizontal: bool, delta: isize, cx: &mut Context<Self>) {
+        if self.preferences.view == "roam" && !self.focused {
+            if horizontal {
+                self.viewport.x -= delta as f32
+                    * ((self.viewport_size.0 / 3.1).clamp(380., 520.) + 56.)
+                    * self.viewport.zoom;
+            } else {
+                self.viewport.y -= delta as f32 * self.viewport_size.1 * 0.6;
+            }
+            self.hover = None;
+            cx.notify();
+        } else if horizontal {
+            self.step_variant(delta, cx);
+        } else {
+            self.move_piece(delta, cx);
+        }
     }
     fn zoom(&mut self, factor: f32, cx: &mut Context<Self>) {
         if !self.focused && self.preferences.view != "roam" {
@@ -1803,13 +2128,17 @@ impl Creditia {
         let selected = self.selected_tile;
         let generation = self.preview_generation;
         request["reducedMotion"] = json!(self.preferences.reduced_motion);
+        if !self.focused {
+            self.saved_viewport = Some(self.viewport);
+        }
         self.focused = true;
         self.viewport.reset();
         self.animation_busy = true;
         let control = crate::animation::PlaybackControl::new();
+        control.set_viewport(self.viewport, self.viewport_size, self.display_scale);
         self.animation_cancellation = Some(control.cancellation());
         self.animation_control = Some(control.clone());
-        let width = texture_width(self.viewport_size.0.min(1200.), 1.);
+        let width = texture_width(self.viewport_size.0, self.display_scale);
         let Some(raw) = self.raw.clone() else {
             return;
         };
@@ -1820,11 +2149,8 @@ impl Creditia {
             let result = (|| {
                 let archive = match archive {
                     Some(archive) => archive,
-                    None => renderer::RenderArchive::new(raw)?,
+                    None => renderer::RenderArchive::with_projects(raw, projects)?,
                 };
-                if !projects.is_empty() {
-                    request["projects"] = json!(projects.as_ref());
-                }
                 crate::animation::run_with_archive(
                     request,
                     archive,
@@ -1855,13 +2181,15 @@ impl Creditia {
                                 timeline,
                                 times,
                             }) => {
+                                let playing = timeline.duration_ms > 0;
                                 view.playback = Some(Playback {
                                     frames: BTreeMap::new(),
+                                    previous: None,
                                     times,
                                     timeline,
                                     started: Instant::now(),
                                     elapsed: Duration::ZERO,
-                                    playing: false,
+                                    playing,
                                     index: 0,
                                     requested: 0,
                                     epoch,
@@ -1872,43 +2200,60 @@ impl Creditia {
                                 epoch,
                                 index,
                                 art,
-                                raster,
+                                tiles,
+                                pixels,
+                                decoded_bytes,
+                                max_resident,
                             }) => {
                                 if view
                                     .animation_control
                                     .as_ref()
-                                    .is_none_or(|c| c.epoch() != epoch)
+                                    .is_none_or(|control| control.epoch() != epoch)
                                 {
                                     return;
                                 }
                                 if let Some(play) = &mut view.playback {
+                                    // Keep the previous geometry visible until this replacement is ready.
                                     if play.epoch != epoch {
-                                        for (_, (_, image)) in std::mem::take(&mut play.frames) {
-                                            ImageSource::Image(image).remove_asset(cx);
+                                        let current = play.frames.remove(&play.index);
+                                        let previous = match current {
+                                            Some(frame) if frame.ready => Some(frame),
+                                            Some(frame) => {
+                                                frame.release(cx);
+                                                play.previous.take()
+                                            }
+                                            None => play.previous.take(),
+                                        };
+                                        if let Some(old) = play.previous.take() {
+                                            old.release(cx);
+                                        }
+                                        play.previous = previous;
+                                        for (_, frame) in std::mem::take(&mut play.frames) {
+                                            frame.release(cx);
                                         }
                                         play.epoch = epoch;
                                     }
-                                    if let Some((_, old)) = play.frames.insert(
-                                        index,
-                                        (
-                                            art,
-                                            Arc::new(Image::from_bytes(
-                                                ImageFormat::Png,
-                                                raster.png.clone(),
-                                            )),
-                                        ),
-                                    ) {
-                                        ImageSource::Image(old).remove_asset(cx);
-                                    }
-                                    if !play.started_once {
-                                        play.started_once = true;
-                                        play.started = Instant::now();
-                                        play.playing = play.timeline.duration_ms > 0;
-                                        play.index = index;
-                                    } else if index <= play.requested
-                                        || !play.frames.contains_key(&play.index)
-                                    {
-                                        play.index = index;
+                                    let frame = PlaybackFrame {
+                                        epoch,
+                                        ready: false,
+                                        art,
+                                        pixels,
+                                        decoded_bytes,
+                                        tiles: tiles
+                                            .into_iter()
+                                            .map(|tile| {
+                                                (
+                                                    tile.region,
+                                                    Arc::new(Image::from_bytes(
+                                                        ImageFormat::Png,
+                                                        tile.raster.png.clone(),
+                                                    )),
+                                                )
+                                            })
+                                            .collect(),
+                                    };
+                                    if let Some(old) = play.frames.insert(index, frame) {
+                                        old.release(cx);
                                     }
                                     let keep = play.requested;
                                     let shown = play.index;
@@ -1918,28 +2263,53 @@ impl Creditia {
                                         .copied()
                                         .filter(|i| {
                                             *i != shown
-                                                && (*i < keep.saturating_sub(1)
+                                                && (*i < keep
                                                     || *i > keep + crate::animation::MAX_AHEAD)
                                         })
                                         .collect::<Vec<_>>();
                                     for index in obsolete {
-                                        if let Some((_, image)) = play.frames.remove(&index) {
-                                            ImageSource::Image(image).remove_asset(cx);
+                                        if let Some(frame) = play.frames.remove(&index) {
+                                            frame.release(cx);
                                         }
                                     }
-                                    while play.frames.len() > crate::animation::MAX_RESIDENT_FRAMES
+                                    let pending_bytes = play
+                                        .frames
+                                        .values()
+                                        .map(|frame| frame.decoded_bytes as u64)
+                                        .sum::<u64>();
+                                    if pending_bytes
+                                        + play
+                                            .previous
+                                            .as_ref()
+                                            .map(|frame| frame.decoded_bytes as u64)
+                                            .unwrap_or(0)
+                                        > crate::animation::DECODED_RESIDENT_BUDGET
                                     {
-                                        let candidate = play
+                                        if let Some(previous) = play.previous.take() {
+                                            previous.release(cx);
+                                        }
+                                    }
+                                    while play.frames.len() > max_resident.max(1)
+                                        || play
+                                            .frames
+                                            .values()
+                                            .map(|frame| frame.decoded_bytes as u64)
+                                            .sum::<u64>()
+                                            > crate::animation::DECODED_RESIDENT_BUDGET
+                                    {
+                                        let Some(candidate) = play
                                             .frames
                                             .keys()
                                             .copied()
-                                            .find(|i| *i != shown)
-                                            .unwrap_or(shown);
-                                        if let Some((_, image)) = play.frames.remove(&candidate) {
-                                            ImageSource::Image(image).remove_asset(cx);
+                                            .filter(|i| *i != shown)
+                                            .max_by_key(|i| i.abs_diff(keep))
+                                        else {
+                                            break;
+                                        };
+                                        if let Some(frame) = play.frames.remove(&candidate) {
+                                            frame.release(cx);
                                         }
                                     }
-                                    view.animation_busy = false;
                                 }
                             }
                             Err(error) => {
@@ -1960,6 +2330,53 @@ impl Creditia {
         }));
         cx.notify();
     }
+    fn prepare_playback_images(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(play) = &mut self.playback else {
+            return;
+        };
+        let mut decoding = false;
+        for frame in play.frames.values_mut() {
+            if !frame.ready {
+                let mut ready = true;
+                for (_, image) in &frame.tiles {
+                    ready &= image.clone().get_render_image(window, cx).is_some();
+                }
+                frame.ready = ready;
+                decoding |= !frame.ready;
+            }
+        }
+        if decoding {
+            window.request_animation_frame();
+        }
+        let desired = if play.started_once { play.requested } else { 0 };
+        let next = play
+            .frames
+            .range(..=desired)
+            .rev()
+            .find(|(_, frame)| frame.ready)
+            .map(|(&index, _)| index)
+            .or_else(|| {
+                (!play.started_once)
+                    .then(|| {
+                        play.frames
+                            .iter()
+                            .find(|(_, frame)| frame.ready)
+                            .map(|(&index, _)| index)
+                    })
+                    .flatten()
+            });
+        if let Some(index) = next {
+            play.index = index;
+            if let Some(previous) = play.previous.take() {
+                previous.release(cx);
+            }
+            if !play.started_once {
+                play.started_once = true;
+                play.started = Instant::now();
+            }
+            self.animation_busy = false;
+        }
+    }
     pub fn fixture_images_ready(&self, window: &mut Window, cx: &mut App) -> bool {
         if self.fixture && !self.benchmark && (self.raw.is_none() || self.loading) {
             return true;
@@ -1970,6 +2387,29 @@ impl Creditia {
             .is_some_and(|transition| transition.started.elapsed() < Duration::from_millis(180))
         {
             return false;
+        }
+        if self.focused {
+            if let Some(play) = &self.playback {
+                if self
+                    .animation_control
+                    .as_ref()
+                    .is_none_or(|control| control.epoch() != play.epoch)
+                {
+                    return false;
+                }
+                let Some(frame) = play.displayed().filter(|frame| frame.epoch == play.epoch) else {
+                    return false;
+                };
+                let r = focused_rect(frame.art.w, frame.art.h, self.viewport, self.viewport_size);
+                if frame.pixels < (r.w * window.scale_factor()).ceil() as u32 {
+                    return false;
+                }
+                return !frame.tiles.is_empty()
+                    && frame
+                        .tiles
+                        .iter()
+                        .all(|(_, image)| image.clone().get_render_image(window, cx).is_some());
+            }
         }
         let visible = Rect {
             x: 0.,
@@ -2592,6 +3032,9 @@ impl Creditia {
         {
             snapshot["sign"] = json!(sign);
         }
+        if let Some(person) = &self.profile_person {
+            snapshot["person"] = json!(person);
+        }
         Ok(snapshot)
     }
     fn load_export_history(
@@ -2916,7 +3359,7 @@ impl Creditia {
             });
         }));
     }
-    fn wheel(&mut self, event: &ScrollWheelEvent, cx: &mut Context<Self>) {
+    fn wheel(&mut self, event: &ScrollEvent, cx: &mut Context<Self>) {
         let delta = event.delta.pixel_delta(px(24.));
         let dx: f32 = delta.x.into();
         let dy: f32 = delta.y.into();
@@ -2926,9 +3369,17 @@ impl Creditia {
             }
             self.zoom_at((-dy * 0.006).exp(), self.pointer.0, self.pointer.1);
         } else {
-            self.viewport.y += dy;
+            self.viewport.y += if event.modifiers.shift && dx == 0. {
+                0.
+            } else {
+                dy
+            };
             if self.preferences.view == "roam" || self.focused {
-                self.viewport.x += dx;
+                self.viewport.x += if event.modifiers.shift && dx == 0. {
+                    dy
+                } else {
+                    dx
+                };
             }
         }
         self.hover = None;
@@ -2950,6 +3401,9 @@ impl Creditia {
                 let dy = local.1 - drag.last.1;
                 if (local.0 - drag.start.0).abs() + (local.1 - drag.start.1).abs() > 6. {
                     drag.moved = true;
+                    if drag.tile.is_some() {
+                        self.export_open = true;
+                    }
                 }
                 if drag.tile.is_none() && (self.preferences.view == "roam" || self.focused) {
                     self.viewport.x += dx;
@@ -2964,19 +3418,28 @@ impl Creditia {
             }
         }
         let mut found = None;
+        let mut hovered = None;
         for (index, tile) in self.tiles.iter().enumerate() {
             if self.focused && self.selected_tile != Some(index) {
                 continue;
             }
             let rect = self.screen_rect(index);
+            let caption = Rect {
+                y: rect.y - 30.,
+                h: rect.h + 30.,
+                ..rect
+            };
+            if caption.contains(local.0, local.1) {
+                hovered = Some(index);
+            }
             if !rect.contains(local.0, local.1) {
                 continue;
             }
             let art = if self.focused {
                 self.playback
                     .as_ref()
-                    .and_then(|p| p.frames.get(&p.index))
-                    .map(|f| f.0.as_ref())
+                    .and_then(Playback::displayed)
+                    .map(|f| f.art.as_ref())
                     .or(tile.art.as_deref())
             } else {
                 tile.art.as_deref()
@@ -3000,6 +3463,10 @@ impl Creditia {
             }
             break;
         }
+        if hovered != self.hovered_tile {
+            self.hovered_tile = hovered;
+            cx.notify();
+        }
         if found.is_some()
             || found.as_ref().map(|h| (&h.t, &h.d)) != self.hover.as_ref().map(|h| (&h.t, &h.d))
         {
@@ -3012,6 +3479,13 @@ impl Creditia {
             return;
         };
         if !drag.moved {
+            if let Some(index) = drag.clicked_tile {
+                if !self.focused {
+                    self.select_tile(index, true, cx);
+                }
+            } else if self.focused {
+                self.close_focus(cx);
+            }
             return;
         }
         let Some(from) = drag.tile else {
@@ -3069,6 +3543,10 @@ impl Creditia {
         let tile = &self.tiles[index];
         let r = self.screen_rect(index);
         let selected = self.selected_tile == Some(index);
+        let dragging = self
+            .drag
+            .as_ref()
+            .is_some_and(|drag| drag.moved && drag.tile == Some(index));
         let border = cx.theme().border;
         let muted = cx.theme().muted_foreground;
         let title = self
@@ -3083,20 +3561,11 @@ impl Creditia {
             })
             .unwrap_or(&tile.spec.piece)
             .to_string();
-        let animated_image = self.focused
-            && self
-                .playback
-                .as_ref()
-                .is_some_and(|p| p.frames.contains_key(&p.index));
-        let image = if self.focused {
-            self.playback
-                .as_ref()
-                .and_then(|p| p.frames.get(&p.index))
-                .map(|f| f.1.clone())
-                .or(tile.image.clone())
-        } else {
-            tile.image.clone()
-        };
+        let animation = self
+            .focused
+            .then(|| self.playback.as_ref().and_then(Playback::displayed))
+            .flatten();
+        let image = tile.image.clone();
         let mut picture = div()
             .id(("artwork", index))
             .test_support()
@@ -3104,11 +3573,12 @@ impl Creditia {
             .w(px(r.w))
             .h(px(r.h))
             .overflow_hidden()
-            .rounded_lg()
+            .rounded(px(10.))
             .cursor_pointer()
+            .when(dragging, |picture| picture.opacity(0.3))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |view, event: &MouseDownEvent, _, cx| {
+                cx.listener(move |view, _: &MouseDownEvent, _, cx| {
                     view.selected_tile = Some(index);
                     view.drag = Some(DragState {
                         tile: if view.focused || view.preferences.view == "roam" {
@@ -3116,26 +3586,37 @@ impl Creditia {
                         } else {
                             Some(index)
                         },
+                        clicked_tile: Some(index),
+                        source: Some(view.screen_rect(index)),
                         start: view.pointer,
                         last: view.pointer,
                         moved: false,
                     });
-                    if event.click_count == 2 {
-                        view.select_tile(index, true, cx);
-                    }
                     cx.stop_propagation();
                     cx.notify();
                 }),
             );
-        if let Some(image) = image {
-            if let (Some(region), Some(art)) = (
-                if !animated_image {
-                    tile.image_region
-                } else {
-                    None
-                },
-                tile.art.as_deref(),
-            ) {
+        if let Some(frame) = animation {
+            for (part, (region, image)) in frame.tiles.iter().enumerate() {
+                let region = region.unwrap_or(Rect {
+                    x: 0.,
+                    y: 0.,
+                    w: frame.art.w,
+                    h: frame.art.h,
+                });
+                picture = picture.child(
+                    img(image.clone())
+                        .id(("animation-region", part))
+                        .absolute()
+                        .left(px(region.x / frame.art.w * r.w))
+                        .top(px(region.y / frame.art.h * r.h))
+                        .w(px(region.w / frame.art.w * r.w))
+                        .h(px(region.h / frame.art.h * r.h))
+                        .object_fit(ObjectFit::Fill),
+                );
+            }
+        } else if let Some(image) = image {
+            if let (Some(region), Some(art)) = (tile.image_region, tile.art.as_deref()) {
                 picture = picture.child(
                     img(image)
                         .id(("artwork-image", index))
@@ -3150,6 +3631,7 @@ impl Creditia {
                 picture = picture.child(
                     img(image)
                         .id(("artwork-image", index))
+                        .rounded(px(10.))
                         .size_full()
                         .object_fit(ObjectFit::Contain)
                         .with_fallback(|| {
@@ -3199,6 +3681,16 @@ impl Creditia {
             .left(px(r.x))
             .top(px(r.y))
             .w(px(r.w))
+            .rounded(px(10.))
+            .border_1()
+            .border_color(rgba(if cx.theme().is_dark() {
+                0xFFFFFF0F
+            } else {
+                0x00000012
+            }))
+            .shadow(vec![
+                BoxShadow::new(px(0.), px(12.), rgba(0x00000014).into()).blur_radius(px(32.)),
+            ])
             .child(picture);
         if !self.focused {
             let variant = tile.spec.variant.as_deref().unwrap_or("").to_string();
@@ -3215,34 +3707,54 @@ impl Creditia {
                     .h(px(22.))
                     .text_xs()
                     .text_color(muted)
-                    .child(div().flex().gap_2().child(title).child(variant))
                     .child(
                         div()
                             .flex()
-                            .gap_1()
-                            .child(
-                                Button::new(("tile-focus", index))
-                                    .ghost()
-                                    .label(self.text("放大", "Open"))
-                                    .on_click(cx.listener(move |view, _, _, cx| {
-                                        view.select_tile(index, true, cx)
-                                    })),
-                            )
-                            .child(
-                                Button::new(("tile-export", index))
-                                    .ghost()
-                                    .label(self.text("导出", "Export"))
-                                    .on_click(cx.listener(move |view, _, _, cx| {
-                                        view.selected_tile = Some(index);
-                                        view.export_open = true;
-                                        cx.notify();
-                                    })),
-                            ),
-                    ),
+                            .gap_2()
+                            .max_w(px(r.w * 0.58))
+                            .overflow_hidden()
+                            .child(title)
+                            .child(variant),
+                    )
+                    .when(self.hovered_tile == Some(index) || selected, |caption| {
+                        caption.child(
+                            div()
+                                .flex()
+                                .gap_1()
+                                .child(
+                                    Button::new(("tile-focus", index))
+                                        .ghost()
+                                        .icon(crate::ui_icons::icon("search"))
+                                        .accessibility_label(self.text("放大作品", "Open artwork"))
+                                        .tooltip(self.text("放大作品", "Open artwork"))
+                                        .h(px(22.))
+                                        .w(px(24.))
+                                        .on_click(cx.listener(move |view, _, _, cx| {
+                                            view.select_tile(index, true, cx)
+                                        })),
+                                )
+                                .child(
+                                    Button::new(("tile-export", index))
+                                        .ghost()
+                                        .icon(crate::ui_icons::icon("export"))
+                                        .accessibility_label(
+                                            self.text("导出作品", "Export artwork"),
+                                        )
+                                        .tooltip(self.text("导出作品", "Export artwork"))
+                                        .h(px(22.))
+                                        .w(px(24.))
+                                        .on_click(cx.listener(move |view, _, _, cx| {
+                                            view.selected_tile = Some(index);
+                                            view.export_open = true;
+                                            cx.notify();
+                                        })),
+                                ),
+                        )
+                    }),
             );
         }
-        if selected {
-            card = card.border_1().border_color(border);
+        if self.hovered_tile == Some(index) {
+            card = card.border_color(border);
         }
         card.into_any_element()
     }
@@ -3259,12 +3771,14 @@ impl Creditia {
             .relative()
             .size_full()
             .overflow_hidden()
-            .on_scroll_wheel(cx.listener(|view, event, _, cx| view.wheel(event, cx)))
+            .on_scroll(cx.listener(|view, event, _, cx| view.wheel(event, cx)))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|view, _, _, cx| {
                     view.drag = Some(DragState {
                         tile: None,
+                        clicked_tile: None,
+                        source: None,
                         start: view.pointer,
                         last: view.pointer,
                         moved: false,
@@ -3273,6 +3787,40 @@ impl Creditia {
                     cx.notify();
                 }),
             );
+        if self.focused {
+            let viewport = self.saved_viewport.unwrap_or_default();
+            for (index, tile) in self.tiles.iter().enumerate() {
+                let Some(image) = tile.image.clone().filter(|_| tile.image_region.is_none()) else {
+                    continue;
+                };
+                let Some(rect) = self
+                    .rects
+                    .get(index)
+                    .copied()
+                    .map(|rect| rect.transformed(viewport))
+                else {
+                    continue;
+                };
+                if !rect.intersects(visible) {
+                    continue;
+                }
+                stage = stage.child(
+                    div()
+                        .absolute()
+                        .left(px(rect.x))
+                        .top(px(rect.y))
+                        .w(px(rect.w))
+                        .h(px(rect.h))
+                        .opacity(0.12)
+                        .child(
+                            img(image)
+                                .size_full()
+                                .rounded(px(10.))
+                                .object_fit(ObjectFit::Contain),
+                        ),
+                );
+            }
+        }
         if self.loading {
             stage = stage.child(
                 div()
@@ -3353,7 +3901,21 @@ impl Creditia {
                 if (!self.focused || self.selected_tile == Some(index))
                     && self.screen_rect(index).intersects(visible)
                 {
-                    stage = stage.child(self.artwork_element(index, cx));
+                    let artwork = self.artwork_element(index, cx);
+                    stage = if self.focused {
+                        stage.child(
+                            div()
+                                .absolute()
+                                .left_0()
+                                .top_0()
+                                .w_full()
+                                .h(px((self.viewport_size.1 - 154.).max(120.)))
+                                .overflow_hidden()
+                                .child(artwork),
+                        )
+                    } else {
+                        stage.child(artwork)
+                    };
                 }
             }
         }
@@ -3397,7 +3959,6 @@ impl Creditia {
     }
     fn render_export_dock(&self, cx: &mut Context<Self>) -> AnyElement {
         let border = cx.theme().border;
-        let muted = cx.theme().muted_foreground;
         let mut dock = div()
             .id("export-dock")
             .h(px(self.dock_height))
@@ -3429,20 +3990,44 @@ impl Creditia {
             };
             let id = id.to_string();
             let chosen = self.export_format == id;
+            let drop_format = id.clone();
             let disabled =
                 id == "gif" && self.selected_piece().is_none_or(|p| p["animated"] != true);
             buttons = buttons.child(
-                Button::new(("format", index))
-                    .ghost()
-                    .label(id.to_uppercase())
-                    .when(chosen, |button| button.bg(cx.theme().muted))
-                    .disabled(disabled)
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        view.export_format = id.clone();
-                        view.preferences.export_format = id.clone();
-                        view.persist();
-                        cx.notify();
-                    })),
+                div()
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(move |view, _, window, cx| {
+                            if !disabled
+                                && view
+                                    .drag
+                                    .as_ref()
+                                    .is_some_and(|drag| drag.moved && drag.tile.is_some())
+                            {
+                                if let Some(drag) = view.drag.take() {
+                                    view.selected_tile = drag.tile;
+                                }
+                                view.export_format = drop_format.clone();
+                                view.preferences.export_format = drop_format.clone();
+                                view.persist();
+                                view.export_artwork(&ExportArtwork, window, cx);
+                                cx.stop_propagation();
+                            }
+                        }),
+                    )
+                    .child(
+                        Button::new(("format", index))
+                            .ghost()
+                            .label(id.to_uppercase())
+                            .when(chosen, |button| button.bg(cx.theme().muted))
+                            .disabled(disabled)
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                view.export_format = id.clone();
+                                view.preferences.export_format = id.clone();
+                                view.persist();
+                                cx.notify();
+                            })),
+                    ),
             );
         }
         let mut sizes = div().flex().flex_wrap().gap_1();
@@ -3872,6 +4457,22 @@ impl Creditia {
                 }
             }
             Panel::Settings => {
+                if let Some(error) = &self.migration_error {
+                    body = body.child(div().text_sm().child(error.clone())).child(
+                        Button::new("retry-settings-migration")
+                            .label(if self.migration_busy {
+                                self.text("正在导入…", "Importing…")
+                            } else {
+                                self.text(
+                                    "重新导入原有桌面设置",
+                                    "Import previous desktop settings again",
+                                )
+                            })
+                            .disabled(self.migration_busy)
+                            .on_click(cx.listener(|view, _, _, cx| view.retry_migration(cx))),
+                    );
+                }
+
                 body = body
                     .child(
                         Button::new("language")
@@ -4078,6 +4679,43 @@ impl Creditia {
                 )));
             }
             Panel::Project => {
+                body = body.child(
+                    div()
+                        .flex()
+                        .gap_2()
+                        .child(
+                            Button::new("analyze")
+                                .ghost()
+                                .icon(crate::ui_icons::icon("refresh"))
+                                .label(self.text("重新分析", "Analyze"))
+                                .disabled(
+                                    self.job_busy
+                                        || self.automatic_job.is_some()
+                                        || self.current().is_none_or(|project| !project.exists),
+                                )
+                                .on_click(cx.listener(|view, _, _, cx| view.start_job(None, cx))),
+                        )
+                        .child(
+                            Button::new("copy")
+                                .ghost()
+                                .icon(crate::ui_icons::icon("copy"))
+                                .label(self.text("复制档案", "Copy archive"))
+                                .disabled(self.raw.is_none())
+                                .on_click(cx.listener(|view, _, window, cx| {
+                                    view.copy_archive(&CopyArchive, window, cx)
+                                })),
+                        )
+                        .child(
+                            Button::new("details")
+                                .ghost()
+                                .icon(crate::ui_icons::icon("info"))
+                                .label(self.text("证据", "Evidence"))
+                                .disabled(self.raw.is_none())
+                                .on_click(cx.listener(|view, _, window, cx| {
+                                    view.open_panel(Panel::Details, window, cx)
+                                })),
+                        ),
+                );
                 if let Some(project) = self.current() {
                     body = body
                         .child(div().text_lg().child(project.name.clone()))
@@ -4393,11 +5031,20 @@ impl Creditia {
 }
 impl Creditia {
     pub fn diagnostic_state(&self) -> Value {
-        json!({"view":self.preferences.view,"focused":self.focused,"group":self.group(),"named":self.preferences.named,"selected_tile":self.selected_tile,"selected_piece":self.current_tile().map(|t|t.spec.piece.clone()),"selected_variant":self.current_tile().and_then(|t|t.spec.variant.clone()),"zoom":self.viewport.zoom,"pan_x":self.viewport.x,"pan_y":self.viewport.y,"tile_count":self.tiles.len(),"style":self.preferences.style,"playing":self.playback.as_ref().is_some_and(|p|p.playing),"loading":self.loading,"panel":self.panel.map(|p|match p{Panel::Projects=>"projects",Panel::Styles=>"styles",Panel::Pieces=>"pieces",Panel::Layouts=>"layouts",Panel::Diagnostics=>"diagnostics",Panel::Blame=>"blame",Panel::Exports=>"exports",Panel::Settings=>"settings",Panel::Project=>"project",Panel::Details=>"details"})})
+        let focused_art = self
+            .focused
+            .then(|| self.current_tile().and_then(|tile| tile.art.as_deref()))
+            .flatten();
+        json!({"selected_id":self.current_tile().map(|tile| tile.identity.clone()),"art_width":focused_art.map(|art|art.w),"art_height":focused_art.map(|art|art.h),"hit_count":focused_art.map(|art|art.hits.len()),"view":self.preferences.view,"focused":self.focused,"group":self.group(),"named":self.preferences.named,"selected_tile":self.selected_tile,"selected_piece":self.current_tile().map(|t|t.spec.piece.clone()),"selected_variant":self.current_tile().and_then(|t|t.spec.variant.clone()),"zoom":self.viewport.zoom,"pan_x":self.viewport.x,"pan_y":self.viewport.y,"tile_count":self.tiles.len(),"style":self.preferences.style,"playing":self.playback.as_ref().is_some_and(|p|p.playing),"loading":self.loading,"panel":self.panel.map(|p|match p{Panel::Projects=>"projects",Panel::Styles=>"styles",Panel::Pieces=>"pieces",Panel::Layouts=>"layouts",Panel::Diagnostics=>"diagnostics",Panel::Blame=>"blame",Panel::Exports=>"exports",Panel::Settings=>"settings",Panel::Project=>"project",Panel::Details=>"details"})})
     }
 }
 impl Render for Creditia {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.panel.is_none() && !self.panel_closing {
+            if let Some(focus) = self.return_focus.take() {
+                focus.focus(window, cx);
+            }
+        }
         if self.panel == Some(Panel::Project)
             && self.details.is_some()
             && self.sign_loaded_for != self.selected
@@ -4411,6 +5058,7 @@ impl Render for Creditia {
             self.sign_input = cx.new(|cx| InputState::new(window, cx).default_value(sign));
             self.sign_loaded_for = self.selected.clone();
         }
+        self.display_scale = window.scale_factor();
         let width: f32 = window.viewport_size().width.into();
         let height: f32 = window.viewport_size().height.into();
         let target = if self.export_open { 148. } else { 0. };
@@ -4471,11 +5119,11 @@ impl Render for Creditia {
             ) {
             24.
         } else {
-            8.
+            0.
         };
         self.compute_layout(
             width.max(300.),
-            (height - 60. - 56. - status_height - dock_height).max(200.),
+            (height - 60. - status_height - dock_height).max(200.),
             cx,
         );
         if !self.fixture {
@@ -4510,7 +5158,7 @@ impl Render for Creditia {
             }
         }
         if let Some(background) = &self.background {
-            background.set_active(window.is_window_active());
+            background.set_active(window.is_window_active() && self.window_visible);
         }
         let animation_visible = self.selected_tile.is_some_and(|index| {
             self.screen_rect(index).intersects(Rect {
@@ -4520,12 +5168,32 @@ impl Render for Creditia {
                 h: self.viewport_size.1,
             })
         });
+        if animation_visible
+            && self.focused
+            && self.panel.is_none()
+            && window.is_window_active()
+            && self.window_visible
+        {
+            self.prepare_playback_images(window, cx);
+        }
+        if let Some(control) = &self.animation_control {
+            control.set_visible(
+                animation_visible
+                    && self.focused
+                    && self.panel.is_none()
+                    && window.is_window_active()
+                    && self.window_visible,
+            );
+            control.set_viewport(self.viewport, self.viewport_size, self.display_scale);
+        }
         if let Some(play) = &mut self.playback {
             if play.playing
+                && play.started_once
                 && animation_visible
                 && self.focused
                 && self.panel.is_none()
                 && window.is_window_active()
+                && self.window_visible
                 && !self.preferences.reduced_motion
             {
                 play.elapsed = play.started.elapsed();
@@ -4535,7 +5203,12 @@ impl Render for Creditia {
                 if let Some(control) = &self.animation_control {
                     control.set_playhead(desired);
                 }
-                if let Some((&index, _)) = play.frames.range(..=desired).next_back() {
+                if let Some((&index, _)) = play
+                    .frames
+                    .range(..=desired)
+                    .rev()
+                    .find(|(_, frame)| frame.ready)
+                {
                     play.index = index;
                 }
                 if !play.timeline.repeat
@@ -4553,6 +5226,7 @@ impl Render for Creditia {
             } else if play.playing
                 && (!animation_visible
                     || !window.is_window_active()
+                    || !self.window_visible
                     || self.panel.is_some()
                     || self.preferences.reduced_motion)
             {
@@ -4574,7 +5248,8 @@ impl Render for Creditia {
 
         if telemetry_enabled() {
             let mut state = self.diagnostic_state();
-            state["active"] = json!(window.is_window_active());
+            state["active"] = json!(window.is_window_active() && self.window_visible);
+            state["visible"] = json!(self.window_visible);
             state["ready"] = json!(self.ready_emitted);
             state["focus_ready"] = json!(self.focused && self.fixture_images_ready(window, cx));
             let visible = Rect {
@@ -4606,9 +5281,9 @@ impl Render for Creditia {
             0xEFEFED
         });
         let glass = rgba(if cx.theme().is_dark() {
-            0x1E1E1ECC
+            0x1E1E1E8C
         } else {
-            0xFFFFFFCC
+            0xFFFFFF94
         });
         let fg = cx.theme().foreground;
         let muted = cx.theme().muted_foreground;
@@ -4620,6 +5295,10 @@ impl Render for Creditia {
                 .map(|p| p.name.clone())
                 .unwrap_or_else(|| self.text("项目作品库", "Project library").into())
         };
+        let style_dot = self
+            .style()
+            .and_then(|style| style["dot"].as_str())
+            .map(style_dot);
         let style_name = self
             .style()
             .and_then(|s| {
@@ -4642,10 +5321,14 @@ impl Render for Creditia {
             .border_1()
             .border_color(border);
         let group = self.group();
+        let group = if group == "auto" {
+            "tool"
+        } else {
+            group.as_str()
+        };
         for (id, label) in [
-            ("auto", self.text("自动", "Auto")),
-            ("tool", self.text("工具", "Tools")),
-            ("model", self.text("模型", "Models")),
+            ("tool", self.text("按工具", "By tool")),
+            ("model", self.text("按模型", "By model")),
         ] {
             let element = match id {
                 "auto" => "group-auto",
@@ -4656,6 +5339,9 @@ impl Render for Creditia {
                 Button::new(element)
                     .ghost()
                     .label(label)
+                    .h(px(30.))
+                    .rounded_full()
+                    .text_size(px(12.))
                     .when(group == id, |b| b.bg(cx.theme().muted))
                     .on_click(cx.listener(move |view, _, _, cx| view.set_group(id, cx))),
             );
@@ -4664,7 +5350,12 @@ impl Render for Creditia {
             .child(
                 Button::new("wall")
                     .ghost()
-                    .label(self.text("展墙", "Wall"))
+                    .w(px(30.))
+                    .h(px(30.))
+                    .rounded_full()
+                    .icon(crate::ui_icons::icon("wall"))
+                    .accessibility_label(self.text("展墙", "Wall"))
+                    .tooltip(self.text("展墙", "Wall"))
                     .when(self.preferences.view == "wall" && !self.focused, |b| {
                         b.bg(cx.theme().muted)
                     })
@@ -4673,25 +5364,26 @@ impl Render for Creditia {
             .child(
                 Button::new("roam")
                     .ghost()
-                    .label(self.text("漫游", "Roam"))
+                    .w(px(30.))
+                    .h(px(30.))
+                    .rounded_full()
+                    .icon(crate::ui_icons::icon("roam"))
+                    .accessibility_label(self.text("漫游", "Roam"))
+                    .tooltip(self.text("漫游", "Roam"))
                     .when(self.preferences.view == "roam" && !self.focused, |b| {
                         b.bg(cx.theme().muted)
                     })
                     .on_click(cx.listener(|view, _, _, cx| view.set_view("roam", cx))),
             )
             .child(
-                Button::new("open-export-dock")
-                    .ghost()
-                    .label(self.text("导出", "Export"))
-                    .on_click(cx.listener(|view, _, _, cx| {
-                        view.export_open = !view.export_open;
-                        cx.notify();
-                    })),
-            )
-            .child(
                 Button::new("settings")
                     .ghost()
-                    .label(self.text("设置", "Settings"))
+                    .w(px(30.))
+                    .h(px(30.))
+                    .rounded_full()
+                    .icon(crate::ui_icons::icon("gear"))
+                    .accessibility_label(self.text("设置", "Settings"))
+                    .tooltip(self.text("设置", "Settings"))
                     .on_click(cx.listener(|view, _, window, cx| {
                         view.open_panel(Panel::Settings, window, cx)
                     })),
@@ -4716,14 +5408,14 @@ impl Render for Creditia {
                 self.loading || self.job_busy || self.automatic_job.is_some(),
                 self.error.is_some(),
                 self.preferences.reduced_motion,
-                24.,
+                20.,
                 window,
                 cx,
             )
         } else {
             img(self.logo_image.clone())
-                .w(px(24.))
-                .h(px(24.))
+                .w(px(20.))
+                .h(px(20.))
                 .into_any_element()
         };
         let toolbar = div()
@@ -4732,15 +5424,25 @@ impl Render for Creditia {
             .flex()
             .items_center()
             .gap_2()
-            .px_5()
+            .pl(px(if cfg!(target_os = "macos") { 84. } else { 58. }))
+            .pr_4()
             .child(mark)
-            .child(Button::new("switch-project").ghost().label(title).on_click(
-                cx.listener(|view, _, window, cx| view.open_panel(Panel::Projects, window, cx)),
-            ))
+            .child(
+                Button::new("switch-project")
+                    .ghost()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_size(px(15.))
+                    .label(title)
+                    .on_click(cx.listener(|view, _, window, cx| {
+                        view.open_panel(Panel::Projects, window, cx)
+                    })),
+            )
             .child(
                 Button::new("project-settings")
                     .ghost()
-                    .label("⋯")
+                    .icon(crate::ui_icons::icon("more"))
+                    .accessibility_label(self.text("项目设置", "Project settings"))
+                    .tooltip(self.text("项目设置", "Project settings"))
                     .disabled(
                         self.selected.is_none() || self.selected.as_deref() == Some("__all__"),
                     )
@@ -4750,85 +5452,109 @@ impl Render for Creditia {
             )
             .child(div().flex_1())
             .child(tools);
-        let mut controls =
+        let toolbar = if self.focused {
+            let title = self
+                .current_tile()
+                .and_then(|tile| self.piece(&tile.spec.piece))
+                .and_then(|piece| {
+                    piece[if self.preferences.language == Language::En {
+                        "en"
+                    } else {
+                        "name"
+                    }]
+                    .as_str()
+                })
+                .unwrap_or("");
             div()
-                .id("view-controls")
-                .h(px(56.))
+                .h(px(60.))
                 .flex_shrink_0()
                 .flex()
                 .items_center()
-                .gap_1()
-                .px_4()
+                .pl(px(if cfg!(target_os = "macos") { 94. } else { 60. }))
+                .pr_4()
                 .child(
                     div()
-                        .flex()
-                        .items_center()
-                        .p_1()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_size(px(15.))
+                        .child(title.to_string()),
+                )
+                .child(div().flex_1())
+                .child(
+                    Button::new("focus-close-top")
+                        .ghost()
                         .rounded_full()
                         .bg(glass)
-                        .border_1()
-                        .border_color(border)
-                        .child(
-                            Button::new("style-previous")
-                                .ghost()
-                                .label("‹")
-                                .on_click(cx.listener(|view, _, _, cx| view.step_style(-1, cx))),
-                        )
-                        .child(Button::new("styles").ghost().label(style_name).on_click(
-                            cx.listener(|view, _, window, cx| {
+                        .icon(crate::ui_icons::icon("close"))
+                        .accessibility_label(self.text("返回展览", "Return to exhibition"))
+                        .tooltip(self.text("返回展览", "Return to exhibition"))
+                        .on_click(cx.listener(|view, _, _, cx| view.close_focus(cx))),
+                )
+                .into_any_element()
+        } else {
+            toolbar.into_any_element()
+        };
+        let mut controls = div()
+            .id("view-controls")
+            .absolute()
+            .left_0()
+            .right_0()
+            .bottom(px(status_height + dock_height + 16.))
+            .h(px(40.))
+            .flex()
+            .items_center()
+            .gap_1()
+            .px_4()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .p_1()
+                    .rounded_full()
+                    .bg(glass)
+                    .border_1()
+                    .border_color(border)
+                    .child(
+                        Button::new("style-previous")
+                            .ghost()
+                            .icon(crate::ui_icons::icon("prev"))
+                            .accessibility_label(self.text("上一种风格", "Previous style"))
+                            .tooltip(self.text("上一种风格", "Previous style"))
+                            .on_click(cx.listener(|view, _, _, cx| view.step_style(-1, cx))),
+                    )
+                    .child(
+                        Button::new("styles")
+                            .ghost()
+                            .when_some(style_dot, |button, dot| {
+                                button.child(img(dot).w(px(18.)).h(px(18.)))
+                            })
+                            .label(style_name)
+                            .on_click(cx.listener(|view, _, window, cx| {
                                 view.open_panel(Panel::Styles, window, cx)
-                            }),
-                        ))
-                        .child(
-                            Button::new("style-next")
-                                .ghost()
-                                .label("›")
-                                .on_click(cx.listener(|view, _, _, cx| view.step_style(1, cx))),
-                        ),
-                )
-                .child(
-                    Button::new("pieces")
-                        .ghost()
-                        .label(self.text("作品", "Artworks"))
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.open_panel(Panel::Pieces, window, cx)
-                        })),
-                )
-                .child(div().flex_1());
-        if !self.focused {
-            controls = controls
-                .child(
-                    Button::new("analyze")
-                        .ghost()
-                        .label(self.text("重新分析", "Analyze"))
-                        .disabled(
-                            self.job_busy
-                                || self.automatic_job.is_some()
-                                || self.current().is_none_or(|p| !p.exists),
-                        )
-                        .on_click(cx.listener(|view, _, _, cx| view.start_job(None, cx))),
-                )
-                .child(
-                    Button::new("copy")
-                        .ghost()
-                        .label(self.text("复制档案", "Copy archive"))
-                        .disabled(self.raw.is_none())
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.copy_archive(&CopyArchive, window, cx)
-                        })),
-                )
-                .child(
-                    Button::new("details")
-                        .ghost()
-                        .label(self.text("证据", "Evidence"))
-                        .disabled(self.raw.is_none())
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.open_panel(Panel::Details, window, cx)
-                        })),
-                );
-        }
+                            })),
+                    )
+                    .child(
+                        Button::new("style-next")
+                            .ghost()
+                            .icon(crate::ui_icons::icon("next"))
+                            .accessibility_label(self.text("下一种风格", "Next style"))
+                            .tooltip(self.text("下一种风格", "Next style"))
+                            .on_click(cx.listener(|view, _, _, cx| view.step_style(1, cx))),
+                    ),
+            )
+            .child(
+                Button::new("pieces")
+                    .ghost()
+                    .icon(crate::ui_icons::icon("more"))
+                    .accessibility_label(self.text("作品", "Artworks"))
+                    .tooltip(self.text("作品", "Artworks"))
+                    .on_click(cx.listener(|view, _, window, cx| {
+                        view.open_panel(Panel::Pieces, window, cx)
+                    })),
+            )
+            .when(!self.focused, |controls| controls.child(div().flex_1()));
         if self.focused {
             controls = controls
+                .justify_center()
                 .child(
                     Button::new("layouts")
                         .ghost()
@@ -4840,14 +5566,22 @@ impl Render for Creditia {
                 .child(
                     Button::new("previous-piece")
                         .ghost()
-                        .label("←")
-                        .on_click(cx.listener(|view, _, _, cx| view.move_piece(-1, cx))),
+                        .icon(crate::ui_icons::icon("prev"))
+                        .accessibility_label(self.text("上一件作品", "Previous artwork"))
+                        .tooltip(self.text("上一件作品", "Previous artwork"))
+                        .on_click(
+                            cx.listener(|view, _, _, cx| view.keyboard_navigation(false, -1, cx)),
+                        ),
                 )
                 .child(
                     Button::new("next-piece")
                         .ghost()
-                        .label("→")
-                        .on_click(cx.listener(|view, _, _, cx| view.move_piece(1, cx))),
+                        .icon(crate::ui_icons::icon("next"))
+                        .accessibility_label(self.text("下一件作品", "Next artwork"))
+                        .tooltip(self.text("下一件作品", "Next artwork"))
+                        .on_click(
+                            cx.listener(|view, _, _, cx| view.keyboard_navigation(false, 1, cx)),
+                        ),
                 )
                 .child(
                     Button::new("play")
@@ -4866,14 +5600,18 @@ impl Render for Creditia {
                 .child(
                     Button::new("replay")
                         .ghost()
-                        .label("↻")
+                        .icon(crate::ui_icons::icon("refresh"))
+                        .accessibility_label(self.text("重播", "Replay"))
+                        .tooltip(self.text("重播", "Replay"))
                         .disabled(self.animation_busy)
                         .on_click(cx.listener(|view, _, _, cx| view.play(true, cx))),
                 )
                 .child(
                     Button::new("focus-close")
                         .ghost()
-                        .label("×")
+                        .icon(crate::ui_icons::icon("close"))
+                        .accessibility_label(self.text("返回展览", "Return to exhibition"))
+                        .tooltip(self.text("返回展览", "Return to exhibition"))
                         .on_click(cx.listener(|view, _, _, cx| {
                             view.close_focus(cx);
                         })),
@@ -4892,8 +5630,7 @@ impl Render for Creditia {
                         .ghost()
                         .label(format!("{}%", (self.viewport.zoom * 100.).round() as i32))
                         .on_click(cx.listener(|view, _, _, cx| {
-                            view.viewport.reset();
-                            cx.notify();
+                            view.reset_viewport(cx);
                         })),
                 )
                 .child(
@@ -4914,7 +5651,6 @@ impl Render for Creditia {
             .text_color(muted);
         if let Some(stage) = self.export_stage {
             let label = match stage {
-                ExportStage::ChoosePath => self.text("选择保存位置…", "Choose a save location…"),
                 ExportStage::Rendering => self.text("正在导出…", "Exporting…"),
                 ExportStage::Writing => self.text("正在保存…", "Saving…"),
             };
@@ -4990,6 +5726,37 @@ impl Render for Creditia {
         let stage = self.render_stage(window, cx);
         let export = self.render_export_dock(cx);
         let modal = self.render_panel(cx);
+        let ghost = self
+            .drag
+            .as_ref()
+            .filter(|drag| drag.moved)
+            .and_then(|drag| {
+                let tile = self.tiles.get(drag.tile?)?;
+                let image = tile.image.clone()?;
+                let art = tile.art.as_ref()?;
+                if tile.image_region.is_some() {
+                    return None;
+                }
+                let source = drag.source?;
+                let in_dock = self.pointer.1 >= self.viewport_size.1;
+                let width = art.w.min(if in_dock { 120. } else { 240. });
+                let height = width * art.h / art.w;
+                let fx = ((drag.start.0 - source.x) / source.w).clamp(0., 1.);
+                let fy = ((drag.start.1 - source.y) / source.h).clamp(0., 1.);
+                Some(
+                    div()
+                        .absolute()
+                        .left(px(self.pointer.0 - width * fx))
+                        .top(px(60. + self.pointer.1 - height * fy))
+                        .w(px(width))
+                        .h(px(height))
+                        .rounded_lg()
+                        .overflow_hidden()
+                        .opacity(0.92)
+                        .child(img(image).size_full().object_fit(ObjectFit::Contain))
+                        .into_any_element(),
+                )
+            });
         div()
             .relative()
             .size_full()
@@ -5031,13 +5798,31 @@ impl Render for Creditia {
             .on_action(cx.listener(|view, _: &ZoomIn, _, cx| view.zoom(1.2, cx)))
             .on_action(cx.listener(|view, _: &ZoomOut, _, cx| view.zoom(1. / 1.2, cx)))
             .on_action(cx.listener(|view, _: &ResetZoom, _, cx| {
-                view.viewport.reset();
-                cx.notify();
+                view.reset_viewport(cx);
             }))
             .on_action(cx.listener(|view, _: &Play, _, cx| view.play(false, cx)))
             .on_action(cx.listener(|view, _: &Replay, _, cx| view.play(true, cx)))
-            .on_action(cx.listener(|view, _: &PreviousPiece, _, cx| view.move_piece(-1, cx)))
-            .on_action(cx.listener(|view, _: &NextPiece, _, cx| view.move_piece(1, cx)))
+            .on_action(
+                cx.listener(|view, _: &PreviousLayout, _, cx| {
+                    view.keyboard_navigation(true, -1, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|view, _: &NextLayout, _, cx| view.keyboard_navigation(true, 1, cx)),
+            )
+            .on_action(
+                cx.listener(|view, _: &PreviousPiece, _, cx| {
+                    view.keyboard_navigation(false, -1, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|view, _: &NextPiece, _, cx| view.keyboard_navigation(false, 1, cx)),
+            )
+            .on_action(cx.listener(|view, _: &FocusArtwork, _, cx| {
+                if let Some(index) = view.selected_tile {
+                    view.select_tile(index, true, cx);
+                }
+            }))
             .on_mouse_move(cx.listener(|view, event, _, cx| view.pointer_move(event, cx)))
             .on_mouse_up(
                 MouseButton::Left,
@@ -5052,9 +5837,23 @@ impl Render for Creditia {
                     .child(toolbar)
                     .child(div().flex_1().min_h_0().child(stage))
                     .child(export)
-                    .child(controls)
                     .child(status),
             )
+            .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .right_0()
+                    .bottom_0()
+                    .h(px(80.))
+                    .child(
+                        img(bottom_fade(cx.theme().is_dark()))
+                            .size_full()
+                            .object_fit(ObjectFit::Fill),
+                    ),
+            )
+            .child(controls)
+            .children(ghost)
             .children(modal)
     }
 }
@@ -5223,9 +6022,14 @@ fn key_bindings(modifier: &str) -> Vec<KeyBinding> {
         KeyBinding::new(shortcut("="), ZoomIn, Some("Creditia")),
         KeyBinding::new(shortcut("-"), ZoomOut, Some("Creditia")),
         KeyBinding::new(shortcut("0"), ResetZoom, Some("Creditia")),
+        KeyBinding::new("home", ResetZoom, Some("Creditia && !CreditiaModal")),
+        KeyBinding::new("0", ResetZoom, Some("Creditia && !CreditiaModal")),
+        KeyBinding::new("up", PreviousPiece, Some("Creditia && !CreditiaModal")),
+        KeyBinding::new("down", NextPiece, Some("Creditia && !CreditiaModal")),
+        KeyBinding::new("enter", FocusArtwork, Some("Creditia && !CreditiaModal")),
         KeyBinding::new("space", Play, Some("Creditia && !CreditiaModal")),
-        KeyBinding::new("left", PreviousPiece, Some("Creditia && !CreditiaModal")),
-        KeyBinding::new("right", NextPiece, Some("Creditia && !CreditiaModal")),
+        KeyBinding::new("left", PreviousLayout, Some("Creditia && !CreditiaModal")),
+        KeyBinding::new("right", NextLayout, Some("Creditia && !CreditiaModal")),
     ]
 }
 pub fn init_fonts(cx: &mut App) -> Result<(), String> {
@@ -5390,6 +6194,26 @@ fn write_performance_event(mut event: Value) {
     }
 }
 
+fn style_dot(svg: &str) -> Arc<Image> {
+    static DOTS: std::sync::OnceLock<std::sync::Mutex<BTreeMap<String, Arc<Image>>>> =
+        std::sync::OnceLock::new();
+    let mut dots = DOTS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    dots.entry(svg.to_string()).or_insert_with(|| Arc::new(Image::from_bytes(ImageFormat::Svg, format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">{svg}</svg>"#).into_bytes()))).clone()
+}
+
+fn bottom_fade(dark: bool) -> Arc<Image> {
+    static LIGHT: std::sync::OnceLock<Arc<Image>> = std::sync::OnceLock::new();
+    static DARK: std::sync::OnceLock<Arc<Image>> = std::sync::OnceLock::new();
+    (if dark { &DARK } else { &LIGHT }).get_or_init(|| {
+        let color = if dark { "#0A0A0A" } else { "#EFEFED" };
+        let svg = format!(r##"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="80"><defs><linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop stop-color="{color}" stop-opacity="0"/><stop offset="1" stop-color="{color}" stop-opacity=".88"/></linearGradient></defs><path fill="url(#fade)" d="M0 0h4v80H0z"/></svg>"##);
+        Arc::new(Image::from_bytes(ImageFormat::Svg, svg.into_bytes()))
+    }).clone()
+}
+
 fn logo_image(id: &str) -> Arc<Image> {
     let svg = match id {
         "star-mono" => include_str!("../../../packages/render/assets/creditia/logo-star-mono.svg"),
@@ -5429,7 +6253,7 @@ mod input_tests {
     #[test]
     fn all_shortcuts_parse_on_both_platform_families() {
         for modifier in ["cmd", "ctrl"] {
-            assert_eq!(key_bindings(modifier).len(), 20);
+            assert_eq!(key_bindings(modifier).len(), 25);
         }
     }
 }

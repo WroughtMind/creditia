@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { sha256 } from './common.mjs';
+import { sha256, caseKey } from './common.mjs';
 
 /** Derived fixtures are explicitly synthetic, even when derived from a real archive. */
 export function fixtureCases(filename, kind = 'synthetic_render_sample') {
@@ -32,3 +32,13 @@ export const preferences = [
   { id: 'zh-model-private', lang: 'zh', group: 'model', named: false },
   { id: 'en-model-named', lang: 'en', group: 'model', named: true },
 ];
+
+/** Exact production protocol inputs shared by render, native and browser catalogs. */
+export function requestFor(row, raw, pref) {
+  const context = contexts(raw);
+  return { version: 1, id: caseKey(row), op: 'render', renderer: row.renderer, style: row.style,
+    piece: row.piece, variant: row.variant === 'default' ? undefined : row.variant,
+    raw, lang: pref.lang, group: pref.group, named: pref.named,
+    ...(row.piece === 'profile' ? { projects: context.projects, person: context.person } : {}),
+    ...(row.piece === 'blame' ? { blame: context.blame } : {}) };
+}

@@ -5,9 +5,13 @@ import type { Art } from '../../render/src/export.ts';
 import { timeAt, type Animation } from '../../render/src/timeline.ts';
 import { renderWeb } from './backend.ts';
 
+/** The same immutable archive and optional context accepted by the shared renderer. */
+export interface ArtworkSource { raw: unknown; projects?: unknown[]; person?: string; blame?: unknown }
+
 class CreditiaCard extends HTMLElement {
   static observedAttributes = ['src', 'piece', 'form', 'theme', 'renderer', 'variant', 'lang', 'group', 'named', 'sign', 'transparent', 'animated'];
   private raw: unknown;
+  private source: ArtworkSource | null = null;
   private generation = 0;
   private loading: AbortController | null = null;
   private off: (() => void) | null = null;
@@ -39,7 +43,7 @@ class CreditiaCard extends HTMLElement {
     this.observer.observe(this);
     document.addEventListener('visibilitychange', this.activity);
     this.media.addEventListener('change', this.reduced);
-    void this.load();
+    if (this.source) void this.paint(); else void this.load();
   }
   disconnectedCallback() {
     this.generation++; this.loading?.abort(); this.stop(); this.off?.();
@@ -52,10 +56,27 @@ class CreditiaCard extends HTMLElement {
     if (name === 'src') void this.load(); else void this.paint();
   }
   private language() { return this.getAttribute('lang') === 'en' ? 'en' : 'zh'; }
+  /** Assign data before connecting, or replace it while the card is displayed. */
+  set data(value: ArtworkSource | null) {
+    let source: ArtworkSource | null = null;
+    if (value !== null) {
+      const encoded = JSON.stringify(value);
+      if (!encoded || new TextEncoder().encode(encoded).byteLength > 32 * 1024 * 1024) throw new Error('Artwork source exceeds 32 MiB');
+      source = JSON.parse(encoded);
+      if (!source?.raw || typeof source.raw !== 'object' || Array.isArray(source.raw)) throw new Error('Invalid credits archive');
+      if (source.projects !== undefined && !Array.isArray(source.projects)) throw new Error('Invalid project archives');
+    }
+    this.generation++; this.loading?.abort(); this.stop();
+    this.source = source; this.raw = source?.raw;
+    if (this.isConnected) { if (source) void this.paint(); else void this.load(); }
+  }
   private selection() {
     const style = this.getAttribute('theme') || 'minimal', group = this.getAttribute('group');
     return {
-      raw: this.raw, style, renderer: this.getAttribute('renderer') || (styleById(style) ? 'svg' : 'classic'),
+      raw: this.raw, ...(this.source?.projects ? { projects: this.source.projects } : {}),
+      ...(this.source?.person ? { person: this.source.person } : {}),
+      ...(this.source?.blame ? { blame: this.source.blame } : {}),
+      style, renderer: this.getAttribute('renderer') || (styleById(style) ? 'svg' : 'classic'),
       piece: this.getAttribute('piece') || this.getAttribute('form') || 'tier',
       ...(this.getAttribute('variant') ? { variant: this.getAttribute('variant') } : {}),
       lang: this.language(), group: group === 'tool' || group === 'model' ? group : 'auto',
@@ -65,7 +86,7 @@ class CreditiaCard extends HTMLElement {
   }
   private async load() {
     const version = ++this.generation;
-    this.loading?.abort(); this.stop(); this.raw = null;
+    this.loading?.abort(); this.stop(); this.raw = null; this.source = null;
     const abort = this.loading = new AbortController(); this.setAttribute('aria-busy', 'true');
     try {
       const response = await fetch(this.getAttribute('src') || '/.creditia/credits.json', { signal: abort.signal });
@@ -88,8 +109,10 @@ class CreditiaCard extends HTMLElement {
       const result = await renderWeb({ ...request, op: 'render' });
       if (version !== this.generation || !this.isConnected) return;
       if (!result.art) {
+        this.off?.(); this.off = null; this.artRoot = null; this.control = null;
         this.textContent = this.language() === 'zh' ? '这份档案没有该作品所需的数据' : 'This archive has no data for this artwork';
-        this.setAttribute('aria-busy', 'false'); return;
+        this.setAttribute('aria-busy', 'false');
+        this.dispatchEvent(new CustomEvent('creditia-ready', { detail: { art: null } })); return;
       }
       if (!document.getElementById('creditia-interact')) {
         const css = document.createElement('style'); css.id = 'creditia-interact';
@@ -99,13 +122,13 @@ class CreditiaCard extends HTMLElement {
       this.off?.(); this.replaceChildren();
       this.artRoot = document.createElement('div'); this.artRoot.className = 'ct-art';
       this.artRoot.style.width = '100%'; this.appendChild(this.artRoot);
-      this.control = null; this.show(result.art); this.setAttribute('aria-busy', 'false');
+      this.control = null; this.show(result.displayArt ?? result.art); this.setAttribute('aria-busy', 'false');
       this.dispatchEvent(new CustomEvent('creditia-ready', { detail: { art: result.art } }));
       if (this.hasAttribute('animated')) {
         try {
           const sequence = await renderWeb({ ...request, op: 'frames', frameCount: 48, reducedMotion: this.media.matches });
           if (version !== this.generation || !this.isConnected) return;
-          this.animation = sequence; this.paused = false;
+          this.animation = {...sequence,frames:sequence.displayFrames ?? sequence.frames}; this.paused = false;
           this.control = document.createElement('button'); this.control.className = 'ct-play'; this.control.type = 'button';
           this.control.onclick = () => this.paused ? this.play() : this.pause();
           this.appendChild(this.control); this.updateControl(); this.schedule();

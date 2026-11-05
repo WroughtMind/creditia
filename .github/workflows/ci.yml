@@ -87,12 +87,18 @@ jobs:
         run: |
           npm ci --prefix packages/embed
           npm run build --prefix packages/embed
-          node packages/embed/tools/fixtures.mjs
+          node packages/embed/tools/fixtures.mjs --full
       - name: Exercise the real browser against native artwork and animation output
         run: |
           npm install --prefix "$RUNNER_TEMP/creditia-browser-qa" --no-audit --no-fund playwright@1.62.1
           "$RUNNER_TEMP/creditia-browser-qa/node_modules/.bin/playwright" install --with-deps chromium
           CREDITIA_PLAYWRIGHT_MODULES="$RUNNER_TEMP/creditia-browser-qa/node_modules" node packages/embed/tools/browser-acceptance.mjs
+      - name: Seal full browser catalog evidence
+        run: >-
+          node packaging/gpui-acceptance/browser-evidence.mjs
+          --browser-report packages/embed/browser-evidence/report.json
+          --catalog-root packages/embed/dist/acceptance
+          --candidate-sha "$GITHUB_SHA" --output evidence/browser-catalog
       - name: Retain the web rendering build for browser acceptance
         if: always()
         uses: actions/upload-artifact@v4
@@ -102,6 +108,7 @@ jobs:
             packages/embed/dist
             packages/embed/browser-evidence
             packages/render/fixtures/catnap.json
+            evidence/browser-catalog
           retention-days: 7
 
       - name: Retain exact renderer dependencies for reproducing failed acceptance

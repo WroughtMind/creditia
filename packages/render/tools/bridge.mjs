@@ -9,7 +9,7 @@ export async function serve(input, output, backend) {
   const session = createRenderSession(backend);
   let pending = Buffer.alloc(0), discarding = false;
   async function send(response) {
-    if (!output.write(JSON.stringify(response) + '\n')) await once(output, 'drain');
+    if (!output.write(JSON.stringify({ ...response, runtime: { rssBytes: process.memoryUsage.rss() } }) + '\n')) await once(output, 'drain');
   }
   async function line(bytes) {
     if (!bytes.length || !bytes.toString('utf8').trim()) return;

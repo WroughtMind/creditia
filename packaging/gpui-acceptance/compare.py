@@ -6,12 +6,36 @@ import hashlib
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
 
 HERE = pathlib.Path(__file__).resolve().parent
+
+
+def retain_warmup(source, destination):
+    """Keep the complete warmup proof without treating it as a measurement.
+
+    Relative artifact links in the warmup report still resolve beside that
+    report, while the acceptance collector only discovers manifest.json files.
+    Failed warmups are retained too, before the isolated profile is removed.
+    """
+    artifacts = []
+    source, destination = pathlib.Path(source), pathlib.Path(destination)
+    for original in sorted(source.rglob("*")):
+        if not original.is_file():
+            continue
+        relative = original.relative_to(source)
+        if relative == pathlib.Path("manifest.json"):
+            relative = pathlib.Path("warmup-report.json")
+        target = destination / "warmup" / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(original, target)
+        artifacts.append({"path": target.relative_to(destination).as_posix(),
+                          "sha256": hashlib.sha256(target.read_bytes()).hexdigest(), "bytes": target.stat().st_size})
+    return artifacts
 
 
 def run(args):
@@ -54,17 +78,19 @@ def run(args):
                                 "--styles", "1", "--artworks", str(expected_artworks), "--window", "1360x880", "--dpi", "1",
                                 "--seconds", "180", "--interval", ".25", "--",
                                 *base, "--scenario", selected_scenario, "--", *command]
+                    destination = output / f"{role}-{scenario}-{cache}"
+                    if destination.exists():
+                        raise ValueError(f"Refusing to reuse evidence directory: {destination}")
+                    warmup_artifacts = []
                     if cache == "warm":
                         warmup = profile / "warmup"
                         # Warmup uses the same process-group cleanup as the
                         # measured run; orphan workers must not contaminate it.
                         result = subprocess.run(resource_command(warmup, "startup"), env=env)
+                        warmup_artifacts = retain_warmup(warmup, destination)
                         if result.returncode:
                             failures.append({"role": role, "scenario": scenario, "cache": cache, "phase": "warmup", "exit_code": result.returncode})
                             continue
-                    destination = output / f"{role}-{scenario}-{cache}"
-                    if destination.exists():
-                        raise ValueError(f"Refusing to reuse evidence directory: {destination}")
                     resource = resource_command(destination, scenario)
                     result = subprocess.run(resource, env=env)
                     if result.returncode:
@@ -78,13 +104,7 @@ def run(args):
                             target = destination / "baseline-overlay.json"
                             target.write_bytes(overlay.read_bytes())
                             data["artifacts"].append({"path": target.name, "sha256": hashlib.sha256(target.read_bytes()).hexdigest(), "bytes": target.stat().st_size})
-                        if cache == "warm":
-                            for name in ["events.jsonl", "application-events.jsonl", "manifest.json"]:
-                                original = profile / "warmup" / name
-                                if original.exists():
-                                    target = destination / ("warmup-report.json" if name == "manifest.json" else f"warmup-{name}")
-                                    target.write_bytes(original.read_bytes())
-                                    data["artifacts"].append({"path": target.name, "sha256": hashlib.sha256(target.read_bytes()).hexdigest(), "bytes": target.stat().st_size})
+                        data["artifacts"].extend(warmup_artifacts)
                         manifest.write_text(json.dumps(data, indent=2) + "\n")
                     time.sleep(.3)
     (output / "run-summary.json").write_text(json.dumps({"candidate_sha": args.candidate_sha, "baseline_sha": args.baseline_sha,

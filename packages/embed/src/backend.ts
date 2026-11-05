@@ -4,7 +4,8 @@ import satori, { init } from 'satori/standalone';
 import { dispatchRender, type RenderBackend } from '../../render/src/protocol.ts';
 import { classicArt, classicFrames } from '../../render/src/classic/art.ts';
 import { fontsFor } from '../../render/src/classic/fonts.ts';
-import { referencedFonts } from '../../render/src/fonts.ts';
+import { nativeFonts } from '../../render/src/fonts.ts';
+import { fontKey, portableTextFonts, portableFontBindings } from '../../render/src/portable-text.ts';
 
 interface Face { family: string; weight: number; italic: boolean; file: string }
 const assets = new URL('./', import.meta.url);
@@ -53,32 +54,39 @@ const backend: RenderBackend = {
 
 /** Install the exact font bytes referenced by SVG text before publishing it. */
 async function prepareText(svg: string) {
-  if (!svg.includes('<text')) return;
+  if (!svg.includes('<text')) return svg;
   const all = await faces();
-  const wanted = new Set<Face>();
-  for (const spec of referencedFonts(svg)) {
+  const loaded = new Map<string, ArrayBuffer>();
+  await Promise.all(nativeFonts(svg).map(async spec => {
     const face = all.find(f => f.family === spec.family && f.weight === spec.weight && f.italic === !!spec.italic);
     if (!face) throw new Error(`Missing packaged font: ${spec.family} ${spec.weight}`);
-    wanted.add(face);
-  }
-  await Promise.all([...wanted].map(face => {
-    let pending = browserFonts.get(face.file);
+    loaded.set(fontKey(spec), await bytes(face));
+  }));
+  const display = portableTextFonts(svg,loaded);
+  await Promise.all(portableFontBindings(display).map(binding => {
+    const face = all.find(f => f.family === binding.face.family && f.weight === binding.face.weight && f.italic === !!binding.face.italic);
+    if (!face) throw new Error(`Missing display font: ${binding.family}`);
+    const key = `${binding.family}|${face.file}`;
+    let pending = browserFonts.get(key);
     if (!pending) {
       pending = bytes(face).then(async data => {
-        const font = new FontFace(face.family, data, { weight: String(face.weight), style: face.italic ? 'italic' : 'normal' });
+        const font = new FontFace(binding.family, data, { weight: String(face.weight), style: face.italic ? 'italic' : 'normal' });
         await font.load(); document.fonts.add(font);
-      }).catch(error => { browserFonts.delete(face.file); throw error; });
-      browserFonts.set(face.file, pending);
+      }).catch(error => { browserFonts.delete(key); throw error; });
+      browserFonts.set(key, pending);
     }
     return pending;
   }));
+  return display;
 }
 
 export async function renderWeb(request: Record<string, unknown>) {
   const response = await dispatchRender({ ...request, version: 1, id: 'web', ...(request.op === 'render' ? { flatten: false } : {}) }, backend);
   if (!response.ok) throw new Error(response.error.message);
   const result = response.result as any;
-  if (result.art) await prepareText(result.art.svg);
-  if (result.frames?.length) await prepareText(result.frames[result.frames.length - 1].svg);
+  // Preserve canonical data for hosts and parity checks; display uses the same
+  // resolved fallback faces as native usvg instead of browser font synthesis.
+  if (result.art) result.displayArt = {...result.art, svg:await prepareText(result.art.svg)};
+  if (result.frames?.length) result.displayFrames = await Promise.all(result.frames.map(async (art: any) => ({...art,svg:await prepareText(art.svg)})));
   return result;
 }

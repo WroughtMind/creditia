@@ -101,6 +101,39 @@ def percentile(values, fraction):
     return ordered[min(len(ordered) - 1, round((len(ordered) - 1) * fraction))]
 
 
+def screenshot_proofs(events, output):
+    """Verify painted-window evidence is present and bound to retained PNG files.
+
+    The X11 driver computes the pixel statistics. This verifies those recorded
+    observations and artifact identity, not authenticity against a malicious host.
+    A valid event chain or successful scenario alone does not prove window paint.
+    """
+    verified, errors = {}, []
+    for filename in ["ready.png", "complete.png"]:
+        matches = [event for event in events if event.get("event") == "screenshot" and event.get("path") == filename]
+        if len(matches) != 1:
+            errors.append(f"Expected exactly one painted-window screenshot proof for {filename}")
+            continue
+        event = matches[0]
+        dark, levels = event.get("dark_content_pixels"), event.get("luminance_levels")
+        if (event.get("content_pixels_verified") is not True or type(dark) is not int or dark < 200
+                or type(levels) is not int or levels < 16):
+            errors.append(f"Screenshot {filename} has no verified rendered-content pixels")
+            continue
+        file = pathlib.Path(output) / filename
+        try:
+            if (not file.is_file() or file.stat().st_size <= 0 or file.stat().st_size != event.get("bytes")
+                    or sha256(file) != event.get("image_sha256")):
+                errors.append(f"Screenshot {filename} does not match its recorded file hash and size")
+                continue
+        except OSError as error:
+            errors.append(f"Cannot verify screenshot {filename}: {error}")
+            continue
+        verified[filename] = {"image_sha256": event["image_sha256"], "bytes": event["bytes"],
+                              "dark_content_pixels": dark, "luminance_levels": levels}
+    return {"verified": len(verified) == 2 and not errors, "screenshots": verified, "errors": errors}
+
+
 def run(args):
     command = args.command[1:] if args.command and args.command[0] == "--" else args.command
     if not command:
@@ -211,7 +244,10 @@ def run(args):
     scenario = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(scenario)
     chain_verified = scenario.verify_journal(events)
-    workload_verified = chain_verified and any(event.get("event") == "scenario-complete" and event.get("scenario") == args.scenario
+    screenshots = screenshot_proofs(events, output)
+    if screenshots["errors"]:
+        metadata.setdefault("event_errors", []).extend(screenshots["errors"])
+    workload_verified = chain_verified and screenshots["verified"] and any(event.get("event") == "scenario-complete" and event.get("scenario") == args.scenario
                             and event.get("success") is True for event in events)
     phase_summary = {}
     for phase, begin, end in [("startup", "launch", "ready-observed"), ("idle", "idle-start", "idle-end")]:
@@ -229,11 +265,15 @@ def run(args):
         if actual_count != args.artworks:
             workload_verified = False
             metadata.setdefault("event_errors", []).append(f"Expected {args.artworks} artwork slots, observed {actual_count}")
+    else:
+        workload_verified = False
+        metadata.setdefault("event_errors", []).append("Missing decoded first-viewport observation")
     metadata["provenance"]["workload"]["action_definition"] = "focus-enlargement" if args.scenario == "zoom" else args.scenario
     metadata["provenance"]["workload"]["cache_definition"] = "fresh isolated app profile; OS page cache uncontrolled" if args.cache == "cold" else "same profile after a complete first-viewport launch; process memory reset"
     metadata["provenance"]["driver_sha256"] = sha256(pathlib.Path(__file__).with_name("scenario.py"))
     metadata.update({"completed_at": dt.datetime.now(dt.timezone.utc).isoformat(), "complete": True,
-                     "workload_verified": workload_verified, "event_chain_verified": chain_verified, "phase_summary": phase_summary,
+                     "workload_verified": workload_verified, "event_chain_verified": chain_verified,
+                     "screenshot_content_verified": screenshots["verified"], "screenshot_proofs": screenshots["screenshots"], "phase_summary": phase_summary,
                      "exit_code": process.returncode, "ended_by_sampler": timed_out,
                      "summary": {"sample_count": len(samples), "observed_process_count": len(high_water),
                         "rss_peak_bytes": max(rss, default=0), "rss_p50_bytes": percentile(rss, .5),

@@ -180,7 +180,10 @@ export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, sator
   if (!f) throw new Error(`未知卡片：${id}`);
   const out = f.render(m, t, ctx);
   if (!out) return null;
-  if (ctx.transparent) out.tree.props.style = { ...out.tree.props.style, backgroundColor: 'transparent', backgroundImage: undefined };
+  if (ctx.transparent) {
+    out.tree.props.style = { ...out.tree.props.style, backgroundColor: 'transparent' };
+    delete out.tree.props.style.backgroundImage;
+  }
   if (ctx.fontMode === 'embed') { const draw = satori; satori = (tree, options) => draw(tree, { ...options, embedFont: false }); }
   if (ctx.lang === 'en') enTree(out.tree);
   const seen: Seen[] = [];
@@ -204,7 +207,10 @@ export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, sa
   else {
     const out = f.render(m, t, ctx);
     if (!out) return [];
-    if (ctx.transparent) out.tree.props.style = { ...out.tree.props.style, backgroundColor: 'transparent', backgroundImage: undefined };
+    if (ctx.transparent) {
+      out.tree.props.style = { ...out.tree.props.style, backgroundColor: 'transparent' };
+      delete out.tree.props.style.backgroundImage;
+    }
     if (ctx.lang === 'en') enTree(out.tree);
     await fitted(out, satori, fonts);
     layout = rememberLayout(key, out.tree, out.w, out.h);

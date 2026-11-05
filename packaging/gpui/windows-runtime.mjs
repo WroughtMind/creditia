@@ -5,6 +5,7 @@
 // https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { files } from './package.mjs';
@@ -14,7 +15,7 @@ const args=Object.fromEntries(process.argv.slice(2).reduce((out,arg,i,all)=>i%2?
 if(!args.root||!args.output)throw new Error('Usage: windows-runtime.mjs --root package-directory --output evidence-directory');
 const root=path.resolve(args.root),output=path.resolve(args.output);
 await fs.mkdir(output,{recursive:true});
-const vswhere=path.join(process.env['ProgramFiles(x86)'],'Microsoft Visual Studio/Installer/vswhere.exe');
+const vswhere=path.join(process.env['ProgramFiles(x86)']??'C:\\Program Files (x86)','Microsoft Visual Studio/Installer/vswhere.exe');
 const installations=JSON.parse(execFileSync(vswhere,['-latest','-products','*','-requires','Microsoft.VisualStudio.Component.VC.Tools.x86.x64','-format','json'],{encoding:'utf8'}));
 const installation=installations[0];
 if(!installation)throw new Error('No Visual C++ toolchain installation is available');
@@ -73,7 +74,16 @@ if(bundled.length){
   await fs.writeFile(path.join(licenses,'Microsoft-VC-Runtime-License.docx'),bytes);
   await fs.writeFile(path.join(licenses,'redistribution.txt'),`Microsoft Visual C++ Runtime DLLs, unmodified from the build toolchain release redistributable directory.\n\nLicense source: ${license}\nLicense SHA-256: ${digest(bytes)}\nRedistribution list: https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution\nDeployment documentation: https://learn.microsoft.com/en-us/cpp/windows/determining-which-dlls-to-redistribute\n\nApplication-local runtime copies are updated with the application; retain current security updates when rebuilding.\n`);
 }
-const report={schema_version:1,candidate_sha:process.env.GITHUB_SHA,visual_studio_version:installation.installationVersion,toolset:path.relative(vc,path.dirname(dumpbin)),redist:path.relative(vc,redist),dependencies,bundled,scope:'PE import tables, including delay imports shown by dumpbin; operating-system DLLs remain system dependencies'};
+const resolution=[];
+for(const entry of dependencies)for(const name of entry.imports){
+  if(/^((api|ext)-ms-|api-ms-onecore-)/i.test(name)){resolution.push({importer:entry.path,name,source:'Windows API set'});continue;}
+  const locations=[path.join(path.dirname(path.join(root,entry.path)),name),path.join(root,'resources',name),path.join(root,name),path.join(process.env.SystemRoot,'System32',name)];
+  let found;
+  for(const location of locations){try{await fs.access(location);found=location;break;}catch{}}
+  if(!found)throw new Error(`Unresolved PE dependency ${name} imported by ${entry.path}`);
+  resolution.push({importer:entry.path,name,source:found.startsWith(root)?path.relative(root,found).split(path.sep).join('/'):'Windows System32'});
+}
+const report={schema_version:1,candidate_sha:process.env.GITHUB_SHA,environment:{platform:process.platform,arch:process.arch,os_release:os.release(),os_version:os.version()},visual_studio_version:installation.installationVersion,toolset:path.relative(vc,path.dirname(dumpbin)),redist:path.relative(vc,redist),dependencies,bundled,resolution,scope:'PE import tables, including delay imports shown by dumpbin; operating-system DLLs remain system dependencies'};
 await fs.writeFile(path.join(output,'windows-dependencies.json'),JSON.stringify(report,null,2)+'\n');
 await fs.writeFile(path.join(output,'windows-dependencies.txt'),transcript.join('\n'));
 await fs.writeFile(path.join(root,'resources/licenses/Windows-runtime-provenance.json'),JSON.stringify(report,null,2)+'\n');

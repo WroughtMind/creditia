@@ -43,7 +43,7 @@ const string = (x: unknown, name: string, limit = 128): string =>
 
 /** Bounded, restartable session. Eviction is explicit: clients re-register archives. */
 export class RenderSession {
-  private archives = new Map<string, { raw: any; bytes: number }>();
+  private archives = new Map<string, { raw: any; projects?: any[]; bytes: number }>();
   private archiveBytes = 0;
   private models = new Map<string, any>();
   private pictures = new Map<string, { value: Art | null; bytes: number }>();
@@ -53,11 +53,11 @@ export class RenderSession {
   readonly backend: RenderBackend;
   constructor(backend: RenderBackend) { this.backend = backend; }
   dispatch(input: unknown) { return dispatchRender(input, this.backend, this); }
-  register(id: string, raw: any) {
-    const bytes = encoder.encode(JSON.stringify(raw)).byteLength;
+  register(id: string, raw: any, projects?: any[]) {
+    const bytes = encoder.encode(JSON.stringify({ raw, projects })).byteLength;
     this.release(id);
     while (this.archives.size >= 8 || this.archiveBytes + bytes > 24 * 1024 * 1024) this.release(this.archives.keys().next().value!);
-    this.archives.set(id, { raw: structuredClone(raw), bytes }); this.archiveBytes += bytes;
+    this.archives.set(id, { raw: structuredClone(raw), projects: projects && structuredClone(projects), bytes }); this.archiveBytes += bytes;
   }
   release(id: string) {
     const item = this.archives.get(id); if (!item) return;
@@ -69,6 +69,7 @@ export class RenderSession {
     const item = this.archives.get(id); if (!item) fail('unknown_archive', `Archive was not registered or was evicted: ${id}`);
     this.archives.delete(id); this.archives.set(id, item); return item.raw;
   }
+  projects(id: string) { return this.archives.get(id)?.projects; }
   identity(raw: object) { let id = this.rawIds.get(raw); if (!id) { id = ++this.seq; this.rawIds.set(raw, id); } return id; }
   model(key: string, make: () => any) {
     if (this.models.has(key)) { const value = this.models.get(key); this.models.delete(key); this.models.set(key, value); return value; }
@@ -130,24 +131,24 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
     if (id === null) fail('invalid_request', 'id must be a string or safe integer');
     if (encoder.encode(JSON.stringify(input)).byteLength > MAX_REQUEST_BYTES) fail('request_too_large', 'Request exceeds 8 MiB');
     const op = input.op;
-    const simple: Record<string, string[]> = { catalog: [], status: [], archive: ['archiveId', 'raw'], release: ['archiveId'], merge: ['projects', 'lang'] };
+    const simple: Record<string, string[]> = { catalog: [], status: [], archive: ['archiveId', 'raw', 'projects'], release: ['archiveId'], merge: ['projects', 'lang'] };
     const common = ['style', 'renderer', 'piece', 'variant', 'lang', 'group', 'named', 'sign', 'raw', 'archiveId', 'projects', 'person', 'blame', 'transparent', 'fontMode', 'reducedMotion'];
     const extra = op === 'render' ? ['t', 'flatten'] : op === 'frames' ? ['frameCount', 'flatten'] : op === 'export' ? ['format', 'size', 'frameCount', 'scale', 'width', 'by'] : simple[op];
     if (!extra) fail('invalid_request', 'Unknown operation');
     const allowed = new Set(['version', 'id', 'op', ...(simple[op] ? extra : [...common, ...extra])]);
     for (const key of Object.keys(input)) if (!allowed.has(key)) fail('invalid_request', `Unknown option: ${key}`);
+    if (input.projects !== undefined && (!Array.isArray(input.projects) || input.projects.length > 50 || input.projects.some(p => !object(p)))) fail('invalid_request', 'projects must be at most 50 credits objects');
     if (op === 'catalog') return success(id, renderCatalog());
     if (op === 'status') return success(id, session?.stats() ?? { archives: 0, models: 0, artworks: 0 });
     if (op === 'archive' || op === 'release') {
       if (!session) fail('session_required', 'Archive registration requires a renderer session');
       const archiveId = string(input.archiveId, 'archiveId', 256);
-      if (op === 'archive') { if (!object(input.raw)) fail('invalid_request', 'raw must be an archive object'); session.register(archiveId, input.raw); }
+      if (op === 'archive') { if (!object(input.raw)) fail('invalid_request', 'raw must be an archive object'); session.register(archiveId, input.raw, input.projects); }
       else session.release(archiveId);
       return success(id, { archiveId });
     }
     const lang: Lang = input.lang ?? 'zh';
     if (lang !== 'zh' && lang !== 'en') fail('invalid_request', 'lang must be zh or en');
-    if (input.projects !== undefined && (!Array.isArray(input.projects) || input.projects.length > 50 || input.projects.some(p => !object(p)))) fail('invalid_request', 'projects must be at most 50 credits objects');
     if (op === 'merge') {
       if (!input.projects?.length) fail('missing_data', 'merge requires at least one project');
       return success(id, { raw: mergeCredits(input.projects.map((raw, i) => ({ name: raw.project?.name ?? `Project ${i + 1}`, raw })), lang) });
@@ -155,6 +156,7 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
     if (input.raw !== undefined && input.archiveId !== undefined) fail('invalid_request', 'Use raw or archiveId, not both');
     const raw = input.archiveId !== undefined ? session?.archive(string(input.archiveId, 'archiveId', 256)) : input.raw;
     if (!object(raw)) fail(input.archiveId !== undefined ? 'unknown_archive' : 'invalid_request', 'A registered archive or raw object is required');
+    const projects: any[] | undefined = input.projects ?? (input.archiveId === undefined ? undefined : session?.projects(input.archiveId));
     const group: GroupOpt = input.group ?? 'auto';
     if (!['auto', 'tool', 'model'].includes(group)) fail('invalid_request', 'group must be auto, tool or model');
     const named = input.named ?? true, transparent = input.transparent ?? false, reducedMotion = input.reducedMotion ?? false, flatten = input.flatten ?? false;
@@ -189,7 +191,7 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
     if (t !== undefined && (typeof t !== 'number' || !Number.isFinite(t) || t < 0 || t > 1)) fail('invalid_request', 't must be between 0 and 1');
     if (input.person !== undefined) string(input.person, 'person', 256);
     if (input.blame !== undefined && (!object(input.blame) || typeof input.blame.file !== 'string' || !Number.isSafeInteger(input.blame.line))) fail('invalid_request', 'blame must include file and line');
-    for (const key of piece.requires) if (!input[key] || Array.isArray(input[key]) && !input[key].length) fail('missing_data', `${pieceId} requires ${key}`);
+    for (const key of piece.requires) { const value = key === 'projects' ? projects : input[key]; if (!value || Array.isArray(value) && !value.length) fail('missing_data', `${pieceId} requires ${key}`); }
     const n = input.frameCount ?? 24;
     if (op === 'frames' || op === 'export') {
       if (!Number.isSafeInteger(n) || n < 1 || n > 120) fail('invalid_request', 'frameCount must be from 1 to 120');
@@ -203,10 +205,13 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
     const baseStyle = theme ? bridgeStyle(theme) : STYLES.find(s => s.id === styleId)!;
     const style: Style = transparent ? { ...baseStyle, ground(s) { s.bg = 'transparent'; } } : baseStyle;
     const model = theme ? getModel('|classic', () => classicModel(raw, { director: false, lang, group, named })) : textModel();
-    const ctx: Ctx = { lang, variant, transparent, fontMode, person: input.person, blame: input.blame, projects: input.projects?.map(raw => classicModel(raw, { director: false, lang, group, named })) };
+    const neededProjects = piece.requires.includes('projects') ? projects : undefined;
+    const projectKey = neededProjects?.map(project => session?.identity(project)).join(',');
+    const projectModels = neededProjects && getModel(`|projects:${projectKey}`, () => neededProjects.map(raw => classicModel(raw, { director: false, lang, group, named })));
+    const ctx: Ctx = { lang, variant, transparent, fontMode, person: input.person, blame: input.blame, projects: projectModels };
     const svgModel = theme ? getModel('|bridge', () => buildModel(raw, { lang, group: (model as ClassicModel).group, named, sign })) : model;
     const bridged = !!theme && isBridged(pieceId, variant);
-    const contextKey = session ? JSON.stringify([input.person, input.projects?.map(project => session.identity(project)), input.blame && session.identity(input.blame)]) : '';
+    const contextKey = session ? JSON.stringify([input.person, neededProjects?.map(project => session.identity(project)), input.blame && session.identity(input.blame)]) : '';
     const key = `${modelKey}|${styleEntry.renderer}|${styleId}|${pieceId}|${variant ?? ''}|${transparent}|${fontMode}|${contextKey}`;
     const full = async () => { const result = !theme || bridged ? art(pieceId, svgModel, style, { variant }) : await backend.classicArt(pieceId, model, theme, ctx); return result && transparent ? { ...result, bg: 'transparent' } : result; };
     const original = session ? await session.picture(key, full) : await full();

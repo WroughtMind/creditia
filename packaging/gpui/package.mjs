@@ -181,7 +181,7 @@ export function bridgeRequest(node, bridge, request, cwd, timeout = 90_000) {
 export async function smoke(root, fixture, output) {
   const info = await verify(root), paths = layout(root, info.platform);
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'creditia-packaged-'));
-  const report = { schema_version: 1, kind: 'package', provenance:{candidate_sha: info.commit,fixture:{path:path.basename(fixture),sha256:digest(await fs.readFile(fixture)),kind:'synthetic_render_fixture'}}, platform:`${info.platform}-${process.arch}`,target:info.target,nodeVersion: info.nodeVersion, tests: [],acceptance:{passed:false},complete:false,artifacts:[] };
+  const report = { schema_version: 1, kind: 'package', provenance:{candidate_sha: info.commit,environment:{platform:process.platform,arch:process.arch,os_release:os.release(),os_version:os.version()},fixture:{path:path.basename(fixture),sha256:digest(await fs.readFile(fixture)),kind:'synthetic_render_fixture'}}, platform:`${info.platform}-${process.arch}`,target:info.target,nodeVersion: info.nodeVersion, tests: [],acceptance:{passed:false},complete:false,artifacts:[] };
   const artifact=async(name,bytes)=>{await fs.mkdir(path.dirname(path.join(path.dirname(output),name)),{recursive:true});await fs.writeFile(path.join(path.dirname(output),name),bytes);report.artifacts.push({path:name,bytes:Buffer.byteLength(bytes),sha256:digest(bytes)});};
   try {
     const env = { ...process.env, CREDITIA_HOME: path.join(temporary, 'library') };

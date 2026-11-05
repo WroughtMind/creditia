@@ -21,6 +21,10 @@ const QUEUE_LIMIT: usize = 32;
 const QUEUE_BYTES: usize = 32 * 1024 * 1024;
 const RESULT_CACHE_BYTES: usize = 32 * 1024 * 1024;
 const ARCHIVE_CACHE_BYTES: usize = 16 * 1024 * 1024;
+// Retire only after a complete operation. Native font/WASM allocations cannot
+// safely be freed by deleting live Satori buffer identities. This is a recycling
+// threshold, not a bound on transient memory inside one rendering operation.
+const PREVIEW_RECYCLE_RSS: u64 = 768 * 1024 * 1024;
 
 #[derive(Clone, Default)]
 pub struct Cancellation(Arc<AtomicBool>);
@@ -38,21 +42,41 @@ impl Cancellation {
 #[derive(Clone)]
 pub struct RenderArchive {
     raw: Arc<Value>,
+    projects: Arc<Vec<Value>>,
     bytes: usize,
 }
 impl RenderArchive {
     pub fn new(raw: Arc<Value>) -> Result<Self, String> {
+        Self::with_projects(raw, Arc::new(Vec::new()))
+    }
+    /// Optional profile context belongs to the same immutable snapshot. It is
+    /// registered once per worker generation, not cloned into every frame.
+    pub fn with_projects(raw: Arc<Value>, projects: Arc<Vec<Value>>) -> Result<Self, String> {
         if !raw.is_object() {
             return Err("An artwork archive must be an object".into());
         }
-        let bytes = serde_json::to_vec(raw.as_ref())
+        if projects.len() > 50 || projects.iter().any(|project| !project.is_object()) {
+            return Err("Artwork context must contain at most 50 project archives".into());
+        }
+        let mut bytes = serde_json::to_vec(raw.as_ref())
             .map_err(|error| error.to_string())?
             .len();
+        if !projects.is_empty() {
+            bytes = bytes.saturating_add(
+                serde_json::to_vec(projects.as_ref())
+                    .map_err(|error| error.to_string())?
+                    .len(),
+            );
+        }
         // Leave room for the archive-registration envelope and its native ID.
         if bytes > REQUEST_LIMIT - 256 {
             return Err("Artwork archive exceeds the 8 MiB transport limit".into());
         }
-        Ok(Self { raw, bytes })
+        Ok(Self {
+            raw,
+            projects,
+            bytes,
+        })
     }
 }
 struct OwnedChild {
@@ -407,6 +431,14 @@ fn supervise(receiver: mpsc::Receiver<Job>) {
         );
         if matches!(result, Err(Failure::Transport(_))) {
             session = None;
+        } else if session.as_ref().is_some_and(Session::should_retire) {
+            if let Some(worker) = &session {
+                eprintln!(
+                    "creditia-renderer: retiring completed preview worker at {} MiB RSS",
+                    worker.rss_bytes / (1024 * 1024)
+                );
+            }
+            session = None;
         }
         let _ = job.response.send(result.map_err(|error| error.message()));
     }
@@ -439,6 +471,7 @@ struct Session {
     archive_bytes: usize,
     result_bytes: usize,
     ticket: u64,
+    rss_bytes: u64,
 }
 impl Session {
     fn start(command: Result<Command, String>) -> Result<Self, Failure> {
@@ -525,6 +558,7 @@ impl Session {
             archive_bytes: 0,
             result_bytes: 0,
             ticket: 0,
+            rss_bytes: 0,
         })
     }
     fn exchange(
@@ -601,10 +635,13 @@ impl Session {
             }
             if written {
                 if let Some(bytes) = response {
-                    return decode_response(&bytes, &id);
+                    return decode_response(&bytes, &id, &mut self.rss_bytes);
                 }
             }
         }
+    }
+    fn should_retire(&self) -> bool {
+        self.rss_bytes >= PREVIEW_RECYCLE_RSS
     }
     #[cfg(test)]
     fn render(
@@ -629,10 +666,23 @@ impl Session {
         };
         let archive = match (archive, raw) {
             (Some(archive), None) => Some(archive),
-            (None, Some(raw)) => Some(
-                RenderArchive::new(Arc::new(raw))
-                    .map_err(|message| Failure::Application("invalid_archive".into(), message))?,
-            ),
+            (None, Some(raw)) => {
+                let projects = input
+                    .as_object_mut()
+                    .and_then(|input| input.remove("projects"));
+                let projects = projects
+                    .map(serde_json::from_value::<Vec<Value>>)
+                    .transpose()
+                    .map_err(|error| {
+                        Failure::Application("invalid_archive".into(), error.to_string())
+                    })?
+                    .unwrap_or_default();
+                Some(
+                    RenderArchive::with_projects(Arc::new(raw), Arc::new(projects)).map_err(
+                        |message| Failure::Application("invalid_archive".into(), message),
+                    )?,
+                )
+            }
             (None, None) => None,
             (Some(_), Some(_)) => {
                 return Err(Failure::Application(
@@ -667,7 +717,9 @@ impl Session {
         deadline: Instant,
     ) -> Result<String, Failure> {
         if let Some(index) = self.archives.iter().position(|archive| {
-            Arc::ptr_eq(&archive.source.raw, &source.raw) || archive.source.raw == source.raw
+            (Arc::ptr_eq(&archive.source.raw, &source.raw) || archive.source.raw == source.raw)
+                && (Arc::ptr_eq(&archive.source.projects, &source.projects)
+                    || archive.source.projects == source.projects)
         }) {
             let archive = self.archives.remove(index).expect("matched archive");
             let id = archive.id.clone();
@@ -691,7 +743,11 @@ impl Session {
             self.result_bytes = 0;
         }
         let id = format!("native-{}", SEQUENCE.fetch_add(1, Ordering::Relaxed));
-        self.exchange(json!({"version":1,"id":"native-archive","op":"archive","archiveId":id,"raw":source.raw.as_ref()}), cancellation, deadline)?;
+        let mut registration = json!({"version":1,"id":"native-archive","op":"archive","archiveId":id,"raw":source.raw.as_ref()});
+        if !source.projects.is_empty() {
+            registration["projects"] = json!(source.projects.as_ref());
+        }
+        self.exchange(registration, cancellation, deadline)?;
         self.archive_bytes += cost;
         self.archives.push_back(Archive {
             id: id.clone(),
@@ -769,7 +825,7 @@ fn read_record(reader: &mut impl BufRead, limit: usize) -> Result<Vec<u8>, Strin
         }
     }
 }
-fn decode_response(bytes: &[u8], id: &Value) -> Result<Value, Failure> {
+fn decode_response(bytes: &[u8], id: &Value, rss_bytes: &mut u64) -> Result<Value, Failure> {
     let text = std::str::from_utf8(bytes)
         .map_err(|error| format!("Renderer output is not UTF-8: {error}"))?
         .trim();
@@ -789,6 +845,9 @@ fn decode_response(bytes: &[u8], id: &Value) -> Result<Value, Failure> {
         return Err(Failure::Transport(
             "Renderer response id does not match the request".into(),
         ));
+    }
+    if let Some(reported) = response["runtime"]["rssBytes"].as_u64() {
+        *rss_bytes = reported;
     }
     match response.get("ok").and_then(Value::as_bool) {
         Some(true) => response
@@ -996,7 +1055,7 @@ fn read_bounded(mut reader: impl Read, limit: usize, truncate: bool) -> Result<V
 
 #[cfg(test)]
 fn parse_response(bytes: &[u8], id: &Value) -> Result<Value, String> {
-    decode_response(bytes, id).map_err(|error| error.message())
+    decode_response(bytes, id, &mut 0).map_err(|error| error.message())
 }
 
 #[cfg(test)]
@@ -1169,15 +1228,17 @@ import { createInterface } from 'node:readline';
 let registrations=0, renders=0; const archives=new Map();
 for await (const line of createInterface({input:process.stdin})) {
   const r=JSON.parse(line); let result;
-  if(r.op==='archive'){archives.set(r.archiveId,r.raw);registrations++;result={archiveId:r.archiveId};}
+  if(r.op==='archive'){archives.set(r.archiveId,{raw:r.raw,projects:r.projects});registrations++;result={archiveId:r.archiveId};}
   else if(r.op==='release'){archives.delete(r.archiveId);result={released:true};}
   else if(r.op==='render'){
     if(r.piece==='delay') await new Promise(resolve=>setTimeout(resolve,5000));
     if(r.piece==='crash') process.exit(9);
     if(r.piece==='error'){process.stdout.write(JSON.stringify({version:1,id:r.id,ok:false,error:{code:'missing_data',message:'fixture'}})+'\n');continue;}
-    result={raw:archives.get(r.archiveId),registrations,renders:++renders,pid:process.pid};
+    const archive=archives.get(r.archiveId);
+    result={raw:archive?.raw,projects:r.projects??archive?.projects,explicitProjects:Object.hasOwn(r,'projects'),registrations,renders:++renders,pid:process.pid};
   } else result={pid:process.pid};
-  process.stdout.write(JSON.stringify({version:1,id:r.id,ok:true,result})+'\n');
+  const rssBytes=r.piece==='memory'||(r.op==='archive'&&r.raw.registrationRss)?805306368:33554432;
+  process.stdout.write(JSON.stringify({version:1,id:r.id,ok:true,result,runtime:{rssBytes}})+'\n');
 }
 "#;
         let mut command = Command::new("node");
@@ -1263,9 +1324,117 @@ for await (const line of createInterface({input:process.stdin})) {
     }
 
     #[test]
+    fn memory_recycling_is_requested_only_after_the_complete_operation() {
+        let archive =
+            RenderArchive::new(Arc::new(json!({"registrationRss":true,"project":"one"}))).unwrap();
+        let cancel = Cancellation::default();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut worker = fixture_session();
+        // The registration response crosses the threshold, but render_archive
+        // must complete the dependent render in the same process first.
+        let first = worker
+            .render_archive(
+                json!({"version":1,"id":1,"op":"render","piece":"tier"}),
+                Some(archive.clone()),
+                &cancel,
+                deadline,
+            )
+            .unwrap();
+        assert_eq!(first["registrations"], 1);
+        assert_eq!(first["renders"], 1);
+        assert!(!worker.should_retire());
+        let result = worker
+            .render_archive(
+                json!({"version":1,"id":2,"op":"render","piece":"memory"}),
+                Some(archive.clone()),
+                &cancel,
+                deadline,
+            )
+            .unwrap();
+        assert_eq!(result["pid"], first["pid"]);
+        assert!(worker.should_retire());
+        drop(worker);
+        let mut replacement = fixture_session();
+        let restored = replacement
+            .render_archive(
+                json!({"version":1,"id":3,"op":"render","piece":"tier"}),
+                Some(archive),
+                &cancel,
+                deadline,
+            )
+            .unwrap();
+        assert_eq!(restored["raw"], first["raw"]);
+        assert_eq!(restored["registrations"], 1);
+        assert_ne!(restored["pid"], first["pid"]);
+    }
+
+    #[test]
+    fn profile_context_is_registered_once_and_restored_without_overriding_explicit_projects() {
+        let raw = Arc::new(json!({"project":"aggregate"}));
+        let projects = Arc::new(vec![json!({"project":"one"}), json!({"project":"two"})]);
+        let archive = RenderArchive::with_projects(raw.clone(), projects.clone()).unwrap();
+        let cancel = Cancellation::default();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut worker = fixture_session();
+        let request = json!({"version":1,"id":1,"op":"render","piece":"profile"});
+        let first = worker
+            .render_archive(request.clone(), Some(archive.clone()), &cancel, deadline)
+            .unwrap();
+        assert_eq!(first["projects"], json!(projects.as_ref()));
+        assert_eq!(first["explicitProjects"], false);
+        let mut sample = request.clone();
+        sample["t"] = json!(0.5);
+        let second = worker
+            .render_archive(sample, Some(archive.clone()), &cancel, deadline)
+            .unwrap();
+        assert_eq!(second["registrations"], 1);
+        assert_eq!(second["renders"], 2);
+        assert_eq!(second["explicitProjects"], false);
+        let mut explicit = request.clone();
+        explicit["projects"] = json!([{"project":"override"}]);
+        let overridden = worker
+            .render_archive(explicit, Some(archive.clone()), &cancel, deadline)
+            .unwrap();
+        assert_eq!(overridden["projects"], json!([{"project":"override"}]));
+        assert_eq!(overridden["explicitProjects"], true);
+        assert_eq!(overridden["registrations"], 1);
+        let changed =
+            RenderArchive::with_projects(raw, Arc::new(vec![json!({"project":"different"})]))
+                .unwrap();
+        let changed_result = worker
+            .render_archive(request.clone(), Some(changed), &cancel, deadline)
+            .unwrap();
+        assert_eq!(changed_result["registrations"], 2);
+        assert_eq!(changed_result["projects"], json!([{"project":"different"}]));
+        drop(worker);
+        let mut replacement = fixture_session();
+        let restored = replacement
+            .render_archive(request, Some(archive), &cancel, deadline)
+            .unwrap();
+        assert_ne!(restored["pid"], first["pid"]);
+        assert_eq!(restored["projects"], first["projects"]);
+        assert_eq!(restored["registrations"], 1);
+        assert_eq!(restored["explicitProjects"], false);
+    }
+
+    #[test]
     fn archive_handles_reject_ambiguous_requests_and_invalid_snapshots() {
         assert!(RenderArchive::new(Arc::new(Value::Null)).is_err());
         assert!(RenderArchive::new(Arc::new(json!({"text":"x".repeat(REQUEST_LIMIT)}))).is_err());
+        assert!(
+            RenderArchive::with_projects(Arc::new(json!({})), Arc::new(vec![Value::Null])).is_err()
+        );
+        assert!(
+            RenderArchive::with_projects(Arc::new(json!({})), Arc::new(vec![json!({}); 51]))
+                .is_err()
+        );
+        assert!(
+            RenderArchive::with_projects(
+                Arc::new(json!({"text":"x".repeat(REQUEST_LIMIT / 2)})),
+                Arc::new(vec![json!({"text":"x".repeat(REQUEST_LIMIT / 2)})]),
+            )
+            .is_err()
+        );
         let archive = RenderArchive::new(Arc::new(json!({}))).unwrap();
         for request in [
             json!({"op":"export"}),

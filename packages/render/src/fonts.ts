@@ -79,7 +79,7 @@ export function portableFontFamilies(svg: string): string {
 // CSS weight matching is directional (600 prefers 700 before 500; 400 prefers
 // 500 before 300). A numeric nearest-weight sort subtly changes native output
 // when moving from all installed faces to just the faces needed by a picture.
-function matchingFace(family: string, weight: number, italic: boolean): FontFace | undefined {
+export function matchingFace(family: string, weight: number, italic: boolean): FontFace | undefined {
   const rank = (w: number) => weight >= 400 && weight <= 500
     ? w >= weight && w <= 500 ? w - weight : w < weight ? 1000 + weight - w : 2000 + w - weight
     : weight < 400 ? w <= weight ? weight - w : 1000 + w - weight
@@ -113,4 +113,14 @@ export function referencedFonts(svg: string): FontFace[] {
     if (!tag.endsWith('/>')) stack.push({ family, weight, italic });
   }
   return [...refs.values()];
+}
+
+/** Face order used by native usvg glyph fallback and portable text shaping. */
+export function nativeFonts(svg: string): FontFace[] {
+  const referenced = referencedFonts(svg);
+  if (!referenced.length) return [];
+  const wanted = new Set(referenced.map(face => `${face.pkg}/${face.dir}`));
+  return FONTS.filter(face => wanted.has(`${face.pkg}/${face.dir}`)
+    || face.family === 'Inter' || face.family === 'JetBrains Mono'
+    || face.family === 'Noto Sans SC' && face.weight === 400);
 }

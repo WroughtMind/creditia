@@ -2,10 +2,18 @@
 //! Run explicitly on the main thread: cargo test --features visual-test --test rendering.
 fn main() {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
-    native::run();
+    if std::env::var_os("CREDITIA_NATIVE_CATALOG").is_some() {
+        catalog::run();
+    } else {
+        native::run();
+    }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     panic!("Native pixel validation requires a supported Metal or WGPU headless renderer");
 }
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[path = "support/catalog.rs"]
+mod catalog;
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod native {
@@ -130,7 +138,7 @@ mod native {
             window.render_frame(cx);
             assert!(window.find("wall").visible());
             assert!(window.find("roam").visible());
-            assert!(window.find("copy").visible());
+            assert!(window.find("pieces").visible());
             match state {
                 Some("empty") => assert!(window.find("first-project").visible()),
                 Some("loading") => assert_eq!(view.read(cx).diagnostic_state()["loading"], true),

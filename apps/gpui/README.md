@@ -11,7 +11,9 @@ acceptance.
 Use Rust 1.92 or later and the [GPUI Kit platform prerequisites](https://gpui-kit.com/docs/installation/).
 The Kit baseline is macOS 15+, Windows 10 with MSVC, and Linux with Wayland/X11
 and a Vulkan driver. The CI Linux distribution is Ubuntu 24.04. Both Mac
-architectures have their own build and package.
+architectures have their own build and package. Windows execution tests use the
+Windows Server 2022 runner; the declared Windows 10 minimum is not a claim of
+automated execution on Windows 10.
 
 ```sh
 npm ci --prefix packages/render
@@ -75,10 +77,24 @@ for decoded artwork, send keyboard input, assert view state and retain screensho
 This requires an interactive desktop and a working graphics driver; unavailable
 native rendering fails the acceptance gate.
 
-These captures establish rendering and the interactions asserted in the test.
-They do not by themselves establish visual equivalence of every offscreen
-artwork, all animations, system dialogs, accessibility, or physical-device GPU
-behavior. The matrix comparison and process-tree benchmark tools keep those
+A separate Linux catalog job selects all 1,482 desktop artwork/layout rows through
+those production controls, waits for native image decoding, checks dimensions,
+visible bounds and hit-region counts, and captures every focused artwork. Its
+contact sheets contain actual native pixels, with full-window screenshot hashes
+in the accompanying manifest. The source fixture includes profile and blame
+contexts; empty outputs fail this gate.
+
+```sh
+node packaging/gpui/catalog-fixtures.mjs --output evidence/catalog-inputs
+CREDITIA_NATIVE_CATALOG="$PWD/evidence/catalog-inputs" \
+CREDITIA_NATIVE_CATALOG_CAPTURE="$PWD/evidence/catalog-captures" \
+cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked
+node packaging/gpui/catalog-evidence.mjs --captures evidence/catalog-captures --output evidence/native-catalog
+```
+
+These captures establish rendering and the interactions asserted in the tests.
+They do not by themselves establish animation behavior, system dialogs,
+accessibility, or physical-device GPU behavior. The matrix comparison and process-tree benchmark tools keep those
 results separate and record incomplete checks explicitly.
 
 ## Packages and release evidence
@@ -110,8 +126,11 @@ the original public Git repository and compares representative artworks from tha
 real archive. Neither input is relabeled as private agent-log evidence.
 
 `packaging/gpui/INSTALL.md` documents installation and reversible upgrades.
-Candidate artifacts are not a published stable release. macOS candidate signing
-is ad hoc; Developer ID signing/notarization and Windows signing require the
-release credentials. Final cutover requires the complete migration report,
+Candidate artifacts are not a published stable release. They follow the existing
+distribution policy: macOS signatures are ad hoc, and Windows binaries are
+unsigned. The installation guide documents the corresponding OS trust prompts.
+Developer ID/notarization and Windows code signing can be configured separately;
+their absence does not prevent generating or installing these packages.
+Final cutover requires the complete migration report,
 including actual package installation, native interactions and process-tree
 performance on the supported systems.

@@ -428,5 +428,6 @@ pub mod platform_ui;
 pub mod preference_writer;
 pub mod renderer;
 pub mod roam;
+pub mod ui_icons;
 pub mod ui_model;
 pub mod ui_reports;

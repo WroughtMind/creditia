@@ -18,6 +18,7 @@ pub struct RasterImage {
 struct Entry {
     svg: String,
     width: u32,
+    height: Option<u32>,
     region: Option<[u32; 4]>,
     image: Arc<RasterImage>,
     cost: usize,
@@ -50,15 +51,19 @@ pub fn cache_stats() -> (usize, usize) {
     (cache.entries.len(), cache.bytes)
 }
 
-fn cached(svg: &str, width: u32, region: Option<[u32; 4]>) -> Option<Arc<RasterImage>> {
+fn cached(
+    svg: &str,
+    width: u32,
+    height: Option<u32>,
+    region: Option<[u32; 4]>,
+) -> Option<Arc<RasterImage>> {
     let mut cache = CACHE
         .get_or_init(Default::default)
         .lock()
         .unwrap_or_else(|e| e.into_inner());
-    let index = cache
-        .entries
-        .iter()
-        .position(|entry| entry.width == width && entry.region == region && entry.svg == svg)?;
+    let index = cache.entries.iter().position(|entry| {
+        entry.width == width && entry.height == height && entry.region == region && entry.svg == svg
+    })?;
     let entry = cache.entries.remove(index)?;
     let result = entry.image.clone();
     cache.entries.push_back(entry);
@@ -73,7 +78,7 @@ pub fn rasterize(
     pixel_width: u32,
     cancellation: &Cancellation,
 ) -> Result<Arc<RasterImage>, String> {
-    rasterize_view(svg, pixel_width, None, cancellation)
+    rasterize_view(svg, pixel_width, None, None, cancellation)
 }
 
 /// Render only a viewport of a tall/deeply zoomed artwork. Region coordinates
@@ -90,12 +95,35 @@ pub fn rasterize_region(
     {
         return Err("Invalid preview region".into());
     }
-    rasterize_view(svg, pixel_width, Some(region), cancellation)
+    rasterize_view(svg, pixel_width, None, Some(region), cancellation)
+}
+
+/// Integer pixel bounds for adjacent animation tiles. An explicit height avoids
+/// an extra ceil pixel from f32 source-coordinate rounding at tile boundaries.
+pub fn rasterize_region_sized(
+    svg: &str,
+    region: (f32, f32, f32, f32),
+    pixel_size: (u32, u32),
+    cancellation: &Cancellation,
+) -> Result<Arc<RasterImage>, String> {
+    let (x, y, width, height) = region;
+    if ![x, y, width, height].iter().all(|value| value.is_finite()) || width <= 0.0 || height <= 0.0
+    {
+        return Err("Invalid preview region".into());
+    }
+    rasterize_view(
+        svg,
+        pixel_size.0,
+        Some(pixel_size.1),
+        Some(region),
+        cancellation,
+    )
 }
 
 fn rasterize_view(
     svg: &str,
     pixel_width: u32,
+    pixel_height: Option<u32>,
     region: Option<(f32, f32, f32, f32)>,
     cancellation: &Cancellation,
 ) -> Result<Arc<RasterImage>, String> {
@@ -109,7 +137,7 @@ fn rasterize_view(
         return Err("Invalid preview width".into());
     }
     let key = region.map(|(x, y, w, h)| [x.to_bits(), y.to_bits(), w.to_bits(), h.to_bits()]);
-    if let Some(image) = cached(svg, pixel_width, key) {
+    if let Some(image) = cached(svg, pixel_width, pixel_height, key) {
         return Ok(image);
     }
     // try_lock permits cancellation while waiting for another tile's filters.
@@ -125,7 +153,7 @@ fn rasterize_view(
             }
         }
     };
-    if let Some(image) = cached(svg, pixel_width, key) {
+    if let Some(image) = cached(svg, pixel_width, pixel_height, key) {
         return Ok(image);
     }
     let mut options = resvg::usvg::Options::default();
@@ -135,7 +163,9 @@ fn rasterize_view(
         .map_err(|error| format!("Invalid preview SVG: {error}"))?;
     let (x, y, width, height) =
         region.unwrap_or((0.0, 0.0, tree.size().width(), tree.size().height()));
-    let output_height = (f64::from(height) * f64::from(pixel_width) / f64::from(width)).ceil();
+    let output_height = pixel_height
+        .map(f64::from)
+        .unwrap_or_else(|| (f64::from(height) * f64::from(pixel_width) / f64::from(width)).ceil());
     if !output_height.is_finite()
         || output_height < 1.0
         || output_height > f64::from(EDGE_LIMIT)
@@ -191,6 +221,7 @@ fn rasterize_view(
         cache.entries.push_back(Entry {
             svg: svg.into(),
             width: pixel_width,
+            height: pixel_height,
             region: key,
             image: image.clone(),
             cost,
@@ -294,5 +325,17 @@ mod tests {
         assert!(!Arc::ptr_eq(&sharp, &smaller));
         let again = rasterize_region(svg, crop, 800, &Cancellation::default()).unwrap();
         assert!(Arc::ptr_eq(&sharp, &again));
+    }
+
+    #[test]
+    fn explicit_animation_tile_height_is_preserved_and_part_of_its_cache_key() {
+        let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#00f"/></svg>"##;
+        let region = (0.1, 0.3, 7.3, 3.1);
+        let a = rasterize_region_sized(svg, region, (100, 43), &Cancellation::default()).unwrap();
+        let b = rasterize_region_sized(svg, region, (100, 42), &Cancellation::default()).unwrap();
+        assert_eq!((a.width, a.height), (100, 43));
+        assert_eq!((b.width, b.height), (100, 42));
+        assert!(!Arc::ptr_eq(&a, &b));
+        assert!(rasterize_region_sized(svg, region, (100, 0), &Cancellation::default()).is_err());
     }
 }

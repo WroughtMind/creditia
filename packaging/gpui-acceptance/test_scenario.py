@@ -27,6 +27,20 @@ class ScenarioTests(unittest.TestCase):
         self.assertFalse(scenario.verify_journal([]))
         self.assertFalse(scenario.verify_journal([{"event": "scenario-complete", "scenario": "scroll", "success": True}]))
 
+    def test_screenshot_hash_remains_distinct_from_journal_digest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            file = pathlib.Path(directory) / "events.jsonl"
+            journal = scenario.Journal(file)
+            journal.write("screenshot", path="ready.png", image_sha256="a" * 64, bytes=1200,
+                          content_pixels_verified=True, dark_content_pixels=400, luminance_levels=25)
+            events = [json.loads(line) for line in file.read_text().splitlines()]
+            self.assertTrue(scenario.verify_journal(events))
+            self.assertEqual(events[0]["image_sha256"], "a" * 64)
+            self.assertNotEqual(events[0]["sha256"], events[0]["image_sha256"])
+            with self.assertRaisesRegex(ValueError, "integrity or timing"):
+                journal.write("screenshot", sha256="a" * 64)
+            self.assertEqual(journal.sequence, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -186,6 +186,7 @@ test('JSONL transport recovers after malformed and oversized input, then exits o
   assert.equal(responses[2].id, 'last');
   assert.equal(responses[2].ok, true);
   assert.deepEqual(responses[2].result, renderCatalog());
+  assert.ok(responses.every(response => Number.isSafeInteger(response.runtime.rssBytes) && response.runtime.rssBytes > 0));
 });
 
 test('persistent session retains prepared models and artwork, replaces archives and evicts bounded state', async () => {
@@ -278,7 +279,7 @@ test('transparent PNG removes the canvas and SVG font embedding includes actual 
   const root = /^<svg\b[^>]*>/.exec(badgeSvg)![0];
   assert.equal((root.match(/\brole=/g) ?? []).length, 1);
   assert.equal((root.match(/\baria-label=/g) ?? []).length, 1);
-  assert.ok(badgeSvg.includes('font-family="Noto Sans SC"'));
+  assert.ok(badgeSvg.includes('font-family="&apos;Noto Sans SC&apos;"'));
 });
 
 test('standalone HTML includes hover placement and cannot terminate its own script with an archive title', async () => {
@@ -300,4 +301,43 @@ test('GIF preserves transparent pixels and explicit reduced motion produces a st
   const html = Buffer.from(result.bytes, 'base64').toString();
   assert.ok(!html.includes('htmlPlayer('));
   assert.ok(html.includes('.piece,.screen .reel{animation:none!important}'));
+});
+
+test('transparent Satori layouts render and animate without undefined CSS properties', async () => {
+  for (const [style, piece, variant] of [
+    ['minimal-light', 'receipt', 'themed'], ['film', 'tier', 'original'],
+    ['glass', 'roll', 'scroll'], ['arcade', 'roll', 'crew'],
+  ]) {
+    const selection = { ...request, style, piece, variant, transparent: true };
+    const result = unwrap(await renderRequest(selection)).art;
+    assert.equal(result.bg, 'transparent');
+    assert.ok(raster.rgba(result.svg, 120).data[3] < 255, `${style}/${piece}/${variant}: no opaque canvas`);
+    const frames = unwrap(await renderRequest({ ...selection, op: 'frames', frameCount: 2 })).frames;
+    assert.equal(frames.length, 3);
+    assert.ok(frames.every(frame => frame.bg === 'transparent'));
+  }
+});
+
+test('registered project context is cloned, inherited and reused across sampled frames', async () => {
+  const contexts: unknown[] = [];
+  const backend = { ...nativeBackend,
+    classicArt: async (...args: Parameters<typeof nativeBackend.classicArt>) => { contexts.push(args[3].projects); return nativeBackend.classicArt(...args); },
+    classicFrames: async (...args: Parameters<typeof nativeBackend.classicFrames>) => { contexts.push(args[3].projects); return nativeBackend.classicFrames(...args); },
+  };
+  const session = createRenderSession(backend);
+  const call = (patch: object) => session.dispatch({ version: 1, id: 'projects', ...patch });
+  const projects = [structuredClone(raw), { ...structuredClone(raw), project: { ...raw.project, name: 'Second project' } }];
+  unwrap(await call({ op: 'archive', archiveId: 'all', raw, projects }));
+  projects[0].project.name = 'Caller mutation';
+  const options = { op: 'render', archiveId: 'all', style: 'minimal-light', piece: 'profile', lang: 'en' };
+  const first = unwrap(await call(options)).art;
+  assert.ok(first && !first.svg.includes('Caller mutation'));
+  unwrap(await call({ ...options, op: 'frames', frameCount: 2 }));
+  assert.ok(contexts.length >= 2);
+  assert.equal(contexts[0], contexts[1], 'whole prepared context array is reused');
+  assert.equal((contexts[0] as any[])[0].project, raw.project.name);
+  const overridden = await call({ ...options, projects: [] });
+  assert.equal(overridden.ok, false);
+  if (!overridden.ok) assert.equal(overridden.error.code, 'missing_data');
+  assert.ok(session.stats().archiveBytes > JSON.stringify(raw).length);
 });

@@ -24,3 +24,8 @@ test('PDF stores straight RGB and a separate alpha mask without darkening edges 
   assert.deepEqual(stream(4), [199, 104, 20, 65, 198, 225, 0, 0, 0]);
   assert.deepEqual(stream(6), [128, 94, 0]);
 });
+
+test('demultiply uses the PNG encoder rounding order at half-integer boundaries', async () => {
+  const { straightRgba } = await import('../src/pixels.ts');
+  assert.deepEqual([...straightRgba(new Uint8Array([11, 33, 55, 66, 7, 35, 49, 70]))], [42, 127, 212, 66, 25, 127, 178, 70]);
+});

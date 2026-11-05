@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Compare a pinned original checkout with the candidate, without conflating a
-// shared-renderer comparison with native-window or human visual acceptance.
+// shared-renderer comparison with native-window or recorded visual review.
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -8,8 +8,9 @@ import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
 import { args, artifact, caseKey, cleanCheckout, commitOf, countBy, environment, fileHash,
   normalizedArt, parseMatrix, pixelDiff, positiveInteger, safeName, sha256, stable } from './common.mjs';
-import { contexts, fixtureCases, preferences } from './fixtures.mjs';
+import { contexts, fixtureCases, preferences, requestFor } from './fixtures.mjs';
 import { exportChecks } from './export-checks.mjs';
+import { portableBadgeReference, terminalRasterReference } from './baseline-equivalence.mjs';
 import { decodePng } from './export-validation.mjs';
 
 const options = args();
@@ -76,17 +77,10 @@ const manifest = {
   scope: { catalog_rows: rows.length, desktop_rows: rows.filter(r => r.desktop === 'true').length,
     selected_rows: selected.length, shard, shards, preferences: options.preferences === 'all' ? 'all' : 'rotated',
     fixtures: fixtures.map(({ id, provenance }) => ({ id, ...provenance })), width,
-    native_ui_tested: false, human_visual_reviewed: false },
+    native_ui_tested: false, recorded_visual_review: false },
   cases: [],
 };
 function variantOf(row) { return row.variant === 'default' ? undefined : row.variant; }
-function requestFor(row, raw, pref) {
-  const context = contexts(raw);
-  return { version: 1, id: caseKey(row), op: 'render', renderer: row.renderer, style: row.style,
-    piece: row.piece, variant: variantOf(row), raw, lang: pref.lang, group: pref.group, named: pref.named,
-    ...(row.piece === 'profile' ? { projects: context.projects, person: context.person } : {}),
-    ...(row.piece === 'blame' ? { blame: context.blame } : {}) };
-}
 async function direct(api, row, raw, pref) {
   const { lang, group, named } = pref, variant = variantOf(row), context = contexts(raw);
   if (row.renderer === 'classic') {
@@ -100,7 +94,7 @@ function unwrap(response) {
   if (!response.ok) throw Error(`${response.error.code}: ${response.error.message}`);
   return response.result;
 }
-function compareArt(a, b) {
+function compareArt(a, b, row) {
   if (!a || !b) return { data_equal: a === b, svg_equal: a === b, pixels: null, empty: a === null && b === null };
   const { svg: asvg, crop: acrop } = normalizedArt(a), { svg: bsvg, crop: bcrop } = normalizedArt(b);
   // Selection/timeline metadata is new API information, not a visual change.
@@ -111,8 +105,25 @@ function compareArt(a, b) {
   // Compare actual PNG pixels across revisions. The old raw resvg buffer uses
   // premultiplied alpha; comparing adapter memory conventions would falsely
   // label a corrected export contract as a visible artwork regression.
-  const ar = decodePng(baseline.raster(a.svg).png(a.svg, pixelWidth)), br = decodePng(candidate.raster(b.svg).png(b.svg, pixelWidth));
-  return { data_equal: stable(adata) === stable(bdata), svg_equal: asvg === bsvg, crop_equal: stable(acrop) === stable(bcrop),
+  const reference = terminalRasterReference(a.svg, row, a.h);
+  const fontReference = portableBadgeReference(reference.svg, row);
+  const normalizedReference = normalizedArt({ ...a, svg: fontReference.svg }).svg;
+  const structuralRule = normalizedReference === bsvg && asvg !== bsvg && (reference.changes || fontReference.changes);
+  const ar = decodePng(baseline.raster(reference.svg).png(reference.svg, pixelWidth)), br = decodePng(candidate.raster(b.svg).png(b.svg, pixelWidth));
+  // Font-stack portability needs a native-size and 2x proof for each language
+  // and preference case; thumbnail equality alone cannot waive XML changes.
+  const nativeProof = structuralRule ? [1, 2].map(scale => {
+    const pixels = pixelDiff(decodePng(baseline.raster(reference.svg).png(reference.svg, Math.round(a.w * scale))),
+      decodePng(candidate.raster(b.svg).png(b.svg, Math.round(b.w * scale))));
+    return { scale, ...pixels };
+  }) : [];
+  const structural_equivalence = structuralRule ? {
+    rules: [...(fontReference.changes ? ['portable_badge_known_fallback'] : []), ...(reference.changes ? ['terminal_off_canvas_rain'] : [])],
+    font_attributes_changed: fontReference.changes, off_canvas_glyphs_removed: reference.changes,
+    normalized_svg_equal: true, native_pixels: nativeProof, passed: nativeProof.every(p => p.equal),
+    baseline_raster_accommodation: reference.changes ? 'Original baseline resvg aborts on nonintersecting text; reference excludes only rain glyphs y > height +20, size16. Original SVG hash retained.' : null,
+  } : null;
+  return { data_equal: stable(adata) === stable(bdata), svg_equal: asvg === bsvg, structural_equivalence, crop_equal: stable(acrop) === stable(bcrop),
     pixels: pixelDiff(ar, br), empty: false, raster_width: pixelWidth,
     baseline_rgba_sha256: sha256(ar.data), candidate_rgba_sha256: sha256(br.data) };
 }
@@ -146,17 +157,18 @@ for (const [rowIndex, row] of selected.entries()) {
       const a = await direct(baseline, row, fixture.raw, pref);
       const request = requestFor(row, fixture.raw, pref);
       const b = unwrap(await candidate.native.renderRequest(request)).art;
-      record.comparison = compareArt(a, b);
-      record.status = record.comparison.empty ? 'empty' : record.comparison.data_equal && record.comparison.svg_equal && record.comparison.pixels?.equal ? 'matched' : 'different';
+      record.comparison = compareArt(a, b, row);
+      record.status = record.comparison.empty ? 'empty' : record.comparison.data_equal && record.comparison.crop_equal && (record.comparison.svg_equal || record.comparison.structural_equivalence?.passed) && record.comparison.pixels?.equal ? 'matched' : 'different';
       if (a && b) {
         const name = safeName(key), w = record.comparison.raster_width;
-        const apng = baseline.raster(a.svg).png(a.svg, w), bpng = candidate.raster(b.svg).png(b.svg, w);
+        const rasterReference = terminalRasterReference(a.svg, row, a.h).svg;
+        const apng = baseline.raster(rasterReference).png(rasterReference, w), bpng = candidate.raster(b.svg).png(b.svg, w);
         const first = artifact(output, `images/${name}-baseline.png`, apng);
         const second = sha256(apng) === sha256(bpng) ? first : artifact(output, `images/${name}-candidate.png`, bpng);
         record.baseline = { svg_sha256: sha256(a.svg), normalized_svg_sha256: sha256(normalizedArt(a).svg), image: first };
         record.candidate = { svg_sha256: sha256(b.svg), normalized_svg_sha256: sha256(normalizedArt(b).svg), image: second };
         record.artifacts.push(first, ...(first === second ? [] : [second]));
-        if (record.status !== 'matched' || options['save-all-svg']) {
+        if (record.status !== 'matched' || record.comparison.structural_equivalence || options['save-all-svg']) {
           record.artifacts.push(artifact(output, `svg/${name}-baseline.svg`, a.svg), artifact(output, `svg/${name}-candidate.svg`, b.svg));
         }
         const representative = fixture.id === fixtures[0].id && pref.id === prefs[(rowIndex * shards + shard) % prefs.length].id;
@@ -186,6 +198,6 @@ manifest.complete = true;
 manifest.summary = countBy(manifest.cases, c => c.status);
 fs.writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 const esc = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-fs.writeFileSync(path.join(output, 'index.html'), `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Creditia artwork comparison</title><style>body{font:14px system-ui;margin:24px;background:#eee;color:#222}header{position:sticky;top:0;background:#eee;padding:12px 0}input{font:inherit;width:28em;max-width:80%;padding:8px}section{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}article{background:white;padding:12px;min-width:0}h2{font:12px monospace;overflow-wrap:anywhere}figure{margin:0;display:flex;gap:6px}img{width:calc(50% - 3px);object-fit:contain;align-self:flex-start}.different,.error{outline:2px solid #bd3b32}p{overflow-wrap:anywhere}</style><header><h1>Creditia artwork comparison</h1><p>${esc(baselineSha)} → ${esc(candidateSha)} · ${esc(JSON.stringify(manifest.summary))}</p><p>Shared-renderer evidence. Native UI and human visual acceptance remain separate.</p><input aria-label="Filter cases" placeholder="Filter by style, piece, language or status" oninput="for(const e of document.querySelectorAll('article'))e.hidden=!e.dataset.search.includes(this.value.toLowerCase())"></header><section>${manifest.cases.map(c => `<article class="${esc(c.status)}" data-search="${esc((c.key + ' ' + c.status).toLowerCase())}"><h2>${esc(c.key)}</h2><p>${esc(c.status)}</p>${c.baseline ? `<figure><img loading="lazy" alt="Baseline" src="${esc(c.baseline.image.path)}"><img loading="lazy" alt="Candidate" src="${esc(c.candidate.image.path)}"></figure>` : `<p>${esc(c.error ?? 'Both renderers produced no artwork for this input.')}</p>`}</article>`).join('')}</section></html>`);
+fs.writeFileSync(path.join(output, 'index.html'), `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Creditia artwork comparison</title><style>body{font:14px system-ui;margin:24px;background:#eee;color:#222}header{position:sticky;top:0;background:#eee;padding:12px 0}input{font:inherit;width:28em;max-width:80%;padding:8px}section{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}article{background:white;padding:12px;min-width:0}h2{font:12px monospace;overflow-wrap:anywhere}figure{margin:0;display:flex;gap:6px}img{width:calc(50% - 3px);object-fit:contain;align-self:flex-start}.different,.error{outline:2px solid #bd3b32}p{overflow-wrap:anywhere}</style><header><h1>Creditia artwork comparison</h1><p>${esc(baselineSha)} → ${esc(candidateSha)} · ${esc(JSON.stringify(manifest.summary))}</p><p>Shared-renderer evidence. Native UI and recorded visual review remain separate.</p><input aria-label="Filter cases" placeholder="Filter by style, piece, language or status" oninput="for(const e of document.querySelectorAll('article'))e.hidden=!e.dataset.search.includes(this.value.toLowerCase())"></header><section>${manifest.cases.map(c => `<article class="${esc(c.status)}" data-search="${esc((c.key + ' ' + c.status).toLowerCase())}"><h2>${esc(c.key)}</h2><p>${esc(c.status)}</p>${c.baseline ? `<figure><img loading="lazy" alt="Baseline" src="${esc(c.baseline.image.path)}"><img loading="lazy" alt="Candidate" src="${esc(c.candidate.image.path)}"></figure>` : `<p>${esc(c.error ?? 'Both renderers produced no artwork for this input.')}</p>`}</article>`).join('')}</section></html>`);
 console.log(JSON.stringify({ output, complete: true, summary: manifest.summary }));
 if (manifest.summary.error || manifest.summary.different) process.exitCode = 1;

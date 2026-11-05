@@ -10,6 +10,7 @@ export async function exportChecks(candidate, request, row, rowIndex, captureFai
   if (!original) throw Error('Export fixture does not produce an artwork');
   const size = '320x240', canvas = { w: 320, h: 240 }, frameCount = 4;
   const fit = art => candidate.exports.sized(art, canvas.w, canvas.h);
+  const outlined = art => art.svg.includes('<text') ? candidate.raster(art.svg).flat(art.svg) : art.svg;
   const fitted = fit(original), expected = candidate.raster(fitted.svg).rgba(fitted.svg, canvas.w);
   const animation = row.animated === 'true' ? unwrap(await candidate.native.renderRequest({ ...selected, op: 'frames', frameCount })) : null;
   const formats = ['png', 'svg', 'pdf', 'html', ...(animation ? ['gif'] : [])], results = [];
@@ -26,9 +27,9 @@ export async function exportChecks(candidate, request, row, rowIndex, captureFai
       checks.dimensions = decoded.w === canvas.w && decoded.h === canvas.h;
       checks.outlined = !svg.includes('<text');
       checks.accessible_title = svg.includes('role="img"') && svg.includes('aria-label="');
-      checks.pixels = pixelDiff(expected, decoded);
+      checks.pixels = pixelDiff(candidate.raster(outlined(fitted)).rgba(outlined(fitted), canvas.w), decoded);
     } else if (format === 'pdf') {
-      const decoded = decodePdf(bytes), scale = Math.min(3, 4000 / Math.max(original.w, original.h));
+      const decoded = decodePdf(bytes), scale = Math.min(3, 4000 / Math.max(canvas.w, canvas.h));
       checks.page_dimensions = decoded.page_width_points === canvas.w * .75 && decoded.page_height_points === canvas.h * .75;
       checks.linked_single_page = decoded.objects >= 6;
       checks.pixels = pixelDiff(candidate.raster(fitted.svg).rgba(fitted.svg, canvas.w * scale), decoded);
@@ -36,7 +37,7 @@ export async function exportChecks(candidate, request, row, rowIndex, captureFai
       const html = bytes.toString(), still = fit(animation?.frames.at(-1) ?? original), embedded = firstSvg(html);
       checks.selected_language = html.includes(`<html lang="${request.lang}">`);
       checks.single_file = !/(?:src|href)=["']https?:\/\//i.test(html);
-      checks.pixels = pixelDiff(candidate.raster(still.svg).rgba(still.svg, canvas.w), candidate.raster(embedded).rgba(embedded, canvas.w));
+      checks.pixels = pixelDiff(candidate.raster(outlined(still)).rgba(outlined(still), canvas.w), candidate.raster(embedded).rgba(embedded, canvas.w));
       const data = /const DATA=(.*);\r?\n/.exec(html);
       checks.hover_geometry = !!data && stable(JSON.parse(data[1])) === stable([{ w: still.w, h: still.h, hits: still.hits }]);
       checks.reduced_motion_handler = html.includes('prefers-reduced-motion');
@@ -46,7 +47,7 @@ export async function exportChecks(candidate, request, row, rowIndex, captureFai
         checks.sample_count = payload?.svgs?.length === animation.frames.length;
         checks.sampled_pixels = checks.sample_count && payload.svgs.every((svg, i) => {
           const frame = fit(animation.frames[i]);
-          return pixelDiff(candidate.raster(frame.svg).rgba(frame.svg, 160), candidate.raster(svg).rgba(svg, 160)).equal;
+          return pixelDiff(candidate.raster(outlined(frame)).rgba(outlined(frame), 160), candidate.raster(svg).rgba(svg, 160)).equal;
         });
       }
     } else if (format === 'gif') {
@@ -55,18 +56,19 @@ export async function exportChecks(candidate, request, row, rowIndex, captureFai
       checks.sample_count = decoded.frames.length === animation.frames.length;
       checks.loop = decoded.loop === (timeline.loop ? 0 : null);
       checks.shared_delays = checks.sample_count && decoded.frames.every((frame, i) => {
-        const millis = i + 1 < animation.times.length ? (animation.times[i + 1] - animation.times[i]) * timeline.durationMs : timeline.holdMs || 10;
-        return frame.delay_ms === Math.round(Math.max(10, Math.round(millis)) / 10) * 10;
+        const endpoint = time => Math.round(time * timeline.durationMs / 10);
+        const ticks = i + 1 < animation.times.length ? endpoint(animation.times[i + 1]) - endpoint(animation.times[i]) : Math.round(timeline.holdMs / 10);
+        return frame.delay_ms === Math.max(1, ticks) * 10;
       });
       checks.frame_pixels = checks.sample_count ? decoded.frames.map((frame, i) => {
         const art = fit(animation.frames[i]); return quantizedDiff(candidate.raster(art.svg).rgba(art.svg, 160), frame);
       }) : [];
     }
     const passed = value => typeof value === 'boolean' ? value : Array.isArray(value) ? value.length > 0 && value.every(passed) : value?.equal === true;
-    const result = { format, size, checks, passed: Object.values(checks).every(passed), bytes: bytes.length, sha256: sha256(bytes) };
+    const result = { format, size, reference_transform: ['svg', 'html'].includes(format) ? 'Explicit text-to-path outline; already outlined paths preserved without reserialization' : 'Fitted source artwork', checks, passed: Object.values(checks).every(passed), bytes: bytes.length, sha256: sha256(bytes) };
     if (!result.passed && captureFailure) {
       result.artifact = captureFailure(`actual.${format}`, bytes);
-      result.reference = captureFailure(`${format}-reference.svg`, (format === 'html' && animation ? fit(animation.frames.at(-1)) : fitted).svg);
+      result.reference = captureFailure(`${format}-reference.svg`, ['svg', 'html'].includes(format) ? outlined(format === 'html' && animation ? fit(animation.frames.at(-1)) : fitted) : fitted.svg);
     }
     results.push(result);
   }

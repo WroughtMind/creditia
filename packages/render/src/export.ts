@@ -65,9 +65,11 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
   const png = (a: Art, scale = 2) => R.png(a.svg, a.w * scale);
   const svg = (a: Art, fontMode: 'outline' | 'embed' = 'outline') => {
     if (fontMode === 'embed' && !R.embed) throw new Error('Font embedding is unavailable in this renderer');
-    const source = fontMode === 'embed' ? R.embed!(a.svg) : R.flat(a.svg);
-    return source.replace(/^<svg\b([^>]*)>/, (_root, attributes: string) =>
-      `<svg${attributes.replace(/\s+(?:role|aria-label)="[^"]*"/g, '')} role="img" aria-label="${attr(a.title)}">`);
+    // Already outlined Satori art needs no parser/serializer round trip; it
+    // would round existing path coordinates and can change edge pixels.
+    const source = fontMode === 'embed' ? R.embed!(a.svg) : a.svg.includes('<text') ? R.flat(a.svg) : a.svg;
+    return source.replace(/^<svg\b([^>]*?)(\/?)>/, (_root, attributes: string, slash: string) =>
+      `<svg${attributes.replace(/\s+(?:role|aria-label)="[^"]*"/g, '')} role="img" aria-label="${attr(a.title)}"${slash}>`);
   };
 
   async function pdf(a: Art, scale = 3, pagePoints?: { w: number; h: number }): Promise<Uint8Array> {
