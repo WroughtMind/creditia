@@ -143,8 +143,11 @@ pub fn export_snapshot(
 
 pub fn export_filename(request: &Value) -> String {
     let component = |value: &str| {
-        let cleaned: String = value.chars().take(60).map(|c| {
+        let cleaned: String = value.chars().map(|c| {
             if c.is_control() || "<>:\"/\\|?*".contains(c) { '_' } else { c }
+        }).scan(0usize, |bytes, c| {
+            *bytes += c.len_utf8();
+            (*bytes <= 60).then_some(c)
         }).collect();
         let cleaned = cleaned.trim_matches(['.', ' ']);
         if cleaned.is_empty() { "creditia".to_string() } else { cleaned.to_string() }
@@ -160,6 +163,17 @@ pub fn export_filename(request: &Value) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn unicode_export_names_fit_filesystem_component_limits() {
+        let name = export_filename(&json!({
+            "raw":{"project":{"name":"😀".repeat(60)}},
+            "piece":"作品".repeat(60),"style":"水墨".repeat(60),"format":"png"
+        }));
+        assert!(name.len() <= 255);
+        assert!(name.ends_with(".png"));
+        assert!(name.starts_with('😀'));
+    }
 
     #[test]
     fn unknown_and_non_verified_contributions_are_preserved() {

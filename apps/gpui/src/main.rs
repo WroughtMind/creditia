@@ -313,6 +313,7 @@ impl Creditia {
     fn preview_artwork(&mut self, cx: &mut Context<Self>) {
         let Some(raw) = self.raw.clone() else { return; };
         self.clear_preview(cx);
+        self.notice = None;
         let generation = self.preview_generation;
         let cancellation = renderer::Cancellation::default();
         self.preview_cancellation = Some(cancellation.clone());
