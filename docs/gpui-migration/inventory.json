@@ -3585,7 +3585,7 @@
       "path": "packages/render/fixtures/catnap.json",
       "kind": "synthetic_render_sample",
       "limits": "Rendering sample only; not a real project.",
-      "sha256": "db57342009bad5c2c14d2b6d850b55fffd7b0d7f2d31140a0800009add8fb5a5"
+      "sha256": "01eabd550afc1e17ac175f74bf5e3d4b9666930986a2c2e3b743ce10fabda9d9"
     },
     {
       "path": "crates/core/tests/fixtures/real/multi-tool.json",
@@ -3705,7 +3705,7 @@
     },
     {
       "path": "packages/render/fixtures/catnap.json",
-      "sha256": "db57342009bad5c2c14d2b6d850b55fffd7b0d7f2d31140a0800009add8fb5a5"
+      "sha256": "01eabd550afc1e17ac175f74bf5e3d4b9666930986a2c2e3b743ce10fabda9d9"
     },
     {
       "path": "packages/render/README.md",
@@ -3749,7 +3749,7 @@
     },
     {
       "path": "packages/render/src/export.ts",
-      "sha256": "223dab1f3864f4c947498a54663071d9838c5a8bca6bfdcb574d58b499bd1469"
+      "sha256": "0889db2cc38f3b306470ec79b9cf3261084a0f66398349de63c1d63fd1e5e906"
     },
     {
       "path": "packages/render/src/fonts.ts",
