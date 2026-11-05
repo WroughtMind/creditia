@@ -59,6 +59,33 @@ try {
       await page.locator('creditia-card').screenshot({ path: resolve(output, file) }); report.screenshots.push(file);
     }
   }
+  // Exercise the public animation controls and the OS motion preference in the
+  // actual custom element; timer mocks would miss its visibility/RAF lifecycle.
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const motion = await page.evaluate(() => new Promise((resolve, reject) => {
+    document.querySelector('creditia-card')?.remove();
+    const card = document.createElement('creditia-card');
+    Object.entries({ src:'/acceptance/fixture.json', theme:'ink', renderer:'svg', piece:'asterisk', animated:'' })
+      .forEach(([key,value]) => card.setAttribute(key,value));
+    const timer = setTimeout(() => reject(new Error('Animated web artwork timed out')),60000);
+    card.addEventListener('creditia-animation-ready', event => { clearTimeout(timer); resolve(event.detail); }, { once:true });
+    card.addEventListener('creditia-animation-error', event => { clearTimeout(timer); reject(new Error(String(event.detail))); }, { once:true });
+    document.body.appendChild(card);
+  }));
+  assert(motion.frameCount > 1 && motion.timeline.durationMs > 0);
+  const svg = () => page.locator('creditia-card .ct-art').innerHTML();
+  await page.evaluate(() => document.querySelector('creditia-card').pause());
+  const paused = await svg(); await page.waitForTimeout(150); assert.equal(await svg(),paused);
+  await page.evaluate(() => document.querySelector('creditia-card').replay());
+  await page.waitForTimeout(400); const playing = await svg();
+  await page.waitForTimeout(400); assert.notEqual(await svg(),playing,'Replay must advance the artwork');
+  await page.emulateMedia({ reducedMotion:'reduce' });
+  await page.waitForTimeout(80); const reduced = await svg();
+  await page.waitForTimeout(200); assert.equal(await svg(),reduced,'Reduced motion must show a stable final frame');
+  assert.equal(await page.locator('creditia-card .ct-play').isVisible(),false);
+  await page.emulateMedia({ reducedMotion:'no-preference' });
+  await page.waitForTimeout(400); assert.notEqual(await svg(),reduced,'Animation must recover when reduced motion is disabled');
+  report.motion = { controls:'passed', reducedMotion:'passed', frameCount:motion.frameCount, timeline:motion.timeline };
   assert.deepEqual(errors, []); assert(requests.every(url => url.startsWith(base)), 'Web renderer requested an external asset');
   report.status = 'passed';
 } catch (error) { report.status = 'failed'; report.failure = error.stack; throw error; }

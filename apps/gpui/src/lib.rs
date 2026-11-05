@@ -55,6 +55,7 @@ pub struct Preferences {
     pub export_format: String,
     pub export_size: String,
     pub auto_analyze: bool,
+    pub logo: String,
     pub projects: std::collections::BTreeMap<String, ProjectPreferences>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -69,7 +70,7 @@ impl Default for ProjectPreferences {
     fn default()->Self {Self{group:"auto".into(),auto_analyze:None,variants:Default::default(),order:vec![]}}
 }
 impl Default for Preferences {
-    fn default()->Self {Self{language:Language::Zh,appearance:Appearance::System,reduced_motion:false,last_project:None,named:true,style:"minimal-light".into(),view:"wall".into(),export_format:"png".into(),export_size:"native".into(),auto_analyze:false,projects:Default::default()}}
+    fn default()->Self {Self{language:Language::Zh,appearance:Appearance::System,reduced_motion:false,last_project:None,named:true,style:"minimal-light".into(),view:"wall".into(),export_format:"png".into(),export_size:"native".into(),auto_analyze:false,logo:"star".into(),projects:Default::default()}}
 }
 impl Preferences {
     pub fn read(settings: &Value) -> Self {
@@ -81,7 +82,7 @@ impl Preferences {
         } else {serde_json::from_value(settings["gpui"].clone()).unwrap_or_default()}
     }
     pub fn shared_patch(&self)->Value {
-        serde_json::json!({"global":{"lang":self.language.code(),"appearance":self.appearance,"reducedMotion":self.reduced_motion,"named":self.named,"style":self.style,"view":self.view,"exportFormat":self.export_format,"exportSize":self.export_size,"lastProject":self.last_project,"autoAnalyze":self.auto_analyze},"projects":self.projects})
+        serde_json::json!({"global":{"lang":self.language.code(),"appearance":self.appearance,"reducedMotion":self.reduced_motion,"named":self.named,"style":self.style,"view":self.view,"exportFormat":self.export_format,"exportSize":self.export_size,"lastProject":self.last_project,"autoAnalyze":self.auto_analyze,"logo":self.logo},"projects":self.projects})
     }
     pub fn project(&self,id:Option<&str>)->ProjectPreferences {id.and_then(|id|self.projects.get(id)).cloned().unwrap_or_default()}
 }
@@ -279,4 +280,7 @@ mod tests {
 pub mod ui_model;
 pub mod renderer;
 pub mod native_preview;
+pub mod preference_writer;
+pub mod animation;
+pub mod platform_ui;
 pub mod app;

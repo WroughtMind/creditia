@@ -150,7 +150,8 @@ test('cancelling a first analysis restores that selection and does not start the
 test('empty and failed startup register resize before taking their recovery paths', async () => {
   for (const fail of [false, true]) {
     const { ctx } = scene(), events = [];
-    Object.assign(ctx, { native: false, bootKits() {}, renderDots() {}, renderDock() {}, wireTop() {}, wireRoam() {}, wireMarkTip() {}, wireKeys() {}, installMenu() {}, applyLang() {}, BRAND: [],
+    Object.assign(ctx, { native: false, syncSharedPreferences: async () => {}, store: { get: () => null, set() {} }, kitById: () => ctx.state.style, KITS: [ctx.state.style],
+      bootKits() {}, renderDots() {}, renderDock() {}, wireTop() {}, wireRoam() {}, wireMarkTip() {}, wireKeys() {}, installMenu() {}, applyLang() {}, BRAND: [],
       innerWidth: 1440, innerHeight: 900, rcw: () => 300, addEventListener: name => events.push(name),
       INTERACT_CSS: '', document: { createElement: () => ({}), head: { appendChild() {} }, querySelectorAll: () => [], body: { classList: { add() {} } } },
       api: async () => { if (fail) throw new Error('unreadable'); return []; }, welcome() {},

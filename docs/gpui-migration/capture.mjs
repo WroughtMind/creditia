@@ -9,9 +9,12 @@ import vm from 'node:vm';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../..');
 const baseline = 'ac82a574b0747bc5651571a3f169f4a893442f88';
+// Catalogs and JSON fixtures are source text: Git checkout line endings must
+// not alter semantic inventory or text fingerprints. Render evidence separately
+// records the exact input bytes used for each run.
 const seen = new Map();
 function read(file) {
-  if (!seen.has(file)) seen.set(file, fs.readFileSync(path.join(root, file), 'utf8'));
+  if (!seen.has(file)) seen.set(file, fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n'));
   return seen.get(file);
 }
 function at(file, anchor) {

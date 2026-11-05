@@ -2,7 +2,9 @@
 //! truncated in place: readers see the previous or the next complete document.
 use crate::{Fail, Res};
 use serde_json::{json, Map, Value};
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
+#[cfg(unix)]
+use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -33,6 +35,12 @@ pub fn app_settings() -> Value {
 /// locks release when either process closes or crashes; there is no stale-PID
 /// deletion race. All clients must use this operation for app.json mutations.
 pub fn edit_app_settings(f: impl FnOnce(&mut Value)) -> Res<()> {
+    edit_app_settings_checked(|settings| { f(settings); Ok(()) })
+}
+
+/// Fallible updates abort before replacing any bytes, including when a newer
+/// or malformed preference section cannot safely be interpreted by this client.
+pub(crate) fn edit_app_settings_checked<T>(f: impl FnOnce(&mut Value) -> Res<T>) -> Res<T> {
     let _thread = SETTINGS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let path = app_settings_path();
     let parent = path.parent().ok_or(Fail::new("io"))?;
@@ -41,9 +49,10 @@ pub fn edit_app_settings(f: impl FnOnce(&mut Value)) -> Res<()> {
         .open(parent.join("app.json.lock")).map_err(|e| Fail::with("io", e))?;
     lock.lock().map_err(|e| Fail::with("io", e))?;
     let mut settings = read_settings(&path)?;
-    f(&mut settings);
+    let result = f(&mut settings)?;
     if !settings.is_object() { return Err(Fail::new("settings_invalid")); }
-    atomic_json(&path, &settings)
+    atomic_json(&path, &settings)?;
+    Ok(result)
 }
 
 pub(crate) fn atomic_json(path: &Path, value: &Value) -> Res<()> {
@@ -107,21 +116,25 @@ pub fn ui_preferences() -> Value {
 
 fn validate_preferences(value: &Value) -> Res<()> {
     if !value.is_object() { return Err(Fail::new("preferences_invalid")); }
-    if value["version"].as_u64().unwrap_or(1) != 1 { return Err(Fail::new("preferences_version")); }
+    if value.get("version").is_some_and(|version| version.as_u64() != Some(1)) { return Err(Fail::new("preferences_version")); }
     for key in ["global", "projects", "legacy"] {
-        if !value[key].is_null() && !value[key].is_object() { return Err(Fail::with("preferences_invalid", key)); }
+        if value.get(key).is_some_and(|section| !section.is_object()) { return Err(Fail::with("preferences_invalid", key)); }
     }
+    if value.get("legacyImported").is_some_and(|imported| !imported.is_boolean()) { return Err(Fail::with("preferences_invalid", "legacyImported")); }
     let global = &value["global"];
     for (key, options) in [
         ("lang", &["zh", "en"][..]), ("appearance", &["system", "light", "dark"][..]),
         ("view", &["wall", "roam"][..]),
     ] {
-        if !global[key].is_null() && !global[key].as_str().is_some_and(|v| options.contains(&v)) {
+        if global.get(key).is_some_and(|value| !value.as_str().is_some_and(|v| options.contains(&v))) {
             return Err(Fail::with("preferences_invalid", key));
         }
     }
     for key in ["named", "reducedMotion", "autoAnalyze"] {
-        if !global[key].is_null() && !global[key].is_boolean() { return Err(Fail::with("preferences_invalid", key)); }
+        if global.get(key).is_some_and(|value| !value.is_boolean()) { return Err(Fail::with("preferences_invalid", key)); }
+    }
+    for key in ["style", "exportFormat", "exportSize", "logo"] {
+        if global.get(key).is_some_and(|value| !value.as_str().is_some_and(|s| !s.is_empty() && s.len() <= 256)) { return Err(Fail::with("preferences_invalid", key)); }
     }
     for project in value["projects"].as_object().into_iter().flat_map(Map::values) {
         if !project.is_object() { return Err(Fail::new("preferences_invalid")); }
@@ -138,20 +151,15 @@ fn validate_preferences(value: &Value) -> Res<()> {
 
 pub fn patch_ui_preferences(patch: Value) -> Res<Value> {
     validate_preferences(&patch)?;
-    let mut result = Value::Null;
-    let mut failure = None;
-    edit_app_settings(|settings| {
+    edit_app_settings_checked(|settings| {
+        if !settings["ui"].is_null() { validate_preferences(&settings["ui"])?; }
         let mut value = defaults(settings);
         if settings["ui"].is_object() { merge(&mut value, &settings["ui"]); }
-        if value["version"].as_u64() != Some(1) { failure = Some(Fail::new("preferences_version")); return; }
         merge(&mut value, &patch);
-        match validate_preferences(&value) {
-            Ok(()) => { settings["ui"] = value.clone(); result = value; }
-            Err(e) => failure = Some(e),
-        }
-    })?;
-    if let Some(error) = failure { return Err(error); }
-    Ok(result)
+        validate_preferences(&value)?;
+        settings["ui"] = value.clone();
+        Ok(value)
+    })
 }
 
 fn legacy_target(key: &str, value: &str) -> Option<(Vec<String>, Value)> {
@@ -210,10 +218,9 @@ fn validate_legacy(values: &Value) -> Res<()> {
 /// after a GPUI edit cannot silently restore stale WebView preferences.
 pub fn import_legacy_preferences(values: Value) -> Res<Value> {
     validate_legacy(&values)?;
-    let mut failure = None;
-    edit_app_settings(|settings| {
-        if settings["ui"]["version"].as_u64().is_some_and(|v| v != 1) { failure = Some(Fail::new("preferences_version")); return; }
-        if settings["ui"]["legacyImported"].as_bool() == Some(true) { return; }
+    edit_app_settings_checked(|settings| {
+        if !settings["ui"].is_null() { validate_preferences(&settings["ui"])?; }
+        if settings["ui"]["legacyImported"].as_bool() == Some(true) { return Ok(()); }
         if !settings["ui"].is_object() { settings["ui"] = json!({"version":1}); }
         for (key, value) in values.as_object().unwrap() {
             if let Some((path, mapped)) = legacy_target(key, value.as_str().unwrap()) {
@@ -223,8 +230,8 @@ pub fn import_legacy_preferences(values: Value) -> Res<Value> {
             settings["ui"]["legacy"][key] = value.clone();
         }
         settings["ui"]["legacyImported"] = json!(true);
+        validate_preferences(&settings["ui"])
     })?;
-    if let Some(e) = failure { return Err(e); }
     Ok(legacy_preferences())
 }
 
@@ -262,6 +269,12 @@ pub fn legacy_preferences() -> Value {
 /// would not work across WebKit/WebView2 versions. This is a blocking startup job.
 pub fn migrate_legacy_with_helper() -> Res<Value> {
     if app_settings()["ui"]["legacyImported"].as_bool() == Some(true) { return Ok(ui_preferences()); }
+    let data = creditia_store::data_dir();
+    std::fs::create_dir_all(&data).map_err(|e| Fail::with("io", e))?;
+    let migration_lock = OpenOptions::new().read(true).write(true).create(true).truncate(false)
+        .open(data.join("ui-migration.lock")).map_err(|e| Fail::with("io", e))?;
+    migration_lock.lock().map_err(|e| Fail::with("io", e))?;
+    if app_settings()["ui"]["legacyImported"].as_bool() == Some(true) { return Ok(ui_preferences()); }
     let executable = std::env::current_exe().map_err(|e| Fail::with("migration_failed", e))?;
     let directory = executable.parent().ok_or(Fail::new("migration_helper_missing"))?;
     let name = if cfg!(windows) { "creditia-migrate.exe" } else { "creditia-migrate" };
@@ -277,35 +290,22 @@ pub fn migrate_legacy_with_helper() -> Res<Value> {
     let mut command = std::process::Command::new(helper);
     command.arg("--migrate-ui-settings").stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-    #[cfg(unix)] {
-        use std::os::unix::process::CommandExt;
-        command.process_group(0);
-    }
-    #[cfg(windows)] {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x0800_0000);
-    }
-    let mut child = command.spawn().map_err(|e| Fail::with("migration_failed", e))?;
+    let mut child = crate::process::spawn(&mut command, &migration_lock).map_err(|e| Fail::with("migration_failed", e))?;
     let started = std::time::Instant::now();
     loop {
-        match child.try_wait() {
+        match crate::process::inner(&mut child).try_wait() {
             Ok(Some(status)) => {
                 if !status.success() || app_settings()["ui"]["legacyImported"].as_bool() != Some(true) { return Err(Fail::with("migration_failed", format!("Helper exited with {status}"))); }
                 return Ok(ui_preferences());
             }
             Ok(None) => {}
-            Err(error) => { let _ = child.kill(); let _ = child.wait(); return Err(Fail::with("migration_failed", error)); }
+            Err(error) => {
+                crate::process::stop(&mut child); let _ = crate::process::inner(&mut child).wait();
+                return Err(Fail::with("migration_failed", error));
+            }
         }
         if started.elapsed() > std::time::Duration::from_secs(50) {
-            #[cfg(unix)] if let Ok(pid) = i32::try_from(child.id()) {
-                // SAFETY: the helper was started in its own process group.
-                if pid > 1 { unsafe { libc::kill(-pid, libc::SIGKILL); } }
-            }
-            #[cfg(windows)] {
-                use std::os::windows::process::CommandExt;
-                let _ = std::process::Command::new("taskkill").args(["/T", "/F", "/PID", &child.id().to_string()]).creation_flags(0x0800_0000).status();
-            }
-            let _ = child.kill(); let _ = child.wait();
+            crate::process::stop(&mut child); let _ = crate::process::inner(&mut child).wait();
             return Err(Fail::new("migration_timeout"));
         }
         std::thread::sleep(std::time::Duration::from_millis(50));

@@ -9,6 +9,7 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import importlib.util
 import os
 import pathlib
 import platform
@@ -157,7 +158,7 @@ def run(args):
                 total = sum(high_water.values())
                 elapsed = now - previous_time
                 sample = {"elapsed_seconds": now - start, "processes": [table[pid] for pid in sorted(pids)],
-                          "rss_bytes": sum(table[pid]["rss_bytes"] for pid in pids),
+                          "monotonic_seconds": now, "rss_bytes": sum(table[pid]["rss_bytes"] for pid in pids),
                           "observed_cpu_seconds": total,
                           "cpu_percent_one_core": max(0.0, (total - previous_total) / elapsed * 100) if elapsed > 0 else None}
                 samples.append(sample)
@@ -206,24 +207,47 @@ def run(args):
                 events.append(value)
             except (json.JSONDecodeError, ValueError) as error:
                 metadata.setdefault("event_errors", []).append(str(error))
-    workload_verified = any(event.get("event") == "scenario-complete" and event.get("scenario") == args.scenario
+    spec = importlib.util.spec_from_file_location("creditia_scenario", pathlib.Path(__file__).with_name("scenario.py"))
+    scenario = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(scenario)
+    chain_verified = scenario.verify_journal(events)
+    workload_verified = chain_verified and any(event.get("event") == "scenario-complete" and event.get("scenario") == args.scenario
                             and event.get("success") is True for event in events)
+    phase_summary = {}
+    for phase, begin, end in [("startup", "launch", "ready-observed"), ("idle", "idle-start", "idle-end")]:
+        first = next((e for e in events if e.get("event") == begin), None)
+        last = next((e for e in events if e.get("event") == end), None)
+        if first and last and "monotonic_seconds" in first and "monotonic_seconds" in last:
+            selected = [sample for sample in samples if first["monotonic_seconds"] <= sample["monotonic_seconds"] <= last["monotonic_seconds"]]
+            phase_summary[phase] = {"duration_seconds": last["monotonic_seconds"] - first["monotonic_seconds"],
+                "sample_count": len(selected), "rss_peak_bytes": max((row["rss_bytes"] for row in selected), default=None),
+                "cpu_p50_percent_one_core": percentile([row["cpu_percent_one_core"] for row in selected], .5)}
+    ready = next((event for event in events if event.get("event") == "ready-observed"), None)
+    if ready:
+        actual_count = ready.get("state", {}).get("tile_count")
+        metadata["provenance"]["workload"]["observed_artworks"] = actual_count
+        if actual_count != args.artworks:
+            workload_verified = False
+            metadata.setdefault("event_errors", []).append(f"Expected {args.artworks} artwork slots, observed {actual_count}")
+    metadata["provenance"]["workload"]["action_definition"] = "focus-enlargement" if args.scenario == "zoom" else args.scenario
+    metadata["provenance"]["workload"]["cache_definition"] = "fresh isolated app profile; OS page cache uncontrolled" if args.cache == "cold" else "same profile after a complete first-viewport launch; process memory reset"
+    metadata["provenance"]["driver_sha256"] = sha256(pathlib.Path(__file__).with_name("scenario.py"))
     metadata.update({"completed_at": dt.datetime.now(dt.timezone.utc).isoformat(), "complete": True,
-                     "workload_verified": workload_verified,
+                     "workload_verified": workload_verified, "event_chain_verified": chain_verified, "phase_summary": phase_summary,
                      "exit_code": process.returncode, "ended_by_sampler": timed_out,
                      "summary": {"sample_count": len(samples), "observed_process_count": len(high_water),
                         "rss_peak_bytes": max(rss, default=0), "rss_p50_bytes": percentile(rss, .5),
                         "cpu_p50_percent_one_core": percentile(cpu, .5), "cpu_p95_percent_one_core": percentile(cpu, .95),
                         "observed_cpu_seconds": sum(high_water.values()), "gpu_memory_bytes": None,
                         "interaction_latency_ms": None, "app_events": events}, "artifacts": []})
-    for name in ["samples.jsonl", "stdout.log", "stderr.log", "events.jsonl"]:
+    for name in ["samples.jsonl", "stdout.log", "stderr.log", "events.jsonl", "application-events.jsonl", "ready.png", "focus.png", "complete.png"]:
         p = output / name
         if p.exists():
             metadata["artifacts"].append({"path": name, "sha256": sha256(p), "bytes": p.stat().st_size})
     (output / "manifest.json").write_text(json.dumps(metadata, indent=2) + "\n")
     print(json.dumps({"output": str(output), "summary": metadata["summary"], "exit_code": process.returncode}))
     # Stopping a still-running UI at the configured deadline is expected.
-    return 0 if timed_out or process.returncode == 0 else 1
+    return 0 if workload_verified and process.returncode == 0 and not timed_out else 1
 
 
 def parser():
@@ -233,7 +257,7 @@ def parser():
     p.add_argument("--commit", required=True)
     p.add_argument("--measured-commit", help="Commit of the measured binary; --commit identifies the candidate being accepted")
     p.add_argument("--comparison-role", choices=["baseline", "candidate"], required=True)
-    p.add_argument("--scenario", choices=["startup", "scroll", "zoom", "idle", "hidden-animation"], required=True)
+    p.add_argument("--scenario", choices=["startup", "scroll", "roam", "zoom", "idle", "hidden-idle", "continuous-zoom"], required=True)
     p.add_argument("--cache", choices=["cold", "warm"], required=True)
     p.add_argument("--styles", type=int, required=True)
     p.add_argument("--artworks", type=int, required=True)

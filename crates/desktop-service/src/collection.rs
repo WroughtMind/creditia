@@ -1,5 +1,5 @@
 //! Shared evidence collection and native background-agent integration.
-use crate::{Fail, Res, AnalysisCancellation, analysis_running, app_settings, core_bin, edit_app_settings, home, run_core_job_with_cancel};
+use crate::{Fail, Res, AnalysisCancellation, analysis_running, app_settings, core_bin, home, run_core_job_with_cancel};
 use creditia_store::Library;
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -16,6 +16,14 @@ pub fn now() -> i64 {
 
 pub fn collect_on() -> bool {
     app_settings()["collect"]["on"].as_bool().unwrap_or(true)
+}
+
+fn save_collection_field(key: &str, value: Value) -> Res<()> {
+    crate::settings::edit_app_settings_checked(|settings| {
+        if !settings["collect"].is_null() && !settings["collect"].is_object() { return Err(Fail::with("settings_invalid", "collect")); }
+        settings["collect"][key] = value;
+        Ok(())
+    })
 }
 
 /// 跑一轮：一个项目一个核心进程，有分析在跑就等它跑完再接着收。定时的一轮在关着时不跑，中途被关掉就停下
@@ -71,7 +79,7 @@ pub fn collect_round_with_cancel(timed: bool, cancellation: AnalysisCancellation
         }
     }
     let last = json!({ "at": now(), "projects": ok, "failed": failed, "newEvidence": new });
-    edit_app_settings(|v| v["collect"]["last"] = last.clone())?;
+    save_collection_field("last", last.clone())?;
     Ok(last)
 }
 
@@ -97,7 +105,7 @@ pub fn collect_info() -> Value {
 }
 
 pub fn set_collect(on: bool) -> Res<Value> {
-    edit_app_settings(|v| v["collect"]["on"] = json!(on))?;
+    save_collection_field("on", json!(on))?;
     if !on {
         if let Some((true, token)) = ACTIVE_COLLECTION.lock().unwrap_or_else(|e| e.into_inner()).as_ref() { token.cancel(); }
     }

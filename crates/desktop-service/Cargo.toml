@@ -12,3 +12,6 @@ serde_json.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+command-group = { version = "5.0.1", default-features = false }

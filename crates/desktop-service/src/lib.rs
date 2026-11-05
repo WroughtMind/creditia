@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 mod analysis;
+mod process;
 mod settings;
 pub mod collection;
 mod background;
@@ -223,6 +224,7 @@ pub fn set_integration(project_id: String, which: String, on: bool, lang: Option
     let lib = Library::open()?;
     let p = project(&lib, &project_id)?;
     let lang = lang.unwrap_or_else(|| "zh".into());
+    let _lock = projects::config_lock(std::path::Path::new(&p.path))?;
     run_core(&[which.as_str(), if on { "install" } else { "uninstall" }, "--repo", p.path.as_str(), "--lang", lang.as_str()]).map_err(|e| Fail { code: "switch_failed", detail: e.detail })
 }
 
@@ -238,6 +240,7 @@ pub fn link_path(project_id: String, path: String, unlink: Option<bool>, lang: O
     let p = project(&lib, &project_id)?;
     let lang = lang.unwrap_or_else(|| "zh".into());
     let cmd = if unlink.unwrap_or(false) { "unlink" } else { "link" };
+    let _lock = projects::config_lock(std::path::Path::new(&p.path))?;
     run_core(&[cmd, path.as_str(), "--repo", p.path.as_str(), "--lang", lang.as_str()])
 }
 

@@ -4,7 +4,7 @@ import satori, { init } from 'satori/standalone';
 import { dispatchRender, type RenderBackend } from '../../render/src/protocol.ts';
 import { classicArt, classicFrames } from '../../render/src/classic/art.ts';
 import { fontsFor } from '../../render/src/classic/fonts.ts';
-import { familiesIn } from '../../render/src/fonts.ts';
+import { referencedFonts } from '../../render/src/fonts.ts';
 
 interface Face { family: string; weight: number; italic: boolean; file: string }
 const assets = new URL('./', import.meta.url);
@@ -30,9 +30,9 @@ function bytes(face: Face) {
   return pending;
 }
 async function prepare(theme: Parameters<typeof fontsFor>[0]) {
-  layout ??= fetch(new URL('layout.wasm', assets)).then(r => {
+  layout ??= fetch(new URL('layout.wasm', assets)).then(async r => {
     if (!r.ok) throw new Error(`Layout engine: HTTP ${r.status}`);
-    return init(r);
+    return init(await r.arrayBuffer());
   }).catch(error => { layout = undefined; throw error; });
   const all = await faces();
   const fonts = await Promise.all(fontsFor(theme).map(async spec => {
@@ -56,15 +56,10 @@ async function prepareText(svg: string) {
   if (!svg.includes('<text')) return;
   const all = await faces();
   const wanted = new Set<Face>();
-  for (const tag of svg.matchAll(/<text\b[^>]*>/g)) {
-    const family = /font-family="([^"]+)"/.exec(tag[0])?.[1] ?? '';
-    const weight = Number(/font-weight="(\d+)"/.exec(tag[0])?.[1] ?? 400);
-    const italic = /font-style="italic"/.test(tag[0]);
-    for (const name of familiesIn(family)) {
-      const options = all.filter(f => f.family === name);
-      const face = options.sort((a, b) => (Number(a.italic !== italic) * 10000 + Math.abs(a.weight - weight)) - (Number(b.italic !== italic) * 10000 + Math.abs(b.weight - weight)))[0];
-      if (face) wanted.add(face);
-    }
+  for (const spec of referencedFonts(svg)) {
+    const face = all.find(f => f.family === spec.family && f.weight === spec.weight && f.italic === !!spec.italic);
+    if (!face) throw new Error(`Missing packaged font: ${spec.family} ${spec.weight}`);
+    wanted.add(face);
   }
   await Promise.all([...wanted].map(face => {
     let pending = browserFonts.get(face.file);

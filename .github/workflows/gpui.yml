@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'apps/gpui/**'
+      - 'apps/desktop/src-tauri/**'
       - 'crates/**'
       - 'packages/render/**'
       - 'packages/schema/**'
@@ -28,9 +29,7 @@ env:
   CARGO_PROFILE_DEV_DEBUG: 0
   CARGO_PROFILE_TEST_DEBUG: 0
   NODE_VERSION: 24.22.2
-  # Bootstrap the newly added native-render/test features without replacing the
-  # existing resolution. Remove after the resulting lockfile is committed.
-  CREDITIA_RESOLVE_LOCK: 1
+  CREDITIA_RESOLVE_LOCK: 0
 
 jobs:
   resolve:
@@ -65,6 +64,16 @@ jobs:
           path: apps/gpui/Cargo.lock
           if-no-files-found: error
           retention-days: 14
+      - name: Retain the exact reusable formatter
+        working-directory: .
+        run: |
+          python packaging/gpui/rustfmt-runtime.py --output "$RUNNER_TEMP/rustfmt-runtime"
+          tar -czf "$RUNNER_TEMP/rustfmt-runtime.tar.gz" -C "$RUNNER_TEMP" rustfmt-runtime
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gpui-rustfmt-runtime
+          path: ${{ runner.temp }}/rustfmt-runtime.tar.gz
+          retention-days: 7
 
   build:
     name: Build and exercise ${{ matrix.platform }}
@@ -125,7 +134,9 @@ jobs:
           workspaces: |
             . -> target
             apps/gpui -> target
+            apps/desktop/src-tauri -> target
           key: gpui-native-${{ matrix.target }}
+          cache-on-failure: true
       - name: Install the exact shared renderer dependencies
         run: npm ci --prefix packages/render
       - name: Validate packaging tools and migration inventory
@@ -136,13 +147,28 @@ jobs:
         run: |
           cargo build --manifest-path apps/gpui/Cargo.toml --release --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-build.log"
           cargo build -p creditia-cli --release --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/core-build.log"
+      - name: Build one-time legacy preference migration helper
+        run: |
+          mkdir -p apps/desktop/dist
+          printf '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>\n' > apps/desktop/dist/index.html
+          cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --release --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-migration-build.log"
+      - name: Record formatting changes for review
+        if: always()
+        run: |
+          cargo fmt --manifest-path apps/gpui/Cargo.toml
+          git diff -- apps/gpui/src apps/gpui/tests > "$RUNNER_TEMP/gpui-rustfmt.patch"
+          git checkout -- apps/gpui/src apps/gpui/tests
       - name: Run native state, worker and export contracts
         run: cargo test --manifest-path apps/gpui/Cargo.toml --lib --bins --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-tests.log"
       - name: Prepare canonical artwork fixtures
-        if: runner.os != 'Windows'
-        run: node packaging/gpui/fixtures.mjs --output evidence/fixtures
+        run: |
+          profile=full
+          if [ "$RUNNER_OS" = Windows ]; then profile=smoke; fi
+          node packaging/gpui/fixtures.mjs --output evidence/fixtures --profile "$profile"
       - name: Exercise production views with the real offscreen renderer
         if: runner.os != 'Windows'
+        id: native-pixels
+        continue-on-error: true
         env:
           CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
           CREDITIA_VISUAL_OUTPUT: ${{ github.workspace }}/evidence/native
@@ -159,7 +185,13 @@ jobs:
         run: |
           ext=''
           if [ "$RUNNER_OS" = Windows ]; then ext='.exe'; fi
-          node packaging/gpui/package.mjs stage --target '${{ matrix.target }}' --output candidates --node-bin "runtime-node/node$ext" --node-license runtime-node/LICENSE --node-provenance runtime-node/provenance.json
+          node packaging/gpui/package.mjs stage --target '${{ matrix.target }}' --output candidates --node-bin "runtime-node/node$ext" --node-license runtime-node/LICENSE --node-provenance runtime-node/provenance.json --migration-bin "apps/desktop/src-tauri/target/${{ matrix.target }}/release/creditia-app$ext"
+      - name: Include licenses for resolved native dependencies
+        run: |
+          cargo metadata --manifest-path apps/gpui/Cargo.toml --locked --format-version 1 --filter-platform '${{ matrix.target }}' > "$RUNNER_TEMP/gpui-dependencies.json"
+          node packaging/gpui/licenses.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --metadata "$RUNNER_TEMP/gpui-dependencies.json"
+          cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --format-version 1 --filter-platform '${{ matrix.target }}' > "$RUNNER_TEMP/gpui-migration-dependencies.json"
+          node packaging/gpui/licenses.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --metadata "$RUNNER_TEMP/gpui-migration-dependencies.json"
       - name: Ad-hoc sign the complete macOS application
         if: runner.os == 'macOS'
         run: |
@@ -168,14 +200,24 @@ jobs:
           codesign --force --sign - "$app/Contents/Resources/node"
           codesign --force --sign - "$app/Contents/MacOS/creditia-core"
           codesign --force --sign - "$app/Contents/MacOS/creditia-gpui"
+          codesign --force --sign - "$app/Contents/Resources/legacy/Creditia Migration.app/Contents/MacOS/creditia"
+          codesign --force --deep --sign - "$app/Contents/Resources/legacy/Creditia Migration.app"
           codesign --force --deep --sign - "$app"
           codesign --verify --deep --strict "$app"
       - name: Seal and exercise the package outside the checkout
         run: |
           node packaging/gpui/package.mjs seal --root 'candidates/creditia-gpui-${{ matrix.target }}' > "$RUNNER_TEMP/package-manifest.json"
-          node packaging/gpui/package.mjs smoke --root 'candidates/creditia-gpui-${{ matrix.target }}' --fixture packages/render/fixtures/catnap.json --output evidence/package-smoke.json
+          node packaging/gpui/package.mjs smoke --root 'candidates/creditia-gpui-${{ matrix.target }}' --fixture packages/render/fixtures/catnap.json --output evidence/package-runtime/manifest.json
+      - name: Launch and operate the packaged Windows window
+        if: runner.os == 'Windows'
+        id: native-window
+        continue-on-error: true
+        shell: pwsh
+        run: ./packaging/gpui/windows-window.ps1 -PackageRoot 'candidates/creditia-gpui-${{ matrix.target }}' -Fixtures evidence/fixtures -Output evidence/native-window
       - name: Build installable candidate
         run: node packaging/gpui/installers.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --output installers
+      - name: Extract or install each candidate and verify the installed runtime
+        run: node packaging/gpui/install-smoke.mjs --installers installers --output evidence/package-installed/manifest.json
       - name: Record linked system libraries
         run: |
           mkdir -p evidence
@@ -196,6 +238,12 @@ jobs:
           path: |
             evidence/**
             ${{ runner.temp }}/gpui-*.log
+            ${{ runner.temp }}/gpui-rustfmt.patch
             ${{ runner.temp }}/core-build.log
           if-no-files-found: warn
           retention-days: 14
+      - name: Require native visual and input acceptance
+        if: always() && (steps.native-pixels.outcome == 'failure' || steps.native-window.outcome == 'failure')
+        run: |
+          echo 'Native visual/input acceptance failed; retained candidates are not release-ready.'
+          exit 1

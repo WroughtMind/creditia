@@ -130,8 +130,6 @@ async fn collect_now() -> Res<Value> {
 }
 #[tauri::command]
 fn set_collect_agent(on: bool) -> Res<Value> { service::set_collect_agent(on) }
-#[cfg(target_os = "macos")]
-fn agent_refresh() { service::collection::agent_refresh(); }
 #[cfg(all(test, unix))]
 use service::analysis_running;
 #[cfg(all(test, unix))]
@@ -331,8 +329,6 @@ fn main() {
                 std::thread::spawn(move || { std::thread::sleep(std::time::Duration::from_secs(45)); handle.exit(2); });
                 return Ok(());
             }
-            #[cfg(target_os = "macos")]
-            agent_refresh();
             if let Some(id) = app_settings()["logo"].as_str() {
                 if id != DEFAULT_LOGO {
                     apply_icon(app.handle(), id);

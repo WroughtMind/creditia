@@ -1,6 +1,7 @@
 use crate::{core_cmd, core_result, Fail, Res};
 use serde_json::Value;
-use std::process::{Child, Stdio};
+use std::process::Stdio;
+use crate::process::{inner, stop, OwnedChild};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -30,7 +31,7 @@ impl AnalysisCancellation {
 }
 
 struct Running {
-    child: Child,
+    child: OwnedChild,
     cancelled: Arc<AtomicBool>,
 }
 
@@ -124,52 +125,53 @@ fn run_core_job(args: &[&str], lang: Option<&str>, progress: Option<ProgressSink
         let mut cmd = core_cmd(args);
         if let Some(lang) = lang { cmd.env("CREDITIA_LANG", lang); }
         cmd.env("CREDITIA_PROGRESS", "1");
-        let mut child = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| Fail::with("core_missing", e))?;
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let mut child = crate::process::spawn(&mut cmd, &lease).map_err(|e| Fail::with("core_missing", e))?;
         if let Some(repo) = tracked_repo {
             let record = serde_json::json!({"id":task_id,"state":"running","repo":repo,"lang":lang.unwrap_or("zh"),"startedAt":now()});
-            if let Err(error) = crate::edit_app_settings(|settings| settings["tasks"]["analysis"] = record) {
-                stop(&mut child); let _ = child.wait(); return Err(error);
+            if let Err(error) = crate::settings::edit_app_settings_checked(|settings| {
+                if !settings["tasks"].is_null() && !settings["tasks"].is_object() { return Err(Fail::with("settings_invalid", "tasks")); }
+                settings["tasks"]["analysis"] = record;
+                Ok(())
+            }) {
+                stop(&mut child); let _ = inner(&mut child).wait(); return Err(error);
             }
         }
-        let pipes = (drain(child.stdout.take()), drain_err(child.stderr.take(), progress));
+        let pipes = (drain(inner(&mut child).stdout.take()), drain_err(inner(&mut child).stderr.take(), progress));
         *slot = Some(Running { child, cancelled: cancelled.clone() });
         pipes
     };
     let _running = RunningGuard(cancelled.clone());
-    let result = (|| {
     // Poll the process rather than joining pipes first: child Git processes may
     // hold a pipe open until the entire process group is cancelled.
     let status = loop {
         {
             let mut slot = RUNNING.lock().unwrap_or_else(|e| e.into_inner());
-            match slot.as_mut().map(|running| running.child.try_wait()) {
+            match slot.as_mut().map(|running| inner(&mut running.child).try_wait()) {
                 Some(Ok(None)) => {}
-                Some(Ok(Some(status))) => break status,
+                Some(Ok(Some(status))) => break Ok(status),
                 Some(Err(error)) => {
                     if let Some(mut running) = slot.take() {
                         stop(&mut running.child);
-                        let _ = running.child.wait();
+                        let _ = inner(&mut running.child).wait();
                     }
-                    return Err(Fail::with("core_failed", error));
+                    break Err(Fail::with("core_failed", error));
                 }
-                None => return Err(Fail::new("cancelled")),
+                None => break Err(Fail::new("cancelled")),
             }
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
     };
-    if cancelled.load(Ordering::SeqCst) {
-        return Err(Fail::new("cancelled"));
-    }
+    // Join on cancelled/error paths as well: no old progress callback may arrive
+    // after this operation reports completion or a new operation takes its slot.
     let stdout = out.and_then(|t| t.join().ok()).unwrap_or_default();
     let stderr = err.and_then(|t| t.join().ok()).unwrap_or_default();
-    if cancelled.load(Ordering::SeqCst) {
-        return Err(Fail::new("cancelled"));
-    }
-    core_result(status, &stdout, &stderr)
-    })();
+    let result = if cancelled.load(Ordering::SeqCst) {
+        Err(Fail::new("cancelled"))
+    } else { status.and_then(|status| core_result(status, &stdout, &stderr)) };
     if tracked_repo.is_some() {
         let saved = crate::edit_app_settings(|settings| {
-            let task = &mut settings["tasks"]["analysis"];
+            let Some(task) = settings.get_mut("tasks").and_then(|tasks| tasks.get_mut("analysis")) else { return; };
             if task["id"].as_str() != Some(task_id.as_str()) { return; }
             task["finishedAt"] = serde_json::json!(now());
             match &result {
@@ -180,23 +182,6 @@ fn run_core_job(args: &[&str], lang: Option<&str>, progress: Option<ProgressSink
         if result.is_ok() { saved?; }
     }
     result
-}
-
-fn stop(child: &mut Child) {
-    #[cfg(unix)]
-    if let Ok(pgid) = i32::try_from(child.id()) {
-        if pgid > 1 {
-            // SAFETY: core_cmd starts a fresh process group, whose id is this
-            // child's pid. No memory is accessed by this signal operation.
-            unsafe { libc::kill(-pgid, libc::SIGKILL) };
-        }
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let _ = std::process::Command::new("taskkill").args(["/T", "/F", "/PID", &child.id().to_string()]).creation_flags(0x0800_0000).status();
-    }
-    let _ = child.kill();
 }
 
 /// Cancels the current process group, including Git children. The running call
@@ -218,7 +203,7 @@ pub fn recover_interrupted_analysis() -> Res<Value> {
     let lease = job_lease()?;
     if lease.try_lock().is_err() { return Ok(analysis_status()); }
     crate::edit_app_settings(|settings| {
-        let task = &mut settings["tasks"]["analysis"];
+        let Some(task) = settings.get_mut("tasks").and_then(|tasks| tasks.get_mut("analysis")) else { return; };
         if task["state"].as_str() == Some("running") {
             task["state"] = serde_json::json!("interrupted");
             task["interruptedAt"] = serde_json::json!(now());

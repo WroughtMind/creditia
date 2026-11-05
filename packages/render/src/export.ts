@@ -65,7 +65,8 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
   const svg = (a: Art, fontMode: 'outline' | 'embed' = 'outline') => {
     if (fontMode === 'embed' && !R.embed) throw new Error('Font embedding is unavailable in this renderer');
     const source = fontMode === 'embed' ? R.embed!(a.svg) : R.flat(a.svg);
-    return source.replace(/^<svg/, `<svg role="img" aria-label="${attr(a.title)}"`);
+    return source.replace(/^<svg\b([^>]*)>/, (_root, attributes: string) =>
+      `<svg${attributes.replace(/\s+(?:role|aria-label)="[^"]*"/g, '')} role="img" aria-label="${attr(a.title)}">`);
   };
 
   async function pdf(a: Art, scale = 3): Promise<Uint8Array> {
@@ -113,7 +114,7 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
   }
 
   /** 单文件 HTML：画面是文字转路径后的 SVG，交互层盖在上面。arts 多于一张时排成一页 */
-  function html(arts: Art[], o: { title: string; lang?: string; bg?: string; note?: string; fontMode?: 'outline' | 'embed' } ): string {
+  function html(arts: Art[], o: { title: string; lang?: string; bg?: string; note?: string; fontMode?: 'outline' | 'embed'; reducedMotion?: boolean } ): string {
     const bg = o.bg ?? arts[0]?.bg ?? '#111';
     const blocks = arts.map((a, i) => {
       const flat = svg(a, o.fontMode);
@@ -150,6 +151,7 @@ body.wall .piece.wide{column-span:all;max-width:100%!important}
 @keyframes rise{from{opacity:0;transform:translateY(16px) scale(.985);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
 footer{font:12px/1.4 Inter,-apple-system,"PingFang SC",sans-serif;color:${lumOf(bg) > 0.5 ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.45)'};text-align:center}
 ${INTERACT_CSS}
+${o.reducedMotion ? '.piece,.screen .reel{animation:none!important}.screen .reel .ct-art{top:0}.ct-hit,.ct-tip{transition:none!important}' : ''}
 @media(prefers-reduced-motion:reduce){.piece,.screen .reel{animation:none!important}.screen .reel .ct-art{top:0}.ct-hit,.ct-tip{transition:none!important}}
 </style>
 </head>

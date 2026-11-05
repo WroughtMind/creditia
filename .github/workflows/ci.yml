@@ -29,6 +29,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
+        with: { cache-on-failure: true }
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
@@ -67,6 +68,19 @@ jobs:
           node_modules/.bin/creditia doc --credits "$GITHUB_WORKSPACE/packages/render/fixtures/catnap.json" --out CREDITS.md
           node_modules/.bin/creditia export --credits "$GITHUB_WORKSPACE/packages/render/fixtures/catnap.json" --piece tier --style ink --format png --out tier.png
 
+
+  web-renderer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            packages/render/package-lock.json
+            packages/embed/package-lock.json
+      - run: npm ci --prefix packages/render
       - name: Build the web adapter with the shared renderer and pinned fonts
         run: |
           npm ci --prefix packages/embed
@@ -80,6 +94,16 @@ jobs:
             packages/embed/dist
             packages/render/fixtures/catnap.json
           retention-days: 7
+
+      - name: Retain exact renderer dependencies for reproducing failed acceptance
+        if: always()
+        run: tar -czf "$RUNNER_TEMP/creditia-render-runtime.tar.gz" packages/render/node_modules packages/embed/node_modules
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creditia-render-debug-runtime
+          path: ${{ runner.temp }}/creditia-render-runtime.tar.gz
+          retention-days: 3
 
   desktop-macos:
     runs-on: macos-26

@@ -82,7 +82,7 @@ test('SVG time sampling matches exported frames, including scrolling crops', () 
   }
 });
 
-test('every catalog style/piece/layout keeps the shared renderer data and geometry', async () => {
+test('every catalog style/piece/layout keeps the shared renderer data and geometry', async t => {
   let count = 0;
   for (const style of renderCatalog().styles) {
     const theme = C.themeById(style.id);
@@ -91,14 +91,20 @@ test('every catalog style/piece/layout keeps the shared renderer data and geomet
       for (const variant of [undefined, ...piece.variants.map(v => v.id)]) {
         const group = count % 2 ? 'model' : 'tool', named = count % 3 === 0;
         const options = { lang: 'en' as const, group: group as 'tool' | 'model', named };
-        const actual = unwrap(await renderRequest({ ...request, ...options, style: style.id, piece: piece.id, variant })).art;
-        const expected = theme
-          ? await C.art(piece.id, C.buildModel(raw, { director: false, ...options }), theme, { lang: 'en', variant })
-          : art(piece.id, buildModel(raw, { ...options, sign: '' }), STYLES.find(s => s.id === style.id)!, { variant });
-        assert.deepEqual(normalizedArt(actual), normalizedArt(expected), `${style.id}/${piece.id}/${variant ?? 'default'}`);
+        const row = `${count}: ${style.id}/${piece.id}/${variant ?? 'default'} group=${group} named=${named}`;
+        try {
+          const actual = unwrap(await renderRequest({ ...request, ...options, style: style.id, piece: piece.id, variant })).art;
+          const expected = theme
+            ? await C.art(piece.id, C.buildModel(raw, { director: false, ...options }), theme, { lang: 'en', variant })
+            : art(piece.id, buildModel(raw, { ...options, sign: '' }), STYLES.find(s => s.id === style.id)!, { variant });
+          assert.deepEqual(normalizedArt(actual), normalizedArt(expected), row);
+        } catch (error) {
+          throw new Error(`Matrix row ${row}; memory=${JSON.stringify(process.memoryUsage())}`, { cause: error });
+        }
         count++;
       }
     }
+    t.diagnostic(`${style.id}: ${count} cumulative rows; memory=${JSON.stringify(process.memoryUsage())}`);
   }
   assert.ok(count > 1482, `Expected complete desktop matrix plus default layouts; compared ${count}`);
 });
@@ -240,7 +246,13 @@ test('text, archive, embed and cross-project output use the shared data model', 
     const text = Buffer.from(result.bytes, 'base64').toString();
     assert.ok(text.length > 20);
     if (format === 'json') assert.deepEqual(JSON.parse(text), raw);
-    if (format === 'embed') assert.ok(text.includes('<creditia-card'));
+    if (format === 'embed') {
+      assert.ok(text.includes('<creditia-card'));
+      assert.ok(text.includes('renderer="classic"'));
+      assert.ok(text.includes('lang="en"'));
+      assert.ok(text.includes('group="auto"'));
+      assert.ok(text.includes('named="true"'));
+    }
   }
   const merge = unwrap(await renderRequest({ version: 1, id: 'merge', op: 'merge', projects: [raw, raw], lang: 'en' }));
   assert.equal(merge.raw.totals.linesAdded, raw.totals.linesAdded * 2);
@@ -261,6 +273,12 @@ test('transparent PNG removes the canvas and SVG font embedding includes actual 
   assert.ok(svg.includes('@font-face'));
   assert.ok(svg.includes('data:font/ttf;base64,'));
   assert.ok(!svg.includes('file://'));
+  const badge = unwrap(await renderRequest({ ...request, piece: 'badge', variant: 'original', op: 'export', format: 'svg', fontMode: 'embed' }));
+  const badgeSvg = Buffer.from(badge.bytes, 'base64').toString();
+  const root = /^<svg\b[^>]*>/.exec(badgeSvg)![0];
+  assert.equal((root.match(/\brole=/g) ?? []).length, 1);
+  assert.equal((root.match(/\baria-label=/g) ?? []).length, 1);
+  assert.ok(badgeSvg.includes('font-family="Noto Sans SC"'));
 });
 
 test('standalone HTML includes hover placement and cannot terminate its own script with an archive title', async () => {
@@ -269,4 +287,17 @@ test('standalone HTML includes hover placement and cannot terminate its own scri
   const html = Buffer.from(result.bytes, 'base64').toString();
   assert.ok(html.includes('function placeTip('));
   assert.ok(!html.includes('</script><script>alert(1)</script>'));
+});
+
+test('GIF preserves transparent pixels and explicit reduced motion produces a still HTML document', async () => {
+  const gif = unwrap(await renderRequest({ ...request, op: 'export', format: 'gif', transparent: true, frameCount: 2, width: 80 }));
+  const bytes = Buffer.from(gif.bytes, 'base64');
+  const controls: number[] = [];
+  for (let i = 0; i + 7 < bytes.length; i++) if (bytes[i] === 0x21 && bytes[i + 1] === 0xf9 && bytes[i + 2] === 4 && bytes[i + 7] === 0) controls.push(bytes[i + 3]);
+  assert.equal(controls.length, 3);
+  assert.ok(controls.every(flags => (flags & 1) !== 0), 'every frame declares a transparent palette entry');
+  const result = unwrap(await renderRequest({ ...request, op: 'export', format: 'html', reducedMotion: true }));
+  const html = Buffer.from(result.bytes, 'base64').toString();
+  assert.ok(!html.includes('htmlPlayer('));
+  assert.ok(html.includes('.piece,.screen .reel{animation:none!important}'));
 });

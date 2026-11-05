@@ -39,7 +39,7 @@ export function layout(root, platform) {
   return { app, bin, resources, gui: path.join(bin, `creditia-gpui${platform === 'win32' ? '.exe' : ''}`), core: path.join(bin, `creditia-core${platform === 'win32' ? '.exe' : ''}`), node: path.join(resources, `node${platform === 'win32' ? '.exe' : ''}`), bridge: path.join(resources, 'render', 'tools', 'bridge.mjs') };
 }
 
-export async function stage({ target, output, appBin, coreBin, nodeBin = process.execPath, nodeLicense, nodeProvenance, source = repo, platform = process.platform }) {
+export async function stage({ target, output, appBin, coreBin, nodeBin = process.execPath, nodeLicense, nodeProvenance, migrationBin, source = repo, platform = process.platform }) {
   if (!safe(target)) throw new Error('Invalid Rust target');
   const root = path.resolve(output, `creditia-gpui-${target}`);
   const paths = layout(root, platform);
@@ -54,6 +54,13 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
   if (!nodeLicense) throw new Error('Pass --node-license with the license for the bundled Node version');
   await copyFile(nodeLicense, path.join(paths.resources, 'licenses/Node-LICENSE.txt'));
   if (nodeProvenance) await copyFile(nodeProvenance, path.join(paths.resources, 'licenses/Node-provenance.json'));
+  if (migrationBin) {
+    if (platform === 'darwin') {
+      const migrationApp=path.join(paths.resources,'legacy/Creditia Migration.app');
+      await copyFile(migrationBin,path.join(migrationApp,'Contents/MacOS/creditia'),0o755);
+      await fs.writeFile(path.join(migrationApp,'Contents/Info.plist'),`<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>creditia</string><key>CFBundleIdentifier</key><string>dev.creditia.app</string><key>CFBundleName</key><string>Creditia Migration</string><key>CFBundleVersion</key><string>${xml(version)}</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/><key>NSHighResolutionCapable</key><true/><key>NSPrincipalClass</key><string>NSApplication</string></dict></plist>\n`);
+    } else await copyFile(migrationBin,path.join(paths.resources,`legacy/creditia-migrate${platform==='win32'?'.exe':''}`),0o755);
+  }
 
   const render = path.join(source, 'packages/render');
   const destination = path.join(paths.resources, 'render');
@@ -86,11 +93,13 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
     if (!faces) { await fs.rm(pkgRoot, { recursive: true }); continue; }
     for (const child of await fs.readdir(pkgRoot, { withFileTypes: true })) {
       if (child.isDirectory() && !faces.has(child.name)) await fs.rm(path.join(pkgRoot, child.name), { recursive: true });
+      else if (child.isFile() && child.name!=='package.json' && !/^(license|ofl|fontlog|copying|notice)([._-]|$)/i.test(child.name)) await fs.rm(path.join(pkgRoot,child.name));
     }
     for (const face of faces) {
       const names = await fs.readdir(path.join(pkgRoot, face));
       const ttf = names.find(name => name.endsWith('.ttf'));
       if (!ttf) throw new Error(`Required font is missing: ${entry.name}/${face}`);
+      for(const name of names)if(!/\.(ttf|otf)$/i.test(name)&&!/^(license|ofl|fontlog|copying|notice)([._-]|$)/i.test(name))await fs.rm(path.join(pkgRoot,face,name),{recursive:true,force:true});
       fontFiles.push(path.relative(root, path.join(pkgRoot, face, ttf)).split(path.sep).join('/'));
     }
   }
@@ -113,17 +122,18 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
     await fs.writeFile(path.join(root, 'creditia.desktop'), '[Desktop Entry]\nType=Application\nName=Creditia\nComment=Your coding agents, in credits\nExec=creditia-gpui\nTerminal=false\nCategories=Development;Graphics;\n');
   }
   const nodeVersion = execFileSync(nodeBin, ['--version'], { encoding: 'utf8' }).trim();
-  const receipt = { schema: 1, product: 'creditia-gpui', version, target, platform, nodeVersion, commit: process.env.GITHUB_SHA ?? null, sourceDateEpoch: process.env.SOURCE_DATE_EPOCH ?? null, fontFiles, files: [] };
+  const receipt = { schema: 1, product: 'creditia-gpui', version, target, platform, nodeVersion, commit: process.env.GITHUB_SHA ?? null, sourceDateEpoch: process.env.SOURCE_DATE_EPOCH ?? null, legacyMigrationHelper: !!migrationBin, fontFiles, files: [] };
   await fs.writeFile(path.join(root, 'package-info.json'), JSON.stringify(receipt, null, 2) + '\n');
   return { root, ...paths };
 }
 
 export async function seal(root) {
   const info = JSON.parse(await fs.readFile(path.join(root, 'package-info.json'), 'utf8'));
-  info.files = await Promise.all((await files(root)).filter(p => p !== 'package-info.json').map(async p => {
+  info.files = [];
+  for(const p of (await files(root)).filter(p => p !== 'package-info.json')) {
     const bytes = await fs.readFile(path.join(root, p));
-    return { path: p, size: bytes.length, sha256: digest(bytes) };
-  }));
+    info.files.push({ path: p, size: bytes.length, sha256: digest(bytes) });
+  }
   await fs.writeFile(path.join(root, 'package-info.json'), JSON.stringify(info, null, 2) + '\n');
   return info;
 }
@@ -144,7 +154,9 @@ export async function verify(root) {
 
 export function bridgeRequest(node, bridge, request, cwd, timeout = 90_000) {
   return new Promise((resolve, reject) => {
-    const child = spawn(node, [bridge], { cwd, windowsHide: true, env: { ...process.env, NODE_PATH: '', CREDITIA_CORE: '' }, stdio: ['pipe','pipe','pipe'] });
+    const env={...process.env};
+    for(const key of ['NODE_PATH','NODE_OPTIONS','CREDITIA_CORE','CREDITIA_NODE','CREDITIA_RENDER_BRIDGE'])delete env[key];
+    const child = spawn(node, [bridge], { cwd, windowsHide: true, env, stdio: ['pipe','pipe','pipe'] });
     let output = '', error = '', settled = false;
     const timer = setTimeout(() => { child.kill(); finish(new Error('Packaged renderer timed out')); }, timeout);
     function finish(failure, value) { if (settled) return; settled = true; clearTimeout(timer); failure ? reject(failure) : resolve(value); }
@@ -164,11 +176,13 @@ export function bridgeRequest(node, bridge, request, cwd, timeout = 90_000) {
 export async function smoke(root, fixture, output) {
   const info = await verify(root), paths = layout(root, info.platform);
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'creditia-packaged-'));
-  const report = { schema: 1, candidate_sha: info.commit, target: info.target, nodeVersion: info.nodeVersion, fixture_sha256: digest(await fs.readFile(fixture)), tests: [] };
+  const report = { schema_version: 1, kind: 'package', provenance:{candidate_sha: info.commit,fixture:{path:path.basename(fixture),sha256:digest(await fs.readFile(fixture)),kind:'synthetic_render_fixture'}}, platform:`${info.platform}-${process.arch}`,target:info.target,nodeVersion: info.nodeVersion, tests: [],acceptance:{passed:false},complete:false,artifacts:[] };
+  const artifact=async(name,bytes)=>{await fs.mkdir(path.dirname(path.join(path.dirname(output),name)),{recursive:true});await fs.writeFile(path.join(path.dirname(output),name),bytes);report.artifacts.push({path:name,bytes:Buffer.byteLength(bytes),sha256:digest(bytes)});};
   try {
-    const env = { ...process.env, CREDITIA_HOME: path.join(temporary, 'library'), CREDITIA_CORE: '', CREDITIA_NODE: '', CREDITIA_RENDER_BRIDGE: '' };
+    const env = { ...process.env, CREDITIA_HOME: path.join(temporary, 'library') };
+    for(const key of ['CREDITIA_CORE','CREDITIA_NODE','CREDITIA_RENDER_BRIDGE','NODE_PATH','NODE_OPTIONS'])delete env[key];
     // Run outside the source checkout to detect accidental development paths.
-    execFileSync(paths.core, ['help'], { cwd: temporary, env, timeout: 30_000, stdio: 'pipe' });
+    await artifact('analysis-core-help.txt',execFileSync(paths.core, ['help'], { cwd: temporary, env, timeout: 30_000, stdio: 'pipe' }));
     report.tests.push({ name: 'bundled-analysis-core-launches', status: 'passed' });
     const catalog = await bridgeRequest(paths.node, paths.bridge, { version: 1, id: 'catalog', op: 'catalog' }, temporary);
     if (catalog.styles.length !== 26) throw new Error(`Expected 26 desktop styles, got ${catalog.styles.length}`);
@@ -177,16 +191,20 @@ export async function smoke(root, fixture, output) {
     const common = { version: 1, raw, style: 'minimal-light', piece: 'asterisk', lang: 'zh', group: 'auto', named: false };
     const image = await bridgeRequest(paths.node, paths.bridge, { ...common, id: 'preview', op: 'render', flatten: true }, temporary);
     if (!image.art?.svg?.includes('<svg')) throw new Error('Packaged preview is missing');
+    await artifact('preview.svg',image.art.svg);
     report.tests.push({ name: 'bundled-fonts-and-preview', status: 'passed' });
     for (const format of ['png','svg','pdf','gif','html']) {
       const result = await bridgeRequest(paths.node, paths.bridge, { ...common, id: format, op: 'export', format, size: 'native', frameCount: 2 }, temporary);
       const bytes = Buffer.from(result.bytes, 'base64');
       if (!bytes.length || result.ext !== format) throw new Error(`Invalid ${format} export`);
+      await artifact(`exports/asterisk.${format}`,bytes);
       report.tests.push({ name: `bundled-export-${format}`, status: 'passed', bytes: bytes.length, sha256: digest(bytes) });
     }
-    execFileSync(paths.gui, ['--check-resources'], { cwd: temporary, env, timeout: 90_000, stdio: 'pipe' });
+    await artifact('native-resource-check.txt',execFileSync(paths.gui, ['--check-resources'], { cwd: temporary, env, timeout: 90_000, stdio: 'pipe' }));
+    await artifact('package-info.json',await fs.readFile(path.join(root,'package-info.json')));
     report.tests.push({ name: 'native-executable-resource-discovery', status: 'passed' });
     report.status = 'passed';
+    report.acceptance.passed=true;report.complete=true;
   } catch (error) { report.status = 'failed'; report.error = error.message; throw error; }
   finally {
     await fs.rm(temporary, { recursive: true, force: true });
@@ -202,7 +220,7 @@ async function main(args) {
   if (command === 'stage') {
     const target = opts.target;
     if (!target || !opts.output) throw new Error('stage requires --target and --output');
-    const result = await stage({ target, output: opts.output, appBin: opts['app-bin'] ?? path.join(repo, `apps/gpui/target/${target}/release/creditia-gpui${executable}`), coreBin: opts['core-bin'] ?? path.join(repo, `target/${target}/release/creditia-core${executable}`), nodeBin: opts['node-bin'], nodeLicense: opts['node-license'], nodeProvenance: opts['node-provenance'] });
+    const result = await stage({ target, output: opts.output, appBin: opts['app-bin'] ?? path.join(repo, `apps/gpui/target/${target}/release/creditia-gpui${executable}`), coreBin: opts['core-bin'] ?? path.join(repo, `target/${target}/release/creditia-core${executable}`), nodeBin: opts['node-bin'], nodeLicense: opts['node-license'], nodeProvenance: opts['node-provenance'],migrationBin:opts['migration-bin'] });
     console.log(JSON.stringify(result));
   } else if (command === 'seal') console.log(JSON.stringify(await seal(path.resolve(opts.root))));
   else if (command === 'verify') { const r = await verify(path.resolve(opts.root)); console.log(`verified ${r.files.length} files for ${r.target}`); }

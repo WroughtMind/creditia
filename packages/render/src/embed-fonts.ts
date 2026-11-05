@@ -3,12 +3,13 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { referencedFonts } from './fonts.ts';
+import { referencedFonts, portableFontFamilies } from './fonts.ts';
 const require = createRequire(import.meta.url);
 const cached = new Map<string, string>();
 let cacheBytes = 0;
 
 export function embeddedFonts(svg: string): string {
+  svg = portableFontFamilies(svg);
   const refs = referencedFonts(svg);
   if (!refs.length) return svg;
   const css = refs.map(face => {

@@ -6,7 +6,7 @@ import { timeAt, type Animation } from '../../render/src/timeline.ts';
 import { renderWeb } from './backend.ts';
 
 class CreditiaCard extends HTMLElement {
-  static observedAttributes = ['src', 'piece', 'form', 'theme', 'renderer', 'variant', 'lang', 'group', 'named', 'sign', 'animated'];
+  static observedAttributes = ['src', 'piece', 'form', 'theme', 'renderer', 'variant', 'lang', 'group', 'named', 'sign', 'transparent', 'animated'];
   private raw: unknown;
   private generation = 0;
   private loading: AbortController | null = null;
@@ -25,8 +25,12 @@ class CreditiaCard extends HTMLElement {
   private activity = () => { this.lastTick = 0; this.schedule(); };
   private reduced = () => {
     this.lastTick = 0;
-    if (this.media.matches && this.animation?.frames.length) this.show(this.animation.frames.at(-1)!);
-    else this.schedule();
+    this.stop(); this.index = -1;
+    if (this.media.matches && this.animation?.frames.length) {
+      this.show(this.animation.frames.at(-1)!); this.updateControl();
+    } else if (this.animation?.timeline.durationMs === 0 && this.hasAttribute('animated')) {
+      void this.paint();
+    } else { this.updateControl(); this.schedule(); }
   };
   connectedCallback() {
     this.observer = new IntersectionObserver(entries => {
@@ -55,6 +59,7 @@ class CreditiaCard extends HTMLElement {
       piece: this.getAttribute('piece') || this.getAttribute('form') || 'tier',
       ...(this.getAttribute('variant') ? { variant: this.getAttribute('variant') } : {}),
       lang: this.language(), group: group === 'tool' || group === 'model' ? group : 'auto',
+      transparent: this.hasAttribute('transparent') && this.getAttribute('transparent') !== 'false',
       named: this.hasAttribute('named') && this.getAttribute('named') !== 'false', sign: this.getAttribute('sign') || '',
     };
   }
@@ -76,6 +81,7 @@ class CreditiaCard extends HTMLElement {
   private async paint() {
     if (!this.raw || !this.isConnected) return;
     const version = ++this.generation;
+    this.removeAttribute('role');
     this.stop(); this.animation = null; this.elapsed = 0; this.index = -1;
     this.setAttribute('aria-busy', 'true'); const request = this.selection();
     try {
@@ -103,6 +109,8 @@ class CreditiaCard extends HTMLElement {
           this.control = document.createElement('button'); this.control.className = 'ct-play'; this.control.type = 'button';
           this.control.onclick = () => this.paused ? this.play() : this.pause();
           this.appendChild(this.control); this.updateControl(); this.schedule();
+          this.dispatchEvent(new CustomEvent('creditia-animation-ready', { detail: {
+            timeline: sequence.timeline, frameCount: sequence.frames.length } }));
         } catch (error) { this.dispatchEvent(new CustomEvent('creditia-animation-error', { detail: error })); }
       }
     } catch (error) { if (version === this.generation) this.fail(error); }
@@ -133,6 +141,8 @@ class CreditiaCard extends HTMLElement {
   }
   private updateControl() {
     if (!this.control) return;
+    this.control.disabled = this.media.matches || !this.animation || this.animation.frames.length < 2;
+    this.control.hidden = this.control.disabled;
     this.control.textContent = this.paused ? (this.language() === 'zh' ? '播放' : 'Play') : (this.language() === 'zh' ? '暂停' : 'Pause');
     this.control.setAttribute('aria-pressed', String(!this.paused));
   }

@@ -11,6 +11,8 @@ struct Fixture {
     root: PathBuf,
     previous_home: Option<std::ffi::OsString>,
     previous_core: Option<std::ffi::OsString>,
+    previous_helper: Option<std::ffi::OsString>,
+    previous_test_runner: Option<std::ffi::OsString>,
 }
 impl Fixture {
     fn new(name: &str) -> Self {
@@ -19,8 +21,10 @@ impl Fixture {
         std::fs::create_dir_all(&root).unwrap();
         let previous_home = std::env::var_os("CREDITIA_HOME");
         let previous_core = std::env::var_os("CREDITIA_CORE");
+        let previous_helper = std::env::var_os("CREDITIA_MIGRATION_HELPER");
+        let previous_test_runner = std::env::var_os("CREDITIA_SERVICE_TEST_RUNNER");
         std::env::set_var("CREDITIA_HOME", root.join("library"));
-        Self { root, previous_home, previous_core }
+        Self { root, previous_home, previous_core, previous_helper, previous_test_runner }
     }
     fn project(&self) -> Project {
         let repo = self.root.join("project");
@@ -43,7 +47,7 @@ impl Fixture {
 impl Drop for Fixture {
     fn drop(&mut self) {
         service::cancel_analyze();
-        for (key, previous) in [("CREDITIA_HOME", &self.previous_home), ("CREDITIA_CORE", &self.previous_core)] {
+        for (key, previous) in [("CREDITIA_HOME", &self.previous_home), ("CREDITIA_CORE", &self.previous_core), ("CREDITIA_MIGRATION_HELPER", &self.previous_helper), ("CREDITIA_SERVICE_TEST_RUNNER", &self.previous_test_runner)] {
             match previous {
                 Some(value) => std::env::set_var(key, value),
                 None => std::env::remove_var(key),
@@ -101,6 +105,12 @@ fn settings_and_project_display_preserve_existing_fields() {
     let value = service::config_of(project.id).unwrap();
     assert_eq!(value["branch"], "release");
     assert_eq!(value["custom"]["keep"], true);
+    service::set_project_config("existing-project".into(), json!({"privacy":{"hidePaths":true,"aliases":{"person":"alias"}},"level":"strict"})).unwrap();
+    let before_invalid = std::fs::read(&config).unwrap();
+    assert!(service::set_project_config("existing-project".into(), json!({"privacy":{"hidePaths":null}})).is_err());
+    assert!(service::set_project_config("existing-project".into(), json!({"repo":"/other"})).is_err());
+    assert_eq!(std::fs::read(&config).unwrap(), before_invalid);
+
 
     let exports = fixture.root.join("exports");
     std::fs::create_dir_all(&exports).unwrap();
@@ -169,6 +179,29 @@ exit 2
     assert!(cancel_at.elapsed() < std::time::Duration::from_secs(5));
     assert!(!service::analysis_running());
 
+    // Even a progress callback that was already dispatched must finish before
+    // cancellation reports completion and a replacement job can start.
+    fixture.core("echo '@progress {\"phase\":\"git\"}' >&2; sleep 30; echo '{}'");
+    let (progress_started, ready) = std::sync::mpsc::channel();
+    let release_progress = Arc::new(std::sync::Barrier::new(2));
+    let release = release_progress.clone();
+    let token = service::AnalysisCancellation::default();
+    let worker_token = token.clone();
+    let (completed, completion) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let result = service::run_analysis_with_cancel("/tmp", None, Some(Arc::new(move |_| {
+            progress_started.send(()).unwrap(); release.wait();
+        })), worker_token);
+        completed.send(()).unwrap();
+        result
+    });
+    ready.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+    token.cancel();
+    let premature_completion = completion.recv_timeout(std::time::Duration::from_millis(150)).is_ok();
+    release_progress.wait();
+    assert_eq!(worker.join().unwrap().unwrap_err().code, "cancelled");
+    assert!(!premature_completion, "completion must wait for in-flight progress to drain");
+
     fixture.core("echo '{\"restarted\":true}'");
     assert_eq!(service::run_analysis("/tmp", None, None).unwrap()["restarted"], true);
     std::env::set_var("CREDITIA_CORE", fixture.root.join("missing"));
@@ -220,8 +253,17 @@ fn corrupted_settings_are_not_overwritten_and_future_versions_are_preserved() {
     assert_eq!(service::edit_app_settings(|s| s["logo"] = json!("star")).unwrap_err().code, "settings_invalid");
     assert_eq!(std::fs::read(&path).unwrap(), b"{unfinished");
     std::fs::write(&path, r#"{"ui":{"version":2,"unknown":"future"},"keep":9}"#).unwrap();
+    let future = std::fs::read(&path).unwrap();
     assert_eq!(service::patch_ui_preferences(json!({"global":{"named":false}})).unwrap_err().code, "preferences_version");
+    assert_eq!(service::import_legacy_preferences(json!({"creditia.names":"on"})).unwrap_err().code, "preferences_version");
+    assert_eq!(std::fs::read(&path).unwrap(), future, "unsupported versions are not rewritten");
     assert_eq!(service::app_settings()["ui"]["unknown"], "future");
+    for malformed in [json!({"version":1,"legacy":[]}), json!({"version":"future"}), json!({"version":1,"projects":{"a":false}})] {
+        std::fs::write(&path, serde_json::to_vec(&json!({"ui":malformed,"keep":9})).unwrap()).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        assert!(service::import_legacy_preferences(json!({"creditia.names":"on"})).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
 }
 
 // Invoked as an isolated test subprocess by the following test. This exercises
@@ -258,6 +300,47 @@ fn concurrent_desktop_processes_merge_settings_without_partial_json() {
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
     assert_eq!(service::app_settings()["counter"], 100);
+}
+
+#[cfg(unix)]
+#[test]
+fn migration_child_process() {
+    match std::env::var("CREDITIA_SERVICE_TEST_MIGRATOR").as_deref() {
+        Ok("launch") => { service::migrate_legacy_with_helper().unwrap(); }
+        Ok("import") => {
+            // Give the other desktop time to contend for the migration lease.
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            service::import_legacy_preferences(json!({"creditia.names":"off","creditia.group.original.project":"model"})).unwrap();
+            service::edit_app_settings(|settings| settings["helperRuns"] = json!(settings["helperRuns"].as_u64().unwrap_or(0) + 1)).unwrap();
+        }
+        _ => {}
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn simultaneous_desktops_run_one_migration_helper_and_failed_import_keeps_privacy() {
+    use std::os::unix::fs::PermissionsExt;
+    let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
+    let fixture = Fixture::new("migration-processes");
+    let helper = fixture.root.join("migration-helper");
+    std::fs::write(&helper, "#!/bin/sh\n[ \"$1\" = --migrate-ui-settings ] || exit 9\nCREDITIA_SERVICE_TEST_MIGRATOR=import exec \"$CREDITIA_SERVICE_TEST_RUNNER\" --exact migration_child_process\n").unwrap();
+    std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::env::set_var("CREDITIA_MIGRATION_HELPER", &helper);
+    std::env::set_var("CREDITIA_SERVICE_TEST_RUNNER", std::env::current_exe().unwrap());
+    let mut desktops = (0..2).map(|_| std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "migration_child_process"]).env("CREDITIA_SERVICE_TEST_MIGRATOR", "launch")
+        .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap()).collect::<Vec<_>>();
+    for desktop in &mut desktops { assert!(desktop.wait().unwrap().success()); }
+    assert_eq!(service::app_settings()["helperRuns"], 1);
+    assert_eq!(service::ui_preferences()["global"]["named"], false);
+    assert_eq!(service::ui_preferences()["projects"]["original.project"]["group"], "model");
+
+    std::fs::write(creditia_store::data_dir().join("app.json"), r#"{"keep":"original"}"#).unwrap();
+    std::fs::write(&helper, "#!/bin/sh\nexit 1\n").unwrap();
+    assert_eq!(service::migrate_legacy_with_helper().unwrap_err().code, "migration_failed");
+    assert_eq!(service::ui_preferences()["global"]["named"], false);
+    assert_eq!(service::app_settings(), json!({"keep":"original"}));
 }
 
 #[cfg(unix)]

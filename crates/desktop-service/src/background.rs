@@ -1,7 +1,7 @@
 //! Desktop-independent collection, archive refresh and incremental catch-up.
 //! The host forwards events to its UI executor and owns this handle's lifetime.
 use crate::{AnalysisCancellation, ProgressSink};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
@@ -39,6 +39,7 @@ impl BackgroundService {
     }
     pub fn set_active(&self, active: bool) {
         let mut state = self.shared.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.active == active { return; }
         state.active = active;
         if active { self.shared.wake.notify_one(); }
     }
@@ -108,15 +109,19 @@ fn run(shared: Arc<Shared>, events: ProgressSink) {
                                 let result = crate::analyze_with_cancel(id.clone(), Some(lang), Some(progress), token);
                                 finish(&shared, generation);
                                 if result.as_ref().err().is_none_or(|e| e.code != "busy" && e.code != "cancelled") { tried.insert(id.clone(), head); }
-                                if current(&shared, generation) {
-                                    match result {
-                                        Ok(result) => {
+                                match result {
+                                    Ok(result) => {
+                                        events(json!({"kind":"analysis-finished","projectId":id,"generation":generation,"result":result}));
+                                        if current(&shared, generation) {
                                             if let Ok(stamp) = crate::stamp(id.clone()) { stamps.insert(id.clone(), stamp); }
-                                            events(json!({"kind":"analysis-finished","projectId":id,"generation":generation,"result":result}));
                                             events(json!({"kind":"archive-changed","projectId":id,"generation":generation}));
                                         }
-                                        Err(error) if error.code != "busy" && error.code != "cancelled" => events(json!({"kind":"error","operation":"auto-analysis","projectId":id,"error":error})),
-                                        Err(_) => {}
+                                    }
+                                    Err(error) => {
+                                        events(json!({"kind":"analysis-finished","projectId":id,"generation":generation,"error":error,"cancelled":error.code=="cancelled"}));
+                                        if current(&shared, generation) && error.code != "busy" && error.code != "cancelled" {
+                                            events(json!({"kind":"error","operation":"auto-analysis","projectId":id,"error":error}));
+                                        }
                                     }
                                 }
                             }
@@ -139,6 +144,7 @@ fn run(shared: Arc<Shared>, events: ProgressSink) {
                 }
             }
         }
+        if shared.state.lock().unwrap_or_else(|e| e.into_inner()).stop { break; }
         let last = crate::collection::last_collect()["at"].as_i64().unwrap_or(0);
         if started.elapsed() >= Duration::from_secs(30) && crate::collection::collect_on()
             && crate::collection::now() - last >= crate::collection::COLLECT_EVERY && current(&shared, generation) {
@@ -154,6 +160,7 @@ fn run(shared: Arc<Shared>, events: ProgressSink) {
         }
         let state = shared.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.stop { break; }
+        if state.generation != generation { continue; }
         // No frame-rate timer: the thread sleeps until a focus/project event or
         // the 30-second archive refresh deadline, including while UI is idle.
         drop(shared.wake.wait_timeout(state, Duration::from_secs(30)));

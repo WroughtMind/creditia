@@ -170,9 +170,8 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
       const view = input.by ?? 'tool';
       const value = format === 'json' ? JSON.stringify(raw, null, 2) + '\n'
         : format === 'md' ? creditsBlock(textModel(), 10, view) + '\n'
-        : format === 'txt' ? fetchSegs(textModel(), view).map(line => line.map(segment => segment.text).join('')).join('\n') + '\n'
-        : embedSnippet(string(input.piece ?? 'tier', 'piece'), string(input.style ?? 'minimal-light', 'style'), '/.creditia/credits.json', input.variant === undefined ? undefined : string(input.variant, 'variant'));
-      return output(id, encoder.encode(value), format === 'json' ? 'application/json' : format === 'md' ? 'text/markdown' : 'text/plain', format === 'embed' ? 'html' : format);
+        : fetchSegs(textModel(), view).map(line => line.map(segment => segment.text).join('')).join('\n') + '\n';
+      return output(id, encoder.encode(value), format === 'json' ? 'application/json' : format === 'md' ? 'text/markdown' : 'text/plain', format);
     }
     const styleId = string(input.style, 'style'), pieceId = string(input.piece, 'piece');
     if (input.renderer !== undefined && !['classic', 'svg'].includes(input.renderer)) fail('invalid_request', 'renderer must be classic or svg');
@@ -183,7 +182,8 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
     if (!piece) fail('unknown_piece', `Unknown piece for ${styleId}: ${pieceId}`);
     const variant = input.variant === undefined ? undefined : string(input.variant, 'variant');
     if (variant !== undefined && !piece.variants.some(v => v.id === variant)) fail('unknown_variant', `Unknown variant for ${pieceId}: ${variant}`);
-    if (op === 'export' && format === 'embed') return output(id, encoder.encode(embedSnippet(pieceId, styleId, '/.creditia/credits.json', variant)), 'text/plain', 'html');
+    if (op === 'export' && format === 'embed') return output(id, encoder.encode(embedSnippet(pieceId, styleId, '/.creditia/credits.json', variant,
+      { renderer: styleEntry.renderer, lang, group, named, ...(sign ? { sign } : {}), ...(transparent ? { transparent } : {}) })), 'text/plain', 'html');
     const t = input.t;
     if (t !== undefined && (typeof t !== 'number' || !Number.isFinite(t) || t < 0 || t > 1)) fail('invalid_request', 't must be between 0 and 1');
     if (input.person !== undefined) string(input.person, 'person', 256);
@@ -205,7 +205,8 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
     const ctx: Ctx = { lang, variant, transparent, fontMode, person: input.person, blame: input.blame, projects: input.projects?.map(raw => classicModel(raw, { director: false, lang, group, named })) };
     const svgModel = theme ? getModel('|bridge', () => buildModel(raw, { lang, group: (model as ClassicModel).group, named, sign })) : model;
     const bridged = !!theme && isBridged(pieceId, variant);
-    const key = `${modelKey}|${styleEntry.renderer}|${styleId}|${pieceId}|${variant ?? ''}|${transparent}|${fontMode}|${JSON.stringify([input.person, input.projects, input.blame])}`;
+    const contextKey = session ? JSON.stringify([input.person, input.projects?.map(project => session.identity(project)), input.blame && session.identity(input.blame)]) : '';
+    const key = `${modelKey}|${styleEntry.renderer}|${styleId}|${pieceId}|${variant ?? ''}|${transparent}|${fontMode}|${contextKey}`;
     const full = async () => { const result = !theme || bridged ? art(pieceId, svgModel, style, { variant }) : await backend.classicArt(pieceId, model, theme, ctx); return result && transparent ? { ...result, bg: 'transparent' } : result; };
     const original = session ? await session.picture(key, full) : await full();
     const at = async (time?: number): Promise<Art | null> => {
@@ -221,7 +222,8 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
     };
     if (op === 'render') {
       const result = await at(reducedMotion ? 1 : t);
-      return success(id, { art: flatten ? flattenArt(result) : result });
+      return success(id, { art: flatten ? flattenArt(result) : result,
+        timeline: original ? timelineFor(styleId, pieceId, original, reducedMotion || !piece.animated) : null });
     }
     if (!original) fail('missing_data', 'This archive does not contain enough data for the selected piece');
     const animate = async (): Promise<Animation> => {

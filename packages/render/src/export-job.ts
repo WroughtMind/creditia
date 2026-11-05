@@ -1,6 +1,6 @@
 // Platform-neutral export policy. Hosts provide rasterization and font bytes.
 import { makeExporter, sized, SIZES, type Art, type Raster, type Deflate } from './export.ts';
-import { frameDelays, timelineFor, type Animation } from './timeline.ts';
+import { frameDelays, type Animation } from './timeline.ts';
 
 export type GraphicFormat = 'png' | 'svg' | 'pdf' | 'gif' | 'html';
 export type FontMode = 'outline' | 'embed';
@@ -47,10 +47,13 @@ export async function exportArtwork(a: Art, o: ExportOptions, raster: Raster, de
       // Animation owns its viewport, including sized long rolls; no second CSS clock.
       const frames = animation?.frames.map(fit);
       const final = frames?.at(-1) ?? fit(a);
-      let html = ex.html([{ ...final, motion: undefined }], { title: a.title, lang: o.lang, fontMode });
+      let html = ex.html([{ ...final, motion: undefined }], { title: a.title, lang: o.lang, fontMode, reducedMotion: o.reducedMotion });
       if (frames?.length && animation && !o.reducedMotion) {
-        const svgs = frames.map(frame => ex.svg(frame, fontMode));
-        html = html.replace('</body>', `<script>\n${htmlPlayer.toString()}\nhtmlPlayer(${scriptJson({ svgs, times: animation.times, timeline: animation.timeline })});\n</script>\n</body>`);
+        const fontCss = new Set<string>();
+        const svgs = frames.map(frame => ex.svg(frame, fontMode)).map(svg => fontMode === 'embed'
+          ? svg.replace(/<style>(@font-face[\s\S]*?)<\/style>/g, (_, css: string) => { fontCss.add(css); return ''; }) : svg);
+        if (fontCss.size) html = html.replace('</head>', `<style>${[...fontCss].join('')}</style>\n</head>`);
+        html = html.replace('</body>', `<script>\n${htmlPlayer.toString()}\nhtmlPlayer(${scriptJson({ svgs, times: animation.times, timeline: animation.timeline, inline: fontMode === 'embed' })});\n</script>\n</body>`);
       }
       bytes = enc.encode(html); mime = 'text/html'; break;
     }
@@ -60,16 +63,18 @@ export async function exportArtwork(a: Art, o: ExportOptions, raster: Raster, de
 }
 
 /** Standalone player: same normalized samples and clock as the native client. */
-function htmlPlayer(animation: { svgs: string[]; times: number[]; timeline: { durationMs: number; holdMs: number; loop: boolean } }) {
+function htmlPlayer(animation: { svgs: string[]; times: number[]; timeline: { durationMs: number; holdMs: number; loop: boolean }; inline?: boolean }) {
   const root = document.getElementById('a0');
   if (!root) return;
   const still = root.querySelector('svg');
   if (!still) return;
-  const images = animation.svgs.map(svg => {
-    const img = new Image(); img.src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); return img;
-  });
-  const image = document.createElement('img'); image.style.cssText = 'display:block;width:100%;height:auto'; image.alt = document.title;
-  still.replaceWith(image);
+  // Keep only the current and next decoded bitmap, rather than eagerly loading
+  // an entire filmstrip. Embedded-font mode keeps inline, selectable SVG text.
+  const sources = animation.inline ? [] : animation.svgs.map(svg => URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })));
+  const image = document.createElement('img'), ahead = new Image();
+  image.style.cssText = 'display:block;width:100%;height:auto'; image.alt = document.title;
+  let current: Element = still;
+  if (!animation.inline) { still.replaceWith(image); current = image; }
   const controls = document.createElement('div'); controls.style.cssText = 'display:flex;gap:12px;justify-content:center;padding:12px';
   const toggle = document.createElement('button'), replay = document.createElement('button');
   const zh = document.documentElement.lang === 'zh';
@@ -77,7 +82,13 @@ function htmlPlayer(animation: { svgs: string[]; times: number[]; timeline: { du
   toggle.type = replay.type = 'button'; controls.append(toggle, replay); root.parentElement?.append(controls);
   let elapsed = 0, last = performance.now(), playing = true, previous = -1, raf = 0;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  const setFrame = (index: number) => { if (index === previous) return; previous = index; image.src = images[index].src; };
+  const setFrame = (index: number) => {
+    if (index === previous) return; previous = index;
+    if (animation.inline) {
+      const template = document.createElement('template'); template.innerHTML = animation.svgs[index];
+      const next = template.content.firstElementChild; if (next) { current.replaceWith(next); current = next; }
+    } else { image.src = sources[index]; ahead.src = sources[(index + 1) % sources.length]; }
+  };
   const draw = (now: number) => {
     const active = playing && !document.hidden && !reduced.matches;
     if (active) elapsed += Math.max(0, now - last);
@@ -88,13 +99,14 @@ function htmlPlayer(animation: { svgs: string[]; times: number[]; timeline: { du
     let index = 0; while (index + 1 < animation.times.length && animation.times[index + 1] <= t) index++;
     setFrame(index);
     const hits = root.querySelector<HTMLElement>('.ct-hits'); if (hits) hits.style.visibility = t >= 1 ? 'visible' : 'hidden';
-    raf = active ? requestAnimationFrame(draw) : 0;
+    const finished = !animation.timeline.loop && elapsed >= cycle;
+    raf = active && !finished ? requestAnimationFrame(draw) : 0;
   };
   const wake = () => { last = performance.now(); if (!raf) raf = requestAnimationFrame(draw); };
   toggle.onclick = () => { playing = !playing; toggle.textContent = playing ? (zh ? '暂停' : 'Pause') : (zh ? '播放' : 'Play'); wake(); };
   replay.onclick = () => { elapsed = 0; playing = true; toggle.textContent = zh ? '暂停' : 'Pause'; wake(); };
   document.addEventListener('visibilitychange', wake); reduced.addEventListener('change', wake);
-  Promise.all(images.map(img => img.decode().catch(() => {}))).then(wake);
   setFrame(animation.svgs.length - 1);
-  window.addEventListener('pagehide', () => { cancelAnimationFrame(raf); images.forEach(img => URL.revokeObjectURL(img.src)); }, { once: true });
+  if (animation.inline) wake(); else image.decode().catch(() => {}).then(wake);
+  window.addEventListener('pagehide', () => { cancelAnimationFrame(raf); sources.forEach(source => URL.revokeObjectURL(source)); }, { once: true });
 }

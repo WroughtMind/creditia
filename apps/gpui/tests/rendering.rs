@@ -18,6 +18,7 @@ mod native {
     fn case(input:&Path,theme:Appearance,key:&str,output:&Path,interact:bool)->Value {
         let mut fixture:Fixture=serde_json::from_slice(&fs::read(input).expect("fixture exists")).expect("valid native fixture");
         fixture.appearance=theme;
+        fixture.reduced_motion=true;
         let mut cx=HeadlessAppContext::with_platform(
             gpui_kit::platform::current_platform(true).text_system(),
             Arc::new(Assets),gpui_kit::platform::current_headless_renderer);
@@ -83,7 +84,7 @@ mod native {
         let fixtures=PathBuf::from(std::env::var("CREDITIA_VISUAL_FIXTURES").expect("set CREDITIA_VISUAL_FIXTURES"));
         let output=PathBuf::from(std::env::var("CREDITIA_VISUAL_OUTPUT").unwrap_or_else(|_|"evidence/native".into()));
         fs::create_dir_all(&output).unwrap();
-        let fixture_manifest:Value=serde_json::from_slice(&fs::read(fixtures.join("manifest.json")).unwrap()).unwrap();
+        let fixture_manifest:Value=serde_json::from_slice(&fs::read(fixtures.join("fixture-manifest.json")).unwrap()).unwrap();
         let mut cases=vec![];
         for entry in fixture_manifest["files"].as_array().unwrap(){
             for(theme,label)in[(Appearance::Light,"light"),(Appearance::Dark,"dark")]{

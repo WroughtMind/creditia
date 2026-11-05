@@ -45,7 +45,7 @@ pub fn swap_variant(tiles:&[TileSpec],selected:&mut BTreeMap<String,String>,key:
 pub fn masonry(tiles:&[TileSpec],dimensions:&BTreeMap<String,(f32,f32)>,width:f32)->(Vec<Rect>,f32){
     let gap=28.;let padding=32.;let width=width.max(320.);let columns=if width>=1000.{3}else if width>=640.{2}else{1};let cell=(width-padding*2.-gap*(columns-1)as f32)/columns as f32;let mut ys=vec![padding;columns];let mut out=Vec::new();
     for tile in tiles{let span=tile.span.min(columns);let mut col=0;let mut top=f32::INFINITY;for candidate in 0..=columns-span{let y=ys[candidate..candidate+span].iter().copied().fold(0.,f32::max);if y<top{top=y;col=candidate;}}
-        let w=cell*span as f32+gap*(span-1)as f32;let(dimension_w,dimension_h)=dimensions.get(&tile.key).copied().unwrap_or((640.,480.));let h=(w*dimension_h/dimension_w.max(1.)).clamp(80.,5000.);out.push(Rect{x:padding+col as f32*(cell+gap),y:top,w,h});for y in &mut ys[col..col+span]{*y=top+h+54.+gap;}
+        let w=cell*span as f32+gap*(span-1)as f32;let(dimension_w,dimension_h)=dimensions.get(&tile.key).copied().unwrap_or((640.,480.));let h=(w*dimension_h/dimension_w.max(1.)).max(1.);out.push(Rect{x:padding+col as f32*(cell+gap),y:top,w,h});for y in &mut ys[col..col+span]{*y=top+h+54.+gap;}
     }let height=ys.into_iter().fold(0.,f32::max)+padding;(out,height)
 }
 pub fn texture_width(logical:f32,dpi:f32)->u32{let target=(logical*dpi).ceil().max(128.)as u32;[256,512,768,1024,1536,2048,3072,4096].into_iter().find(|w|*w>=target).unwrap_or(4096)}

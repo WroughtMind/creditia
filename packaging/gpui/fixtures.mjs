@@ -25,20 +25,27 @@ for(const style of catalog.styles.filter(s=>selected.has(s.id))){
     const requests=new Map();
     function add(entry,variant){const key=`${entry.id}#${variant??''}`;if(!requests.has(key))requests.set(key,{piece:entry.id,variant});}
     for(const entry of board){const piece=style.pieces.find(p=>p.id===entry.id);if(!piece||piece.requires?.length)continue;add(entry,entry.variant??piece.defaultVariant??piece.variants?.[0]?.id);}
-    for(const entry of board){const piece=style.pieces.find(p=>p.id===entry.id);if(!piece||piece.requires?.length)continue;for(const v of piece.variants??[])add(entry,v.id);}
+    // Native captures show the initial board. The separate sharded matrix owns
+    // every layout; only preload the one alternative exercised by native input.
+    if(style.id==='minimal-light'&&language==='en'){
+      const entry=board.find(entry=>entry.id==='tier'),piece=style.pieces.find(piece=>piece.id==='tier');
+      const current=entry?.variant??piece?.defaultVariant??piece?.variants?.[0]?.id;
+      const alternative=piece?.variants?.find(variant=>variant.id!==current);
+      if(entry&&alternative)add(entry,alternative.id);
+    }
     for(const item of requests.values()){
       const request={version:1,id:`${style.id}/${language}/${item.piece}/${item.variant??''}`,op:'render',raw,style:style.id,piece:item.piece,lang:language,group:'auto',named:true,flatten:true};
       if(item.variant)request.variant=item.variant;
       const rendered=await renderRequest(request);
       if(!rendered.ok)throw new Error(`${request.id}: ${JSON.stringify(rendered.error)}`);
-      if(rendered.result.art)artworks.push({style:style.id,...item,art:rendered.result.art});
+      artworks.push({style:style.id,...item,art:rendered.result.art??null});
     }
-    if(!artworks.length)throw new Error(`No artworks generated for ${style.id}/${language}`);
-    const bytes=Buffer.from(JSON.stringify({raw,catalog,artworks,language,appearance:'light'}));
+    if(!artworks.some(entry=>entry.art))throw new Error(`No artworks generated for ${style.id}/${language}`);
+    const bytes=Buffer.from(JSON.stringify({raw,catalog,artworks,language,appearance:'light',reduced_motion:true}));
     const name=`${style.id}-${language}.json`;
     await fs.writeFile(path.join(output,name),bytes);
     manifest.files.push({path:name,sha256:hash(bytes),bytes:bytes.length,style:style.id,language,artworks:artworks.length});
     console.log(`${name}: ${artworks.length} artworks, ${bytes.length} bytes`);
   }
 }
-await fs.writeFile(path.join(output,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');
+await fs.writeFile(path.join(output,'fixture-manifest.json'),JSON.stringify(manifest,null,2)+'\n');

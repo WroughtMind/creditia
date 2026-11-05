@@ -4,6 +4,16 @@ use creditia_store::Library;
 use serde_json::{json, Value};
 use std::path::{Component, Path, PathBuf};
 
+pub(crate) fn config_lock(root: &Path) -> Res<std::fs::File> {
+    if !root.is_dir() { return Err(Fail::with("dir_missing", root.display())); }
+    let directory = root.join(".creditia");
+    std::fs::create_dir_all(&directory).map_err(|e| Fail::with("io", e))?;
+    let lock = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false)
+        .open(directory.join("config.lock")).map_err(|e| Fail::with("io", e))?;
+    lock.lock().map_err(|e| Fail::with("io", e))?;
+    Ok(lock)
+}
+
 pub fn project_archives() -> Res<Value> {
     let library = Library::open()?;
     let mut archives = vec![];
@@ -52,19 +62,39 @@ pub fn set_project_config(project_id: String, patch: Value) -> Res<Value> {
     for key in ["privacy", "display", "agentEmails", "branchPrefixes"] {
         if let Some(value) = object.get(key) { if !value.is_object() { return Err(Fail::with("config_invalid", key)); } }
     }
+    for key in ["agentEmails", "branchPrefixes"] {
+        if let Some(value) = object.get(key) {
+            if !value.as_object().is_some_and(|entries| entries.values().all(Value::is_string)) { return Err(Fail::with("config_invalid", key)); }
+        }
+    }
+    if let Some(privacy) = object.get("privacy") {
+        for key in ["hideTitles", "hidePaths"] {
+            if privacy.get(key).is_some_and(|value| !value.is_boolean()) { return Err(Fail::with("config_invalid", key)); }
+        }
+        if let Some(aliases) = privacy.get("aliases") {
+            if !aliases.as_object().is_some_and(|entries| entries.values().all(Value::is_string)) { return Err(Fail::with("config_invalid", "aliases")); }
+        }
+    }
     if let Some(display) = object.get("display") {
-        if !display["hideNames"].is_null() && !display["hideNames"].is_boolean() { return Err(Fail::with("config_invalid", "hideNames")); }
-        if !display["sign"].is_null() && !display["sign"].as_str().is_some_and(|s| s.chars().count() <= 256) { return Err(Fail::with("config_invalid", "sign")); }
+        if display.get("hideNames").is_some_and(|value| !value.is_boolean()) { return Err(Fail::with("config_invalid", "hideNames")); }
+        if display.get("sign").is_some_and(|value| !value.as_str().is_some_and(|s| s.chars().count() <= 256)) { return Err(Fail::with("config_invalid", "sign")); }
+    }
+    if let Some(directors) = object.get("directors") {
+        if !directors.as_array().is_some_and(|items| items.iter().all(|person| person["id"].is_string() && person["name"].is_string()
+            && person.get("emails").is_none_or(|emails| emails.as_array().is_some_and(|items| items.iter().all(Value::is_string))))) {
+            return Err(Fail::with("config_invalid", "directors"));
+        }
+    }
+    if let Some(segments) = object.get("segments") {
+        if !segments.as_array().is_some_and(|items| items.iter().all(|segment| segment.as_array().is_some_and(|parts| parts.len() == 3 && parts.iter().all(Value::is_string)))) {
+            return Err(Fail::with("config_invalid", "segments"));
+        }
     }
     if serde_json::to_vec(&patch).map_err(|e| Fail::with("config_invalid", e))?.len() > 1024 * 1024 { return Err(Fail::new("config_invalid")); }
     let project = crate::project(&Library::open()?, &project_id)?;
     let root = PathBuf::from(project.path);
-    if !root.is_dir() { return Err(Fail::with("dir_missing", root.display())); }
+    let _lock = config_lock(&root)?;
     let directory = root.join(".creditia");
-    std::fs::create_dir_all(&directory).map_err(|e| Fail::with("io", e))?;
-    let lock = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false)
-        .open(directory.join("config.lock")).map_err(|e| Fail::with("io", e))?;
-    lock.lock().map_err(|e| Fail::with("io", e))?;
     let path = directory.join("config.json");
     let mut config = match std::fs::read(&path) {
         Ok(bytes) => serde_json::from_slice::<Value>(&bytes).map_err(|e| Fail::with("config_invalid", e))?,
@@ -88,7 +118,7 @@ pub fn blame(project_id: String, file: String, line: u64) -> Res<Value> {
         return Err(Fail::new("invalid_location"));
     }
     let project = crate::project(&Library::open()?, &project_id)?;
-    crate::run_core(&["blame", &format!("{file}:{line}"), "--repo", &project.path])
+    crate::run_core_job_with_cancel(&["blame", &format!("{file}:{line}"), "--repo", &project.path], None, None, crate::AnalysisCancellation::default())
 }
 
 /// Same evidence archive schema as `creditia-core evidence export`. It contains

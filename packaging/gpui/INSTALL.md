@@ -5,6 +5,12 @@ matching Node runtime, the shared artwork renderer, and its fonts. Installing
 Node or downloading fonts is not required. Keep the application and its resources
 together. `package-info.json` records the source commit and every packaged file.
 
+A small legacy helper runs once to read preferences from the original desktop's
+WebView storage under `dev.creditia.app`. It leaves that storage intact for
+rollback. The normal GPUI interface does not run this helper or use a WebView.
+If importing preferences fails, resolve the import error before exporting work
+whose contributor names were previously hidden.
+
 ## Install
 
 - macOS 15 or later: open the DMG and copy `Creditia.app` to Applications. Apple
@@ -15,6 +21,8 @@ together. `package-info.json` records the source commit and every packaged file.
   and `creditia-core.exe` must remain beside the application.
 - Linux x64: extract the archive and run `./creditia-gpui`. The build baseline is
   Ubuntu 24.04 with Wayland or X11, fontconfig, xkbcommon and a Vulkan driver.
+  The DEB package installs system libraries, including WebKit for the one-time
+  legacy preference importer; it does not install Node globally.
   The bundled desktop file may be installed into the user's applications folder
   with an absolute `Exec` path. Runtime system libraries are recorded by CI.
 
