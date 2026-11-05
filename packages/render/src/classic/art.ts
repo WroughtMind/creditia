@@ -11,7 +11,7 @@ import { BRIDGED, BRIDGED_LAYOUTS, isBridged, bridgeArt, bridgeFrames } from './
 import { reveal, rise, RISING } from './motion.ts';
 import { hitsOf, type Seen } from './hits.ts';
 
-export type Satori = (tree: any, o: { width: number; height: number; fonts: any[]; onNodeDetected?: (n: any) => void }) => Promise<string>;
+export type Satori = (tree: any, o: { width: number; height: number; fonts: any[]; onNodeDetected?: (n: any) => void; embedFont?: boolean }) => Promise<string>;
 
 /** 同一页面会内联多张 satori 出的 SVG，它们的 clipPath/mask id 都是 satori_ 开头，会互相顶掉；每张换成独有前缀 */
 let seq = 0;
@@ -151,16 +151,18 @@ export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, sator
   if (id === 'badge') {
     const svg = ctx.lang === 'en' ? enSvg(badge(m, t)) : badge(m, t);
     const w = Number(/width="([\d.]+)"/.exec(svg)?.[1] ?? 200), h = Number(/height="([\d.]+)"/.exec(svg)?.[1] ?? 28);
-    return { w, h, svg, hits: [], bg: 'transparent', title };
+    return { w, h, svg, hits: [], bg: 'transparent', title, selection: { style: t.id, piece: id, lang: ctx.lang } };
   }
   const f = FORMS[id];
   if (!f) throw new Error(`未知卡片：${id}`);
   const out = f.render(m, t, ctx);
   if (!out) return null;
+  if (ctx.transparent) out.tree.props.style = { ...out.tree.props.style, backgroundColor: 'transparent', backgroundImage: undefined };
+  if (ctx.fontMode === 'embed') { const draw = satori; satori = (tree, options) => draw(tree, { ...options, embedFont: false }); }
   if (ctx.lang === 'en') enTree(out.tree);
   const seen: Seen[] = [];
   const svg = tidy(await fitted(out, satori, fonts, seen), out.w, out.h);
-  return { w: out.w, h: out.h, svg, hits: hitsOf(seen, m, t, ctx.lang, out.w, out.h), bg: t.bg, title };
+  return { w: out.w, h: out.h, svg, hits: hitsOf(seen, m, t, ctx.lang, out.w, out.h), bg: ctx.transparent ? 'transparent' : t.bg, title, selection: { style: t.id, piece: id, lang: ctx.lang } };
 }
 
 /** 会动的作品：徽章是单独的小 SVG，不做动画；其余原版作品都能出帧 */
@@ -173,6 +175,8 @@ export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, sa
   if (!f || id === 'badge') return [];
   const out = f.render(m, t, ctx);
   if (!out) return [];
+  if (ctx.transparent) out.tree.props.style = { ...out.tree.props.style, backgroundColor: 'transparent', backgroundImage: undefined };
+  if (ctx.fontMode === 'embed') { const draw = satori; satori = (tree, options) => draw(tree, { ...options, embedFont: false }); }
   if (ctx.lang === 'en') enTree(out.tree);
   await fitted(out, satori, fonts);
   const laid = JSON.stringify(out.tree);
@@ -182,10 +186,10 @@ export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, sa
   const frames: Art[] = [];
   for (const k of times ?? Array.from({ length: n + 1 }, (_, i) => i / n)) {
     let tree = JSON.parse(laid);
-    if (rising) tree = rise(tree, k, out.w, out.h, t.bg);
-    else reveal(tree, k);
+    if (rising) tree = rise(tree, k, out.w, out.h, ctx.transparent ? 'transparent' : t.bg);
+    else reveal(tree, k, t.family);
     const svg = tidy(await satori(tree, { width: out.w, height: out.h, fonts }), out.w, out.h);
-    frames.push({ w: out.w, h: out.h, svg, hits: [], bg: t.bg, title });
+    frames.push({ w: out.w, h: out.h, svg, hits: [], bg: ctx.transparent ? 'transparent' : t.bg, title, selection: { style: t.id, piece: id, lang: ctx.lang } });
   }
   return frames;
 }

@@ -3,9 +3,10 @@
 // and one bounded input line in memory; restart the child to cancel active work.
 import { once } from 'node:events';
 import { pathToFileURL } from 'node:url';
-import { dispatchRender, errorResponse, MAX_REQUEST_BYTES } from '../src/protocol.ts';
+import { createRenderSession, errorResponse, MAX_REQUEST_BYTES } from '../src/protocol.ts';
 
 export async function serve(input, output, backend) {
+  const session = createRenderSession(backend);
   let pending = Buffer.alloc(0), discarding = false;
   async function send(response) {
     if (!output.write(JSON.stringify(response) + '\n')) await once(output, 'drain');
@@ -15,7 +16,7 @@ export async function serve(input, output, backend) {
     let request;
     try { request = JSON.parse(bytes.toString('utf8')); }
     catch { await send(errorResponse(null, 'invalid_json', 'Request is not valid JSON')); return; }
-    await send(await dispatchRender(request, backend));
+    await send(await session.dispatch(request));
   }
   for await (const value of input) {
     const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);

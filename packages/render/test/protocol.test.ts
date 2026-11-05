@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Readable, Writable } from 'node:stream';
-import { dispatchRender, renderCatalog, MAX_REQUEST_BYTES } from '../src/protocol.ts';
+import { dispatchRender, renderCatalog, createRenderSession, MAX_REQUEST_BYTES } from '../src/protocol.ts';
 import { nativeBackend, renderRequest } from '../src/native-protocol.ts';
 import { buildModel, art, frame, frames, STYLES, raster } from '../src/index.ts';
 import { makeExporter, sized, type Art } from '../src/export.ts';
@@ -27,7 +27,9 @@ test('native catalog preserves all 26 desktop styles and registry variants', asy
   assert.equal(result.styles.length, 26);
   assert.equal(new Set(result.styles.map(s => s.id)).size, 26);
   assert.equal(result.styles.filter(s => s.renderer === 'classic').length, 15);
-  assert.deepEqual(result.formats.map(f => f.id), ['png', 'svg', 'pdf', 'gif', 'html']);
+  assert.deepEqual(result.formats.map(f => f.id), ['png', 'svg', 'pdf', 'gif', 'html', 'md', 'embed', 'txt', 'json']);
+  assert.equal(result.sharedStyles.length, 16);
+  for (const style of result.styles) assert.ok(style.board.length >= 20);
   for (const style of result.styles) {
     assert.ok(style.pieces.some(p => p.id === 'asterisk'));
     for (const p of style.pieces) if (p.defaultVariant !== null) assert.ok(p.variants.some(v => v.id === p.defaultVariant), `${style.id}/${p.id}`);
@@ -125,14 +127,16 @@ test('sized scrolling GIF keeps both its viewport and chosen canvas', () => {
   assert.equal(gif[8] + (gif[9] << 8), 200);
 });
 
-test('HTML honors language and static canvas size, and rejects resized scrolling HTML', async () => {
-  const result = unwrap(await renderRequest({ ...request, op: 'export', format: 'html', size: 'square' }));
+test('HTML honors language and canvas size for static and scrolling artwork', async () => {
+  const result = unwrap(await renderRequest({ ...request, op: 'export', format: 'html', size: 'square', frameCount: 2 }));
   const html = Buffer.from(result.bytes, 'base64').toString();
   assert.ok(html.includes('<html lang="en">'));
   assert.ok(html.includes('"w":1080,"h":1080'));
-  const scrolling = await renderRequest({ ...request, op: 'export', style: 'ink', piece: 'roll', variant: 'scroll', format: 'html', size: 'square' });
-  assert.equal(scrolling.ok, false);
-  if (!scrolling.ok) assert.equal(scrolling.error.code, 'unsupported_size');
+  const scrolling = await renderRequest({ ...request, op: 'export', style: 'ink', piece: 'roll', variant: 'scroll', format: 'html', size: 'square', frameCount: 2 });
+  const animated = Buffer.from(unwrap(scrolling).bytes, 'base64').toString();
+  assert.ok(animated.includes('htmlPlayer'));
+  assert.ok(animated.includes('\"w\":1080,\"h\":1080'));
+  assert.ok(!animated.includes('class=\"reel\"'));
 });
 
 test('native export returns the five real formats with embedded outlined SVG fonts', async () => {
@@ -176,4 +180,93 @@ test('JSONL transport recovers after malformed and oversized input, then exits o
   assert.equal(responses[2].id, 'last');
   assert.equal(responses[2].ok, true);
   assert.deepEqual(responses[2].result, renderCatalog());
+});
+
+test('persistent session retains prepared models and artwork, replaces archives and evicts bounded state', async () => {
+  let renders = 0;
+  const backend = { ...nativeBackend, classicArt: async (...args: Parameters<typeof nativeBackend.classicArt>) => { renders++; return nativeBackend.classicArt(...args); } };
+  const session = createRenderSession(backend);
+  const call = (patch: object) => session.dispatch({ version: 1, id: 'session', ...patch });
+  unwrap(await call({ op: 'archive', archiveId: 'one', raw }));
+  const options = { op: 'render', archiveId: 'one', style: 'minimal-light', piece: 'tier', variant: 'original' };
+  const first = unwrap(await call(options)).art;
+  first.svg = 'caller mutation';
+  const second = unwrap(await call(options)).art;
+  assert.notEqual(second.svg, 'caller mutation');
+  assert.equal(renders, 1);
+  assert.equal(session.stats().models, 2);
+  assert.equal(session.stats().artworks, 1);
+  unwrap(await call({ op: 'archive', archiveId: 'one', raw: { ...raw, project: { ...raw.project, name: 'Replacement' } } }));
+  assert.ok(unwrap(await call(options)).art.title.includes('Replacement'));
+  assert.equal(renders, 2);
+  for (let i = 0; i < 9; i++) unwrap(await call({ op: 'archive', archiveId: `project-${i}`, raw }));
+  const evicted = await call(options);
+  assert.equal(evicted.ok, false);
+  if (!evicted.ok) assert.equal(evicted.error.code, 'unknown_archive');
+  assert.equal(session.stats().archives, 8);
+  assert.ok(session.stats().archiveBytes <= 24 * 1024 * 1024);
+  unwrap(await call({ op: 'release', archiveId: 'project-8' }));
+  assert.equal(session.stats().archives, 7);
+});
+
+test('animation samples have one shared duration, exact final geometry and reduced-motion final state', async () => {
+  const options = { ...request, op: 'frames', style: 'ink', piece: 'asterisk', frameCount: 4 };
+  const result = unwrap(await renderRequest(options));
+  assert.deepEqual(result.times, [0, .25, .5, .75, 1]);
+  assert.equal(result.frames.length, 5);
+  assert.equal(result.timeline.durationMs, 2600);
+  const { frameCount: _count, ...renderOptions } = options;
+  const still = unwrap(await renderRequest({ ...renderOptions, op: 'render' }));
+  assert.deepEqual(normalizedArt(result.frames.at(-1)), normalizedArt(still.art));
+  const reduced = unwrap(await renderRequest({ ...options, reducedMotion: true }));
+  assert.equal(reduced.frames.length, 1);
+  assert.deepEqual(reduced.times, [1]);
+  assert.equal(reduced.timeline.loop, false);
+  assert.equal(reduced.timeline.durationMs, 0);
+  assert.deepEqual(normalizedArt(reduced.frames[0]), normalizedArt(still.art));
+});
+
+test('hidden shared SVG styles remain addressable independently from desktop classic styles', async () => {
+  for (const style of ['minimal', 'noir', 'glass', 'cinema', 'terminal']) {
+    const result = unwrap(await renderRequest({ ...request, renderer: 'svg', style })).art;
+    const expected = art('asterisk', buildModel(raw, { lang: 'en', named: true, group: 'auto', sign: '' }), STYLES.find(s => s.id === style)!);
+    assert.deepEqual(normalizedArt(result), normalizedArt(expected), style);
+  }
+});
+
+test('text, archive, embed and cross-project output use the shared data model', async () => {
+  for (const format of ['md', 'txt', 'json', 'embed']) {
+    const result = unwrap(await renderRequest({ ...request, op: 'export', format }));
+    const text = Buffer.from(result.bytes, 'base64').toString();
+    assert.ok(text.length > 20);
+    if (format === 'json') assert.deepEqual(JSON.parse(text), raw);
+    if (format === 'embed') assert.ok(text.includes('<creditia-card'));
+  }
+  const merge = unwrap(await renderRequest({ version: 1, id: 'merge', op: 'merge', projects: [raw, raw], lang: 'en' }));
+  assert.equal(merge.raw.totals.linesAdded, raw.totals.linesAdded * 2);
+  const malicious = await renderRequest({ ...request, op: 'export', format: 'embed', piece: '"><script>' });
+  assert.equal(malicious.ok, false);
+});
+
+test('transparent PNG removes the canvas and SVG font embedding includes actual bytes and selectable text', async () => {
+  for (const style of ['minimal-light', 'ink']) {
+    const result = unwrap(await renderRequest({ ...request, style, transparent: true })).art;
+    assert.equal(result.bg, 'transparent');
+    const image = raster.rgba(result.svg, 120);
+    assert.equal(image.data[3], 0, style);
+  }
+  const result = unwrap(await renderRequest({ ...request, piece: 'tier', variant: 'original', op: 'export', format: 'svg', fontMode: 'embed' }));
+  const svg = Buffer.from(result.bytes, 'base64').toString();
+  assert.ok(svg.includes('<text'));
+  assert.ok(svg.includes('@font-face'));
+  assert.ok(svg.includes('data:font/ttf;base64,'));
+  assert.ok(!svg.includes('file://'));
+});
+
+test('standalone HTML includes hover placement and cannot terminate its own script with an archive title', async () => {
+  const injected = { ...raw, project: { ...raw.project, name: '</script><script>alert(1)</script>' } };
+  const result = unwrap(await renderRequest({ ...request, raw: injected, piece: 'badge', op: 'export', format: 'html' }));
+  const html = Buffer.from(result.bytes, 'base64').toString();
+  assert.ok(html.includes('function placeTip('));
+  assert.ok(!html.includes('</script><script>alert(1)</script>'));
 });

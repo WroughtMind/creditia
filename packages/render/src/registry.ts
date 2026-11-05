@@ -12,6 +12,7 @@ import { codemap } from './pieces/map.ts';
 import { asterisk } from './pieces/asterisk.ts';
 import { people } from './pieces/people.ts';
 import { historyLabels } from './history.ts';
+import { materialSvg } from './material-motion.ts';
 
 export interface PieceDef {
   name: string;
@@ -70,7 +71,7 @@ export function art(id: string, m: Model, st: Style, o: PieceOpts = {}): Art | n
   const s = p.render(m, st, o);
   if (!s) return null;
   const name = id === 'versions' ? historyLabels(m.history.basis, m.lang).name : m.lang === 'en' ? p.en : p.name;
-  return { w: s.w, h: s.h, svg: s.toString(), hits: s.hits, bg: s.bg, title: `${m.project} · ${name}`, motion: (s as any).motion };
+  return { w: s.w, h: s.h, svg: materialSvg(s, st.id, o.t), hits: s.hits, bg: s.bg, title: `${m.project} · ${name}`, motion: (s as any).motion, selection: { style: st.id, piece: id, lang: m.lang } };
 }
 /** 桌面播放和导出使用同一时刻采样；full 可复用已经排好的长卷。 */
 export function frame(id: string, m: Model, st: Style, o: PieceOpts = {}, t = 1, full = art(id, m, st, o)): Art | null {
@@ -82,7 +83,8 @@ export function frame(id: string, m: Model, st: Style, o: PieceOpts = {}, t = 1,
     const y = Math.round(travel * t);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewW}" height="${viewH}" viewBox="0 ${y} ${viewW} ${viewH}"><rect y="${y}" width="${viewW}" height="${viewH}" fill="${full.bg}"/>${inner}</svg>`;
     // GIF 仍然只栅格化一次整卷，逐帧按 y 裁图。
-    return { ...full, w: viewW, h: viewH, svg, hits: [], motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y } };
+    const hits = full.hits.filter(hit => hit.y + hit.h > y && hit.y < y + viewH).map(hit => { const top = Math.max(0, hit.y - y); return { ...hit, y: top, h: Math.min(viewH, hit.y + hit.h - y) - top }; });
+    return { ...full, w: viewW, h: viewH, svg, hits, motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y } };
   }
   return art(id, m, st, { ...o, t });
 }

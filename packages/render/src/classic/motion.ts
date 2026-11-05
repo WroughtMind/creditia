@@ -20,11 +20,12 @@ const pctOf = (v: unknown) => (typeof v === 'string' && /^[\d.]+%$/.test(v) ? pa
 const filled = (s: Record<string, any>) => !!(s.backgroundColor || s.backgroundImage);
 
 /** t∈[0,1]：就地改树 */
-export function reveal(tree: Node, t: number) {
+export function reveal(tree: Node, t: number, family = 'minimal') {
   if (t >= 1) return;
   const ls = leaves(tree);
   ls.forEach((n, i) => {
-    const e = ease(t, i, ls.length);
+    const raw = ease(t, i, ls.length);
+    const e = ['terminal', 'crt', 'arcade'].includes(family) ? Math.floor(raw * 12) / 12 : raw;
     const s = { ...n.props.style };
     const w = pctOf(s.width), h = pctOf(s.height);
     // 条形：宽（或高）按百分比的色块，从零长出来
@@ -33,6 +34,10 @@ export function reveal(tree: Node, t: number) {
       else if (h !== null && h < 100) s.height = `${Math.round(h * e * 100) / 100}%`;
       else s.opacity = (s.opacity ?? 1) * e;
     } else s.opacity = (s.opacity ?? 1) * e;
+    if (!filled(s) && e < 1 && !['terminal', 'crt', 'arcade'].includes(family)) {
+      const dy = ['film', 'cinema', 'gala', 'playbill'].includes(family) ? 14 : 5;
+      s.transform = `${s.transform ?? ''} translateY(${Math.round((1 - e) * dy * 100) / 100}px)`.trim();
+    }
     n.props = { ...n.props, style: s };
   });
 }

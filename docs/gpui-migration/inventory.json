@@ -16,7 +16,7 @@
     "desktopStylePieceLayoutRows": 1482,
     "features": 37,
     "globalShortcuts": 10,
-    "nativeCommands": 31
+    "nativeCommands": 36
   },
   "styles": [
     {
@@ -1904,7 +1904,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1838,
+        "line": 1878,
         "anchor": "function welcome()"
       }
     },
@@ -1923,7 +1923,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1571,
+        "line": 1611,
         "anchor": "function toggleMenu()"
       }
     },
@@ -1943,7 +1943,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1673,
+        "line": 1713,
         "anchor": "function rowMenu("
       }
     },
@@ -1963,7 +1963,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 313,
+        "line": 353,
         "anchor": "async function openProject("
       }
     },
@@ -1982,7 +1982,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 366,
+        "line": 406,
         "anchor": "async function creditsOf("
       }
     },
@@ -2002,7 +2002,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 373,
+        "line": 413,
         "anchor": "async function refreshIfChanged("
       }
     },
@@ -2020,7 +2020,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 474,
+        "line": 514,
         "anchor": "function renderGroup()"
       }
     },
@@ -2040,7 +2040,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 546,
+        "line": 586,
         "anchor": "async function paint()"
       }
     },
@@ -2059,7 +2059,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 669,
+        "line": 709,
         "anchor": "function layout("
       }
     },
@@ -2078,7 +2078,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 755,
+        "line": 795,
         "anchor": "async function changeVariant("
       }
     },
@@ -2097,7 +2097,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1216,
+        "line": 1256,
         "anchor": "function mountRoamHits("
       }
     },
@@ -2119,7 +2119,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 997,
+        "line": 1037,
         "anchor": "function openFocus("
       }
     },
@@ -2141,7 +2141,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1321,
+        "line": 1361,
         "anchor": "function wireRoam()"
       }
     },
@@ -2161,7 +2161,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1424,
+        "line": 1464,
         "anchor": "function toggleStyles()"
       }
     },
@@ -2180,7 +2180,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 801,
+        "line": 841,
         "anchor": "function toggleFormats("
       }
     },
@@ -2200,7 +2200,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 833,
+        "line": 873,
         "anchor": "function renderExports()"
       }
     },
@@ -2220,7 +2220,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 935,
+        "line": 975,
         "anchor": "function startDrag("
       }
     },
@@ -2240,7 +2240,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1748,
+        "line": 1788,
         "anchor": "async function withProgress"
       }
     },
@@ -2259,7 +2259,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 195,
+        "line": 228,
         "anchor": "function syncStatus()"
       }
     },
@@ -2276,7 +2276,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1896,
+        "line": 1936,
         "anchor": "function showWarnings("
       }
     },
@@ -2297,7 +2297,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1914,
+        "line": 1954,
         "anchor": "function projectSettings("
       }
     },
@@ -2317,7 +2317,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 457,
+        "line": 497,
         "anchor": "async function setPlug("
       }
     },
@@ -2336,7 +2336,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1703,
+        "line": 1743,
         "anchor": "async function removeProject("
       }
     },
@@ -2354,7 +2354,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1985,
+        "line": 2025,
         "anchor": "async function settings("
       }
     },
@@ -2373,7 +2373,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1985,
+        "line": 2025,
         "anchor": "async function settings("
       }
     },
@@ -2393,7 +2393,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1985,
+        "line": 2025,
         "anchor": "async function settings("
       }
     },
@@ -2410,7 +2410,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1985,
+        "line": 2025,
         "anchor": "async function settings("
       }
     },
@@ -2429,7 +2429,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1532,
+        "line": 1572,
         "anchor": "async function installMenu()"
       }
     },
@@ -2448,7 +2448,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1522,
+        "line": 1562,
         "anchor": "function wireKeys()"
       }
     },
@@ -2466,7 +2466,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1481,
+        "line": 1521,
         "anchor": "async function setLang("
       }
     },
@@ -2578,7 +2578,7 @@
       "en": "Switch Project…",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1501,
+        "line": 1541,
         "anchor": "{ id: 'switch', key: 'K', label: () => L('切换项目…', 'Switch Project…')"
       }
     },
@@ -2589,7 +2589,7 @@
       "en": "Add Folder…",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1502,
+        "line": 1542,
         "anchor": "{ id: 'add', key: 'O', label: () => L('添加文件夹…', 'Add Folder…')"
       }
     },
@@ -2600,7 +2600,7 @@
       "en": "Re-analyze",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1503,
+        "line": 1543,
         "anchor": "{ id: 'reanalyze', key: 'R', label: () => L('重新分析', 'Re-analyze')"
       }
     },
@@ -2611,7 +2611,7 @@
       "en": "Project Settings…",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1504,
+        "line": 1544,
         "anchor": "{ id: 'project', key: 'I', label: () => L('项目设置…', 'Project Settings…')"
       }
     },
@@ -2622,7 +2622,7 @@
       "en": "Settings…",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1505,
+        "line": 1545,
         "anchor": "{ id: 'settings', key: ',', label: () => L('设置…', 'Settings…')"
       }
     },
@@ -2633,7 +2633,7 @@
       "en": "Wall",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1506,
+        "line": 1546,
         "anchor": "{ id: 'wall', key: '1', label: () => L('墙', 'Wall')"
       }
     },
@@ -2644,7 +2644,7 @@
       "en": "Roam",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1507,
+        "line": 1547,
         "anchor": "{ id: 'roam', key: '2', label: () => L('漫游', 'Roam')"
       }
     },
@@ -2655,7 +2655,7 @@
       "en": "Previous Style",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1508,
+        "line": 1548,
         "anchor": "{ id: 'prevstyle', key: '[', label: () => L('上一种风格', 'Previous Style')"
       }
     },
@@ -2666,7 +2666,7 @@
       "en": "Next Style",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1509,
+        "line": 1549,
         "anchor": "{ id: 'nextstyle', key: ']', label: () => L('下一种风格', 'Next Style')"
       }
     },
@@ -2677,7 +2677,7 @@
       "en": "Export…",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1510,
+        "line": 1550,
         "anchor": "{ id: 'export', key: 'E', label: () => L('导出…', 'Export…')"
       }
     }
@@ -2688,7 +2688,7 @@
       "action": "close topmost popup/dialog/export list",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 985,
+        "line": 1025,
         "anchor": "function closeTop()"
       }
     },
@@ -2697,7 +2697,7 @@
       "action": "open focused wall artwork",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 733,
+        "line": 773,
         "anchor": "artEl.addEventListener('keydown'"
       }
     },
@@ -2706,7 +2706,7 @@
       "action": "previous/next layout in focus",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1113,
+        "line": 1153,
         "anchor": "  focusKeys = (e) =>"
       }
     },
@@ -2715,7 +2715,7 @@
       "action": "previous/next artwork in focus",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1113,
+        "line": 1153,
         "anchor": "  focusKeys = (e) =>"
       }
     },
@@ -2724,7 +2724,7 @@
       "action": "pan roam viewport",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1321,
+        "line": 1361,
         "anchor": "function wireRoam()"
       }
     },
@@ -2733,7 +2733,7 @@
       "action": "return roam viewport home",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1321,
+        "line": 1361,
         "anchor": "function wireRoam()"
       }
     },
@@ -2742,7 +2742,7 @@
       "action": "select/open searched project",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1646,
+        "line": 1686,
         "anchor": "  q.onkeydown ="
       }
     },
@@ -2751,7 +2751,7 @@
       "action": "horizontal roam scroll",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1321,
+        "line": 1361,
         "anchor": "function wireRoam()"
       }
     }
@@ -2902,10 +2902,50 @@
       }
     },
     {
+      "id": "import_legacy_preferences",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 89,
+        "anchor": "#[tauri::command]\nfn import_legacy_preferences("
+      }
+    },
+    {
+      "id": "set_legacy_preference",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 91,
+        "anchor": "#[tauri::command]\nfn set_legacy_preference("
+      }
+    },
+    {
+      "id": "legacy_preferences",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 93,
+        "anchor": "#[tauri::command]\nfn legacy_preferences("
+      }
+    },
+    {
+      "id": "migration_mode",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 97,
+        "anchor": "#[tauri::command]\nfn migration_mode("
+      }
+    },
+    {
+      "id": "migration_done",
+      "source": {
+        "path": "apps/desktop/src-tauri/src/main.rs",
+        "line": 99,
+        "anchor": "#[tauri::command]\nfn migration_done("
+      }
+    },
+    {
       "id": "choose_export_dir",
       "source": {
         "path": "apps/desktop/src-tauri/src/main.rs",
-        "line": 90,
+        "line": 107,
         "anchor": "#[tauri::command]\nasync fn choose_export_dir("
       }
     },
@@ -2913,7 +2953,7 @@
       "id": "reset_export_dir",
       "source": {
         "path": "apps/desktop/src-tauri/src/main.rs",
-        "line": 99,
+        "line": 116,
         "anchor": "#[tauri::command]\nfn reset_export_dir("
       }
     },
@@ -2921,7 +2961,7 @@
       "id": "collect_info",
       "source": {
         "path": "apps/desktop/src-tauri/src/main.rs",
-        "line": 182,
+        "line": 123,
         "anchor": "#[tauri::command]\nfn collect_info("
       }
     },
@@ -2929,7 +2969,7 @@
       "id": "set_collect",
       "source": {
         "path": "apps/desktop/src-tauri/src/main.rs",
-        "line": 190,
+        "line": 125,
         "anchor": "#[tauri::command]\nfn set_collect("
       }
     },
@@ -2937,7 +2977,7 @@
       "id": "collect_now",
       "source": {
         "path": "apps/desktop/src-tauri/src/main.rs",
-        "line": 196,
+        "line": 127,
         "anchor": "#[tauri::command]\nasync fn collect_now("
       }
     },
@@ -2945,7 +2985,7 @@
       "id": "set_collect_agent",
       "source": {
         "path": "apps/desktop/src-tauri/src/main.rs",
-        "line": 326,
+        "line": 131,
         "anchor": "#[tauri::command]\nfn set_collect_agent("
       }
     },
@@ -2953,7 +2993,7 @@
       "id": "open_folder",
       "source": {
         "path": "apps/desktop/src-tauri/src/main.rs",
-        "line": 341,
+        "line": 141,
         "anchor": "#[tauri::command]\nfn open_folder("
       }
     },
@@ -2961,7 +3001,7 @@
       "id": "save_file",
       "source": {
         "path": "apps/desktop/src-tauri/src/main.rs",
-        "line": 361,
+        "line": 161,
         "anchor": "#[tauri::command]\nfn save_file("
       }
     },
@@ -2969,7 +3009,7 @@
       "id": "reveal",
       "source": {
         "path": "apps/desktop/src-tauri/src/main.rs",
-        "line": 392,
+        "line": 192,
         "anchor": "#[tauri::command]\nfn reveal("
       }
     },
@@ -2977,7 +3017,7 @@
       "id": "doctor",
       "source": {
         "path": "apps/desktop/src-tauri/src/main.rs",
-        "line": 423,
+        "line": 223,
         "anchor": "#[tauri::command]\nfn doctor("
       }
     },
@@ -2985,7 +3025,7 @@
       "id": "set_logo",
       "source": {
         "path": "apps/desktop/src-tauri/src/main.rs",
-        "line": 495,
+        "line": 295,
         "anchor": "#[tauri::command]\nfn set_logo("
       }
     },
@@ -2993,7 +3033,7 @@
       "id": "logo",
       "source": {
         "path": "apps/desktop/src-tauri/src/main.rs",
-        "line": 505,
+        "line": 305,
         "anchor": "#[tauri::command]\nfn logo("
       }
     },
@@ -3019,7 +3059,7 @@
       "key": "creditia.theme",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 94,
+        "line": 93,
         "anchor": "'theme'"
       }
     },
@@ -3027,7 +3067,7 @@
       "key": "creditia.lang",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 95,
+        "line": 93,
         "anchor": "'lang'"
       }
     },
@@ -3035,7 +3075,7 @@
       "key": "creditia.size",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 99,
+        "line": 93,
         "anchor": "'size'"
       }
     },
@@ -3043,7 +3083,7 @@
       "key": "creditia.mark.full.{projectId}",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 112,
+        "line": 145,
         "anchor": "'mark.full.'"
       }
     },
@@ -3051,7 +3091,7 @@
       "key": "creditia.project",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 292,
+        "line": 93,
         "anchor": "'project'"
       }
     },
@@ -3059,7 +3099,7 @@
       "key": "creditia.autofresh",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 391,
+        "line": 93,
         "anchor": "'autofresh'"
       }
     },
@@ -3067,7 +3107,7 @@
       "key": "creditia.autofresh.{projectId}",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 392,
+        "line": 93,
         "anchor": "'autofresh.'"
       }
     },
@@ -3075,7 +3115,7 @@
       "key": "creditia.names",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 472,
+        "line": 93,
         "anchor": "'names'"
       }
     },
@@ -3083,7 +3123,7 @@
       "key": "creditia.group.{projectId}",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 473,
+        "line": 93,
         "anchor": "'group.'"
       }
     },
@@ -3091,7 +3131,7 @@
       "key": "creditia.dims",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 523,
+        "line": 563,
         "anchor": "'dims'"
       }
     },
@@ -3099,7 +3139,7 @@
       "key": "creditia.fmt",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 807,
+        "line": 93,
         "anchor": "'fmt'"
       }
     },
@@ -3107,7 +3147,7 @@
       "key": "creditia.view",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1135,
+        "line": 93,
         "anchor": "'view'"
       }
     }
@@ -3117,7 +3157,7 @@
       "id": "not_in_library",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 127,
+        "line": 160,
         "anchor": "  not_in_library:"
       }
     },
@@ -3125,7 +3165,7 @@
       "id": "no_credits",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 128,
+        "line": 161,
         "anchor": "  no_credits:"
       }
     },
@@ -3133,7 +3173,7 @@
       "id": "dir_missing",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 129,
+        "line": 162,
         "anchor": "  dir_missing:"
       }
     },
@@ -3141,7 +3181,7 @@
       "id": "core_missing",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 130,
+        "line": 163,
         "anchor": "  core_missing:"
       }
     },
@@ -3149,7 +3189,7 @@
       "id": "core_failed",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 131,
+        "line": 164,
         "anchor": "  core_failed:"
       }
     },
@@ -3157,7 +3197,7 @@
       "id": "busy",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 132,
+        "line": 165,
         "anchor": "  busy:"
       }
     },
@@ -3165,7 +3205,7 @@
       "id": "cancelled",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 133,
+        "line": 166,
         "anchor": "  cancelled:"
       }
     },
@@ -3173,7 +3213,7 @@
       "id": "no_home",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 134,
+        "line": 167,
         "anchor": "  no_home:"
       }
     },
@@ -3181,7 +3221,7 @@
       "id": "io",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 135,
+        "line": 168,
         "anchor": "  io:"
       }
     },
@@ -3189,7 +3229,7 @@
       "id": "store",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 136,
+        "line": 169,
         "anchor": "  store:"
       }
     },
@@ -3197,7 +3237,7 @@
       "id": "not_allowed",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 137,
+        "line": 170,
         "anchor": "  not_allowed:"
       }
     },
@@ -3205,7 +3245,7 @@
       "id": "switch_failed",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 138,
+        "line": 171,
         "anchor": "  switch_failed:"
       }
     },
@@ -3213,7 +3253,7 @@
       "id": "agent_failed",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 139,
+        "line": 172,
         "anchor": "  agent_failed:"
       }
     },
@@ -3221,7 +3261,7 @@
       "id": "unsupported",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 140,
+        "line": 173,
         "anchor": "  unsupported:"
       }
     }
@@ -3285,7 +3325,7 @@
       "condition": null,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 26,
+        "line": 28,
         "anchor": "{ id: 'png'"
       }
     },
@@ -3297,7 +3337,7 @@
       "condition": null,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 27,
+        "line": 29,
         "anchor": "{ id: 'svg'"
       }
     },
@@ -3309,7 +3349,7 @@
       "condition": null,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 28,
+        "line": 30,
         "anchor": "{ id: 'pdf'"
       }
     },
@@ -3321,7 +3361,7 @@
       "condition": "animated artwork only",
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 29,
+        "line": 31,
         "anchor": "{ id: 'gif'"
       }
     },
@@ -3333,7 +3373,7 @@
       "condition": null,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 30,
+        "line": 32,
         "anchor": "{ id: 'html'"
       }
     },
@@ -3345,7 +3385,7 @@
       "condition": "clipboard with file fallback",
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 31,
+        "line": 33,
         "anchor": "{ id: 'md'"
       }
     },
@@ -3357,7 +3397,7 @@
       "condition": "shared declaration; hidden in desktop/CLI list",
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 32,
+        "line": 34,
         "anchor": "{ id: 'embed'"
       }
     }
@@ -3371,7 +3411,7 @@
       "desktop": true,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 37,
+        "line": 39,
         "anchor": "{ id: 'native'"
       }
     },
@@ -3383,7 +3423,7 @@
       "desktop": true,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 38,
+        "line": 40,
         "anchor": "{ id: 'og'"
       }
     },
@@ -3395,7 +3435,7 @@
       "desktop": true,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 39,
+        "line": 41,
         "anchor": "{ id: 'square'"
       }
     },
@@ -3407,7 +3447,7 @@
       "desktop": true,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 40,
+        "line": 42,
         "anchor": "{ id: 'portrait'"
       }
     },
@@ -3419,7 +3459,7 @@
       "desktop": true,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 41,
+        "line": 43,
         "anchor": "{ id: 'story'"
       }
     },
@@ -3431,7 +3471,7 @@
       "desktop": false,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 42,
+        "line": 44,
         "anchor": "{ id: 'a4'"
       }
     }
@@ -3442,8 +3482,8 @@
       "entry": "creditia export --format json / summary / publish",
       "source": {
         "path": "packages/cli/src/cli.ts",
-        "line": 424,
-        "anchor": "if (format === 'json')"
+        "line": 419,
+        "anchor": "async function exportCmd()"
       }
     },
     {
@@ -3451,7 +3491,7 @@
       "entry": "creditia doc",
       "source": {
         "path": "packages/cli/src/cli.ts",
-        "line": 333,
+        "line": 336,
         "anchor": "case 'doc':"
       }
     },
@@ -3460,7 +3500,7 @@
       "entry": "creditia release-notes",
       "source": {
         "path": "packages/cli/src/cli.ts",
-        "line": 343,
+        "line": 346,
         "anchor": "case 'release-notes':"
       }
     },
@@ -3469,7 +3509,7 @@
       "entry": "creditia pr-comment / --commits",
       "source": {
         "path": "packages/cli/src/cli.ts",
-        "line": 355,
+        "line": 358,
         "anchor": "case 'pr-comment':"
       }
     },
@@ -3478,7 +3518,7 @@
       "entry": "creditia badge-json",
       "source": {
         "path": "packages/cli/src/cli.ts",
-        "line": 381,
+        "line": 384,
         "anchor": "case 'badge-json':"
       }
     },
@@ -3487,7 +3527,7 @@
       "entry": "creditia fetch",
       "source": {
         "path": "packages/cli/src/cli.ts",
-        "line": 391,
+        "line": 394,
         "anchor": "case 'fetch':"
       }
     },
@@ -3496,7 +3536,7 @@
       "entry": "creditia board",
       "source": {
         "path": "packages/cli/src/cli.ts",
-        "line": 388,
+        "line": 391,
         "anchor": "case 'board':"
       }
     },
@@ -3505,7 +3545,7 @@
       "entry": "creditia site",
       "source": {
         "path": "packages/cli/src/cli.ts",
-        "line": 389,
+        "line": 392,
         "anchor": "case 'site':"
       }
     }
@@ -3603,33 +3643,40 @@
   "observedOutputDifferences": [
     {
       "id": "html-language",
-      "detail": "Desktop export worker calls html without lang (defaults zh); CLI supplies LANG(). Normalize in the shared contract and validate both languages.",
+      "state": "shared_policy_implemented_acceptance_pending",
+      "detail": "The old desktop HTML path defaulted to zh while CLI supplied the selected language. Desktop, protocol and CLI now call the shared export policy with language; cross-entrypoint output and browser validation remain acceptance gates.",
       "sources": [
         {
           "path": "apps/desktop/src/export-worker.ts",
-          "line": 43,
+          "line": 39,
+          "anchor": "return exportArtwork("
+        },
+        {
+          "path": "packages/render/src/export-job.ts",
+          "line": 46,
           "anchor": "case 'html':"
         },
         {
           "path": "packages/cli/src/cli.ts",
-          "line": 441,
-          "anchor": "case 'html':"
+          "line": 427,
+          "anchor": "const response = await renderRequest("
         }
       ]
     },
     {
       "id": "pdf-raster-scale",
-      "detail": "Desktop caps the default PDF raster scale using 4000/max artwork dimension; CLI uses scale 3 unless A4. Match explicit export parameters before pixel comparisons.",
+      "state": "shared_policy_implemented_acceptance_pending",
+      "detail": "The old desktop capped PDF raster scale at 4000/max dimension while CLI defaulted to 3. The shared export policy now owns this rule; exact output checks must still run.",
       "sources": [
         {
-          "path": "apps/desktop/src/export-worker.ts",
-          "line": 42,
+          "path": "packages/render/src/export-job.ts",
+          "line": 37,
           "anchor": "case 'pdf':"
         },
         {
           "path": "packages/cli/src/cli.ts",
-          "line": 440,
-          "anchor": "case 'pdf':"
+          "line": 427,
+          "anchor": "const response = await renderRequest("
         }
       ]
     }
@@ -3637,7 +3684,7 @@
   "candidateSourceFingerprints": [
     {
       "path": "apps/desktop/src-tauri/src/main.rs",
-      "sha256": "e0922383dd2524ac582080c03d32b169ee54132fe2a833f104c6691379247e8b"
+      "sha256": "949ef026d12aab06268c7ce0a030506fd053e758cfa8788a075bd3fabff914ee"
     },
     {
       "path": "apps/desktop/src-tauri/src/preview.rs",
@@ -3645,11 +3692,11 @@
     },
     {
       "path": "apps/desktop/src/engine.ts",
-      "sha256": "14aaa1791e14656b5438b03291b3e37bf1255fe6819da9ebd4fade6dc22f710c"
+      "sha256": "c2895371a8331e8460f0b6b3f478c49dda2e3486c1fa11505a6c0a9169ecbdd5"
     },
     {
       "path": "apps/desktop/src/export-worker.ts",
-      "sha256": "b9c59f96ce2cd21d2cbd8df841cf69f6edf5d12677c66c00b640a675e3c6e7b8"
+      "sha256": "e5734f32b96157dfd60afac52c2a8e9cbecadf45d0f0fc1afcc8f11363e7cea5"
     },
     {
       "path": "apps/desktop/src/fonts.ts",
@@ -3669,7 +3716,7 @@
     },
     {
       "path": "apps/desktop/src/main.ts",
-      "sha256": "51a679cae36e8876fd4d014e11f98c966ba87b3c4edb62f96a39ec311f7245c6"
+      "sha256": "ab5f6f01ce2b1d807b8f60006438e0e5b52ca0ab29ff10e1348d141999b16695"
     },
     {
       "path": "apps/desktop/src/roam-preview.ts",
@@ -3701,7 +3748,7 @@
     },
     {
       "path": "packages/cli/src/cli.ts",
-      "sha256": "bba71039eeae33b4163490e5751bdd087601d7cb61423d4929682a9f902a05cc"
+      "sha256": "bce9e82d7b3d185dcd9baa6395a51c450759f996496318eb1c68cda840feb62e"
     },
     {
       "path": "packages/render/fixtures/catnap.json",
@@ -3713,7 +3760,7 @@
     },
     {
       "path": "packages/render/src/classic/art.ts",
-      "sha256": "59ae9452c7ff2c50260fc7c18838ac33c49a26f36849fee8f6d9fce4d0caa491"
+      "sha256": "72867939f3ca98a4bc0443a0842fab6d224202a2c9e099de98bb0d98b4f31fe4"
     },
     {
       "path": "packages/render/src/classic/bridge.ts",
@@ -3733,11 +3780,11 @@
     },
     {
       "path": "packages/render/src/classic/motion.ts",
-      "sha256": "aabf0d5c0601266a79d62209d5abfd2c8ee6cada933e958943af1e39dbd88be8"
+      "sha256": "18d99ec6ddf953514930a987ad5c767b634a1141012a1717458471c4ba7b4aac"
     },
     {
       "path": "packages/render/src/classic/registry.ts",
-      "sha256": "14814a2bc0bc5d7c18e39861786e4c34af49efc32e133859c6e8f5231586fbc7"
+      "sha256": "8885d11248d0ee0d6f0e515a19fc541c4d2e9500ec650e5bc11ca1208f1d7609"
     },
     {
       "path": "packages/render/src/classic/rolls.ts",
@@ -3748,8 +3795,12 @@
       "sha256": "746019bce032a75296aeaa8a2c307a94a259b458fa59234efbccca9ee99f5d49"
     },
     {
+      "path": "packages/render/src/export-job.ts",
+      "sha256": "fd54e6a9f0fdfecd83633c9551810f21539151b2bbe91f16cc03e53226bf0f3c"
+    },
+    {
       "path": "packages/render/src/export.ts",
-      "sha256": "0889db2cc38f3b306470ec79b9cf3261084a0f66398349de63c1d63fd1e5e906"
+      "sha256": "f15eeeb9eef441b3ea92828d78ffdd1b80630e76b02d88e3b03220a262c909e1"
     },
     {
       "path": "packages/render/src/fonts.ts",
@@ -3777,7 +3828,7 @@
     },
     {
       "path": "packages/render/src/registry.ts",
-      "sha256": "d4185fb5777c2dcbc187f07be9b53c9e01433ee243811fd043b27004b3b8e399"
+      "sha256": "5b10b2ba674ceda96a10ce2341f6ff53340c30af7bb83b1f17cf75d0e675cfa0"
     },
     {
       "path": "packages/render/src/styles/base.ts",

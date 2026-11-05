@@ -4,11 +4,11 @@ import * as gifenc from 'gifenc';
 // gifenc 在 Node 里是 CommonJS（导出挂在 default 上），在打包器里是 ESM
 const G: any = (gifenc as any).GIFEncoder ? gifenc : (gifenc as any).default;
 const { GIFEncoder, quantize, applyPalette } = G;
-import { INTERACT_CSS, mountHits } from './interact.ts';
+import { INTERACT_CSS, mountHits, placeTip } from './interact.ts';
 import type { Hit } from './svg.ts';
 
 /** 一张可导出的作品 */
-export interface Art { w: number; h: number; svg: string; hits: Hit[]; bg: string; title: string; motion?: Motion; crop?: Crop }
+export interface Art { w: number; h: number; svg: string; hits: Hit[]; bg: string; title: string; selection?: { style: string; piece: string; lang: 'zh' | 'en' }; motion?: Motion; crop?: Crop }
 /** 滚动片尾字幕的一帧：整卷 svg 里从 y 开始、高 h 的一段 */
 export interface Crop { svg: string; w: number; h: number; y: number }
 /** HTML 里的动态：scroll = 片尾字幕在银幕里滚动 */
@@ -19,6 +19,8 @@ export interface Raster {
   rgba(svg: string, width?: number): { w: number; h: number; data: Uint8Array };
   /** 文字转路径后的 SVG */
   flat(svg: string): string;
+  /** Font files embedded as data URLs; hosts supply this for selectable SVG text. */
+  embed?(svg: string): string;
 }
 export type Deflate = (data: Uint8Array) => Uint8Array | Promise<Uint8Array>;
 
@@ -60,7 +62,11 @@ export function sized(a: Art, W: number, H: number, pad = 0.06): Art {
 
 export function makeExporter(R: Raster, deflate?: Deflate) {
   const png = (a: Art, scale = 2) => R.png(a.svg, a.w * scale);
-  const svg = (a: Art) => R.flat(a.svg).replace(/^<svg/, `<svg role="img" aria-label="${attr(a.title)}"`);
+  const svg = (a: Art, fontMode: 'outline' | 'embed' = 'outline') => {
+    if (fontMode === 'embed' && !R.embed) throw new Error('Font embedding is unavailable in this renderer');
+    const source = fontMode === 'embed' ? R.embed!(a.svg) : R.flat(a.svg);
+    return source.replace(/^<svg/, `<svg role="img" aria-label="${attr(a.title)}"`);
+  };
 
   async function pdf(a: Art, scale = 3): Promise<Uint8Array> {
     if (!deflate) throw new Error('PDF 需要压缩函数');
@@ -79,7 +85,7 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
   }
 
   /** frames：同一作品在动画各时刻的画面 */
-  function gif(frames: Art[], o: { width?: number; fps?: number; hold?: number } = {}): Uint8Array {
+  function gif(frames: Art[], o: { width?: number; fps?: number; hold?: number; delays?: number[]; repeat?: number } = {}): Uint8Array {
     const enc = GIFEncoder();
     const fps = o.fps ?? 20, delay = Math.round(1000 / fps);
     const width = o.width ?? Math.min(frames[0].w, 960);
@@ -92,19 +98,25 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
     };
     frames.forEach((f, i) => {
       const img = whole ? cut(f) : R.rgba(f.svg, width);
-      const palette = quantize(img.data, 256, { format: 'rgb565' });
+      const transparent = img.data.some((value, index) => index % 4 === 3 && value < 128);
+      const palette = quantize(img.data, transparent ? 255 : 256, { format: 'rgb565' });
       const index = applyPalette(img.data, palette, 'rgb565');
-      enc.writeFrame(index, img.w, img.h, { palette, delay: i === frames.length - 1 ? (o.hold ?? 2400) : delay, repeat: 0 });
+      if (transparent) {
+        palette.unshift([0, 0, 0]);
+        for (let p = 0; p < index.length; p++) index[p] = img.data[p * 4 + 3] < 128 ? 0 : index[p] + 1;
+      }
+      enc.writeFrame(index, img.w, img.h, { palette, transparent, transparentIndex: transparent ? 0 : -1, dispose: transparent ? 2 : 0,
+        delay: o.delays?.[i] ?? (i === frames.length - 1 ? (o.hold ?? 2400) : delay), repeat: o.repeat ?? 0 });
     });
     enc.finish();
     return enc.bytes();
   }
 
   /** 单文件 HTML：画面是文字转路径后的 SVG，交互层盖在上面。arts 多于一张时排成一页 */
-  function html(arts: Art[], o: { title: string; lang?: string; bg?: string; note?: string } ): string {
+  function html(arts: Art[], o: { title: string; lang?: string; bg?: string; note?: string; fontMode?: 'outline' | 'embed' } ): string {
     const bg = o.bg ?? arts[0]?.bg ?? '#111';
     const blocks = arts.map((a, i) => {
-      const flat = svg(a);
+      const flat = svg(a, o.fontMode);
       if (a.motion?.kind === 'scroll') {
         const m = a.motion;
         return `<figure class="screen" style="--vw:${m.viewW}px;aspect-ratio:${m.viewW}/${m.viewH};--secs:${m.secs}s;--travel:${((a.h + m.viewH) / m.viewH * 100).toFixed(2)}%"><div class="reel"><div class="ct-art" id="a${i}" style="width:100%">${flat}</div></div><button class="replay" aria-label="replay">↻</button></figure>`;
@@ -138,13 +150,15 @@ body.wall .piece.wide{column-span:all;max-width:100%!important}
 @keyframes rise{from{opacity:0;transform:translateY(16px) scale(.985);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
 footer{font:12px/1.4 Inter,-apple-system,"PingFang SC",sans-serif;color:${lumOf(bg) > 0.5 ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.45)'};text-align:center}
 ${INTERACT_CSS}
+@media(prefers-reduced-motion:reduce){.piece,.screen .reel{animation:none!important}.screen .reel .ct-art{top:0}.ct-hit,.ct-tip{transition:none!important}}
 </style>
 </head>
 <body${wall ? ' class="wall"' : ''}>
 ${wall ? `<main>${blocks}</main>` : blocks}
 <footer>${o.note ? esc(o.note) + ' · ' : ''}creditia</footer>
 <script>
-const DATA=${JSON.stringify(data)};
+const DATA=${JSON.stringify(data).replace(/</g, '\\u003c')};
+${placeTip.toString()}
 ${mountHits.toString()}
 DATA.forEach((d,i)=>{const el=document.getElementById('a'+i);if(el)mountHits(el,d.hits,d.w,d.h)});
 document.querySelectorAll('.replay').forEach(b=>b.onclick=()=>{const r=b.parentElement.querySelector('.reel');r.style.animation='none';r.offsetHeight;r.style.animation=''});

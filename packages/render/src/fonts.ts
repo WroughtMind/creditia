@@ -62,3 +62,26 @@ export const facesOf = (family: string) => FONTS.filter((f) => f.family === fami
 
 /** CSS font-family 串 → 引用到的 family 名（去引号） */
 export const familiesIn = (stack: string) => stack.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+
+/** Font faces actually referenced by text, including inherited tspan attributes. */
+export function referencedFonts(svg: string): FontFace[] {
+  const refs = new Map<string, FontFace>();
+  const stack: { family?: string; weight: number; italic: boolean }[] = [{ weight: 400, italic: false }];
+  for (const match of svg.matchAll(/<\/?([\w:-]+)\b[^>]*>/g)) {
+    const tag = match[0];
+    if (tag.startsWith('</')) { if (stack.length > 1) stack.pop(); continue; }
+    const parent = stack.at(-1)!;
+    const family = /\bfont-family="([^"]+)"/.exec(tag)?.[1] ?? parent.family;
+    const weight = Number(/\bfont-weight="(\d+)"/.exec(tag)?.[1] ?? parent.weight);
+    const mode = /\bfont-style="([^"]+)"/.exec(tag)?.[1];
+    const italic = mode ? mode === 'italic' : parent.italic;
+    if ((match[1] === 'text' || match[1] === 'tspan') && family) {
+      for (const name of familiesIn(family.replaceAll('&quot;', '"').replaceAll('&apos;', "'"))) {
+        const face = FONTS.filter(f => f.family === name).sort((a, b) => Number(!!a.italic !== italic) - Number(!!b.italic !== italic) || Math.abs(a.weight - weight) - Math.abs(b.weight - weight))[0];
+        if (face) refs.set(`${face.pkg}/${face.dir}`, face);
+      }
+    }
+    if (!tag.endsWith('/>')) stack.push({ family, weight, italic });
+  }
+  return [...refs.values()];
+}

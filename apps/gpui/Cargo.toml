@@ -16,6 +16,16 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 async-channel = "2"
 base64 = "0.22"
+resvg = { version = "0.48.1", default-features = false, features = ["raster-images"] }
+
+[features]
+visual-test = ["gpui-kit/test-support"]
+
+[[test]]
+name = "rendering"
+harness = false
+test = false
+required-features = ["visual-test"]
 
 [profile.release]
 debug = false

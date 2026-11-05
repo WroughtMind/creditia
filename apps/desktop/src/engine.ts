@@ -8,7 +8,7 @@ export type ExportJob = { fmt: Format; fontStyle: Pick<Style, 'f'> | null; art: 
 /** 按格式出文件。frames 只在 GIF 时用 */
 export async function exportArt(fmt: Format, st: Style | null, a: Art, size: string, frames?: () => Art[] | Promise<Art[]>): Promise<Exported> {
   const job: ExportJob = { fmt, fontStyle: st ? { f: st.f } : null, art: a, size };
-  if (fmt === 'gif' && frames) job.frames = await frames();
+  if ((fmt === 'gif' || fmt === 'html') && frames) job.frames = await frames();
   const worker = new Worker(new URL('./export-worker.ts', import.meta.url), { type: 'module' });
   return new Promise((resolve, reject) => {
     const fail = (error: unknown) => { worker.terminate(); reject(error); };

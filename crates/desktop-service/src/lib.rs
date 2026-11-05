@@ -7,10 +7,17 @@ use creditia_store::Library;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Mutex;
 
 mod analysis;
-pub use analysis::{analysis_running, cancel_analyze, run_analysis, run_analysis_with_cancel, AnalysisCancellation, ProgressSink};
+mod settings;
+pub mod collection;
+mod background;
+mod projects;
+pub use projects::{project_archives, project_details, set_project_config, blame, evidence_archive, import_evidence, doctor};
+pub use background::BackgroundService;
+pub use collection::{collect_info, collect_now, collect_round, set_collect, set_collect_agent};
+pub use settings::{app_settings, edit_app_settings, ui_preferences, patch_ui_preferences, import_legacy_preferences, set_legacy_preference, legacy_preferences, migrate_legacy_with_helper};
+pub use analysis::{analysis_running, cancel_analyze, run_analysis, run_analysis_with_cancel, run_core_job_with_cancel, analysis_status, recover_interrupted_analysis, resume_analysis, AnalysisCancellation, ProgressSink};
 
 /// 给界面的错误：只带代码和原始细节，文案由界面按当前语言写
 #[derive(serde::Serialize, Debug)]
@@ -145,9 +152,8 @@ pub fn config_of(project_id: String) -> Res<Value> {
 }
 
 pub fn set_display(project_id: String, hide_names: bool, sign: String) -> Res<()> {
-    let lib = Library::open()?;
-    let p = project(&lib, &project_id)?;
-    Ok(creditia_store::Library::set_display(std::path::Path::new(&p.path), hide_names, &sign)?)
+    set_project_config(project_id, json!({"display":{"hideNames":hide_names,"sign":sign}}))?;
+    Ok(())
 }
 
 /// 核心二进制：和 App 一起打包（sidecar 同目录），开发时用 PATH 里的
@@ -257,24 +263,6 @@ pub fn home() -> Option<PathBuf> {
 // ───────────────────────── App 自己的设置（作品库目录里的 app.json） ─────────────────────────
 // 导出目录只能经系统的选文件夹对话框改，界面传不进任意路径
 
-fn app_settings_path() -> PathBuf {
-    creditia_store::data_dir().join("app.json")
-}
-pub fn app_settings() -> Value {
-    std::fs::read_to_string(app_settings_path()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}))
-}
-/// 读改写一次设置：后台采集也会写，两边不互相盖掉
-pub fn edit_app_settings(f: impl FnOnce(&mut Value)) -> Res<()> {
-    static LOCK: Mutex<()> = Mutex::new(());
-    let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let mut v = app_settings();
-    f(&mut v);
-    let p = app_settings_path();
-    if let Some(d) = p.parent() {
-        std::fs::create_dir_all(d).map_err(|e| Fail::with("io", e))?;
-    }
-    std::fs::write(p, serde_json::to_string_pretty(&v).unwrap()).map_err(|e| Fail::with("io", e))
-}
 pub fn default_export_dir() -> Res<PathBuf> {
     Ok(home().ok_or(Fail::new("no_home"))?.join("Downloads"))
 }

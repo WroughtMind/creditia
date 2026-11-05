@@ -174,3 +174,143 @@ exit 2
     std::env::set_var("CREDITIA_CORE", fixture.root.join("missing"));
     assert_eq!(service::discover().unwrap_err().code, "core_missing");
 }
+
+#[test]
+fn legacy_preferences_round_trip_preserves_privacy_and_newer_edits() {
+    let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
+    let _fixture = Fixture::new("preference-migration");
+    service::edit_app_settings(|settings| {
+        settings["unknown"] = json!({"keep": 7});
+        settings["gpui"] = json!({"language":"en","reducedMotion":true});
+    }).unwrap();
+    let projected = service::import_legacy_preferences(json!({
+        "creditia.names":"off", "creditia.lang":"zh", "creditia.theme":"ink",
+        "creditia.group.project.with.dot":"model", "creditia.autofresh.project.with.dot":"off",
+        "creditia.custom-pref":"retained"
+    })).unwrap();
+    assert_eq!(projected["creditia.names"], "off");
+    let prefs = service::ui_preferences();
+    assert_eq!(prefs["global"]["named"], false);
+    assert_eq!(prefs["global"]["style"], "ink");
+    assert_eq!(prefs["global"]["reducedMotion"], true);
+    assert_eq!(prefs["projects"]["project.with.dot"]["group"], "model");
+    assert_eq!(prefs["projects"]["project.with.dot"]["autoAnalyze"], false);
+    assert_eq!(service::app_settings()["unknown"]["keep"], 7);
+
+    service::patch_ui_preferences(json!({"global":{"style":"bauhaus","lang":"en"},"projects":{"project.with.dot":{"autoAnalyze":null}}})).unwrap();
+    let again = service::import_legacy_preferences(json!({"creditia.theme":"ink","creditia.lang":"zh","creditia.names":"on"})).unwrap();
+    assert_eq!(again["creditia.theme"], "bauhaus", "reopening legacy client cannot overwrite GPUI edits");
+    assert_eq!(again["creditia.lang"], "en");
+    assert!(again.get("creditia.autofresh.project.with.dot").is_none(), "inherit clears stale override in legacy projection");
+    assert_eq!(again["creditia.custom-pref"], "retained");
+    service::set_legacy_preference("creditia.names".into(), "on".into()).unwrap();
+    assert_eq!(service::ui_preferences()["global"]["named"], true);
+    assert!(service::patch_ui_preferences(json!({"global":{"named":"false"}})).is_err());
+    assert_eq!(service::ui_preferences()["global"]["named"], true);
+}
+
+#[test]
+fn corrupted_settings_are_not_overwritten_and_future_versions_are_preserved() {
+    let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
+    let _fixture = Fixture::new("settings-invalid");
+    let directory = creditia_store::data_dir();
+    std::fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("app.json");
+    std::fs::write(&path, b"{unfinished").unwrap();
+    assert_eq!(service::edit_app_settings(|s| s["logo"] = json!("star")).unwrap_err().code, "settings_invalid");
+    assert_eq!(std::fs::read(&path).unwrap(), b"{unfinished");
+    std::fs::write(&path, r#"{"ui":{"version":2,"unknown":"future"},"keep":9}"#).unwrap();
+    assert_eq!(service::patch_ui_preferences(json!({"global":{"named":false}})).unwrap_err().code, "preferences_version");
+    assert_eq!(service::app_settings()["ui"]["unknown"], "future");
+}
+
+// Invoked as an isolated test subprocess by the following test. This exercises
+// real OS file locks rather than an in-process mutex pretending to be one.
+#[test]
+fn settings_child_process_writer() {
+    if std::env::var_os("CREDITIA_SERVICE_TEST_WRITER").is_none() { return; }
+    for _ in 0..25 {
+        service::edit_app_settings(|settings| settings["counter"] = json!(settings["counter"].as_u64().unwrap_or(0) + 1)).unwrap();
+    }
+}
+
+#[test]
+fn concurrent_desktop_processes_merge_settings_without_partial_json() {
+    let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
+    let _fixture = Fixture::new("settings-processes");
+    service::edit_app_settings(|settings| { settings["counter"] = json!(0); settings["unknown"] = json!({"keep":true}); }).unwrap();
+    let mut children = (0..4).map(|_| std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "settings_child_process_writer"])
+        .env("CREDITIA_SERVICE_TEST_WRITER", "1")
+        .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap()).collect::<Vec<_>>();
+    let mut finished = vec![false; children.len()];
+    let started = std::time::Instant::now();
+    while finished.iter().any(|done| !done) {
+        let bytes = std::fs::read(creditia_store::data_dir().join("app.json")).unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&bytes).expect("every reader sees a complete file");
+        assert_eq!(value["unknown"]["keep"], true);
+        for (child, done) in children.iter_mut().zip(&mut finished) {
+            if !*done {
+                if let Some(status) = child.try_wait().unwrap() { assert!(status.success()); *done = true; }
+            }
+        }
+        assert!(started.elapsed() < std::time::Duration::from_secs(30));
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    assert_eq!(service::app_settings()["counter"], 100);
+}
+
+#[cfg(unix)]
+#[test]
+fn durable_analysis_recovers_after_exit_and_retries_the_original_request() {
+    let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
+    let fixture = Fixture::new("task-recovery");
+    service::edit_app_settings(|settings| settings["tasks"]["analysis"] = json!({"id":"exited-owner","state":"running","repo":"/tmp","lang":"en","startedAt":1})).unwrap();
+    assert_eq!(service::recover_interrupted_analysis().unwrap()["state"], "interrupted");
+    fixture.core("[ \"$CREDITIA_LANG\" = en ] || exit 9; echo '{\"resumed\":true}'");
+    let result = service::resume_analysis(None, service::AnalysisCancellation::default()).unwrap();
+    assert_eq!(result["resumed"], true);
+    assert_eq!(service::analysis_status()["state"], "completed");
+    assert_eq!(service::analysis_status()["repo"], "/tmp");
+    assert_eq!(service::resume_analysis(None, service::AnalysisCancellation::default()).unwrap_err().code, "no_interrupted_task");
+
+    fixture.core("sleep 30; echo '{}'");
+    let token = service::AnalysisCancellation::default();
+    let worker_token = token.clone();
+    let job = std::thread::spawn(move || service::run_analysis_with_cancel("/tmp", None, None, worker_token));
+    let start = std::time::Instant::now();
+    while !service::analysis_running() && start.elapsed() < std::time::Duration::from_secs(5) { std::thread::sleep(std::time::Duration::from_millis(10)); }
+    assert!(service::analysis_running());
+    assert_eq!(service::recover_interrupted_analysis().unwrap()["state"], "running", "a live process lease prevents false recovery");
+    token.cancel();
+    assert_eq!(job.join().unwrap().unwrap_err().code, "cancelled");
+    assert_eq!(service::analysis_status()["state"], "cancelled");
+}
+
+#[cfg(unix)]
+#[test]
+fn closing_background_service_cancels_its_analysis_before_later_writes() {
+    let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
+    let fixture = Fixture::new("background-cancel");
+    let project = fixture.project();
+    let repo = Path::new(&project.path);
+    assert!(std::process::Command::new("git").args(["init", "-q"]).arg(repo).status().unwrap().success());
+    assert!(std::process::Command::new("git").arg("-C").arg(repo).args(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-qm", "fixture"]).status().unwrap().success());
+    Library::open().unwrap().upsert_project(&project).unwrap();
+    std::fs::write(repo.join(".creditia/credits.json"), r#"{"head":"previous","project":{"name":"fixture"}}"#).unwrap();
+    let marker = fixture.root.join("should-not-exist");
+    fixture.core(&format!("echo '@progress {{\"stage\":\"history\"}}' >&2; sleep 30; touch '{}'; echo '{{}}'", marker.display()));
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let background = service::BackgroundService::start(std::sync::Arc::new(move |event| { let _ = sender.send(event); }));
+    background.watch_project(Some(project.id));
+    loop {
+        let event = receiver.recv_timeout(std::time::Duration::from_secs(10)).expect("automatic analysis starts");
+        if event["kind"] == "analysis-progress" { break; }
+    }
+    drop(background);
+    let start = std::time::Instant::now();
+    while service::analysis_running() && start.elapsed() < std::time::Duration::from_secs(5) { std::thread::sleep(std::time::Duration::from_millis(10)); }
+    assert!(!service::analysis_running());
+    assert!(!marker.exists());
+    assert_eq!(service::analysis_status()["state"], "cancelled");
+}

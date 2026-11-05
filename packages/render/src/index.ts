@@ -2,7 +2,7 @@
 import { readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { FONTS } from './fonts.ts';
+import { FONTS, referencedFonts } from './fonts.ts';
 import { makeExporter, type Raster } from './export.ts';
 
 const require = createRequire(import.meta.url);
@@ -24,16 +24,32 @@ export function fontFiles(): string[] {
   return files;
 }
 
-const opts = (width?: number) => ({
-  font: { fontFiles: fontFiles(), loadSystemFonts: false, defaultFontFamily: 'Noto Sans SC' },
+const paths = new Map<string, string>();
+function selectedFontFiles(svg: string): string[] {
+  const faces = referencedFonts(svg);
+  if (!faces.length) return [];
+  return faces.map(face => {
+    const key = `${face.pkg}/${face.dir}`;
+    let file = paths.get(key);
+    if (!file) {
+      const dir = path.join(path.dirname(require.resolve(`@expo-google-fonts/${face.pkg}/package.json`)), face.dir);
+      const name = readdirSync(dir).find(name => name.endsWith('.ttf'));
+      if (!name) throw new Error(`Missing font: ${face.family} ${face.weight}`);
+      file = path.join(dir, name); paths.set(key, file);
+    }
+    return file;
+  });
+}
+const opts = (svg: string, width?: number) => ({
+  font: { fontFiles: selectedFontFiles(svg), loadSystemFonts: false, defaultFontFamily: 'Noto Sans SC' },
   fitTo: width ? { mode: 'width', value: Math.round(width) } : undefined,
   shapeRendering: 2, textRendering: 1, imageRendering: 0,
 });
 
 export const raster: Raster = {
-  png(svg, width) { return new Uint8Array(new Resvg(svg, opts(width)).render().asPng()); },
-  rgba(svg, width) { const img = new Resvg(svg, opts(width)).render(); return { w: img.width, h: img.height, data: new Uint8Array(img.pixels) }; },
-  flat(svg) { return new Resvg(svg, opts()).toString(); },
+  png(svg, width) { return new Uint8Array(new Resvg(svg, opts(svg, width)).render().asPng()); },
+  rgba(svg, width) { const img = new Resvg(svg, opts(svg, width)).render(); return { w: img.width, h: img.height, data: new Uint8Array(img.pixels) }; },
+  flat(svg) { return new Resvg(svg, opts(svg)).toString(); },
 };
 
 export const exporter = makeExporter(raster);

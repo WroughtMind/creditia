@@ -15,15 +15,21 @@ import type { Raster } from '../export.ts';
 
 const require = createRequire(import.meta.url);
 const fontCache = new Map<string, Buffer>();
+let fontCacheBytes = 0;
 // 字体文件在包目录里找 .ttf，不靠拼文件名：各包的大小写不一致，在大小写敏感的文件系统（Linux）上拼出来的名字会找不到
 function fontFile(pkg: string, file: string) {
   const k = `${pkg}/${file}`;
   if (!fontCache.has(k)) {
     const dir = path.join(path.dirname(require.resolve(`@expo-google-fonts/${pkg}/package.json`)), file);
     const ttf = readdirSync(dir).find((x) => x.endsWith('.ttf') && !x.includes('Italic'));
-    fontCache.set(k, readFileSync(path.join(dir, ttf!)));
+    const bytes = readFileSync(path.join(dir, ttf!));
+    while (fontCache.size && fontCacheBytes + bytes.length > 48 * 1024 * 1024) {
+      const first = fontCache.keys().next().value!; fontCacheBytes -= fontCache.get(first)!.length; fontCache.delete(first);
+    }
+    if (bytes.length > 48 * 1024 * 1024) return bytes;
+    fontCache.set(k, bytes); fontCacheBytes += bytes.length;
   }
-  return fontCache.get(k)!;
+  const hit = fontCache.get(k)!; fontCache.delete(k); fontCache.set(k, hit); return hit;
 }
 /** 只给这个主题用到的字体 */
 function fonts(t: Theme) {

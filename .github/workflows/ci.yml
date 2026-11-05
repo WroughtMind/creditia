@@ -67,6 +67,20 @@ jobs:
           node_modules/.bin/creditia doc --credits "$GITHUB_WORKSPACE/packages/render/fixtures/catnap.json" --out CREDITS.md
           node_modules/.bin/creditia export --credits "$GITHUB_WORKSPACE/packages/render/fixtures/catnap.json" --piece tier --style ink --format png --out tier.png
 
+      - name: Build the web adapter with the shared renderer and pinned fonts
+        run: |
+          npm ci --prefix packages/embed
+          npm run build --prefix packages/embed
+          node packages/embed/tools/fixtures.mjs
+      - name: Retain the web rendering build for browser acceptance
+        uses: actions/upload-artifact@v4
+        with:
+          name: creditia-web-renderer
+          path: |
+            packages/embed/dist
+            packages/render/fixtures/catnap.json
+          retention-days: 7
+
   desktop-macos:
     runs-on: macos-26
     steps:

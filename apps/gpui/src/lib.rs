@@ -42,19 +42,48 @@ pub enum Appearance {
     Dark,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Preferences {
     pub language: Language,
     pub appearance: Appearance,
     pub reduced_motion: bool,
     pub last_project: Option<String>,
+    pub named: bool,
+    pub style: String,
+    pub view: String,
+    pub export_format: String,
+    pub export_size: String,
+    pub auto_analyze: bool,
+    pub projects: std::collections::BTreeMap<String, ProjectPreferences>,
 }
-
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ProjectPreferences {
+    pub group: String,
+    pub auto_analyze: Option<bool>,
+    pub variants: std::collections::BTreeMap<String,String>,
+    pub order: Vec<String>,
+}
+impl Default for ProjectPreferences {
+    fn default()->Self {Self{group:"auto".into(),auto_analyze:None,variants:Default::default(),order:vec![]}}
+}
+impl Default for Preferences {
+    fn default()->Self {Self{language:Language::Zh,appearance:Appearance::System,reduced_motion:false,last_project:None,named:true,style:"minimal-light".into(),view:"wall".into(),export_format:"png".into(),export_size:"native".into(),auto_analyze:false,projects:Default::default()}}
+}
 impl Preferences {
     pub fn read(settings: &Value) -> Self {
-        serde_json::from_value(settings["gpui"].clone()).unwrap_or_default()
+        if settings["global"].is_object() {
+            let mut global=settings["global"].clone();
+            global["language"]=global["lang"].clone();
+            global["projects"]=settings["projects"].clone();
+            serde_json::from_value(global).unwrap_or_default()
+        } else {serde_json::from_value(settings["gpui"].clone()).unwrap_or_default()}
     }
+    pub fn shared_patch(&self)->Value {
+        serde_json::json!({"global":{"lang":self.language.code(),"appearance":self.appearance,"reducedMotion":self.reduced_motion,"named":self.named,"style":self.style,"view":self.view,"exportFormat":self.export_format,"exportSize":self.export_size,"lastProject":self.last_project,"autoAnalyze":self.auto_analyze},"projects":self.projects})
+    }
+    pub fn project(&self,id:Option<&str>)->ProjectPreferences {id.and_then(|id|self.projects.get(id)).cloned().unwrap_or_default()}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -111,7 +140,7 @@ pub fn export_snapshot(
     size: &str,
 ) -> Result<Value, String> {
     use serde_json::json;
-    if !["png", "svg", "pdf", "gif", "html"].contains(&format)
+    if !["png", "svg", "pdf", "gif", "html", "md", "txt", "json", "embed"].contains(&format)
         || !catalog["formats"].as_array().is_some_and(|formats| formats.iter().any(|item| item["id"] == format)) {
         return Err("The selected export format is unavailable".into());
     }
@@ -138,6 +167,15 @@ pub fn export_snapshot(
             .ok_or("The selected layout is unavailable")?;
         request["variant"] = json!(variant);
     }
+    Ok(request)
+}
+
+pub fn export_with_preferences(raw:&Value,catalog:&Value,selection:(usize,usize,usize),preferences:&Preferences,format:&str,size:&str,transparent:bool,font_mode:&str)->Result<Value,String>{
+    let mut request=export_snapshot(raw,catalog,selection,&preferences.language,format,size)?;
+    request["group"]=serde_json::json!(preferences.project(preferences.last_project.as_deref()).group);
+    request["named"]=serde_json::json!(preferences.named);
+    request["transparent"]=serde_json::json!(transparent);
+    request["fontMode"]=serde_json::json!(font_mode);
     Ok(request)
 }
 
@@ -237,3 +275,8 @@ mod tests {
         assert!(export_snapshot(&json!({}), &catalog, (0,0,0), &Language::Zh, "png", "unknown").is_err());
     }
 }
+
+pub mod ui_model;
+pub mod renderer;
+pub mod native_preview;
+pub mod app;

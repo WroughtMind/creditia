@@ -159,7 +159,7 @@ const inventory = {
   styles,sharedSvgStyles:styleOrder.map(s=>({...s,desktop:!skipped.includes(s.id)})),excludedSvgStyleAliases:skipped,boards:{classic:classicBoard,svg:v2Board},pieces:{classic:classicPieces,svg:v2Pieces},variantNames:{classic:classicVariantNames,svg:variantNames},
   features,globalShortcuts:commands,localShortcuts:localKeys,nativeCommands,settingsKeys,errors,logos,formats,sizes,
   additionalOutputs:[
-    {id:'json',entry:'creditia export --format json / summary / publish',source:at(cliFile,"if (format === 'json')")},
+    {id:'json',entry:'creditia export --format json / summary / publish',source:at(cliFile,"async function exportCmd()")},
     {id:'markdown-document',entry:'creditia doc',source:at(cliFile,"case 'doc':")},
     {id:'release-notes',entry:'creditia release-notes',source:at(cliFile,"case 'release-notes':")},
     {id:'pr-comment',entry:'creditia pr-comment / --commits',source:at(cliFile,"case 'pr-comment':")},
@@ -170,8 +170,8 @@ const inventory = {
   ],
   fonts:{families:fontFamilies,classicFamilies:classicFontFamilies,fontFilesCaptured:false,licenseAudit:'pending'},fixtures,
   observedOutputDifferences:[
-    {id:'html-language',detail:'Desktop export worker calls html without lang (defaults zh); CLI supplies LANG(). Normalize in the shared contract and validate both languages.',sources:[at('apps/desktop/src/export-worker.ts',"case 'html':"),at(cliFile,"case 'html':")]},
-    {id:'pdf-raster-scale',detail:'Desktop caps the default PDF raster scale using 4000/max artwork dimension; CLI uses scale 3 unless A4. Match explicit export parameters before pixel comparisons.',sources:[at('apps/desktop/src/export-worker.ts',"case 'pdf':"),at(cliFile,"case 'pdf':")]},
+    {id:'html-language',state:'shared_policy_implemented_acceptance_pending',detail:'The old desktop HTML path defaulted to zh while CLI supplied the selected language. Desktop, protocol and CLI now call the shared export policy with language; cross-entrypoint output and browser validation remain acceptance gates.',sources:[at('apps/desktop/src/export-worker.ts','return exportArtwork('),at('packages/render/src/export-job.ts',"case 'html':"),at(cliFile,'const response = await renderRequest(')]},
+    {id:'pdf-raster-scale',state:'shared_policy_implemented_acceptance_pending',detail:'The old desktop capped PDF raster scale at 4000/max dimension while CLI defaulted to 3. The shared export policy now owns this rule; exact output checks must still run.',sources:[at('packages/render/src/export-job.ts',"case 'pdf':"),at(cliFile,'const response = await renderRequest(')]},
   ],
   candidateSourceFingerprints:[...seen].map(([file,source])=>({path:file,sha256:createHash('sha256').update(source).digest('hex')})).sort((a,b)=>a.path.localeCompare(b.path)),
 };
@@ -193,7 +193,7 @@ for(const f of features)md+=`| ${f.name} | ${f.stage} | ${f.source?link(f.source
 md+='\n## 输出边界\n\n| 格式 | 当前桌面 | 拖放坞 | 说明 |\n|---|---|---|---|\n';
 for(const f of formats)md+=`| ${f.name} | ${f.desktop?'有':'隐藏'} | ${f.dragDock?'有':'无'} | ${f.condition??'共享导出器'} |\n`;
 md+='\n- JSON、Markdown 文档、版本说明、PR/提交归因文字、动态徽章数据、终端名片、HTML 展墙及站点另由 CLI 提供。\n- 尺寸：native、og 1200×630、square 1080×1080、portrait 1080×1350、story 1080×1920、a4 2480×3508；A4 当前仅共享/CLI，桌面隐藏；CLI 支持自定义宽高。\n- SVG/HTML 文字可转路径；PDF 当前为带透明蒙版的栅格图像 PDF，不能宣称已实现可编辑矢量 PDF 或字体嵌入。\n- GIF 使用已有帧生成器；完整桌面动态播放与风格动作仍需迁移和补齐。开放的 [#116](https://github.com/WroughtMind/creditia/issues/116) 是待完成要求，不计为已交付基线。\n- `fixtures/catnap.json` 是虚构样例；真实回放样例是有限的归因输入，不是完整视觉档案。真实项目视觉样例和截图仍待采集。\n';
-md+='\n当前输出已有两个需统一的差异：桌面 HTML 未传 lang，默认写 zh，而 CLI 传入所选语言；桌面 PDF 默认栅格倍率有 4000px 限制，CLI 默认 3×。跨端比较须固定这些参数，并记录修正后的共同规则，不能把旧差异当作已满足一致性。\n';
+md+='\n基线中的 HTML 语言默认值与 PDF 栅格倍率差异，现已集中到 `packages/render/src/export-job.ts` 的共享规则。源码接入状态为 implemented；跨入口输出与浏览器验证仍为独立验收项，不能凭共用函数直接标为 verified。\n';
 
 const header=['style','renderer','piece','variant','default_variant','desktop','animated','baseline_visual','gpui_functional','gpui_visual','gpui_motion','desktop_cli_web_outputs','evidence'];
 const tsv=header.join('\t')+'\n'+rows.map(r=>[r.style,r.renderer,r.piece,r.variant,r.defaultVariant,r.desktop,r.animated,'pending','pending','pending',r.animated?'pending':'not_applicable','pending',''].join('\t')).join('\n')+'\n';
