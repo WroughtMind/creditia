@@ -3790,3 +3790,34 @@
     {
       "path": "packages/render/src/styles/east.ts",
       "sha256": "acad3fa06adf2498b3a9d5eff2a1f8a65b37f684d82e1f4fb48ae22fcd2745fe"
+    },
+    {
+      "path": "packages/render/src/styles/index.ts",
+      "sha256": "6d12a719cf4678cd454814a7e4d4a973dd7ec1abf1c1bb1f13ffe96067f41105"
+    },
+    {
+      "path": "packages/render/src/styles/pop.ts",
+      "sha256": "9dc546078125fbb00268ed946d5f71030911ef8c15ee930ba101b579bfbc3ae9"
+    },
+    {
+      "path": "packages/render/src/styles/story.ts",
+      "sha256": "11613b07afdcdc2fe59e7afb1909fe740624e0dbb09cd7367ca465e477018a28"
+    },
+    {
+      "path": "packages/render/src/styles/west.ts",
+      "sha256": "c9c28bb5dc7901e38d3d56c77f68f77fadb169f9cfdc4c2453a6045a021ff6d2"
+    },
+    {
+      "path": "packages/render/src/text.ts",
+      "sha256": "ebea9128ac5af72f52b72f0d52ecfc767266d44a73c90da26efc325db40097ec"
+    },
+    {
+      "path": "packages/schema/credits.schema.json",
+      "sha256": "3d186c6f8c322d3fd6fb69526a7f7416f53e6d42c81d8e3b6f7f9dc70ee66a50"
+    },
+    {
+      "path": "packages/schema/types.ts",
+      "sha256": "0eae1ad396560588d6004b1a89982e158b712d9ffb63dd055c8c2edc9666bef9"
+    }
+  ]
+}

@@ -214,4 +214,14 @@ if(process.argv.includes('--write')) {
     if(file==='matrix.tsv') {
       const saved=fs.readFileSync(path.join(here,file),'utf8').trimEnd().split('\n');
       const actual=content.trimEnd().split('\n');
-      if(saved.length!==actual.length || saved.some((line,i)=>line.split('\t').slice(0,7).join('\t')!==actual[i].split('\t').slice(0,7).join('\t'))) throw new Error('matrix.tsv catalog drift; review
+      if(saved.length!==actual.length || saved.some((line,i)=>line.split('\t').slice(0,7).join('\t')!==actual[i].split('\t').slice(0,7).join('\t'))) throw new Error('matrix.tsv catalog drift; review and run --write');
+    } else if(file==='inventory.json') {
+      // Body changes during migration are allowed. Check catalog semantics, not
+      // snapshot hashes or line shifts; at() above still verifies every anchor.
+      const semantic=(_key,value)=>['candidateSourceFingerprints','source','variantSource'].includes(_key)?undefined:value;
+      const saved=JSON.parse(fs.readFileSync(path.join(here,file),'utf8'));
+      if(JSON.stringify(saved,semantic)!==JSON.stringify(inventory,semantic)) throw new Error(`${file} catalog drift; review and run --write`);
+    }
+  }
+  console.log(`Inventory verified: ${styles.length} styles; ${rows.length} style/piece/layout combinations. Visual and GPUI acceptance remain separate.`);
+}

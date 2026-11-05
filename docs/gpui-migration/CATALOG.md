@@ -171,3 +171,5 @@ SVG 注册表另有 `minimal/noir/glass/cinema/terminal`；桌面为避免重复
 - SVG/HTML 文字可转路径；PDF 当前为带透明蒙版的栅格图像 PDF，不能宣称已实现可编辑矢量 PDF 或字体嵌入。
 - GIF 使用已有帧生成器；完整桌面动态播放与风格动作仍需迁移和补齐。开放的 [#116](https://github.com/WroughtMind/creditia/issues/116) 是待完成要求，不计为已交付基线。
 - `fixtures/catnap.json` 是虚构样例；真实回放样例是有限的归因输入，不是完整视觉档案。真实项目视觉样例和截图仍待采集。
+
+当前输出已有两个需统一的差异：桌面 HTML 未传 lang，默认写 zh，而 CLI 传入所选语言；桌面 PDF 默认栅格倍率有 4000px 限制，CLI 默认 3×。跨端比较须固定这些参数，并记录修正后的共同规则，不能把旧差异当作已满足一致性。
