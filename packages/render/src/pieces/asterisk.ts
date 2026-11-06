@@ -4,6 +4,7 @@ import type { Model } from '../data.ts';
 import { pct } from '../data.ts';
 import type { Style } from '../style.ts';
 import { markPaths, sharePetals } from '../mark.ts';
+import { petalMotion } from '../timeline.ts';
 import { colorOf, tip, canvas, range, summary, type PieceOpts } from './common.ts';
 
 export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
@@ -30,7 +31,7 @@ export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
   let y = c.y + 70;
   // 星号：各瓣依次长出来
   const petals = sharePetals(ag.map((a) => ({ tool: a.key, lines: a.lines, color: colorOf(st, a) })), st.c.faint)
-    .map((p, i, all) => { const e = ease(t, i, all.length); return { ...p, len: (p.len ?? 1) * (0.3 + 0.7 * e), opacity: (p.opacity ?? 1) * e }; });
+    .map((p, i, all) => { const e = petalMotion(st.id, t, i, all.length); return { ...p, at: i / all.length + e.turn, len: (p.len ?? 1) * e.growth, opacity: (p.opacity ?? 1) * e.opacity }; });
   s.add(`<g transform="translate(${+(cx - SZ / 2).toFixed(2)} ${y}) scale(${+(SZ / 24).toFixed(4)})">${markPaths({ petals })}</g>`);
   s.hit(cx - SZ / 2, y, SZ, SZ, { t: m.project || 'Untitled', d: ag.map((a) => `${a.name} ${pct(a.pct)}`) });
   y += SZ * 0.86 + 104; // 星号下面两瓣只伸到画框的 86%

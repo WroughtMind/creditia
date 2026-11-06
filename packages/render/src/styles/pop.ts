@@ -114,7 +114,13 @@ export const terminal: Style = defineStyle({
     for (let x = b.x + 10; x < b.x + b.w; x += 22) {
       if (rnd() < 0.45) continue;
       const len = 4 + Math.floor(rnd() * 14), y0 = b.y + rnd() * b.h * 0.7;
-      for (let k = 0; k < len; k++) cols.push(el('text', { x, y: y0 + k * 20, fontFamily: 'DotGothic16, JetBrains Mono', fontSize: 16, fill: PH, opacity: r(0.04 + 0.16 * (k / len)) }, esc(glyphs[Math.floor(rnd() * glyphs.length)])));
+      for (let k = 0; k < len; k++) {
+        const glyph = glyphs[Math.floor(rnd() * glyphs.length)], y = y0 + k * 20;
+        // A fully off-canvas opacity group triggers a resvg 0.35 bounds panic.
+        // Keep sampling the seeded stream so every visible column stays exact.
+        if (y > s.h + 20) continue;
+        cols.push(el('text', { x, y, fontFamily: 'DotGothic16, JetBrains Mono', fontSize: 16, fill: PH, opacity: r(0.04 + 0.16 * (k / len)) }, esc(glyph)));
+      }
     }
     s.add(g({}, ...cols));
     s.add(rect(b.x, b.y, b.w, b.h, { fill: radial(s, 'tm-glow', [[0, '#123A22', 0.55], [1, TBG, 0]], { cx: 0.5, cy: 0.4, r: 0.7 }) }));

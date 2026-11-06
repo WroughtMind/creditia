@@ -7,9 +7,10 @@
   "main": "dist/creditia-card.js",
   "files": ["dist", "src"],
   "scripts": {
-    "build": "esbuild src/creditia-card.ts --bundle --format=esm --minify --outfile=dist/creditia-card.js && mkdir -p dist/logos && cp ../render/assets/logos/*.svg dist/logos/"
+    "build": "node tools/build.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
   }
 }
+

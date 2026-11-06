@@ -31,3 +31,29 @@ test('network and server errors do not masquerade as an unpublished release', as
   await assert.rejects(downloads(async () => response('', 503)), /Availability lookup failed/);
   await assert.rejects(downloads(async () => { throw Error('offline'); }), /offline/);
 });
+
+test('the selected published GPUI candidate exposes only verified downloads', async () => {
+  const { readFileSync } = await import('node:fs');
+  const channel=JSON.parse(readFileSync(new URL('../packaging/desktop-channel.json',import.meta.url)));
+  const rc={tag_name:channel.tag,target_commitish:channel.candidate_sha,draft:false,prerelease:true,
+    assets:[apps[0].file,'SHA256SUMS'].map(name=>({name,browser_download_url:'https://example.org/'+name}))};
+  const fetchRc=async url => url.endsWith('/'+channel.tag) ? response(rc) : response('',404);
+  const actual=await downloads(fetchRc);
+  assert.equal(actual.apps.length,1);
+  assert.ok(actual.apps[0].checksum.endsWith('/SHA256SUMS'));
+  assert.equal(actual.brew,false);
+  rc.target_commitish='some-other-commit';
+  assert.deepEqual((await downloads(fetchRc)).apps,[]);
+});
+
+test('a core-only stable release does not hide the reviewed desktop downloads', async () => {
+  const {readFileSync}=await import('node:fs');
+  const channel=JSON.parse(readFileSync(new URL('../packaging/desktop-channel.json',import.meta.url)));
+  const rc={tag_name:channel.tag,target_commitish:channel.candidate_sha,draft:false,prerelease:true,
+    assets:[apps[0].file,'SHA256SUMS'].map(name=>({name,browser_download_url:'https://example.org/'+name}))};
+  const old={...release,assets:[{name:'creditia-core-x86_64-unknown-linux-gnu',browser_download_url:'https://example.org/core'}]};
+  const result=await downloads(async url=>url.endsWith('/'+channel.tag)?response(rc):url.includes('api.github.com')?response(old):response('',404));
+  assert.equal(result.apps[0].file,apps[0].file);
+  assert.equal(result.desktopTag,channel.tag);
+  assert.equal(result.brew,false);
+});

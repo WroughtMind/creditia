@@ -144,6 +144,7 @@ export class Scene {
   readonly id: string;
   private defs = new Map<string, string>();
   private out: string[] = [];
+  private contentStart = 0;
   readonly hits: Hit[] = [];
   /** 背景色（导出 PDF / 尺寸画布时用来铺底） */
   bg = '#ffffff';
@@ -162,6 +163,8 @@ export class Scene {
   }
   url(name: string, make: (id: string) => string) { return `url(#${this.def(name, make)})`; }
   add(...parts: (string | null | undefined | false)[]) { for (const p of parts) if (p) this.out.push(p); return this; }
+  /** Mark the end of the static ground/plate without adding markup to resting SVGs. */
+  markContent() { this.contentStart = this.out.length; return this; }
   hit(x: number, y: number, w: number, h: number, tip: Tip) {
     if (w > 0 && h > 0) this.hits.push({ x: r(x), y: r(y), w: r(w), h: r(h), ...tip });
     return this;
@@ -214,10 +217,10 @@ export class Scene {
     }
     return yy - y;
   }
-  toString(): string {
+  toString(foreground?: (content: string) => string): string {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${r(this.w)}" height="${r(this.h)}" viewBox="0 0 ${r(this.w)} ${r(this.h)}">`
       + (this.defs.size ? `<defs>${[...this.defs.values()].join('')}</defs>` : '')
-      + this.out.join('') + '</svg>';
+      + (foreground ? this.out.slice(0, this.contentStart).join('') + foreground(this.out.slice(this.contentStart).join('')) : this.out.join('')) + '</svg>';
   }
 }
 

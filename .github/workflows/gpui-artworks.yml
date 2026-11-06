@@ -1,0 +1,121 @@
+name: gpui-artworks
+
+on:
+  workflow_dispatch:
+    inputs:
+      all_exports:
+        description: 'Compare every preference and exported format (long-running)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare-fixture:
+    name: Capture the pinned public project archive
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: 0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+      - uses: actions/checkout@v4
+        with:
+          ref: ac82a574b0747bc5651571a3f169f4a893442f88
+          path: baseline
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: candidate -> target
+          cache-on-failure: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+      - name: Build the exact analysis worker
+        run: cargo build --manifest-path candidate/Cargo.toml -p creditia-cli --release --locked
+      - name: Analyze public Git history without private session evidence
+        run: node candidate/packaging/gpui-acceptance/public-fixture.mjs --core candidate/target/release/creditia-core --repo baseline --output real-fixture/public-creditia.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gpui-public-project-fixture
+          path: |
+            real-fixture/public-creditia.json
+            real-fixture/public-creditia.json.provenance.json
+            real-fixture/public-creditia.json.analysis.log
+          if-no-files-found: error
+          retention-days: 14
+  compare:
+    name: Artwork parity ${{ matrix.shard }} of 8
+    needs: prepare-fixture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+      - uses: actions/checkout@v4
+        with:
+          ref: ac82a574b0747bc5651571a3f169f4a893442f88
+          path: baseline
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+          cache: npm
+          cache-dependency-path: |
+            candidate/packages/render/package-lock.json
+            baseline/packages/render/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: gpui-public-project-fixture
+          path: real-fixture
+      - name: Install both pinned renderers
+        run: |
+          npm ci --prefix baseline/packages/render
+          npm ci --prefix candidate/packages/render
+      - name: Verify comparison and measurement contracts
+        run: |
+          node --test candidate/packaging/gpui-acceptance/common.test.mjs
+          python candidate/packaging/gpui-acceptance/test_resources.py
+      - name: Compare the actual public project on both renderers
+        run: |
+          node candidate/packaging/gpui-acceptance/render-matrix.mjs \
+            --baseline-root baseline --candidate-root candidate \
+            --output "evidence/real-shard-${{ matrix.shard }}" --profile smoke \
+            --fixture real-fixture/public-creditia.json --fixture-kind real_public_git_archive \
+            --shards 8 --shard '${{ matrix.shard }}' --motion
+      - name: Compare complete artwork scope against the original desktop renderer
+        env:
+          ALL_EXPORTS: ${{ github.event.inputs.all_exports || 'true' }}
+        run: |
+          extra=()
+          if [ "$ALL_EXPORTS" = true ]; then extra+=(--preferences all --exports); fi
+          node candidate/packaging/gpui-acceptance/matrix-batches.mjs \
+            --baseline-root baseline --candidate-root candidate \
+            --output "evidence/shard-${{ matrix.shard }}" --profile full \
+            --shards 8 --shard '${{ matrix.shard }}' --motion "${extra[@]}"
+      - name: Retain representative production motion frames and GIFs
+        if: matrix.shard == 0
+        run: node candidate/packages/render/tools/migration-motion.mjs evidence/material-motion
+      - name: Retain baseline, candidate and parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpui-artwork-evidence-${{ matrix.shard }}
+          path: evidence/**
+          if-no-files-found: warn
+          retention-days: 14

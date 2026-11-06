@@ -163,7 +163,7 @@ jobs:
 
 ## 安装
 
-当前可用的是源码版 CLI；npm 包和 App 安装包尚未发布。正式安装渠道开放后会在[官网](https://wroughtmind.github.io/creditia/)和 [Releases](https://github.com/WroughtMind/creditia/releases) 公布。
+桌面版使用 GPUI。macOS 提供 Apple 芯片和 Intel 两种 DMG，Windows x64 提供安装程序和便携 ZIP，Linux x64 提供 DEB 和 tar.gz。[桌面下载](https://github.com/WroughtMind/creditia/releases/tag/gpui-v0.1.0-rc.1) · [安装与回退](packaging/gpui/INSTALL.md)
 
 源码安装需要 Git、Rust 和 Node 22.18+：
 
@@ -186,7 +186,7 @@ npm link
 cargo install --git https://github.com/WroughtMind/creditia creditia-cli
 ```
 
-App 安装包准备中。macOS 产物使用本地签名（ad-hoc），未经 Apple 开发者签名与公证。发布后先核对下载来源与 SHA-256；遇到无法验证开发者的提示时，尝试打开一次，再到「系统设置 → 隐私与安全性」点「仍要打开」。若提示文件已损坏，应先核对或重新下载，不能一律归因于未公证。不要关闭整个 Gatekeeper。
+安装包自带渲染器、字体和分析核心。macOS 采用 ad-hoc 签名，Windows 安装包未签名。下载后可用同版的 SHA256SUMS 核对。
 
 发布流程与验收步骤见 [发布说明](packaging/RELEASE.md)。
 
@@ -214,13 +214,15 @@ crates/
   core/       归因引擎、行哈希、模型目录（名称归一、厂商、渠道）、配置
   adapters/   git 与各家 agent 日志的读取
   store/      本地项目库：项目、路径、证据库、快照（SQLite）
+  desktop-service/ 项目、分析任务、设置与后台采集的共享服务
   cli/        二进制 creditia-core
 packages/
   schema/     credits.json v0 的 JSON Schema 与类型
   render/     卡片渲染：credits.json → SVG 场景（风格 × 卡片）→ PNG / SVG / PDF / GIF / HTML
   cli/        npm 包 creditia：档案、导出、终端名片
   embed/      <creditia-card> 网页组件
-apps/desktop/ Tauri 2 App（展墙与导出）
+apps/gpui/    GPUI Kit 桌面：展墙、漫游、动画与导出
+apps/desktop/ 原有 Tauri 桌面及一次性设置迁移助手
 site/         官网（build.ts）和这份 README 的图（readme.ts）
 skills/       给 agent 用的 skill
 spike/        阶段 0 验证工程（保留作记录）
@@ -232,14 +234,20 @@ spike/        阶段 0 验证工程（保留作记录）
 <summary><b>开发</b></summary>
 
 ```bash
-cargo build --release && cargo test           # Rust 核心（端到端测试用临时 HOME 里的假日志）
-cd packages/render && npm i && npm test       # 渲染（全部作品 × 全部风格 × 全部版式）
-npm run gallery                               # 样张：gallery/index.html
-cd apps/desktop && npm i && npm run fonts && npm run dev   # 浏览器里调 App（用 fixtures 里的样例档案）
-npm run core && npm run tauri dev             # 原生 App（core 把分析核心放进 App 的打包位置）
+cargo build --release && cargo test           # Rust 核心和共享桌面服务
+npm ci --prefix packages/render
+npm test --prefix packages/render             # 全部作品、风格、版式的渲染契约
+npm run gallery --prefix packages/render      # 样张：packages/render/gallery/index.html
+CREDITIA_CORE="$PWD/target/release/creditia-core" cargo run --manifest-path apps/gpui/Cargo.toml
+node --test packaging/gpui/package.test.mjs    # 独立打包与资源校验
 node site/build.ts                            # 官网 → _site/
 node site/readme.ts                           # README 的图 → .github/readme/
 ```
+
+以上命令从仓库根目录运行。GPUI 的系统依赖、Windows 命令和原生截图检查见
+[桌面开发文档](apps/gpui/README.md)；安装、升级和回退见
+[安装说明](packaging/gpui/INSTALL.md)。全量迁移的完成状态由同一提交的
+[验收报告](docs/gpui-migration/README.md)判定，四个平台使用同一候选构建的安装验证结果。
 
 
 </details>

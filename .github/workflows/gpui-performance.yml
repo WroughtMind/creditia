@@ -1,0 +1,141 @@
+name: gpui-performance
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      full_matrix:
+        description: 'Run the complete cold/warm performance matrix'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name || github.event_name }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: never
+  CARGO_INCREMENTAL: 0
+  CARGO_BUILD_JOBS: 2
+  LIBGL_ALWAYS_SOFTWARE: '1'
+  # WebKitGTK's accelerated compositor can leave a blank Xvfb shell even with
+  # a fully loaded DOM: https://github.com/tauri-apps/tauri/issues/15936
+  WEBKIT_DISABLE_COMPOSITING_MODE: '1'
+  GDK_BACKEND: x11
+  WINIT_UNIX_BACKEND: x11
+  WGPU_BACKEND: vulkan
+  CREDITIA_LANG: en
+
+jobs:
+  production-windows:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'gpui-candidate'
+    name: Same-host production desktop comparison
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+      - uses: actions/checkout@v4
+        with:
+          ref: ac82a574b0747bc5651571a3f169f4a893442f88
+          fetch-depth: 0
+          path: baseline
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+          cache: npm
+          cache-dependency-path: |
+            candidate/packages/render/package-lock.json
+            baseline/packages/render/package-lock.json
+            baseline/apps/desktop/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/gpui-apt/*.deb
+          key: gpui-apt-build-${{ runner.arch }}-${{ hashFiles('candidate/packaging/gpui/linux-libs.sh') }}
+          restore-keys: gpui-apt-build-${{ runner.arch }}-
+      - name: Install native build and real X11 input tools
+        timeout-minutes: 15
+        run: |
+          bash candidate/packaging/gpui/linux-libs.sh performance
+          python -m pip install --timeout 20 --retries 2 fonttools brotli
+          printf 'VK_ICD_FILENAMES=%s\n' /usr/share/vulkan/icd.d/lvp_icd.x86_64.json >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            candidate -> target
+            candidate/apps/gpui -> target
+            baseline/apps/desktop/src-tauri -> target
+          key: gpui-production-performance
+          cache-on-failure: true
+      - name: Install pinned renderers and original desktop frontend
+        run: |
+          npm ci --prefix candidate/packages/render
+          npm ci --prefix baseline/packages/render
+          npm ci --prefix baseline/apps/desktop
+      - name: Verify measurement and provenance tools
+        run: |
+          node --test candidate/packaging/gpui-acceptance/common.test.mjs candidate/packaging/gpui-acceptance/instrument-tauri.test.mjs
+          python -m unittest discover -s candidate/packaging/gpui-acceptance -p 'test_*.py'
+      - name: Build current native app and analysis core
+        run: |
+          cargo build --manifest-path candidate/apps/gpui/Cargo.toml --release --locked
+          cargo build --manifest-path candidate/Cargo.toml -p creditia-cli --release --locked
+      - name: Capture a real public project archive before baseline instrumentation
+        run: |
+          node candidate/packaging/gpui-acceptance/public-fixture.mjs \
+            --core candidate/target/release/creditia-core --repo baseline \
+            --output evidence/inputs/public-creditia.json
+      - name: Instrument only fixture access and passive state observation
+        run: |
+          node candidate/packaging/gpui-acceptance/instrument-tauri.mjs \
+            --root baseline --output evidence/baseline-overlay.json
+          node baseline/apps/desktop/tools/fonts.mjs
+          npm run build --prefix baseline/apps/desktop
+          mkdir -p baseline/apps/desktop/src-tauri/binaries
+          cp candidate/target/release/creditia-core baseline/apps/desktop/src-tauri/binaries/creditia-core-x86_64-unknown-linux-gnu
+          cargo build --manifest-path baseline/apps/desktop/src-tauri/Cargo.toml --release --locked --features tauri/custom-protocol
+      - name: Drive both production windows and sample every descendant process
+        env:
+          ACCEPTANCE_CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          export CREDITIA_NODE="$(command -v node)"
+          export CREDITIA_RENDER_BRIDGE="$GITHUB_WORKSPACE/candidate/packages/render/tools/bridge.mjs"
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1600x1000x24' \
+            python candidate/packaging/gpui-acceptance/x11-session.py -- \
+            python candidate/packaging/gpui-acceptance/compare.py \
+              --output evidence/performance --fixture evidence/inputs/public-creditia.json \
+              --baseline-bin baseline/apps/desktop/src-tauri/target/release/creditia-app \
+              --candidate-bin candidate/apps/gpui/target/release/creditia-gpui \
+              --baseline-sha ac82a574b0747bc5651571a3f169f4a893442f88 \
+              --candidate-sha "$ACCEPTANCE_CANDIDATE_SHA" \
+              --baseline-overlay evidence/baseline-overlay.json ${{ !inputs.full_matrix && '--delivery' || '' }}
+      - name: Bind measured performance to explicit feature checks
+        run: |
+          python candidate/packaging/gpui-acceptance/performance-evidence.py \
+            --input evidence/performance --candidate-sha "$GITHUB_SHA" \
+            --output evidence/performance-features
+      - name: Summarize measured comparison without promoting missing migration gates
+        if: always()
+        run: |
+          mkdir -p evidence
+          node candidate/packaging/gpui-acceptance/report.mjs \
+            --evidence evidence --candidate-sha "$GITHUB_SHA" --output evidence/report
+      - name: Retain raw process samples, actions and actual window captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpui-production-performance
+          path: |
+            evidence/**
+            ${{ runner.temp }}/creditia-openbox.log
+          if-no-files-found: warn
+          retention-days: 14

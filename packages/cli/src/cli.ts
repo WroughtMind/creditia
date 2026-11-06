@@ -15,6 +15,7 @@ import { mergeCredits } from '../../render/src/merge.ts';
 import * as V2 from '../../render/src/index.ts';
 import { BRIDGED } from '../../render/src/classic/bridge.ts';
 import { variantsOf } from '../../render/src/classic/art.ts';
+import { renderRequest } from '../../render/src/native-protocol.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../..');
@@ -26,7 +27,7 @@ const ex = makeExporter({ png: (s, w) => pick(s).png(s, w), rgba: (s, w) => pick
 const exV2 = makeExporter(V2.raster, deflate);
 
 // ───────────────────────── 参数 ─────────────────────────
-const SWITCHES = new Set(['json', 'fresh', 'force', 'github', 'all', 'yes', 'list', 'no-color', 'refresh', 'check', 'all-projects', 'no-names']);
+const SWITCHES = new Set(['json', 'fresh', 'force', 'github', 'all', 'yes', 'list', 'no-color', 'refresh', 'check', 'all-projects', 'no-names', 'transparent', 'reduced-motion']);
 const argv = process.argv.slice(2);
 const cmd = argv[0] ?? '';
 const pos: string[] = [];
@@ -86,6 +87,7 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   summary        [--out all.json]                       跨项目汇总：本地已记录的全部项目并成一份；其他命令加 --all-projects 也一样
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
                  [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group tool|model] [--out FILE]
+                 [--transparent] [--font-mode outline|embed] [--reduced-motion]
   export         --list                                 全部卡片、版式、风格、格式
   board          [--style S] [--out credits.html]       全部卡片放进一个可交互的 HTML 页面
   fetch                                                 终端名片
@@ -131,6 +133,7 @@ Credits and pieces
   summary        [--out all.json]                       cross-project summary: every project in the library in one; other commands take --all-projects too
   export         --piece P [--style S] [--variant V] [--format png|svg|pdf|html|md|json]
                  [--size og|square|portrait|story|a4|WxH] [--lang zh|en] [--group tool|model] [--out FILE]
+                 [--transparent] [--font-mode outline|embed] [--reduced-motion]
   export         --list                                 every piece, layout, style and format
   board          [--style S] [--out credits.html]       every piece on one interactive HTML page
   fetch                                                 terminal card
@@ -415,37 +418,23 @@ function listAll() {
 
 async function exportCmd() {
   if (on.has('list')) return listAll();
-  const repo = repoOf();
-  const piece = flags.piece ?? flags.form ?? 'tier';
+  const repo = repoOf(), piece = flags.piece ?? flags.form ?? 'tier';
   const look = lookOf(flags.style ?? flags.theme);
-  const e = exOf(look);
-  const format = flags.format ?? (flags.out ? path.extname(flags.out).slice(1) : 'svg') ?? 'svg';
-  const { m, raw } = modelOf(repo, on.has('refresh'));
-  if (format === 'json') return write(flags.out, JSON.stringify(raw, null, 2) + '\n');
-  if (format === 'md') { const tm = textModel(raw); return write(flags.out, creditsBlock(tm, 10, VIEW(tm)) + '\n'); }
-  if (!piecesOf(look).includes(piece)) die(L(`该风格不支持卡片 ${piece}；可通过 creditia export --list 查看`, `this style has no card ${piece}; see creditia export --list`));
-  const a0 = await artOf(piece, raw, look, flags.variant);
-  if (!a0) die(L(`${piece} 需要的数据不够（例如没有 tag、没有会话记录），没有出图`, `not enough data for ${piece} (for example no tags or no sessions); nothing rendered`));
-  const fit = (a: Art): Art => {
-    if (!flags.size) return a;
-    const preset = SIZES.find((s) => s.id === flags.size);
-    const [w, h] = preset ? [preset.w, preset.h] : flags.size.split(/[x×]/).map(Number);
-    if (!w || !h) die(L('--size 形如 og、square、1200x630', '--size looks like og, square or 1200x630'));
-    return sized(a, w, h);
-  };
-  const a = fit(a0);
-  switch (format) {
-    case 'svg': return write(flags.out, e.svg(a));
-    case 'png': return write(flags.out, e.png(a, flags.size ? 1 : Number(flags.scale ?? 2)));
-    case 'pdf': return write(flags.out, await e.pdf(a, flags.size === 'a4' ? 1 : 3));
-    case 'html': return write(flags.out, e.html([a0], { title: a0.title, lang: LANG() }));
-    case 'gif': {
-      const fr = (await framesOf(piece, raw, look, flags.variant, Number(flags.frames ?? 24)))?.map(fit);
-      if (!fr?.length) die(L(`${piece} 在这个风格下不会动；换 png`, `${piece} isn't animated in this style; use png`));
-      return write(flags.out, e.gif(fr, { width: Number(flags.width ?? Math.min(fr[0].w, 800)) }));
-    }
-    default: die(L(`未知格式：${format}`, `unknown format: ${format}`));
-  }
+  const format = flags.format ?? (flags.out ? path.extname(flags.out).slice(1) : 'svg');
+  const { raw } = modelOf(repo, on.has('refresh'));
+  if (!['json', 'md', 'txt', 'embed'].includes(format) && !piecesOf(look).includes(piece)) die(L(`该风格不支持卡片 ${piece}；可通过 creditia export --list 查看`, `this style has no card ${piece}; see creditia export --list`));
+  const by = ['md', 'txt'].includes(format) ? VIEW(textModel(raw)) : undefined;
+  const response = await renderRequest({
+    version: 1, id: 'cli-export', op: 'export', raw, style: lookId(look), renderer: look.kind === 'v2' ? 'svg' : 'classic',
+    piece, ...(flags.variant ? { variant: flags.variant } : {}), lang: LANG(), group: GROUP(), named: !on.has('no-names'),
+    format, size: flags.size ?? 'native', fontMode: flags['font-mode'] ?? 'outline', transparent: on.has('transparent'), reducedMotion: on.has('reduced-motion'),
+    ...(flags.frames !== undefined ? { frameCount: Number(flags.frames) } : {}),
+    ...(flags.scale !== undefined ? { scale: Number(flags.scale) } : {}),
+    ...(flags.width !== undefined ? { width: Number(flags.width) } : {}), ...(by ? { by } : {}),
+  });
+  if (!response.ok) return die(response.error.message);
+  const result = response.result as { bytes: string };
+  return write(flags.out, Buffer.from(result.bytes, 'base64'));
 }
 
 const boardIds = (l: Look) => (l.kind === 'classic'

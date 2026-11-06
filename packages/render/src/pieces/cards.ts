@@ -307,6 +307,7 @@ export function byline(m: Model, st: Style, o: PieceOpts): Scene | null {
   // 窄幅有自己的底（装饰让开中间的文字带）；没有就用大画幅的底
   if (st.strip) st.strip(s, { x: 0, y: 0, w: W, h: H }, m, { x: W - 48 - sumW, y: 58, w: sumW, h: 18 });
   else st.ground(s, { x: 0, y: 0, w: W, h: H }, m);
+  s.markContent();
   const tail = T(m, '写成', '');
   const nameY = models ? 66 : 72;
   let x = 48;
