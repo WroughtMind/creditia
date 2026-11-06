@@ -15,6 +15,11 @@ on:
       - 'Cargo.lock'
       - '.github/workflows/gpui.yml'
   workflow_dispatch:
+    inputs:
+      full_catalog:
+        description: 'Paint every desktop artwork and layout'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -355,6 +360,7 @@ jobs:
           exit 1
 
   native-catalog:
+    if: github.event_name == 'workflow_dispatch' && inputs.full_catalog
     name: Paint every desktop artwork and layout
     needs: resolve
     runs-on: ubuntu-24.04

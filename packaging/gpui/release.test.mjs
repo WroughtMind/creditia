@@ -8,7 +8,7 @@ import { TARGETS, validateRequest, runMatchesCandidate, validateReport, verifyIn
 const sha='a'.repeat(40), head='b'.repeat(40), base='c'.repeat(40);
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 const request=()=>({enabled:true,candidate_sha:sha,native_run:'1',artwork_run:'2',performance_run:'3',core_run:'4',review_commit:head,review_path:'docs/review.json',tag:'gpui-v0.2.0-rc.1'});
-const ready=()=>({schema_version:1,candidate_sha:sha,release_ready:true,invalid_evidence:[],native_failures:[],recorded_review:{status:'complete'},real_project_visual_sample:true,native_platforms_complete:true,native_catalog:{complete:true},browser_catalog:{complete:true},package_platforms:['darwin-arm64','darwin-x64','win32-x64','linux-x64'].map(platform=>({platform,acceptance:{passed:true}})),performance_comparisons:['startup','scroll','roam','zoom','idle','hidden-idle'].flatMap(scenario=>['cold','warm'].map(cache_state=>({scenario,cache_state,status:'comparable'}))),artwork:[{status:'machine_matched',all_preferences:true,motion_sampled:true,exports_checked:true}]});
+const ready=()=>({schema_version:1,candidate_sha:sha,release_ready:true,invalid_evidence:[],native_failures:[],feature_failures:[],recorded_review:{status:'complete'},real_project_visual_sample:true,native_platforms_complete:true,native_catalog:{complete:true},browser_catalog:{complete:true},package_platforms:['darwin-arm64','darwin-x64','win32-x64','linux-x64'].map(platform=>({platform,acceptance:{passed:true}})),performance_comparisons:['startup','scroll','roam','zoom','idle','hidden-idle'].flatMap(scenario=>['cold','warm'].map(cache_state=>({scenario,cache_state,status:'comparable'}))),artwork:[{status:'machine_matched',all_preferences:true,motion_sampled:true,exports_checked:true}]});
 async function temporary(fn){const root=await fs.mkdtemp(path.join(os.tmpdir(),'creditia-release-test-'));try{await fn(root);}finally{await fs.rm(root,{recursive:true,force:true});}}
 
 test('release requests default off and reject stable tags, traversal and output injection',()=>{
@@ -23,9 +23,9 @@ test('successful workflow provenance accepts exact tested PR merge and rejects u
  runMatchesCandidate({...run,head_sha:sha,event:'workflow_dispatch'},commit,'gpui','org/repo');
  for(const change of [{conclusion:'failure'},{status:'in_progress'},{path:'.github/workflows/ci.yml'},{head_sha:'d'.repeat(40)},{pull_requests:[{head:{sha:head},base:{sha:'d'.repeat(40)}}]},{head_repository:{full_name:'fork/repo'}}])assert.throws(()=>runMatchesCandidate({...run,...change},commit,'gpui','org/repo'));
 });
-test('a release_ready boolean cannot replace complete platform, catalog and performance gates',()=>{
- validateReport(ready(),sha);
- for(const change of [{candidate_sha:head},{release_ready:false},{native_catalog:{complete:false}},{browser_catalog:{complete:false}},{package_platforms:[]},{performance_comparisons:[]},{native_failures:[{}]},{recorded_review:{status:'incomplete'}},{artwork:[{status:'machine_matched'}]}])assert.throws(()=>validateReport({...ready(),...change},sha));
+test('a release_ready boolean cannot replace installed platforms, recorded review and performance gates',()=>{
+ validateReport({...ready(),artwork:[],native_catalog:{complete:false},browser_catalog:{complete:false}},sha);
+ for(const change of [{candidate_sha:head},{release_ready:false},{package_platforms:[]},{performance_comparisons:[]},{native_failures:[{}]},{recorded_review:{status:'incomplete'}},{feature_failures:[{}]}])assert.throws(()=>validateReport({...ready(),...change},sha));
 });
 test('installed candidate checksum validation rejects tampered bytes and wrong SHA',async()=>temporary(async root=>{
  const target=TARGETS[0], names=[`creditia-gpui-${target}.zip`,`creditia-gpui-${target}.dmg`];

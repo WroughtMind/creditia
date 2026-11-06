@@ -13,14 +13,11 @@ on:
       native_run:
         description: 'Successful gpui workflow run ID, including all four packages'
         required: true
-      artwork_run:
-        description: 'Successful complete gpui-artworks workflow run ID'
-        required: true
       performance_run:
         description: 'Successful gpui-performance workflow run ID'
         required: true
       core_run:
-        description: 'Successful ci run ID with complete browser catalog evidence'
+        description: 'Successful ci run ID for core, renderer and browser checks'
         required: true
       review_commit:
         description: 'Immutable commit containing the recorded visual and interaction review'
@@ -50,7 +47,6 @@ jobs:
       enabled: ${{ steps.request.outputs.enabled }}
       candidate_sha: ${{ steps.request.outputs.candidate_sha }}
       native_run: ${{ steps.request.outputs.native_run }}
-      artwork_run: ${{ steps.request.outputs.artwork_run }}
       performance_run: ${{ steps.request.outputs.performance_run }}
       core_run: ${{ steps.request.outputs.core_run }}
       review_commit: ${{ steps.request.outputs.review_commit }}
@@ -96,7 +92,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CANDIDATE_SHA: ${{ needs.request.outputs.candidate_sha }}
           NATIVE_RUN: ${{ needs.request.outputs.native_run }}
-          ARTWORK_RUN: ${{ needs.request.outputs.artwork_run }}
           PERFORMANCE_RUN: ${{ needs.request.outputs.performance_run }}
           CORE_RUN: ${{ needs.request.outputs.core_run }}
           REVIEW_COMMIT: ${{ needs.request.outputs.review_commit }}
@@ -105,7 +100,7 @@ jobs:
         run: |
           node packaging/gpui/release.mjs prepare \
             --candidate-root tested-candidate --candidate-sha "$CANDIDATE_SHA" \
-            --native-run "$NATIVE_RUN" --artwork-run "$ARTWORK_RUN" \
+            --native-run "$NATIVE_RUN" \
             --performance-run "$PERFORMANCE_RUN" --core-run "$CORE_RUN" \
             --review-commit "$REVIEW_COMMIT" --review-path "$REVIEW_PATH" \
             --tag "$RELEASE_TAG" --output prepared

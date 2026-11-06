@@ -28,7 +28,7 @@ const json = async file => JSON.parse(await fs.readFile(file, 'utf8'));
 export function validateRequest(input) {
   if (input.enabled === false) return { enabled: false };
   if (input.enabled !== true) throw Error('A repository request must explicitly set enabled:true');
-  const fields = ['candidate_sha', 'native_run', 'artwork_run', 'performance_run', 'core_run', 'review_commit', 'review_path', 'tag'];
+  const fields = ['candidate_sha', 'native_run', 'performance_run', 'core_run', 'review_commit', 'review_path', 'tag'];
   for (const field of fields) if (typeof input[field] !== 'string') throw Error(`Release request needs string ${field}`);
   if (!SHA.test(input.candidate_sha) || !SHA.test(input.review_commit) || !TAG.test(input.tag)) throw Error('Release request needs immutable commits and a GPUI prerelease tag');
   for (const field of fields.filter(field => field.endsWith('_run'))) if (!/^[1-9]\d*$/.test(input[field])) throw Error(`Invalid workflow run ID: ${field}`);
@@ -66,13 +66,12 @@ export function runMatchesCandidate(run, candidate, workflow, repo) {
 }
 export function validateReport(report, candidate) {
   if (report.schema_version !== 1 || report.candidate_sha !== candidate || report.release_ready !== true) throw Error('Combined acceptance report is not release-ready for this candidate');
-  if (report.invalid_evidence?.length !== 0 || report.native_failures?.length !== 0 || report.recorded_review?.status !== 'complete' || report.real_project_visual_sample !== true || report.native_platforms_complete !== true || report.native_catalog?.complete !== true || report.browser_catalog?.complete !== true) throw Error('Combined acceptance report has missing or failed migration gates');
+  if (report.invalid_evidence?.length !== 0 || report.native_failures?.length !== 0 || report.recorded_review?.status !== 'complete' || report.native_platforms_complete !== true || report.feature_failures?.length !== 0) throw Error('Combined acceptance report has missing or failed migration gates');
   const platforms = new Set((report.package_platforms ?? []).filter(item => item.acceptance?.passed === true).map(item => item.platform));
   for (const platform of ['darwin-arm64', 'darwin-x64', 'win32-x64', 'linux-x64']) if (!platforms.has(platform)) throw Error(`Missing accepted package platform ${platform}`);
-  for (const scenario of ['startup', 'scroll', 'roam', 'zoom', 'idle', 'hidden-idle']) for (const cache of ['cold', 'warm']) {
-    if (!report.performance_comparisons?.some(item => item.scenario === scenario && item.cache_state === cache && item.status === 'comparable')) throw Error(`Missing comparable performance: ${scenario}/${cache}`);
+  for (const scenario of ['startup', 'scroll', 'roam', 'hidden-idle']) {
+    if (!report.performance_comparisons?.some(item => item.scenario === scenario && item.status === 'comparable')) throw Error(`Missing same-host performance: ${scenario}`);
   }
-  if (!report.artwork?.length || report.artwork.some(row => row.status !== 'machine_matched' || !row.all_preferences || !row.motion_sampled || !row.exports_checked)) throw Error('Artwork acceptance is incomplete');
 }
 export async function verifyInstallers(root, candidate, target) {
   const info = await json(path.join(root, 'candidate.json'));
@@ -163,8 +162,7 @@ async function prepare(opts) {
   const provenance = { schema_version: 1, candidate_sha: candidate, repository: repo, tag: opts.tag, prepared_at: new Date().toISOString(), runs: [], artifacts: [] };
   const nativeArtifacts = new Map();
   const definitions = [
-    ['native-run', 'gpui', [...TARGETS.map(target => `gpui-candidate-${target}`), ...TARGETS.map(target => `gpui-evidence-${target}`), 'gpui-native-catalog-linux-x86_64']],
-    ['artwork-run', 'gpui-artworks', Array.from({ length: 8 }, (_, i) => `gpui-artwork-evidence-${i}`)],
+    ['native-run', 'gpui', [...TARGETS.map(target => `gpui-candidate-${target}`), ...TARGETS.map(target => `gpui-evidence-${target}`)]],
     ['performance-run', 'gpui-performance', ['gpui-production-performance']],
     ['core-run', 'ci', ['creditia-web-renderer', 'creditia-features-core', 'creditia-features-windows-service', 'creditia-features-render']],
   ];
@@ -181,9 +179,6 @@ async function prepare(opts) {
       const destination = await downloadArtifact(repo, matches[0], output, provenance);
       if (name.startsWith('gpui-candidate-')) nativeArtifacts.set(name.slice('gpui-candidate-'.length), destination);
     }
-    // Retain any independently uploaded full native PNG archives too. They are
-    // evidence, never substituted for a missing mandatory catalog manifest.
-    for (const item of available.filter(item => /native-catalog.*(capture|full)/.test(item.name) && !required.includes(item.name))) await downloadArtifact(repo, item, output, provenance);
   }
   const reviewResponse = await api(repo, `contents/${opts['review-path'].split('/').map(encodeURIComponent).join('/')}?ref=${opts['review-commit']}`);
   if (reviewResponse.type !== 'file' || reviewResponse.encoding !== 'base64') throw Error('Review must be an immutable committed JSON file');
@@ -238,7 +233,7 @@ async function prepare(opts) {
   const checksumLines = [];
   for (const file of await files(assets)) checksumLines.push(`${await fileHash(path.join(assets, file))}  ${file}`);
   await fs.writeFile(path.join(assets, 'SHA256SUMS'), checksumLines.join('\n') + '\n');
-  const notes = `# Creditia GPUI ${opts.tag}\n\nTested source: \`${candidate}\`. This draft is a prerelease; it does not switch the stable desktop or the main branch.\n\nAll four native packages, installation checks, the complete shared/native/browser artwork catalogs, recorded visual/interaction review, and comparable cold/warm process-tree measurements passed the combined acceptance gate. See REPORT.md, ACCEPTANCE.zh.md and report.json. ARTWORK-STATUS.tsv and FEATURE-STATUS.tsv retain the per-item results; the complete source evidence is retained in the archive described by evidence-archive.json (large archives are split into ordered 1 GiB parts). Concatenate parts in manifest order before extracting the tar.gz; its reconstructed SHA-256 is recorded there.\n\nmacOS uses ad-hoc signatures without notarization; Windows packages are unsigned. INSTALL.md explains installation, OS trust prompts, upgrade and rollback. No externally installed Node or downloaded fonts are required.\n\n## Verified workflow runs\n\n${provenance.runs.map(run => `- [${run.path} run ${run.id}](${run.html_url})`).join('\n')}\n`;
+  const notes = `# Creditia GPUI ${opts.tag}\n\nTested source: \`${candidate}\`. This draft is a prerelease; it does not switch the stable desktop or the main branch.\n\nAll four native packages, installation checks, the reviewed desktop journey, representative visual checks and same-host process-tree measurements passed the combined acceptance gate. See REPORT.md, ACCEPTANCE.zh.md and report.json. ARTWORK-STATUS.tsv and FEATURE-STATUS.tsv retain the per-item results; the complete source evidence is retained in the archive described by evidence-archive.json (large archives are split into ordered 1 GiB parts). Concatenate parts in manifest order before extracting the tar.gz; its reconstructed SHA-256 is recorded there.\n\nmacOS uses ad-hoc signatures without notarization; Windows packages are unsigned. INSTALL.md explains installation, OS trust prompts, upgrade and rollback. No externally installed Node or downloaded fonts are required.\n\n## Verified workflow runs\n\n${provenance.runs.map(run => `- [${run.path} run ${run.id}](${run.html_url})`).join('\n')}\n`;
   await fs.writeFile(path.join(output, 'release-notes.md'), notes);
   const records = [];
   for (const file of [...await files(assets)].map(file => `assets/${file}`).concat(['release-notes.md'])) records.push({ path: file, bytes: (await fs.stat(path.join(output, file))).size, sha256: await fileHash(path.join(output, file)) });

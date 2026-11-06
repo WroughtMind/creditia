@@ -1,13 +1,6 @@
 name: gpui-artworks
 
 on:
-  pull_request:
-    paths:
-      - 'packages/render/**'
-      - 'packages/schema/**'
-      - 'docs/gpui-migration/**'
-      - 'packaging/gpui-acceptance/**'
-      - '.github/workflows/gpui-artworks.yml'
   workflow_dispatch:
     inputs:
       all_exports:

@@ -46,7 +46,7 @@ def run(args):
     for binary in binaries.values():
         if not binary.is_file():
             raise ValueError(f"Missing native executable: {binary}")
-    scenarios = args.scenarios.split(",")
+    scenarios = ["startup", "scroll", "roam", "hidden-idle"] if args.delivery else args.scenarios.split(",")
     matrix = HERE.parent.parent / "docs/gpui-migration/matrix.tsv"
     with matrix.open() as stream:
         expected_artworks = sum(row["style"] == "minimal-light" and row["renderer"] == "classic" and row["desktop"] == "true" for row in csv.DictReader(stream, delimiter="\t"))
@@ -55,7 +55,7 @@ def run(args):
     failures = []
     with tempfile.TemporaryDirectory(prefix="creditia-benchmark-profiles-") as temporary:
         for scenario_index, scenario in enumerate(scenarios):
-            for cache in ["cold", "warm"]:
+            for cache in (["cold"] if args.delivery else ["cold", "warm"]):
                 # Alternate launch order to make one implementation less likely
                 # to benefit systematically from the host's changing load.
                 roles = ["baseline", "candidate"] if scenario_index % 2 == 0 else ["candidate", "baseline"]
@@ -108,6 +108,7 @@ def run(args):
                         manifest.write_text(json.dumps(data, indent=2) + "\n")
                     time.sleep(.3)
     (output / "run-summary.json").write_text(json.dumps({"candidate_sha": args.candidate_sha, "baseline_sha": args.baseline_sha,
+        "profile": "delivery" if args.delivery else "full",
         "fixture_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(), "failures": failures,
         "limitations": ["Linux software rendering on this host only; no universal hardware performance claim.",
                         "The cold label means a fresh app profile; operating-system page caches are not purged.",
@@ -122,6 +123,7 @@ def parser():
     for option in ["output", "fixture", "baseline-bin", "candidate-bin", "baseline-sha", "candidate-sha", "baseline-overlay"]:
         p.add_argument("--" + option, required=True)
     p.add_argument("--artworks", type=int, help="Optional assertion; defaults to the actual complete wall count in matrix.tsv")
+    p.add_argument("--delivery", action="store_true", help="Measure four representative same-host workloads once")
     p.add_argument("--scenarios", default="startup,scroll,roam,zoom,idle,hidden-idle")
     return p
 

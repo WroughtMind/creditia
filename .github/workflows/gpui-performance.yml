@@ -10,6 +10,11 @@ on:
       - 'packaging/gpui-acceptance/**'
       - '.github/workflows/gpui-performance.yml'
   workflow_dispatch:
+    inputs:
+      full_matrix:
+        description: 'Run the complete cold/warm performance matrix'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -120,7 +125,7 @@ jobs:
               --candidate-bin candidate/apps/gpui/target/release/creditia-gpui \
               --baseline-sha ac82a574b0747bc5651571a3f169f4a893442f88 \
               --candidate-sha "$ACCEPTANCE_CANDIDATE_SHA" \
-              --baseline-overlay evidence/baseline-overlay.json
+              --baseline-overlay evidence/baseline-overlay.json ${{ !inputs.full_matrix && '--delivery' || '' }}
       - name: Bind measured performance to explicit feature checks
         run: |
           python candidate/packaging/gpui-acceptance/performance-evidence.py \

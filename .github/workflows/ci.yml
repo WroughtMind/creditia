@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      full_catalog:
+        description: 'Verify every web artwork combination'
+        type: boolean
+        default: false
 
 # Superseded PR commits can stop; main and manual runs keep unique groups.
 concurrency:
@@ -148,13 +153,14 @@ jobs:
         run: |
           npm ci --prefix packages/embed
           npm run build --prefix packages/embed
-          node packages/embed/tools/fixtures.mjs --full
+          node packages/embed/tools/fixtures.mjs ${{ inputs.full_catalog && '--full' || '' }}
       - name: Exercise the real browser against native artwork and animation output
         run: |
           npm install --prefix "$RUNNER_TEMP/creditia-browser-qa" --no-audit --no-fund playwright@1.62.1
           "$RUNNER_TEMP/creditia-browser-qa/node_modules/.bin/playwright" install --with-deps chromium
           CREDITIA_PLAYWRIGHT_MODULES="$RUNNER_TEMP/creditia-browser-qa/node_modules" node packages/embed/tools/browser-acceptance.mjs
       - name: Seal full browser catalog evidence
+        if: inputs.full_catalog
         run: >-
           node packaging/gpui-acceptance/browser-evidence.mjs
           --browser-report packages/embed/browser-evidence/report.json

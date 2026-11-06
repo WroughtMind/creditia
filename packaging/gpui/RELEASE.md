@@ -20,7 +20,7 @@ template has `enabled:false`, so shipping this workflow does not create a releas
 
 Provide the full **tested** candidate commit recorded in the evidence manifests.
 For a pull request this is normally GitHub's checkout merge commit, not the PR
-branch head. Supply successful run IDs for `gpui`, `gpui-artworks`,
+branch head. Supply successful run IDs for `gpui`,
 `gpui-performance`, and `ci`, all bound to that candidate, a new
 `gpui-vX.Y.Z-rc.N` tag, and a full commit/path containing the completed review JSON:
 
@@ -30,7 +30,6 @@ branch head. Supply successful run IDs for `gpui`, `gpui-artworks`,
   "enabled": true,
   "candidate_sha": "FULL_TESTED_40_CHARACTER_COMMIT",
   "native_run": "NATIVE_WORKFLOW_RUN_ID",
-  "artwork_run": "ARTWORK_WORKFLOW_RUN_ID",
   "performance_run": "PERFORMANCE_WORKFLOW_RUN_ID",
   "core_run": "CORE_AND_BROWSER_WORKFLOW_RUN_ID",
   "review_commit": "FULL_40_CHARACTER_REVIEW_COMMIT",
@@ -39,15 +38,15 @@ branch head. Supply successful run IDs for `gpui`, `gpui-artworks`,
 }
 ```
 
-The review uses `packaging/gpui-acceptance/report.mjs`'s existing schema: candidate
-SHA, reviewer identity, review timestamp, artwork visual/motion reviews, and every
-named feature check with evidence references. The review can be committed after
-the test candidate; it must still identify that exact tested candidate. Evidence
-references are relative to a download root whose immediate directories use the
-GitHub artifact names, for example `gpui-evidence-aarch64-apple-darwin/…/manifest.json#CASE`.
-Keep the exact paths below those artifact roots as uploaded. A review with missing
-or nonmatching references fails; the release workflow never rewrites reviews or
-marks unreviewed work accepted.
+Record the candidate SHA, reviewer, date (`reviewed_at`) and primary `platform` (e.g. `linux-x64`).
+Use `workflow` entries for `legacy-library`, `analysis-cancel-retry`, `browse-playback`, `settings`,
+`export-recovery`, `restart` and `performance-review`. Use `visuals` entries for `dense-chinese`,
+`long-layout`, `attribution`, `animation` and `high-dpi`. Each entry has an `id`, `status` of
+`accepted`, concrete reviewer `notes`, and an `evidence` array of passed case references
+(`artifact/directory/manifest.json#case`) or validated artifact paths. Record actual observations,
+including the legacy project used, platform-specific dialog/clipboard behavior, export/restart
+outcomes and the same-host CPU, memory and playback findings. Failed or missing evidence blocks
+release. The immutable review may be committed separately after the candidate runs.
 
 Preparation has read-only repository permissions. It verifies successful workflow
 conclusions, workflow identity, repository and tested commit relationships. It
@@ -55,8 +54,7 @@ then downloads each uniquely identified v4 artifact by ID and verifies GitHub's
 archive SHA-256 before safely extracting it. Missing, expired, duplicate or
 unverifiable artifacts fail the job. It recomputes the complete acceptance report
 from raw evidence with `--require-complete`, including all four native platforms,
-the full artwork/browser/native catalogs, all preference/export/motion coverage,
-recorded review and twelve comparable performance scenarios.
+the recorded primary-platform journey, five visual samples, installed-runtime checks and a same-host performance comparison.
 
 Each installer must match both its candidate's checksum manifest and the exact
 bytes recorded by the installed-package smoke test. The next job has narrowly
