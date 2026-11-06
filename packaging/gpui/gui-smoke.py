@@ -98,6 +98,11 @@ def check_platform_input(run, helper, pid, fixture, report):
         if helper:
             report["mac_windows_after"] = json.loads(run([str(helper), "inspect", str(pid)]).stdout)
     key("escape")
+    if helper:
+        try:
+            wait_for(lambda: not dialog_open(), "Mac panel still visible", 3)
+        except RuntimeError:
+            run([str(helper), "cancel-button", str(pid)])
     wait_for(lambda: not dialog_open(), "Native folder picker did not close")
     report["checks"].append({"id": "system-clipboard-and-folder-dialog", "passed": True,
                              "project": expected["project"]["name"]})

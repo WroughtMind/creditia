@@ -3,6 +3,7 @@ import ApplicationServices
 import AppKit
 import CoreGraphics
 import Foundation
+import Vision
 
 guard CommandLine.arguments.count == 3,
       let pid = Int32(CommandLine.arguments[2]),
@@ -18,6 +19,14 @@ func panelService(_ row: [String: Any]) -> Bool {
     let id = NSRunningApplication(processIdentifier: owner)?.bundleIdentifier ?? ""
     let name = row[kCGWindowOwnerName as String] as? String ?? ""
     return (id + name).lowercased().contains("openandsavepanel")
+}
+func openPanel() -> [String: Any]? {
+    let titles = ["Open", "打开", "開啟"]
+    return visibleWindows().first { row in
+        (row[kCGWindowLayer as String] as? Int) == 0 &&
+        (panelService(row) || (row[kCGWindowOwnerPID as String] as? Int32 == pid &&
+        titles.contains(row[kCGWindowName as String] as? String ?? "")))
+    }
 }
 func axString(_ element: AXUIElement, _ name: String) -> String {
     var result: CFTypeRef?
@@ -47,20 +56,39 @@ case "copy", "open", "escape":
     for down in [true, false] {
         guard let event = CGEvent(keyboardEventSource: nil, virtualKey: key, keyDown: down) else { exit(5) }
         event.flags = flags
-        if action == "escape", let panel = visibleWindows().first(where: panelService),
-           let owner = panel[kCGWindowOwnerPID as String] as? Int32 {
-            event.postToPid(owner)
+        if action == "escape" {
+            guard openPanel() != nil else { exit(4) }
+            // Route the key through the window server to the modal panel,
+            // just as a physical keyboard does, instead of the GPUI window.
+            event.post(tap: .cghidEventTap)
         } else {
             event.postToPid(pid)
         }
     }
 case "dialog":
-    let openTitles = ["Open", "打开", "開啟"]
-    if visibleWindows().contains(where: { row in
-        panelService(row) || (row[kCGWindowOwnerPID as String] as? Int32 == pid &&
-            openTitles.contains(row[kCGWindowName as String] as? String ?? ""))
-    }) || containsDialog(AXUIElementCreateApplication(pid), 4) { exit(0) }
+    if openPanel() != nil || containsDialog(AXUIElementCreateApplication(pid), 4) { exit(0) }
     exit(4)
+case "cancel-button":
+    guard let panel = openPanel(), let id = panel[kCGWindowNumber as String] as? Int,
+          let bounds = panel[kCGWindowBounds as String] as? [String: Double],
+          let x = bounds["X"], let y = bounds["Y"], let width = bounds["Width"], let height = bounds["Height"] else { exit(4) }
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
+    defer { try? FileManager.default.removeItem(at: url) }
+    let capture = Process()
+    capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+    capture.arguments = ["-x", "-o", "-l", String(id), url.path]
+    try capture.run()
+    capture.waitUntilExit()
+    let recognition = VNRecognizeTextRequest()
+    recognition.recognitionLevel = .accurate
+    try VNImageRequestHandler(url: url).perform([recognition])
+    guard let cancel = recognition.results?.first(where: {
+        ["Cancel", "取消"].contains($0.topCandidates(1).first?.string ?? "")
+    }), openPanel()?[kCGWindowNumber as String] as? Int == id else { exit(4) }
+    let point = CGPoint(x: x + cancel.boundingBox.midX * width, y: y + (1 - cancel.boundingBox.midY) * height)
+    for action in [CGEventType.leftMouseDown, .leftMouseUp] {
+        CGEvent(mouseEventSource: nil, mouseType: action, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+    }
 case "inspect":
     let rows = visibleWindows().map { row -> [String: Any] in
         let owner = row[kCGWindowOwnerPID as String] as? Int32 ?? 0

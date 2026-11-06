@@ -168,7 +168,15 @@ foreach ($language in $languages) {
       if(Test-Path $events){$name="$key-events.jsonl";Copy-Item $events (Join-Path $Output $name);$case.artifacts+=@{path=$name;sha256=(Get-FileHash (Join-Path $Output $name) -Algorithm SHA256).Hash.ToLowerInvariant();bytes=(Get-Item (Join-Path $Output $name)).Length}}
       $env:CREDITIA_APP_EVENTS=$previousEvents
       $env:CREDITIA_HOME=$previousLibrary
-      Remove-Item $temporary -Recurse -Force
+      # Windows can retain an exited child's working directory briefly.
+      $deadline = [DateTime]::UtcNow.AddSeconds(20)
+      while (Test-Path -LiteralPath $temporary) {
+        try { Remove-Item -LiteralPath $temporary -Recurse -Force -ErrorAction Stop }
+        catch [System.IO.IOException] {
+          if ([DateTime]::UtcNow -ge $deadline) { throw }
+          Start-Sleep -Milliseconds 200
+        }
+      }
       $cases += $case
     }
   }
