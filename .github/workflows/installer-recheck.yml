@@ -1,46 +1,39 @@
-name: Profile the installed high-DPI renderer
+name: Recheck sealed GPUI installers
 on:
   push:
     branches: [codex/gpui-installer-check]
 permissions: { contents: read, actions: read }
 jobs:
-  profile:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-15-intel, target: x86_64-apple-darwin }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24.22.2 }
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: python -m pip install Pillow==11.3.0
-      - run: bash packaging/gpui/linux-libs.sh build
+      - if: runner.os == 'Linux'
+        run: bash packaging/gpui/linux-libs.sh build
       - uses: actions/download-artifact@v4
         with:
-          name: gpui-candidate-x86_64-unknown-linux-gnu
+          name: gpui-candidate-${{ matrix.target }}
           path: installers
           run-id: 42264578175
           github-token: ${{ github.token }}
-      - name: Profile a disposable copy of the renderer
+      - run: node packaging/gpui/install-smoke.mjs --installers installers --fixture packages/render/fixtures/catnap.json --output evidence/installed/manifest.json
+      - if: always() && runner.os == 'Linux'
         run: |
           tar xf installers/*.tar.gz
-          pkg=creditia-gpui-x86_64-unknown-linux-gnu
-          mkdir -p evidence/bridge
-          export CREDITIA_PROFILE_DIR="$PWD/evidence/bridge"
-          python /dev/stdin <<'PY'
-          from pathlib import Path
-          f=Path('creditia-gpui-x86_64-unknown-linux-gnu/resources/render/tools/bridge.mjs')
-          s=f.read_text().replace("import { once }", "import fs from 'node:fs';\nimport crypto from 'node:crypto';\nimport { once }")
-          s=s.replace("    await send(await session.dispatch(request));", """    const start=Date.now(), response=await session.dispatch(request);
-              if (request.t !== undefined && response.result?.art?.svg) {
-                const svg=response.result.art.svg, digest=crypto.createHash('sha256').update(svg).digest('hex');
-                fs.appendFileSync(process.env.CREDITIA_PROFILE_DIR+'/frames.jsonl',JSON.stringify({start,end:Date.now(),time:request.t,digest,bytes:svg.length})+'\\n');
-                const path=process.env.CREDITIA_PROFILE_DIR+'/frame-'+Math.round(request.t*90)+'.svg';
-                if(!fs.existsSync(path))fs.writeFileSync(path,svg);
-              }
-              await send(response);""")
-          assert "frames.jsonl" in s
-          f.write_text(s)
-          PY
-          python packaging/gpui/animation-smoke.py --binary "$pkg/creditia-gpui" --archive packages/render/fixtures/catnap.json --output evidence/player --candidate "$(node -p 'require("./installers/candidate.json").candidate_sha')"
+          python packaging/gpui/animation-smoke.py --binary creditia-gpui-x86_64-unknown-linux-gnu/creditia-gpui --archive packages/render/fixtures/catnap.json --output evidence/animation --candidate "$(node -p 'require("./installers/candidate.json").candidate_sha')"
       - if: always()
         uses: actions/upload-artifact@v4
-        with: { name: high-dpi-profile, path: evidence }
+        with:
+          name: installer-recheck-${{ matrix.target }}
+          path: evidence

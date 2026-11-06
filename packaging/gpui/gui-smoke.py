@@ -283,18 +283,25 @@ def main():
         except Exception as error:
             report["error"] = f"{type(error).__name__}: {error}"
         finally:
-            if process is not None:
-                # Catch renderer descendants even if their parent already quit.
+            # After normal exit, macOS can leave an OS-owned panel service in
+            # the former process group. Only stop a test application still alive.
+            if process is not None and process.poll() is None:
                 try:
                     os.killpg(process.pid, signal.SIGTERM)
                 except ProcessLookupError:
                     pass
-                if process.poll() is None:
+                except PermissionError:
+                    process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
                     try:
-                        process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
                         os.killpg(process.pid, signal.SIGKILL)
-                        process.wait()
+                    except ProcessLookupError:
+                        pass
+                    except PermissionError:
+                        process.kill()
+                    process.wait()
             if wm is not None:
                 try:
                     wm.terminate()
