@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { TARGETS, reviewedArtifact, validateRequest, runMatchesCandidate, validateReport, verifyInstallers, retainWebBuild, verifyUploadedRelease, verifyBundle } from './release.mjs';
@@ -93,3 +95,11 @@ test('workflow retries use the reviewed, unexpired artifact from the selected ru
   assert.equal(reviewedArtifact(entries, 'performance', '2').id, 2);
   for (const id of [0, 3, 4, 'latest']) assert.throws(() => reviewedArtifact(entries, 'performance', id));
 });
+
+test('the actual publish command accepts the SHA-256 manifest option', () => temporary(async root => {
+  const script = fileURLToPath(new URL('./release.mjs', import.meta.url));
+  const result = spawnSync(process.execPath, [script, 'publish', '--root', root,
+    '--manifest-sha256', 'a'.repeat(64), '--publish-downloads', 'true'], { encoding: 'utf8' });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /ENOENT.*release-bundle\.json/);
+}));

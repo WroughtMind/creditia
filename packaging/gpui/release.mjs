@@ -100,7 +100,7 @@ export async function verifyInstallers(root, candidate, target) {
 function options(argv) {
   const result = {};
   for (let i = 0; i < argv.length; i += 2) {
-    if (!/^--[a-z-]+$/.test(argv[i]) || !argv[i + 1] || argv[i + 1].startsWith('--') || Object.hasOwn(result, argv[i].slice(2))) throw Error(`Invalid option ${argv[i]}`);
+    if (!/^--[a-z][a-z0-9-]*$/.test(argv[i]) || !argv[i + 1] || argv[i + 1].startsWith('--') || Object.hasOwn(result, argv[i].slice(2))) throw Error(`Invalid option ${argv[i]}`);
     result[argv[i].slice(2)] = argv[i + 1];
   }
   return result;
