@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { layout, verify } from './package.mjs';
+import { bridgeRequest, layout, verify } from './package.mjs';
 
 const options = Object.fromEntries(process.argv.slice(2).reduce((pairs,arg,i,all) => i%2 ? pairs : [...pairs,[arg.replace(/^--/,''),all[i+1]]],[]));
 if (!options.installers || !options.output || !options.fixture) throw new Error('Usage: install-smoke.mjs --installers installer-directory --output evidence.json --fixture archive.json');
@@ -51,20 +51,53 @@ async function exercise(root,format,{payloadOnly=false,uninstaller=false}={}){
   run(paths.gui,['--check-resources']);
   run(paths.core,['help']);
   report.checks.push({id:`${format}-installed-payload-and-resource-launch`,passed:true,files:info.files.length});
-  if(['darwin','linux'].includes(process.platform)){
-    const captureRoot=path.join(path.dirname(output),`${format}-native-window`);
-    try{
-      run('python',[path.join(import.meta.dirname,'gui-smoke.py'),'--binary',paths.gui,'--archive',fixture,'--output',captureRoot,'--candidate',candidate.candidate_sha],{timeout:330_000});
-      const capture=JSON.parse(await fs.readFile(path.join(captureRoot,'window-evidence.json'),'utf8'));
-      if(!capture.complete||capture.provenance.candidate_sha!==candidate.candidate_sha||!capture.checks.every(check=>check.passed))throw new Error('Installed native window evidence is incomplete');
-      report.checks.push({id:`${format}-installed-native-window-and-normal-quit`,passed:true,source:`${format}-native-window/window-evidence.json`});
-    }finally{
-      for(const file of await fs.readdir(captureRoot).catch(()=>[])){
-        const bytes=await fs.readFile(path.join(captureRoot,file));
-        report.artifacts.push({path:`${format}-native-window/${file}`,bytes:bytes.length,sha256:digest(bytes)});
-      }
+  const repository = path.join(temporary, 'existing-project');
+  const archive = path.join(repository, '.creditia', 'credits.json');
+  if (!(await fs.stat(repository).catch(() => null))) {
+    await fs.mkdir(repository);
+    run('git', ['init', repository]);
+    await fs.writeFile(path.join(repository, 'README.md'), '# Existing project\n');
+    run('git', ['-C', repository, 'add', 'README.md']);
+    run('git', ['-C', repository, '-c', 'user.name=Creditia QA', '-c', 'user.email=qa@example.invalid',
+      'commit', '-m', 'Initial project']);
+    run(paths.core, ['analyze', '--repo', repository]);
+    const legacy = JSON.parse(await fs.readFile(fixture, 'utf8'));
+    legacy.head = run('git', ['-C', repository, 'rev-parse', 'HEAD']).toString().trim();
+    await fs.writeFile(archive, JSON.stringify(legacy));
+  }
+  const original = await fs.readFile(archive);
+  const raw = JSON.parse(original);
+  for (const phase of ['launch', 'restart']) {
+    const label = `${format}-${phase}`;
+    const captureRoot = path.join(path.dirname(output), label);
+    if (process.platform === 'win32') {
+      run('pwsh', ['-NoProfile', '-File', path.join(import.meta.dirname, 'windows-window.ps1'),
+        '-PackageRoot', root, '-ProjectName', raw.project.name, '-Output', captureRoot], {timeout: 240_000});
+    } else {
+      run('python', [path.join(import.meta.dirname, 'gui-smoke.py'), '--binary', paths.gui,
+        '--archive', archive, '--library', env.CREDITIA_HOME, '--output', captureRoot,
+        '--candidate', candidate.candidate_sha], {timeout: 330_000});
+    }
+    const captureFile = process.platform === 'win32' ? 'manifest.json' : 'window-evidence.json';
+    const capture = JSON.parse(await fs.readFile(path.join(captureRoot, captureFile), 'utf8'));
+    if (!capture.complete || capture.provenance.candidate_sha !== candidate.candidate_sha)
+      throw new Error(`Installed project did not open: ${label}`);
+    report.checks.push({id: label, passed: true, source: `${label}/${captureFile}`});
+    for (const file of await fs.readdir(captureRoot)) {
+      const bytes = await fs.readFile(path.join(captureRoot, file));
+      report.artifacts.push({path: `${label}/${file}`, bytes: bytes.length, sha256: digest(bytes)});
+    }
+    if (phase === 'launch') {
+      const result = await bridgeRequest(paths.node, paths.bridge, {version: 1, id: label,
+        op: 'export', raw, style: 'minimal-light', piece: 'asterisk', format: 'png', size: 'native'}, temporary);
+      const bytes = Buffer.from(result.bytes, 'base64');
+      if (result.ext !== 'png' || !bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')))
+        throw new Error('Installed renderer returned an invalid PNG');
+      await artifact(`${format}-installed.png`, bytes);
+      report.checks.push({id: `${format}-installed-export`, passed: true});
     }
   }
+  if (!(await fs.readFile(archive)).equals(original)) throw new Error('Opening the project changed its archive');
 }
 
 try{

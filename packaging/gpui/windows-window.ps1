@@ -1,6 +1,7 @@
 param(
   [Parameter(Mandatory=$true)][string]$PackageRoot,
-  [Parameter(Mandatory=$true)][string]$Fixtures,
+  [string]$Fixtures,
+  [string]$ProjectName,
   [Parameter(Mandatory=$true)][string]$Output
 )
 $ErrorActionPreference = 'Stop'
@@ -22,10 +23,10 @@ public static class CreditiaWindow {
 '@
 [CreditiaWindow]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
 $PackageRoot = [IO.Path]::GetFullPath($PackageRoot)
-$Fixtures = [IO.Path]::GetFullPath($Fixtures)
+if ($Fixtures) { $Fixtures = [IO.Path]::GetFullPath($Fixtures) }
 $Output = [IO.Path]::GetFullPath($Output)
 [IO.Directory]::CreateDirectory($Output) | Out-Null
-$manifest = Get-Content (Join-Path $Fixtures 'fixture-manifest.json') -Raw | ConvertFrom-Json
+$manifest = if ($Fixtures) { Get-Content (Join-Path $Fixtures 'fixture-manifest.json') -Raw | ConvertFrom-Json }
 $cases = @()
 
 function Wait-AppState($process,[string]$events,[scriptblock]$predicate,[int]$seconds=30) {
@@ -70,8 +71,10 @@ function Capture-Window($process, [string]$name) {
   } finally { $graphics.Dispose(); $bitmap.Dispose() }
 }
 
-foreach ($language in @('zh','en')) {
-  foreach ($theme in @('light','dark')) {
+$languages = if ($ProjectName) { 'saved' } else { @('zh','en') }
+$themes = if ($ProjectName) { 'saved' } else { @('light','dark') }
+foreach ($language in $languages) {
+  foreach ($theme in $themes) {
     $key = "windows-$language-$theme"
     $process = $null; $temporary = Join-Path ([IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString())
     [IO.Directory]::CreateDirectory($temporary) | Out-Null
@@ -79,13 +82,18 @@ foreach ($language in @('zh','en')) {
     $previousEvents=$env:CREDITIA_APP_EVENTS
     $previousLibrary=$env:CREDITIA_HOME
     try {
-      $fixture = Get-Content (Join-Path $Fixtures "minimal-light-$language.json") -Raw | ConvertFrom-Json
-      $fixture.appearance = $theme
-      $fixturePath = Join-Path $temporary 'fixture.json'
-      [IO.File]::WriteAllText($fixturePath,($fixture | ConvertTo-Json -Depth 100 -Compress),(New-Object Text.UTF8Encoding($false)))
       $env:CREDITIA_APP_EVENTS=Join-Path $temporary 'events.jsonl'
-      $env:CREDITIA_HOME=Join-Path $temporary 'library'
-      $process = Start-Process -FilePath (Join-Path $PackageRoot 'creditia-gpui.exe') -ArgumentList @('--fixture',('"'+$fixturePath+'"')) -WorkingDirectory $temporary -PassThru -RedirectStandardOutput (Join-Path $temporary 'stdout.log') -RedirectStandardError (Join-Path $temporary 'stderr.log')
+      $start = @{FilePath=(Join-Path $PackageRoot 'creditia-gpui.exe');WorkingDirectory=$temporary;PassThru=$true;
+        RedirectStandardOutput=(Join-Path $temporary 'stdout.log');RedirectStandardError=(Join-Path $temporary 'stderr.log')}
+      if (!$ProjectName) {
+        $fixture = Get-Content (Join-Path $Fixtures "minimal-light-$language.json") -Raw | ConvertFrom-Json
+        $fixture.appearance = $theme
+        $fixturePath = Join-Path $temporary 'fixture.json'
+        [IO.File]::WriteAllText($fixturePath,($fixture | ConvertTo-Json -Depth 100 -Compress),(New-Object Text.UTF8Encoding($false)))
+        $env:CREDITIA_HOME=Join-Path $temporary 'library'
+        $start.ArgumentList = @('--fixture',('"'+$fixturePath+'"'))
+      }
+      $process = Start-Process @start
       $deadline = [DateTime]::UtcNow.AddSeconds(45)
       do {
         Start-Sleep -Milliseconds 200; $process.Refresh()
@@ -95,7 +103,11 @@ foreach ($language in @('zh','en')) {
       $screen = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
       [CreditiaWindow]::SetWindowPos($process.MainWindowHandle,[IntPtr]::Zero,($screen.Left+8),($screen.Top+8),[Math]::Min(1440,$screen.Width-16),[Math]::Min(1000,$screen.Height-16),0x0040) | Out-Null
       [CreditiaWindow]::SetForegroundWindow($process.MainWindowHandle)|Out-Null
-      $ready=Wait-AppState $process $env:CREDITIA_APP_EVENTS {param($state)$state.ready -and $state.active -and $state.view -eq 'wall'} 45
+      $ready=Wait-AppState $process $env:CREDITIA_APP_EVENTS {param($state)
+        $state.ready -and $state.active -and $state.view -eq 'wall' -and
+          (!$ProjectName -or ($state.project_name -eq $ProjectName -and $state.viewport_ready -and
+            @($state.visible_tiles | Where-Object image_ready).Count -gt 0))
+      } 90
       $wall = Capture-Window $process "$key-wall.png"; $case.artifacts += $wall
       $case.checks += @{id='packaged-native-window-and-decoded-artwork';passed=$true;state=$ready}
       [System.Windows.Forms.SendKeys]::SendWait('^2')
@@ -111,6 +123,10 @@ foreach ($language in @('zh','en')) {
       [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
       $null=Wait-AppState $process $env:CREDITIA_APP_EVENTS {param($state)$null -eq $state.panel}
       $case.checks += @{id='keyboard-roam-wall-settings';passed=$true}
+      if ($ProjectName) {
+        [System.Windows.Forms.SendKeys]::SendWait('^q')
+        if (!$process.WaitForExit(15000) -or $process.ExitCode -ne 0) { throw 'Installed window did not quit normally' }
+      }
       $case.status = 'passed'
     } catch { $case.error = $_.Exception.Message }
     finally {

@@ -55,6 +55,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", required=True)
     parser.add_argument("--archive", required=True)
+    parser.add_argument("--library", help="Open the existing project library through normal startup")
     parser.add_argument("--output", required=True)
     parser.add_argument("--candidate", required=True)
     parser.add_argument("--inside-x11", action="store_true")
@@ -82,7 +83,7 @@ def main():
         env = dict(os.environ)
         for key in ("CREDITIA_CORE", "CREDITIA_NODE", "CREDITIA_RENDER_BRIDGE", "CREDITIA_PERF_EVENTS", "NODE_PATH", "NODE_OPTIONS", "WAYLAND_DISPLAY"):
             env.pop(key, None)
-        env.update(CREDITIA_HOME=str(work / "library"), CREDITIA_APP_EVENTS=str(events))
+        env.update(CREDITIA_HOME=args.library or str(work / "library"), CREDITIA_APP_EVENTS=str(events))
         try:
             def run(command, timeout=10, check=True):
                 return subprocess.run(command, cwd=work, env=env, capture_output=True, text=True, timeout=timeout, check=check)
@@ -105,7 +106,9 @@ def main():
 
             for name in ("stdout.log", "stderr.log"):
                 logs.append((output / name).open("wb"))
-            process = subprocess.Popen([str(binary), "--benchmark-archive", str(fixture)], cwd=work,
+            arguments = [] if args.library else ["--benchmark-archive", str(fixture)]
+            expected_project = json.loads(fixture.read_bytes())["project"]["name"]
+            process = subprocess.Popen([str(binary), *arguments], cwd=work,
                                        env=env, stdout=logs[-2], stderr=logs[-1], start_new_session=True)
             window = None
             deadline = time.monotonic() + 150
@@ -125,7 +128,9 @@ def main():
                         if found.returncode == 0:
                             window = str(json.loads(found.stdout)["id"])
                 ready, state = last_events(events)
-                if window and ready.get("loaded", 0) > 0 and state.get("ready") and state.get("first_tile"):
+                if (window and state.get("project_name") == expected_project
+                        and state.get("viewport_ready") and state.get("first_tile")
+                        and any(tile.get("image_ready") for tile in state.get("visible_tiles", []))):
                     break
                 time.sleep(.15)
             else:
