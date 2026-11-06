@@ -31,8 +31,8 @@ if (info.platform === 'darwin') {
   notes.installers.push(path.basename(dmg));
 } else if (info.platform === 'win32') {
   const archive = path.join(output,`${name}.zip`);
-  // tar.exe supports ZIP creation on current Windows runners.
-  run('tar',['-a','-c','-f',archive,'-C',path.dirname(root),name]);
+  const tar = path.join(process.env.SystemRoot, 'System32', 'tar.exe');
+  run(tar,['-a','-c','-f',archive,'-C',path.dirname(root),name]);
   notes.installers.push(path.basename(archive));
   const nsis = process.env.MAKENSIS ?? 'C:\\Program Files (x86)\\NSIS\\makensis.exe';
   await fs.access(nsis);

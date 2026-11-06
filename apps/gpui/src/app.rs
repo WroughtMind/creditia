@@ -3164,12 +3164,16 @@ impl Creditia {
                                     }
                                     let keep = play.requested;
                                     let shown = play.index;
+                                    // The producer can finish behind the clock on high-DPI
+                                    // displays. Keep its newest eligible frame for decoding.
+                                    let latest = play.frames.range(..=keep).next_back().map(|(&i, _)| i);
                                     let obsolete = play
                                         .frames
                                         .keys()
                                         .copied()
                                         .filter(|i| {
                                             *i != shown
+                                                && Some(*i) != latest
                                                 && (*i < keep
                                                     || *i > keep + crate::animation::MAX_AHEAD)
                                         })
@@ -3209,7 +3213,7 @@ impl Creditia {
                                             .frames
                                             .keys()
                                             .copied()
-                                            .filter(|i| *i != shown)
+                                            .filter(|i| *i != index)
                                             .max_by_key(|i| i.abs_diff(keep))
                                         else {
                                             break;

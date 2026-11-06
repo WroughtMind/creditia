@@ -677,8 +677,8 @@ mod tests {
             dpi: 2.,
         };
         let plan = frame_plan(&art, 1200, Some(view)).unwrap().unwrap();
-        let expected = (focused_rect(art.w, art.h, view.viewport, view.size).w * view.dpi).ceil();
-        assert_eq!(plan.pixels, expected as u32);
+        // The 1100-point focus width at 6× zoom and 2× DPI lands on an integer.
+        assert_eq!(plan.pixels, 13_200);
         assert!(plan.pixels > 4096, "deep zoom must retain physical density");
         assert!(plan.tiles.len() > 1);
         assert!(plan.max_resident <= 2);

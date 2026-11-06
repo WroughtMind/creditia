@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Readable, Writable } from 'node:stream';
 import { dispatchRender, renderCatalog, createRenderSession, MAX_REQUEST_BYTES } from '../src/protocol.ts';
 import { nativeBackend, renderRequest } from '../src/native-protocol.ts';
@@ -21,6 +25,23 @@ const unwrap = (response: Awaited<ReturnType<typeof renderRequest>>): any => {
   assert.equal(response.ok, true, response.ok ? '' : JSON.stringify(response.error));
   return response.ok ? response.result : null;
 };
+
+test('the installed bridge serves requests through a directory alias', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'creditia-bridge-'));
+  try {
+    const alias = join(directory, 'installed renderer');
+    symlinkSync(fileURLToPath(new URL('..', import.meta.url)), alias, 'junction');
+    const output = execFileSync(process.execPath, [join(alias, 'tools/bridge.mjs')], {
+      cwd: directory, encoding: 'utf8', timeout: 30_000,
+      input: JSON.stringify({ version: 1, id: 'alias', op: 'catalog' }) + '\n',
+    });
+    const response = JSON.parse(output);
+    assert.equal(response.id, 'alias');
+    assert.equal(response.result.styles.length, 26);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test('native catalog preserves all 26 desktop styles and registry variants', async () => {
   const result = unwrap(await renderRequest({ version: 1, id: 'catalog', op: 'catalog' }));

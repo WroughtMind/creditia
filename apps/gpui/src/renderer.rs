@@ -466,6 +466,7 @@ struct Session {
     writes: mpsc::SyncSender<WriteJob>,
     events: mpsc::Receiver<Event>,
     diagnostics: Arc<Mutex<Vec<u8>>>,
+    stderr_done: mpsc::Receiver<()>,
     archives: VecDeque<Archive>,
     results: VecDeque<ResultEntry>,
     archive_bytes: usize,
@@ -530,6 +531,7 @@ impl Session {
             .map_err(|error| format!("Unable to start renderer output: {error}"))?;
         let diagnostics = Arc::new(Mutex::new(Vec::new()));
         let captured = diagnostics.clone();
+        let (stderr_finished, stderr_done) = mpsc::channel();
         thread::Builder::new()
             .name("creditia-render-error".into())
             .spawn(move || {
@@ -546,6 +548,7 @@ impl Session {
                         Err(_) => break,
                     }
                 }
+                let _ = stderr_finished.send(());
             })
             .map_err(|error| format!("Unable to start renderer diagnostics: {error}"))?;
         Ok(Self {
@@ -553,6 +556,7 @@ impl Session {
             writes,
             events,
             diagnostics,
+            stderr_done,
             archives: VecDeque::new(),
             results: VecDeque::new(),
             archive_bytes: 0,
@@ -560,6 +564,16 @@ impl Session {
             ticket: 0,
             rss_bytes: 0,
         })
+    }
+    fn pipe_failure(&mut self, reason: String) -> Failure {
+        // stdout can close just before the stderr reader has drained the child.
+        let _ = self.stderr_done.recv_timeout(Duration::from_millis(100));
+        let status = self.child.child.try_wait().ok().flatten();
+        self.child.reaped = status.is_some();
+        let detail = self.diagnostics.lock().unwrap_or_else(|e| e.into_inner());
+        let detail = String::from_utf8_lossy(&detail);
+        let status = status.map(|s| format!(" ({s})")).unwrap_or_default();
+        Failure::Transport(format!("{reason}{status}: {}", detail.trim()))
     }
     fn exchange(
         &mut self,
@@ -596,19 +610,6 @@ impl Session {
             if remaining.is_zero() {
                 return Err(Failure::Transport("Renderer request timed out".into()));
             }
-            if let Some(status) = self
-                .child
-                .child
-                .try_wait()
-                .map_err(|error| format!("Unable to inspect renderer: {error}"))?
-            {
-                self.child.reaped = true;
-                let detail = self.diagnostics.lock().unwrap_or_else(|e| e.into_inner());
-                return Err(Failure::Transport(format!(
-                    "Renderer exited with {status}: {}",
-                    String::from_utf8_lossy(&detail).trim()
-                )));
-            }
             match self
                 .events
                 .recv_timeout(remaining.min(Duration::from_millis(20)))
@@ -617,7 +618,7 @@ impl Session {
                     if ticket != self.ticket {
                         return Err(Failure::Transport("Renderer input order changed".into()));
                     }
-                    result?;
+                    result.map_err(|reason| self.pipe_failure(reason))?;
                     written = true;
                 }
                 Ok(Event::Record(result)) => {
@@ -626,7 +627,7 @@ impl Session {
                             "Renderer returned multiple records for one request".into(),
                         ));
                     }
-                    response = Some(result?);
+                    response = Some(result.map_err(|reason| self.pipe_failure(reason))?);
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => {

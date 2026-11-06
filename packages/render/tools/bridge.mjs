@@ -2,7 +2,6 @@
 // One JSON request/response per line. Backpressure keeps only one active render
 // and one bounded input line in memory; restart the child to cancel active work.
 import { once } from 'node:events';
-import { pathToFileURL } from 'node:url';
 import { createRenderSession, errorResponse, MAX_REQUEST_BYTES } from '../src/protocol.ts';
 
 export async function serve(input, output, backend) {
@@ -41,7 +40,7 @@ export async function serve(input, output, backend) {
   if (!discarding && pending.length) await line(pending);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.main) {
   const { nativeBackend } = await import('../src/native-protocol.ts');
   try { await serve(process.stdin, process.stdout, nativeBackend); }
   catch (error) {

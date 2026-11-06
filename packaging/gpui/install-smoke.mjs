@@ -77,7 +77,7 @@ try{
     await fs.mkdir(extracted,{recursive:true});
     if(name.endsWith('.zip')){
       if(process.platform==='darwin')run('ditto',['-x','-k',artifact,extracted]);
-      else run('tar',['-xf',artifact,'-C',extracted]);
+      else run(path.join(process.env.SystemRoot,'System32','tar.exe'),['-xf',artifact,'-C',extracted]);
       await exercise(path.join(extracted,name.slice(0,-4)),'zip');
     }else if(name.endsWith('.tar.gz')){
       run('tar',['-xzf',artifact,'-C',extracted]);

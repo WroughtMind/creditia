@@ -325,7 +325,7 @@ mod tests {
         );
         assert!(
             rows.iter()
-                .any(|(_, text)| text == "Cannot find the analysis core (creditia-core): /app/core")
+                .any(|(_, text)| text == "找不到分析核心 creditia-core：/app/core")
         );
         assert!(
             rows.iter()

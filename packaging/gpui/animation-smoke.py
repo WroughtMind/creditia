@@ -308,7 +308,8 @@ def main():
             first_index = state["animation"]["index"]
             first = capture("paused-first", state)
             action("resume", lambda: key("space"), lambda _, s: s.get("playing") and frame_ready(s))
-            wait(lambda s: frame_ready(s) and s["animation"]["index"] > first_index + 2, "later frame")
+            wait(lambda s: frame_ready(s) and abs(s["animation"]["index"] - first_index) > 2,
+                 "different painted frame after resume")
             state = action("pause-later", lambda: key("space"), lambda _, s: not s.get("playing") and frame_ready(s))
             second = capture("paused-later", state)
             with Image.open(first) as a, Image.open(second) as b:

@@ -285,7 +285,7 @@ impl Harness {
             }
         ));
     }
-    fn input(&mut self, id: &str, text: &str) {
+    fn input(&mut self, id: &'static str, text: &str) {
         self.click(id);
         self.shortcut("a");
         self.update(|window, cx, _| window.input(text, cx));
@@ -305,7 +305,7 @@ impl Harness {
         self.click(("choose-project", self.project_index(id)));
         self.ready(id);
     }
-    fn scroll_to(&mut self, id: &str) {
+    fn scroll_to(&mut self, id: &'static str) {
         for _ in 0..20 {
             let visible = self.update(|window, _, _| {
                 let body = window.find("panel-body").bounds();
