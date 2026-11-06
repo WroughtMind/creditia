@@ -1,11 +1,12 @@
 import { stable, sha256, pixelDiff } from './common.mjs';
 import { decodePng, decodePdf, decodeGif, firstSvg, quantizedDiff } from './export-validation.mjs';
 function unwrap(response) { if (!response.ok) throw Error(`${response.error.code}: ${response.error.message}`); return response.result; }
-export async function exportChecks(candidate, request, row, rowIndex, captureFailure) {
+export async function exportChecks(candidate, request, row, rowIndex, captureFailure, onStage) {
   // Every row exercises all encoders once, with preferences/transparency rotated
   // across the matrix. The four preference variants are independently compared
   // above; repeating these same encoder paths for each adds no format coverage.
   const selected = { ...request, transparent: rowIndex % 2 === 1 };
+  onStage?.('reference-art');
   const original = unwrap(await candidate.native.renderRequest(selected)).art;
   if (!original) throw Error('Export fixture does not produce an artwork');
   const size = '320x240', canvas = { w: 320, h: 240 }, frameCount = 4;
@@ -15,7 +16,9 @@ export async function exportChecks(candidate, request, row, rowIndex, captureFai
   const animation = row.animated === 'true' ? unwrap(await candidate.native.renderRequest({ ...selected, op: 'frames', frameCount })) : null;
   const formats = ['png', 'svg', 'pdf', 'html', ...(animation ? ['gif'] : [])], results = [];
   for (const format of formats) {
+    onStage?.(`encode-${format}`);
     const exported = unwrap(await candidate.native.renderRequest({ ...selected, op: 'export', format, size, frameCount, width: 160 }));
+    onStage?.(`verify-${format}`);
     const bytes = Buffer.from(exported.bytes, 'base64'), checks = {};
     if (format === 'png') {
       const decoded = decodePng(bytes);

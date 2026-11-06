@@ -12,6 +12,7 @@ import { fontsFor } from './fonts.ts';
 import { classicArt, classicFrames } from './art.ts';
 import type { Raster } from '../export.ts';
 import { straightRgba } from '../pixels.ts';
+import { rasterViewport, viewportPixels, viewportPngSvg, retainRasterExtent } from '../raster-viewport.ts';
 
 
 const require = createRequire(import.meta.url);
@@ -65,9 +66,9 @@ export async function renderSized(form: string, m: Model, theme: Theme, w: numbe
 /** 栅格化：satori 出的 SVG 里文字已经是路径，resvg 不需要字体 */
 const ropts = (width?: number) => ({ font: { loadSystemFonts: false }, fitTo: width ? { mode: 'width' as const, value: Math.round(width) } : undefined });
 export const raster: Raster = {
-  png(svg, width) { return new Uint8Array(new Resvg(svg, ropts(width)).render().asPng()); },
-  rgba(svg, width) { const img = new Resvg(svg, ropts(width)).render(); return { w: img.width, h: img.height, data: straightRgba(img.pixels) }; },
-  flat(svg) { return new Resvg(svg, ropts()).toString(); },
+  png(svg, width) { const v = rasterViewport(svg, width); const png = new Resvg(v?.svg ?? svg, ropts(width)).render().asPng(); return new Uint8Array(v ? new Resvg(viewportPngSvg(png, v), ropts()).render().asPng() : png); },
+  rgba(svg, width) { const v = rasterViewport(svg, width); let img = new Resvg(v?.svg ?? svg, ropts(width)).render(); if (v?.window) { img = new Resvg(viewportPngSvg(img.asPng(), v), ropts()).render(); return { w: img.width, h: img.height, data: straightRgba(img.pixels) }; } return { w: img.width, h: v?.height ?? img.height, data: straightRgba(viewportPixels(img.pixels, v)) }; },
+  flat(svg) { return retainRasterExtent(svg, new Resvg(svg, ropts()).toString()); },
 };
 
 /** 统一的 Art：命令行导出、官网都走这个 */

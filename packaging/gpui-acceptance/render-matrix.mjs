@@ -80,6 +80,12 @@ const manifest = {
     native_ui_tested: false, recorded_visual_review: false },
   cases: [],
 };
+let activeCase = null;
+function progress(stage) {
+  if (!activeCase) return;
+  fs.writeFileSync(path.join(output, 'active-case.json'), JSON.stringify({ ...activeCase, stage,
+    candidate_sha: candidateSha, baseline_sha: baselineSha, updated_at: new Date().toISOString() }, null, 2) + '\n');
+}
 function variantOf(row) { return row.variant === 'default' ? undefined : row.variant; }
 async function direct(api, row, raw, pref) {
   const { lang, group, named } = pref, variant = variantOf(row), context = contexts(raw);
@@ -109,12 +115,17 @@ function compareArt(a, b, row) {
   const fontReference = portableBadgeReference(reference.svg, row);
   const normalizedReference = normalizedArt({ ...a, svg: fontReference.svg }).svg;
   const structuralRule = normalizedReference === bsvg && asvg !== bsvg && (reference.changes || fontReference.changes);
-  const ar = decodePng(baseline.raster(reference.svg).png(reference.svg, pixelWidth)), br = decodePng(candidate.raster(b.svg).png(b.svg, pixelWidth));
+  progress('baseline-static-png');
+  const ar = decodePng(baseline.raster(reference.svg).png(reference.svg, pixelWidth));
+  progress('candidate-static-png');
+  const br = decodePng(candidate.raster(b.svg).png(b.svg, pixelWidth));
   // Font-stack portability needs a native-size and 2x proof for each language
   // and preference case; thumbnail equality alone cannot waive XML changes.
   const nativeProof = structuralRule ? [1, 2].map(scale => {
-    const pixels = pixelDiff(decodePng(baseline.raster(reference.svg).png(reference.svg, Math.round(a.w * scale))),
-      decodePng(candidate.raster(b.svg).png(b.svg, Math.round(b.w * scale))));
+    progress(`baseline-native-pixels-${scale}x`);
+    const previous = decodePng(baseline.raster(reference.svg).png(reference.svg, Math.round(a.w * scale)));
+    progress(`candidate-native-pixels-${scale}x`);
+    const pixels = pixelDiff(previous, decodePng(candidate.raster(b.svg).png(b.svg, Math.round(b.w * scale))));
     return { scale, ...pixels };
   }) : [];
   const structural_equivalence = structuralRule ? {
@@ -129,10 +140,12 @@ function compareArt(a, b, row) {
 }
 async function motionChecks(request, row) {
   if (row.animated !== 'true') return { status: 'not_applicable' };
+  progress('candidate-motion-frames');
   const result = unwrap(await candidate.native.renderRequest({ ...request, op: 'frames', frameCount: 4 }));
   if (!Array.isArray(result.frames) || !Array.isArray(result.times) || result.frames.length !== result.times.length) throw Error('Frames response lacks explicit aligned sample times');
   const checks = [];
   for (let i = 0; i < result.frames.length; i++) {
+    progress(`candidate-motion-sample-${result.times[i]}`);
     const sampled = unwrap(await candidate.native.renderRequest({ ...request, op: 'render', t: result.times[i] })).art;
     checks.push(stable(normalizedArt(sampled)) === stable(normalizedArt(result.frames[i])));
   }
@@ -153,13 +166,17 @@ for (const [rowIndex, row] of selected.entries()) {
       options: pref, context_kind: ['profile', 'blame'].includes(row.piece) ? 'synthetic_presentation_context' : null,
       started_at: new Date().toISOString(), artifacts: [] };
     const start = performance.now();
+    activeCase = { key, row: record.row, preference: pref.id, fixture: fixture.id };
     try {
+      progress('baseline-art');
       const a = await direct(baseline, row, fixture.raw, pref);
       const request = requestFor(row, fixture.raw, pref);
+      progress('candidate-art');
       const b = unwrap(await candidate.native.renderRequest(request)).art;
       record.comparison = compareArt(a, b, row);
       record.status = record.comparison.empty ? 'empty' : record.comparison.data_equal && record.comparison.crop_equal && (record.comparison.svg_equal || record.comparison.structural_equivalence?.passed) && record.comparison.pixels?.equal ? 'matched' : 'different';
       if (a && b) {
+        progress('comparison-artifacts');
         const name = safeName(key), w = record.comparison.raster_width;
         const rasterReference = terminalRasterReference(a.svg, row, a.h).svg;
         const apng = baseline.raster(rasterReference).png(rasterReference, w), bpng = candidate.raster(b.svg).png(b.svg, w);
@@ -175,12 +192,13 @@ for (const [rowIndex, row] of selected.entries()) {
         if (options.motion && representative) record.motion = await motionChecks(request, row);
         if (options.exports && representative) record.exports = await exportChecks(candidate, request, row, rowIndex * shards + shard, (filename, bytes) => {
           const file = artifact(output, `exports/${name}-${filename}`, bytes); record.artifacts.push(file); return file;
-        });
+        }, stage => progress(`candidate-export-${stage}`));
         if (record.motion?.status === 'different' || record.exports?.status === 'different') record.status = 'different';
       }
     } catch (error) { record.status = 'error'; record.error = error instanceof Error ? error.stack : String(error); }
     record.duration_ms = Math.round((performance.now() - start) * 100) / 100;
     manifest.cases.push(record);
+    progress(`completed-${record.status}`);
     if (['different', 'error'].includes(record.status) && diagnosticFailures++ < 20) console.warn(JSON.stringify({
       case: record.key, status: record.status, data_equal: record.comparison?.data_equal,
       svg_equal: record.comparison?.svg_equal, pixels_equal: record.comparison?.pixels?.equal,

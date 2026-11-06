@@ -6,6 +6,7 @@ const G: any = (gifenc as any).GIFEncoder ? gifenc : (gifenc as any).default;
 const { GIFEncoder, quantize, applyPalette } = G;
 import { INTERACT_CSS, mountHits, placeTip } from './interact.ts';
 import type { Hit } from './svg.ts';
+import { rasterExtent } from './raster-viewport.ts';
 
 /** 一张可导出的作品 */
 export interface Art { w: number; h: number; svg: string; hits: Hit[]; bg: string; title: string; selection?: { style: string; piece: string; lang: 'zh' | 'en' }; motion?: Motion; crop?: Crop }
@@ -52,10 +53,14 @@ export function sized(a: Art, W: number, H: number, pad = 0.06): Art {
   if (!W || !H) return a;
   const k = Math.min((W * (1 - pad * 2)) / a.w, (H * (1 - pad * 2)) / a.h);
   const dx = (W - a.w * k) / 2, dy = (H - a.h * k) / 2;
-  // A scrolling frame has a nonzero viewBox origin. Keep that nested viewport:
-  // stripping it would put every resized frame back at the top of the reel.
-  const content = a.crop ? a.svg : strip(a.svg);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${a.bg}"/><g transform="translate(${dx.toFixed(2)} ${dy.toFixed(2)}) scale(${k.toFixed(4)})">${content}</g></svg>`;
+  // Preserve the scrolling origin and visible window. Native raster adapters
+  // can defer this named clip until after rendering the complete filtered reel.
+  const content = a.crop
+    ? `<defs><clipPath id="creditia-scroll-viewport"><rect width="${a.w}" height="${a.h}"/></clipPath></defs><g clip-path="url(#creditia-scroll-viewport)"><g transform="translate(0 ${-a.crop.y})">${strip(a.svg)}</g></g>`
+    : strip(a.svg);
+  const extent = rasterExtent(a.svg), actualK = Number(k.toFixed(4)), actualDx = Number(dx.toFixed(2)), actualDy = Number(dy.toFixed(2));
+  const metadata = extent ? ` data-creditia-raster="${actualDy + extent[0] * actualK} ${actualDy + extent[1] * actualK}"${a.crop ? ` data-creditia-window="${actualDx} ${actualDy} ${a.w * actualK} ${a.h * actualK}" data-creditia-bg="${attr(a.bg)}"` : ''}` : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"${metadata}><rect width="${W}" height="${H}" fill="${a.bg}"/><g transform="translate(${dx.toFixed(2)} ${dy.toFixed(2)}) scale(${k.toFixed(4)})">${content}</g></svg>`;
   // The old crop describes the unsized reel, so it cannot shortcut this padded,
   // transformed image. Rasterize this frame's SVG instead.
   return { ...a, w: W, h: H, svg, crop: undefined, hits: a.hits.map((x) => ({ ...x, x: dx + x.x * k, y: dy + x.y * k, w: x.w * k, h: x.h * k })) };

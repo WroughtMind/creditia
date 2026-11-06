@@ -7,6 +7,7 @@ import type { ExportJob, Exported } from './engine.ts';
 import { exportArtwork } from '../../../packages/render/src/export-job.ts';
 import { timelineFor } from '../../../packages/render/src/timeline.ts';
 import { straightRgba } from '../../../packages/render/src/pixels.ts';
+import { rasterViewport, viewportPixels, viewportPngSvg, retainRasterExtent } from '../../../packages/render/src/raster-viewport.ts';
 
 /** WASM 对象不等 GC 回收；底层异常后的清理失败不能覆盖原始错误。 */
 function using<T extends { free(): void }, R>(value: T, read: (value: T) => R): R {
@@ -31,9 +32,20 @@ async function run({ fmt, fontStyle, art: a, size, frames }: ExportJob): Promise
   const fonts = fontStyle && a.svg.includes('<text') ? await fontBytes(fontStyle, a.svg) : [];
   const opts = (width?: number) => ({ font: { fontBuffers: fonts, loadSystemFonts: false, defaultFontFamily: 'Noto Sans SC' }, fitTo: width ? { mode: 'width' as const, value: Math.round(width) } : undefined });
   const raster: Raster = {
-    png: (svg, w) => using(new Resvg(svg, opts(w)), r => using(r.render(), img => img.asPng())),
-    rgba: (svg, w) => using(new Resvg(svg, opts(w)), r => using(r.render(), img => ({ w: img.width, h: img.height, data: straightRgba(img.pixels) }))),
-    flat: svg => using(new Resvg(svg, opts()), r => r.toString()),
+    png: (svg, w) => {
+      const v = rasterViewport(svg, w);
+      const png = using(new Resvg(v?.svg ?? svg, opts(w)), r => using(r.render(), img => img.asPng()));
+      return v ? using(new Resvg(viewportPngSvg(png, v), opts()), r => using(r.render(), img => img.asPng())) : png;
+    },
+    rgba: (svg, w) => {
+      const v = rasterViewport(svg, w);
+      if (v?.window) {
+        const png = using(new Resvg(v.svg, opts(w)), r => using(r.render(), img => img.asPng()));
+        return using(new Resvg(viewportPngSvg(png, v), opts()), r => using(r.render(), img => ({ w: img.width, h: img.height, data: straightRgba(img.pixels) })));
+      }
+      return using(new Resvg(v?.svg ?? svg, opts(w)), r => using(r.render(), img => ({ w: img.width, h: v?.height ?? img.height, data: straightRgba(viewportPixels(img.pixels, v)) })));
+    },
+    flat: svg => retainRasterExtent(svg, using(new Resvg(svg, opts()), r => r.toString())),
   };
   const timeline = timelineFor(a.selection?.style ?? 'minimal-light', a.selection?.piece ?? '', a);
   const animation = frames?.length ? { frames, times: frames.map((_, i) => frames.length === 1 ? 1 : i / (frames.length - 1)), timeline } : undefined;

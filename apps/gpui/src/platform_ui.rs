@@ -1,7 +1,125 @@
 //! Native application chrome. Call on the GPUI foreground thread and keep one
 //! adapter per window. Linux keeps its packaged launcher icon and in-app status;
 //! this module reports that limitation instead of claiming native support.
-use gpui_kit::Window;
+use gpui_kit::{App, Global, Task, Window};
+
+#[derive(Default)]
+struct SystemMotion(Option<bool>);
+impl Global for SystemMotion {}
+
+/// Raw operating-system preference, independent of the application's switch.
+/// An unavailable portal/API has no opinion; callers still honor their setting.
+pub fn system_reduced_motion(cx: &App) -> Option<bool> {
+    cx.try_global::<SystemMotion>().and_then(|state| state.0)
+}
+
+fn publish_system_motion(value: Option<bool>, cx: &mut App) {
+    if let Some(value) = value {
+        let state = cx.default_global::<SystemMotion>();
+        if state.0 != Some(value) {
+            state.0 = Some(value);
+            cx.refresh_windows();
+        }
+    }
+}
+
+fn deterministic_scheduler(cx: &App) -> bool {
+    cx.background_executor()
+        .scheduler_executor()
+        .scheduler()
+        .as_test()
+        .is_some()
+}
+
+/// Refresh on window activation as well as native notifications. No subprocess,
+/// timer, or polling loop is used. Linux receives readings from the portal task.
+pub fn refresh_system_motion(cx: &mut App) {
+    if deterministic_scheduler(cx) {
+        return;
+    }
+    #[cfg(target_os = "macos")]
+    publish_system_motion(Some(macos::reduced_motion()), cx);
+    #[cfg(target_os = "windows")]
+    publish_system_motion(win32::reduced_motion(), cx);
+}
+
+/// Retain this task in the view. Dropping it drops the native observer guard or
+/// portal stream, so closed windows leave no listener or idle wakeup behind.
+/// Native callbacks only signal a bounded channel; GPUI updates stay on its
+/// foreground executor rather than re-entering it from an OS callback.
+pub fn watch_system_motion(cx: &mut App) -> Option<Task<()>> {
+    if deterministic_scheduler(cx) {
+        return None;
+    }
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        let (send, receive) = async_channel::bounded(1);
+        #[cfg(target_os = "macos")]
+        let observer = macos::MotionObserver::new(send);
+        #[cfg(target_os = "windows")]
+        let observer = win32::MotionObserver::new(send);
+        refresh_system_motion(cx);
+        let observer = match observer {
+            Ok(observer) => observer,
+            Err(error) => {
+                eprintln!("creditia: system motion notifications unavailable: {error}");
+                return None;
+            }
+        };
+        return Some(cx.spawn(async move |cx| {
+            let _observer = observer;
+            while receive.recv().await.is_ok() {
+                if cx.update(refresh_system_motion).is_err() {
+                    break;
+                }
+            }
+        }));
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use ashpd::desktop::settings::{ReducedMotion, Settings};
+        use futures_util::StreamExt as _;
+        Some(cx.spawn(async move |cx| {
+            let Ok(settings) = Settings::new().await else {
+                return;
+            };
+            // Subscribe before reading so a concurrent preference change cannot
+            // disappear between the initial value and the first notification.
+            let changes = settings.receive_reduced_motion_changed().await;
+            if let Ok(value) = settings.reduced_motion().await {
+                if cx
+                    .update(|cx| {
+                        publish_system_motion(
+                            Some(matches!(value, ReducedMotion::ReducedMotion)),
+                            cx,
+                        )
+                    })
+                    .is_err()
+                {
+                    return;
+                }
+            }
+            let Ok(mut changes) = changes else {
+                return;
+            };
+            while let Some(value) = changes.next().await {
+                if cx
+                    .update(|cx| {
+                        publish_system_motion(
+                            Some(matches!(value, ReducedMotion::ReducedMotion)),
+                            cx,
+                        )
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        }))
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    None
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Progress {
@@ -113,6 +231,49 @@ mod macos {
     use objc2_app_kit::{NSApplication, NSImage};
     use objc2_foundation::{NSData, NSString};
 
+    pub fn reduced_motion() -> bool {
+        objc2_app_kit::NSWorkspace::sharedWorkspace().accessibilityDisplayShouldReduceMotion()
+    }
+    pub struct MotionObserver {
+        center: objc2::rc::Retained<objc2_foundation::NSNotificationCenter>,
+        observer: objc2::rc::Retained<
+            objc2::runtime::ProtocolObject<dyn objc2_foundation::NSObjectProtocol>,
+        >,
+    }
+    impl MotionObserver {
+        pub fn new(send: async_channel::Sender<()>) -> Result<Self, String> {
+            MainThreadMarker::new().ok_or("Motion observer requires the main thread")?;
+            let center = objc2_app_kit::NSWorkspace::sharedWorkspace().notificationCenter();
+            let block = block2::RcBlock::new(
+                move |_: std::ptr::NonNull<objc2_foundation::NSNotification>| {
+                    let _ = send.try_send(());
+                },
+            );
+            // SAFETY: The block captures only a Send+Sync channel; no AppKit or
+            // GPUI value crosses threads. NSNotificationCenter retains it until
+            // the matching removal in Drop. No notification object is retained.
+            let observer = unsafe {
+                center.addObserverForName_object_queue_usingBlock(
+                    Some(
+                        objc2_app_kit::NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification,
+                    ),
+                    None,
+                    None,
+                    &block,
+                )
+            };
+            Ok(Self { center, observer })
+        }
+    }
+    impl Drop for MotionObserver {
+        fn drop(&mut self) {
+            // SAFETY: This is exactly the observer returned by this center.
+            unsafe {
+                self.center.removeObserver(&self.observer);
+            }
+        }
+    }
+
     pub fn apply_logo(id: &str) -> Result<(), String> {
         let mtm = MainThreadMarker::new().ok_or("Application icons require the main thread")?;
         let app = NSApplication::sharedApplication(mtm);
@@ -163,6 +324,84 @@ mod win32 {
             },
         },
     };
+
+    pub fn reduced_motion() -> Option<bool> {
+        use windows::{
+            Win32::UI::WindowsAndMessaging::{
+                SPI_GETCLIENTAREAANIMATION, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+                SystemParametersInfoW,
+            },
+            core::BOOL,
+        };
+        let mut enabled = BOOL(0);
+        // SAFETY: This action writes exactly one BOOL into the live stack slot.
+        unsafe {
+            SystemParametersInfoW(
+                SPI_GETCLIENTAREAANIMATION,
+                0,
+                Some((&mut enabled as *mut BOOL).cast()),
+                SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+            )
+        }
+        .ok()?;
+        Some(!enabled.as_bool())
+    }
+
+    pub struct MotionObserver {
+        settings: Option<windows::UI::ViewManagement::UISettings>,
+        token: Option<i64>,
+        runtime_initialized: bool,
+        _foreground: std::marker::PhantomData<std::rc::Rc<()>>,
+    }
+    impl MotionObserver {
+        pub fn new(send: async_channel::Sender<()>) -> Result<Self, String> {
+            use windows::{
+                Foundation::TypedEventHandler,
+                UI::ViewManagement::{UISettings, UISettingsAnimationsEnabledChangedEventArgs},
+                Win32::System::WinRT::{RO_INIT_SINGLETHREADED, RoInitialize},
+            };
+            // Pair every successful initialization, including an existing STA,
+            // while leaving an already-established different apartment alone.
+            let runtime_initialized = match unsafe { RoInitialize(RO_INIT_SINGLETHREADED) } {
+                Ok(()) => true,
+                Err(error) if error.code() == RPC_E_CHANGED_MODE => false,
+                Err(error) => return Err(error.to_string()),
+            };
+            let mut observer = Self {
+                settings: None,
+                token: None,
+                runtime_initialized,
+                _foreground: std::marker::PhantomData,
+            };
+            let settings = UISettings::new().map_err(|error| error.to_string())?;
+            let handler = TypedEventHandler::<
+                UISettings,
+                UISettingsAnimationsEnabledChangedEventArgs,
+            >::new(move |_, _| {
+                let _ = send.try_send(());
+                Ok(())
+            });
+            let token = settings
+                .AnimationsEnabledChanged(&handler)
+                .map_err(|error| error.to_string())?;
+            observer.settings = Some(settings);
+            observer.token = Some(token);
+            Ok(observer)
+        }
+    }
+    impl Drop for MotionObserver {
+        fn drop(&mut self) {
+            if let (Some(settings), Some(token)) = (&self.settings, self.token.take()) {
+                let _ = settings.RemoveAnimationsEnabledChanged(token);
+            }
+            self.settings = None;
+            if self.runtime_initialized {
+                unsafe {
+                    windows::Win32::System::WinRT::RoUninitialize();
+                }
+            }
+        }
+    }
 
     #[derive(Default)]
     pub struct NativeWindow {
@@ -307,6 +546,27 @@ mod win32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "visual-test")]
+    #[gpui_kit::test]
+    fn raw_system_motion_survives_application_overrides_and_tests_never_watch_the_os(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        cx.update(|cx| {
+            assert_eq!(system_reduced_motion(cx), None);
+            publish_system_motion(Some(true), cx);
+            cx.set_reduce_motion(false);
+            assert_eq!(system_reduced_motion(cx), Some(true));
+            publish_system_motion(None, cx);
+            assert_eq!(system_reduced_motion(cx), Some(true));
+            publish_system_motion(Some(false), cx);
+            cx.set_reduce_motion(true);
+            assert_eq!(system_reduced_motion(cx), Some(false));
+            assert!(watch_system_motion(cx).is_none());
+            refresh_system_motion(cx);
+            assert_eq!(system_reduced_motion(cx), Some(false));
+        });
+        cx.run_until_parked();
+    }
     #[test]
     fn native_progress_is_bounded_and_coalesces_subpercent_changes() {
         assert_eq!(

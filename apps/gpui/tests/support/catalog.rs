@@ -86,9 +86,13 @@ pub fn run() {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 cx.update_window(handle, |_, window, cx| {
                     window.click("pieces", cx);
+                    assert_eq!(view.read(cx).diagnostic_state()["panel"], "pieces", "the Artworks control must open its own selector without clicking through to the wall");
                     window.click(("piece", row["piece_index"].as_u64().unwrap() as usize), cx);
+                    assert_eq!(view.read(cx).diagnostic_state()["selected_piece"], row["piece"], "the piece selector must preserve the requested selection");
+                    assert_eq!(view.read(cx).diagnostic_state()["focused"], true);
                     if let Some(index) = row["variant_index"].as_u64() {
                         window.click("layouts", cx);
+                        assert_eq!(view.read(cx).diagnostic_state()["panel"], "layouts");
                         window.click(("variant", index as usize), cx);
                     }
                     window.render_frame(cx);
@@ -180,7 +184,23 @@ pub fn run() {
                         .cloned()
                         .or_else(|| error.downcast_ref::<&str>().map(|s| s.to_string()))
                         .unwrap_or_else(|| "Native catalog input failed".into());
-                    json!({"row":key,"status":"failed","error":error})
+                    let mut failure = json!({"row":key,"status":"failed","error":error});
+                    // Retain the actual failed view as well as its diagnostic state;
+                    // a failed assertion must never leave only an unverifiable log.
+                    if let Ok(image) =
+                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            cx.capture_screenshot(handle)
+                                .expect("capture failed native view")
+                        }))
+                    {
+                        let file = format!("failure-{:04}.png", rows.len());
+                        if image.save(output.join(&file)).is_ok() {
+                            failure["capture"] = json!(file);
+                            failure["pixel_bounds"] = json!([0, 0, image.width(), image.height()]);
+                            failure["window_pixels"] = json!([image.width(), image.height()]);
+                        }
+                    }
+                    failure
                 }
             });
         }

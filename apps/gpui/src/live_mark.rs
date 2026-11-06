@@ -200,7 +200,7 @@ impl LiveMark {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Motion, petal_sources};
     #[test]
     fn petals_keep_the_original_geometry_and_palette() {
         let sources = petal_sources();

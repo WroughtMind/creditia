@@ -2,6 +2,9 @@
 // Contact sheets contain cropped, scaled native captures, never rerendered art.
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createReadStream } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { raster } from '../../packages/render/src/index.ts';
 import { args, sha256 } from '../gpui-acceptance/common.mjs';
 
@@ -12,7 +15,7 @@ const manifest=JSON.parse(await fs.readFile(path.join(captures,'capture-manifest
 if(manifest.kind!=='native-catalog'||!Array.isArray(manifest.rows))throw new Error('Expected native catalog capture records');
 await fs.mkdir(path.join(output,'contacts'),{recursive:true});
 const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));
-const width=340,height=260,columns=3,perSheet=12,contactFiles=[];
+const width=340,height=260,columns=3,perSheet=12,contactFiles=[],captureFiles=[];
 for(let start=0;start<manifest.rows.length;start+=perSheet){
   const rows=manifest.rows.slice(start,start+perSheet),blocks=[];
   for(const [index,row]of rows.entries()){
@@ -30,6 +33,8 @@ for(let start=0;start<manifest.rows.length;start+=perSheet){
       if(![x,y,w,h].every(Number.isFinite)||w<1||h<1||x<0||y<0||x+w>windowWidth||y+h>windowHeight)throw new Error('Invalid native artwork crop');
       row.screenshot_sha256=sha256(bytes);
       row.screenshot_bytes=bytes.length;
+      row.screenshot={archive:'captures.tar.gz',path:row.capture,sha256:row.screenshot_sha256,bytes:bytes.length};
+      captureFiles.push(row.capture);
       row.contact_cell={x:left+12,y:top+48,width:width-24,height:height-76};
       blocks.push(`<svg x="${left+12}" y="${top+48}" width="${width-24}" height="${height-76}" viewBox="${x} ${y} ${w} ${h}" preserveAspectRatio="xMidYMid meet"><image width="${windowWidth}" height="${windowHeight}" href="data:image/png;base64,${bytes.toString('base64')}"/></svg>`);
       delete row.capture;
@@ -45,12 +50,22 @@ for(let start=0;start<manifest.rows.length;start+=perSheet){
   contactFiles.push(name);
   console.log(`${name}: ${rows.length} native captures`);
 }
-manifest.artifacts=[];
+// Preserve every full-resolution window alongside compact contacts. The sealed
+// archive includes original row-to-file mapping, so screenshot hashes remain
+// independently verifiable after the builder has been destroyed.
+const archive=path.join(output,'captures.tar.gz');
+execFileSync('tar',['-czf',archive,'-C',captures,'--','capture-manifest.json',...new Set(captureFiles)],{timeout:600_000,stdio:'pipe'});
+const archiveHash=createHash('sha256');
+for await(const chunk of createReadStream(archive))archiveHash.update(chunk);
+const archiveRecord={path:'captures.tar.gz',sha256:archiveHash.digest('hex'),bytes:(await fs.stat(archive)).size};
+manifest.artifacts=[archiveRecord];
+manifest.full_resolution={archive:archiveRecord,captures:captureFiles.length,png_bytes:manifest.rows.reduce((sum,row)=>sum+(row.screenshot_bytes??0),0)};
+console.log(`Retained ${captureFiles.length} full-resolution PNGs: ${manifest.full_resolution.png_bytes} bytes, archive ${archiveRecord.bytes} bytes`);
 manifest.complete=manifest.complete===true&&manifest.rows.length===manifest.scope.selected_rows&&manifest.rows.every(row=>row.status==='passed'&&row.decoded===true&&row.screenshot_sha256);
-manifest.review={contact_sheets:contactFiles.length,source:'Cropped/scaled pixels from real GPUI window captures; each full window PNG is hashed before contact assembly',preference:'Chinese, automatic grouping, visible contributor names; language/theme permutations are covered by the separate native-ui suite'};
+manifest.review={contact_sheets:contactFiles.length,source:'Cropped/scaled pixels from real GPUI window captures; each full window PNG is retained in the hashed captures.tar.gz archive',preference:'Chinese, automatic grouping, visible contributor names; language/theme permutations are covered by the separate native-ui suite'};
 manifest.cases=manifest.rows.map(row=>({...row,key:row.row}));
 delete manifest.rows;
 await fs.writeFile(path.join(output,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');
-const html=`<!doctype html><meta charset="utf-8"><title>Creditia native catalog</title><style>body{font:16px system-ui;background:#eef0f2;color:#17212b;margin:24px auto;max-width:1040px}img{display:block;width:100%;height:auto;margin:24px 0}p{line-height:1.5}a{color:#145fa0}</style><h1>Native desktop catalog</h1><p>${manifest.cases.length} rows · complete=${manifest.complete} · ${escape(manifest.provenance.candidate_sha??'local')}</p><p>Every tile below is a crop of a real GPUI focused artwork after production piece/layout input. Metadata and full-window PNG hashes are recorded in <a href="manifest.json">manifest.json</a>.</p>${contactFiles.map(file=>`<img loading="lazy" src="${file}" alt="Native artwork contact sheet">`).join('')}`;
+const html=`<!doctype html><meta charset="utf-8"><title>Creditia native catalog</title><style>body{font:16px system-ui;background:#eef0f2;color:#17212b;margin:24px auto;max-width:1040px}img{display:block;width:100%;height:auto;margin:24px 0}p{line-height:1.5}a{color:#145fa0}</style><h1>Native desktop catalog</h1><p>${manifest.cases.length} rows · complete=${manifest.complete} · ${escape(manifest.provenance.candidate_sha??'local')}</p><p>Every tile below is a crop of a real GPUI focused artwork after production piece/layout input. Metadata and full-window PNG hashes are recorded in <a href="manifest.json">manifest.json</a>. Download <a href="captures.tar.gz">all full-resolution native captures</a> for individual inspection.</p>${contactFiles.map(file=>`<img loading="lazy" src="${file}" alt="Native artwork contact sheet">`).join('')}`;
 await fs.writeFile(path.join(output,'index.html'),html);
 if(!manifest.complete)process.exitCode=1;

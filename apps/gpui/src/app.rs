@@ -151,6 +151,12 @@ struct ViewBookmark {
     focused: bool,
     saved_viewport: Option<Viewport>,
 }
+struct FocusStyles {
+    original: String,
+    current: String,
+    bookmark: ViewBookmark,
+    variants: BTreeMap<String, BTreeMap<String, String>>,
+}
 struct FocusTransition {
     from: Rect,
     started: Instant,
@@ -193,6 +199,8 @@ pub struct Creditia {
     live_mark: crate::live_mark::LiveMark,
     center_mark: crate::live_mark::LiveMark,
     platform_ui: crate::platform_ui::PlatformUi,
+    _system_motion_task: Option<Task<()>>,
+    reduced_motion: bool,
     platform_error: Option<String>,
     focus: FocusHandle,
     panel_focus: FocusHandle,
@@ -204,6 +212,8 @@ pub struct Creditia {
     dock_tween: Option<Tween>,
     dock_target: f32,
     focus_transition: Option<FocusTransition>,
+    focus_styles: Option<FocusStyles>,
+    focus_placeholder: Option<Tile>,
     saved_viewport: Option<Viewport>,
     pending_view: Option<ViewBookmark>,
     mode_viewports: BTreeMap<String, Viewport>,
@@ -323,7 +333,14 @@ impl Creditia {
         bind_keys(cx);
         apply_appearance(&preferences.appearance, window, cx);
         install_menus(&preferences.language, cx);
-        cx.set_reduce_motion(preferences.reduced_motion);
+        let system_motion_task = if fixture {
+            None
+        } else {
+            crate::platform_ui::watch_system_motion(cx)
+        };
+        let reduced_motion = preferences.reduced_motion
+            || (!fixture && crate::platform_ui::system_reduced_motion(cx).unwrap_or(false));
+        cx.set_reduce_motion(reduced_motion);
         let focus = cx.focus_handle().tab_stop(true);
         focus.focus(window, cx);
         let sign_input = cx.new(|cx| InputState::new(window, cx).placeholder("署名 / Signature"));
@@ -331,7 +348,9 @@ impl Creditia {
             cx.new(|cx| InputState::new(window, cx).placeholder("搜索项目 / Search projects"));
         let blame_file = cx.new(|cx| InputState::new(window, cx).placeholder("src/main.rs"));
         let blame_line = cx.new(|cx| InputState::new(window, cx).default_value("1"));
+        let entity = cx.entity();
         let subscriptions = vec![
+            cx.observe_release(&entity, |view, cx| view.release_images(cx)),
             cx.observe(&search_input, |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, |view, window, cx| {
                 view.window_activity(window, cx)
@@ -373,6 +392,8 @@ impl Creditia {
             live_mark: crate::live_mark::LiveMark::new(),
             center_mark: crate::live_mark::LiveMark::new(),
             platform_ui: crate::platform_ui::PlatformUi::new(),
+            _system_motion_task: system_motion_task,
+            reduced_motion,
             platform_error: None,
             focus,
             panel_focus: cx.focus_handle(),
@@ -384,6 +405,8 @@ impl Creditia {
             dock_tween: None,
             dock_target: 0.,
             focus_transition: None,
+            focus_styles: None,
+            focus_placeholder: None,
             saved_viewport: None,
             pending_view: None,
             mode_viewports: BTreeMap::new(),
@@ -522,7 +545,10 @@ impl Creditia {
                         ))
                     }
                 }
-                cx.set_reduce_motion(view.preferences.reduced_motion);
+                view.reduced_motion = view.preferences.reduced_motion
+                    || (!view.fixture
+                        && crate::platform_ui::system_reduced_motion(cx).unwrap_or(false));
+                cx.set_reduce_motion(view.reduced_motion);
                 match view.preferences.appearance {
                     Appearance::System => Theme::sync_system_appearance(None, cx),
                     Appearance::Light => Theme::change(ThemeMode::Light, None, cx),
@@ -625,12 +651,17 @@ impl Creditia {
         if !self.fixture {
             return;
         }
+        let style = self
+            .style()
+            .and_then(|style| style["id"].as_str())
+            .unwrap_or(&self.preferences.style)
+            .to_string();
         for tile in &mut self.tiles {
             if tile.image.is_some() || tile.error.is_some() {
                 continue;
             }
             if let Some(art) = self.fixture_artworks.get(&(
-                self.preferences.style.clone(),
+                style.clone(),
                 tile.spec.piece.clone(),
                 tile.spec.variant.clone().unwrap_or_default(),
             )) {
@@ -687,7 +718,46 @@ impl Creditia {
         view.load_catalog(cx);
         view
     }
+    fn release_images(&mut self, cx: &mut App) {
+        ImageSource::Image(self.logo_image.clone()).remove_asset(cx);
+        if let Some(control) = &self.animation_control {
+            control.cancel();
+        }
+        if let Some(cancel) = &self.preview_cancellation {
+            cancel.cancel();
+        }
+        if let Some(cancel) = &self.analysis_cancellation {
+            cancel.cancel();
+        }
+        if let Some(cancel) = &self.export_cancellation {
+            cancel.cancel();
+        }
+        if let Some(background) = &self.background {
+            background.stop();
+        }
+        if let Some(tile) = self.focus_placeholder.take() {
+            if let Some(image) = tile.image {
+                ImageSource::Image(image).remove_asset(cx);
+            }
+        }
+        for tile in &mut self.tiles {
+            if let Some(image) = tile.image.take() {
+                ImageSource::Image(image).remove_asset(cx);
+            }
+        }
+        if let Some(play) = self.playback.take() {
+            if let Some(frame) = play.previous {
+                frame.release(cx);
+            }
+            for (_, frame) in play.frames {
+                frame.release(cx);
+            }
+        }
+    }
     fn window_activity(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.fixture {
+            crate::platform_ui::refresh_system_motion(cx);
+        }
         let active = window.is_window_active() && self.window_visible;
         if let Some(background) = &self.background {
             background.set_active(active);
@@ -743,7 +813,10 @@ impl Creditia {
                             view.text("已导入原有桌面设置", "Previous desktop settings imported")
                                 .into(),
                         );
-                        cx.set_reduce_motion(view.preferences.reduced_motion);
+                        view.reduced_motion = view.preferences.reduced_motion
+                            || (!view.fixture
+                                && crate::platform_ui::system_reduced_motion(cx).unwrap_or(false));
+                        cx.set_reduce_motion(view.reduced_motion);
                         match view.preferences.appearance {
                             Appearance::System => Theme::sync_system_appearance(None, cx),
                             Appearance::Light => Theme::change(ThemeMode::Light, None, cx),
@@ -776,7 +849,18 @@ impl Creditia {
         }
     }
     fn project_preferences(&self) -> crate::ProjectPreferences {
-        self.preferences.project(self.selected.as_deref())
+        let mut preferences = self.preferences.project(self.selected.as_deref());
+        if let Some(styles) = &self.focus_styles {
+            if styles.current != styles.original {
+                preferences.variants = styles
+                    .variants
+                    .get(&styles.current)
+                    .cloned()
+                    .unwrap_or_default();
+                preferences.order.clear();
+            }
+        }
+        preferences
     }
     fn group(&self) -> String {
         self.project_preferences().group
@@ -804,11 +888,16 @@ impl Creditia {
         self.selected_tile.and_then(|i| self.tiles.get(i))
     }
     fn resolve_style(&mut self) {
+        let style = self
+            .focus_styles
+            .as_ref()
+            .map(|styles| styles.current.as_str())
+            .unwrap_or(&self.preferences.style);
         self.style_index = self
             .catalog
             .as_ref()
             .and_then(|c| c["styles"].as_array())
-            .and_then(|s| s.iter().position(|s| s["id"] == self.preferences.style))
+            .and_then(|s| s.iter().position(|entry| entry["id"] == style))
             .unwrap_or(0);
     }
     fn stop_playback(&mut self, cx: &mut Context<Self>) {
@@ -830,6 +919,48 @@ impl Creditia {
             }
         }
     }
+    fn drop_focus_placeholder(&mut self, cx: &mut App) {
+        if let Some(tile) = self.focus_placeholder.take() {
+            if let Some(image) = tile.image {
+                if !self.tiles.iter().any(|tile| {
+                    tile.image
+                        .as_ref()
+                        .is_some_and(|kept| Arc::ptr_eq(kept, &image))
+                }) {
+                    ImageSource::Image(image).remove_asset(cx);
+                }
+            }
+        }
+    }
+    fn retain_focus_preview(&mut self, cx: &mut Context<Self>) {
+        if !self.focused {
+            return;
+        }
+        if let Some(tile) = self
+            .current_tile()
+            .filter(|tile| tile.art.is_some() && tile.image.is_some())
+            .cloned()
+        {
+            self.drop_focus_placeholder(cx);
+            self.focus_placeholder = Some(tile);
+        }
+    }
+    fn prepare_focus_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.focus_placeholder.is_none() || !self.focused {
+            return;
+        }
+        if self.current_tile().is_none_or(|tile| tile.error.is_some()) {
+            self.drop_focus_placeholder(cx);
+            return;
+        }
+        if let Some(image) = self.current_tile().and_then(|tile| tile.image.clone()) {
+            if image.get_render_image(window, cx).is_some() {
+                self.drop_focus_placeholder(cx);
+            } else if self.window_visible && window.is_window_active() {
+                window.request_animation_frame();
+            }
+        }
+    }
     fn clear_preview(&mut self, cx: &mut Context<Self>) {
         if let Some(c) = self.preview_cancellation.take() {
             c.cancel();
@@ -840,7 +971,14 @@ impl Creditia {
         self.stop_playback(cx);
         for tile in &mut self.tiles {
             if let Some(image) = tile.image.take() {
-                ImageSource::Image(image).remove_asset(cx);
+                if !self
+                    .focus_placeholder
+                    .as_ref()
+                    .and_then(|tile| tile.image.as_ref())
+                    .is_some_and(|kept| Arc::ptr_eq(kept, &image))
+                {
+                    ImageSource::Image(image).remove_asset(cx);
+                }
             }
         }
         self.tiles.clear();
@@ -922,6 +1060,7 @@ impl Creditia {
         self.restore_fixture_artworks();
     }
     fn rebuild_preserving_view(&mut self, cx: &mut Context<Self>) {
+        self.retain_focus_preview(cx);
         let bookmark = self.bookmark();
         self.rebuild_tiles(cx);
         self.restore_bookmark(bookmark);
@@ -978,6 +1117,10 @@ impl Creditia {
 
     fn select(&mut self, id: String, cx: &mut Context<Self>) {
         let same_project = self.selected.as_ref() == Some(&id);
+        if !same_project {
+            self.focus_styles = None;
+            self.drop_focus_placeholder(cx);
+        }
         let refresh_projects = same_project && !self.all_archives.is_empty();
         let refresh_blame = same_project
             .then(|| {
@@ -1446,11 +1589,16 @@ impl Creditia {
     fn screen_rect(&self, index: usize) -> Rect {
         let target = if self.focused && self.selected_tile == Some(index) {
             let art = self
-                .playback
+                .focus_placeholder
                 .as_ref()
-                .and_then(Playback::displayed)
-                .map(|f| f.art.as_ref())
-                .or_else(|| self.tiles.get(index).and_then(|t| t.art.as_deref()));
+                .and_then(|tile| tile.art.as_deref())
+                .or_else(|| {
+                    self.playback
+                        .as_ref()
+                        .and_then(Playback::displayed)
+                        .map(|f| f.art.as_ref())
+                        .or_else(|| self.tiles.get(index).and_then(|t| t.art.as_deref()))
+                });
             let (w, h) = art.map(|a| (a.w, a.h)).unwrap_or((640., 480.));
             focused_rect(w, h, self.viewport, self.viewport_size)
         } else {
@@ -1726,18 +1874,97 @@ impl Creditia {
         }
     }
     fn choose_style(&mut self, index: usize, cx: &mut Context<Self>) {
-        if let Some(style) = self
+        let Some(style) = self
             .catalog
             .as_ref()
-            .and_then(|c| c["styles"].as_array())
-            .and_then(|s| s.get(index))
-        {
-            self.preferences.style = style["id"].as_str().unwrap_or("").into();
+            .and_then(|catalog| catalog["styles"].as_array())
+            .and_then(|styles| styles.get(index))
+        else {
+            return;
+        };
+        let id = style["id"].as_str().unwrap_or("").to_string();
+        if self.focused {
+            let Some(piece) = self.current_tile().map(|tile| tile.spec.piece.clone()) else {
+                return;
+            };
+            if !style["pieces"]
+                .as_array()
+                .is_some_and(|pieces| pieces.iter().any(|entry| entry["id"] == piece))
+            {
+                return;
+            }
+            if self.focus_styles.is_none() {
+                let mut bookmark = self.bookmark();
+                bookmark.focused = false;
+                bookmark.viewport = self.saved_viewport.unwrap_or_default();
+                bookmark.saved_viewport = None;
+                let original = self
+                    .style()
+                    .and_then(|style| style["id"].as_str())
+                    .unwrap_or(&self.preferences.style)
+                    .to_string();
+                self.focus_styles = Some(FocusStyles {
+                    original: original.clone(),
+                    current: original,
+                    bookmark,
+                    variants: BTreeMap::new(),
+                });
+            }
+            self.focus_styles.as_mut().unwrap().current = id;
+            let saved = self.focus_styles.as_ref().unwrap().bookmark.viewport;
+            self.retain_focus_preview(cx);
+            self.style_index = index;
+            self.panel = None;
+            self.rebuild_tiles(cx);
+            self.select_piece(piece, cx);
+            self.saved_viewport = Some(saved);
+            self.focus_transition = None;
+        } else {
+            self.focus_styles = None;
+            self.preferences.style = id;
             self.style_index = index;
             self.persist();
             self.panel = None;
             self.rebuild_tiles(cx);
         }
+    }
+    fn restore_global_style(&mut self, cx: &mut Context<Self>) -> bool {
+        self.drop_focus_placeholder(cx);
+        let Some(styles) = self.focus_styles.take() else {
+            return false;
+        };
+        self.resolve_style();
+        self.rebuild_tiles(cx);
+        self.restore_bookmark(styles.bookmark);
+        self.focused = false;
+        self.focus_transition = None;
+        true
+    }
+    fn apply_focus_style(&mut self, cx: &mut Context<Self>) {
+        self.drop_focus_placeholder(cx);
+        let Some(styles) = self.focus_styles.take() else {
+            return;
+        };
+        let mut bookmark = self.bookmark();
+        bookmark.focused = false;
+        bookmark.viewport = styles.bookmark.viewport;
+        bookmark.saved_viewport = None;
+        self.preferences.style = styles.current.clone();
+        if let Some(id) = self.selected.clone() {
+            let preferences = self.preferences.projects.entry(id).or_default();
+            preferences.variants = styles
+                .variants
+                .get(&styles.current)
+                .cloned()
+                .unwrap_or_default();
+            preferences.order.clear();
+        }
+        self.persist();
+        self.rebuild_tiles(cx);
+        self.restore_bookmark(bookmark);
+        self.focused = false;
+        self.focus_transition = None;
+        cx.notify();
     }
     fn step_style(&mut self, delta: isize, cx: &mut Context<Self>) {
         let count = self
@@ -1764,6 +1991,7 @@ impl Creditia {
         self.rebuild_preserving_view(cx);
     }
     fn set_view(&mut self, mode: &str, cx: &mut Context<Self>) {
+        self.restore_global_style(cx);
         let previous = if self.focused {
             self.saved_viewport.unwrap_or_default()
         } else {
@@ -1793,6 +2021,7 @@ impl Creditia {
         cx.notify();
     }
     fn select_tile(&mut self, index: usize, focus: bool, cx: &mut Context<Self>) {
+        self.drag = None;
         if index >= self.tiles.len() {
             return;
         }
@@ -1809,7 +2038,7 @@ impl Creditia {
         }
         self.hover = None;
         self.panel = None;
-        self.focus_transition = if entering && !self.preferences.reduced_motion {
+        self.focus_transition = if entering && !self.reduced_motion {
             Some(FocusTransition {
                 from: source,
                 started: Instant::now(),
@@ -1820,11 +2049,15 @@ impl Creditia {
         cx.notify();
     }
     fn close_focus(&mut self, cx: &mut Context<Self>) {
+        if self.restore_global_style(cx) {
+            cx.notify();
+            return;
+        }
         let source = self.selected_tile.map(|i| self.screen_rect(i));
         self.focused = false;
         self.viewport = self.saved_viewport.take().unwrap_or_default();
         self.stop_playback(cx);
-        self.focus_transition = if self.preferences.reduced_motion {
+        self.focus_transition = if self.reduced_motion {
             None
         } else {
             source.map(|from| FocusTransition {
@@ -1947,6 +2180,23 @@ impl Creditia {
         };
         let key = tile.spec.key.clone();
         let piece = tile.spec.piece.clone();
+        if self
+            .focus_styles
+            .as_ref()
+            .is_some_and(|styles| styles.current != styles.original)
+        {
+            let specs = self
+                .tiles
+                .iter()
+                .map(|tile| tile.spec.clone())
+                .collect::<Vec<_>>();
+            let styles = self.focus_styles.as_mut().unwrap();
+            let variants = styles.variants.entry(styles.current.clone()).or_default();
+            if swap_variant(&specs, variants, &key, &variant) {
+                self.rebuild_preserving_view(cx);
+            }
+            return;
+        }
         let Some(id) = self.selected.clone() else {
             return;
         };
@@ -2079,8 +2329,19 @@ impl Creditia {
     }
     fn toggle_motion(&mut self, _: &ToggleMotion, _: &mut Window, cx: &mut Context<Self>) {
         self.preferences.reduced_motion = !self.preferences.reduced_motion;
-        cx.set_reduce_motion(self.preferences.reduced_motion);
+        self.reduced_motion = self.preferences.reduced_motion
+            || (!self.fixture && crate::platform_ui::system_reduced_motion(cx).unwrap_or(false));
+        cx.set_reduce_motion(self.reduced_motion);
         self.stop_playback(cx);
+        if self.reduced_motion {
+            self.focus_transition = None;
+            self.panel_tween = None;
+            self.dock_tween = None;
+            if self.panel_closing {
+                self.panel_closing = false;
+                self.panel = None;
+            }
+        }
         self.persist();
         cx.notify();
     }
@@ -2127,7 +2388,7 @@ impl Creditia {
         };
         let selected = self.selected_tile;
         let generation = self.preview_generation;
-        request["reducedMotion"] = json!(self.preferences.reduced_motion);
+        request["reducedMotion"] = json!(self.reduced_motion);
         if !self.focused {
             self.saved_viewport = Some(self.viewport);
         }
@@ -2555,6 +2816,8 @@ impl Creditia {
         }));
     }
     fn open_panel(&mut self, panel: Panel, window: &mut Window, cx: &mut Context<Self>) {
+        self.drag = None;
+        self.hovered_tile = None;
         if self.panel == Some(panel) && !self.panel_closing {
             self.close_panel(window, cx);
             return;
@@ -2568,7 +2831,7 @@ impl Creditia {
         }
         self.panel = Some(panel);
         self.panel_closing = false;
-        self.panel_tween = (!self.preferences.reduced_motion).then_some(Tween {
+        self.panel_tween = (!self.reduced_motion).then_some(Tween {
             from,
             to: 1.,
             started: Instant::now(),
@@ -2595,7 +2858,7 @@ impl Creditia {
         cx.notify();
     }
     fn close_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.preferences.reduced_motion {
+        if self.reduced_motion {
             self.panel = None;
             self.panel_tween = None;
             self.panel_closing = false;
@@ -2954,6 +3217,9 @@ impl Creditia {
     fn show_all_projects(&mut self, cx: &mut Context<Self>) {
         if self.fixture {
             return;
+        }
+        if self.selected.as_deref() != Some("__all__") {
+            self.focus_styles = None;
         }
         self.pending_view = if self.selected.as_deref() == Some("__all__") && self.raw.is_some() {
             Some(self.bookmark())
@@ -3417,6 +3683,10 @@ impl Creditia {
                 self.drag = None;
             }
         }
+        if self.focused && self.focus_placeholder.is_some() {
+            self.hover = None;
+            return;
+        }
         let mut found = None;
         let mut hovered = None;
         for (index, tile) in self.tiles.iter().enumerate() {
@@ -3475,6 +3745,10 @@ impl Creditia {
         }
     }
     fn pointer_up(&mut self, event: &MouseUpEvent, cx: &mut Context<Self>) {
+        if self.panel.is_some() {
+            self.drag = None;
+            return;
+        }
         let Some(drag) = self.drag.take() else {
             return;
         };
@@ -3540,7 +3814,12 @@ impl Drop for Creditia {
 }
 impl Creditia {
     fn artwork_element(&self, index: usize, cx: &mut Context<Self>) -> AnyElement {
-        let tile = &self.tiles[index];
+        let selection = &self.tiles[index];
+        let tile = if self.focused {
+            self.focus_placeholder.as_ref().unwrap_or(selection)
+        } else {
+            selection
+        };
         let r = self.screen_rect(index);
         let selected = self.selected_tile == Some(index);
         let dragging = self
@@ -3579,6 +3858,10 @@ impl Creditia {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |view, _: &MouseDownEvent, _, cx| {
+                    if view.panel.is_some() {
+                        cx.stop_propagation();
+                        return;
+                    }
                     view.selected_tile = Some(index);
                     view.drag = Some(DragState {
                         tile: if view.focused || view.preferences.view == "roam" {
@@ -3775,6 +4058,10 @@ impl Creditia {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|view, _, _, cx| {
+                    if view.panel.is_some() {
+                        cx.stop_propagation();
+                        return;
+                    }
                     view.drag = Some(DragState {
                         tile: None,
                         clicked_tile: None,
@@ -3835,7 +4122,7 @@ impl Creditia {
                         self.progress.as_ref().and_then(analysis_fraction),
                         true,
                         false,
-                        self.preferences.reduced_motion,
+                        self.reduced_motion,
                         64.,
                         window,
                         cx,
@@ -3961,6 +4248,7 @@ impl Creditia {
         let border = cx.theme().border;
         let mut dock = div()
             .id("export-dock")
+            .occlude()
             .h(px(self.dock_height))
             .overflow_hidden()
             .flex()
@@ -4265,6 +4553,16 @@ impl Creditia {
                         Button::new(("style", index))
                             .ghost()
                             .label(name)
+                            .disabled(
+                                self.focused
+                                    && self.current_tile().is_some_and(|tile| {
+                                        !style["pieces"].as_array().is_some_and(|pieces| {
+                                            pieces
+                                                .iter()
+                                                .any(|piece| piece["id"] == tile.spec.piece)
+                                        })
+                                    }),
+                            )
                             .when(index == self.style_index, |b| b.bg(cx.theme().muted))
                             .on_click(
                                 cx.listener(move |view, _, _, cx| view.choose_style(index, cx)),
@@ -4457,6 +4755,13 @@ impl Creditia {
                 }
             }
             Panel::Settings => {
+                if !self.fixture && crate::platform_ui::system_reduced_motion(cx).unwrap_or(false) {
+                    body = body.child(div().text_sm().text_color(muted).child(self.text(
+                        "系统已启用减少动态效果。",
+                        "Reduced motion is enabled by the operating system.",
+                    )));
+                }
+
                 if let Some(error) = &self.migration_error {
                     body = body.child(div().text_sm().child(error.clone())).child(
                         Button::new("retry-settings-migration")
@@ -4955,6 +5260,7 @@ impl Creditia {
         let openness = self.panel_tween.map(Tween::value).unwrap_or(1.);
         let modal = div()
             .id("panel")
+            .occlude()
             .key_context("CreditiaModal")
             .opacity(openness)
             .mt(px((1. - openness) * 16.))
@@ -4996,6 +5302,15 @@ impl Creditia {
             div()
                 .absolute()
                 .inset_0()
+                .occlude()
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|view, _, _, cx| {
+                        view.drag = None;
+                        cx.stop_propagation();
+                    }),
+                )
+                .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .bg(rgba(0x00000066))
                 .flex()
                 .items_center()
@@ -5035,11 +5350,32 @@ impl Creditia {
             .focused
             .then(|| self.current_tile().and_then(|tile| tile.art.as_deref()))
             .flatten();
-        json!({"selected_id":self.current_tile().map(|tile| tile.identity.clone()),"art_width":focused_art.map(|art|art.w),"art_height":focused_art.map(|art|art.h),"hit_count":focused_art.map(|art|art.hits.len()),"view":self.preferences.view,"focused":self.focused,"group":self.group(),"named":self.preferences.named,"selected_tile":self.selected_tile,"selected_piece":self.current_tile().map(|t|t.spec.piece.clone()),"selected_variant":self.current_tile().and_then(|t|t.spec.variant.clone()),"zoom":self.viewport.zoom,"pan_x":self.viewport.x,"pan_y":self.viewport.y,"tile_count":self.tiles.len(),"style":self.preferences.style,"playing":self.playback.as_ref().is_some_and(|p|p.playing),"loading":self.loading,"panel":self.panel.map(|p|match p{Panel::Projects=>"projects",Panel::Styles=>"styles",Panel::Pieces=>"pieces",Panel::Layouts=>"layouts",Panel::Diagnostics=>"diagnostics",Panel::Blame=>"blame",Panel::Exports=>"exports",Panel::Settings=>"settings",Panel::Project=>"project",Panel::Details=>"details"})})
+        json!({"selected_id":self.current_tile().map(|tile| tile.identity.clone()),"art_width":focused_art.map(|art|art.w),"art_height":focused_art.map(|art|art.h),"hit_count":focused_art.map(|art|art.hits.len()),"view":self.preferences.view,"focused":self.focused,"group":self.group(),"named":self.preferences.named,"selected_tile":self.selected_tile,"selected_piece":self.current_tile().map(|t|t.spec.piece.clone()),"selected_variant":self.current_tile().and_then(|t|t.spec.variant.clone()),"zoom":self.viewport.zoom,"pan_x":self.viewport.x,"pan_y":self.viewport.y,"tile_count":self.tiles.len(),"style":self.style().map(|style|style["id"].clone()),"global_style":self.preferences.style,"reduced_motion":self.reduced_motion,"preview_style":self.focus_styles.as_ref().is_some_and(|styles|styles.current!=styles.original),"playing":self.playback.as_ref().is_some_and(|p|p.playing),"loading":self.loading,"panel":self.panel.map(|p|match p{Panel::Projects=>"projects",Panel::Styles=>"styles",Panel::Pieces=>"pieces",Panel::Layouts=>"layouts",Panel::Diagnostics=>"diagnostics",Panel::Blame=>"blame",Panel::Exports=>"exports",Panel::Settings=>"settings",Panel::Project=>"project",Panel::Details=>"details"})})
     }
 }
 impl Render for Creditia {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let reduced = self.preferences.reduced_motion
+            || (!self.fixture && crate::platform_ui::system_reduced_motion(cx).unwrap_or(false));
+        // Kit also observes OS settings. Keep its effective value in sync even
+        // when an OS change does not change our app-or-system preference.
+        if cx.reduce_motion() != reduced {
+            cx.set_reduce_motion(reduced);
+        }
+        if reduced != self.reduced_motion {
+            self.reduced_motion = reduced;
+            if reduced {
+                self.stop_playback(cx);
+                self.focus_transition = None;
+                self.panel_tween = None;
+                self.dock_tween = None;
+                if self.panel_closing {
+                    self.panel_closing = false;
+                    self.panel = None;
+                }
+            }
+        }
+
         if self.panel.is_none() && !self.panel_closing {
             if let Some(focus) = self.return_focus.take() {
                 focus.focus(window, cx);
@@ -5064,7 +5400,7 @@ impl Render for Creditia {
         let target = if self.export_open { 148. } else { 0. };
         if target != self.dock_target {
             self.dock_target = target;
-            self.dock_tween = (!self.preferences.reduced_motion).then_some(Tween {
+            self.dock_tween = (!self.reduced_motion).then_some(Tween {
                 from: self.dock_height,
                 to: target,
                 started: Instant::now(),
@@ -5160,6 +5496,7 @@ impl Render for Creditia {
         if let Some(background) = &self.background {
             background.set_active(window.is_window_active() && self.window_visible);
         }
+        self.prepare_focus_preview(window, cx);
         let animation_visible = self.selected_tile.is_some_and(|index| {
             self.screen_rect(index).intersects(Rect {
                 x: 0.,
@@ -5194,7 +5531,7 @@ impl Render for Creditia {
                 && self.panel.is_none()
                 && window.is_window_active()
                 && self.window_visible
-                && !self.preferences.reduced_motion
+                && !self.reduced_motion
             {
                 play.elapsed = play.started.elapsed();
                 let desired =
@@ -5228,7 +5565,7 @@ impl Render for Creditia {
                     || !window.is_window_active()
                     || !self.window_visible
                     || self.panel.is_some()
-                    || self.preferences.reduced_motion)
+                    || self.reduced_motion)
             {
                 play.elapsed = play.started.elapsed();
                 play.playing = false;
@@ -5407,7 +5744,7 @@ impl Render for Creditia {
                 self.progress.as_ref().and_then(analysis_fraction),
                 self.loading || self.job_busy || self.automatic_job.is_some(),
                 self.error.is_some(),
-                self.preferences.reduced_motion,
+                self.reduced_motion,
                 20.,
                 window,
                 cx,
@@ -5495,6 +5832,15 @@ impl Render for Creditia {
         };
         let mut controls = div()
             .id("view-controls")
+            .occlude()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|view, _, _, cx| {
+                    view.drag = None;
+                    cx.stop_propagation();
+                }),
+            )
+            .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .absolute()
             .left_0()
             .right_0()
@@ -5616,6 +5962,19 @@ impl Render for Creditia {
                             view.close_focus(cx);
                         })),
                 );
+        }
+        if self.focused
+            && self
+                .focus_styles
+                .as_ref()
+                .is_some_and(|styles| styles.current != styles.original)
+        {
+            controls = controls.child(
+                Button::new("apply-focus-style")
+                    .ghost()
+                    .label(self.text("设为全局风格", "Use for all cards"))
+                    .on_click(cx.listener(|view, _, _, cx| view.apply_focus_style(cx))),
+            );
         }
         if self.focused || self.preferences.view == "roam" {
             controls = controls
@@ -6249,7 +6608,7 @@ fn analysis_fraction(progress: &Value) -> Option<f64> {
 }
 #[cfg(test)]
 mod input_tests {
-    use super::*;
+    use super::key_bindings;
     #[test]
     fn all_shortcuts_parse_on_both_platform_families() {
         for modifier in ["cmd", "ctrl"] {

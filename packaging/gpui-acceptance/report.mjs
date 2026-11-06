@@ -28,7 +28,7 @@ function verifiedStructuralEquivalence(value) {
     value.rules.every(rule => ['portable_badge_known_fallback', 'terminal_off_canvas_rain'].includes(rule)) &&
     value.native_pixels?.length === 2 && [1, 2].every(scale => value.native_pixels.some(p => p.scale === scale && p.equal === true));
 }
-const failures = [], manifests = [], rows = new Map(), native = [], nativeCatalog = [], browserCatalog = [], performance = [], packages = [];
+const failures = [], manifests = [], rows = new Map(), native = [], nativeCatalog = [], browserCatalog = [], performance = [], packages = [], featureChecks = [];
 const validatedArtifacts = new Set();
 function checkArtifacts(value, dir) {
   if (!value || typeof value !== 'object') return;
@@ -45,7 +45,7 @@ for (const file of files) {
     if (manifest.schema_version !== 1) throw Error('Unsupported evidence schema');
     if (manifest.provenance?.candidate_sha !== options['candidate-sha']) throw Error('Evidence belongs to a different candidate commit');
     if (manifest.complete !== true) throw Error('Evidence run did not complete');
-    if (['render-matrix', 'native-ui', 'native-catalog', 'browser-catalog'].includes(manifest.kind) && (!Array.isArray(manifest.cases) || !manifest.cases.length)) throw Error('Rendering/UI evidence has no cases');
+    if (['render-matrix', 'native-ui', 'native-catalog', 'browser-catalog', 'feature-checks'].includes(manifest.kind) && (!Array.isArray(manifest.cases) || !manifest.cases.length)) throw Error('Rendering/UI evidence has no cases');
     // Only declared artifacts are rooted at the manifest; fixture input paths
     // can refer to the checkout and must not be mistaken for output artifacts.
     checkArtifacts(manifest.artifacts, path.dirname(file));
@@ -63,6 +63,14 @@ for (const file of files) {
         if (!rows.has(c.row)) rows.set(c.row, []);
         rows.get(c.row).push({ status: c.status, key: c.key, manifest: relative, fixture_kind: manifest.scope.fixtures.find(f => f.id === c.fixture)?.kind,
           preference: c.options?.id, motion: c.motion?.status ?? 'not_run', exports: c.exports?.status ?? 'not_run' });
+      }
+    } else if (manifest.kind === 'feature-checks') {
+      for (const c of manifest.cases) {
+        const feature = features.find(feature => feature.id === c.feature_id);
+        if (!feature || !c.key || !feature.checks.includes(c.check)) throw Error(`Unknown semantic feature check ${c.feature_id}/${c.check}`);
+        if (!['passed', 'failed', 'not_run'].includes(c.status)) throw Error(`Unknown feature check status ${c.status}`);
+        if (c.status === 'passed' && (!c.behavior || !c.test_id || !(c.artifacts?.length || manifest.artifacts?.length))) throw Error(`Feature check lacks actual behavior/test evidence: ${c.key}`);
+        featureChecks.push({ ...c, manifest: relative });
       }
     } else if (manifest.kind === 'browser-catalog') {
       const seen = new Set();
@@ -144,13 +152,21 @@ const requiredPieces = [...new Set(matrix.map(row => row.piece))];
 const motionCoverage = [...new Set(acceptedReviews.filter(review => review.motion === 'accepted').map(review => expected.get(review.key).style))];
 const reviewedArtwork = requiredStyles.every(style => styleCoverage.includes(style)) && requiredPieces.every(piece => pieceCoverage.includes(piece)) &&
   requiredStyles.every(style => motionCoverage.includes(style));
-const reviewedFeatures = features.every(feature => {
+const featureCoverage = features.map(feature => {
   const review = featureEntries.get(feature.id);
-  return review?.status === 'accepted' && hasEvidence(review) && Array.isArray(review.checks) &&
-    feature.checks.every(check => review.checks.some(c => c.name === check && c.status === 'accepted'));
+  const checked = feature.checks.map(name => {
+    const executable = featureChecks.filter(c => c.feature_id === feature.id && c.check === name);
+    const reviewed = review?.status === 'accepted' && hasEvidence(review) && Array.isArray(review.checks) &&
+      review.checks.some(c => c.name === name && c.status === 'accepted');
+    return { name, status: executable.some(c => c.status === 'failed') ? 'failed' : executable.some(c => c.status === 'passed') || reviewed ? 'passed' : 'not_run',
+      evidence: executable.map(c => `${c.manifest}#${c.key}`), recorded_review: !!reviewed };
+  });
+  return { id: feature.id, name: feature.name, checks: checked, complete: checked.every(c => c.status === 'passed') };
 });
-const manualComplete = manual?.candidate_sha === options['candidate-sha'] && typeof manual.reviewer === 'string' && manual.reviewer.trim().length > 0 &&
-  !Number.isNaN(Date.parse(manual.reviewed_at)) && reviewedArtwork && reviewedFeatures;
+const featuresComplete = featureCoverage.every(feature => feature.complete);
+const reviewIdentity = manual?.candidate_sha === options['candidate-sha'] && typeof manual.reviewer === 'string' && manual.reviewer.trim().length > 0 &&
+  !Number.isNaN(Date.parse(manual.reviewed_at));
+const manualComplete = reviewIdentity && reviewedArtwork;
 const realVisualInput = artwork.some(row => row.evidence.some(e => e.fixture_kind === 'real_public_git_archive' && e.status === 'matched'));
 const nativeCatalogPassed = new Set(nativeCatalog.flatMap(m => m.cases.filter(c => c.status === 'passed').map(c => c.row)));
 const nativeCatalogComplete = matrix.filter(row => row.desktop === 'true').every(row => nativeCatalogPassed.has([row.renderer, row.style, row.piece, row.variant].join('/')));
@@ -163,14 +179,14 @@ const releaseReady = failures.length === 0 && artwork.every(r => r.status === 'm
   ['darwin-arm64', 'darwin-x64', 'win32-x64', 'linux-x64'].every(platform =>
     packages.some(p => p.platform === platform && p.acceptance?.passed === true && p.tests?.length) &&
     packages.some(p => p.platform === platform && p.acceptance?.passed === true && p.installers?.length)) &&
-  manualComplete && realVisualInput && nativeCatalogComplete && browserCatalogComplete;
+  manualComplete && featuresComplete && realVisualInput && nativeCatalogComplete && browserCatalogComplete;
 const report = { schema_version: 1, candidate_sha: options['candidate-sha'], generated_at: new Date().toISOString(),
   release_ready: releaseReady, evidence_manifests: manifests, invalid_evidence: failures,
-  real_project_visual_sample: realVisualInput,
+  real_project_visual_sample: realVisualInput, feature_coverage: featureCoverage, features_complete: featuresComplete,
   artwork_summary: countBy(artwork, r => r.status), artwork, native, native_platforms_complete: nativePlatformsComplete, browser_catalog: { complete: browserCatalogComplete, passed_rows: browserCatalogPassed.size, manifests: browserCatalog }, native_catalog: { complete: nativeCatalogComplete, passed_rows: nativeCatalogPassed.size, manifests: nativeCatalog }, native_failures: nativeFailures,
   performance_comparisons: performanceComparisons, additional_performance: performance.filter(p => !comparisonScenarios.includes(p.scenario)).map(p => ({ manifest: p.manifest, scenario: p.scenario, verified: p.workload_verified })), package_platforms: packages.map(p => ({ platform: p.platform, acceptance: p.acceptance, manifest: p.manifest })),
   recorded_review: { status: manual ? manualComplete ? 'complete' : 'incomplete' : 'not_provided', reviewed_artworks: manualEntries.size,
-    reviewed_features: featureEntries.size, style_coverage: styleCoverage, piece_coverage: pieceCoverage, motion_style_coverage: motionCoverage, source: reviewPath ?? null },
+    reviewed_features: featureEntries.size, executable_feature_checks: featureChecks.length, style_coverage: styleCoverage, piece_coverage: pieceCoverage, motion_style_coverage: motionCoverage, source: reviewPath ?? null },
   limitations: ['Machine rendering matches do not verify native UI placement or interaction.',
     'Empty outputs require a data-rich fixture before a combination can be accepted.',
     'Named visual/interaction reviews cover every style and artwork family; every row additionally requires machine evidence, and every feature requires checked behavior.',
@@ -186,6 +202,7 @@ const md = [`# Creditia GPUI acceptance`, '', `Candidate: \`${report.candidate_s
   ...manifests.map(m => `| ${m.kind} | ${m.path} | ${m.cases} |`), '',
   '## Remaining gates', '',
   `- Invalid or incomplete evidence: ${failures.length}.`, `- Native UI cases not passed: ${nativeFailures.length}.`,
+  `- Behavioral feature checks not passed: ${featureCoverage.reduce((n, feature) => n + feature.checks.filter(c => c.status !== 'passed').length, 0)}.`,
   `- Matched baseline/candidate performance scenarios: ${performanceComparisons.filter(p => p.status === 'comparable').length}.`,
   `- Recorded visual/interaction review: ${manual ? 'provided; see report.json for candidate and gate checks' : 'not provided'}.`, '',
   ...report.limitations.map(l => `- ${l}`), '',

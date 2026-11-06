@@ -80,8 +80,9 @@ native rendering fails the acceptance gate.
 A separate Linux catalog job selects all 1,482 desktop artwork/layout rows through
 those production controls, waits for native image decoding, checks dimensions,
 visible bounds and hit-region counts, and captures every focused artwork. Its
-contact sheets contain actual native pixels, with full-window screenshot hashes
-in the accompanying manifest. The source fixture includes profile and blame
+contact sheets contain actual native pixels. Every full-resolution window PNG is
+also retained in `captures.tar.gz`; the manifest records archive and individual
+screenshot hashes for independent review. The source fixture includes profile and blame
 contexts; empty outputs fail this gate.
 
 ```sh
@@ -126,6 +127,11 @@ the original public Git repository and compares representative artworks from tha
 real archive. Neither input is relabeled as private agent-log evidence.
 
 `packaging/gpui/INSTALL.md` documents installation and reversible upgrades.
+The gated `gpui-release` workflow can create a draft prerelease from already
+validated artifacts without rebuilding them. An explicit branch request or
+manual run supplies the immutable candidate, successful evidence runs and
+recorded review; the combined acceptance gate must pass first. Requests default
+to disabled. See `packaging/gpui/RELEASE.md` for the exact procedure.
 Candidate artifacts are not a published stable release. They follow the existing
 distribution policy: macOS signatures are ad hoc, and Windows binaries are
 unsigned. The installation guide documents the corresponding OS trust prompts.

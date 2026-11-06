@@ -37,3 +37,4 @@ _site/
 # Generated migration validation artifacts
 /evidence/
 /packages/embed/browser-evidence/
+__pycache__/

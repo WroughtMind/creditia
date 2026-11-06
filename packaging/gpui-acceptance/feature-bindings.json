@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "meaning": "Only tests whose assertions were inspected are mapped. Missing test outcomes remain not_run; this is not a source-coverage pass list.",
+  "bindings": [
+    {
+      "feature_id": "project-open",
+      "check": "读取项目档案及版本戳",
+      "required_tests": [
+        "existing_library_live_archive_and_snapshot_keep_their_contract"
+      ],
+      "behavior": "Reads live credits, falls back to retained snapshot after malformed live bytes, and verifies archive stamp and missing-project errors."
+    },
+    {
+      "feature_id": "remove-readd",
+      "check": "只移除列表记录",
+      "required_tests": [
+        "existing_library_live_archive_and_snapshot_keep_their_contract"
+      ],
+      "behavior": "Removes the project from visible library records and asserts its retained snapshot still exists."
+    },
+    {
+      "feature_id": "remove-readd",
+      "check": "可立即加回来",
+      "required_tests": [
+        "removed_forks_rejoin_their_own_project_identity"
+      ],
+      "behavior": "Runs the real core CLI after hiding original and fork records; each reappears with its own existing project identity."
+    },
+    {
+      "feature_id": "grouping",
+      "check": "逐项目记住偏好",
+      "required_tests": [
+        "legacy_preferences_round_trip_preserves_privacy_and_newer_edits"
+      ],
+      "behavior": "Persists a model-group preference under a project ID containing dots and reads the same per-project value after migration."
+    },
+    {
+      "feature_id": "settings-general",
+      "check": "偏好持久化",
+      "required_tests": [
+        "settings_and_project_display_preserve_existing_fields",
+        "legacy_preferences_round_trip_preserves_privacy_and_newer_edits",
+        "concurrent_desktop_processes_merge_settings_without_partial_json"
+      ],
+      "behavior": "Writes and rereads application/project preferences, preserves unknown fields and privacy, and verifies four real processes merge100 updates without partial JSON."
+    },
+    {
+      "feature_id": "analysis",
+      "check": "停止子进程及收尾",
+      "required_tests": [
+        "analysis_progress_warnings_errors_and_restart_use_the_same_worker_protocol",
+        "command::tests::killing_core_also_stops_its_command_group",
+        "command::tests::timeout_and_exited_leader_both_stop_helpers"
+      ],
+      "behavior": "Cancels running workers, waits for in-flight progress callbacks, and checks process-group descendants stop even after the command leader exits."
+    },
+    {
+      "feature_id": "analysis",
+      "check": "不允许重入",
+      "required_tests": [
+        "analysis_progress_warnings_errors_and_restart_use_the_same_worker_protocol",
+        "process::tests::forced_desktop_exit_cannot_release_an_active_worker_for_duplicate_recovery"
+      ],
+      "behavior": "Rejects a second live analysis as busy and verifies a crashed desktop owner cannot release an active worker lease for duplicate recovery."
+    },
+    {
+      "feature_id": "analysis",
+      "check": "取消后可再次分析",
+      "required_tests": [
+        "analysis_progress_warnings_errors_and_restart_use_the_same_worker_protocol"
+      ],
+      "behavior": "Cancels active analysis and then runs a replacement worker that returns a verified restarted result; an old cancellation token cannot cancel the new job."
+    },
+    {
+      "feature_id": "integrations",
+      "check": "安装及卸载发布工作流",
+      "required_tests": [
+        "integrations_switches"
+      ],
+      "behavior": "Installs and removes the actual generated release workflow and refuses to overwrite an unrelated user-owned workflow."
+    },
+    {
+      "feature_id": "new-resume",
+      "check": "进程退出后恢复持久任务状态",
+      "required_tests": [
+        "durable_analysis_recovers_after_exit_and_retries_the_original_request"
+      ],
+      "behavior": "Loads a persisted running task as interrupted after owner exit, resumes its original repo/language, marks completion, and leaves live leased tasks running."
+    },
+    {
+      "feature_id": "new-resume",
+      "check": "取消后不继续写入",
+      "required_tests": [
+        "closing_background_service_cancels_its_analysis_before_later_writes"
+      ],
+      "behavior": "Drops the running background service, waits for analysis termination and asserts the worker cannot create its later-write marker."
+    },
+    {
+      "feature_id": "new-resume",
+      "check": "部分结果和事务的一致性",
+      "required_tests": [
+        "existing_library_live_archive_and_snapshot_keep_their_contract",
+        "concurrent_desktop_processes_merge_settings_without_partial_json",
+        "export_tasks::tests::stale_writer_and_malformed_history_never_replace_the_existing_bytes"
+      ],
+      "behavior": "Rejects malformed live data in favor of a retained snapshot, verifies atomic settings across processes, and preserves existing export history bytes on stale revision or malformed state."
+    },
+    {
+      "feature_id": "new-export-options",
+      "check": "恢复不覆盖错误输入或旧任务",
+      "required_tests": [
+        "export_tasks::tests::stale_writer_and_malformed_history_never_replace_the_existing_bytes",
+        "export_jobs::tests::invalid_future_or_incomplete_state_is_rejected_without_an_overwrite",
+        "export_jobs::tests::rejected_enqueue_preserves_the_full_recovery_history"
+      ],
+      "behavior": "Rejects stale writes, malformed/future history, missing archives and invalid destinations; rejected enqueue leaves the full recovery snapshot unchanged."
+    },
+    {
+      "feature_id": "export-jobs",
+      "check": "相同输入和选项去重",
+      "required_tests": [
+        "export_jobs::tests::deduplication_and_retry_preserve_the_original_options_and_destination",
+        "export_jobs::tests::retry_does_not_duplicate_a_newer_pending_export"
+      ],
+      "behavior": "Equivalent export inputs/destination deduplicate despite changed transport IDs, and retry cannot create a duplicate newer pending export."
+    },
+    {
+      "feature_id": "export-jobs",
+      "check": "切换项目后任务仍完成到原请求",
+      "required_tests": [
+        "export_jobs::tests::deduplication_and_retry_preserve_the_original_options_and_destination"
+      ],
+      "behavior": "Queued retry retains its captured destination and grouping options, and stale completion cannot finish a newer attempt."
+    },
+    {
+      "feature_id": "export-jobs",
+      "check": "错误不吞掉、允许再次发起",
+      "required_tests": [
+        "export_jobs::tests::deduplication_and_retry_preserve_the_original_options_and_destination",
+        "export_jobs::tests::journal_advances_only_successful_revisions_and_stops_after_conflict"
+      ],
+      "behavior": "A simulated disk-full error can be retried successfully; journal conflicts report a visible retrievable error and stop further destructive saves."
+    },
+    {
+      "feature_id": "new-reduced-motion",
+      "check": "不可见动画暂停",
+      "required_tests": [
+        "animation::tests::first_frame_preparation_obeys_visibility_but_survives_an_early_pause",
+        "animation::tests::zoom_changes_refresh_one_paused_frame_and_hidden_views_do_no_work"
+      ],
+      "behavior": "Hidden views block animation preparation and viewport updates do not render while invisible; becoming visible resumes the current frame plan."
+    },
+    {
+      "feature_id": "new-reduced-motion",
+      "check": "连续操作、中断、重播",
+      "required_tests": [
+        "animation::tests::lookahead_waits_and_cancellation_wakes_a_paused_producer",
+        "animation::tests::seek_and_loop_reset_the_epoch_and_skip_obsolete_frames"
+      ],
+      "behavior": "Pause blocks producer work, cancellation wakes it, and seeking/replay updates the epoch so obsolete frames are discarded."
+    },
+    {
+      "feature_id": "new-zoom",
+      "check": "缩放锚点和拖动坐标一致",
+      "required_tests": [
+        "ui_model::tests::zoom_keeps_pointer_world_coordinate"
+      ],
+      "behavior": "Checks the same world point remains under the cursor across zoom transformations."
+    },
+    {
+      "feature_id": "new-zoom",
+      "check": "缓存按缩放档和像素密度失效",
+      "required_tests": [
+        "animation::tests::hidpi_and_deep_zoom_preserve_density_by_tiling_only_the_visible_viewport",
+        "animation::tests::zoom_changes_refresh_one_paused_frame_and_hidden_views_do_no_work"
+      ],
+      "behavior": "Checks physical pixel density at high DPI/deep zoom and invalidates the paused frame when viewport scale changes."
+    },
+    {
+      "feature_id": "roam",
+      "check": "每轮切换作品版式",
+      "required_tests": [
+        "roam::tests::slots_match_original_negative_modulo_laps_and_selected_variants"
+      ],
+      "behavior": "Exhaustively samples positive/negative columns and rows and asserts the original artwork order and per-lap variant rotation."
+    },
+    {
+      "feature_id": "roam",
+      "check": "仅挂载可见区附近作品",
+      "required_tests": [
+        "roam::tests::huge_pan_is_bounded_revisitable_and_empty_art_is_skipped"
+      ],
+      "behavior": "Pans tens of millions of pixels, keeps visible tile count and geometry storage bounded, revisits the original layout exactly, and skips empty artwork."
+    },
+    {
+      "feature_id": "layout",
+      "check": "宽作品 span",
+      "required_tests": [
+        "ui_model::tests::layout_has_no_overlaps_for_mixed_spans"
+      ],
+      "behavior": "Lays out mixed one- and two-column spans and checks every pair for overlap."
+    }
+  ]
+}

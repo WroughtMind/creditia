@@ -8,8 +8,9 @@ import { execFileSync } from 'node:child_process';
 import { layout, verify } from './package.mjs';
 
 const options = Object.fromEntries(process.argv.slice(2).reduce((pairs,arg,i,all) => i%2 ? pairs : [...pairs,[arg.replace(/^--/,''),all[i+1]]],[]));
-if (!options.installers || !options.output) throw new Error('Usage: install-smoke.mjs --installers installer-directory --output evidence.json');
+if (!options.installers || !options.output || !options.fixture) throw new Error('Usage: install-smoke.mjs --installers installer-directory --output evidence.json --fixture archive.json');
 const directory=path.resolve(options.installers), output=path.resolve(options.output);
+const fixture=path.resolve(options.fixture);
 const candidate=JSON.parse(await fs.readFile(path.join(directory,'candidate.json'),'utf8'));
 const temporary=await fs.mkdtemp(path.join(os.tmpdir(),'creditia-install-'));
 const checksums=new Map((await fs.readFile(path.join(directory,'SHA256SUMS'),'utf8')).trim().split('\n').map(line=>{
@@ -49,7 +50,21 @@ async function exercise(root,format,{payloadOnly=false,uninstaller=false}={}){
   const paths=layout(root,info.platform);
   run(paths.gui,['--check-resources']);
   run(paths.core,['help']);
-  report.checks.push({id:`${format}-installed-payload-and-launch`,passed:true,files:info.files.length});
+  report.checks.push({id:`${format}-installed-payload-and-resource-launch`,passed:true,files:info.files.length});
+  if(['darwin','linux'].includes(process.platform)){
+    const captureRoot=path.join(path.dirname(output),`${format}-native-window`);
+    try{
+      run('python',[path.join(import.meta.dirname,'gui-smoke.py'),'--binary',paths.gui,'--archive',fixture,'--output',captureRoot,'--candidate',candidate.candidate_sha],{timeout:330_000});
+      const capture=JSON.parse(await fs.readFile(path.join(captureRoot,'window-evidence.json'),'utf8'));
+      if(!capture.complete||capture.provenance.candidate_sha!==candidate.candidate_sha||!capture.checks.every(check=>check.passed))throw new Error('Installed native window evidence is incomplete');
+      report.checks.push({id:`${format}-installed-native-window-and-normal-quit`,passed:true,source:`${format}-native-window/window-evidence.json`});
+    }finally{
+      for(const file of await fs.readdir(captureRoot).catch(()=>[])){
+        const bytes=await fs.readFile(path.join(captureRoot,file));
+        report.artifacts.push({path:`${format}-native-window/${file}`,bytes:bytes.length,sha256:digest(bytes)});
+      }
+    }
+  }
 }
 
 try{

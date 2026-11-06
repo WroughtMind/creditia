@@ -91,7 +91,7 @@ function renderer(failAt, cleanupFails = false) {
     free() { counts.trees--; if (cleanupFails) throw new Error('tree cleanup failed'); }
   }
   const messages = [];
-  const ctx = vm.createContext({ Resvg, Error, TextEncoder, Uint8Array,
+  const ctx = vm.createContext({ Resvg, Error, TextEncoder, Uint8Array, btoa,
     initWasm: async () => {}, fetch: () => {}, wasmUrl: 'test.wasm', fontBytes: async () => [],
     SIZES: [{ id: 'native', w: 0, h: 0 }], self: { postMessage: (data, transfer) => messages.push({ data, transfer }) },
     makeExporter: r => ({
@@ -105,6 +105,7 @@ function renderer(failAt, cleanupFails = false) {
   // WASM objects instrumented so ownership failures remain observable.
   load(sharedSource('motion-profiles.ts'), ctx);
   load(sharedSource('pixels.ts'), ctx);
+  load(sharedSource('raster-viewport.ts'), ctx);
   load(sharedSource('timeline.ts'), ctx);
   load(sharedSource('export-job.ts'), ctx);
   load(source('export-worker.ts'), ctx);
@@ -118,6 +119,16 @@ for (const format of ['png', 'pdf', 'gif', 'svg', 'html']) test(`${format} frees
   assert.equal(counts.images, 0); assert.equal(counts.trees, 0);
   assert.equal(counts.peakImages, ['svg', 'html'].includes(format) ? 0 : 1);
   if (format === 'gif') assert.equal(counts.rendered, 24);
+});
+
+for (const format of ['png', 'pdf', 'gif']) test(`${format} releases the full scroll bitmap before rendering its clipped viewport`, async () => {
+  const { ctx, counts } = renderer();
+  const scroll = { ...art, w: 40, h: 20, svg: '<svg width="40" height="20" viewBox="0 0 40 20" data-creditia-raster="-20 60" data-creditia-window="4 2 32 16" data-creditia-bg="#111"/>' };
+  const out = await ctx.run({ fmt: format, fontStyle: null, art: scroll, size: 'native', frames: [scroll] });
+  assert.equal(out.ext, format);
+  assert.equal(counts.rendered, 2);
+  assert.equal(counts.peakImages, 1);
+  assert.equal(counts.images, 0); assert.equal(counts.trees, 0);
 });
 
 for (const [stage, format] of [['constructor', 'png'], ['render', 'png'], ['png', 'png'], ['rgba', 'pdf'], ['flat', 'svg']]) test(`${stage} failure releases owned objects and is not replaced by a cleanup error`, async () => {

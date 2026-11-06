@@ -116,14 +116,16 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install nsis --yes --no-progress
       - name: Install Linux native libraries and software Vulkan
+        timeout-minutes: 15
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install --no-install-recommends -y \
             gcc g++ clang cmake pkg-config libfontconfig-dev libwayland-dev \
             libwebkit2gtk-4.1-dev libxkbcommon-x11-dev libx11-xcb-dev \
             libssl-dev libzstd-dev libasound2-dev vulkan-validationlayers libvulkan1 \
-            mesa-vulkan-drivers fonts-noto-core fonts-noto-cjk xvfb xauth dbus-x11
+            mesa-vulkan-drivers fonts-noto-core fonts-noto-cjk xvfb xauth dbus-x11 \
+            openbox xdotool imagemagick x11-utils python3
           mkdir -p "$RUNNER_TEMP/xdg-runtime"
           chmod 700 "$RUNNER_TEMP/xdg-runtime"
           printf 'XDG_RUNTIME_DIR=%s\n' "$RUNNER_TEMP/xdg-runtime" >> "$GITHUB_ENV"
@@ -157,6 +159,8 @@ jobs:
           git diff -- apps/gpui/src apps/gpui/tests > "$RUNNER_TEMP/gpui-rustfmt.patch"
           git checkout -- apps/gpui/src apps/gpui/tests
       - name: Run native state, worker and export contracts
+        id: native-unit
+        continue-on-error: true
         run: cargo test --manifest-path apps/gpui/Cargo.toml --lib --bins --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-tests.log"
       - name: Prepare canonical artwork fixtures
         run: |
@@ -227,8 +231,11 @@ jobs:
         run: ./packaging/gpui/windows-window.ps1 -PackageRoot 'candidates/creditia-gpui-${{ matrix.target }}' -Fixtures evidence/fixtures -Output evidence/native-window
       - name: Build installable candidate
         run: node packaging/gpui/installers.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --output installers
+      - name: Install the native window capture reader
+        if: runner.os != 'Windows'
+        run: python -m pip install Pillow==11.3.0
       - name: Extract or install each candidate and verify the installed runtime
-        run: node packaging/gpui/install-smoke.mjs --installers installers --output evidence/package-installed/manifest.json
+        run: node packaging/gpui/install-smoke.mjs --installers installers --fixture packages/render/fixtures/catnap.json --output evidence/package-installed/manifest.json
       - name: Record linked system libraries
         run: |
           mkdir -p evidence
@@ -259,10 +266,10 @@ jobs:
             ${{ runner.temp }}/core-build.log
           if-no-files-found: warn
           retention-days: 14
-      - name: Require native visual and input acceptance
-        if: always() && (steps.native-pixels.outcome == 'failure' || steps.native-window.outcome == 'failure')
+      - name: Require native unit, visual and input acceptance
+        if: always() && (steps.native-unit.outcome != 'success' || steps.native-pixels.outcome == 'failure' || steps.native-window.outcome == 'failure')
         run: |
-          echo 'Native visual/input acceptance failed; retained candidates are not release-ready.'
+          echo 'Native unit/visual/input acceptance failed; retained candidates are not release-ready.'
           exit 1
 
   native-catalog:
@@ -292,9 +299,10 @@ jobs:
           cache: npm
           cache-dependency-path: packages/render/package-lock.json
       - name: Install native libraries and software Vulkan
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=120 install --no-install-recommends -y \
             gcc g++ clang cmake pkg-config libfontconfig-dev libwayland-dev \
             libwebkit2gtk-4.1-dev libxkbcommon-x11-dev libx11-xcb-dev \
             libssl-dev libzstd-dev libasound2-dev vulkan-validationlayers libvulkan1 \

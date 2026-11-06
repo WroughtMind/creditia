@@ -89,7 +89,7 @@ test('staging preserves schema and required fonts while pruning previews and unu
   }finally{await fs.rm(root,{recursive:true,force:true});}
 });
 
-test('Linux installer harness verifies extracted payloads and rejects a modified archive',{skip:process.platform!=='linux'},async()=>{
+test('Linux installer round trip preserves sealed payloads and rejects a modified archive',{skip:process.platform!=='linux'},async()=>{
   const temporary=await fs.mkdtemp(path.join(os.tmpdir(),'creditia-installer-test-'));
   const root=path.join(temporary,'creditia-gpui-x86_64-unknown-linux-gnu'),installers=path.join(temporary,'installers'),output=path.join(temporary,'evidence/manifest.json');
   try{
@@ -100,14 +100,25 @@ test('Linux installer harness verifies extracted payloads and rejects a modified
     await fs.writeFile(path.join(root,'package-info.json'),JSON.stringify({schema:1,target:'x86_64-unknown-linux-gnu',platform:'linux',version:'0.1.0',commit:'a'.repeat(40),fontFiles:[]}));
     await seal(root);
     execFileSync(process.execPath,[path.join(import.meta.dirname,'installers.mjs'),'--root',root,'--output',installers],{stdio:'pipe'});
-    execFileSync(process.execPath,[path.join(import.meta.dirname,'install-smoke.mjs'),'--installers',installers,'--output',output],{stdio:'pipe'});
-    const report=JSON.parse(await fs.readFile(output,'utf8'));
-    assert.equal(report.complete,true);
-    assert.equal(report.acceptance.passed,true);
-    assert.deepEqual(report.checks.map(check=>check.id),['tar-installed-payload-and-launch','deb-installed-payload-and-launch','deb-command-link']);
-    assert.equal(report.installers.length,2);
+    const candidate=JSON.parse(await fs.readFile(path.join(installers,'candidate.json'),'utf8'));
+    assert.equal(candidate.installers.length,2);
+    // This is an installer-tool contract fixture, deliberately not a GUI or
+    // release acceptance report. Actual native startup is a separate CI gate.
+    const tarRoot=path.join(temporary,'tar-extracted'),debRoot=path.join(temporary,'deb-extracted');
+    await fs.mkdir(tarRoot);await fs.mkdir(debRoot);
+    execFileSync('tar',['-xzf',path.join(installers,path.basename(root)+'.tar.gz'),'-C',tarRoot]);
+    execFileSync('dpkg-deb',['--extract',path.join(installers,path.basename(root)+'.deb'),debRoot]);
+    for(const payload of [path.join(tarRoot,path.basename(root)),path.join(debRoot,'usr/lib/creditia-gpui')]){
+      const info=await verify(payload);assert.equal(info.commit,'a'.repeat(40));
+      for(const file of ['creditia-gpui','creditia-core']){
+        assert.ok((await fs.stat(path.join(payload,file))).mode&0o111);
+        assert.match(execFileSync(path.join(payload,file),['help'],{encoding:'utf8'}),/installer harness executable fixture/);
+      }
+    }
+    assert.equal(await fs.readlink(path.join(debRoot,'usr/bin/creditia-gpui')),'../lib/creditia-gpui/creditia-gpui');
     await fs.appendFile(path.join(installers,path.basename(root)+'.tar.gz'),'corrupt');
-    assert.throws(()=>execFileSync(process.execPath,[path.join(import.meta.dirname,'install-smoke.mjs'),'--installers',installers,'--output',output],{stdio:'pipe'}));
+    const fixture=path.join(temporary,'fixture.json');await fs.writeFile(fixture,'{}');
+    assert.throws(()=>execFileSync(process.execPath,[path.join(import.meta.dirname,'install-smoke.mjs'),'--installers',installers,'--output',output,'--fixture',fixture],{stdio:'pipe'}));
     const failed=JSON.parse(await fs.readFile(output,'utf8'));
     assert.equal(failed.complete,false);assert.match(failed.error,/checksum mismatch/);
   }finally{await fs.rm(temporary,{recursive:true,force:true});}

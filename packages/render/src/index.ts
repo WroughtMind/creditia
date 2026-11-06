@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { FONTS, nativeFonts } from './fonts.ts';
 import { makeExporter, type Raster } from './export.ts';
 import { straightRgba } from './pixels.ts';
+import { rasterViewport, viewportPixels, viewportPngSvg, retainRasterExtent } from './raster-viewport.ts';
 
 const require = createRequire(import.meta.url);
 const { Resvg } = require('@resvg/resvg-js');
@@ -48,9 +49,9 @@ const opts = (svg: string, width?: number) => ({
 });
 
 export const raster: Raster = {
-  png(svg, width) { return new Uint8Array(new Resvg(svg, opts(svg, width)).render().asPng()); },
-  rgba(svg, width) { const img = new Resvg(svg, opts(svg, width)).render(); return { w: img.width, h: img.height, data: straightRgba(img.pixels) }; },
-  flat(svg) { return new Resvg(svg, opts(svg)).toString(); },
+  png(svg, width) { const v = rasterViewport(svg, width), source = v?.svg ?? svg; const png = new Resvg(source, opts(source, width)).render().asPng(); return new Uint8Array(v ? new Resvg(viewportPngSvg(png, v), { font: { loadSystemFonts: false } }).render().asPng() : png); },
+  rgba(svg, width) { const v = rasterViewport(svg, width), source = v?.svg ?? svg; let img = new Resvg(source, opts(source, width)).render(); if (v?.window) { img = new Resvg(viewportPngSvg(img.asPng(), v), { font: { loadSystemFonts: false } }).render(); return { w: img.width, h: img.height, data: straightRgba(img.pixels) }; } return { w: img.width, h: v?.height ?? img.height, data: straightRgba(viewportPixels(img.pixels, v)) }; },
+  flat(svg) { return retainRasterExtent(svg, new Resvg(svg, opts(svg)).toString()); },
 };
 
 export const exporter = makeExporter(raster);

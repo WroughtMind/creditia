@@ -81,7 +81,7 @@ export function frame(id: string, m: Model, st: Style, o: PieceOpts = {}, t = 1,
     const travel = Math.max(0, full.h - viewH);
     const inner = full.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
     const y = Math.round(travel * t);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewW}" height="${viewH}" viewBox="0 ${y} ${viewW} ${viewH}"><rect y="${y}" width="${viewW}" height="${viewH}" fill="${full.bg}"/>${inner}</svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewW}" height="${viewH}" viewBox="0 ${y} ${viewW} ${viewH}" data-creditia-raster="${-y} ${full.h-y}"><rect y="${y}" width="${viewW}" height="${viewH}" fill="${full.bg}"/>${inner}</svg>`;
     // GIF 仍然只栅格化一次整卷，逐帧按 y 裁图。
     const hits = full.hits.filter(hit => hit.y + hit.h > y && hit.y < y + viewH).map(hit => { const top = Math.max(0, hit.y - y); return { ...hit, y: top, h: Math.min(viewH, hit.y + hit.h - y) - top }; });
     return { ...full, w: viewW, h: viewH, svg, hits, motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y } };
