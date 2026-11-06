@@ -70,19 +70,26 @@ async function exercise(root,format,{payloadOnly=false,uninstaller=false}={}){
   for (const phase of ['launch', 'restart']) {
     const label = `${format}-${phase}`;
     const captureRoot = path.join(path.dirname(output), label);
+    const platformCheck = phase === 'launch' && ['zip', 'tar'].includes(format);
     if (process.platform === 'win32') {
-      run('pwsh', ['-NoProfile', '-File', path.join(import.meta.dirname, 'windows-window.ps1'),
-        '-PackageRoot', root, '-ProjectName', raw.project.name, '-Output', captureRoot], {timeout: 240_000});
+      run('pwsh', ['-NoProfile', '-STA', '-File', path.join(import.meta.dirname, 'windows-window.ps1'),
+        '-PackageRoot', root, '-ProjectName', raw.project.name, '-Output', captureRoot, ...(platformCheck ? ['-CheckPlatform'] : [])], {timeout: 240_000});
     } else {
       run('python', [path.join(import.meta.dirname, 'gui-smoke.py'), '--binary', paths.gui,
         '--archive', archive, '--library', env.CREDITIA_HOME, '--output', captureRoot,
-        '--candidate', candidate.candidate_sha], {timeout: 330_000});
+        '--candidate', candidate.candidate_sha, ...(platformCheck ? ['--platform-check'] : [])], {timeout: 330_000});
     }
     const captureFile = process.platform === 'win32' ? 'manifest.json' : 'window-evidence.json';
     const capture = JSON.parse(await fs.readFile(path.join(captureRoot, captureFile), 'utf8'));
     if (!capture.complete || capture.provenance.candidate_sha !== candidate.candidate_sha)
       throw new Error(`Installed project did not open: ${label}`);
     report.checks.push({id: label, passed: true, source: `${label}/${captureFile}`});
+    if (platformCheck) {
+      const checks = capture.checks ?? capture.cases.flatMap(item => item.checks);
+      const verified = checks.some(check => check.id === 'system-clipboard-and-folder-dialog' && check.passed);
+      if (!verified && !capture.manual_checks?.length) throw new Error('Missing clipboard and file dialog result');
+      report.platform_input = {verified, source: `${label}/${captureFile}`, manual_checks: capture.manual_checks ?? []};
+    }
     for (const file of await fs.readdir(captureRoot)) {
       const bytes = await fs.readFile(path.join(captureRoot, file));
       report.artifacts.push({path: `${label}/${file}`, bytes: bytes.length, sha256: digest(bytes)});

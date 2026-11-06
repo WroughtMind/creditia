@@ -45,7 +45,7 @@ export function writeDeliveryReport(r, output, {matrix, packages = [], performan
     `| 网页作品 | ${r.browser_catalog.passed_rows} / ${r.artwork.length} 组 |`,
     `| 原生窗口作品 | ${r.native_catalog.passed_rows} / ${desktop} 组 |`,
     `| 功能操作 | ${checksPassed} / ${checks.length-1} 项；${r.feature_coverage.filter(f=>f.complete).length} / ${r.feature_coverage.length} 组全部通过 |`,
-    `| 原生交互用例 | ${r.native.reduce((s,m)=>s+m.cases.filter(c=>c.status==='passed').length,0)} 项通过；四种目标平台${r.native_platforms_complete?'均有记录':'记录不齐'} |`,
+    `| 原生交互用例 | ${r.native.reduce((s,m)=>s+m.cases.filter(c=>c.status==='passed').length,0)} 项通过；安装后的原生窗口${r.native_platforms_complete?'均有记录':'记录不齐'} |`,
     `| 实际安装 | ${platforms.filter(([id])=>installed.some(p=>p.platform===id)).length} / 4 平台 |`,
     `| 同机性能对照 | ${r.performance_comparisons.filter(p=>p.status==='comparable').length} 对 |`,
     `| 视觉复核 | ${r.recorded_review.status}；已记录 ${r.recorded_review.reviewed_artworks} 个代表组合 |`,

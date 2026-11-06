@@ -187,8 +187,6 @@ const nativeCatalogPassed = new Set(nativeCatalog.flatMap(m => m.cases.filter(c 
 const nativeCatalogComplete = matrix.filter(row => row.desktop === 'true').every(row => nativeCatalogPassed.has([row.renderer, row.style, row.piece, row.variant].join('/')));
 const browserCatalogPassed = new Set(browserCatalog.flatMap(m => m.cases.filter(c => c.status === 'passed').map(c => c.row)));
 const browserCatalogComplete = [...expected.keys()].every(key => browserCatalogPassed.has(key));
-const nativePlatforms = new Set(native.map(m => `${m.platform}-${m.arch}`));
-const nativePlatformsComplete = ['macos-aarch64', 'macos-x86_64', 'windows-x86_64', 'linux-x86_64'].every(p => nativePlatforms.has(p));
 const featureFailures = featureCoverage.flatMap(f => f.checks.filter(c => c.status === 'failed'));
 const requiredPerformance = ['startup', 'scroll', 'roam', 'hidden-idle'];
 const performanceComplete = requiredPerformance.every(scenario => performanceComparisons.some(p =>
@@ -197,11 +195,19 @@ const packageFormats = { 'darwin-arm64': ['zip', 'dmg'], 'darwin-x64': ['zip', '
   'win32-x64': ['zip', 'nsis'], 'linux-x64': ['tar', 'deb'] };
 function installedWorkflow(p) {
   const ids = new Set((p.checks ?? []).filter(check => check.passed).map(check => check.id));
-  return p.acceptance?.passed && p.installers?.length && packageFormats[p.platform]?.every(format =>
+  const inputVerified = p.platform_input?.verified === true || (reviewIdentity &&
+    p.platform_input?.manual_checks?.length > 0 && reviewed('platform_input', [p.platform]));
+  return inputVerified && p.acceptance?.passed && p.installers?.length && packageFormats[p.platform]?.every(format =>
     ['launch', 'installed-export', 'restart'].every(step => ids.has(`${format}-${step}`))) &&
     (p.platform !== 'win32-x64' || ids.has('nsis-uninstall-preserves-user-library'));
 }
-const releaseReady = failures.length === 0 && nativePlatformsComplete && nativeFailures.length === 0 &&
+const nativePlatformsComplete = primaryPlatforms.every(platform =>
+  packages.some(p => p.platform === platform && installedWorkflow(p)));
+const primaryNativeCases = new Set(native.filter(m => m.platform === 'linux' && m.arch === 'x86_64')
+  .flatMap(m => m.cases.filter(c => c.status === 'passed').map(c => c.key)));
+const primaryFlowPassed = ['services-search', 'services-persistence', 'services-export-recovery',
+  'services-removal', 'installed-streaming-animation-dpi2'].every(key => primaryNativeCases.has(key));
+const releaseReady = primaryFlowPassed && failures.length === 0 && nativePlatformsComplete && nativeFailures.length === 0 &&
   featureFailures.length === 0 && performanceComplete && manualComplete &&
   primaryPlatforms.every(platform =>
     packages.some(p => p.platform === platform && p.acceptance?.passed && p.tests?.length) &&

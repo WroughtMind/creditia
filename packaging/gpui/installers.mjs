@@ -57,7 +57,7 @@ if (info.platform === 'darwin') {
   await fs.mkdir(path.join(debRoot,'usr/share/applications'),{recursive:true});
   await fs.copyFile(path.join(root,'creditia.desktop'),path.join(debRoot,'usr/share/applications/creditia-gpui.desktop'));
   const bytes = info.files.reduce((n,item)=>n+item.size,0);
-  await fs.writeFile(path.join(debRoot,'DEBIAN/control'),`Package: creditia-gpui\nVersion: ${info.version}\nArchitecture: amd64\nMaintainer: WroughtMind\nInstalled-Size: ${Math.ceil(bytes/1024)}\nDepends: libc6 (>= 2.39), libfontconfig1, libxkbcommon0, libxkbcommon-x11-0, libvulkan1, libasound2t64, libssl3t64, libzstd1, libwayland-client0, libwayland-cursor0, libx11-xcb1, libwebkit2gtk-4.1-0\nSection: devel\nPriority: optional\nDescription: Creditia native GPUI desktop\n Includes the artwork renderer, fonts and Node runtime.\n`);
+  await fs.writeFile(path.join(debRoot,'DEBIAN/control'),`Package: creditia-gpui\nVersion: ${info.version}\nArchitecture: amd64\nMaintainer: WroughtMind\nInstalled-Size: ${Math.ceil(bytes/1024)}\nDepends: libc6 (>= 2.39), libfontconfig1, libxkbcommon0, libxkbcommon-x11-0, libvulkan1, libasound2t64, libssl3t64, libzstd1, libwayland-client0, libwayland-cursor0, libx11-xcb1, libwebkit2gtk-4.1-0, xdg-desktop-portal, xdg-desktop-portal-gtk | xdg-desktop-portal-kde | xdg-desktop-portal-gnome | xdg-desktop-portal-xapp\nSection: devel\nPriority: optional\nDescription: Creditia native GPUI desktop\n Includes the artwork renderer, fonts and Node runtime.\n`);
   const deb = path.join(output,`${name}.deb`);
   run('dpkg-deb',['--root-owner-group','--build',debRoot,deb]);
   run('dpkg-deb',['--info',deb]);

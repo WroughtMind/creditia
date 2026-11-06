@@ -51,6 +51,51 @@ def pixels(path):
         return {"width": image.width, "height": image.height, "sampled_colors": colors}
 
 
+def wait_for(test, message, timeout=15):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if test():
+            return
+        time.sleep(.1)
+    raise RuntimeError(message)
+
+
+def check_platform_input(run, helper, pid, fixture, report):
+    if helper and run([str(helper), "input-access", str(pid)], check=False).returncode:
+        report["manual_checks"] = ["Mac runner input permission unavailable. Verify the clipboard and folder picker on this installer."]
+        return
+
+    def key(action):
+        if helper:
+            run([str(helper), action, str(pid)])
+        else:
+            keys = {"copy": "ctrl+shift+c", "open": "ctrl+o", "escape": "Escape"}
+            run(["xdotool", "key", "--clearmodifiers", keys[action]])
+
+    def dialog_open():
+        if helper:
+            return run([str(helper), "dialog", str(pid)], check=False).returncode == 0
+        result = run(["xdotool", "search", "--onlyvisible", "--name", "^Open Folder$"], check=False)
+        return bool(result.stdout.strip())
+
+    expected = json.loads(fixture.read_bytes())
+    def clipboard_matches():
+        command = ["pbpaste"] if helper else ["xclip", "-selection", "clipboard", "-out"]
+        try:
+            return json.loads(run(command, check=False).stdout) == expected
+        except (ValueError, subprocess.TimeoutExpired):
+            return False
+
+    key("copy")
+    wait_for(clipboard_matches, "System clipboard did not contain the current archive")
+    key("open")
+    wait_for(dialog_open, "Native folder picker did not open", 20)
+    key("escape")
+    wait_for(lambda: not dialog_open(), "Native folder picker did not close")
+    report["checks"].append({"id": "system-clipboard-and-folder-dialog", "passed": True,
+                             "project": expected["project"]["name"]})
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", required=True)
@@ -58,10 +103,11 @@ def main():
     parser.add_argument("--library", help="Open the existing project library through normal startup")
     parser.add_argument("--output", required=True)
     parser.add_argument("--candidate", required=True)
+    parser.add_argument("--platform-check", action="store_true")
     parser.add_argument("--inside-x11", action="store_true")
     args = parser.parse_args()
     if sys.platform == "linux" and not args.inside_x11:
-        command = ["xvfb-run", "-a", "-s", "-screen 0 1600x1000x24", sys.executable,
+        command = ["xvfb-run", "-a", "-s", "-screen 0 1600x1000x24", "dbus-run-session", "--", sys.executable,
                    str(Path(__file__).resolve()), *sys.argv[1:], "--inside-x11"]
         return subprocess.run(command, timeout=240).returncode
     if sys.platform not in ("linux", "darwin"):
@@ -92,6 +138,13 @@ def main():
                 runtime = work / "runtime"
                 runtime.mkdir(mode=0o700)
                 env.update(XDG_RUNTIME_DIR=str(runtime), XDG_SESSION_TYPE="x11")
+                if args.platform_check:
+                    portals = work / "config" / "xdg-desktop-portal"
+                    portals.mkdir(parents=True)
+                    (portals / "portals.conf").write_text("[preferred]\ndefault=gtk\n")
+                    env.update(XDG_CONFIG_HOME=str(portals.parent), XDG_CURRENT_DESKTOP="CreditiaTest")
+                    run(["dbus-update-activation-environment", "DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR",
+                         "XDG_CONFIG_HOME", "XDG_CURRENT_DESKTOP"])
                 wm_log = (output / "window-manager.log").open("wb")
                 logs.append(wm_log)
                 wm = subprocess.Popen(["openbox"], cwd=work, env=env, stdout=wm_log, stderr=wm_log)
@@ -151,6 +204,9 @@ def main():
                     time.sleep(.2)
             report["checks"].append({"id": "installed-production-window-and-bundled-artwork", "passed": True,
                                      "ready_event": ready, "state": state, **dimensions})
+            if args.platform_check:
+                check_platform_input(run, helper if sys.platform == "darwin" else None,
+                                     process.pid, fixture, report)
             if sys.platform == "linux":
                 run(["xdotool", "windowactivate", "--sync", window])
                 run(["xdotool", "key", "--clearmodifiers", "ctrl+q"])

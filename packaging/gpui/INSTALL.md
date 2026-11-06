@@ -26,6 +26,8 @@ whose contributor names were previously hidden.
   Install the DEB with `sudo apt install ./creditia-gpui-*.deb` so required system
   libraries are resolved, including WebKit for the one-time legacy preference
   importer; it does not install Node globally.
+  The project chooser and Save dialog use xdg-desktop-portal with a FileChooser backend.
+  Tarball users need the GTK, GNOME, KDE or XApp portal used by their desktop session.
   The bundled desktop file may be installed into the user's applications folder
   with an absolute `Exec` path. Runtime system libraries are recorded by CI.
 

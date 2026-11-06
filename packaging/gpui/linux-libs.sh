@@ -14,7 +14,7 @@ for tool in gcc g++ clang cmake pkg-config; do
     if ! command -v "$tool" >/dev/null; then packages+=("$tool"); fi
 done
 if [[ "$profile" == build ]]; then
-    packages+=(libwebkit2gtk-4.1-dev xvfb xauth dbus-x11 openbox xdotool imagemagick x11-utils python3)
+    packages+=(libwebkit2gtk-4.1-dev xvfb xauth dbus-x11 openbox xdotool xclip xdg-desktop-portal xdg-desktop-portal-gtk imagemagick x11-utils python3)
 fi
 sudo apt-get "${apt_options[@]}" update
 sudo env DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install --no-install-recommends -y "${packages[@]}"

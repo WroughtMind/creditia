@@ -2,6 +2,7 @@ param(
   [Parameter(Mandatory=$true)][string]$PackageRoot,
   [string]$Fixtures,
   [string]$ProjectName,
+  [switch]$CheckPlatform,
   [Parameter(Mandatory=$true)][string]$Output
 )
 $ErrorActionPreference = 'Stop'
@@ -15,6 +16,16 @@ public static class CreditiaWindow {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr handle, out Rect rect);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr handle);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int length);
+  public static bool FileDialogActive(uint pid) {
+    IntPtr window = GetForegroundWindow();
+    uint process;
+    GetWindowThreadProcessId(window, out process);
+    var name = new System.Text.StringBuilder(128);
+    GetClassName(window, name, name.Capacity);
+    return process == pid && name.ToString() == "#32770";
+  }
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr handle, int command);
   [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr handle, IntPtr after, int x, int y, int width, int height, uint flags);
   [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr handle);
@@ -109,6 +120,26 @@ foreach ($language in $languages) {
             @($state.visible_tiles | Where-Object image_ready).Count -gt 0))
       } 90
       $wall = Capture-Window $process "$key-wall.png"; $case.artifacts += $wall
+      if ($CheckPlatform) {
+        Set-Clipboard -Value 'creditia-install-check'
+        [System.Windows.Forms.SendKeys]::SendWait('^+c')
+        $deadline=[DateTime]::UtcNow.AddSeconds(10)
+        do {
+          try { $archive=Get-Clipboard -Raw | ConvertFrom-Json } catch { $archive=$null }
+          if ($archive.project.name -eq $ProjectName) { break }
+          Start-Sleep -Milliseconds 100
+        } while ([DateTime]::UtcNow -lt $deadline)
+        if ($archive.project.name -ne $ProjectName) { throw 'Copy Archive did not reach the Windows clipboard' }
+        [System.Windows.Forms.SendKeys]::SendWait('^o')
+        $deadline=[DateTime]::UtcNow.AddSeconds(15)
+        while (![CreditiaWindow]::FileDialogActive($process.Id) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
+        if (![CreditiaWindow]::FileDialogActive($process.Id)) { throw 'Native folder picker did not open' }
+        [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+        $deadline=[DateTime]::UtcNow.AddSeconds(10)
+        while ([CreditiaWindow]::FileDialogActive($process.Id) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
+        if ([CreditiaWindow]::FileDialogActive($process.Id)) { throw 'Native folder picker did not close' }
+        $case.checks += @{id='system-clipboard-and-folder-dialog';passed=$true;project=$ProjectName}
+      }
       $case.checks += @{id='packaged-native-window-and-decoded-artwork';passed=$true;state=$ready}
       [System.Windows.Forms.SendKeys]::SendWait('^2')
       $null=Wait-AppState $process $env:CREDITIA_APP_EVENTS {param($state)$state.view -eq 'roam'}

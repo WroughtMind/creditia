@@ -52,7 +52,10 @@ Use `workflow` entries for `legacy-library`, `analysis-cancel-retry`, `browse-pl
 (`artifact/directory/manifest.json#case`) or validated artifact paths. Record actual observations,
 including the legacy project used, platform-specific dialog/clipboard behavior, export/restart
 outcomes and the same-host CPU, memory and playback findings. Failed or missing evidence blocks
-release. The immutable review may be committed separately after the candidate runs.
+release. When a Mac runner records that targeted keyboard input is unavailable, run Copy Archive
+and open/cancel the folder picker on the exact installer; record it in `platform_input` with
+the platform as `id` and the same notes, status and evidence fields. The immutable review may
+be committed separately after the candidate runs.
 
 Preparation has read-only repository permissions. It verifies successful workflow
 conclusions, workflow identity, repository and tested commit relationships. It

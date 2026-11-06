@@ -243,42 +243,6 @@ jobs:
           JS
             node packaging/gpui-acceptance/feature-evidence.mjs --logs evidence/native-test-logs --bindings packaging/gpui-acceptance/feature-bindings.json --candidate-sha "$GITHUB_SHA" --output evidence/native-feature-checks
           fi
-      - name: Prepare canonical artwork fixtures
-        run: |
-          node packaging/gpui/fixtures.mjs --output evidence/fixtures --profile smoke
-      - name: Exercise production views with the real offscreen renderer
-        if: runner.os != 'Windows'
-        id: native-pixels
-        continue-on-error: true
-        env:
-          CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
-          CREDITIA_VISUAL_OUTPUT: ${{ github.workspace }}/evidence/native
-        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-rendering.log"
-      - name: Exercise native input with the actual shared rendering worker
-        if: runner.os == 'Linux'
-        id: native-input
-        continue-on-error: true
-        env:
-          CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
-          CREDITIA_RUNTIME_OUTPUT: ${{ github.workspace }}/evidence/native-input
-        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-input.log"
-      - name: Operate real projects and persist settings through native controls
-        if: runner.os == 'Linux'
-        id: native-services
-        continue-on-error: true
-        env:
-          CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
-          CREDITIA_SERVICE_OUTPUT: ${{ github.workspace }}/evidence/native-services
-          CREDITIA_CORE: ${{ github.workspace }}/target/${{ matrix.target }}/release/creditia-core
-        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-services.log"
-      - name: Seal native screenshot provenance
-        if: always() && runner.os != 'Windows'
-        run: |
-          for directory in evidence/native evidence/native-input evidence/native-services; do
-            if [ -f "$directory/manifest.json" ]; then
-              node packaging/gpui/seal-evidence.mjs "$directory"
-            fi
-          done
       - name: Fetch and verify the bundled Node distribution
         run: python packaging/gpui/node-runtime.py --version "$NODE_VERSION" --platform '${{ matrix.node_platform }}' --arch '${{ matrix.node_arch }}' --output runtime-node
       - name: Build one-time legacy preference migration helper
@@ -328,17 +292,18 @@ jobs:
         run: |
           node packaging/gpui/package.mjs seal --root 'candidates/creditia-gpui-${{ matrix.target }}' > "$RUNNER_TEMP/package-manifest.json"
           node packaging/gpui/package.mjs smoke --root 'candidates/creditia-gpui-${{ matrix.target }}' --fixture packages/render/fixtures/catnap.json --output evidence/package-runtime/manifest.json
-      - name: Launch and operate the packaged Windows window
-        if: runner.os == 'Windows'
-        id: native-window
-        continue-on-error: true
-        shell: pwsh
-        run: ./packaging/gpui/windows-window.ps1 -PackageRoot 'candidates/creditia-gpui-${{ matrix.target }}' -Fixtures evidence/fixtures -Output evidence/native-window
       - name: Build installable candidate
         run: node packaging/gpui/installers.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --output installers
       - name: Install the native window capture reader
         if: runner.os != 'Windows'
         run: python -m pip install Pillow==11.3.0
+      - name: Retain installable candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpui-candidate-${{ matrix.target }}
+          path: installers/*
+          if-no-files-found: error
+          retention-days: 14
       - name: Extract or install each candidate and verify the installed runtime
         run: node packaging/gpui/install-smoke.mjs --installers installers --fixture packages/render/fixtures/catnap.json --output evidence/package-installed/manifest.json
       - name: Exercise the packaged streaming player at native DPI2
@@ -357,13 +322,43 @@ jobs:
           mkdir -p evidence
           if [ "$RUNNER_OS" = Linux ]; then ldd 'candidates/creditia-gpui-${{ matrix.target }}/creditia-gpui' > evidence/system-libraries.txt; fi
           if [ "$RUNNER_OS" = macOS ]; then otool -L 'candidates/creditia-gpui-${{ matrix.target }}/Creditia.app/Contents/MacOS/creditia-gpui' > evidence/system-libraries.txt; fi
-      - name: Retain installable candidate
-        uses: actions/upload-artifact@v4
-        with:
-          name: gpui-candidate-${{ matrix.target }}
-          path: installers/*
-          if-no-files-found: error
-          retention-days: 14
+      - name: Prepare canonical artwork fixtures
+        if: runner.os == 'Linux'
+        run: |
+          node packaging/gpui/fixtures.mjs --output evidence/fixtures --profile smoke
+      - name: Exercise production views with the real offscreen renderer
+        if: runner.os == 'Linux'
+        id: native-pixels
+        continue-on-error: true
+        env:
+          CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
+          CREDITIA_VISUAL_OUTPUT: ${{ github.workspace }}/evidence/native
+        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-rendering.log"
+      - name: Exercise native input with the actual shared rendering worker
+        if: runner.os == 'Linux'
+        id: native-input
+        continue-on-error: true
+        env:
+          CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
+          CREDITIA_RUNTIME_OUTPUT: ${{ github.workspace }}/evidence/native-input
+        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-input.log"
+      - name: Operate real projects and persist settings through native controls
+        if: runner.os == 'Linux'
+        id: native-services
+        continue-on-error: true
+        env:
+          CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
+          CREDITIA_SERVICE_OUTPUT: ${{ github.workspace }}/evidence/native-services
+          CREDITIA_CORE: ${{ github.workspace }}/target/${{ matrix.target }}/release/creditia-core
+        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-services.log"
+      - name: Seal native screenshot provenance
+        if: always() && runner.os == 'Linux'
+        run: |
+          for directory in evidence/native evidence/native-input evidence/native-services; do
+            if [ -f "$directory/manifest.json" ]; then
+              node packaging/gpui/seal-evidence.mjs "$directory"
+            fi
+          done
       - name: Retain execution and visual evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -373,7 +368,6 @@ jobs:
             evidence/native/**
             evidence/native-input/**
             evidence/native-services/**
-            evidence/native-window/**
             evidence/native-animation/**
             evidence/native-feature-checks/**
             evidence/package-runtime/**
@@ -387,7 +381,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Require native unit, visual and input acceptance
-        if: always() && (steps.native-unit.outcome != 'success' || steps.native-pixels.outcome == 'failure' || steps.native-window.outcome == 'failure' || steps.native-animation.outcome == 'failure' || steps.native-input.outcome == 'failure' || steps.native-services.outcome == 'failure')
+        if: always() && (steps.native-unit.outcome != 'success' || steps.native-pixels.outcome == 'failure' || steps.native-animation.outcome == 'failure' || steps.native-input.outcome == 'failure' || steps.native-services.outcome == 'failure')
         run: |
           echo 'Native unit/visual/input acceptance failed; retained candidates are not release-ready.'
           exit 1
