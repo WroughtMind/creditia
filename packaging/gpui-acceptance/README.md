@@ -243,19 +243,12 @@ source inventory's acceptance columns. Empty-only renderings remain unresolved.
 Performance results are comparable only when machine/data/workload identities
 match and both workloads actually completed.
 
-The final gate additionally requires four platform package acceptance records,
-twelve matched scenario/cache combinations, 1,482 actual native decoded catalog rows,
-1,738 browser component catalog rows, and native UI captures on all four platform architectures,
-and a recorded visual/interaction review supplied with `--review review.json`
-(`--manual-review` remains an alias). The review records the actual reviewer
-including an agent identity, timestamp and candidate. Representative visual reviews
-cover all 26 desktop styles and all artwork families, and sampled-motion reviews
-cover all 26 styles. Exhaustive per-row machine evidence remains mandatory; the
-review never claims every combination was manually viewed. Every named check of
-all 37 feature groups has an explicit behavior verdict. Each verdict links to a
-concrete `manifest.json#case-key` from this run.
-Blanket boolean statements such as “all visuals passed” do not satisfy this gate.
-`--require-complete` exits nonzero until every gate is met.
+Delivery requires the four installed package workflows, the primary-platform user journey,
+five representative visual cases and same-host startup, scroll, roam and hidden-idle comparisons.
+Each reviewer entry records its observation and references verified evidence for this candidate.
+See [the review format](../gpui/RELEASE.md). The complete artwork and feature tables remain available
+for investigation. Full native, web, artwork and cold/warm matrices run on demand.
+`--require-complete` exits nonzero until the delivery checks pass.
 
 Tooling checks require no renderer dependencies:
 

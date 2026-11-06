@@ -36,9 +36,10 @@ export function writeDeliveryReport(r, output, {matrix, packages = [], performan
   fs.writeFileSync(path.join(output,'ARTWORK-STATUS.tsv'),tsv(art));
   fs.writeFileSync(path.join(output,'FEATURE-STATUS.tsv'),tsv(checks));
   const desktop = r.artwork.filter(a=>a.desktop).length, perf = new Map(performance.map(p=>[p.manifest,p]));
-  const installed = packages.filter(p=>p.acceptance?.passed === true && p.installers?.length);
+  const installed = packages.filter(p=>r.package_platforms.some(item=>item.manifest===p.manifest && item.installed_workflow));
   const ready = r.release_ready === true;
   const doc = ['# Creditia GPUI 迁移验收','',`实测提交：\`${r.candidate_sha}\`。**${ready?'已达到切换条件':'尚未达到切换条件'}**。`,
+    '', '桌面界面采用 GPUI。项目库和分析继续使用 Rust 服务，展墙、漫游、动画和导出复用 CLI 与网页的作品渲染器。安装包内含运行时与字体。',
     '', '| 验收项 | 本次证据 |','|---|---:|',
     `| 全目录按需回归 | ${r.artwork.filter(a=>a.status==='machine_matched'&&a.all_preferences&&a.motion_sampled&&a.exports_checked).length} / ${r.artwork.length} 组完成偏好、适用动作及导出验证 |`,
     `| 网页作品 | ${r.browser_catalog.passed_rows} / ${r.artwork.length} 组 |`,
@@ -49,6 +50,12 @@ export function writeDeliveryReport(r, output, {matrix, packages = [], performan
     `| 同机性能对照 | ${r.performance_comparisons.filter(p=>p.status==='comparable').length} 对 |`,
     `| 视觉复核 | ${r.recorded_review.status}；已记录 ${r.recorded_review.reviewed_artworks} 个代表组合 |`,
     `| 无效证据 | ${r.invalid_evidence.length} 份 |`,
+    '', '## 主平台使用记录', '',
+    ...(r.recorded_review.workflow ?? []).map(entry => `- ${entry.notes}`),
+    ...(r.recorded_review.workflow?.length ? [] : ['等待主平台验收。']),
+    '', '## 已知限制与回退', '',
+    'macOS 候选包使用临时签名，Windows 候选包使用未签名安装程序。同机性能只代表所测硬件和显示环境。',
+    '升级前保留上一版应用和项目库备份。需要回退时退出 GPUI，重新打开上一版，保留项目的 .creditia 目录和证据库。具体步骤见 INSTALL.md。',
     '', '[逐作品、版式、风格台账](ARTWORK-STATUS.tsv) · [逐项操作台账](FEATURE-STATUS.tsv) · [完整证据索引](report.json)',
     '', '共享目录中只有标记为 desktop 的作品需要 GPUI 窗口截图。动作栏的 sampled 表示导出采样已核对；窗口播放、中断和重播另见功能台账。',
     '', '## 安装包','', '| 平台 | 安装并核对的文件 | SHA-256 |','|---|---|---|',

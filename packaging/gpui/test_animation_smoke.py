@@ -17,6 +17,12 @@ class StreamingEvidenceTests(unittest.TestCase):
 
     def test_current_physical_resolution_is_required(self):
         self.assertEqual(smoke.validate_frame(self.state())["required_pixels"], 2200)
+        state = self.state()
+        state["focused_rect"]["w"] += 0.0001
+        self.assertEqual(smoke.validate_frame(state)["required_pixels"], 2200)
+        state["focused_rect"]["w"] += 0.1
+        with self.assertRaisesRegex(AssertionError, "Undersampled"):
+            smoke.validate_frame(state)
         for change in ({"display_scale": 1}, {"viewport_ready": False}):
             state = self.state()
             state.update(change)

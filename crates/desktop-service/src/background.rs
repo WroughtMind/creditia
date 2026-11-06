@@ -6,12 +6,18 @@ use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TaskKind {
+    Analysis,
+    Collection,
+}
+
 struct State {
     stop: bool,
     active: bool,
     project: Option<String>,
     generation: u64,
-    task: Option<AnalysisCancellation>,
+    task: Option<(TaskKind, AnalysisCancellation)>,
 }
 struct Shared {
     state: Mutex<State>,
@@ -45,12 +51,23 @@ impl BackgroundService {
         if state.project == project {
             return;
         }
-        if let Some(task) = state.task.take() {
+        if let Some((_, task)) = state.task.take() {
             task.cancel();
         }
         state.project = project;
         state.generation = state.generation.wrapping_add(1);
         self.shared.wake.notify_one();
+    }
+    pub fn cancel_analysis(&self, project: &str, generation: u64) -> bool {
+        let state = self.shared.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.generation != generation || state.project.as_deref() != Some(project) {
+            return false;
+        }
+        if let Some((TaskKind::Analysis, token)) = &state.task {
+            token.cancel();
+            return true;
+        }
+        false
     }
     pub fn set_active(&self, active: bool) {
         let mut state = self.shared.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -68,7 +85,7 @@ impl BackgroundService {
     pub fn stop(&self) {
         let mut state = self.shared.state.lock().unwrap_or_else(|e| e.into_inner());
         state.stop = true;
-        if let Some(task) = state.task.take() {
+        if let Some((_, task)) = state.task.take() {
             task.cancel();
         }
         self.shared.wake.notify_one();
@@ -84,13 +101,13 @@ fn current(shared: &Shared, generation: u64) -> bool {
     let state = shared.state.lock().unwrap_or_else(|e| e.into_inner());
     !state.stop && state.generation == generation
 }
-fn begin(shared: &Shared, generation: u64) -> Option<AnalysisCancellation> {
+fn begin(shared: &Shared, generation: u64, kind: TaskKind) -> Option<AnalysisCancellation> {
     let mut state = shared.state.lock().unwrap_or_else(|e| e.into_inner());
     if state.stop || state.generation != generation {
         return None;
     }
     let token = AnalysisCancellation::default();
-    state.task = Some(token.clone());
+    state.task = Some((kind, token.clone()));
     Some(token)
 }
 fn finish(shared: &Shared, generation: u64) {
@@ -150,7 +167,7 @@ fn run(shared: Arc<Shared>, events: ProgressSink) {
                             && head != archived
                             && tried.get(&id) != Some(&head)
                         {
-                            if let Some(token) = begin(&shared, generation) {
+                            if let Some(token) = begin(&shared, generation, TaskKind::Analysis) {
                                 let progress_id = id.clone();
                                 let emit = events.clone();
                                 let progress: ProgressSink = Arc::new(move |value| {
@@ -253,7 +270,7 @@ fn run(shared: Arc<Shared>, events: ProgressSink) {
             && crate::collection::now() - last >= crate::collection::COLLECT_EVERY
             && current(&shared, generation)
         {
-            if let Some(token) = begin(&shared, generation) {
+            if let Some(token) = begin(&shared, generation, TaskKind::Collection) {
                 events(json!({"kind":"collect-started"}));
                 let result = crate::collection::collect_round_with_cancel(true, token);
                 finish(&shared, generation);

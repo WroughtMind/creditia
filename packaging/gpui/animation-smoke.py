@@ -51,7 +51,12 @@ def validate_frame(state):
     if not frame_ready(state):
         raise AssertionError("Displayed frame has not decoded at the current viewport epoch")
     player, rect = state["animation"], state["focused_rect"]
-    required = math.ceil(rect["w"] * state["display_scale"])
+    # Focus geometry is f32. Ignore representation error at an integer pixel,
+    # using the same tolerance as the production texture_width calculation.
+    physical = rect["w"] * state["display_scale"]
+    nearest = round(physical)
+    tolerance = max(0.0001, abs(physical) * 2 ** -22)
+    required = nearest if abs(physical - nearest) <= tolerance else math.ceil(physical)
     if player["frame_pixels"] < required:
         raise AssertionError(f"Undersampled frame: {player['frame_pixels']} < {required}")
     decoded = 0

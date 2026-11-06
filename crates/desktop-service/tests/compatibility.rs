@@ -719,8 +719,10 @@ fn explicit_background_cancel_waits_for_a_new_head_despite_forced_refresh() {
             }
         }
     };
-    wait_for("analysis-progress");
-    service::cancel_analyze();
+    let generation = wait_for("analysis-progress")["generation"].as_u64().unwrap();
+    assert!(!background.cancel_analysis(&project.id, generation.wrapping_sub(1)));
+    assert!(!background.cancel_analysis("different-project", generation));
+    assert!(background.cancel_analysis(&project.id, generation));
     assert_eq!(wait_for("analysis-finished")["cancelled"], true);
     // Change the archive stamp to prove the worker actually scans again; merely
     // sleeping after cancellation would not establish suppression under refresh.

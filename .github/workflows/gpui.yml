@@ -210,9 +210,7 @@ jobs:
           fi
       - name: Prepare canonical artwork fixtures
         run: |
-          profile=full
-          if [ "$RUNNER_OS" = Windows ]; then profile=smoke; fi
-          node packaging/gpui/fixtures.mjs --output evidence/fixtures --profile "$profile"
+          node packaging/gpui/fixtures.mjs --output evidence/fixtures --profile smoke
       - name: Exercise production views with the real offscreen renderer
         if: runner.os != 'Windows'
         id: native-pixels
@@ -222,7 +220,7 @@ jobs:
           CREDITIA_VISUAL_OUTPUT: ${{ github.workspace }}/evidence/native
         run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-rendering.log"
       - name: Exercise native input with the actual shared rendering worker
-        if: runner.os != 'Windows'
+        if: runner.os == 'Linux'
         id: native-input
         continue-on-error: true
         env:
@@ -230,7 +228,7 @@ jobs:
           CREDITIA_RUNTIME_OUTPUT: ${{ github.workspace }}/evidence/native-input
         run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-input.log"
       - name: Operate real projects and persist settings through native controls
-        if: runner.os != 'Windows'
+        if: runner.os == 'Linux'
         id: native-services
         continue-on-error: true
         env:

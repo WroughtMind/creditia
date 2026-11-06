@@ -16,7 +16,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, VecDeque},
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -1586,8 +1586,9 @@ impl Creditia {
         self.blame = None;
         self.focused = false;
         self.details = None;
-        self.automatic_job = None;
-        if !self.job_busy {
+        // Changing the watch cancels its worker asynchronously. Keep its identity
+        // until completion so a queued project does not race the analysis lock.
+        if !self.job_busy && !same_project {
             self.progress = None;
         }
         if let Some(background) = &self.background {
@@ -1931,10 +1932,13 @@ impl Creditia {
     }
 
     fn cancel(&mut self, _: &CancelAnalysis, _: &mut Window, cx: &mut Context<Self>) {
-        if self.automatic_job.is_some() && !self.job_busy {
-            service::cancel_analyze();
-            self.cancelling = true;
-            cx.notify();
+        if !self.job_busy {
+            if let (Some((id, generation)), Some(background)) =
+                (&self.automatic_job, &self.background)
+            {
+                self.cancelling = background.cancel_analysis(id, *generation);
+                cx.notify();
+            }
         }
         if self.job_busy {
             for path in self.add_queue.drain(..) {
@@ -3398,18 +3402,19 @@ impl Creditia {
                                 }
                             }
                             "analysis-started" => {
-                                if event["projectId"].as_str() == view.selected.as_deref() {
+                                if let Some(id) = event["projectId"].as_str() {
                                     view.automatic_job = Some((
-                                        event["projectId"].as_str().unwrap_or("").into(),
+                                        id.into(),
                                         event["generation"].as_u64().unwrap_or(0),
                                     ));
-                                    if !view.job_busy {
+                                    if !view.job_busy && view.selected.as_deref() == Some(id) {
                                         view.progress = Some(json!({"stage":"history"}));
                                     }
                                 }
                             }
                             "analysis-progress" => {
                                 if !view.job_busy
+                                    && event["projectId"].as_str() == view.selected.as_deref()
                                     && view.automatic_job.as_ref().is_some_and(
                                         |(id, generation)| {
                                             event["projectId"].as_str() == Some(id)
@@ -3426,10 +3431,18 @@ impl Creditia {
                                         && event["generation"].as_u64() == Some(*generation)
                                 }) {
                                     view.automatic_job = None;
+                                    view.cancelling = false;
+                                    if event["projectId"].as_str() != view.selected.as_deref() {
+                                        if !view.job_busy {
+                                            view.progress = None;
+                                        }
+                                        view.start_next_project(cx);
+                                        cx.notify();
+                                        return;
+                                    }
                                     view.warnings =
                                         crate::ui_reports::analysis_warnings(&event["result"]);
                                     view.start_next_project(cx);
-                                    view.cancelling = false;
                                     if !event["error"].is_null() {
                                         if event["error"]["code"] == "cancelled" {
                                             view.notice = Some(
@@ -3521,6 +3534,10 @@ impl Creditia {
         }
         if panel == Panel::Projects {
             self.picker_selected = None;
+            self.search_query.clear();
+            self.search_input
+                .update(cx, |input, cx| input.set_value("", window, cx));
+            self.project_scroll.scroll_to_item(0);
             self.search_input
                 .read(cx)
                 .focus_handle(cx)
@@ -3799,6 +3816,9 @@ impl Creditia {
         }));
     }
     fn import_evidence(&mut self, cx: &mut Context<Self>) {
+        if self.job_busy || self.automatic_job.is_some() {
+            return;
+        }
         let Some(id) = self.settings_id().cloned() else {
             return;
         };
@@ -3831,15 +3851,27 @@ impl Creditia {
                     return;
                 }
             };
-            let cancellation = service::AnalysisCancellation::default();
-            let worker = cancellation.clone();
-            let _ = this.update(cx, |view, cx| {
-                view.job_busy = true;
-                view.analysis_cancellation = Some(cancellation);
-                cx.notify();
-            });
+            let _ = this.update(cx, |view, cx| view.start_evidence_import(id, path, cx));
+        }));
+    }
+    fn start_evidence_import(&mut self, id: String, path: PathBuf, cx: &mut Context<Self>) {
+        if self.job_busy || self.automatic_job.is_some() {
+            self.notice = Some(
+                self.text(
+                    "已有任务正在运行，请稍后重试",
+                    "Another task is running; try again when it finishes",
+                )
+                .into(),
+            );
+            cx.notify();
+            return;
+        }
+        let cancellation = service::AnalysisCancellation::default();
+        self.analysis_cancellation = Some(cancellation.clone());
+        self.job_busy = true;
+        self.job_task = Some(cx.spawn(async move |this, cx| {
             let result = cx
-                .background_spawn(async move { service::import_evidence(id, path, worker) })
+                .background_spawn(async move { service::import_evidence(id, path, cancellation) })
                 .await;
             let _ = this.update(cx, |view, cx| {
                 view.job_busy = false;
@@ -3858,9 +3890,11 @@ impl Creditia {
                     }
                     Err(error) => view.error = Some(error.to_string()),
                 }
+                view.start_next_project(cx);
                 cx.notify();
             });
         }));
+        cx.notify();
     }
     fn load_diagnostics(&mut self, cx: &mut Context<Self>) {
         self.panel = Some(Panel::Diagnostics);
@@ -4083,6 +4117,14 @@ impl Creditia {
             && (self.export_format != "gif"
                 || self.selected_piece().is_some_and(|p| p["animated"] == true))
     }
+    fn export_history_writable(&self) -> bool {
+        self.fixture
+            || (self.export_history_error.is_none()
+                && self
+                    .export_journal
+                    .as_ref()
+                    .is_some_and(|journal| !journal.blocked()))
+    }
     fn export_request(&self) -> Result<Value, String> {
         let raw = self.raw.as_ref().ok_or("No archive")?;
         let catalog = self.catalog.as_ref().ok_or("No artwork catalog")?;
@@ -4226,7 +4268,7 @@ impl Creditia {
         }
     }
     fn export_artwork(&mut self, _: &ExportArtwork, _: &mut Window, cx: &mut Context<Self>) {
-        if !self.can_export() {
+        if !self.can_export() || !self.export_history_writable() {
             return;
         }
         let snapshot = match self.export_request() {
@@ -4253,6 +4295,9 @@ impl Creditia {
             let _ = this.update(cx, |view, cx| {
                 view.export_prompt_busy = false;
                 match choice {
+                    Ok(Ok(Some(_))) if !view.export_history_writable() => {
+                        view.panel = Some(Panel::Exports);
+                    }
                     Ok(Ok(Some(path))) => match view.export_queue.enqueue(snapshot, path, filename)
                     {
                         Ok(queued) => {
@@ -4368,6 +4413,9 @@ impl Creditia {
         cx.notify();
     }
     fn retry_export_job(&mut self, id: u64, cx: &mut Context<Self>) {
+        if !self.export_history_writable() {
+            return;
+        }
         match self.export_queue.retry(id) {
             Ok(()) => {
                 self.persist_exports();
@@ -5499,7 +5547,7 @@ impl Creditia {
                         Button::new("save-export")
                             .primary()
                             .label(self.text("保存…", "Save…"))
-                            .disabled(!self.can_export())
+                            .disabled(!self.can_export() || !self.export_history_writable())
                             .on_click(cx.listener(|view, _, window, cx| {
                                 view.export_artwork(&ExportArtwork, window, cx)
                             })),
@@ -6050,6 +6098,7 @@ impl Creditia {
                             Button::new(("export-remove", index))
                                 .ghost()
                                 .label(self.text("移除记录", "Remove record"))
+                                .disabled(!self.export_history_writable())
                                 .on_click(cx.listener(move |view, _, _, cx| {
                                     view.export_queue.remove(id);
                                     view.persist_exports();

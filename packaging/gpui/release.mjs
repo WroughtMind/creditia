@@ -67,7 +67,7 @@ export function runMatchesCandidate(run, candidate, workflow, repo) {
 export function validateReport(report, candidate) {
   if (report.schema_version !== 1 || report.candidate_sha !== candidate || report.release_ready !== true) throw Error('Combined acceptance report is not release-ready for this candidate');
   if (report.invalid_evidence?.length !== 0 || report.native_failures?.length !== 0 || report.recorded_review?.status !== 'complete' || report.native_platforms_complete !== true || report.feature_failures?.length !== 0) throw Error('Combined acceptance report has missing or failed migration gates');
-  const platforms = new Set((report.package_platforms ?? []).filter(item => item.acceptance?.passed === true).map(item => item.platform));
+  const platforms = new Set((report.package_platforms ?? []).filter(item => item.acceptance?.passed === true && item.installed_workflow === true).map(item => item.platform));
   for (const platform of ['darwin-arm64', 'darwin-x64', 'win32-x64', 'linux-x64']) if (!platforms.has(platform)) throw Error(`Missing accepted package platform ${platform}`);
   for (const scenario of ['startup', 'scroll', 'roam', 'hidden-idle']) {
     if (!report.performance_comparisons?.some(item => item.scenario === scenario && item.status === 'comparable')) throw Error(`Missing same-host performance: ${scenario}`);

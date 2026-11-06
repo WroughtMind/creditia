@@ -193,16 +193,24 @@ const featureFailures = featureCoverage.flatMap(f => f.checks.filter(c => c.stat
 const requiredPerformance = ['startup', 'scroll', 'roam', 'hidden-idle'];
 const performanceComplete = requiredPerformance.every(scenario => performanceComparisons.some(p =>
   p.scenario === scenario && p.status === 'comparable'));
+const packageFormats = { 'darwin-arm64': ['zip', 'dmg'], 'darwin-x64': ['zip', 'dmg'],
+  'win32-x64': ['zip', 'nsis'], 'linux-x64': ['tar', 'deb'] };
+function installedWorkflow(p) {
+  const ids = new Set((p.checks ?? []).filter(check => check.passed).map(check => check.id));
+  return p.acceptance?.passed && p.installers?.length && packageFormats[p.platform]?.every(format =>
+    ['launch', 'installed-export', 'restart'].every(step => ids.has(`${format}-${step}`))) &&
+    (p.platform !== 'win32-x64' || ids.has('nsis-uninstall-preserves-user-library'));
+}
 const releaseReady = failures.length === 0 && nativePlatformsComplete && nativeFailures.length === 0 &&
   featureFailures.length === 0 && performanceComplete && manualComplete &&
   primaryPlatforms.every(platform =>
     packages.some(p => p.platform === platform && p.acceptance?.passed && p.tests?.length) &&
-    packages.some(p => p.platform === platform && p.acceptance?.passed && p.installers?.length));
+    packages.some(p => p.platform === platform && installedWorkflow(p)));
 const report = { schema_version: 1, candidate_sha: options['candidate-sha'], generated_at: new Date().toISOString(),
   release_ready: releaseReady, evidence_manifests: manifests, invalid_evidence: failures,
   real_project_visual_sample: realVisualInput, feature_coverage: featureCoverage, features_complete: featuresComplete,
   artwork_summary: countBy(artwork, r => r.status), artwork, native, native_platforms_complete: nativePlatformsComplete, browser_catalog: { complete: browserCatalogComplete, passed_rows: browserCatalogPassed.size, manifests: browserCatalog }, native_catalog: { complete: nativeCatalogComplete, passed_rows: nativeCatalogPassed.size, manifests: nativeCatalog }, native_failures: nativeFailures, feature_failures: featureFailures,
-  performance_comparisons: performanceComparisons, additional_performance: performance.filter(p => !comparisonScenarios.includes(p.scenario)).map(p => ({ manifest: p.manifest, scenario: p.scenario, verified: p.workload_verified })), package_platforms: packages.map(p => ({ platform: p.platform, acceptance: p.acceptance, manifest: p.manifest })),
+  performance_comparisons: performanceComparisons, additional_performance: performance.filter(p => !comparisonScenarios.includes(p.scenario)).map(p => ({ manifest: p.manifest, scenario: p.scenario, verified: p.workload_verified })), package_platforms: packages.map(p => ({ platform: p.platform, acceptance: p.acceptance, installed_workflow: Boolean(installedWorkflow(p)), manifest: p.manifest })),
   recorded_review: { status: manual ? manualComplete ? 'complete' : 'incomplete' : 'not_provided', reviewed_artworks: manual?.visuals?.length ?? 0,
     reviewed_features: featureEntries.size, executable_feature_checks: featureChecks.length, platform: manual?.platform, workflow: manual?.workflow, visuals: manual?.visuals, source: reviewPath ?? null },
   limitations: ['Machine rendering matches do not verify native UI placement or interaction.',
