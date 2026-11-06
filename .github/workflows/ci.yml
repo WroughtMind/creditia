@@ -16,24 +16,64 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with: { cache-on-failure: true }
       - name: Verify helper jobs stop on completion, timeout and core cancellation
+        id: tests
+        shell: bash
         run: |
-          cargo test -p creditia-adapters command:: --lib
-          cargo test -p creditia-desktop-service
+          mkdir -p evidence/test-logs
+          git rev-parse HEAD > evidence/test-logs/core.log
+          cargo test -p creditia-adapters command:: --lib 2>&1 | tee -a evidence/test-logs/core.log
+          cargo test -p creditia-desktop-service 2>&1 | tee -a evidence/test-logs/core.log
+      - name: Record exercised Windows service behavior
+        if: always() && steps.tests.outcome != 'skipped'
+        shell: bash
+        run: |
+          node -e 'require("node:fs").writeFileSync("evidence/test-logs/provenance.json", JSON.stringify({candidate_sha:process.env.GITHUB_SHA,sources:[{file:"core.log",run_id:process.env.GITHUB_RUN_ID,job_name:process.env.GITHUB_JOB,platform:process.platform+"-"+process.arch}]}))'
+          node packaging/gpui-acceptance/feature-evidence.mjs --logs evidence/test-logs --bindings packaging/gpui-acceptance/feature-bindings.json --candidate-sha "$GITHUB_SHA" --output evidence/feature-checks
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creditia-features-windows-service
+          path: evidence/feature-checks
+          if-no-files-found: warn
+          retention-days: 14
 
   core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
         with: { cache-on-failure: true }
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - name: Exercise core and shared desktop behavior
+        id: tests
+        shell: bash
+        run: |
+          mkdir -p evidence/test-logs
+          git rev-parse HEAD > evidence/test-logs/core.log
+          cargo test --workspace 2>&1 | tee -a evidence/test-logs/core.log
+      - name: Record exercised shared-service behavior
+        if: always() && steps.tests.outcome != 'skipped'
+        shell: bash
+        run: |
+          node -e 'require("node:fs").writeFileSync("evidence/test-logs/provenance.json", JSON.stringify({candidate_sha:process.env.GITHUB_SHA,sources:[{file:"core.log",run_id:process.env.GITHUB_RUN_ID,job_name:process.env.GITHUB_JOB,platform:process.platform+"-"+process.arch}]}))'
+          node packaging/gpui-acceptance/feature-evidence.mjs --logs evidence/test-logs --bindings packaging/gpui-acceptance/feature-bindings.json --candidate-sha "$GITHUB_SHA" --output evidence/feature-checks
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creditia-features-core
+          path: evidence/feature-checks
+          if-no-files-found: warn
+          retention-days: 14
 
   render:
     runs-on: ubuntu-latest
@@ -49,12 +89,33 @@ jobs:
       - run: npm ci
         working-directory: packages/render
       - run: node --test packaging/*.test.mjs site/*.test.mjs
-      - run: npm test
+      - name: Exercise shared artwork and export behavior
+        id: render-tests
+        shell: bash
         working-directory: packages/render
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/evidence/test-logs"
+          git rev-parse HEAD > "$GITHUB_WORKSPACE/evidence/test-logs/render.log"
+          npm test 2>&1 | tee -a "$GITHUB_WORKSPACE/evidence/test-logs/render.log"
       - name: Check GPUI migration catalog coverage
         run: node docs/gpui-migration/capture.mjs --check
-      - run: node --test test/*.test.ts
+      - name: Exercise CLI selection and output behavior
+        shell: bash
         working-directory: packages/cli
+        run: node --test test/*.test.ts 2>&1 | tee -a "$GITHUB_WORKSPACE/evidence/test-logs/render.log"
+      - name: Record exercised renderer and CLI behavior
+        if: always() && steps.render-tests.outcome != 'skipped'
+        shell: bash
+        run: |
+          node -e 'require("node:fs").writeFileSync("evidence/test-logs/provenance.json", JSON.stringify({candidate_sha:process.env.GITHUB_SHA,sources:[{file:"render.log",run_id:process.env.GITHUB_RUN_ID,job_name:process.env.GITHUB_JOB,platform:process.platform+"-"+process.arch}]}))'
+          node packaging/gpui-acceptance/feature-evidence.mjs --logs evidence/test-logs --bindings packaging/gpui-acceptance/feature-bindings.json --candidate-sha "$GITHUB_SHA" --output evidence/feature-checks
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creditia-features-render
+          path: evidence/feature-checks
+          if-no-files-found: warn
+          retention-days: 14
       - name: Install CLI build dependencies
         run: npm ci
         working-directory: packages/cli

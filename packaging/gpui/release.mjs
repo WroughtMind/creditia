@@ -13,6 +13,7 @@ import { createWriteStream } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 export const TARGETS = ['aarch64-apple-darwin', 'x86_64-apple-darwin', 'x86_64-pc-windows-msvc', 'x86_64-unknown-linux-gnu'];
+const REPORT_ASSETS = ['report.json','REPORT.md','ACCEPTANCE.zh.md','ARTWORK-STATUS.tsv','FEATURE-STATUS.tsv'];
 const SHA = /^[a-f0-9]{40}$/;
 const HASH = /^[a-f0-9]{64}$/;
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -165,7 +166,7 @@ async function prepare(opts) {
     ['native-run', 'gpui', [...TARGETS.map(target => `gpui-candidate-${target}`), ...TARGETS.map(target => `gpui-evidence-${target}`), 'gpui-native-catalog-linux-x86_64']],
     ['artwork-run', 'gpui-artworks', Array.from({ length: 8 }, (_, i) => `gpui-artwork-evidence-${i}`)],
     ['performance-run', 'gpui-performance', ['gpui-production-performance']],
-    ['core-run', 'ci', ['creditia-web-renderer']],
+    ['core-run', 'ci', ['creditia-web-renderer', 'creditia-features-core', 'creditia-features-windows-service', 'creditia-features-render']],
   ];
   for (const [input, workflow, required] of definitions) {
     const id = opts[input];
@@ -213,8 +214,7 @@ async function prepare(opts) {
   provenance.installers = installers;
   await fs.writeFile(path.join(output, 'provenance.json'), JSON.stringify(provenance, null, 2) + '\n');
   await fs.copyFile(path.join(candidateRoot, 'packaging/gpui/INSTALL.md'), path.join(assets, 'INSTALL.md'));
-  await fs.copyFile(path.join(output, 'report/report.json'), path.join(assets, 'acceptance-report.json'));
-  await fs.copyFile(path.join(output, 'report/REPORT.md'), path.join(assets, 'ACCEPTANCE.md'));
+  for (const file of REPORT_ASSETS) await fs.copyFile(path.join(output, 'report', file), path.join(assets, file));
   // Full raw evidence survives CI retention, including individual native pixels.
   // Installer payloads are release assets already, so omit their duplicate copies.
   for (const [target, directory] of nativeArtifacts) {
@@ -238,7 +238,7 @@ async function prepare(opts) {
   const checksumLines = [];
   for (const file of await files(assets)) checksumLines.push(`${await fileHash(path.join(assets, file))}  ${file}`);
   await fs.writeFile(path.join(assets, 'SHA256SUMS'), checksumLines.join('\n') + '\n');
-  const notes = `# Creditia GPUI ${opts.tag}\n\nTested source: \`${candidate}\`. This draft is a prerelease; it does not switch the stable desktop or the main branch.\n\nAll four native packages, installation checks, the complete shared/native/browser artwork catalogs, recorded visual/interaction review, and comparable cold/warm process-tree measurements passed the combined acceptance gate. See ACCEPTANCE.md and acceptance-report.json; the complete source evidence is retained in the archive described by evidence-archive.json (large archives are split into ordered 1 GiB parts). Concatenate parts in manifest order before extracting the tar.gz; its reconstructed SHA-256 is recorded there.\n\nmacOS uses ad-hoc signatures without notarization; Windows packages are unsigned. INSTALL.md explains installation, OS trust prompts, upgrade and rollback. No externally installed Node or downloaded fonts are required.\n\n## Verified workflow runs\n\n${provenance.runs.map(run => `- [${run.path} run ${run.id}](${run.html_url})`).join('\n')}\n`;
+  const notes = `# Creditia GPUI ${opts.tag}\n\nTested source: \`${candidate}\`. This draft is a prerelease; it does not switch the stable desktop or the main branch.\n\nAll four native packages, installation checks, the complete shared/native/browser artwork catalogs, recorded visual/interaction review, and comparable cold/warm process-tree measurements passed the combined acceptance gate. See REPORT.md, ACCEPTANCE.zh.md and report.json. ARTWORK-STATUS.tsv and FEATURE-STATUS.tsv retain the per-item results; the complete source evidence is retained in the archive described by evidence-archive.json (large archives are split into ordered 1 GiB parts). Concatenate parts in manifest order before extracting the tar.gz; its reconstructed SHA-256 is recorded there.\n\nmacOS uses ad-hoc signatures without notarization; Windows packages are unsigned. INSTALL.md explains installation, OS trust prompts, upgrade and rollback. No externally installed Node or downloaded fonts are required.\n\n## Verified workflow runs\n\n${provenance.runs.map(run => `- [${run.path} run ${run.id}](${run.html_url})`).join('\n')}\n`;
   await fs.writeFile(path.join(output, 'release-notes.md'), notes);
   const records = [];
   for (const file of [...await files(assets)].map(file => `assets/${file}`).concat(['release-notes.md'])) records.push({ path: file, bytes: (await fs.stat(path.join(output, file))).size, sha256: await fileHash(path.join(output, file)) });
@@ -262,7 +262,7 @@ export async function verifyBundle(root, expected) {
     if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== item.bytes || await fileHash(file) !== item.sha256) throw Error(`Prepared release asset changed: ${item.path}`);
   }
   const actual = (await files(path.join(root, 'assets'))).map(file => `assets/${file}`);
-  if (actual.some(file => !names.has(file)) || !names.has('release-notes.md') || !names.has('assets/evidence-archive.json') || !names.has('assets/SHA256SUMS')) throw Error('Prepared release assets are incomplete or injected');
+  if (actual.some(file => !names.has(file)) || REPORT_ASSETS.some(file => !names.has(`assets/${file}`)) || !names.has('release-notes.md') || !names.has('assets/evidence-archive.json') || !names.has('assets/SHA256SUMS')) throw Error('Prepared release assets are incomplete or injected');
   const archive = await json(path.join(root, 'assets/evidence-archive.json'));
   if (archive.name !== 'gpui-acceptance-evidence.tar.gz' || !HASH.test(archive.sha256 ?? '') || !archive.parts?.length) throw Error('Full evidence archive is missing');
   const reconstructed = createHash('sha256');
@@ -275,7 +275,7 @@ export async function verifyBundle(root, expected) {
     for await (const chunk of createReadStream(file)) { reconstructed.update(chunk); archiveBytes += chunk.length; }
   }
   if (archiveBytes !== archive.bytes || reconstructed.digest('hex') !== archive.sha256) throw Error('Reconstructed full evidence archive checksum mismatch');
-  validateReport(await json(path.join(root, 'assets/acceptance-report.json')), bundle.candidate_sha);
+  validateReport(await json(path.join(root, 'assets/report.json')), bundle.candidate_sha);
   for (const target of TARGETS) if (actual.filter(file => file.startsWith(`assets/creditia-gpui-${target}`)).length !== 2) throw Error(`Prepared bundle lacks both installers for ${target}`);
   return bundle;
 }

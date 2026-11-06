@@ -73,27 +73,27 @@ SVG 注册表另有 `minimal/noir/glass/cinema/terminal`；桌面为避免重复
 
 | 作品 | 名称 | 版式 | 桌面 | 可生成动画帧 | 源码 |
 |---|---|---|---|---|---|
-| tier | 署名榜 | rows, center, podium, vertical, hud, stats, split, grouped | 是 | 是 | [packages/render/src/registry.ts:29](../../packages/render/src/registry.ts#L29) |
-| asterisk | 星号 | 默认 | 是 | 是 | [packages/render/src/registry.ts:30](../../packages/render/src/registry.ts#L30) |
-| share | 分享图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:31](../../packages/render/src/registry.ts#L31) |
-| hand | 开发者 | 默认 | 共享模块额外能力 | 是 | [packages/render/src/registry.ts:32](../../packages/render/src/registry.ts#L32) |
-| people | 贡献者 | 默认 | 是 | 是 | [packages/render/src/registry.ts:33](../../packages/render/src/registry.ts#L33) |
-| receipt | 小票 | slip, ticket, itemized | 是 | 否 | [packages/render/src/registry.ts:34](../../packages/render/src/registry.ts#L34) |
-| badge | 徽章 | flat, stack, emblem, split | 是 | 否 | [packages/render/src/registry.ts:35](../../packages/render/src/registry.ts#L35) |
-| byline | 署名行 | line, models | 是 | 否 | [packages/render/src/registry.ts:36](../../packages/render/src/registry.ts#L36) |
-| roll | 片尾字幕 | classic, scroll, card, vertical, ed, billing, terminal, troupe | 是 | 是 | [packages/render/src/registry.ts:37](../../packages/render/src/registry.ts#L37) |
-| donut | 环形图 | ring, nested | 是 | 是 | [packages/render/src/registry.ts:38](../../packages/render/src/registry.ts#L38) |
-| waffle | 华夫饼图 | grid, blocks | 是 | 是 | [packages/render/src/registry.ts:39](../../packages/render/src/registry.ts#L39) |
-| stream | 河流图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:40](../../packages/render/src/registry.ts#L40) |
-| lanes | 会话泳道 | 默认 | 是 | 是 | [packages/render/src/registry.ts:41](../../packages/render/src/registry.ts#L41) |
-| clock | 作息打卡 | 默认 | 是 | 是 | [packages/render/src/registry.ts:42](../../packages/render/src/registry.ts#L42) |
-| versions | 版本柱状图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:43](../../packages/render/src/registry.ts#L43) |
-| survival | 留存 | 默认 | 是 | 是 | [packages/render/src/registry.ts:44](../../packages/render/src/registry.ts#L44) |
-| mosaic | 文件马赛克 | 默认 | 是 | 是 | [packages/render/src/registry.ts:45](../../packages/render/src/registry.ts#L45) |
-| calendar | 日历 | 默认 | 是 | 是 | [packages/render/src/registry.ts:46](../../packages/render/src/registry.ts#L46) |
-| evidence | 出处 | 默认 | 是 | 是 | [packages/render/src/registry.ts:47](../../packages/render/src/registry.ts#L47) |
-| areas | 板块 | 默认 | 是 | 是 | [packages/render/src/registry.ts:48](../../packages/render/src/registry.ts#L48) |
-| codemap | 代码地图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:49](../../packages/render/src/registry.ts#L49) |
+| tier | 署名榜 | rows, center, podium, vertical, hud, stats, split, grouped | 是 | 是 | [packages/render/src/registry.ts:30](../../packages/render/src/registry.ts#L30) |
+| asterisk | 星号 | 默认 | 是 | 是 | [packages/render/src/registry.ts:31](../../packages/render/src/registry.ts#L31) |
+| share | 分享图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:32](../../packages/render/src/registry.ts#L32) |
+| hand | 开发者 | 默认 | 共享模块额外能力 | 是 | [packages/render/src/registry.ts:33](../../packages/render/src/registry.ts#L33) |
+| people | 贡献者 | 默认 | 是 | 是 | [packages/render/src/registry.ts:34](../../packages/render/src/registry.ts#L34) |
+| receipt | 小票 | slip, ticket, itemized | 是 | 否 | [packages/render/src/registry.ts:35](../../packages/render/src/registry.ts#L35) |
+| badge | 徽章 | flat, stack, emblem, split | 是 | 否 | [packages/render/src/registry.ts:36](../../packages/render/src/registry.ts#L36) |
+| byline | 署名行 | line, models | 是 | 否 | [packages/render/src/registry.ts:37](../../packages/render/src/registry.ts#L37) |
+| roll | 片尾字幕 | classic, scroll, card, vertical, ed, billing, terminal, troupe | 是 | 是 | [packages/render/src/registry.ts:38](../../packages/render/src/registry.ts#L38) |
+| donut | 环形图 | ring, nested | 是 | 是 | [packages/render/src/registry.ts:39](../../packages/render/src/registry.ts#L39) |
+| waffle | 华夫饼图 | grid, blocks | 是 | 是 | [packages/render/src/registry.ts:40](../../packages/render/src/registry.ts#L40) |
+| stream | 河流图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:41](../../packages/render/src/registry.ts#L41) |
+| lanes | 会话泳道 | 默认 | 是 | 是 | [packages/render/src/registry.ts:42](../../packages/render/src/registry.ts#L42) |
+| clock | 作息打卡 | 默认 | 是 | 是 | [packages/render/src/registry.ts:43](../../packages/render/src/registry.ts#L43) |
+| versions | 版本柱状图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:44](../../packages/render/src/registry.ts#L44) |
+| survival | 留存 | 默认 | 是 | 是 | [packages/render/src/registry.ts:45](../../packages/render/src/registry.ts#L45) |
+| mosaic | 文件马赛克 | 默认 | 是 | 是 | [packages/render/src/registry.ts:46](../../packages/render/src/registry.ts#L46) |
+| calendar | 日历 | 默认 | 是 | 是 | [packages/render/src/registry.ts:47](../../packages/render/src/registry.ts#L47) |
+| evidence | 出处 | 默认 | 是 | 是 | [packages/render/src/registry.ts:48](../../packages/render/src/registry.ts#L48) |
+| areas | 板块 | 默认 | 是 | 是 | [packages/render/src/registry.ts:49](../../packages/render/src/registry.ts#L49) |
+| codemap | 代码地图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:50](../../packages/render/src/registry.ts#L50) |
 
 `profile` 需要项目集合与个人上下文；`blame` 需要溯源结果；`hand` 未列入默认桌面展墙。台账仍保留这些注册能力。经典主题追加版式经 `classic/bridge.ts` 使用其自己的颜色、字体及框线；不等于直接套用 SVG 风格。
 
@@ -151,8 +151,8 @@ SVG 注册表另有 `minimal/noir/glass/cinema/terminal`；桌面为避免重复
 | 完整动作定义与减少动态效果 | 6 | 本次新增要求 | 26 风格逐件动作审定；星号逐瓣、有机形变、水墨展开、片尾滚动；桌面与动画导出同一时间轴；连续操作、中断、重播；遵循系统及应用减少动态效果设置；不可见动画暂停 |
 | 透明背景、字体与失败恢复 | 7 | 本次新增要求 | 明确各格式透明背景支持；字体嵌入或转路径策略及许可证；导出进度与可重试失败；恢复不覆盖错误输入或旧任务；桌面、CLI、网页的尺寸和数据一致 |
 | 中断后恢复 | 3 | 本次新增要求 | 进程退出后恢复持久任务状态；部分结果和事务的一致性；取消后不继续写入；已有数据库和配置可回退 |
-| 性能与资源基准 | 8 | 本次新增要求 | 相同设备、数据、作品和布局规模；冷/热启动、滚动、缩放、交互延迟；整组进程 RSS、CPU、GPU 资源；空闲 CPU 与不可见动画；后台排版和渲染；纹理缓存上限和释放；请求去重及过期任务丢弃 |
-| 跨平台发布 | 9 | 本次新增要求 | macOS Apple Silicon 与 Intel；Windows 与 Linux；最低系统和图形依赖；独立安装包与升级；签名、公证和发布 CI；升级备份及回退；完整验收报告和维护文档 |
+| 性能与资源基准 | 8 | 本次新增要求 | 相同设备、数据、作品和布局规模；冷/热启动、滚动、缩放、交互延迟；整组进程 RSS 与 CPU 资源；空闲 CPU 与不可见动画；后台排版和渲染；纹理缓存上限和释放；请求去重及过期任务丢弃 |
+| 跨平台发布 | 9 | 本次新增要求 | macOS Apple Silicon 与 Intel；Windows 与 Linux；最低系统和图形依赖；独立安装包与升级；沿用现有签名策略并完成发布 CI；升级备份及回退；完整验收报告和维护文档 |
 
 ## 输出边界
 

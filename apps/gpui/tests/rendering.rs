@@ -4,6 +4,10 @@ fn main() {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     if std::env::var_os("CREDITIA_NATIVE_CATALOG").is_some() {
         catalog::run();
+    } else if std::env::var_os("CREDITIA_SERVICE_OUTPUT").is_some() {
+        services::run();
+    } else if std::env::var_os("CREDITIA_RUNTIME_OUTPUT").is_some() {
+        runtime::run();
     } else {
         native::run();
     }
@@ -14,6 +18,14 @@ fn main() {
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[path = "support/catalog.rs"]
 mod catalog;
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[path = "support/runtime.rs"]
+mod runtime;
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[path = "support/services.rs"]
+mod services;
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod native {

@@ -3,7 +3,7 @@
 use crate::{
     native_preview::{self, RasterImage},
     renderer,
-    ui_model::{Artwork, Rect, Timeline, Viewport, focused_rect},
+    ui_model::{Artwork, Rect, Timeline, Viewport, focused_rect, texture_width},
 };
 use serde_json::{Value, json};
 use std::sync::{Arc, Condvar, Mutex};
@@ -446,11 +446,14 @@ fn frame_plan(
     {
         return Ok(None);
     }
-    let full_width = (f64::from(rect.w) * f64::from(view.dpi)).ceil();
-    if !full_width.is_finite() || full_width < 1. || full_width > f64::from(u32::MAX) {
+    let physical_width = f64::from(rect.w) * f64::from(view.dpi);
+    if !physical_width.is_finite() || physical_width < 1. || physical_width > f64::from(u32::MAX) {
         return Err("Animation zoom resolution is out of range".into());
     }
-    let pixels = full_width as u32;
+    // Share rounding with the image's final physical paint bounds, including
+    // fractional desktop scales and logical -> physical -> logical round trips.
+    let pixels = texture_width(rect.w, view.dpi);
+    let full_width = f64::from(pixels);
     let scale = full_width / f64::from(art.w);
     let logical_scale = f64::from(rect.w) / f64::from(art.w);
     let full_height = (f64::from(art.h) * scale).ceil();
@@ -747,6 +750,30 @@ mod tests {
             (control.epoch(), 4)
         );
         worker.join().unwrap();
+    }
+    #[test]
+    fn fractional_display_scale_uses_the_same_pixel_grid_as_static_paint() {
+        let art = artwork(1200., 630.);
+        for dpi in [1.25, 1.5, 1.75, 2.] {
+            for zoom in [1., 1.2, 2.48832, 6.] {
+                let view = FrameView {
+                    viewport: Viewport {
+                        zoom,
+                        ..Viewport::default()
+                    },
+                    size: (1360., 820.),
+                    dpi,
+                };
+                let rect = focused_rect(art.w, art.h, view.viewport, view.size);
+                let width = texture_width(rect.w, dpi);
+                let plan = frame_plan(&art, 1, Some(view)).unwrap().unwrap();
+                assert_eq!(plan.pixels, width);
+                assert_eq!(texture_width(width as f32 / dpi, dpi), width);
+                for tile in plan.tiles {
+                    assert!(tile.width as u64 * tile.height as u64 * 4 <= DECODED_FRAME_BUDGET);
+                }
+            }
+        }
     }
     #[test]
     fn resident_frame_count_shrinks_with_viewport_cost() {

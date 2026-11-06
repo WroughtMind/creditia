@@ -14,7 +14,10 @@ catch(error) {if(error.code!=='ENOENT')throw error;}
 const entries=new Map(previous.map(entry=>[`${entry.name}@${entry.version}`,entry]));
 for(const pkg of metadata.packages){
   const base=path.dirname(pkg.manifest_path),name=`${pkg.name}-${pkg.version}`;
-  if(!/^[A-Za-z0-9_.-]+$/.test(name))throw new Error('Unexpected crate identifier');
+  // Cargo versions include SemVer build metadata (ash 0.38.0+1.3.281,
+  // wasi 0.11.1+wasi-snapshot-preview1). Validate each path component's
+  // vocabulary independently rather than dropping that part of the identity.
+  if(!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(pkg.name)||!/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?(?:\+[A-Za-z0-9.-]+)?$/.test(pkg.version))throw new Error(`Unexpected crate identifier: ${JSON.stringify([pkg.name,pkg.version])}`);
   const names=(await fs.readdir(base,{withFileTypes:true})).filter(x=>x.isFile()&&/^(licen[sc]e|copying|notice)([._-]|$)/i.test(x.name)).map(x=>x.name);
   if(pkg.license_file&&!names.includes(pkg.license_file)&&!path.isAbsolute(pkg.license_file)&&!pkg.license_file.split(/[\\/]/).includes('..'))names.push(pkg.license_file);
   const copied=[];

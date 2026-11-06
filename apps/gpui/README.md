@@ -77,6 +77,34 @@ for decoded artwork, send keyboard input, assert view state and retain screensho
 This requires an interactive desktop and a working graphics driver; unavailable
 native rendering fails the acceptance gate.
 
+The separate native input suite starts the production benchmark view from raw
+archive data and uses the actual shared rendering worker. Pointer and keyboard
+actions verify layout cycling, interrupted selections, focused style trials and
+restoration, grouping, contributor names, language, theme, transformed hover,
+roam navigation and the export dock. It supplies no precomputed artwork and
+makes no claim about filesystem persistence or project-service behavior:
+
+```sh
+CREDITIA_VISUAL_FIXTURES="$PWD/evidence/fixtures" \
+CREDITIA_RUNTIME_OUTPUT="$PWD/evidence/native-input" \
+cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked
+node packaging/gpui/seal-evidence.mjs evidence/native-input
+```
+
+The service-backed suite starts `Creditia::new` with one isolated project library
+for its entire process. It types into native controls, opens real Git archives,
+writes settings, closes and reopens the window, and checks removal against the
+actual SQLite evidence, snapshot, cache and repository files. Run the same harness
+in a separate process with `CREDITIA_SERVICE_OUTPUT` and `CREDITIA_CORE` pointing
+to the built analysis executable. Its input archives and results are retained in
+`evidence/native-services`; it does not claim to exercise an OS folder dialog.
+
+Linux additionally exercises the packaged streaming player through actual X11
+input at native scale 2. It checks pause, replay, zoom and pan while paused,
+visibility suspension, decoded frame density, bounded texture chunks and whole
+process samples. The manifest and OS screenshots retain the observed state;
+this Linux gate does not imply equivalent GPU execution on other platforms.
+
 A separate Linux catalog job selects all 1,482 desktop artwork/layout rows through
 those production controls, waits for native image decoding, checks dimensions,
 visible bounds and hit-region counts, and captures every focused artwork. Its
@@ -114,11 +142,16 @@ archive SHA-256 verified), shared renderer and fonts. License files and a file
 checksum manifest travel with it. A smoke test runs from a temporary directory
 outside the checkout, checks all five graphical export formats, then calls the
 native executable's `--check-resources` entry point.
+Both Mac architectures install the same verified Icon Composer catalog from
+macOS 26/Xcode 26.6, including the original static icon for macOS 15.
 Windows PE imports are recorded. Required Visual C++ release runtime DLLs are
 copied unmodified from the builder's redistributable directory beside the
 relevant executables, with Microsoft's runtime license and provenance retained.
-Every archive/installer is then extracted or installed into a fresh directory,
-its payload is checked and its installed executables are launched. The Windows
+Every archive/installer is then extracted or installed into a fresh directory
+and its sealed payload and resource entry points are checked. Each Mac/Linux
+format also launches the actual installed application with raw archive data,
+waits for its bundled renderer to paint decoded artwork, retains an OS window
+capture and verifies normal quit. The Windows
 installer's uninstall path is also checked for preserving the user library.
 
 The `gpui-artworks` workflow compares all 1,738 catalog combinations and all

@@ -660,3 +660,96 @@ fn closing_background_service_cancels_its_analysis_before_later_writes() {
     assert!(!marker.exists());
     assert_eq!(service::analysis_status()["state"], "cancelled");
 }
+
+#[cfg(unix)]
+#[test]
+fn explicit_background_cancel_waits_for_a_new_head_despite_forced_refresh() {
+    use std::time::{Duration, Instant};
+    let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
+    let fixture = Fixture::new("background-user-cancel");
+    let project = fixture.project();
+    let repo = Path::new(&project.path);
+    assert!(std::process::Command::new("git")
+        .args(["init", "-q"])
+        .arg(repo)
+        .status()
+        .unwrap()
+        .success());
+    let commit = |message: &str| {
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args([
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "commit",
+                "--allow-empty",
+                "-qm",
+                message
+            ])
+            .status()
+            .unwrap()
+            .success());
+    };
+    commit("first");
+    let library = Library::open().unwrap();
+    library.upsert_project(&project).unwrap();
+    std::fs::write(
+        repo.join(".creditia/credits.json"),
+        r#"{"head":"previous","project":{"name":"fixture"}}"#,
+    )
+    .unwrap();
+    fixture.core("echo '@progress {\"stage\":\"history\"}' >&2; sleep 30; echo '{}'");
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let background = service::BackgroundService::start(std::sync::Arc::new(move |event| {
+        let _ = sender.send(event);
+    }));
+    background.watch_project(Some(project.id.clone()));
+    let wait_for = |kind: &str| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            assert!(Instant::now() < deadline, "expected {kind}");
+            match receiver.recv_timeout(Duration::from_millis(30)) {
+                Ok(event) if event["kind"] == kind => return event,
+                Ok(_) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => background.refresh(),
+                Err(error) => panic!("background channel closed: {error}"),
+            }
+        }
+    };
+    wait_for("analysis-progress");
+    service::cancel_analyze();
+    assert_eq!(wait_for("analysis-finished")["cancelled"], true);
+    // Change the archive stamp to prove the worker actually scans again; merely
+    // sleeping after cancellation would not establish suppression under refresh.
+    library
+        .save_snapshot(&project.id, "previous", "2026-01-01", "{}")
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_millis(500);
+    let mut refreshed = false;
+    while Instant::now() < deadline {
+        background.refresh();
+        if let Ok(event) = receiver.recv_timeout(Duration::from_millis(20)) {
+            assert_ne!(
+                event["kind"], "analysis-started",
+                "explicitly cancelled HEAD must stay stopped"
+            );
+            refreshed |= event["kind"] == "archive-changed";
+        }
+    }
+    assert!(
+        refreshed,
+        "forced refresh observed the changed archive stamp"
+    );
+    assert!(!service::analysis_running());
+    commit("new work");
+    wait_for("analysis-progress");
+    drop(background);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while service::analysis_running() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(!service::analysis_running());
+}

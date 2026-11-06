@@ -6,6 +6,13 @@ the Tauri release workflow, or promotes a stable version. No signing certificate
 is required; the candidate's recorded signing policy remains visible in the
 installation guide and release notes.
 
+Both Mac packages use the original five-petal Icon Composer source. Compile it
+once on macOS 26 with `DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer
+node packaging/gpui/mac-icons.mjs compile --output mac-icon-assets` and pass
+`--mac-icons mac-icon-assets` to each architecture's staging command. The builder
+verifies the light, dark and tinted stacks before the macOS 15 runners install the
+same asset catalog and original `.icns` fallback, sign the bundle, and hash it.
+
 The workflow can be started manually after it is available in the default branch.
 Before then, an explicit repository push that changes
 `packaging/gpui/release-request.json` can request the same operation. The committed
@@ -59,7 +66,7 @@ An existing tag is never replaced. If uploading fails, the draft remains a draft
 inspect and resolve that incomplete draft before retrying with the same tag.
 
 Release assets include the eight installers/archives, installation instructions,
-combined JSON/Markdown acceptance report, SHA256SUMS, and all raw evidence plus
+combined `report.json`, `REPORT.md` and `ACCEPTANCE.zh.md`, per-row `ARTWORK-STATUS.tsv` and `FEATURE-STATUS.tsv`, SHA256SUMS, and all raw evidence plus
 its review and immutable run/artifact provenance. Evidence archives larger than
 1 GiB are split into ordered parts. `evidence-archive.json` records the part hashes
 and the reconstructed archive hash. Concatenate parts in listed order, verify

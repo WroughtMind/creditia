@@ -291,15 +291,17 @@ pub fn masonry(
     (out, heights.into_iter().fold(0., f32::max) + 100.)
 }
 
+/// Exact physical width prevents a second sampling pass from blurring small type.
 pub fn texture_width(logical: f32, dpi: f32) -> u32 {
-    let target = (logical * dpi).ceil().max(128.) as u32;
-    [
-        256, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192, 12288, 16384, 24576, 32768, 49152,
-        65536, 98304, 131072,
-    ]
-    .into_iter()
-    .find(|w| *w >= target)
-    .unwrap_or(131072)
+    let physical = f64::from(logical.max(1.)) * f64::from(dpi.max(0.1));
+    let nearest = physical.round();
+    let exact =
+        if (physical - nearest).abs() <= (physical.abs() * f32::EPSILON as f64 * 2.).max(0.0001) {
+            nearest
+        } else {
+            physical.ceil()
+        };
+    exact.clamp(1., u32::MAX as f64) as u32
 }
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -336,6 +338,17 @@ pub fn frame_at(times: &[f64], timeline: &Timeline, elapsed_ms: u64) -> usize {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn exact_texture_pixels_survive_fractional_dpi_round_trip() {
+        for dpi in [1., 1.25, 1.5, 2., 2.5] {
+            for logical in [360., 439., 760., 1100., 1100.1] {
+                let physical = texture_width(logical, dpi);
+                assert_eq!(texture_width(physical as f32 / dpi, dpi), physical);
+            }
+        }
+        assert_eq!(texture_width(760., 1.), 760);
+        assert_eq!(texture_width(360., 1.), 360);
+    }
     #[test]
     fn wall_preserves_default_and_all_layouts() {
         let s = json!({"board":[{"id":"tier","span":2},{"id":"badge","variant":"stack"}],"pieces":[{"id":"tier","defaultVariant":"center","variants":[{"id":"rows"},{"id":"center"}]},{"id":"badge","defaultVariant":"flat","variants":[{"id":"flat"},{"id":"stack"}]}]});

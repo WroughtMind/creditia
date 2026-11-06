@@ -212,13 +212,15 @@ crates/
   core/       attribution engine, line hashing, model catalog (name normalization, vendors, providers), config
   adapters/   readers for git and each agent's logs
   store/      library: projects, paths, evidence store, snapshots (SQLite)
+  desktop-service/ shared project, analysis-task, settings and background-collection service
   cli/        the creditia-core binary
 packages/
   schema/     JSON Schema and types for credits.json v0
   render/     rendering: credits.json → SVG scene (style × piece) → PNG / SVG / PDF / GIF / HTML
   cli/        the creditia npm package: records, export, terminal card
   embed/      <creditia-card> web component
-apps/desktop/ Tauri 2 app (wall and export)
+apps/gpui/    GPUI Kit desktop: wall, roam, animation and export
+apps/desktop/ original Tauri desktop and one-time preference migration helper
 site/         website (build.ts) and the images in this README (readme.ts)
 skills/       skill for agents
 spike/        phase-0 validation project (kept for the record)
@@ -230,14 +232,21 @@ spike/        phase-0 validation project (kept for the record)
 <summary><b>Development</b></summary>
 
 ```bash
-cargo build --release && cargo test           # Rust core (end-to-end tests use fake logs in a temp HOME)
-cd packages/render && npm i && npm test       # rendering (every piece × style × layout)
-npm run gallery                               # proof sheet: gallery/index.html
-cd apps/desktop && npm i && npm run fonts && npm run dev   # app in the browser (uses the fixture record)
-npm run core && npm run tauri dev             # native app (core puts the analysis binary where the app bundles it)
+cargo build --release && cargo test           # Rust core and shared desktop service
+npm ci --prefix packages/render
+npm test --prefix packages/render             # artwork, style and layout contracts
+npm run gallery --prefix packages/render      # proof sheet: packages/render/gallery/index.html
+CREDITIA_CORE="$PWD/target/release/creditia-core" cargo run --manifest-path apps/gpui/Cargo.toml
+node --test packaging/gpui/package.test.mjs    # standalone packaging and resource checks
 node site/build.ts                            # website → _site/
 node site/readme.ts                           # README images → .github/readme/
 ```
+
+Run these commands from the repository root. See the [desktop development guide](apps/gpui/README.md)
+for platform dependencies, Windows commands and native screenshot checks, and the
+[installation guide](packaging/gpui/INSTALL.md) for upgrades and rollback. Migration
+completion is determined by the [acceptance report](docs/gpui-migration/README.md)
+for the same commit; the candidate becomes the stable desktop after acceptance.
 
 
 </details>

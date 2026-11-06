@@ -121,6 +121,11 @@ jobs:
               --baseline-sha ac82a574b0747bc5651571a3f169f4a893442f88 \
               --candidate-sha "$ACCEPTANCE_CANDIDATE_SHA" \
               --baseline-overlay evidence/baseline-overlay.json
+      - name: Bind measured performance to explicit feature checks
+        run: |
+          python candidate/packaging/gpui-acceptance/performance-evidence.py \
+            --input evidence/performance --candidate-sha "$GITHUB_SHA" \
+            --output evidence/performance-features
       - name: Summarize measured comparison without promoting missing migration gates
         if: always()
         run: |

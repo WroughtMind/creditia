@@ -15,6 +15,8 @@ pub struct Project {
     pub has_credits: bool,
     #[serde(default)]
     pub evidence: u64,
+    #[serde(default)]
+    pub last_analyzed: Option<i64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -422,12 +424,15 @@ mod tests {
 pub mod animation;
 pub mod app;
 pub mod export_jobs;
+pub mod image_assets;
 pub mod live_mark;
 pub mod native_preview;
 pub mod platform_ui;
 pub mod preference_writer;
+pub mod project_marks;
 pub mod renderer;
 pub mod roam;
 pub mod ui_icons;
 pub mod ui_model;
+pub mod ui_motion;
 pub mod ui_reports;

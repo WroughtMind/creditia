@@ -199,6 +199,46 @@
         "ui_model::tests::layout_has_no_overlaps_for_mixed_spans"
       ],
       "behavior": "Lays out mixed one- and two-column spans and checks every pair for overlap."
+    },
+    {
+      "feature_id": "grouping",
+      "check": "自动、工具、模型分组语义",
+      "required_tests": [
+        "分组：默认按工具（不按占比自动切换）；指定按模型才按模型",
+        "按模型分组：key 是「工具/模型」，占比合计不变，按工具的排名还在 tools 里，两套渲染器数字一致"
+      ],
+      "behavior": "Asserts default auto grouping retains tool semantics, model groups use tool/model identities, percentages still sum correctly, and classic/SVG data agree."
+    },
+    {
+      "feature_id": "new-export-options",
+      "check": "明确各格式透明背景支持",
+      "required_tests": [
+        "transparent PNG removes the canvas and SVG font embedding includes actual bytes and selectable text",
+        "GIF preserves transparent pixels and explicit reduced motion produces a still HTML document",
+        "PDF stores straight RGB and a separate alpha mask without darkening edges twice"
+      ],
+      "behavior": "Checks transparent PNG/SVG art, GIF transparent indices, HTML reduced-motion output and PDF RGB/alpha streams; formats with raster transparency retain the supported alpha representation."
+    },
+    {
+      "feature_id": "new-reduced-motion",
+      "check": "桌面与动画导出同一时间轴",
+      "required_tests": [
+        "GIF delays and native/HTML clocks share duration independently of sample count",
+        "animation samples have one shared duration, exact final geometry and reduced-motion final state",
+        "ui_model::tests::timeline_uses_duration_and_holds_last_frame"
+      ],
+      "behavior": "Verifies shared sample timestamps and duration, GIF cumulative delays, reduced-motion final frame, and native playback frame selection/hold/loop from the same timeline values."
+    },
+    {
+      "feature_id": "new-reduced-motion",
+      "check": "星号逐瓣、有机形变、水墨展开、片尾滚动",
+      "required_tests": [
+        "petals stagger, grow organically and return exact resting geometry for every material",
+        "every desktop asterisk material has finite changing samples and exact resting geometry",
+        "brush materials unfold the foreground with a stable texture seed and remove the mask at rest",
+        "SVG time sampling matches exported frames, including scrolling crops"
+      ],
+      "behavior": "Tests actual generated petal samples, material-specific growth, stable brush textures/unfold masks and scrolling viewport crops; these are motion-definition assertions, not claims about native input/playback controls."
     }
   ]
 }

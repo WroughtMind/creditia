@@ -1061,11 +1061,12 @@ fn parse_response(bytes: &[u8], id: &Value) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        Budget, Cancellation, Failure, Permit, QUEUE_BYTES, Session, decode_export, parse_response,
-        read_bounded, read_record, resource_roots, valid_id, write_export,
+        Budget, Cancellation, Failure, Permit, QUEUE_BYTES, REQUEST_LIMIT, RenderArchive, Session,
+        UI_FONTS, decode_export, parse_response, read_bounded, read_record, request_with_archive,
+        resource_roots, ui_font_files_in, valid_id, write_export,
     };
     use base64::Engine as _;
-    use serde_json::json;
+    use serde_json::{Value, json};
     use std::{
         fs,
         io::BufReader,

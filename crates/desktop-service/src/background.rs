@@ -172,11 +172,15 @@ fn run(shared: Arc<Shared>, events: ProgressSink) {
                                     token,
                                 );
                                 finish(&shared, generation);
-                                if result
-                                    .as_ref()
-                                    .err()
-                                    .is_none_or(|e| e.code != "busy" && e.code != "cancelled")
-                                {
+                                // An explicit stop on the still-watched project
+                                // means do not retry this same HEAD on the next
+                                // focus/timer event. Navigation/shutdown changes
+                                // the generation and leaves it retryable later.
+                                if result.as_ref().err().is_none_or(|error| {
+                                    error.code != "busy"
+                                        && (error.code != "cancelled"
+                                            || current(&shared, generation))
+                                }) {
                                     tried.insert(id.clone(), head);
                                 }
                                 match result {
@@ -250,8 +254,12 @@ fn run(shared: Arc<Shared>, events: ProgressSink) {
             && current(&shared, generation)
         {
             if let Some(token) = begin(&shared, generation) {
+                events(json!({"kind":"collect-started"}));
                 let result = crate::collection::collect_round_with_cancel(true, token);
                 finish(&shared, generation);
+                events(
+                    json!({"kind":"collect-finished","result":result.as_ref().ok(),"error":result.as_ref().err()}),
+                );
                 match result {
                     Ok(result) => events(json!({"kind":"collect-done","result":result})),
                     Err(error) if !["off", "busy", "cancelled"].contains(&error.code) => {

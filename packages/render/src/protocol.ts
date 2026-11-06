@@ -1,5 +1,5 @@
 // One platform-neutral request contract for native, browser and CLI rendering.
-import { buildModel, type GroupOpt, type Lang } from './data.ts';
+import { agentOf, buildModel, resolveGroup, type GroupOpt, type Lang } from './data.ts';
 import { STYLES } from './styles/index.ts';
 import { PIECES, art, frame, variantName } from './registry.ts';
 import { FORMS, type Ctx } from './classic/registry.ts';
@@ -16,6 +16,7 @@ import { CLASSIC_BOARD, V2_BOARD } from './boards.ts';
 import { creditsBlock, fetchSegs, embedSnippet } from './text.ts';
 import { mergeCredits } from './merge.ts';
 import { motionProfile } from './motion-profiles.ts';
+import { markSvg, sharePetals } from './mark.ts';
 
 export const PROTOCOL_VERSION = 1;
 export const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
@@ -131,7 +132,7 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
     if (id === null) fail('invalid_request', 'id must be a string or safe integer');
     if (encoder.encode(JSON.stringify(input)).byteLength > MAX_REQUEST_BYTES) fail('request_too_large', 'Request exceeds 8 MiB');
     const op = input.op;
-    const simple: Record<string, string[]> = { catalog: [], status: [], archive: ['archiveId', 'raw', 'projects'], release: ['archiveId'], merge: ['projects', 'lang'] };
+    const simple: Record<string, string[]> = { catalog: [], status: [], archive: ['archiveId', 'raw', 'projects'], release: ['archiveId'], merge: ['projects', 'lang'], mark: ['raw', 'archiveId', 'lang', 'group', 'named', 'sign'] };
     const common = ['style', 'renderer', 'piece', 'variant', 'lang', 'group', 'named', 'sign', 'raw', 'archiveId', 'projects', 'person', 'blame', 'transparent', 'fontMode', 'reducedMotion'];
     const extra = op === 'render' ? ['t', 'flatten'] : op === 'frames' ? ['frameCount', 'flatten'] : op === 'export' ? ['format', 'size', 'frameCount', 'scale', 'width', 'by'] : simple[op];
     if (!extra) fail('invalid_request', 'Unknown operation');
@@ -167,6 +168,28 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
     const modelKey = `${session?.identity(raw)}|${lang}|${group}|${named}|${sign}`;
     const getModel = (suffix: string, make: () => any) => session ? session.model(modelKey + suffix, make) : make();
     const textModel = () => getModel('|svg', () => buildModel(raw, { lang, group, named, sign }));
+    if (op === 'mark') {
+      const model = getModel('|classic', () => classicModel(raw, { director: false, lang, group, named }));
+      // The desktop status mark uses the same uncollapsed contributors and tool
+      // shares as its existing model. Each tool keeps a petal, even beyond five.
+      const petals = sharePetals(model.agents.filter(agent => agent.kind === 'agent')
+        .map(agent => ({ tool: agent.key.split('/')[0], lines: agent.lines })));
+      const options = { optical: true, size: 384 };
+      return success(id, {
+        hasModels: (raw.contributors ?? []).some((contributor: any) => !!agentOf(raw, contributor.id)?.model),
+        resolvedGroup: resolveGroup(raw, group),
+        project: model.project,
+        rows: model.rows.filter(row => ['agent', 'unknown', 'other'].includes(row.kind))
+          .map(({ name, pct, kind }) => ({ name, pct, kind })),
+        svg: markSvg({ ...options, petals }),
+        rowSvg: markSvg({ optical: true, size: 96, petals }),
+        petals: petals.map((petal, index) => ({ ...petal,
+          // Keep every angular slot in the input, hiding other paths without
+          // changing this petal's sector, head radius or original opacity.
+          svg: markSvg({ ...options, petals: petals.map((p, i) => i === index ? p : { ...p, opacity: 0 }) }),
+        })),
+      });
+    }
     const format = input.format;
     if (op === 'export' && TEXT_FORMATS.has(format) && format !== 'embed') {
       if (input.by !== undefined && !['tool', 'contributor'].includes(input.by)) fail('invalid_request', 'by must be tool or contributor');

@@ -115,6 +115,9 @@ jobs:
             --baseline-root baseline --candidate-root candidate \
             --output "evidence/shard-${{ matrix.shard }}" --profile full \
             --shards 8 --shard '${{ matrix.shard }}' --motion "${extra[@]}"
+      - name: Retain representative production motion frames and GIFs
+        if: matrix.shard == 0
+        run: node candidate/packages/render/tools/migration-motion.mjs evidence/material-motion
       - name: Retain baseline, candidate and parity evidence
         if: always()
         uses: actions/upload-artifact@v4

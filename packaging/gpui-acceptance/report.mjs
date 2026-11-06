@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { args, countBy, parseMatrix, readArtifact, stable } from './common.mjs';
+import { writeDeliveryReport } from './delivery-report.mjs';
 import { preferences } from './fixtures.mjs';
 
 const options = args();
@@ -42,6 +43,7 @@ for (const file of files) {
   const relative = path.relative(root, file).split(path.sep).join('/');
   try {
     const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const collectedFeatureChecks = [];
     if (manifest.schema_version !== 1) throw Error('Unsupported evidence schema');
     if (manifest.provenance?.candidate_sha !== options['candidate-sha']) throw Error('Evidence belongs to a different candidate commit');
     if (manifest.complete !== true) throw Error('Evidence run did not complete');
@@ -51,6 +53,16 @@ for (const file of files) {
     checkArtifacts(manifest.artifacts, path.dirname(file));
     for (const c of manifest.cases ?? []) checkArtifacts(c.artifacts, path.dirname(file));
     if (manifest.provenance.fonts) readArtifact(path.dirname(file), manifest.provenance.fonts);
+    for (const c of manifest.cases ?? []) for (const claim of c.feature_checks ?? []) {
+      const feature = features.find(feature => feature.id === claim.feature_id);
+      if (!feature || !feature.checks.includes(claim.check)) throw Error(`Unknown embedded feature check ${claim.feature_id}/${claim.check}`);
+      const status = claim.status ?? (claim.passed === true ? 'passed' : claim.passed === false ? 'failed' : 'not_run');
+      if (!['passed','failed','not_run'].includes(status)) throw Error('Invalid embedded behavior status');
+      if (status === 'passed' && !['passed', 'matched'].includes(c.status)) throw Error(`Passed behavior belongs to an unsuccessful case: ${c.key}`);
+      if (status === 'passed' && (!claim.test_id || !claim.behavior || !(c.artifacts?.length || manifest.artifacts?.length))) throw Error(`Embedded behavior lacks concrete assertions/artifacts: ${c.key}`);
+      collectedFeatureChecks.push({ ...claim, key:c.key ?? c.row, status, manifest:relative });
+    }
+
     if (manifest.kind === 'render-matrix') {
       for (const c of manifest.cases) {
         if (!expected.has(c.row)) throw Error(`Unknown artwork matrix identity ${c.row}`);
@@ -70,7 +82,7 @@ for (const file of files) {
         if (!feature || !c.key || !feature.checks.includes(c.check)) throw Error(`Unknown semantic feature check ${c.feature_id}/${c.check}`);
         if (!['passed', 'failed', 'not_run'].includes(c.status)) throw Error(`Unknown feature check status ${c.status}`);
         if (c.status === 'passed' && (!c.behavior || !c.test_id || !(c.artifacts?.length || manifest.artifacts?.length))) throw Error(`Feature check lacks actual behavior/test evidence: ${c.key}`);
-        featureChecks.push({ ...c, manifest: relative });
+        collectedFeatureChecks.push({ ...c, manifest: relative });
       }
     } else if (manifest.kind === 'browser-catalog') {
       const seen = new Set();
@@ -107,6 +119,7 @@ for (const file of files) {
       packages.push({ manifest: relative, ...manifest });
     }
     else throw Error(`Unknown evidence kind ${manifest.kind}`);
+    featureChecks.push(...collectedFeatureChecks);
     manifests.push({ path: relative, kind: manifest.kind, cases: manifest.cases?.length ?? 0 });
   } catch (error) { failures.push({ manifest: relative, error: error.message }); }
 }
@@ -156,9 +169,14 @@ const featureCoverage = features.map(feature => {
   const review = featureEntries.get(feature.id);
   const checked = feature.checks.map(name => {
     const executable = featureChecks.filter(c => c.feature_id === feature.id && c.check === name);
+    const requiredTests = [...new Set(executable.flatMap(c => (c.tests ?? []).map(t => t.test_id)))];
+    const outcomes = testId => executable.flatMap(c => (c.tests ?? []).filter(t => t.test_id === testId).flatMap(t => t.outcomes ?? []));
+    const combinedTests = requiredTests.length > 0 && requiredTests.every(id => outcomes(id).some(result => result.status === 'passed'));
+    const failedTest = requiredTests.some(id => outcomes(id).some(result => result.status === 'failed'));
     const reviewed = review?.status === 'accepted' && hasEvidence(review) && Array.isArray(review.checks) &&
       review.checks.some(c => c.name === name && c.status === 'accepted');
-    return { name, status: executable.some(c => c.status === 'failed') ? 'failed' : executable.some(c => c.status === 'passed') || reviewed ? 'passed' : 'not_run',
+    return { name, status: failedTest || executable.some(c => c.status === 'failed') ? 'failed' : executable.some(c => c.status === 'passed') || combinedTests || reviewed ? 'passed' : 'not_run',
+      combined_test_sources: combinedTests, required_tests: requiredTests,
       evidence: executable.map(c => `${c.manifest}#${c.key}`), recorded_review: !!reviewed };
   });
   return { id: feature.id, name: feature.name, checks: checked, complete: checked.every(c => c.status === 'passed') };
@@ -209,5 +227,6 @@ const md = [`# Creditia GPUI acceptance`, '', `Candidate: \`${report.candidate_s
   ...(failures.length ? ['## Evidence errors', '', ...failures.map(f => `- ${f.manifest}: ${f.error}`), ''] : []),
 ].join('\n');
 fs.writeFileSync(path.join(output, 'REPORT.md'), md);
+writeDeliveryReport(report, output, {matrix, packages, performance});
 console.log(JSON.stringify({ release_ready: releaseReady, artwork_summary: report.artwork_summary, invalid_evidence: failures.length, output }));
 if (failures.length || options['require-complete'] && !releaseReady) process.exitCode = 1;

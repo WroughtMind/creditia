@@ -121,6 +121,45 @@ selected artwork, interaction result and layout. Screenshot review compares
 Chinese/English, light/dark, DPI, native font appearance and empty/error states.
 Platform-specific dialogs and OS integration require native installed-app runs.
 
+The installed Linux DPI2 animation driver is sealed separately:
+
+```sh
+node packaging/gpui-acceptance/native-animation-evidence.mjs \
+  --input evidence/native-animation/animation-evidence.json \
+  --candidate-sha "$GITHUB_SHA" --output evidence/native-animation/sealed
+```
+
+This retains real OS actions, decoder epochs, bounded frame chunks and screenshots
+for one `minimal-light/share` streaming path. Its cadence data measures decoded
+frame selection before compositor presentation, with separate sampled OS pixels.
+It does not imply native animation coverage of every style or a sharpness review.
+
+## Behavioral feature evidence
+
+The checklist tracks implementation and checked behavior independently. Collect
+actual Rust/Node test outcomes using inspected assertion mappings:
+
+```sh
+node packaging/gpui-acceptance/feature-evidence.mjs \
+  --logs evidence/test-logs --bindings packaging/gpui-acceptance/feature-bindings.json \
+  --candidate-sha "$GITHUB_SHA" --output evidence/feature-checks
+```
+
+`test-logs/provenance.json` identifies the candidate and each log's file, run,
+job ID or job name, and platform. Each command log starts with the actual
+`git rev-parse HEAD`; decoded GitHub job logs already contain the checkout commit.
+The collector reads explicit pass/fail/ignored outcomes. Merely finding a test
+name, compiling a test, or having a green job does not verify a checklist item.
+The report can combine required test outcomes across valid same-candidate suites.
+Any failed required test remains failed, and missing tests remain unverified.
+
+Native input and browser cases can include `feature_checks` with the exact
+`feature_id` and `check` from `features.json`, a `test_id`, a concrete `behavior`
+description, and `passed`. Such claims inherit their case artifacts and count only
+after the complete manifest, candidate and artifacts validate. A passed claim in
+an unsuccessful case is rejected. Backend tests establish only their stated
+backend behavior; they do not establish that a menu or dialog invokes it.
+
 ## Whole-process resources
 
 The sampler launches a program directly, observes descendants and retains children
@@ -175,6 +214,21 @@ children can be missed between samples, making observed CPU a lower bound. GPU
 memory and unmeasured interaction latency stay `null`. The sampler refuses hosts
 whose process IDs and `/proc` use different namespaces. No local values from
 such an executor are accepted.
+
+After all 24 measurements finish, seal their behavioral evidence:
+
+```sh
+python3 packaging/gpui-acceptance/performance-evidence.py \
+  --input evidence/performance --candidate-sha "$GITHUB_SHA" \
+  --output evidence/performance-features
+```
+
+This rechecks the 12 paired identities, original action chains, captured image
+hashes and raw per-process RSS/CPU arithmetic. It maps only the measured scope to
+the checklist. The combined idle-CPU/hidden-animation item remains incomplete
+until the independent installed animation assertion is also present. GPU
+telemetry stays explicitly unmeasured; it is outside the original RSS/CPU
+comparison requirement.
 
 ## Consolidation and review
 

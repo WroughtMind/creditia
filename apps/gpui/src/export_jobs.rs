@@ -787,13 +787,24 @@ mod tests {
     #[test]
     fn retry_does_not_duplicate_a_newer_pending_export() {
         let mut queue = Queue::default();
-        let old = queue.enqueue(request("png"), path("same.png"), "Old".into()).unwrap();
+        let old = queue
+            .enqueue(request("png"), path("same.png"), "Old".into())
+            .unwrap();
         let active = queue.start_next().unwrap();
         queue.finish(active.id, active.attempt, Err("disk full".into()));
-        let newer = queue.enqueue(request("png"), path("same.png"), "New".into()).unwrap();
+        let newer = queue
+            .enqueue(request("png"), path("same.png"), "New".into())
+            .unwrap();
         assert!(queue.retry(old.id).is_err());
         assert_eq!(queue.job(old.id).unwrap().state, State::Failed);
-        assert_eq!(queue.jobs().iter().filter(|job| job.state.pending()).count(), 1);
+        assert_eq!(
+            queue
+                .jobs()
+                .iter()
+                .filter(|job| job.state.pending())
+                .count(),
+            1
+        );
         assert!(queue.cancel_queued(newer.id));
         queue.retry(old.id).unwrap();
         assert_eq!(queue.start_next().unwrap().id, old.id);

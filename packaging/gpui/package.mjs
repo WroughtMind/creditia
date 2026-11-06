@@ -7,6 +7,7 @@ import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { installMacIcons } from './mac-icons.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -39,8 +40,9 @@ export function layout(root, platform) {
   return { app, bin, resources, gui: path.join(bin, `creditia-gpui${platform === 'win32' ? '.exe' : ''}`), core: path.join(bin, `creditia-core${platform === 'win32' ? '.exe' : ''}`), node: path.join(resources, `node${platform === 'win32' ? '.exe' : ''}`), bridge: path.join(resources, 'render', 'tools', 'bridge.mjs') };
 }
 
-export async function stage({ target, output, appBin, coreBin, nodeBin = process.execPath, nodeLicense, nodeProvenance, migrationBin, source = repo, platform = process.platform }) {
+export async function stage({ target, output, appBin, coreBin, nodeBin = process.execPath, nodeLicense, nodeProvenance, migrationBin, macIcons, source = repo, platform = process.platform }) {
   if (!safe(target)) throw new Error('Invalid Rust target');
+  if(platform==='darwin'&&!macIcons)throw new Error('Mac staging requires --mac-icons with the verified Xcode 26 Icon Composer artifact');
   const root = path.resolve(output, `creditia-gpui-${target}`);
   const paths = layout(root, platform);
   await fs.mkdir(root, { recursive: true });
@@ -118,11 +120,7 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
     const plist = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>CFBundleExecutable</key><string>creditia-gpui</string><key>CFBundleIdentifier</key><string>dev.creditia.gpui</string><key>CFBundleName</key><string>Creditia</string><key>CFBundleDisplayName</key><string>Creditia</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>${xml(version)}</string><key>CFBundleVersion</key><string>${xml(version)}</string><key>LSMinimumSystemVersion</key><string>15.0</string><key>NSHighResolutionCapable</key><true/><key>NSPrincipalClass</key><string>NSApplication</string></dict></plist>\n`;
     await fs.writeFile(path.join(paths.app, 'Contents/Info.plist'), plist);
     await fs.writeFile(path.join(paths.app, 'Contents/PkgInfo'), 'APPL????');
-    const icon = path.join(source,'apps/desktop/src-tauri/icons/icon.icns');
-    try {
-      await copyFile(icon,path.join(paths.resources,'Creditia.icns'));
-      await fs.writeFile(path.join(paths.app,'Contents/Info.plist'),plist.replace('</dict>','<key>CFBundleIconFile</key><string>Creditia.icns</string></dict>'));
-    } catch(error) { if(error.code!=='ENOENT')throw error; }
+    await installMacIcons({app:paths.app,assets:macIcons,source});
   } else if (platform === 'linux') {
     await fs.writeFile(path.join(root, 'creditia.desktop'), '[Desktop Entry]\nType=Application\nName=Creditia\nComment=Your coding agents, in credits\nExec=creditia-gpui\nTerminal=false\nCategories=Development;Graphics;\n');
   }
@@ -235,7 +233,7 @@ async function main(args) {
   if (command === 'stage') {
     const target = opts.target;
     if (!target || !opts.output) throw new Error('stage requires --target and --output');
-    const result = await stage({ target, output: opts.output, appBin: opts['app-bin'] ?? path.join(repo, `apps/gpui/target/${target}/release/creditia-gpui${executable}`), coreBin: opts['core-bin'] ?? path.join(repo, `target/${target}/release/creditia-core${executable}`), nodeBin: opts['node-bin'], nodeLicense: opts['node-license'], nodeProvenance: opts['node-provenance'],migrationBin:opts['migration-bin'] });
+    const result = await stage({ target, output: opts.output, appBin: opts['app-bin'] ?? path.join(repo, `apps/gpui/target/${target}/release/creditia-gpui${executable}`), coreBin: opts['core-bin'] ?? path.join(repo, `target/${target}/release/creditia-core${executable}`), nodeBin: opts['node-bin'], nodeLicense: opts['node-license'], nodeProvenance: opts['node-provenance'],migrationBin:opts['migration-bin'],macIcons:opts['mac-icons'] });
     console.log(JSON.stringify(result));
   } else if (command === 'seal') console.log(JSON.stringify(await seal(path.resolve(opts.root))));
   else if (command === 'verify') { const r = await verify(path.resolve(opts.root)); console.log(`verified ${r.files.length} files for ${r.target}`); }

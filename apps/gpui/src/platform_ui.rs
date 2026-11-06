@@ -249,9 +249,12 @@ mod macos {
     }
     impl Drop for MotionObserver {
         fn drop(&mut self) {
+            let observer: &objc2::runtime::ProtocolObject<dyn objc2_foundation::NSObjectProtocol> =
+                &self.observer;
+            let object: &objc2::runtime::AnyObject = observer.as_ref();
             // SAFETY: This is exactly the observer returned by this center.
             unsafe {
-                self.center.removeObserver(self.observer.as_ref().as_ref());
+                self.center.removeObserver(object);
             }
         }
     }

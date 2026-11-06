@@ -26,7 +26,91 @@ pub fn analysis_warnings(result: &Value) -> Vec<String> {
     rows
 }
 
-fn error_text(value: &Value) -> Option<String> {
+fn failure_parts(code: &str, detail: Option<&str>, language: &Language) -> String {
+    let known = match code {
+        "not_in_library" => Some(("未找到该项目记录", "This project is not in the library")),
+        "no_credits" => Some(("这个项目还没分析过", "Not analyzed yet")),
+        "dir_missing" => Some(("项目目录已经不在了", "The project folder is gone")),
+        "core_missing" => Some((
+            "找不到分析核心 creditia-core",
+            "Cannot find the analysis core (creditia-core)",
+        )),
+        "core_failed" => Some(("分析失败", "Analysis failed")),
+        "busy" => Some((
+            "已有任务正在运行，请稍后重试",
+            "Another task is running; try again when it finishes",
+        )),
+        "cancelled" => Some(("任务已取消", "Task cancelled")),
+        "no_home" => Some(("找不到用户目录", "Cannot find your home folder")),
+        "io" => Some(("读写文件失败", "Could not read or write the file")),
+        "store" => Some(("读取项目数据库失败", "Cannot read the library")),
+        "not_allowed" => Some(("无法打开这个位置", "This location cannot be opened")),
+        "switch_failed" => Some(("没能修改这一项设置", "Could not change this setting")),
+        "agent_failed" => Some((
+            "没能设置后台任务",
+            "Could not configure the background task",
+        )),
+        "unsupported" => Some(("这个系统上还不支持", "Not supported on this system")),
+        "off" => Some(("自动采集已关闭", "Automatic collection is off")),
+        "config_invalid" => Some((
+            "项目配置无效，原文件已保留",
+            "Project settings are invalid; the original file is preserved",
+        )),
+        "settings_invalid" | "preferences_invalid" => Some((
+            "设置文件无效，原文件已保留",
+            "Settings are invalid; the original file is preserved",
+        )),
+        "preferences_version" => Some((
+            "设置来自较新的版本，请使用对应版本打开",
+            "These settings require a newer app version",
+        )),
+        "preferences_too_large" => Some(("设置文件超过大小限制", "Settings exceed the size limit")),
+        "invalid_location" => Some((
+            "请选择有效的项目文件和行号",
+            "Choose a valid project file and line number",
+        )),
+        "no_interrupted_task" => Some((
+            "没有可继续的中断任务",
+            "No interrupted task is available to resume",
+        )),
+        "migration_helper_missing" => Some((
+            "找不到旧设置导入组件，请使用完整安装包",
+            "The settings importer is missing; use a complete app package",
+        )),
+        "migration_timeout" => Some((
+            "旧设置导入超时，可以重试",
+            "Importing previous settings timed out; you can retry",
+        )),
+        "migration_failed" => Some((
+            "旧设置尚未导入，原有设置已保留",
+            "Previous settings have not been imported; the originals are preserved",
+        )),
+        "export_history_invalid" => Some((
+            "导出历史格式无效，原文件已保留",
+            "Export history is invalid; the original file is preserved",
+        )),
+        "export_history_too_large" => Some((
+            "导出历史超过大小限制",
+            "Export history exceeds the size limit",
+        )),
+        "export_history_conflict" => Some((
+            "其他窗口更新了导出历史，请重新读取",
+            "Another window updated export history; reload it before saving",
+        )),
+        _ => None,
+    };
+    let message = known.map(|(zh, en)| language.text(zh, en)).unwrap_or(code);
+    match detail.filter(|detail| !detail.is_empty()) {
+        Some(detail) => format!("{message}{}{detail}", language.text("：", ": ")),
+        None => message.to_string(),
+    }
+}
+
+pub fn failure(error: &creditia_desktop_service::Fail, language: &Language) -> String {
+    failure_parts(error.code, error.detail.as_deref(), language)
+}
+
+pub fn error_text(value: &Value, language: &Language) -> Option<String> {
     if let Some(text) = value.as_str() {
         return Some(text.to_owned());
     }
@@ -35,8 +119,7 @@ fn error_text(value: &Value) -> Option<String> {
         .as_str()
         .or_else(|| value["message"].as_str());
     match (code, detail) {
-        (Some(code), Some(detail)) if !detail.is_empty() => Some(format!("{code}: {detail}")),
-        (Some(code), _) => Some(code.to_owned()),
+        (Some(code), detail) => Some(failure_parts(code, detail, language)),
         (_, Some(detail)) => Some(detail.to_owned()),
         _ => None,
     }
@@ -64,7 +147,7 @@ fn age(at: u64, language: &Language) -> String {
 /// Every returned value is plain text; the view owns layout and scrolling.
 pub fn report_rows(value: &Value, language: &Language) -> Vec<(String, String)> {
     let mut rows = Vec::new();
-    if let Some(error) = error_text(&value["error"]) {
+    if let Some(error) = error_text(&value["error"], language) {
         rows.push((language.text("检查失败", "Check failed").into(), error));
     }
     if let Some(git) = value["git"].as_bool() {
@@ -242,11 +325,31 @@ mod tests {
         );
         assert!(
             rows.iter()
-                .any(|(_, text)| text == "core_missing: /app/core")
+                .any(|(_, text)| text == "Cannot find the analysis core (creditia-core): /app/core")
         );
         assert!(
             rows.iter()
                 .any(|(_, text)| text.contains("2 个失败") && text.contains("8 条证据"))
+        );
+    }
+    #[test]
+    fn localized_failures_keep_details_and_unknown_codes() {
+        let error = creditia_desktop_service::Fail::with("dir_missing", "/projects/example");
+        assert_eq!(
+            failure(&error, &Language::Zh),
+            "项目目录已经不在了：/projects/example"
+        );
+        assert_eq!(
+            failure(&error, &Language::En),
+            "The project folder is gone: /projects/example"
+        );
+        assert_eq!(
+            error_text(
+                &serde_json::json!({"code":"future_error","detail":"original"}),
+                &Language::En
+            )
+            .unwrap(),
+            "future_error: original"
         );
     }
 }

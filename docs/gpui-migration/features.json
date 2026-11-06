@@ -34,6 +34,6 @@
   {"id":"new-reduced-motion","stage":6,"name":"完整动作定义与减少动态效果","baseline":"target_requirement","checks":["26 风格逐件动作审定","星号逐瓣、有机形变、水墨展开、片尾滚动","桌面与动画导出同一时间轴","连续操作、中断、重播","遵循系统及应用减少动态效果设置","不可见动画暂停"]},
   {"id":"new-export-options","stage":7,"name":"透明背景、字体与失败恢复","baseline":"target_requirement","checks":["明确各格式透明背景支持","字体嵌入或转路径策略及许可证","导出进度与可重试失败","恢复不覆盖错误输入或旧任务","桌面、CLI、网页的尺寸和数据一致"]},
   {"id":"new-resume","stage":3,"name":"中断后恢复","baseline":"target_requirement","checks":["进程退出后恢复持久任务状态","部分结果和事务的一致性","取消后不继续写入","已有数据库和配置可回退"]},
-  {"id":"new-performance","stage":8,"name":"性能与资源基准","baseline":"target_requirement","checks":["相同设备、数据、作品和布局规模","冷/热启动、滚动、缩放、交互延迟","整组进程 RSS、CPU、GPU 资源","空闲 CPU 与不可见动画","后台排版和渲染","纹理缓存上限和释放","请求去重及过期任务丢弃"]},
-  {"id":"new-release","stage":9,"name":"跨平台发布","baseline":"target_requirement","checks":["macOS Apple Silicon 与 Intel","Windows 与 Linux","最低系统和图形依赖","独立安装包与升级","签名、公证和发布 CI","升级备份及回退","完整验收报告和维护文档"]}
+  {"id":"new-performance","stage":8,"name":"性能与资源基准","baseline":"target_requirement","checks":["相同设备、数据、作品和布局规模","冷/热启动、滚动、缩放、交互延迟","整组进程 RSS 与 CPU 资源","空闲 CPU 与不可见动画","后台排版和渲染","纹理缓存上限和释放","请求去重及过期任务丢弃"]},
+  {"id":"new-release","stage":9,"name":"跨平台发布","baseline":"target_requirement","checks":["macOS Apple Silicon 与 Intel","Windows 与 Linux","最低系统和图形依赖","独立安装包与升级","沿用现有签名策略并完成发布 CI","升级备份及回退","完整验收报告和维护文档"]}
 ]
