@@ -423,8 +423,10 @@ def main():
                            lambda old, s: s.get("playing") and frame_ready(s)
                            and s["animation"]["epoch"] > old["animation"]["epoch"])
             timeline = state["animation"].get("timeline") or {}
-            duration_ms = timeline.get("duration_ms", 2000)
-            until = time.monotonic() + min(12, max(2, duration_ms / 1000 + .5))
+            # Include the authored hold and observe repeated cycles, including
+            # a constrained software GPU after DPI2 zoom and window restore.
+            cycle_ms = timeline["duration_ms"] + timeline["hold_ms"]
+            until = time.monotonic() + min(24, max(10, 3 * cycle_ms / 1000))
             while time.monotonic() < until:
                 if process.poll() is not None:
                     raise RuntimeError("Application exited during uninterrupted replay")
@@ -441,6 +443,11 @@ def main():
             if state.get("playing"):
                 state = action("pause-after-cadence", lambda: key("space"), lambda _, s: not s.get("playing") and frame_ready(s))
             capture("replay-complete", state)
+            action("resume-before-piece-switch", lambda: key("space"),
+                   lambda _, s: s.get("playing") and frame_ready(s))
+            action("switch-playing-artwork", lambda: key("Down"),
+                   lambda old, s: s.get("focused") and s.get("selected_piece") != old.get("selected_piece")
+                   and not s.get("animation") and s.get("viewport_ready"))
             state = action("close-player", lambda: key("Escape"), lambda _, s: not s.get("focused") and not s.get("animation") and s.get("viewport_ready"))
             final_assets = image_assets(state)
             if final_assets["atlas_releases"] <= initial_assets["atlas_releases"]:

@@ -128,7 +128,7 @@ results separate and record incomplete checks explicitly.
 ## Packages and release evidence
 
 The `gpui` workflow builds and links four platform targets, executes contracts,
-captures native views on Mac/Linux, and produces downloadable candidates:
+checks the installed window on each target and produces downloadable candidates:
 
 | Platform | Candidate artifacts |
 |---|---|
@@ -140,7 +140,7 @@ Each package contains the exact analysis executable, Node runtime (official
 archive SHA-256 verified), shared renderer and fonts. License files and a file
 checksum manifest travel with it. A smoke test runs from a temporary directory
 outside the checkout, checks all five graphical export formats, then calls the
-native executable's `--check-resources` entry point.
+native executable's `--check-resources` entry point. On Linux the installed desktop also analyzes new Git changes, cancels the running process, and retries against the same on-disk project. The DPI2 player is observed across multiple authored playback cycles.
 Both Mac architectures install the same verified Icon Composer catalog from
 macOS 26/Xcode 26.6, including the original static icon for macOS 15.
 Windows PE imports are recorded. Required Visual C++ release runtime DLLs are

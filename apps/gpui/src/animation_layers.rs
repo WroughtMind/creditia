@@ -118,11 +118,14 @@ fn layers(svg: &str) -> Option<Vec<Layer>> {
             let filter = url_id(child.attribute("filter")?)?;
             let mask = url_id(child.attribute("mask")?)?;
             let prefix = filter.split_once('_')?.0;
-            if !prefix
-                .strip_prefix('s')?
-                .bytes()
-                .all(|b| b.is_ascii_digit())
-                || !mask.starts_with(prefix)
+            // Satori increments this namespace in base 36 (s9, sa, ...).
+            // A decimal-only match silently rerenders shadows after nine SVGs.
+            let serial = prefix.strip_prefix('s')?;
+            if serial.is_empty()
+                || !serial
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || b.is_ascii_lowercase())
+                || mask.split_once('_')?.0 != prefix
             {
                 return None;
             }
@@ -232,7 +235,7 @@ mod tests {
         let mut cache = LayerCache::default();
         let options = usvg::Options::default();
         let transform = tiny_skia::Transform::from_row(2., 0., 0., 2., -8., -6.);
-        for (namespace, x, blur, expected) in [(1, 3, 2, 1), (2, 10, 2, 1), (3, 10, 4, 2)] {
+        for (namespace, x, blur, expected) in [("9", 3, 2, 1), ("a", 10, 2, 1), ("1z", 10, 4, 2)] {
             let svg = format!(
                 r##"<svg xmlns="http://www.w3.org/2000/svg" width="60" height="50" viewBox="0 0 60 50"><rect width="60" height="50" fill="#c3957a"/><rect x="{x}" y="4" width="22" height="30" fill="#b294c3"/><defs><filter id="s{namespace}_f"><feGaussianBlur stdDeviation="{blur}"/></filter><mask id="s{namespace}_m"><rect width="60" height="50" fill="white"/></mask></defs><g mask="url(#s{namespace}_m)" filter="url(#s{namespace}_f)"><path fill="#0f3751" d="M12 15h17v16H12z"/></g><circle cx="{x}" cy="28" r="7" fill="coral"/></svg>"##
             );

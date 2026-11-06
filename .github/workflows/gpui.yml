@@ -314,6 +314,8 @@ jobs:
         continue-on-error: true
         run: python packaging/gpui/animation-smoke.py --binary 'candidates/creditia-gpui-${{ matrix.target }}/creditia-gpui' --archive packages/render/fixtures/catnap.json --output evidence/native-animation --candidate "$GITHUB_SHA"
       - name: Seal actual streaming input and image evidence
+        id: animation-evidence
+        continue-on-error: true
         if: always() && runner.os == 'Linux'
         run: |
           if [ -f evidence/native-animation/animation-evidence.json ]; then
@@ -383,7 +385,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Require native unit, visual and input acceptance
-        if: always() && (steps.installed.outcome != 'success' || steps.native-unit.outcome != 'success' || steps.native-pixels.outcome == 'failure' || steps.native-animation.outcome == 'failure' || steps.native-input.outcome == 'failure' || steps.native-services.outcome == 'failure')
+        if: always() && (steps.installed.outcome != 'success' || steps.native-unit.outcome != 'success' || steps.native-pixels.outcome == 'failure' || steps.native-animation.outcome == 'failure' || steps.animation-evidence.outcome == 'failure' || steps.native-input.outcome == 'failure' || steps.native-services.outcome == 'failure')
         run: |
           echo 'Native unit/visual/input acceptance failed; retained candidates are not release-ready.'
           exit 1

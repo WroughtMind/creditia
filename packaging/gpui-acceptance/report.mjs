@@ -199,7 +199,8 @@ function installedWorkflow(p) {
     p.platform_input?.manual_checks?.length > 0 && reviewed('platform_input', [p.platform]));
   return inputVerified && p.acceptance?.passed && p.installers?.length && packageFormats[p.platform]?.every(format =>
     ['launch', 'installed-export', 'restart'].every(step => ids.has(`${format}-${step}`))) &&
-    (p.platform !== 'win32-x64' || ids.has('nsis-uninstall-preserves-user-library'));
+    (p.platform !== 'win32-x64' || ids.has('nsis-uninstall-preserves-user-library')) &&
+    (p.platform !== 'linux-x64' || ids.has('installed-analysis-cancel-retry'));
 }
 const nativePlatformsComplete = primaryPlatforms.every(platform =>
   packages.some(p => p.platform === platform && installedWorkflow(p)));

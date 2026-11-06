@@ -61,27 +61,34 @@ def wait_for(test, message, timeout=15):
     raise RuntimeError(message)
 
 
-def check_platform_input(run, helper, pid, fixture, report):
-    if helper and run([str(helper), "input-access", str(pid)], check=False).returncode:
-        report["manual_checks"] = ["Mac runner input permission unavailable. Verify the clipboard and folder picker on this installer."]
-        return
+def check_platform_input(run, driver, fixture, report):
+    def appkit(command):
+        reply = driver / "reply"
+        reply.unlink(missing_ok=True)
+        request = driver / "request.tmp"
+        request.write_text(command)
+        request.replace(driver / "command")
+        wait_for(reply.is_file, "Installed process did not answer AppKit " + command, 15)
+        return reply.read_text()
 
     def key(action):
-        if helper:
-            run([str(helper), action, str(pid)])
+        if driver:
+            result = appkit("cancel" if action == "escape" else action)
+            if result != "ok":
+                raise RuntimeError(f"AppKit {action}: {result}")
         else:
             keys = {"copy": "ctrl+shift+c", "open": "ctrl+o", "escape": "Escape"}
             run(["xdotool", "key", "--clearmodifiers", keys[action]])
 
     def dialog_open():
-        if helper:
-            return run([str(helper), "dialog", str(pid)], check=False).returncode == 0
+        if driver:
+            return appkit("visible") == "yes"
         result = run(["xdotool", "search", "--onlyvisible", "--name", "^Open Folder$"], check=False)
         return bool(result.stdout.strip())
 
     expected = json.loads(fixture.read_bytes())
     def clipboard_matches():
-        command = ["pbpaste"] if helper else ["xclip", "-selection", "clipboard", "-out"]
+        command = ["pbpaste"] if driver else ["xclip", "-selection", "clipboard", "-out"]
         try:
             return json.loads(run(command, check=False).stdout) == expected
         except (ValueError, subprocess.TimeoutExpired):
@@ -89,18 +96,47 @@ def check_platform_input(run, helper, pid, fixture, report):
 
     key("copy")
     wait_for(clipboard_matches, "System clipboard did not contain the current archive")
-    if helper:
-        report["mac_windows_before"] = json.loads(run([str(helper), "inspect", str(pid)]).stdout)
     key("open")
-    try:
-        wait_for(dialog_open, "Native folder picker did not open", 20)
-    finally:
-        if helper:
-            report["mac_windows_after"] = json.loads(run([str(helper), "inspect", str(pid)]).stdout)
+    wait_for(dialog_open, "Native folder picker did not open", 20)
     key("escape")
     wait_for(lambda: not dialog_open(), "Native folder picker did not close")
     report["checks"].append({"id": "system-clipboard-and-folder-dialog", "passed": True,
                              "project": expected["project"]["name"]})
+
+
+def check_analysis(run, archive, library, report):
+    repo = archive.parent.parent
+    previous = archive.read_bytes()
+    for n in range(384):
+        (repo / f"module_{n}.rs").write_text(f"pub fn module_{n}() -> u32 {{ {n} }}\n")
+    run(["git", "-C", repo, "add", "*.rs"])
+    run(["git", "-C", repo, "-c", "user.name=Creditia QA", "-c", "user.email=qa@example.invalid",
+         "commit", "-m", "New source for incremental analysis"])
+    head = run(["git", "-C", repo, "rev-parse", "HEAD"]).stdout.strip()
+    journal = library / "app.json"
+    def state():
+        return json.loads(journal.read_bytes()).get("tasks", {}).get("analysis", {})
+    def check_state(value, timeout):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if state().get("state") == value:
+                return state()
+            time.sleep(.01)
+        raise RuntimeError(f"Analysis did not reach {value}: {state()}")
+    run(["xdotool", "key", "--clearmodifiers", "ctrl+r"])
+    running = check_state("running", 15)
+    run(["xdotool", "key", "--clearmodifiers", "Escape"])
+    cancelled = check_state("cancelled", 15)
+    if cancelled.get("id") != running.get("id") or archive.read_bytes() != previous:
+        raise RuntimeError("Cancelling analysis changed the prior archive or cancelled another job")
+    # Wait for the GPUI completion callback before issuing the next user input.
+    time.sleep(.25)
+    run(["xdotool", "key", "--clearmodifiers", "ctrl+r"])
+    completed = check_state("completed", 60)
+    if completed.get("id") == running.get("id") or json.loads(archive.read_bytes()).get("head") != head:
+        raise RuntimeError("Retried analysis did not write the new Git HEAD")
+    report["checks"].append({"id":"analysis-cancel-retry", "passed":True, "head":head,
+                             "cancelled":cancelled, "completed":completed})
 
 
 def main():
@@ -111,6 +147,7 @@ def main():
     parser.add_argument("--output", required=True)
     parser.add_argument("--candidate", required=True)
     parser.add_argument("--platform-check", action="store_true")
+    parser.add_argument("--analysis-check", action="store_true")
     parser.add_argument("--inside-x11", action="store_true")
     args = parser.parse_args()
     if sys.platform == "linux" and not args.inside_x11:
@@ -174,10 +211,20 @@ def main():
 
             for name in ("stdout.log", "stderr.log"):
                 logs.append((output / name).open("wb"))
+            process_env = env.copy()
+            driver = None
+            if sys.platform == "darwin" and args.platform_check:
+                driver = work / "appkit-input"
+                driver.mkdir(mode=0o700)
+                dylib = driver / "input.dylib"
+                run(["clang", "-dynamiclib", "-fobjc-arc", "-fblocks", "-framework", "AppKit",
+                     str(Path(__file__).with_name("mac-input.m")), "-o", str(dylib)], timeout=90)
+                run(["codesign", "--force", "--sign", "-", str(dylib)])
+                process_env.update(DYLD_INSERT_LIBRARIES=str(dylib), CREDITIA_TEST_APPKIT_DIR=str(driver))
             arguments = [] if args.library else ["--benchmark-archive", str(fixture)]
             expected_project = json.loads(fixture.read_bytes())["project"]["name"]
             process = subprocess.Popen([str(binary), *arguments], cwd=work,
-                                       env=env, stdout=logs[-2], stderr=logs[-1], start_new_session=True)
+                                       env=process_env, stdout=logs[-2], stderr=logs[-1], start_new_session=True)
             window = None
             deadline = time.monotonic() + 150
             ready = state = {}
@@ -219,9 +266,10 @@ def main():
                     time.sleep(.2)
             report["checks"].append({"id": "installed-production-window-and-bundled-artwork", "passed": True,
                                      "ready_event": ready, "state": state, **dimensions})
+            if args.analysis_check:
+                check_analysis(run, archive, Path(args.library), report)
             if args.platform_check:
-                check_platform_input(run, helper if sys.platform == "darwin" else None,
-                                     process.pid, fixture, report)
+                check_platform_input(run, driver, fixture, report)
             if sys.platform == "linux":
                 run(["xdotool", "windowactivate", "--sync", window])
                 run(["xdotool", "key", "--clearmodifiers", "ctrl+q"])
