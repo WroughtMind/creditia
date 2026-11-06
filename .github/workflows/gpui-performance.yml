@@ -57,20 +57,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/gpui-apt/*.deb
+          key: gpui-apt-build-${{ runner.arch }}-${{ hashFiles('candidate/packaging/gpui/linux-libs.sh') }}
+          restore-keys: gpui-apt-build-${{ runner.arch }}-
       - name: Install native build and real X11 input tools
+        timeout-minutes: 15
         run: |
-          apt_options=(-o Acquire::Retries=2 -o Acquire::http::Timeout=25 -o Acquire::https::Timeout=25 -o DPkg::Lock::Timeout=120)
-          sudo apt-get "${apt_options[@]}" update
-          sudo apt-get "${apt_options[@]}" install --no-install-recommends -y \
-            gcc g++ clang cmake pkg-config libfontconfig-dev libwayland-dev \
-            libwebkit2gtk-4.1-dev libxkbcommon-x11-dev libx11-xcb-dev \
-            libssl-dev libzstd-dev libasound2-dev libvulkan1 mesa-vulkan-drivers \
-            fonts-noto-core fonts-noto-cjk xvfb xauth xdotool openbox \
-            imagemagick dbus-x11 x11-utils
-          python -m pip install fonttools brotli
-          mkdir -p "$RUNNER_TEMP/creditia-xdg-runtime"
-          chmod 700 "$RUNNER_TEMP/creditia-xdg-runtime"
-          printf 'XDG_RUNTIME_DIR=%s\n' "$RUNNER_TEMP/creditia-xdg-runtime" >> "$GITHUB_ENV"
+          bash candidate/packaging/gpui/linux-libs.sh performance
+          python -m pip install --timeout 20 --retries 2 fonttools brotli
           printf 'VK_ICD_FILENAMES=%s\n' /usr/share/vulkan/icd.d/lvp_icd.x86_64.json >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
         with:

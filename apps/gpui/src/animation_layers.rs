@@ -5,10 +5,91 @@ use resvg::{tiny_skia, usvg};
 use std::collections::{HashMap, VecDeque};
 
 const BUDGET: usize = 48 * 1024 * 1024;
+const FULL_LAYER_PIXEL_LIMIT: u64 = 16 * 1024 * 1024;
+const FULL_LAYER_CACHE_BUDGET: usize = 8 * 1024 * 1024;
+
+struct Span {
+    x: u32,
+    end: u32,
+    rgba: [u8; 4],
+}
+
+struct ShadowRows {
+    rows: Vec<Vec<Span>>,
+    bytes: usize,
+}
+
+impl ShadowRows {
+    // A masked shadow is transparent across most of its artwork, and usually
+    // has long runs of identical premultiplied pixels along the straight edges.
+    fn encode(pixels: &tiny_skia::Pixmap) -> Option<Self> {
+        let mut rows = Vec::with_capacity(pixels.height() as usize);
+        let mut bytes = rows.capacity() * size_of::<Vec<Span>>();
+        for line in pixels.data().chunks_exact(pixels.width() as usize * 4) {
+            let mut row: Vec<Span> = Vec::new();
+            for (index, color) in line.chunks_exact(4).enumerate() {
+                if color[3] == 0 {
+                    continue;
+                }
+                let x = index as u32;
+                if let Some(last) = row.last_mut()
+                    && last.end == x
+                    && last.rgba == color
+                {
+                    last.end += 1;
+                } else {
+                    row.push(Span {
+                        x,
+                        end: x + 1,
+                        rgba: color.try_into().unwrap(),
+                    });
+                }
+            }
+            bytes += row.capacity() * size_of::<Span>();
+            if bytes > FULL_LAYER_CACHE_BUDGET {
+                return None;
+            }
+            rows.push(row);
+        }
+        Some(Self { rows, bytes })
+    }
+    fn crop(&self, x: u32, y: u32, output: &mut tiny_skia::Pixmap) {
+        let width = output.width();
+        for (row, line) in output
+            .data_mut()
+            .chunks_exact_mut(width as usize * 4)
+            .enumerate()
+        {
+            for run in &self.rows[y as usize + row] {
+                let start = run.x.max(x);
+                let end = run.end.min(x + width);
+                if start >= end {
+                    continue;
+                }
+                for pixel in
+                    line[((start - x) * 4) as usize..((end - x) * 4) as usize].chunks_exact_mut(4)
+                {
+                    pixel.copy_from_slice(&run.rgba);
+                }
+            }
+        }
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct LayerCache {
     layers: VecDeque<(String, tiny_skia::Transform, tiny_skia::Pixmap)>,
     bytes: usize,
+    full_layers: VecDeque<(String, tiny_skia::Transform, ShadowRows)>,
+    full_bytes: usize,
+    oversized: VecDeque<(u64, tiny_skia::Transform)>,
+}
+
+fn shadow_hash(xml: &str) -> u64 {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    let mut hash = DefaultHasher::new();
+    xml.hash(&mut hash);
+    hash.finish()
 }
 
 fn definition(tag: &str) -> bool {
@@ -167,6 +248,89 @@ fn layers(svg: &str) -> Option<Vec<Layer>> {
 }
 
 impl LayerCache {
+    // Preserve the artwork's physical pixel grid across cropped tiles and
+    // panning. resvg otherwise runs the full-art blur once for *each* tile.
+    fn crop_shadow(
+        &mut self,
+        xml: &str,
+        tree: &usvg::Tree,
+        transform: tiny_skia::Transform,
+        tile: &mut tiny_skia::Pixmap,
+    ) -> bool {
+        if transform.kx != 0.
+            || transform.ky != 0.
+            || transform.sx <= 0.
+            || transform.sx != transform.sy
+        {
+            return false;
+        }
+        // FramePlan derives these logical coordinates from integral physical
+        // pixel bounds. Undo only f32 round-off; genuinely fractional transforms
+        // continue to use a tile-local render.
+        let integer = |value: f32| {
+            let rounded = value.round();
+            ((value - rounded).abs() <= (value.abs() * f32::EPSILON * 2.).max(0.00001))
+                .then_some(rounded)
+        };
+        let (Some(full_width), Some(x), Some(y)) = (
+            integer(tree.size().width() * transform.sx),
+            integer(-transform.tx),
+            integer(-transform.ty),
+        ) else {
+            return false;
+        };
+        let scale = full_width / tree.size().width();
+        let width = full_width as u32;
+        let height = (tree.size().height() * scale).ceil() as u32;
+        if x < 0.
+            || y < 0.
+            || u64::from(width) * u64::from(height) > FULL_LAYER_PIXEL_LIMIT
+            || x as u64 + u64::from(tile.width()) > u64::from(width)
+            || y as u64 + u64::from(tile.height()) > u64::from(height)
+            || (tile.width() == width && tile.height() == height)
+        {
+            return false;
+        }
+        let (x, y) = (x as u32, y as u32);
+        let world = tiny_skia::Transform::from_scale(scale, scale);
+        if !self.oversized.is_empty() && self.oversized.contains(&(shadow_hash(xml), world)) {
+            return false;
+        }
+        let cached = self
+            .full_layers
+            .iter()
+            .position(|(s, t, _)| s == xml && *t == world);
+        let entry = if let Some(index) = cached {
+            self.full_layers.remove(index).unwrap()
+        } else {
+            let Some(mut full) = tiny_skia::Pixmap::new(width, height) else {
+                return false;
+            };
+            resvg::render(tree, world, &mut full.as_mut());
+            let Some(rows) = ShadowRows::encode(&full) else {
+                // At most four filtered groups are eligible per artwork.
+                self.oversized.push_back((shadow_hash(xml), world));
+                if self.oversized.len() > 4 {
+                    self.oversized.pop_front();
+                }
+                let stride = tile.width() as usize * 4;
+                for (row, line) in tile.data_mut().chunks_exact_mut(stride).enumerate() {
+                    let start = ((y as usize + row) * width as usize + x as usize) * 4;
+                    line.copy_from_slice(&full.data()[start..start + stride]);
+                }
+                return true;
+            };
+            self.full_bytes += rows.bytes + xml.len();
+            (xml.to_string(), world, rows)
+        };
+        entry.2.crop(x, y, tile);
+        self.full_layers.push_back(entry);
+        while self.full_bytes > FULL_LAYER_CACHE_BUDGET {
+            let (xml, _, rows) = self.full_layers.pop_front().unwrap();
+            self.full_bytes -= xml.len() + rows.bytes;
+        }
+        true
+    }
     pub(crate) fn render(
         &mut self,
         svg: &str,
@@ -202,7 +366,9 @@ impl LayerCache {
                         else {
                             return false;
                         };
-                        resvg::render(&tree, transform, &mut pix.as_mut());
+                        if !self.crop_shadow(&xml, &tree, transform, &mut pix) {
+                            resvg::render(&tree, transform, &mut pix.as_mut());
+                        }
                         self.bytes += pix.data().len() + xml.len();
                         (xml, transform, pix)
                     };
@@ -215,7 +381,7 @@ impl LayerCache {
                         None,
                     );
                     self.layers.push_back(entry);
-                    while self.bytes > BUDGET {
+                    while self.bytes + self.full_bytes > BUDGET {
                         let (xml, _, pix) = self.layers.pop_front().unwrap();
                         self.bytes -= pix.data().len() + xml.len();
                     }
@@ -229,6 +395,37 @@ impl LayerCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn panning_reads_exact_pixels_of_the_full_size_shadow_without_refiltering() {
+        let xml = r##"<svg xmlns="http://www.w3.org/2000/svg" width="96" height="60"><defs><filter id="blur" filterUnits="userSpaceOnUse" width="96" height="60" x="0" y="0"><feGaussianBlur stdDeviation="3"/></filter></defs><path filter="url(#blur)" fill="#369" d="M21 11h46v31H21z"/></svg>"##;
+        let tree = usvg::Tree::from_str(xml, &usvg::Options::default()).unwrap();
+        let mut full = tiny_skia::Pixmap::new(240, 150).unwrap();
+        resvg::render(
+            &tree,
+            tiny_skia::Transform::from_scale(2.5, 2.5),
+            &mut full.as_mut(),
+        );
+        let mut cache = LayerCache::default();
+        for (x, y) in [(13, 8), (37, 21), (48, 30)] {
+            let mut tile = tiny_skia::Pixmap::new(80, 36).unwrap();
+            let tf = tiny_skia::Transform::from_row(2.5, 0., 0., 2.5, -(x as f32), -(y as f32));
+            assert!(cache.crop_shadow(xml, &tree, tf, &mut tile));
+            for (row, actual) in tile.data().chunks_exact(80 * 4).enumerate() {
+                let start = ((y + row) * 240 + x) * 4;
+                assert_eq!(actual, &full.data()[start..start + 80 * 4]);
+            }
+            assert_eq!(cache.full_layers.len(), 1);
+            assert!(cache.full_bytes <= FULL_LAYER_CACHE_BUDGET);
+        }
+        let fractional = tiny_skia::Transform::from_row(2.5, 0., 0., 2.5, -4.25, -3.);
+        assert!(!cache.crop_shadow(
+            xml,
+            &tree,
+            fractional,
+            &mut tiny_skia::Pixmap::new(10, 10).unwrap()
+        ));
+    }
 
     #[test]
     fn moving_content_and_changing_shadows_match_unsplit_pixels() {
