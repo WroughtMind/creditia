@@ -348,9 +348,8 @@ impl Creditia {
             cx.new(|cx| InputState::new(window, cx).placeholder("搜索项目 / Search projects"));
         let blame_file = cx.new(|cx| InputState::new(window, cx).placeholder("src/main.rs"));
         let blame_line = cx.new(|cx| InputState::new(window, cx).default_value("1"));
-        let entity = cx.entity();
         let subscriptions = vec![
-            cx.observe_release(&entity, |view, cx| view.release_images(cx)),
+            cx.on_release(|view, cx| view.release_images(cx)),
             cx.observe(&search_input, |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, |view, window, cx| {
                 view.window_activity(window, cx)

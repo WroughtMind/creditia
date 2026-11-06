@@ -69,9 +69,7 @@ pub fn watch_system_motion(cx: &mut App) -> Option<Task<()>> {
         return Some(cx.spawn(async move |cx| {
             let _observer = observer;
             while receive.recv().await.is_ok() {
-                if cx.update(refresh_system_motion).is_err() {
-                    break;
-                }
+                cx.update(refresh_system_motion);
             }
         }));
     }
@@ -87,33 +85,17 @@ pub fn watch_system_motion(cx: &mut App) -> Option<Task<()>> {
             // disappear between the initial value and the first notification.
             let changes = settings.receive_reduced_motion_changed().await;
             if let Ok(value) = settings.reduced_motion().await {
-                if cx
-                    .update(|cx| {
-                        publish_system_motion(
-                            Some(matches!(value, ReducedMotion::ReducedMotion)),
-                            cx,
-                        )
-                    })
-                    .is_err()
-                {
-                    return;
-                }
+                cx.update(|cx| {
+                    publish_system_motion(Some(matches!(value, ReducedMotion::ReducedMotion)), cx)
+                });
             }
             let Ok(mut changes) = changes else {
                 return;
             };
             while let Some(value) = changes.next().await {
-                if cx
-                    .update(|cx| {
-                        publish_system_motion(
-                            Some(matches!(value, ReducedMotion::ReducedMotion)),
-                            cx,
-                        )
-                    })
-                    .is_err()
-                {
-                    break;
-                }
+                cx.update(|cx| {
+                    publish_system_motion(Some(matches!(value, ReducedMotion::ReducedMotion)), cx)
+                });
             }
         }))
     }
@@ -269,7 +251,7 @@ mod macos {
         fn drop(&mut self) {
             // SAFETY: This is exactly the observer returned by this center.
             unsafe {
-                self.center.removeObserver(&self.observer);
+                self.center.removeObserver(self.observer.as_ref().as_ref());
             }
         }
     }
