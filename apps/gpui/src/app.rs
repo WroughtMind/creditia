@@ -6799,6 +6799,7 @@ impl Creditia {
             });
         Some(
             div()
+                .id("panel-backdrop")
                 .absolute()
                 .inset_0()
                 .occlude()
