@@ -9,8 +9,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { runner: macos-15, target: aarch64-apple-darwin }
-          - { runner: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
+          - { runner: windows-2022, target: x86_64-pc-windows-msvc }
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     steps:

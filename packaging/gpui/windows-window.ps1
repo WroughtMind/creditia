@@ -3,6 +3,7 @@ param(
   [string]$Fixtures,
   [string]$ProjectName,
   [switch]$CheckPlatform,
+  [string]$Candidate = $env:GITHUB_SHA,
   [Parameter(Mandatory=$true)][string]$Output
 )
 $ErrorActionPreference = 'Stop'
@@ -95,7 +96,7 @@ foreach ($language in $languages) {
     try {
       $env:CREDITIA_APP_EVENTS=Join-Path $temporary 'events.jsonl'
       $start = @{FilePath=(Join-Path $PackageRoot 'creditia-gpui.exe');WorkingDirectory=$temporary;PassThru=$true;
-        RedirectStandardOutput=(Join-Path $temporary 'stdout.log');RedirectStandardError=(Join-Path $temporary 'stderr.log')}
+        RedirectStandardOutput=(Join-Path $Output "$key-stdout.log");RedirectStandardError=(Join-Path $Output "$key-stderr.log")}
       if (!$ProjectName) {
         $fixture = Get-Content (Join-Path $Fixtures "minimal-light-$language.json") -Raw | ConvertFrom-Json
         $fixture.appearance = $theme
@@ -108,7 +109,7 @@ foreach ($language in $languages) {
       $deadline = [DateTime]::UtcNow.AddSeconds(45)
       do {
         Start-Sleep -Milliseconds 200; $process.Refresh()
-        if ($process.HasExited) { throw "Native process exited $($process.ExitCode): $(Get-Content (Join-Path $temporary 'stderr.log') -Raw)" }
+        if ($process.HasExited) { throw "Native process exited $($process.ExitCode): $(Get-Content (Join-Path $Output "$key-stderr.log") -Raw)" }
       } while ($process.MainWindowHandle -eq [IntPtr]::Zero -and [DateTime]::UtcNow -lt $deadline)
       if ($process.MainWindowHandle -eq [IntPtr]::Zero) { throw 'Timed out waiting for a native window' }
       $screen = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
@@ -162,7 +163,7 @@ foreach ($language in $languages) {
     } catch { $case.error = $_.Exception.Message }
     finally {
       if ($process) { if (!$process.HasExited) { $process.CloseMainWindow() | Out-Null; if (!$process.WaitForExit(5000)) { Stop-Process -Id $process.Id -Force } } }
-      foreach ($log in @('stdout','stderr')) { $file=Join-Path $temporary "$log.log"; if(Test-Path $file){Copy-Item $file (Join-Path $Output "$key-$log.log")} }
+      if ($process) { $process.WaitForExit(); $process.Dispose() }
       $events=Join-Path $temporary 'events.jsonl'
       if(Test-Path $events){$name="$key-events.jsonl";Copy-Item $events (Join-Path $Output $name);$case.artifacts+=@{path=$name;sha256=(Get-FileHash (Join-Path $Output $name) -Algorithm SHA256).Hash.ToLowerInvariant();bytes=(Get-Item (Join-Path $Output $name)).Length}}
       $env:CREDITIA_APP_EVENTS=$previousEvents
@@ -173,6 +174,6 @@ foreach ($language in $languages) {
   }
 }
 $complete = @($cases | Where-Object status -ne 'passed').Count -eq 0
-$report = @{schema_version=1;kind='native-ui';provenance=@{candidate_sha=$env:GITHUB_SHA;environment=@{platform='windows';arch='x86_64';renderer='native-window';os=[Environment]::OSVersion.ToString()};fixture=$manifest.fixture;profile='packaged-window-four-cases'};cases=$cases;complete=$complete}
+$report = @{schema_version=1;kind='native-ui';provenance=@{candidate_sha=$Candidate;environment=@{platform='windows';arch='x86_64';renderer='native-window';os=[Environment]::OSVersion.ToString()};fixture=$manifest.fixture;profile='packaged-window-four-cases'};cases=$cases;complete=$complete}
 [IO.File]::WriteAllText((Join-Path $Output 'manifest.json'),($report | ConvertTo-Json -Depth 100),(New-Object Text.UTF8Encoding($false)))
 if (!$complete) { throw 'One or more packaged Windows window checks failed; inspect native-window evidence' }

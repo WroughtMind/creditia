@@ -73,7 +73,7 @@ async function exercise(root,format,{payloadOnly=false,uninstaller=false}={}){
     const platformCheck = phase === 'launch' && ['zip', 'tar'].includes(format);
     if (process.platform === 'win32') {
       run('pwsh', ['-NoProfile', '-STA', '-File', path.join(import.meta.dirname, 'windows-window.ps1'),
-        '-PackageRoot', root, '-ProjectName', raw.project.name, '-Output', captureRoot, ...(platformCheck ? ['-CheckPlatform'] : [])], {timeout: 240_000});
+        '-PackageRoot', root, '-ProjectName', raw.project.name, '-Candidate', candidate.candidate_sha, '-Output', captureRoot, ...(platformCheck ? ['-CheckPlatform'] : [])], {timeout: 240_000});
     } else {
       run('python', [path.join(import.meta.dirname, 'gui-smoke.py'), '--binary', paths.gui,
         '--archive', archive, '--library', env.CREDITIA_HOME, '--output', captureRoot,
