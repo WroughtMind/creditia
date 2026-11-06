@@ -87,8 +87,20 @@ def check_platform_input(run, helper, pid, fixture, report):
         except (ValueError, subprocess.TimeoutExpired):
             return False
 
-    key("copy")
-    wait_for(clipboard_matches, "System clipboard did not contain the current archive")
+    if helper:
+        run([str(helper), "activate", str(pid)])
+        wait_for(lambda: run([str(helper), "front", str(pid)], check=False).returncode == 0,
+                 "Installed Creditia did not become the foreground application")
+    # The first synthetic shortcut can race focus activation on a hosted Mac.
+    # Re-copy only until the system pasteboard contains the actual archive.
+    next_copy = 0
+    def copy_and_read():
+        nonlocal next_copy
+        if time.monotonic() >= next_copy:
+            key("copy")
+            next_copy = time.monotonic() + 1
+        return clipboard_matches()
+    wait_for(copy_and_read, "System clipboard did not contain the current archive")
     if helper:
         report["mac_windows_before"] = json.loads(run([str(helper), "inspect", str(pid)]).stdout)
     key("open")
@@ -108,6 +120,41 @@ def check_platform_input(run, helper, pid, fixture, report):
                              "project": expected["project"]["name"]})
 
 
+def check_analysis(run, archive, library, report):
+    repo = archive.parent.parent
+    previous = archive.read_bytes()
+    for n in range(384):
+        (repo / f"module_{n}.rs").write_text(f"pub fn module_{n}() -> u32 {{ {n} }}\n")
+    run(["git", "-C", repo, "add", "*.rs"])
+    run(["git", "-C", repo, "-c", "user.name=Creditia QA", "-c", "user.email=qa@example.invalid",
+         "commit", "-m", "New source for incremental analysis"])
+    head = run(["git", "-C", repo, "rev-parse", "HEAD"]).stdout.strip()
+    journal = library / "app.json"
+    def state():
+        return json.loads(journal.read_bytes()).get("tasks", {}).get("analysis", {})
+    def check_state(value, timeout):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if state().get("state") == value:
+                return state()
+            time.sleep(.01)
+        raise RuntimeError(f"Analysis did not reach {value}: {state()}")
+    run(["xdotool", "key", "--clearmodifiers", "ctrl+r"])
+    running = check_state("running", 15)
+    run(["xdotool", "key", "--clearmodifiers", "Escape"])
+    cancelled = check_state("cancelled", 15)
+    if cancelled.get("id") != running.get("id") or archive.read_bytes() != previous:
+        raise RuntimeError("Cancelling analysis changed the prior archive or cancelled another job")
+    # Wait for the GPUI completion callback before issuing the next user input.
+    time.sleep(.25)
+    run(["xdotool", "key", "--clearmodifiers", "ctrl+r"])
+    completed = check_state("completed", 60)
+    if completed.get("id") == running.get("id") or json.loads(archive.read_bytes()).get("head") != head:
+        raise RuntimeError("Retried analysis did not write the new Git HEAD")
+    report["checks"].append({"id":"analysis-cancel-retry", "passed":True, "head":head,
+                             "cancelled":cancelled, "completed":completed})
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", required=True)
@@ -116,6 +163,7 @@ def main():
     parser.add_argument("--output", required=True)
     parser.add_argument("--candidate", required=True)
     parser.add_argument("--platform-check", action="store_true")
+    parser.add_argument("--analysis-check", action="store_true")
     parser.add_argument("--inside-x11", action="store_true")
     args = parser.parse_args()
     if sys.platform == "linux" and not args.inside_x11:
@@ -224,6 +272,8 @@ def main():
                     time.sleep(.2)
             report["checks"].append({"id": "installed-production-window-and-bundled-artwork", "passed": True,
                                      "ready_event": ready, "state": state, **dimensions})
+            if args.analysis_check:
+                check_analysis(run, archive, Path(args.library), report)
             if args.platform_check:
                 check_platform_input(run, helper if sys.platform == "darwin" else None,
                                      process.pid, fixture, report)

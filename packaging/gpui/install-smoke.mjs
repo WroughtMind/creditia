@@ -107,6 +107,28 @@ async function exercise(root,format,{payloadOnly=false,uninstaller=false}={}){
   if (!(await fs.readFile(archive)).equals(original)) throw new Error('Opening the project changed its archive');
 }
 
+async function checkAnalysis(paths) {
+  const repo = path.join(temporary, 'analysis-retry'), library = path.join(temporary,'analysis-library');
+  await fs.mkdir(repo);
+  run('git',['init',repo]);
+  await fs.writeFile(path.join(repo,'initial.rs'),'pub fn initial() {}\n');
+  run('git',['-C',repo,'add','initial.rs']);
+  run('git',['-C',repo,'-c','user.name=Creditia QA','-c','user.email=qa@example.invalid','commit','-m','Initial source']);
+  run(paths.core,['analyze','--repo',repo],{env:{...env,CREDITIA_HOME:library}});
+  const capture = path.join(path.dirname(output),'analysis-retry');
+  run('python',[path.join(import.meta.dirname,'gui-smoke.py'),'--binary',paths.gui,
+    '--archive',path.join(repo,'.creditia/credits.json'),'--library',library,'--output',capture,
+    '--candidate',candidate.candidate_sha,'--analysis-check'],{timeout:330_000});
+  const result = JSON.parse(await fs.readFile(path.join(capture,'window-evidence.json'),'utf8'));
+  if (!result.complete || !result.checks.some(c=>c.id==='analysis-cancel-retry' && c.passed))
+    throw Error('Installed analysis/cancel/retry did not complete');
+  report.checks.push({id:'installed-analysis-cancel-retry',passed:true,source:'analysis-retry/window-evidence.json'});
+  for(const file of await fs.readdir(capture)) {
+    const bytes=await fs.readFile(path.join(capture,file));
+    report.artifacts.push({path:`analysis-retry/${file}`,bytes:bytes.length,sha256:digest(bytes)});
+  }
+}
+
 try{
   for(const name of candidate.installers){
     if(!checksums.has(name)||path.basename(name)!==name)throw new Error(`Unlisted or unsafe installer: ${name}`);
@@ -121,7 +143,9 @@ try{
       await exercise(path.join(extracted,name.slice(0,-4)),'zip');
     }else if(name.endsWith('.tar.gz')){
       run('tar',['-xzf',artifact,'-C',extracted]);
-      await exercise(path.join(extracted,name.slice(0,-7)),'tar');
+      const installed = path.join(extracted,name.slice(0,-7));
+      await exercise(installed,'tar');
+      await checkAnalysis(layout(installed,'linux'));
     }else if(name.endsWith('.deb')){
       run('dpkg-deb',['--extract',artifact,extracted]);
       await exercise(path.join(extracted,'usr/lib/creditia-gpui'),'deb');

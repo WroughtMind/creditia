@@ -10,7 +10,7 @@ jobs:
       matrix:
         include:
           - { runner: macos-15, target: aarch64-apple-darwin }
-          - { runner: windows-2022, target: x86_64-pc-windows-msvc }
+          - { runner: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     steps:
@@ -26,13 +26,13 @@ jobs:
         with:
           name: gpui-candidate-${{ matrix.target }}
           path: installers
-          run-id: 42259094670
+          run-id: 42264578175
           github-token: ${{ github.token }}
       - run: node packaging/gpui/install-smoke.mjs --installers installers --fixture packages/render/fixtures/catnap.json --output evidence/installed/manifest.json
       - if: always() && runner.os == 'Linux'
         run: |
           tar xf installers/*.tar.gz
-          python packaging/gpui/animation-smoke.py --binary creditia-gpui-x86_64-unknown-linux-gnu/creditia-gpui --archive packages/render/fixtures/catnap.json --output evidence/animation --candidate d8c87be6278b66122581b0e38f8f7c1abeed3b8b
+          python packaging/gpui/animation-smoke.py --binary creditia-gpui-x86_64-unknown-linux-gnu/creditia-gpui --archive packages/render/fixtures/catnap.json --output evidence/animation --candidate "$(node -p 'require("./installers/candidate.json").candidate_sha')"
       - if: always()
         uses: actions/upload-artifact@v4
         with:

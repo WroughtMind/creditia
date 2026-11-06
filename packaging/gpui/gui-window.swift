@@ -44,6 +44,8 @@ func containsDialog(_ element: AXUIElement, _ depth: Int) -> Bool {
 switch CommandLine.arguments[1] {
 case "activate":
     _ = app.activate(options: [.activateIgnoringOtherApps])
+case "front":
+    if NSWorkspace.shared.frontmostApplication?.processIdentifier != pid { exit(4) }
 case "input-access":
     // Never prompt or change runner permissions. A tester can record this check
     // separately on machines which do not permit targeted input automation.
