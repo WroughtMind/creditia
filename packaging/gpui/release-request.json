@@ -1,11 +1,11 @@
 {
-  "schema_version": 1,
-  "enabled": false,
-  "candidate_sha": "",
-  "native_run": "",
-  "performance_run": "",
-  "core_run": "",
-  "review_commit": "",
-  "review_path": "docs/gpui-migration/reviews/review.json",
-  "tag": "gpui-v0.2.0-rc.1"
+  "enabled": true,
+  "publish_downloads": true,
+  "candidate_sha": "273068e80af532afd5501e9e9600787420447381",
+  "native_run": "42279605157",
+  "performance_run": "42279604972",
+  "core_run": "42279590928",
+  "review_commit": "a22421897f0cde2fa0f8e62cb281fb9b41431ab5",
+  "review_path": "docs/gpui-migration/reviews/85368f6/review.json",
+  "tag": "gpui-v0.1.0-rc.1"
 }
