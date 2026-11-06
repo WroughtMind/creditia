@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { TARGETS, validateRequest, runMatchesCandidate, validateReport, verifyInstallers, retainWebBuild, verifyUploadedRelease, verifyBundle } from './release.mjs';
+import { TARGETS, reviewedArtifact, validateRequest, runMatchesCandidate, validateReport, verifyInstallers, retainWebBuild, verifyUploadedRelease, verifyBundle } from './release.mjs';
 const sha='a'.repeat(40), head='b'.repeat(40), base='c'.repeat(40);
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 const request=()=>({enabled:true,candidate_sha:sha,native_run:'1',artwork_run:'2',performance_run:'3',core_run:'4',review_commit:head,review_path:'docs/review.json',tag:'gpui-v0.2.0-rc.1'});
@@ -86,3 +86,10 @@ test('browser build files remain intact outside the evidence scan and bind to th
  assert.equal(await fs.readFile(path.join(root,retained.retained_bundle,'fonts/manifest.json'),'utf8'),'{"font":"fixture"}');
  await assert.rejects(fs.stat(dist),{code:'ENOENT'});
 }));
+
+test('workflow retries use the reviewed, unexpired artifact from the selected run', () => {
+  const entries = [1, 2, 3].map(id => ({ id, name: 'performance', expired: id === 3 }));
+  assert.throws(() => reviewedArtifact(entries, 'performance'));
+  assert.equal(reviewedArtifact(entries, 'performance', '2').id, 2);
+  for (const id of [0, 3, 4, 'latest']) assert.throws(() => reviewedArtifact(entries, 'performance', id));
+});

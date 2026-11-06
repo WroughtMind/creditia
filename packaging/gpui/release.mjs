@@ -217,6 +217,13 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
 `,file],{stdio:'inherit'});
   return {...record,bytes:(await fs.stat(file)).size};
 }
+export function reviewedArtifact(available, name, pinnedId) {
+  if (pinnedId !== undefined && !/^[1-9]\d*$/.test(String(pinnedId))) throw Error(`Invalid reviewed artifact ID for ${name}`);
+  const matches = available.filter(item => item.name === name && !item.expired &&
+    (pinnedId === undefined || String(item.id) === String(pinnedId)));
+  if (matches.length !== 1) throw Error(`Expected one immutable artifact ${name}, found ${matches.length}`);
+  return matches[0];
+}
 async function prepare(opts) {
   const candidate = opts['candidate-sha'], repo = process.env.GITHUB_REPOSITORY, output = path.resolve(opts.output ?? 'prepared');
   if (!SHA.test(candidate ?? '') || !SHA.test(opts['review-commit'] ?? '') || !TAG.test(opts.tag ?? '')) throw Error('Use full immutable candidate/review commits and a gpui-vX.Y.Z-prerelease tag');
@@ -229,6 +236,10 @@ async function prepare(opts) {
   const metadata = await api(repo, `commits/${candidate}`);
   if (await api(repo, `git/ref/tags/${encodeURIComponent(opts.tag)}`, { allow404: true })) throw Error('Release tag already exists; immutable candidates are never replaced');
   const provenance = { schema_version: 1, candidate_sha: candidate, repository: repo, tag: opts.tag, prepared_at: new Date().toISOString(), runs: [], artifacts: [] };
+  const reviewResponse = await api(repo, `contents/${opts['review-path'].split('/').map(encodeURIComponent).join('/')}?ref=${opts['review-commit']}`);
+  if (reviewResponse.type !== 'file' || reviewResponse.encoding !== 'base64') throw Error('Review must be an immutable committed JSON file');
+  const reviewBytes = Buffer.from(reviewResponse.content, 'base64'), review = JSON.parse(reviewBytes);
+  if (review.candidate_sha !== candidate) throw Error('Recorded review belongs to another candidate');
   const nativeArtifacts = new Map();
   const definitions = [
     ['native-run', 'gpui', [...TARGETS.map(target => `gpui-candidate-${target}`), ...TARGETS.map(target => `gpui-evidence-${target}`)]],
@@ -243,17 +254,12 @@ async function prepare(opts) {
     provenance.runs.push({ id: run.id, path: run.path, head_sha: run.head_sha, event: run.event, attempt: run.run_attempt, html_url: run.html_url, conclusion: run.conclusion });
     const available = await artifactList(repo, id);
     for (const name of required) {
-      const matches = available.filter(item => item.name === name && !item.expired);
-      if (matches.length !== 1) throw Error(`Expected one immutable artifact ${name}, found ${matches.length}`);
-      const destination = await downloadArtifact(repo, matches[0], output, provenance);
+      const artifact = reviewedArtifact(available, name, review.artifact_ids?.[name]);
+      const destination = await downloadArtifact(repo, artifact, output, provenance);
       if (name === 'creditia-web-renderer') provenance.browser = await retainWebBuild(destination, output, candidate);
       if (name.startsWith('gpui-candidate-')) nativeArtifacts.set(name.slice('gpui-candidate-'.length), destination);
     }
   }
-  const reviewResponse = await api(repo, `contents/${opts['review-path'].split('/').map(encodeURIComponent).join('/')}?ref=${opts['review-commit']}`);
-  if (reviewResponse.type !== 'file' || reviewResponse.encoding !== 'base64') throw Error('Review must be an immutable committed JSON file');
-  const reviewBytes = Buffer.from(reviewResponse.content, 'base64'), review = JSON.parse(reviewBytes);
-  if (review.candidate_sha !== candidate) throw Error('Recorded review belongs to another candidate');
   await fs.writeFile(path.join(output, 'review.json'), reviewBytes);
   provenance.review = { commit: opts['review-commit'], path: opts['review-path'], git_blob: reviewResponse.sha, sha256: digest(reviewBytes) };
   provenance.review.images = await retainReviewImages(repo,opts['review-commit'],opts['review-path'],review,output);
