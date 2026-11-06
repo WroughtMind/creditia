@@ -34,7 +34,8 @@ export function validateRequest(input) {
   for (const field of fields.filter(field => field.endsWith('_run'))) if (!/^[1-9]\d*$/.test(input[field])) throw Error(`Invalid workflow run ID: ${field}`);
   if (!/^[A-Za-z0-9_./-]+\.json$/.test(input.review_path)) throw Error('Review path must be a repository JSON path');
   safeRelative(input.review_path);
-  return Object.fromEntries([['enabled', true], ...fields.map(field => [field, input[field]])]);
+  if (input.publish_downloads !== undefined && typeof input.publish_downloads !== 'boolean') throw Error('publish_downloads must be a boolean');
+  return Object.fromEntries([['enabled', true], ['publish_downloads', input.publish_downloads === true], ...fields.map(field => [field, input[field]])]);
 }
 export function safeRelative(name) {
   if (typeof name !== 'string' || !name || name.includes('\\') || name.startsWith('/') || name.split('/').some(part => !part || part === '.' || part === '..') || /^[A-Za-z]:/.test(name)) throw Error(`Unsafe relative path: ${name}`);
@@ -111,16 +112,18 @@ async function api(repo, resource, { allow404 = false } = {}) {
   if (!response.ok) throw Error(`GitHub metadata request failed: ${response.status} ${resource}`);
   return response.json();
 }
-async function downloadArtifact(repo, item, root, receipt) {
+async function downloadSealedArchive(repo,item,archive) {
   if (item.expired || !/^sha256:[a-f0-9]{64}$/.test(item.digest ?? '')) throw Error(`Artifact ${item.name} is expired or lacks its immutable server digest`);
-  const archive = path.join(root, `${item.id}.zip`), destination = path.join(root, 'evidence', item.name);
-  if (!/^[A-Za-z0-9_.-]+$/.test(item.name)) throw Error('Unsafe artifact name');
-  await fs.mkdir(destination, { recursive: true });
   const response = await fetch(`https://api.github.com/repos/${repo}/actions/artifacts/${item.id}/zip`, { headers: { Authorization: `Bearer ${process.env.GH_TOKEN}`, Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(600_000) });
   if (!response.ok || !response.body) throw Error(`Artifact ${item.id} download failed: ${response.status}`);
   await pipeline(Readable.fromWeb(response.body), createWriteStream(archive));
-  const actual = await fileHash(archive);
-  if (`sha256:${actual}` !== item.digest) throw Error(`GitHub artifact archive checksum mismatch: ${item.name}`);
+  if (`sha256:${await fileHash(archive)}` !== item.digest) throw Error(`GitHub artifact archive checksum mismatch: ${item.name}`);
+}
+async function downloadArtifact(repo, item, root, receipt) {
+  const archive = path.join(root, `${item.id}.zip`), destination = path.join(root, 'evidence', item.name);
+  if (!/^[A-Za-z0-9_.-]+$/.test(item.name)) throw Error('Unsafe artifact name');
+  await fs.mkdir(destination,{recursive:true});
+  await downloadSealedArchive(repo,item,archive);
   // Inspect every member before extraction. Artifact ZIPs are never executed.
   execFileSync('python3', ['-c', `import pathlib,stat,sys,zipfile
 root=pathlib.Path(sys.argv[2]).resolve()
@@ -147,6 +150,72 @@ async function artifactList(repo, run) {
     list.push(...response.artifacts);
     if (list.length >= response.total_count) return list;
   }
+}
+// The downloadable embed bundle contains its own font manifest. Keep the
+// runnable build intact, alongside the evidence rather than in its scan root.
+export async function retainWebBuild(directory, output, candidate) {
+  const embed = path.join(directory, 'packages/embed');
+  const browser = await json(path.join(embed,'browser-evidence/report.json'));
+  const dist = path.join(embed,'dist');
+  if (browser.candidateSha !== candidate || browser.status !== 'passed' || browser.errors?.length !== 0 ||
+      !browser.cases?.length || browser.cases.some(c => c.status !== 'passed' || !c.checks?.length || c.checks.some(check => check.passed !== true)) ||
+      browser.motion?.controls !== 'passed' || browser.motion?.reducedMotion !== 'passed' || !(browser.motion.frameCount > 1) ||
+      !browser.screenshots?.length || browser.bundleSha256 !== await fileHash(path.join(dist,'creditia-card.js'))) {
+    throw Error('Browser result does not verify the observed interactions and matching compiled embed bundle');
+  }
+  for (const name of browser.screenshots) {
+    const screenshot=await fs.readFile(path.join(embed,'browser-evidence',safeRelative(name)));
+    if (!screenshot.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex'))) throw Error(`Invalid browser screenshot: ${name}`);
+  }
+  const saved=path.join(output,'web-build/creditia-web-renderer/packages/embed/dist');
+  await fs.mkdir(path.dirname(saved),{recursive:true});
+  await fs.rename(dist,saved);
+  return {candidate_sha:candidate,cases:browser.cases.length,screenshots:browser.screenshots.length,
+    bundle_sha256:browser.bundleSha256,retained_bundle:'web-build/creditia-web-renderer/packages/embed/dist'};
+}
+async function reviewAttachment(repo,commit,reviewPath,description,ext,signature,destination) {
+  const name = safeRelative(description.file);
+  if (path.posix.basename(name) !== name || !name.endsWith(ext) || !HASH.test(description.sha256)) throw Error('Invalid reviewer attachment reference');
+  const file = path.posix.join(path.posix.dirname(reviewPath),name);
+  const metadata = await api(repo,`contents/${file.split('/').map(encodeURIComponent).join('/')}?ref=${commit}`);
+  if (metadata.type !== 'file' || metadata.size > 4 * 1024 * 1024 || !SHA.test(metadata.sha)) throw Error('Invalid reviewer attachment file');
+  const blob = await api(repo,`git/blobs/${metadata.sha}`);
+  if (blob.encoding !== 'base64') throw Error('Invalid reviewer attachment encoding');
+  const bytes = Buffer.from(blob.content,'base64');
+  if (bytes.length !== metadata.size || digest(bytes) !== description.sha256 || !bytes.subarray(0,signature.length).equals(signature)) throw Error(`Reviewer attachment changed: ${file}`);
+  await fs.writeFile(path.join(destination,name),bytes,{flag:'wx'});
+  return {file,git_blob:metadata.sha,bytes:bytes.length,sha256:description.sha256};
+}
+async function retainReviewImages(repo, commit, reviewPath, review, output) {
+  const images = review.images ?? [];
+  if (!Array.isArray(images) || images.length > 10) throw Error('Invalid reviewer image list');
+  const root = path.join(output, 'review-images');
+  await fs.mkdir(root);
+  const records=[];
+  for (const description of images) {
+    records.push(await reviewAttachment(repo,commit,reviewPath,description,'.jpg',Buffer.from('ffd8ff','hex'),root));
+  }
+  return records;
+}
+async function retainRollback(repo, record, assets) {
+  if (!record) return null;
+  if (!/^[1-9][0-9]*$/.test(record.id) || !/^[1-9][0-9]*$/.test(record.run) || !HASH.test(record.sha256) ||
+      !/^[A-Za-z0-9_.-]+\.zip$/.test(record.name) || !record.name.toLowerCase().includes('rollback')) {
+    throw Error('Rollback needs an immutable artifact, source run, checksum and ZIP name');
+  }
+  const item = await api(repo,`actions/artifacts/${record.id}`);
+  if (item.workflow_run?.id !== Number(record.run) || item.digest !== `sha256:${record.sha256}`) throw Error('Rollback artifact differs from the reviewed build');
+  const file = path.join(assets,record.name);
+  await downloadSealedArchive(repo,item,file);
+  execFileSync('python3',['-c',`import hashlib,re,sys,zipfile
+with zipfile.ZipFile(sys.argv[1]) as archive:
+ sums=archive.read("SHA256SUMS").decode().splitlines()
+ if not sums: raise ValueError("empty rollback checksum list")
+ for line in sums:
+  match=re.fullmatch(r"([a-f0-9]{64})  ([A-Za-z0-9_.-]+)",line)
+  if not match or hashlib.sha256(archive.read(match[2])).hexdigest()!=match[1]: raise ValueError("rollback payload checksum mismatch")
+`,file],{stdio:'inherit'});
+  return {...record,bytes:(await fs.stat(file)).size};
 }
 async function prepare(opts) {
   const candidate = opts['candidate-sha'], repo = process.env.GITHUB_REPOSITORY, output = path.resolve(opts.output ?? 'prepared');
@@ -177,6 +246,7 @@ async function prepare(opts) {
       const matches = available.filter(item => item.name === name && !item.expired);
       if (matches.length !== 1) throw Error(`Expected one immutable artifact ${name}, found ${matches.length}`);
       const destination = await downloadArtifact(repo, matches[0], output, provenance);
+      if (name === 'creditia-web-renderer') provenance.browser = await retainWebBuild(destination, output, candidate);
       if (name.startsWith('gpui-candidate-')) nativeArtifacts.set(name.slice('gpui-candidate-'.length), destination);
     }
   }
@@ -186,12 +256,18 @@ async function prepare(opts) {
   if (review.candidate_sha !== candidate) throw Error('Recorded review belongs to another candidate');
   await fs.writeFile(path.join(output, 'review.json'), reviewBytes);
   provenance.review = { commit: opts['review-commit'], path: opts['review-path'], git_blob: reviewResponse.sha, sha256: digest(reviewBytes) };
+  provenance.review.images = await retainReviewImages(repo,opts['review-commit'],opts['review-path'],review,output);
   await fs.writeFile(path.join(output, 'provenance.json'), JSON.stringify(provenance, null, 2) + '\n');
   execFileSync(process.execPath, [path.join(candidateRoot, 'packaging/gpui-acceptance/report.mjs'), '--evidence', path.join(output, 'evidence'), '--candidate-sha', candidate, '--review', path.join(output, 'review.json'), '--output', path.join(output, 'report'), '--require-complete'], { stdio: 'inherit' });
   const report = await json(path.join(output, 'report/report.json'));
   validateReport(report, candidate);
   const assets = path.join(output, 'assets');
   await fs.mkdir(assets);
+  if (review.delivery_note) {
+    provenance.review.delivery_note = await reviewAttachment(repo,opts['review-commit'],opts['review-path'],review.delivery_note,
+      '.pdf',Buffer.from('%PDF-'),assets);
+  }
+  provenance.rollback = await retainRollback(repo,review.rollback,assets);
   const installers = [];
   const installedProof = [];
   for (const relative of await files(path.join(output, 'evidence'))) if (relative.endsWith('/manifest.json')) {
@@ -215,7 +291,7 @@ async function prepare(opts) {
   for (const [target, directory] of nativeArtifacts) {
     for (const record of installers.filter(item => item.target === target)) await fs.rm(path.join(directory, record.path));
   }
-  execFileSync('tar', ['-czf', path.join(assets, 'gpui-acceptance-evidence.tar.gz'), '-C', output, 'evidence', 'review.json', 'report', 'provenance.json'], { stdio: 'inherit' });
+  execFileSync('tar', ['-czf', path.join(assets, 'gpui-acceptance-evidence.tar.gz'), '-C', output, 'evidence', 'web-build', 'review-images', 'review.json', 'report', 'provenance.json'], { stdio: 'inherit' });
   const archivePath = path.join(assets, 'gpui-acceptance-evidence.tar.gz');
   const archiveSize = (await fs.stat(archivePath)).size;
   const archiveRecord = { name: 'gpui-acceptance-evidence.tar.gz', bytes: archiveSize, sha256: await fileHash(archivePath), parts: [] };
@@ -233,7 +309,7 @@ async function prepare(opts) {
   const checksumLines = [];
   for (const file of await files(assets)) checksumLines.push(`${await fileHash(path.join(assets, file))}  ${file}`);
   await fs.writeFile(path.join(assets, 'SHA256SUMS'), checksumLines.join('\n') + '\n');
-  const notes = `# Creditia GPUI ${opts.tag}\n\nTested source: \`${candidate}\`. This draft is a prerelease; it does not switch the stable desktop or the main branch.\n\nAll four native packages, installation checks, the reviewed desktop journey, representative visual checks and same-host process-tree measurements passed the combined acceptance gate. See REPORT.md, ACCEPTANCE.zh.md and report.json. ARTWORK-STATUS.tsv and FEATURE-STATUS.tsv retain the per-item results; the complete source evidence is retained in the archive described by evidence-archive.json (large archives are split into ordered 1 GiB parts). Concatenate parts in manifest order before extracting the tar.gz; its reconstructed SHA-256 is recorded there.\n\nmacOS uses ad-hoc signatures without notarization; Windows packages are unsigned. INSTALL.md explains installation, OS trust prompts, upgrade and rollback. No externally installed Node or downloaded fonts are required.\n\n## Verified workflow runs\n\n${provenance.runs.map(run => `- [${run.path} run ${run.id}](${run.html_url})`).join('\n')}\n`;
+  const notes = `# Creditia GPUI ${opts.tag}\n\nTested source: \`${candidate}\`. These prerelease downloads contain the exact installers exercised on all four targets.\n\nAll four native packages, installation checks, the reviewed desktop journey, representative visual checks and same-host process-tree measurements passed the combined acceptance gate. See REPORT.md, ACCEPTANCE.zh.md and report.json. ARTWORK-STATUS.tsv and FEATURE-STATUS.tsv retain the per-item results; the complete source evidence is retained in the archive described by evidence-archive.json (large archives are split into ordered 1 GiB parts). Concatenate parts in manifest order before extracting the tar.gz; its reconstructed SHA-256 is recorded there.\n\nmacOS uses ad-hoc signatures without notarization; Windows packages are unsigned. INSTALL.md explains installation, OS trust prompts, upgrade and rollback. No externally installed Node or downloaded fonts are required.\n\n${provenance.rollback ? `## Rollback\n\nDownload ${provenance.rollback.name} for the previous desktop. Its SHA-256 is \`${provenance.rollback.sha256}\`. Quit the GPUI app and keep the library and project archives in place before opening Tauri.\n\n` : ''}## Verified workflow runs\n\n${provenance.runs.map(run => `- [${run.path} run ${run.id}](${run.html_url})`).join('\n')}\n`;
   await fs.writeFile(path.join(output, 'release-notes.md'), notes);
   const records = [];
   for (const file of [...await files(assets)].map(file => `assets/${file}`).concat(['release-notes.md'])) records.push({ path: file, bytes: (await fs.stat(path.join(output, file))).size, sha256: await fileHash(path.join(output, file)) });
@@ -274,6 +350,20 @@ export async function verifyBundle(root, expected) {
   for (const target of TARGETS) if (actual.filter(file => file.startsWith(`assets/creditia-gpui-${target}`)).length !== 2) throw Error(`Prepared bundle lacks both installers for ${target}`);
   return bundle;
 }
+export function verifyUploadedRelease(release, assets, bundle) {
+  if (!release.draft || !release.prerelease || release.tag_name !== bundle.tag || release.target_commitish !== bundle.candidate_sha) {
+    throw Error('Draft release does not target the reviewed candidate');
+  }
+  const expected = bundle.assets.filter(a => a.path.startsWith('assets/'));
+  if (expected.length !== assets.length) throw Error('Uploaded asset count differs from the verified bundle');
+  for (const file of expected) {
+    const actual = assets.find(a => a.name === path.basename(file.path));
+    if (actual?.state !== 'uploaded' || actual.size !== file.bytes || actual.digest !== `sha256:${file.sha256}`) {
+      throw Error(`Uploaded release asset does not match: ${file.path}`);
+    }
+  }
+}
+
 async function main() {
   const command = process.argv[2], opts = options(process.argv.slice(3));
   if (command === 'request') {
@@ -291,6 +381,16 @@ async function main() {
     if (process.env.GITHUB_REPOSITORY !== bundle.repository) throw Error('Publish repository differs from preparation');
     if (await api(bundle.repository, `git/ref/tags/${encodeURIComponent(bundle.tag)}`, { allow404: true })) throw Error('Tag already exists; refusing to replace a previous candidate');
     execFileSync('gh', ['release', 'create', bundle.tag, '--repo', bundle.repository, '--target', bundle.candidate_sha, '--draft', '--prerelease', '--title', `Creditia GPUI ${bundle.tag}`, '--notes-file', path.join(root, 'release-notes.md'), ...bundle.assets.filter(item => item.path.startsWith('assets/')).map(item => path.join(root, item.path))], { stdio: 'inherit' });
+    if (opts['publish-downloads'] === 'true') {
+      const drafts = await api(bundle.repository, 'releases?per_page=100');
+      const draft = drafts.find(item => item.draft && item.tag_name === bundle.tag);
+      if (!draft) throw Error('Uploaded draft release is missing');
+      const assets = await api(bundle.repository, `releases/${draft.id}/assets?per_page=100`);
+      verifyUploadedRelease(draft,assets,bundle);
+      execFileSync('gh',['release','edit',bundle.tag,'--repo',bundle.repository,'--draft=false','--prerelease','--latest=false'],{stdio:'inherit'});
+      const published = await api(bundle.repository, `releases/tags/${encodeURIComponent(bundle.tag)}`);
+      if (published.draft || !published.prerelease || published.id !== draft.id) throw Error('Prerelease publication did not complete');
+    }
     return;
   }
   throw Error('Use prepare or publish');

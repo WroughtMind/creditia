@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { TARGETS, validateRequest, runMatchesCandidate, validateReport, verifyInstallers, verifyBundle } from './release.mjs';
+import { TARGETS, validateRequest, runMatchesCandidate, validateReport, verifyInstallers, retainWebBuild, verifyUploadedRelease, verifyBundle } from './release.mjs';
 const sha='a'.repeat(40), head='b'.repeat(40), base='c'.repeat(40);
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 const request=()=>({enabled:true,candidate_sha:sha,native_run:'1',artwork_run:'2',performance_run:'3',core_run:'4',review_commit:head,review_path:'docs/review.json',tag:'gpui-v0.2.0-rc.1'});
@@ -53,4 +53,36 @@ test('publish verifies sealed assets, reconstructed evidence and rejects added o
  await fs.rm(path.join(assets,'injected.txt'));
  await fs.appendFile(path.join(assets,'evidence.tar.part0'),'modified');
  await assert.rejects(verifyBundle(root,digest(manifest)),/asset changed/);
+}));
+
+test('publishing requires the complete draft and the same installer bytes',()=>{
+ const file={path:'assets/desktop.dmg',bytes:7,sha256:'b'.repeat(64)};
+ const bundle={tag:'gpui-v0.1.0-rc.1',candidate_sha:sha,assets:[file]};
+ const release={tag_name:bundle.tag,target_commitish:sha,draft:true,prerelease:true};
+ const asset={name:'desktop.dmg',size:7,digest:'sha256:'+file.sha256,state:'uploaded'};
+ verifyUploadedRelease(release,[asset],bundle);
+ assert.throws(()=>verifyUploadedRelease({...release,target_commitish:head},[asset],bundle));
+ assert.throws(()=>verifyUploadedRelease(release,[],bundle));
+ assert.throws(()=>verifyUploadedRelease(release,[{...asset,digest:'wrong'}],bundle));
+ assert.equal(validateRequest(request()).publish_downloads,false);
+ assert.equal(validateRequest({...request(),publish_downloads:true}).publish_downloads,true);
+ assert.throws(()=>validateRequest({...request(),publish_downloads:'true'}));
+});
+
+test('browser build files remain intact outside the evidence scan and bind to the actual report',async()=>temporary(async root=>{
+ const embed=path.join(root,'artifact/packages/embed'), dist=path.join(embed,'dist');
+ const evidence=path.join(embed,'browser-evidence');
+ await fs.mkdir(path.join(dist,'fonts'),{recursive:true});
+ await fs.mkdir(evidence,{recursive:true});
+ await fs.writeFile(path.join(dist,'fonts/manifest.json'),'{"font":"fixture"}');
+ await fs.writeFile(path.join(dist,'creditia-card.js'),'tested bundle');
+ await fs.writeFile(path.join(evidence,'sample.png'),Buffer.from('89504e470d0a1a0a','hex'));
+ const report={candidateSha:sha,status:'passed',errors:[],cases:[{status:'passed',checks:[{passed:true}]}],
+   motion:{controls:'passed',reducedMotion:'passed',frameCount:5},screenshots:['sample.png'],bundleSha256:digest('tested bundle')};
+ await fs.writeFile(path.join(evidence,'report.json'),JSON.stringify(report));
+ await assert.rejects(retainWebBuild(path.join(root,'artifact'),root,head));
+ const retained=await retainWebBuild(path.join(root,'artifact'),root,sha);
+ assert.equal(retained.cases,1);
+ assert.equal(await fs.readFile(path.join(root,retained.retained_bundle,'fonts/manifest.json'),'utf8'),'{"font":"fixture"}');
+ await assert.rejects(fs.stat(dist),{code:'ENOENT'});
 }));
