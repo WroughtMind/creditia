@@ -1,4 +1,4 @@
-# CI：Rust 核心与渲染在 Linux 上测；App 在 macOS 上实际编译、打包成 .app（未签名），作为产物上传，再跑 App 自己的 clippy 和单测
+# Linux verifies the shared core and renderer. macOS builds and tests the GPUI desktop and the previous-preferences importer.
 name: ci
 on:
   pull_request:
@@ -204,17 +204,18 @@ jobs:
           retention-days: 3
 
   desktop-macos:
-    runs-on: macos-26
+    runs-on: macos-15
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode with Icon Composer support
-        run: echo "DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            . -> target
+            apps/gpui -> target
             apps/desktop/src-tauri -> target
       - uses: actions/setup-node@v4
         with:
@@ -223,35 +224,17 @@ jobs:
           cache-dependency-path: |
             packages/render/package-lock.json
             apps/desktop/package-lock.json
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
-      - run: pip install fonttools brotli
-      - run: npm ci
-        working-directory: packages/render
-      - run: npm ci
-        working-directory: apps/desktop
-      - run: npm test
-        working-directory: apps/desktop
-      - name: 字体子集
-        run: npm run fonts
-        working-directory: apps/desktop
-      - name: 分析核心（随 App 一起打包）
-        run: npm run core
-        working-directory: apps/desktop
-      - name: 编译并打包 App
-        run: npm run tauri -- build --bundles app --verbose
-        working-directory: apps/desktop
-      - name: 验证分层图标及三种外观
-        run: node apps/desktop/tools/verify-macos-icon.mjs apps/desktop/src-tauri/target/release/bundle/macos/creditia.app
-      # 放在打包之后：要用上一步 vite 编出来的 dist（App 把它编进二进制）
-      - name: App 的 Rust：clippy 与单测
+      - run: npm ci --prefix packages/render
+      - name: Build the default desktop and verify native contracts
+        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --lib --bins --locked
+      - run: npm ci --prefix apps/desktop
+      - name: Check the web preview used by the site
+        run: npm test --prefix apps/desktop
+      - name: Verify the one-time legacy preferences importer
+        env:
+          TAURI_CONFIG: '{"build":{"devUrl":null},"bundle":{"active":false,"externalBin":[],"resources":[],"icon":["icons/icon.png"]}}'
         run: |
-          cargo clippy --all-targets -- -D warnings
-          cargo test
-        working-directory: apps/desktop/src-tauri
-      - name: 打成 zip
-        run: ditto -c -k --keepParent apps/desktop/src-tauri/target/release/bundle/macos/creditia.app creditia-macos.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: creditia-macos
-          path: creditia-macos.zip
+          mkdir -p apps/desktop/dist
+          printf '<!doctype html><html><body></body></html>\n' > apps/desktop/dist/index.html
+          cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked

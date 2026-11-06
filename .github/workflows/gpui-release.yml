@@ -1,4 +1,4 @@
-# Produces a draft prerelease only. Stable desktop/main cutover remains separate.
+# Preserve a draft by default; an explicit request can publish the verified downloads.
 name: gpui-release
 
 on:
@@ -26,6 +26,10 @@ on:
         description: 'Review JSON path; evidence references start with immutable artifact names'
         required: true
         default: docs/gpui-migration/reviews/review.json
+      publish_downloads:
+        description: 'Publish the prerelease downloads after matching every uploaded asset digest'
+        type: boolean
+        default: false
       tag:
         description: 'New prerelease tag, for example gpui-v0.2.0-rc.1'
         required: true
@@ -52,6 +56,7 @@ jobs:
       review_commit: ${{ steps.request.outputs.review_commit }}
       review_path: ${{ steps.request.outputs.review_path }}
       tag: ${{ steps.request.outputs.tag }}
+      publish_downloads: ${{ steps.request.outputs.publish_downloads }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -152,4 +157,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           MANIFEST_SHA256: ${{ needs.prepare.outputs.manifest_sha256 }}
-        run: node packaging/gpui/release.mjs publish --root prepared --manifest-sha256 "$MANIFEST_SHA256"
+          PUBLISH_DOWNLOADS: ${{ needs.request.outputs.publish_downloads }}
+        run: node packaging/gpui/release.mjs publish --root prepared --manifest-sha256 "$MANIFEST_SHA256" --publish-downloads "$PUBLISH_DOWNLOADS"

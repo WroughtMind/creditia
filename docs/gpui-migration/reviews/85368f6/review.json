@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "candidate_sha": "273068e80af532afd5501e9e9600787420447381",
+  "reviewer": "Codex — direct native visual review and installed workflow verification",
+  "reviewed_at": "2026-11-06T20:07:27.266037+00:00",
+  "platform": "linux-x64",
+  "workflow": [
+    {
+      "id": "legacy-library",
+      "status": "accepted",
+      "notes": "Previous 0.1.0 executable created the isolated library, project archive and evidence. Final-source GPUI reopened it twice at 2×; pixels and original archive bytes matched. Reviewer image creditia-legacy-restart.jpg accompanies this record. Installed startup and primary project switching were also verified.",
+      "evidence": [
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/package-installed/tar-launch/window-evidence.json",
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native-services/manifest.json#services-search"
+      ]
+    },
+    {
+      "id": "analysis-cancel-retry",
+      "status": "accepted",
+      "notes": "Real installed Linux desktop started incremental analysis following a Git commit, cancelled the active worker, preserved the old archive bytes and retried to the new HEAD. The journal records distinct task IDs.",
+      "evidence": [
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/package-installed/analysis-retry/window-evidence.json"
+      ]
+    },
+    {
+      "id": "browse-playback",
+      "status": "accepted",
+      "notes": "Opened a project through search and switched via keyboard. Viewed the wall, roamed and changed focus. The installed player showed independently captured different frame pixels, paused, replayed, suspended while hidden, restored, and switched artwork during playback.",
+      "evidence": [
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native-services/manifest.json#services-search",
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native/manifest.json#minimal-light-en-light-wall",
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native-animation/sealed/manifest.json#installed-streaming-animation-dpi2"
+      ]
+    },
+    {
+      "id": "settings",
+      "status": "accepted",
+      "notes": "The settings GUI saved global and project-specific choices. The reopened window read the persisted project settings.",
+      "evidence": [
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native-services/manifest.json#services-persistence"
+      ]
+    },
+    {
+      "id": "export-recovery",
+      "status": "accepted",
+      "notes": "Recovered the interrupted export of Alpha while Beta was selected, verified the PNG against a separate render of Alpha and reopened the saved queue. Installed package rendered a real export.",
+      "evidence": [
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native-services/manifest.json#services-export-recovery",
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/package-installed/tar-installed.png"
+      ]
+    },
+    {
+      "id": "restart",
+      "status": "accepted",
+      "notes": "Both Linux package formats reopened the same existing project and preserved its archive bytes. Mac and Windows installation results are checked separately in the platform manifests.",
+      "evidence": [
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/package-installed/tar-restart/window-evidence.json",
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/package-installed/deb-restart/window-evidence.json"
+      ]
+    },
+    {
+      "id": "performance-review",
+      "status": "accepted",
+      "notes": "Compared both complete process trees on the same Linux software renderer with the public archive. Reviewed startup, scroll and roam CPU and RSS, hidden idle, and the separate installed 2× player frame/resource measurements. See the attached one-page note for measured figures and limitations.",
+      "evidence": [
+        "gpui-production-performance/creditia/creditia/evidence/performance/candidate-startup-cold/samples.jsonl",
+        "gpui-production-performance/creditia/creditia/evidence/performance/baseline-startup-cold/samples.jsonl",
+        "gpui-production-performance/creditia/creditia/evidence/performance/candidate-scroll-cold/samples.jsonl",
+        "gpui-production-performance/creditia/creditia/evidence/performance/baseline-scroll-cold/samples.jsonl",
+        "gpui-production-performance/creditia/creditia/evidence/performance/candidate-roam-cold/samples.jsonl",
+        "gpui-production-performance/creditia/creditia/evidence/performance/baseline-roam-cold/samples.jsonl",
+        "gpui-production-performance/creditia/creditia/evidence/performance/candidate-hidden-idle-cold/samples.jsonl",
+        "gpui-production-performance/creditia/creditia/evidence/performance/baseline-hidden-idle-cold/samples.jsonl",
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native-animation/sealed/manifest.json#installed-streaming-animation-dpi2"
+      ]
+    }
+  ],
+  "visuals": [
+    {
+      "id": "dense-chinese",
+      "status": "accepted",
+      "notes": "Viewed Chinese artwork labels and names in the ink wall and the Chinese receipt at 2×. The receipt remained readable down through the totals and barcode; public-receipt-focused.jpg.",
+      "evidence": [
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native/manifest.json#ink-zh-light-wall"
+      ]
+    },
+    {
+      "id": "long-layout",
+      "status": "accepted",
+      "notes": "Focused the 720 × 1,140 Chinese ink receipt from the public Creditia archive. Its top, lowest line and bottom actions fit the focused window. See public-receipt-focused.jpg.",
+      "evidence": [
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native/manifest.json#ink-zh-light-wall",
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native/manifest.json#minimal-light-en-light-wall"
+      ]
+    },
+    {
+      "id": "attribution",
+      "status": "accepted",
+      "notes": "Reviewed the focused Chinese evidence card with its 57% summary, named contributors, unconfirmed row and stacked evidence categories. The synthetic fixture accompanies the independent real repository receipt; see attribution-focused.jpg.",
+      "evidence": [
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native-services/manifest.json#services-search",
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native/manifest.json#minimal-light-en-light-wall"
+      ]
+    },
+    {
+      "id": "animation",
+      "status": "accepted",
+      "notes": "Compared independently captured paused frames inside the artwork crop and inspected the installed player after replay, pause, deep zoom, restore and switching pieces.",
+      "evidence": [
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native-animation/sealed/manifest.json#installed-streaming-animation-dpi2"
+      ]
+    },
+    {
+      "id": "high-dpi",
+      "status": "accepted",
+      "notes": "Inspected samples at 2× with recorded physical dimensions, decode-ready frames and coverage of the zoomed viewport. Screenshots cover the native window as well as the artwork.",
+      "evidence": [
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native-animation/sealed/manifest.json#installed-streaming-animation-dpi2",
+        "gpui-evidence-x86_64-unknown-linux-gnu/creditia/creditia/evidence/native/manifest.json#cyber-zh-dark-wall"
+      ]
+    }
+  ],
+  "images": [
+    {
+      "file": "public-receipt-focused.jpg",
+      "sha256": "21604d8979faca58f2730ff2238d52e79fee81c94d8dbf9b50478432c3d8c41c",
+      "source_png_sha256": "52608ccdc6c23050fcc4dac2ae176a368b4c6bcf0ece7394e3ca9adedb6a0ecd",
+      "description": "Chinese ink receipt, public Creditia repository at 2×"
+    },
+    {
+      "file": "attribution-focused.jpg",
+      "sha256": "360a48e020110152eb51c047d05c4a0e75a3af41710f61a33bbb30573242eab8",
+      "source_png_sha256": "a035875b2ed5e5dbcb05681d32d5c103d8490755c65e1ff6a3626b813b620618",
+      "description": "Catnap attribution and contributor evidence at 2×"
+    },
+    {
+      "file": "creditia-legacy-restart.jpg",
+      "sha256": "e76f78f35dfd0c0365118ce0376e2950826ae67fd1a98ac14a64de7ac9897875",
+      "source_png_sha256": "d076cf32f852bbd7c2f15bf2c3605f0799389e5a43ad33d66c08feab850ebbac",
+      "description": "Reopened library from the prior 0.1.0 executable"
+    }
+  ],
+  "rollback": {
+    "id": "12871083447",
+    "run": "40811823090",
+    "sha256": "115755b2ad090057b42ce27581bddd97381d576eed65f433b18969b6caa502d9",
+    "name": "Creditia-Tauri-rollback.zip"
+  },
+  "extra_checks": [
+    {
+      "platform": "Ubuntu 24.04 x64",
+      "source_run": 42280974878,
+      "artifact_id": 13535556455,
+      "artifact_sha256": "abd503e1da03045fec3fac2793698fbaa7e9ef92847c87d4485904c0cf39f699",
+      "candidate_sha": "273068e80af532afd5501e9e9600787420447381",
+      "checks": [
+        "Installed the checksum-verified DEB using APT",
+        "Opened and reopened an existing Git project using /usr/bin/creditia-gpui",
+        "Removed through APT; the SQLite library and project archive survived"
+      ]
+    }
+  ],
+  "artifact_ids": {
+    "gpui-production-performance": "13536897845"
+  },
+  "delivery_note": {
+    "file": "Creditia-GPUI-130.pdf",
+    "sha256": "fcbd7a453be7fd6519b336e1ec365aecb4de9f19b275aed51e3e4e4dad288716"
+  }
+}

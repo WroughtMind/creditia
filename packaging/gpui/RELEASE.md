@@ -80,6 +80,6 @@ and the reconstructed archive hash. Concatenate parts in listed order, verify
 the reconstructed SHA-256, then extract the tar.gz. This keeps individual assets
 below GitHub's upload limit without dropping full-resolution native screenshots.
 
-The draft remains available for final distribution review. Publishing it or
-changing the stable desktop/main branch is a separate action; this workflow does
-neither automatically.
+By default the draft remains available for distribution review. An explicit publication request can promote the verified downloads; the main branch cutover is reviewed independently.
+
+For public candidate downloads, set `publish_downloads` to `true` in the immutable release request. The workflow first uploads a draft, checks each asset size and GitHub digest against the sealed bundle, and then publishes the prerelease. The optional review fields `images` and `delivery_note` preserve reviewed JPEGs and a one-page PDF by filename and SHA-256. A `rollback` record can preserve a previous installer artifact by its GitHub run, artifact ID and verified ZIP checksum.

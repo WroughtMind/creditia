@@ -1,5 +1,7 @@
 # Creditia → GPUI Kit 迁移验收
 
+桌面默认入口为 GPUI。本次四平台安装包、实际验收报告与旧版回退包见[桌面发布页](https://github.com/WroughtMind/creditia/releases/tag/gpui-v0.1.0-rc.1)。安装包对应同一测试构建 `273068e80af532afd5501e9e9600787420447381`。
+
 本目录以主线 `ac82a574b0747bc5651571a3f169f4a893442f88` 为迁移范围基线。登记是源码盘点，不代表 GPUI 已实现或视觉已通过。源码位置与 `candidateSourceFingerprints` 对应本分支捕获时的文件，可能包含迁移中的重构，不声称其内容与基线提交相同。正式主线切换以本页的发布门槛为准。
 
 - `features.json`：页面、操作、异常状态与新增要求；`anchor` 在基线源码中定位。
@@ -12,7 +14,11 @@
 
 在仓库根目录执行 `node docs/gpui-migration/capture.mjs --check` 检查目录语义和源码锚点；它允许实现函数体变化和行号移动，不把这类重构误判为目录增减。执行 `node docs/gpui-migration/capture.mjs --write` 明确更新目录快照、链接和候选源码指纹，并保留未变组合的人工验收栏。更新不会自动证明任何 GPUI 验收项通过，验收证据应另存于 `evidence/` 并在台账中关联。
 
+[一页交付说明](reviews/85368f6/Creditia-GPUI-130.pdf)汇总了四平台安装结果、同机性能和回退方法。[本次审阅记录](reviews/85368f6/review.json)列出各项验证使用的窗口、导出和性能样本。
+
 ## 迁移范围与历史盘点
+
+下表保存迁移开始时的盘点状态。本次交付结果以本页上方链接的审阅记录和发布报告为准。
 
 | 阶段 | 交付与退出条件 | 本次盘点状态 |
 |---|---|---|

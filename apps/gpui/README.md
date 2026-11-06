@@ -1,10 +1,6 @@
 # Creditia GPUI desktop
 
-The native desktop reuses `creditia-desktop-service`, the existing Rust analysis
-worker and the shared artwork definitions in `packages/render`. Migration scope
-and evidence are tracked in `docs/gpui-migration`. Source implementation and a
-successful build are separate from completed visual, performance and release
-acceptance.
+GPUI is the default Creditia desktop. It uses the Rust analysis service and the same artwork renderer as the CLI and web embed. [Download installers and read the test results](https://github.com/WroughtMind/creditia/releases/tag/gpui-v0.1.0-rc.1), or see the [installation and rollback guide](../../packaging/gpui/INSTALL.md).
 
 ## Run from source
 
@@ -164,8 +160,7 @@ validated artifacts without rebuilding them. An explicit branch request or
 manual run supplies the immutable candidate, successful evidence runs and
 recorded review; the combined acceptance gate must pass first. Requests default
 to disabled. See `packaging/gpui/RELEASE.md` for the exact procedure.
-Candidate artifacts are not a published stable release. They follow the existing
-distribution policy: macOS signatures are ad hoc, and Windows binaries are
+Published desktop packages follow the existing distribution policy: macOS signatures are ad hoc, and Windows binaries are
 unsigned. The installation guide documents the corresponding OS trust prompts.
 Developer ID/notarization and Windows code signing can be configured separately;
 their absence does not prevent generating or installing these packages.

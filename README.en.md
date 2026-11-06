@@ -161,7 +161,7 @@ Run `creditia agents --json` for the catalogue. The [complete matrix](AGENT_SUPP
 
 ## Install
 
-The CLI is currently available from source. The npm package and app installers are not published yet; official installation channels will be announced on the [website](https://wroughtmind.github.io/creditia/) and [Releases](https://github.com/WroughtMind/creditia/releases).
+The native desktop uses GPUI. Download a DMG for Apple silicon or Intel, an installer or portable ZIP for Windows x64, or a DEB or tar.gz for Linux x64. [Desktop downloads](https://github.com/WroughtMind/creditia/releases/tag/gpui-v0.1.0-rc.1) · [Install and roll back](packaging/gpui/INSTALL.md)
 
 Source installation requires Git, Rust and Node 22.18+:
 
@@ -184,7 +184,7 @@ To install only the analysis core, use the command below. Its executable is name
 cargo install --git https://github.com/WroughtMind/creditia creditia-cli
 ```
 
-App installers are in preparation. macOS builds use ad-hoc signing, without Apple Developer ID signing or notarization. Once released, verify the download source and SHA-256 first. For an unidentified-developer warning, try opening the app once, then use System Settings → Privacy & Security → Open Anyway. If macOS reports damage, check or download the file again; do not assume every warning is caused by notarization. Do not disable Gatekeeper globally.
+The installers include the renderer, fonts and analysis core. macOS packages are ad-hoc signed and Windows installers are unsigned. Verify the download against the release's SHA256SUMS.
 
 See the [release procedure](packaging/RELEASE.md) for packaging and acceptance checks.
 
@@ -246,7 +246,7 @@ Run these commands from the repository root. See the [desktop development guide]
 for platform dependencies, Windows commands and native screenshot checks, and the
 [installation guide](packaging/gpui/INSTALL.md) for upgrades and rollback. Migration
 completion is determined by the [acceptance report](docs/gpui-migration/README.md)
-for the same commit; the candidate becomes the stable desktop after acceptance.
+for the same build across all four desktop targets.
 
 
 </details>

@@ -45,6 +45,10 @@ before using a migration candidate with valuable projects.
 
 ## Upgrade and rollback
 
+The previous Tauri 0.1.0 installers and their checksums are available in
+[Creditia-Tauri-rollback.zip](https://github.com/WroughtMind/creditia/releases/download/gpui-v0.1.0-rc.1/Creditia-Tauri-rollback.zip).
+The archive SHA-256 is `115755b2ad090057b42ce27581bddd97381d576eed65f433b18969b6caa502d9`.
+
 1. Quit both desktop versions and let active analysis/export jobs finish or cancel.
 2. Preserve the previous application directory or installer. Do not delete the
    Creditia library, project `.creditia` directories, or evidence database.

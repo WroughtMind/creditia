@@ -163,7 +163,7 @@ jobs:
 
 ## 安装
 
-当前可用的是源码版 CLI；npm 包和 App 安装包尚未发布。正式安装渠道开放后会在[官网](https://wroughtmind.github.io/creditia/)和 [Releases](https://github.com/WroughtMind/creditia/releases) 公布。
+桌面版使用 GPUI。macOS 提供 Apple 芯片和 Intel 两种 DMG，Windows x64 提供安装程序和便携 ZIP，Linux x64 提供 DEB 和 tar.gz。[桌面下载](https://github.com/WroughtMind/creditia/releases/tag/gpui-v0.1.0-rc.1) · [安装与回退](packaging/gpui/INSTALL.md)
 
 源码安装需要 Git、Rust 和 Node 22.18+：
 
@@ -186,7 +186,7 @@ npm link
 cargo install --git https://github.com/WroughtMind/creditia creditia-cli
 ```
 
-App 安装包准备中。macOS 产物使用本地签名（ad-hoc），未经 Apple 开发者签名与公证。发布后先核对下载来源与 SHA-256；遇到无法验证开发者的提示时，尝试打开一次，再到「系统设置 → 隐私与安全性」点「仍要打开」。若提示文件已损坏，应先核对或重新下载，不能一律归因于未公证。不要关闭整个 Gatekeeper。
+安装包自带渲染器、字体和分析核心。macOS 采用 ad-hoc 签名，Windows 安装包未签名。下载后可用同版的 SHA256SUMS 核对。
 
 发布流程与验收步骤见 [发布说明](packaging/RELEASE.md)。
 
@@ -247,7 +247,7 @@ node site/readme.ts                           # README 的图 → .github/readme
 以上命令从仓库根目录运行。GPUI 的系统依赖、Windows 命令和原生截图检查见
 [桌面开发文档](apps/gpui/README.md)；安装、升级和回退见
 [安装说明](packaging/gpui/INSTALL.md)。全量迁移的完成状态由同一提交的
-[验收报告](docs/gpui-migration/README.md)判定，候选版本通过验收后再切换正式桌面。
+[验收报告](docs/gpui-migration/README.md)判定，四个平台使用同一候选构建的安装验证结果。
 
 
 </details>
