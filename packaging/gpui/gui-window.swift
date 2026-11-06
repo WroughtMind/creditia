@@ -55,7 +55,11 @@ case "copy", "open", "escape":
         }
     }
 case "dialog":
-    if visibleWindows().contains(where: panelService) || containsDialog(AXUIElementCreateApplication(pid), 4) { exit(0) }
+    let openTitles = ["Open", "打开", "開啟"]
+    if visibleWindows().contains(where: { row in
+        panelService(row) || (row[kCGWindowOwnerPID as String] as? Int32 == pid &&
+            openTitles.contains(row[kCGWindowName as String] as? String ?? ""))
+    }) || containsDialog(AXUIElementCreateApplication(pid), 4) { exit(0) }
     exit(4)
 case "inspect":
     let rows = visibleWindows().map { row -> [String: Any] in
