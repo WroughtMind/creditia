@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 const source = name => fs.readFileSync(require.resolve('../src/' + name), 'utf8').replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
+const sharedSource = name => fs.readFileSync(require.resolve('../../../packages/render/src/' + name), 'utf8').replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
 const load = (code, ctx) => vm.runInContext(ts.transpile(code, { target: ts.ScriptTarget.ES2022 }), ctx);
 const art = { svg: '<svg/>', w: 1200, h: 630, title: 'Project A', hits: [], bg: '#111' };
 const tick = () => new Promise(setImmediate);
@@ -54,21 +55,21 @@ test('an uncloneable export request closes its worker and reports the original e
   assert(workers[0].stopped);
 });
 
-test('only GIF generates frames and only font data crosses the worker boundary', async () => {
+test('GIF and HTML share animation frames and only font data crosses the worker boundary', async () => {
   const { ctx, workers } = client();
   const style = { f: { body: { family: 'Inter', weight: 400 } }, draw() {} };
   let calls = 0;
   const frames = async () => { calls++; return [art, { ...art, svg: '<svg id="last"/>' }]; };
-  for (const format of ['png', 'gif']) {
+  for (const format of ['png', 'gif', 'html']) {
     const pending = ctx.exportArt(format, style, art, 'square', frames);
     await tick();
     const worker = workers.at(-1);
     assert.deepEqual(worker.job.fontStyle, { f: style.f });
     assert.equal(worker.job.size, 'square');
-    assert.equal(worker.job.frames?.length, format === 'gif' ? 2 : undefined);
+    assert.equal(worker.job.frames?.length, format === 'gif' || format === 'html' ? 2 : undefined);
     worker.onmessage({ data: { result: {} } }); await pending;
   }
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
 });
 
 function renderer(failAt, cleanupFails = false) {
@@ -90,9 +91,9 @@ function renderer(failAt, cleanupFails = false) {
     free() { counts.trees--; if (cleanupFails) throw new Error('tree cleanup failed'); }
   }
   const messages = [];
-  const ctx = vm.createContext({ Resvg, Error, TextEncoder, Uint8Array,
+  const ctx = vm.createContext({ Resvg, Error, TextEncoder, Uint8Array, btoa,
     initWasm: async () => {}, fetch: () => {}, wasmUrl: 'test.wasm', fontBytes: async () => [],
-    SIZES: [], self: { postMessage: (data, transfer) => messages.push({ data, transfer }) },
+    SIZES: [{ id: 'native', w: 0, h: 0 }], self: { postMessage: (data, transfer) => messages.push({ data, transfer }) },
     makeExporter: r => ({
       png: a => r.png(a.svg, a.w * 2),
       pdf: async a => r.rgba(a.svg, a.w).data,
@@ -100,6 +101,13 @@ function renderer(failAt, cleanupFails = false) {
       svg: a => r.flat(a.svg), html: arts => r.flat(arts[0].svg),
     }),
   });
+  // Exercise the production normalization/clock, keeping only the codec and
+  // WASM objects instrumented so ownership failures remain observable.
+  load(sharedSource('motion-profiles.ts'), ctx);
+  load(sharedSource('pixels.ts'), ctx);
+  load(sharedSource('raster-viewport.ts'), ctx);
+  load(sharedSource('timeline.ts'), ctx);
+  load(sharedSource('export-job.ts'), ctx);
   load(source('export-worker.ts'), ctx);
   return { ctx, counts, primary, messages };
 }
@@ -111,6 +119,16 @@ for (const format of ['png', 'pdf', 'gif', 'svg', 'html']) test(`${format} frees
   assert.equal(counts.images, 0); assert.equal(counts.trees, 0);
   assert.equal(counts.peakImages, ['svg', 'html'].includes(format) ? 0 : 1);
   if (format === 'gif') assert.equal(counts.rendered, 24);
+});
+
+for (const format of ['png', 'pdf', 'gif']) test(`${format} releases the full scroll bitmap before rendering its clipped viewport`, async () => {
+  const { ctx, counts } = renderer();
+  const scroll = { ...art, w: 40, h: 20, svg: '<svg width="40" height="20" viewBox="0 0 40 20" data-creditia-raster="-20 60" data-creditia-window="4 2 32 16" data-creditia-bg="#111"/>' };
+  const out = await ctx.run({ fmt: format, fontStyle: null, art: scroll, size: 'native', frames: [scroll] });
+  assert.equal(out.ext, format);
+  assert.equal(counts.rendered, 2);
+  assert.equal(counts.peakImages, 1);
+  assert.equal(counts.images, 0); assert.equal(counts.trees, 0);
 });
 
 for (const [stage, format] of [['constructor', 'png'], ['render', 'png'], ['png', 'png'], ['rgba', 'pdf'], ['flat', 'svg']]) test(`${stage} failure releases owned objects and is not replaced by a cleanup error`, async () => {

@@ -10,6 +10,8 @@ on:
       - '.github/workflows/release.yml'
       - '.github/workflows/acceptance.yml'
       - 'packaging/**'
+      - '!packaging/gpui/**'
+      - '!packaging/gpui-acceptance/**'
       - 'apps/desktop/tools/core.mjs'
       - 'apps/desktop/src-tauri/tauri.conf.json'
       - 'apps/desktop/src-tauri/tauri.macos.conf.json'
@@ -17,6 +19,9 @@ on:
       - 'apps/desktop/tools/verify-macos-icon.mjs'
 permissions:
   contents: read
+concurrency:
+  group: legacy-release-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   build:
     strategy:

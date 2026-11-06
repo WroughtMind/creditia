@@ -193,8 +193,12 @@ export function mergeMarked(existing: string, block: string, start = RELEASE_STA
 }
 
 /** 嵌入代码 */
-export function embedSnippet(piece: string, style: string, src = '/.creditia/credits.json', variant?: string): string {
-  return `<script type="module" src="https://cdn.jsdelivr.net/npm/@creditia/embed@0/dist/creditia-card.js"></script>\n<creditia-card src="${src}" piece="${piece}" theme="${style}"${variant ? ` variant="${variant}"` : ''}></creditia-card>\n`;
+export function embedSnippet(piece: string, style: string, src = '/.creditia/credits.json', variant?: string,
+  options: { renderer?: 'classic' | 'svg'; lang?: 'zh' | 'en'; group?: 'auto' | 'tool' | 'model'; named?: boolean; sign?: string; transparent?: boolean } = {}): string {
+  const escape = (value: unknown) => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  const attributes = Object.entries({ src, piece, theme: style, ...(variant ? { variant } : {}), ...options })
+    .filter(([, value]) => value !== undefined).map(([key, value]) => ` ${key}="${escape(value)}"`).join('');
+  return `<script type="module" src="https://cdn.jsdelivr.net/npm/@creditia/embed@0/dist/creditia-card.js"></script>\n<creditia-card${attributes}></creditia-card>\n`;
 }
 
 /** 终端里的显示宽度：中日文占两格 */

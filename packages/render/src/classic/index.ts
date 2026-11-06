@@ -11,10 +11,16 @@ import type { Out } from './ui.ts';
 import { fontsFor } from './fonts.ts';
 import { classicArt, classicFrames } from './art.ts';
 import type { Raster } from '../export.ts';
+import { straightRgba } from '../pixels.ts';
+import { rasterViewport, viewportPixels, viewportPngSvg, retainRasterExtent } from '../raster-viewport.ts';
 
 
 const require = createRequire(import.meta.url);
 const fontCache = new Map<string, Buffer>();
+// Bounded by the finite, pinned CLASSIC_FONTS manifest. Keep buffer identities
+// stable throughout the WASM engine's lifetime: a per-face LRU smaller than one
+// theme's CJK set reloads the same fonts repeatedly during a single wall. Native
+// renderer recycling after idle/cancellation releases the engine and its fonts.
 // 字体文件在包目录里找 .ttf，不靠拼文件名：各包的大小写不一致，在大小写敏感的文件系统（Linux）上拼出来的名字会找不到
 function fontFile(pkg: string, file: string) {
   const k = `${pkg}/${file}`;
@@ -60,9 +66,9 @@ export async function renderSized(form: string, m: Model, theme: Theme, w: numbe
 /** 栅格化：satori 出的 SVG 里文字已经是路径，resvg 不需要字体 */
 const ropts = (width?: number) => ({ font: { loadSystemFonts: false }, fitTo: width ? { mode: 'width' as const, value: Math.round(width) } : undefined });
 export const raster: Raster = {
-  png(svg, width) { return new Uint8Array(new Resvg(svg, ropts(width)).render().asPng()); },
-  rgba(svg, width) { const img = new Resvg(svg, ropts(width)).render(); return { w: img.width, h: img.height, data: new Uint8Array(img.pixels) }; },
-  flat(svg) { return new Resvg(svg, ropts()).toString(); },
+  png(svg, width) { const v = rasterViewport(svg, width); const png = new Resvg(v?.svg ?? svg, ropts(width)).render().asPng(); return new Uint8Array(v ? new Resvg(viewportPngSvg(png, v), ropts()).render().asPng() : png); },
+  rgba(svg, width) { const v = rasterViewport(svg, width); let img = new Resvg(v?.svg ?? svg, ropts(width)).render(); if (v?.window) { img = new Resvg(viewportPngSvg(img.asPng(), v), ropts()).render(); return { w: img.width, h: img.height, data: straightRgba(img.pixels) }; } return { w: img.width, h: v?.height ?? img.height, data: straightRgba(viewportPixels(img.pixels, v)) }; },
+  flat(svg) { return retainRasterExtent(svg, new Resvg(svg, ropts()).toString()); },
 };
 
 /** 统一的 Art：命令行导出、官网都走这个 */
@@ -70,8 +76,8 @@ export function art(form: string, m: Model, theme: Theme, ctx: Ctx = { lang: 'zh
   return classicArt(form, m, theme, ctx, satori as any, fonts(theme));
 }
 /** 动画帧（GIF） */
-export function frames(form: string, m: Model, theme: Theme, ctx: Ctx = { lang: 'zh' }, n = 24) {
-  return classicFrames(form, m, theme, ctx, satori as any, fonts(theme), n);
+export function frames(form: string, m: Model, theme: Theme, ctx: Ctx = { lang: 'zh' }, n = 24, times?: readonly number[]) {
+  return classicFrames(form, m, theme, ctx, satori as any, fonts(theme), n, times);
 }
 export { animatedClassic } from './art.ts';
 

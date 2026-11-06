@@ -214,6 +214,7 @@ function ed(m: Model, st: Style, secs: Section[], o: PieceOpts): Scene {
   const W = 1920, H = 1080;
   const s = new Scene(W, H);
   st.ground(s, { x: 0, y: 0, w: W, h: H }, m);
+  s.markContent();
   const t = o.t ?? 1;
   const x0 = W * 0.66, w = W * 0.28;
   // 右侧一层渐隐的纸色，保证字可读

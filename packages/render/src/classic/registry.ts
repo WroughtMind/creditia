@@ -6,7 +6,7 @@ import type { Theme } from './themes.ts';
 import type { Out } from './ui.ts';
 import { fetchSegs, blameSegs } from './text.ts';
 
-export interface Ctx { lang: 'zh' | 'en'; projects?: Model[]; person?: string; blame?: any; variant?: string }
+export interface Ctx { lang: 'zh' | 'en'; projects?: Model[]; person?: string; blame?: any; variant?: string; transparent?: boolean; fontMode?: 'outline' | 'embed' }
 
 /** null 表示数据不够，不出图。variants 是可选的版式 */
 export const FORMS: Record<string, { name: string; q: string; size: string; variants?: string[]; def?: (t: Theme) => string; render: (m: Model, t: Theme, ctx: Ctx) => Out | null }> = {

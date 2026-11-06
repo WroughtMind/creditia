@@ -1,0 +1,484 @@
+name: gpui
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - 'apps/gpui/**'
+      - 'apps/desktop/src-tauri/**'
+      - 'crates/**'
+      - 'packages/render/**'
+      - 'packages/schema/**'
+      - 'packaging/gpui/**'
+      - 'packaging/gpui-acceptance/**'
+      - 'docs/gpui-migration/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/gpui.yml'
+  workflow_dispatch:
+    inputs:
+      full_catalog:
+        description: 'Paint every desktop artwork and layout'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name == 'gpui-candidate' && github.sha || github.event_name }}
+  cancel-in-progress: ${{ github.event.label.name != 'gpui-candidate' }}
+
+env:
+  CARGO_TERM_COLOR: never
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  NODE_VERSION: 24.22.2
+  CREDITIA_RESOLVE_LOCK: 0
+
+jobs:
+  daily:
+    name: Native contracts and representative views
+    if: github.event_name == 'pull_request' && github.event.action != 'labeled'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: packages/render/package-lock.json
+      - run: bash packaging/gpui/linux-libs.sh catalog
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/gpui -> target
+      - run: npm ci --prefix packages/render
+      - run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --lib --bins --locked
+      - run: node packaging/gpui/fixtures.mjs --output evidence/fixtures --profile smoke
+      - name: Paint representative desktop views
+        env:
+          CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
+          CREDITIA_VISUAL_OUTPUT: ${{ github.workspace }}/evidence/native
+        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gpui-daily-views
+          path: evidence/native
+          retention-days: 7
+
+  mac-icons:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'gpui-candidate'
+    name: Compile and verify the original five-petal Mac icon
+    runs-on: macos-26
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Compile same-source light, dark and tinted icon assets
+        run: node packaging/gpui/mac-icons.mjs compile --output mac-icon-assets
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gpui-mac-icon-assets
+          path: mac-icon-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  resolve:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'gpui-candidate'
+    name: Resolve one dependency graph
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      rust-version: ${{ steps.toolchain.outputs.version }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/gpui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Record the compiler shared by every platform
+        id: toolchain
+        run: |
+          rustc --version --verbose
+          printf 'version=%s\n' "$(rustc --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Resolve declared features, preserving the existing graph
+        run: |
+          if [ "$CREDITIA_RESOLVE_LOCK" = 1 ]; then
+            cargo metadata --format-version 1 --features visual-test > /dev/null
+          else
+            cargo metadata --format-version 1 --features visual-test --locked > /dev/null
+          fi
+          test -s Cargo.lock
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gpui-cargo-lock
+          path: apps/gpui/Cargo.lock
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain the exact reusable formatter
+        working-directory: .
+        run: |
+          python packaging/gpui/rustfmt-runtime.py --output "$RUNNER_TEMP/rustfmt-runtime"
+          tar -czf "$RUNNER_TEMP/rustfmt-runtime.tar.gz" -C "$RUNNER_TEMP" rustfmt-runtime
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gpui-rustfmt-runtime
+          path: ${{ runner.temp }}/rustfmt-runtime.tar.gz
+          retention-days: 7
+
+  build:
+    name: Build and exercise ${{ matrix.platform }}
+    needs: [resolve, mac-icons]
+    # A failed Mac asset build must not suppress native tests or packages on
+    # Linux/Windows. Mac linking and screenshot tests also run before staging.
+    if: ${{ !cancelled() && needs.resolve.result == 'success' }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: macos-arm64, runner: macos-15, target: aarch64-apple-darwin, node_platform: darwin, node_arch: arm64 }
+          - { platform: macos-intel, runner: macos-15-intel, target: x86_64-apple-darwin, node_platform: darwin, node_arch: x64 }
+          - { platform: windows-msvc, runner: windows-2022, target: x86_64-pc-windows-msvc, node_platform: win, node_arch: x64 }
+          - { platform: linux-x64, runner: ubuntu-24.04, target: x86_64-unknown-linux-gnu, node_platform: linux, node_arch: x64 }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: gpui-cargo-lock
+          path: apps/gpui
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ needs.resolve.outputs.rust-version }}
+          targets: ${{ matrix.target }}
+          components: rustfmt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: packages/render/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Windows installer compiler
+        if: runner.os == 'Windows'
+        run: choco install nsis --yes --no-progress
+      - uses: actions/cache/restore@v4
+        if: runner.os == 'Linux'
+        id: apt-cache
+        with:
+          path: ${{ runner.temp }}/gpui-apt/*.deb
+          key: gpui-apt-build-${{ runner.arch }}-${{ hashFiles('packaging/gpui/linux-libs.sh') }}
+          restore-keys: gpui-apt-build-${{ runner.arch }}-
+      - name: Install Linux native libraries and software Vulkan
+        timeout-minutes: 15
+        if: runner.os == 'Linux'
+        run: bash packaging/gpui/linux-libs.sh build
+      - uses: actions/cache/save@v4
+        if: runner.os == 'Linux' && steps.apt-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/gpui-apt/*.deb
+          key: ${{ steps.apt-cache.outputs.cache-primary-key }}
+      - name: Select macOS minimum system version
+        if: runner.os == 'macOS'
+        run: |
+          xcode-select -p
+          printf 'MACOSX_DEPLOYMENT_TARGET=15.0\n' >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            apps/gpui -> target
+            apps/desktop/src-tauri -> target
+          key: gpui-native-${{ matrix.target }}
+          cache-on-failure: true
+      - name: Install the exact shared renderer dependencies
+        run: npm ci --prefix packages/render
+      - name: Validate packaging tools and migration inventory
+        run: |
+          node --test packaging/gpui/package.test.mjs packaging/gpui/mac-icons.test.mjs packaging/gpui/licenses.test.mjs
+          node docs/gpui-migration/capture.mjs --check
+      - name: Build and link the native desktop and analysis worker
+        run: |
+          cargo build --manifest-path apps/gpui/Cargo.toml --release --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-build.log"
+          cargo build -p creditia-cli --release --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/core-build.log"
+      - name: Record formatting changes for review
+        if: always()
+        run: |
+          cargo fmt --manifest-path apps/gpui/Cargo.toml
+          git diff -- apps/gpui/src apps/gpui/tests > "$RUNNER_TEMP/gpui-rustfmt.patch"
+          git checkout -- apps/gpui/src apps/gpui/tests
+      - name: Run native state, worker and export contracts
+        id: native-unit
+        continue-on-error: true
+        run: |
+          git rev-parse HEAD | tee "$RUNNER_TEMP/gpui-tests.log"
+          cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --lib --bins --locked --target '${{ matrix.target }}' 2>&1 | tee -a "$RUNNER_TEMP/gpui-tests.log"
+      - name: Record executed native unit feature checks
+        if: always()
+        env:
+          CREDITIA_TARGET: ${{ matrix.target }}
+        run: |
+          if [ -f "$RUNNER_TEMP/gpui-tests.log" ]; then
+            mkdir -p evidence/native-test-logs
+            cp "$RUNNER_TEMP/gpui-tests.log" evidence/native-test-logs/native-unit.log
+            node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          fs.writeFileSync('evidence/native-test-logs/provenance.json',JSON.stringify({candidate_sha:process.env.GITHUB_SHA,sources:[{file:'native-unit.log',run_id:process.env.GITHUB_RUN_ID,job_name:process.env.GITHUB_JOB,platform:process.env.CREDITIA_TARGET}]},null,2)+'\n');
+          JS
+            node packaging/gpui-acceptance/feature-evidence.mjs --logs evidence/native-test-logs --bindings packaging/gpui-acceptance/feature-bindings.json --candidate-sha "$GITHUB_SHA" --output evidence/native-feature-checks
+          fi
+      - name: Fetch and verify the bundled Node distribution
+        run: python packaging/gpui/node-runtime.py --version "$NODE_VERSION" --platform '${{ matrix.node_platform }}' --arch '${{ matrix.node_arch }}' --output runtime-node
+      - name: Build one-time legacy preference migration helper
+        env:
+          # This helper only imports old WebView preferences. The application
+          # identifier/origin stay unchanged; sidecars and bundle assets do not
+          # belong to this independently packaged migration executable.
+          TAURI_CONFIG: '{"build":{"devUrl":null},"bundle":{"active":false,"externalBin":[],"resources":[],"icon":["icons/icon.png"]}}'
+        run: |
+          mkdir -p apps/desktop/dist
+          printf '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>\n' > apps/desktop/dist/index.html
+          cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --features tauri/custom-protocol --release --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-migration-build.log"
+      - uses: actions/download-artifact@v4
+        if: runner.os == 'macOS'
+        with:
+          name: gpui-mac-icon-assets
+          path: mac-icon-assets
+      - name: Stage the standalone application
+        run: |
+          ext=''
+          if [ "$RUNNER_OS" = Windows ]; then ext='.exe'; fi
+          platform_args=()
+          if [ "$RUNNER_OS" = macOS ]; then platform_args+=(--mac-icons mac-icon-assets); fi
+          node packaging/gpui/package.mjs stage --target '${{ matrix.target }}' --output candidates --node-bin "runtime-node/node$ext" --node-license runtime-node/LICENSE --node-provenance runtime-node/provenance.json --migration-bin "apps/desktop/src-tauri/target/${{ matrix.target }}/release/creditia-app$ext" "${platform_args[@]}"
+      - name: Include licenses for resolved native dependencies
+        run: |
+          cargo metadata --manifest-path apps/gpui/Cargo.toml --locked --format-version 1 --filter-platform '${{ matrix.target }}' > "$RUNNER_TEMP/gpui-dependencies.json"
+          node packaging/gpui/licenses.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --metadata "$RUNNER_TEMP/gpui-dependencies.json"
+          cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --features tauri/custom-protocol --locked --format-version 1 --filter-platform '${{ matrix.target }}' > "$RUNNER_TEMP/gpui-migration-dependencies.json"
+          node packaging/gpui/licenses.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --metadata "$RUNNER_TEMP/gpui-migration-dependencies.json"
+      - name: Record Windows PE dependencies and include required redistributable runtimes
+        if: runner.os == 'Windows'
+        run: node packaging/gpui/windows-runtime.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --output evidence
+      - name: Ad-hoc sign the complete macOS application
+        if: runner.os == 'macOS'
+        run: |
+          app='candidates/creditia-gpui-${{ matrix.target }}/Creditia.app'
+          find "$app" -name '*.node' -type f -exec codesign --force --sign - {} \;
+          codesign --force --sign - "$app/Contents/Resources/node"
+          codesign --force --sign - "$app/Contents/MacOS/creditia-core"
+          codesign --force --sign - "$app/Contents/MacOS/creditia-gpui"
+          codesign --force --sign - "$app/Contents/Resources/legacy/Creditia Migration.app/Contents/MacOS/creditia"
+          codesign --force --deep --sign - "$app/Contents/Resources/legacy/Creditia Migration.app"
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
+      - name: Seal and exercise the package outside the checkout
+        run: |
+          node packaging/gpui/package.mjs seal --root 'candidates/creditia-gpui-${{ matrix.target }}' > "$RUNNER_TEMP/package-manifest.json"
+          node packaging/gpui/package.mjs smoke --root 'candidates/creditia-gpui-${{ matrix.target }}' --fixture packages/render/fixtures/catnap.json --output evidence/package-runtime/manifest.json
+      - name: Build installable candidate
+        run: node packaging/gpui/installers.mjs --root 'candidates/creditia-gpui-${{ matrix.target }}' --output installers
+      - name: Install the native window capture reader
+        if: runner.os != 'Windows'
+        run: python -m pip install Pillow==11.3.0
+      - name: Retain installable candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpui-candidate-${{ matrix.target }}
+          path: installers/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Extract or install each candidate and verify the installed runtime
+        id: installed
+        continue-on-error: true
+        run: node packaging/gpui/install-smoke.mjs --installers installers --fixture packages/render/fixtures/catnap.json --output evidence/package-installed/manifest.json
+      - name: Exercise the packaged streaming player at native DPI2
+        if: runner.os == 'Linux'
+        id: native-animation
+        continue-on-error: true
+        run: python packaging/gpui/animation-smoke.py --binary 'candidates/creditia-gpui-${{ matrix.target }}/creditia-gpui' --archive packages/render/fixtures/catnap.json --output evidence/native-animation --candidate "$GITHUB_SHA"
+      - name: Seal actual streaming input and image evidence
+        id: animation-evidence
+        continue-on-error: true
+        if: always() && runner.os == 'Linux'
+        run: |
+          if [ -f evidence/native-animation/animation-evidence.json ]; then
+            node packaging/gpui-acceptance/native-animation-evidence.mjs --input evidence/native-animation/animation-evidence.json --candidate-sha "$GITHUB_SHA" --output evidence/native-animation/sealed
+          fi
+      - name: Record linked system libraries
+        run: |
+          mkdir -p evidence
+          if [ "$RUNNER_OS" = Linux ]; then ldd 'candidates/creditia-gpui-${{ matrix.target }}/creditia-gpui' > evidence/system-libraries.txt; fi
+          if [ "$RUNNER_OS" = macOS ]; then otool -L 'candidates/creditia-gpui-${{ matrix.target }}/Creditia.app/Contents/MacOS/creditia-gpui' > evidence/system-libraries.txt; fi
+      - name: Prepare canonical artwork fixtures
+        if: runner.os == 'Linux'
+        run: |
+          node packaging/gpui/fixtures.mjs --output evidence/fixtures --profile smoke
+      - name: Exercise production views with the real offscreen renderer
+        if: runner.os == 'Linux'
+        id: native-pixels
+        continue-on-error: true
+        env:
+          CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
+          CREDITIA_VISUAL_OUTPUT: ${{ github.workspace }}/evidence/native
+        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-rendering.log"
+      - name: Exercise native input with the actual shared rendering worker
+        if: runner.os == 'Linux'
+        id: native-input
+        continue-on-error: true
+        env:
+          CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
+          CREDITIA_RUNTIME_OUTPUT: ${{ github.workspace }}/evidence/native-input
+        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-input.log"
+      - name: Operate real projects and persist settings through native controls
+        if: runner.os == 'Linux'
+        id: native-services
+        continue-on-error: true
+        env:
+          CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
+          CREDITIA_SERVICE_OUTPUT: ${{ github.workspace }}/evidence/native-services
+          CREDITIA_CORE: ${{ github.workspace }}/target/${{ matrix.target }}/release/creditia-core
+        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked --target '${{ matrix.target }}' 2>&1 | tee "$RUNNER_TEMP/gpui-services.log"
+      - name: Seal native screenshot provenance
+        if: always() && runner.os == 'Linux'
+        run: |
+          for directory in evidence/native evidence/native-input evidence/native-services; do
+            if [ -f "$directory/manifest.json" ]; then
+              node packaging/gpui/seal-evidence.mjs "$directory"
+            fi
+          done
+      - name: Retain execution and visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpui-evidence-${{ matrix.target }}
+          path: |
+            evidence/native/**
+            evidence/native-input/**
+            evidence/native-services/**
+            evidence/native-animation/**
+            evidence/native-feature-checks/**
+            evidence/package-runtime/**
+            evidence/package-installed/**
+            evidence/fixtures/fixture-manifest.json
+            evidence/system-libraries.txt
+            evidence/windows-dependencies.*
+            ${{ runner.temp }}/gpui-*.log
+            ${{ runner.temp }}/gpui-rustfmt.patch
+            ${{ runner.temp }}/core-build.log
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Require native unit, visual and input acceptance
+        if: always() && (steps.installed.outcome != 'success' || steps.native-unit.outcome != 'success' || steps.native-pixels.outcome == 'failure' || steps.native-animation.outcome == 'failure' || steps.animation-evidence.outcome == 'failure' || steps.native-input.outcome == 'failure' || steps.native-services.outcome == 'failure')
+        run: |
+          echo 'Native unit/visual/input acceptance failed; retained candidates are not release-ready.'
+          exit 1
+
+  native-catalog:
+    if: github.event_name == 'workflow_dispatch' && inputs.full_catalog
+    name: Paint every desktop artwork and layout
+    needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CREDITIA_NATIVE_CATALOG: ${{ github.workspace }}/evidence/catalog-inputs
+      CREDITIA_NATIVE_CATALOG_CAPTURE: ${{ github.workspace }}/evidence/catalog-captures
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: gpui-cargo-lock
+          path: apps/gpui
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ needs.resolve.outputs.rust-version }}
+          targets: x86_64-unknown-linux-gnu
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: packages/render/package-lock.json
+      - uses: actions/cache/restore@v4
+        id: apt-cache
+        with:
+          path: ${{ runner.temp }}/gpui-apt/*.deb
+          key: gpui-apt-catalog-${{ runner.arch }}-${{ hashFiles('packaging/gpui/linux-libs.sh') }}
+          restore-keys: |
+            gpui-apt-catalog-${{ runner.arch }}-
+            gpui-apt-build-${{ runner.arch }}-
+      - name: Install native libraries and software Vulkan
+        timeout-minutes: 15
+        run: bash packaging/gpui/linux-libs.sh catalog
+      - uses: actions/cache/save@v4
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/gpui-apt/*.deb
+          key: ${{ steps.apt-cache.outputs.cache-primary-key }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/gpui -> target
+          key: gpui-native-catalog-x86_64-unknown-linux-gnu
+          cache-on-failure: true
+      - name: Compile the real renderer/input harness before preparing fixtures
+        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --no-run --message-format=json --locked --target x86_64-unknown-linux-gnu 2>&1 | tee "$RUNNER_TEMP/native-catalog-build.log"
+      - name: Retain a small reusable Linux pixel diagnostic runtime
+        continue-on-error: true
+        run: |
+          python packaging/gpui/headless-runtime.py --build-json "$RUNNER_TEMP/native-catalog-build.log" --output "$RUNNER_TEMP/gpui-headless-runtime"
+          tar -czf "$RUNNER_TEMP/gpui-headless-runtime.tar.gz" -C "$RUNNER_TEMP" gpui-headless-runtime
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gpui-headless-runtime-linux-x86_64
+          path: ${{ runner.temp }}/gpui-headless-runtime.tar.gz
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Prepare every declared desktop artwork with full source context
+        run: |
+          npm ci --prefix packages/render
+          node packaging/gpui/catalog-fixtures.mjs --output "$CREDITIA_NATIVE_CATALOG" 2>&1 | tee "$RUNNER_TEMP/native-catalog-fixtures.log"
+      - name: Select, decode and capture every production focused view
+        id: catalog
+        continue-on-error: true
+        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked --target x86_64-unknown-linux-gnu 2>&1 | tee "$RUNNER_TEMP/native-catalog-run.log"
+      - name: Seal compact contacts from actual native captures
+        if: always()
+        run: |
+          if [ -f "$CREDITIA_NATIVE_CATALOG_CAPTURE/capture-manifest.json" ]; then
+            node packaging/gpui/catalog-evidence.mjs --captures "$CREDITIA_NATIVE_CATALOG_CAPTURE" --output evidence/native-catalog
+          fi
+      - name: Retain native catalog proof and failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpui-native-catalog-linux-x86_64
+          path: |
+            evidence/native-catalog/**
+            evidence/catalog-inputs/catalog-inputs.json
+            ${{ runner.temp }}/native-catalog-*.log
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Require every desktop row to have real native pixels
+        if: always() && steps.catalog.outcome != 'success'
+        run: |
+          echo 'Full native catalog acceptance did not pass; inspect retained input and capture evidence.'
+          exit 1

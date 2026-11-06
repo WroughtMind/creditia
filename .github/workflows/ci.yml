@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      full_catalog:
+        description: 'Verify every web artwork combination'
+        type: boolean
+        default: false
 
 # Superseded PR commits can stop; main and manual runs keep unique groups.
 concurrency:
@@ -16,21 +21,64 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with: { cache-on-failure: true }
       - name: Verify helper jobs stop on completion, timeout and core cancellation
+        id: tests
+        shell: bash
         run: |
-          cargo test -p creditia-adapters command:: --lib
+          mkdir -p evidence/test-logs
+          git rev-parse HEAD > evidence/test-logs/core.log
+          cargo test -p creditia-adapters command:: --lib 2>&1 | tee -a evidence/test-logs/core.log
+          cargo test -p creditia-desktop-service 2>&1 | tee -a evidence/test-logs/core.log
+      - name: Record exercised Windows service behavior
+        if: always() && steps.tests.outcome != 'skipped'
+        shell: bash
+        run: |
+          node -e 'require("node:fs").writeFileSync("evidence/test-logs/provenance.json", JSON.stringify({candidate_sha:process.env.GITHUB_SHA,sources:[{file:"core.log",run_id:process.env.GITHUB_RUN_ID,job_name:process.env.GITHUB_JOB,platform:process.platform+"-"+process.arch}]}))'
+          node packaging/gpui-acceptance/feature-evidence.mjs --logs evidence/test-logs --bindings packaging/gpui-acceptance/feature-bindings.json --candidate-sha "$GITHUB_SHA" --output evidence/feature-checks
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creditia-features-windows-service
+          path: evidence/feature-checks
+          if-no-files-found: warn
+          retention-days: 14
 
   core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
+        with: { cache-on-failure: true }
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - name: Exercise core and shared desktop behavior
+        id: tests
+        shell: bash
+        run: |
+          mkdir -p evidence/test-logs
+          git rev-parse HEAD > evidence/test-logs/core.log
+          cargo test --workspace 2>&1 | tee -a evidence/test-logs/core.log
+      - name: Record exercised shared-service behavior
+        if: always() && steps.tests.outcome != 'skipped'
+        shell: bash
+        run: |
+          node -e 'require("node:fs").writeFileSync("evidence/test-logs/provenance.json", JSON.stringify({candidate_sha:process.env.GITHUB_SHA,sources:[{file:"core.log",run_id:process.env.GITHUB_RUN_ID,job_name:process.env.GITHUB_JOB,platform:process.platform+"-"+process.arch}]}))'
+          node packaging/gpui-acceptance/feature-evidence.mjs --logs evidence/test-logs --bindings packaging/gpui-acceptance/feature-bindings.json --candidate-sha "$GITHUB_SHA" --output evidence/feature-checks
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creditia-features-core
+          path: evidence/feature-checks
+          if-no-files-found: warn
+          retention-days: 14
 
   render:
     runs-on: ubuntu-latest
@@ -46,10 +94,33 @@ jobs:
       - run: npm ci
         working-directory: packages/render
       - run: node --test packaging/*.test.mjs site/*.test.mjs
-      - run: npm test
+      - name: Exercise shared artwork and export behavior
+        id: render-tests
+        shell: bash
         working-directory: packages/render
-      - run: node --test test/*.test.ts
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/evidence/test-logs"
+          git rev-parse HEAD > "$GITHUB_WORKSPACE/evidence/test-logs/render.log"
+          npm test 2>&1 | tee -a "$GITHUB_WORKSPACE/evidence/test-logs/render.log"
+      - name: Check GPUI migration catalog coverage
+        run: node docs/gpui-migration/capture.mjs --check
+      - name: Exercise CLI selection and output behavior
+        shell: bash
         working-directory: packages/cli
+        run: node --test test/*.test.ts 2>&1 | tee -a "$GITHUB_WORKSPACE/evidence/test-logs/render.log"
+      - name: Record exercised renderer and CLI behavior
+        if: always() && steps.render-tests.outcome != 'skipped'
+        shell: bash
+        run: |
+          node -e 'require("node:fs").writeFileSync("evidence/test-logs/provenance.json", JSON.stringify({candidate_sha:process.env.GITHUB_SHA,sources:[{file:"render.log",run_id:process.env.GITHUB_RUN_ID,job_name:process.env.GITHUB_JOB,platform:process.platform+"-"+process.arch}]}))'
+          node packaging/gpui-acceptance/feature-evidence.mjs --logs evidence/test-logs --bindings packaging/gpui-acceptance/feature-bindings.json --candidate-sha "$GITHUB_SHA" --output evidence/feature-checks
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creditia-features-render
+          path: evidence/feature-checks
+          if-no-files-found: warn
+          retention-days: 14
       - name: Install CLI build dependencies
         run: npm ci
         working-directory: packages/cli
@@ -64,6 +135,73 @@ jobs:
           node_modules/.bin/creditia --help
           node_modules/.bin/creditia doc --credits "$GITHUB_WORKSPACE/packages/render/fixtures/catnap.json" --out CREDITS.md
           node_modules/.bin/creditia export --credits "$GITHUB_WORKSPACE/packages/render/fixtures/catnap.json" --piece tier --style ink --format png --out tier.png
+
+
+  web-renderer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            packages/render/package-lock.json
+            packages/embed/package-lock.json
+      - run: npm ci --prefix packages/render
+      - name: Build the web adapter with the shared renderer and pinned fonts
+        run: |
+          npm ci --prefix packages/embed
+          npm run build --prefix packages/embed
+          node packages/embed/tools/fixtures.mjs ${{ inputs.full_catalog && '--full' || '' }}
+      - name: Exercise the real browser against native artwork and animation output
+        run: |
+          npm install --prefix "$RUNNER_TEMP/creditia-browser-qa" --no-audit --no-fund playwright@1.62.1
+          "$RUNNER_TEMP/creditia-browser-qa/node_modules/.bin/playwright" install --with-deps chromium
+          CREDITIA_PLAYWRIGHT_MODULES="$RUNNER_TEMP/creditia-browser-qa/node_modules" node packages/embed/tools/browser-acceptance.mjs
+      - name: Seal full browser catalog evidence
+        if: inputs.full_catalog
+        run: >-
+          node packaging/gpui-acceptance/browser-evidence.mjs
+          --browser-report packages/embed/browser-evidence/report.json
+          --catalog-root packages/embed/dist/acceptance
+          --candidate-sha "$GITHUB_SHA" --output evidence/browser-catalog
+      - name: Retain the web rendering build for browser acceptance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: creditia-web-renderer
+          path: |
+            packages/embed/dist
+            packages/embed/browser-evidence
+            packages/render/fixtures/catnap.json
+            evidence/browser-catalog
+          retention-days: 7
+
+      - name: Retain exact renderer dependencies for reproducing failed acceptance
+        if: always()
+        run: tar -czf "$RUNNER_TEMP/creditia-render-runtime.tar.gz" packages/render/node_modules packages/embed/node_modules
+      - name: Retain the exact browser binary for local reproduction
+        if: always()
+        run: |
+          if [ -d "$HOME/.cache/ms-playwright" ]; then
+            python - <<'PYTHON'
+          import os,pathlib,tarfile
+          root=pathlib.Path.home()/'.cache/ms-playwright'
+          browsers=list(root.glob('chromium_headless_shell-*'))
+          if browsers:
+              with tarfile.open(pathlib.Path(os.environ['RUNNER_TEMP'])/'creditia-browser-runtime.tar.gz','w:gz') as archive:
+                  for browser in browsers: archive.add(browser,arcname=browser.name)
+          PYTHON
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creditia-render-debug-runtime
+          path: |
+            ${{ runner.temp }}/creditia-render-runtime.tar.gz
+            ${{ runner.temp }}/creditia-browser-runtime.tar.gz
+          retention-days: 3
 
   desktop-macos:
     runs-on: macos-26

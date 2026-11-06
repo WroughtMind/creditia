@@ -1,0 +1,1372 @@
+{
+  "schema_version": 1,
+  "kind": "recorded_visual_review",
+  "reviewer": "Codex /root agent",
+  "recorded_at": "2026-11-05T23:18:42.406814+00:00",
+  "candidate_sha": "96d31f6c1cfb1f8f3077c89dea06aeef56d347a1",
+  "renderer_source_sha256": "e69365963b217da732a191ff40b3c3a6d543ad265c23707136b92beb9c28e01e",
+  "fixture_sha256": "01eabd550afc1e17ac175f74bf5e3d4b9666930986a2c2e3b743ce10fabda9d9",
+  "review_method": "Root agent visually inspected all four contact sheets, each with five sampled timeline frames. This record transcribes the explicit root-agent review communicated during the task.",
+  "observations": [
+    "Card plates and frames remain stationary while appropriate graphs, cells, roll content and individual petals animate.",
+    "Chinese text is visible and no unintended clipping at artwork edges was observed in the sampled frames."
+  ],
+  "scope": {
+    "cases": 30,
+    "sample_times": [
+      0,
+      0.2,
+      0.45,
+      0.7,
+      1
+    ],
+    "continuous_gif_playback_reviewed": false,
+    "native_window_reviewed": false,
+    "full_catalog_reviewed": false
+  },
+  "contacts": [
+    {
+      "path": "material-motion-contact.png",
+      "sha256": "ee14d17f71e83272887d018fe13fe54bd97958903925c1d2eec63e112ea78d0d"
+    },
+    {
+      "path": "material-motion-contact-2.png",
+      "sha256": "0b00cb8af5339bbc4c76716f4ceffa711d431df508ab541c5302090c3af80dad"
+    },
+    {
+      "path": "material-motion-contact-3.png",
+      "sha256": "cb56d6efb13e0f93d7ae0fb79a9f6e4797ed5b492822084b4f92fe55a46c9eb4"
+    },
+    {
+      "path": "material-motion-contact-4.png",
+      "sha256": "000cf60d98be8eb79b509f1ddaee21faceb61fe66f98b4a9665fc995f933443d"
+    }
+  ],
+  "cases": [
+    {
+      "style": "minimal-light",
+      "piece": "tier",
+      "variant": "original",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "minimal-light-tier-original-t0.png",
+          "sha256": "1a827462f56900a2df28ed5837d2ccc4faa508449a2c34a3b3f1cd8378a1ac9f",
+          "w": 800,
+          "h": 1120
+        },
+        {
+          "t": 0.2,
+          "file": "minimal-light-tier-original-t0.2.png",
+          "sha256": "9c2cd7e00aea51639b877d8e80b274cea13623a41f5d5d28f4bf359478eabd8a",
+          "w": 800,
+          "h": 1120
+        },
+        {
+          "t": 0.45,
+          "file": "minimal-light-tier-original-t0.45.png",
+          "sha256": "b12fe8f922d48942d9118bdd655ef7275d793ea5fb52b94084054d89c05a76a4",
+          "w": 800,
+          "h": 1120
+        },
+        {
+          "t": 0.7,
+          "file": "minimal-light-tier-original-t0.7.png",
+          "sha256": "e9be0c4f06664bf02b0fbf1773d26558df9c552f36d4c98b71105bff5b45a6d2",
+          "w": 800,
+          "h": 1120
+        },
+        {
+          "t": 1,
+          "file": "minimal-light-tier-original-t1.png",
+          "sha256": "dbab16fb8023b08529cb34912048b59e01aa5796db6fb7262b24de2d1fbfec4d",
+          "w": 800,
+          "h": 1120
+        }
+      ]
+    },
+    {
+      "style": "minimal-dark",
+      "piece": "asterisk",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "minimal-dark-asterisk-t0.png",
+          "sha256": "dcbf5cc79e343f2950ad220c86bca30938645afd307f3cc1df506a1848b21aa9",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 0.2,
+          "file": "minimal-dark-asterisk-t0.2.png",
+          "sha256": "105f6f9c169c87b6610940dcf3591e55e80c2049dffd189e64fd9db2feaa11b9",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 0.45,
+          "file": "minimal-dark-asterisk-t0.45.png",
+          "sha256": "ed8d59a6bf8b4b24fae7c1ed96866dcd8eb25aa7648d955029ff2a348858db01",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 0.7,
+          "file": "minimal-dark-asterisk-t0.7.png",
+          "sha256": "41bea31e39390237eb13789fceb4ab851d47e7e1be8c1fa774b10277bcf26be7",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 1,
+          "file": "minimal-dark-asterisk-t1.png",
+          "sha256": "63af5b5ca1da94fea0c96715c6434f200a26fc5ce6f1bc6bfc11bfe8fa52b51e",
+          "w": 1080,
+          "h": 980
+        }
+      ]
+    },
+    {
+      "style": "glass",
+      "piece": "donut",
+      "variant": "original",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "glass-donut-original-t0.png",
+          "sha256": "cf9e2ab99aaa6488aee2181567a489be860f5dc4311708e199ffd0bdd169e2fb",
+          "w": 1200,
+          "h": 630
+        },
+        {
+          "t": 0.2,
+          "file": "glass-donut-original-t0.2.png",
+          "sha256": "12d66bbdd842b420897e473534e2d5c463258bf171214326a4dfeb6b03d65434",
+          "w": 1200,
+          "h": 630
+        },
+        {
+          "t": 0.45,
+          "file": "glass-donut-original-t0.45.png",
+          "sha256": "80f28c1c163e0a2ec0b11094d97a7e2751a5ed00eab40868b81a65b711d6c410",
+          "w": 1200,
+          "h": 630
+        },
+        {
+          "t": 0.7,
+          "file": "glass-donut-original-t0.7.png",
+          "sha256": "b4ec0164c42dc505ba2b509374ed70d0719e28c2158321d7575eb9854e288e1f",
+          "w": 1200,
+          "h": 630
+        },
+        {
+          "t": 1,
+          "file": "glass-donut-original-t1.png",
+          "sha256": "b336c68e6e642bdb97cf7c8282fe0e0fe654a072dff88299b52296f77bafc764",
+          "w": 1200,
+          "h": 630
+        }
+      ]
+    },
+    {
+      "style": "film",
+      "piece": "roll",
+      "variant": "crawl",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "film-roll-crawl-t0.png",
+          "sha256": "78533f76fd3d65173ead2d45509d54d4605d34d55551cbff9e637ba47b04c055",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 0.2,
+          "file": "film-roll-crawl-t0.2.png",
+          "sha256": "ce4865e0a3884826304d0a4a370e9ed182923eb277209c17a1f864244ff2e90c",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 0.45,
+          "file": "film-roll-crawl-t0.45.png",
+          "sha256": "2604fb025dc832af80f7fe663865d843202d30fb0df3fc6852a57e2daac5f8e4",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 0.7,
+          "file": "film-roll-crawl-t0.7.png",
+          "sha256": "b46db939d14fd0c992aaeef34cfd4a2a061dc0ee8d50dd5ac106fbdef8dd5104",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 1,
+          "file": "film-roll-crawl-t1.png",
+          "sha256": "5cb7686b85e64529d3c608f46e24e6110bda90dfa2fa7c1161a0c3aa026d5dce",
+          "w": 1080,
+          "h": 1350
+        }
+      ]
+    },
+    {
+      "style": "cinema",
+      "piece": "roll",
+      "variant": "scroll",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "cinema-roll-scroll-t0.png",
+          "sha256": "d70632064780e117facdddbb8255b33567914f57a008cc22943229a189c1db57",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 0.2,
+          "file": "cinema-roll-scroll-t0.2.png",
+          "sha256": "4e0ae7bd698fe37e2d4f53985b3dc96cfb0634bee62e32b59cf17a80883854ea",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 0.45,
+          "file": "cinema-roll-scroll-t0.45.png",
+          "sha256": "044fdf4cdd9962f1ad347976723c2329f36ee8c35df2064bf1f55944b3baec4e",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 0.7,
+          "file": "cinema-roll-scroll-t0.7.png",
+          "sha256": "2819676a85ac7015652c6410ad9023ec9360d50992adf325aede6e4ce3a9a4cc",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 1,
+          "file": "cinema-roll-scroll-t1.png",
+          "sha256": "94e64a404a25891745829b05729b4ea7bb8c19dd31b2c0f11e3eee96c545c011",
+          "w": 1080,
+          "h": 1350
+        }
+      ]
+    },
+    {
+      "style": "editorial",
+      "piece": "receipt",
+      "variant": "folio",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "editorial-receipt-folio-t0.png",
+          "sha256": "0297c09cb96e574fb5710e4db63f44f2162782f4b8db5f165a79d174a9020948",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 0.2,
+          "file": "editorial-receipt-folio-t0.2.png",
+          "sha256": "692f438bdb12a30bbf78a795cd1c8ede5a74fdac60c390a28f39577ca4b70e3d",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 0.45,
+          "file": "editorial-receipt-folio-t0.45.png",
+          "sha256": "479c7cd5c0d2497ecda80dd9797ae6577e76642e629b8b5cf496dc9ab3ab207c",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 0.7,
+          "file": "editorial-receipt-folio-t0.7.png",
+          "sha256": "38e75976b746f65a5efdada69d68d3d4908dbfcfc365dc30b6a438bbe9d6a0f6",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 1,
+          "file": "editorial-receipt-folio-t1.png",
+          "sha256": "560e69ed4b7c89545792aaccd23ee450fc6120c6fbe27d2f247dda8037459be5",
+          "w": 1080,
+          "h": 1350
+        }
+      ]
+    },
+    {
+      "style": "broadsheet",
+      "piece": "tier",
+      "variant": "original",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "broadsheet-tier-original-t0.png",
+          "sha256": "469d3812fdd78eb30e9da1143850f09b3efec99617376b739d37f0b9f8848be6",
+          "w": 1160,
+          "h": 1266
+        },
+        {
+          "t": 0.2,
+          "file": "broadsheet-tier-original-t0.2.png",
+          "sha256": "cf118ec44d8dcb9a1f753f89fb6ff92036b61d791d670ae354134a149bac392c",
+          "w": 1160,
+          "h": 1266
+        },
+        {
+          "t": 0.45,
+          "file": "broadsheet-tier-original-t0.45.png",
+          "sha256": "02af1d55e1e32b450c8266ca32f89f696438828131d581c19cf932261fa504b3",
+          "w": 1160,
+          "h": 1266
+        },
+        {
+          "t": 0.7,
+          "file": "broadsheet-tier-original-t0.7.png",
+          "sha256": "4dcefb07eb31b5e14a748c607f5d207b1cf4688122e89bec6e8f976dc118c64f",
+          "w": 1160,
+          "h": 1266
+        },
+        {
+          "t": 1,
+          "file": "broadsheet-tier-original-t1.png",
+          "sha256": "880a0a61139119163e07073a763f64b504b01d212a3cd88de67aa2b3bb929e23",
+          "w": 1160,
+          "h": 1266
+        }
+      ]
+    },
+    {
+      "style": "playbill",
+      "piece": "roll",
+      "variant": "program",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "playbill-roll-program-t0.png",
+          "sha256": "b34426932498cb26a6335a7e81f727634c874289af792511799ba2652abc55ba",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 0.2,
+          "file": "playbill-roll-program-t0.2.png",
+          "sha256": "32c1a828a537cbdb08e44f1475c4b5df56ea0fd93a59693fe284a994ae4a51a4",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 0.45,
+          "file": "playbill-roll-program-t0.45.png",
+          "sha256": "6b8744450f2e50c40f4218890a5697f2b7ec9175d8125a76852a24c0baae894d",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 0.7,
+          "file": "playbill-roll-program-t0.7.png",
+          "sha256": "d7e86493b72e29272add1bb653b423d04ed1bc114ddc311ea31a93a997f8b9c7",
+          "w": 1080,
+          "h": 1350
+        },
+        {
+          "t": 1,
+          "file": "playbill-roll-program-t1.png",
+          "sha256": "8118c7a61de2398c2b6b13071faf036c972c80692b5edd0c02865d93387a7f1e",
+          "w": 1080,
+          "h": 1350
+        }
+      ]
+    },
+    {
+      "style": "gala",
+      "piece": "asterisk",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "gala-asterisk-t0.png",
+          "sha256": "678dbe7b9e75803d7cfdc1f509d5651679ddce645e64ac96c479add781c4b749",
+          "w": 1080,
+          "h": 988
+        },
+        {
+          "t": 0.2,
+          "file": "gala-asterisk-t0.2.png",
+          "sha256": "0544d949003df6c4a7c2bd662b0861908fc3e5c39838605a024dc8988a6f8150",
+          "w": 1080,
+          "h": 988
+        },
+        {
+          "t": 0.45,
+          "file": "gala-asterisk-t0.45.png",
+          "sha256": "62ff8f961d432f4eaf2cdea919b9d9c750a3ff2bf0be0a68bf192c5d15a54119",
+          "w": 1080,
+          "h": 988
+        },
+        {
+          "t": 0.7,
+          "file": "gala-asterisk-t0.7.png",
+          "sha256": "298b66a8e70a40564d1e981ba4bc73bab0575bdad9ce6fe2e1edf894c50f41aa",
+          "w": 1080,
+          "h": 988
+        },
+        {
+          "t": 1,
+          "file": "gala-asterisk-t1.png",
+          "sha256": "ee1957e8496c7d65be8b2ae789377fad57d81cb0bca5c7af53d74ad5e3edb847",
+          "w": 1080,
+          "h": 988
+        }
+      ]
+    },
+    {
+      "style": "mono",
+      "piece": "waffle",
+      "variant": "original",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "mono-waffle-original-t0.png",
+          "sha256": "0b39bc919f6471b8b0068640b21360b5b515a88cf6fd7c7cc4361d9618a23429",
+          "w": 1200,
+          "h": 680
+        },
+        {
+          "t": 0.2,
+          "file": "mono-waffle-original-t0.2.png",
+          "sha256": "5eec47285cc4d5e0a43d8ec94390d6b8ad9526a6020f2fe80d6f48132be89a5e",
+          "w": 1200,
+          "h": 680
+        },
+        {
+          "t": 0.45,
+          "file": "mono-waffle-original-t0.45.png",
+          "sha256": "0b2083836506ff424603b26501a85d3199f3a418b6d6d53b01d1276f0fa67a9c",
+          "w": 1200,
+          "h": 680
+        },
+        {
+          "t": 0.7,
+          "file": "mono-waffle-original-t0.7.png",
+          "sha256": "2329884cdccb7743161213d77e45100183b75563566a6d9db851cc2d1a7e6ed1",
+          "w": 1200,
+          "h": 680
+        },
+        {
+          "t": 1,
+          "file": "mono-waffle-original-t1.png",
+          "sha256": "f38ebd5540b2357edd88a75ae452550757922f7f1905d2192f52408d27d3197d",
+          "w": 1200,
+          "h": 680
+        }
+      ]
+    },
+    {
+      "style": "poster",
+      "piece": "mosaic",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "poster-mosaic-t0.png",
+          "sha256": "beeca3d5a335ee366f9097e8d74ebb72675807eb7bcb925940827d42ac6870a5",
+          "w": 1200,
+          "h": 860
+        },
+        {
+          "t": 0.2,
+          "file": "poster-mosaic-t0.2.png",
+          "sha256": "941e1517edbaf22b99e0d7104eb0fe6cf9388c26dff655875dde3010bf29a8f7",
+          "w": 1200,
+          "h": 860
+        },
+        {
+          "t": 0.45,
+          "file": "poster-mosaic-t0.45.png",
+          "sha256": "2baf338e92660264aab97528f26220109de56b58f95eed8cceed0c56e762e674",
+          "w": 1200,
+          "h": 860
+        },
+        {
+          "t": 0.7,
+          "file": "poster-mosaic-t0.7.png",
+          "sha256": "e7b1ae68507e78449a689b307d0e4af945fd47d1236c601f6b6dcf1191fe2e36",
+          "w": 1200,
+          "h": 860
+        },
+        {
+          "t": 1,
+          "file": "poster-mosaic-t1.png",
+          "sha256": "eacdbad0c741678ae3114340557d75628afc4daefcca40aa3c78c7650c2c4fc7",
+          "w": 1200,
+          "h": 860
+        }
+      ]
+    },
+    {
+      "style": "terminal",
+      "piece": "fetch",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "terminal-fetch-t0.png",
+          "sha256": "cc570beea0766a527350f3855d0dfb45d80b003ba4263b5ce01faad3bbefafb2",
+          "w": 1200,
+          "h": 756
+        },
+        {
+          "t": 0.2,
+          "file": "terminal-fetch-t0.2.png",
+          "sha256": "94ef1e61f6e52a39c60716138b1d4a40b6808c4908e1440dd3c80a4f21b288ce",
+          "w": 1200,
+          "h": 756
+        },
+        {
+          "t": 0.45,
+          "file": "terminal-fetch-t0.45.png",
+          "sha256": "1c6711a23a3f161257821793776d79965359d39d8523d32206a225f0ac066c73",
+          "w": 1200,
+          "h": 756
+        },
+        {
+          "t": 0.7,
+          "file": "terminal-fetch-t0.7.png",
+          "sha256": "d796644077b7d50ea03905304cfac11aacdfab7494defa7b31c483b65c71293d",
+          "w": 1200,
+          "h": 756
+        },
+        {
+          "t": 1,
+          "file": "terminal-fetch-t1.png",
+          "sha256": "d796644077b7d50ea03905304cfac11aacdfab7494defa7b31c483b65c71293d",
+          "w": 1200,
+          "h": 756
+        }
+      ]
+    },
+    {
+      "style": "crt",
+      "piece": "donut",
+      "variant": "original",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "crt-donut-original-t0.png",
+          "sha256": "604e2edced9ed3cfe1e6ee4e2ce691c912f77d956f5ad852475e4dd368fe2a31",
+          "w": 1200,
+          "h": 630
+        },
+        {
+          "t": 0.2,
+          "file": "crt-donut-original-t0.2.png",
+          "sha256": "7264805f0df4581d4d9976004e6175dc030422ca49861c9c9c2764216ea170fd",
+          "w": 1200,
+          "h": 630
+        },
+        {
+          "t": 0.45,
+          "file": "crt-donut-original-t0.45.png",
+          "sha256": "9bb31d4a3b210398d145e8c28c64a2840d559560044a3abb5044d5319135fc6d",
+          "w": 1200,
+          "h": 630
+        },
+        {
+          "t": 0.7,
+          "file": "crt-donut-original-t0.7.png",
+          "sha256": "76ac4352b8aeedf14c8abdd91637bf0f14b0a3cc40bbfe98e3892d778df16539",
+          "w": 1200,
+          "h": 630
+        },
+        {
+          "t": 1,
+          "file": "crt-donut-original-t1.png",
+          "sha256": "99280d177ad20cf429b082e73d0db9aaaea0f666cef23ca8c516055fa9117c1c",
+          "w": 1200,
+          "h": 630
+        }
+      ]
+    },
+    {
+      "style": "neon",
+      "piece": "asterisk",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "neon-asterisk-t0.png",
+          "sha256": "a7f2959265b2b04342db71bd49a912fc315c3f335ab609d83c67eff4cdea2894",
+          "w": 1080,
+          "h": 1000
+        },
+        {
+          "t": 0.2,
+          "file": "neon-asterisk-t0.2.png",
+          "sha256": "c7818d7e4abfae156561e04b41aa50742bdb255b72932c1d17bf340b2b35987b",
+          "w": 1080,
+          "h": 1000
+        },
+        {
+          "t": 0.45,
+          "file": "neon-asterisk-t0.45.png",
+          "sha256": "6b4f5cbca3f27932dc230b6e4e4b83c8f28adcaff67105c4e56f626f33bf240b",
+          "w": 1080,
+          "h": 1000
+        },
+        {
+          "t": 0.7,
+          "file": "neon-asterisk-t0.7.png",
+          "sha256": "d24f6603e173dddc942a53f7327176eb47412a43308efcbac7b4eb56534b27bb",
+          "w": 1080,
+          "h": 1000
+        },
+        {
+          "t": 1,
+          "file": "neon-asterisk-t1.png",
+          "sha256": "b9961c757363d263dc6f0e5a990a8a0148c5977619b1cd151b07dc3d0b88236a",
+          "w": 1080,
+          "h": 1000
+        }
+      ]
+    },
+    {
+      "style": "arcade",
+      "piece": "waffle",
+      "variant": "original",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "arcade-waffle-original-t0.png",
+          "sha256": "60eb3bc114a2cece3d4170cf59cc95f32da51ebc634bbc6f16839136d04563f9",
+          "w": 1200,
+          "h": 680
+        },
+        {
+          "t": 0.2,
+          "file": "arcade-waffle-original-t0.2.png",
+          "sha256": "fa119d3796ad095206cfc795a665ada2fa739c776e7faecb9b8b2c1dc22a33d3",
+          "w": 1200,
+          "h": 680
+        },
+        {
+          "t": 0.45,
+          "file": "arcade-waffle-original-t0.45.png",
+          "sha256": "a08f1fd1ce47d9dbf7773b8a35fdb09fb41b84e1499b68b3e405245f4f145c44",
+          "w": 1200,
+          "h": 680
+        },
+        {
+          "t": 0.7,
+          "file": "arcade-waffle-original-t0.7.png",
+          "sha256": "11d9e81b28b7fe4862529a7624ccbb6369ca9ffb068e16428d18891be2f7230b",
+          "w": 1200,
+          "h": 680
+        },
+        {
+          "t": 1,
+          "file": "arcade-waffle-original-t1.png",
+          "sha256": "82a2c624b9b91a369972d999a8c124c66f4a2ee60385dc672154c90ae6d8728e",
+          "w": 1200,
+          "h": 680
+        }
+      ]
+    },
+    {
+      "style": "ink",
+      "piece": "asterisk",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "ink-asterisk-t0.png",
+          "sha256": "a30470cb5677c6dfa03ab2fc5bc0af1916b9a35239b4a840b35f42bfab37ed6b",
+          "w": 1080,
+          "h": 1078
+        },
+        {
+          "t": 0.2,
+          "file": "ink-asterisk-t0.2.png",
+          "sha256": "244804daed8d396a6a9f5f7e8da62e23cfb06843952e5ea36f17458a3b20b040",
+          "w": 1080,
+          "h": 1078
+        },
+        {
+          "t": 0.45,
+          "file": "ink-asterisk-t0.45.png",
+          "sha256": "42fa0bdbb84681058d5d058aeb5ad45a60b129726132eff7058cde6c916c8ec0",
+          "w": 1080,
+          "h": 1078
+        },
+        {
+          "t": 0.7,
+          "file": "ink-asterisk-t0.7.png",
+          "sha256": "4354a902ad9c813c39871cb6cddfe41e55375e3dada56ee1a72ddd3a06f201a7",
+          "w": 1080,
+          "h": 1078
+        },
+        {
+          "t": 1,
+          "file": "ink-asterisk-t1.png",
+          "sha256": "b80444d32c2103bc41ce771d64f5ce8a31a5123aad63967032d1a066dd058b1c",
+          "w": 1080,
+          "h": 1078
+        }
+      ]
+    },
+    {
+      "style": "ukiyoe",
+      "piece": "roll",
+      "variant": "vertical",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "ukiyoe-roll-vertical-t0.png",
+          "sha256": "d4a78c157ff423303d1f28fe88493465f6a839961e77c1a8b34ce0d994e0769b",
+          "w": 1992,
+          "h": 1040
+        },
+        {
+          "t": 0.2,
+          "file": "ukiyoe-roll-vertical-t0.2.png",
+          "sha256": "c4545f1ac0d0dcaed07b23f9ffa4f029de197373e0a9b99334f93923e8d62297",
+          "w": 1992,
+          "h": 1040
+        },
+        {
+          "t": 0.45,
+          "file": "ukiyoe-roll-vertical-t0.45.png",
+          "sha256": "dca0d9a553698ffe0baae101ec321f52912299fcf9189e08a896b42584d3b736",
+          "w": 1992,
+          "h": 1040
+        },
+        {
+          "t": 0.7,
+          "file": "ukiyoe-roll-vertical-t0.7.png",
+          "sha256": "b05b705cc0b91f45a4272704f444fa0fbacbf123255754bd1e1760eff7e5a7f0",
+          "w": 1992,
+          "h": 1040
+        },
+        {
+          "t": 1,
+          "file": "ukiyoe-roll-vertical-t1.png",
+          "sha256": "d02603028e05f48839f5d5b15dc738b67040032844f3dec04535ebb59652383e",
+          "w": 1992,
+          "h": 1040
+        }
+      ]
+    },
+    {
+      "style": "woodblock",
+      "piece": "mosaic",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "woodblock-mosaic-t0.png",
+          "sha256": "52609a0a0bbc822ac80f7a1dd9f9bbbd36e22877b84cf1c5ef1c0a2e1463d85f",
+          "w": 1200,
+          "h": 990
+        },
+        {
+          "t": 0.2,
+          "file": "woodblock-mosaic-t0.2.png",
+          "sha256": "b8c40bd9e4f0434f2f1b5effe03d9ea69e3105ef2bd843951d8bc0e58c9eeb89",
+          "w": 1200,
+          "h": 990
+        },
+        {
+          "t": 0.45,
+          "file": "woodblock-mosaic-t0.45.png",
+          "sha256": "705946c79726620ca182714568c424c8086d479abacf71111507600291f8a367",
+          "w": 1200,
+          "h": 990
+        },
+        {
+          "t": 0.7,
+          "file": "woodblock-mosaic-t0.7.png",
+          "sha256": "617010c340cd3c888e0e134e6e4a3af2c65639fecb63f166ede4fe1059cb556a",
+          "w": 1200,
+          "h": 990
+        },
+        {
+          "t": 1,
+          "file": "woodblock-mosaic-t1.png",
+          "sha256": "aa3a4cc7bf936b326b49057996912afbdab8199cc3d5015734518353bb0d0cba",
+          "w": 1200,
+          "h": 990
+        }
+      ]
+    },
+    {
+      "style": "baroque",
+      "piece": "roll",
+      "variant": "billing",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "baroque-roll-billing-t0.png",
+          "sha256": "a2704a00866a34aa6c67a4b5d5f5e80ab9de5577e64433c63b7d7cd0cdd91fa3",
+          "w": 1080,
+          "h": 1580
+        },
+        {
+          "t": 0.2,
+          "file": "baroque-roll-billing-t0.2.png",
+          "sha256": "412d1fd94a04cb4df3dad726b60302d86de38d1c16b3433226aaaff5d64c39ed",
+          "w": 1080,
+          "h": 1580
+        },
+        {
+          "t": 0.45,
+          "file": "baroque-roll-billing-t0.45.png",
+          "sha256": "36c91be2a428d2c2ef6a60e5b3173064ef5badff6049b60623ade0daefdd6342",
+          "w": 1080,
+          "h": 1580
+        },
+        {
+          "t": 0.7,
+          "file": "baroque-roll-billing-t0.7.png",
+          "sha256": "238206ea0142bd6983b82f7e48dc9bcd5c3b49c9a98c2883690d5ee527ac2a60",
+          "w": 1080,
+          "h": 1580
+        },
+        {
+          "t": 1,
+          "file": "baroque-roll-billing-t1.png",
+          "sha256": "63511d45877b4ac48b59367dc6f25c20b1e4e0f56abbe909d01e6901f15a5015",
+          "w": 1080,
+          "h": 1580
+        }
+      ]
+    },
+    {
+      "style": "grimoire",
+      "piece": "tier",
+      "variant": "rows",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "grimoire-tier-rows-t0.png",
+          "sha256": "b76886683fdb7c1c5574b1c033db4d3ff3864c3f0dba7ebd5a1e2da33bd256ec",
+          "w": 880,
+          "h": 1196
+        },
+        {
+          "t": 0.2,
+          "file": "grimoire-tier-rows-t0.2.png",
+          "sha256": "5a6246aca141aba99c05d04f5e3bda1a8cc044fb029dcb8ad9082ecb733c0bd4",
+          "w": 880,
+          "h": 1196
+        },
+        {
+          "t": 0.45,
+          "file": "grimoire-tier-rows-t0.45.png",
+          "sha256": "c98be6cd198051d4cb5ee30ed80b14fe6e391d702a70d32dfdc01c08f4101354",
+          "w": 880,
+          "h": 1196
+        },
+        {
+          "t": 0.7,
+          "file": "grimoire-tier-rows-t0.7.png",
+          "sha256": "5f8bedd195c5114dc8af095a7a831843c56a53eecc0841816bacda45dd2d2a83",
+          "w": 880,
+          "h": 1196
+        },
+        {
+          "t": 1,
+          "file": "grimoire-tier-rows-t1.png",
+          "sha256": "db139539878821c8198a6fd38fae704faeab4eaa263acb970898bdc02b5625de",
+          "w": 880,
+          "h": 1196
+        }
+      ]
+    },
+    {
+      "style": "manuscript",
+      "piece": "roll",
+      "variant": "vertical",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "manuscript-roll-vertical-t0.png",
+          "sha256": "15c8cc666c2c3d19ecf85dfe3a2e4f43a654e509211c370e5a734630b90e031a",
+          "w": 1992,
+          "h": 870
+        },
+        {
+          "t": 0.2,
+          "file": "manuscript-roll-vertical-t0.2.png",
+          "sha256": "04425e063123e2396c23027f33689437f39453546174df6c8fa3ea0ad98e9dd6",
+          "w": 1992,
+          "h": 870
+        },
+        {
+          "t": 0.45,
+          "file": "manuscript-roll-vertical-t0.45.png",
+          "sha256": "580e3ff1b279d4f2120b1a9ef813211d4c76e4fdf75e1d7831944cc25c7c93a3",
+          "w": 1992,
+          "h": 870
+        },
+        {
+          "t": 0.7,
+          "file": "manuscript-roll-vertical-t0.7.png",
+          "sha256": "c152c5bdf43d20371f5ccccc37f4e87069814cc7e6763cd25d44c492e733d89e",
+          "w": 1992,
+          "h": 870
+        },
+        {
+          "t": 1,
+          "file": "manuscript-roll-vertical-t1.png",
+          "sha256": "9c6a8cb7566261907c9cebebc671988854a9602b58430f66428465c87765a914",
+          "w": 1992,
+          "h": 870
+        }
+      ]
+    },
+    {
+      "style": "pastel",
+      "piece": "share",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "pastel-share-t0.png",
+          "sha256": "63e2d29bb345043fb94f028467c4b4b406aaf8902ca7c7edba19d55d2399ba5d",
+          "w": 1200,
+          "h": 630
+        },
+        {
+          "t": 0.2,
+          "file": "pastel-share-t0.2.png",
+          "sha256": "6a68cbfad4fea22aad3d3fafe60fc63c9ef06c69bbf3a37037d0bd7633710a28",
+          "w": 1200,
+          "h": 630
+        },
+        {
+          "t": 0.45,
+          "file": "pastel-share-t0.45.png",
+          "sha256": "bdc3691763f48a41d6c6fc2726ff445eee7b72d38cfe9d081cb9ba289fb523ed",
+          "w": 1200,
+          "h": 630
+        },
+        {
+          "t": 0.7,
+          "file": "pastel-share-t0.7.png",
+          "sha256": "b5b2e3786fe8f21ec347a533e9a9fa40d74aef65d9fd328f6cb6234cc8283d15",
+          "w": 1200,
+          "h": 630
+        },
+        {
+          "t": 1,
+          "file": "pastel-share-t1.png",
+          "sha256": "0275157812b5a9ae973dedd29516516362ec596b90da6369de632621729af08e",
+          "w": 1200,
+          "h": 630
+        }
+      ]
+    },
+    {
+      "style": "cutout",
+      "piece": "waffle",
+      "variant": "grid",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "cutout-waffle-grid-t0.png",
+          "sha256": "ceca647e64f1a85ba9cff5076026123708fd51f7f1364adeaa273e6997afb87e",
+          "w": 1000,
+          "h": 958
+        },
+        {
+          "t": 0.2,
+          "file": "cutout-waffle-grid-t0.2.png",
+          "sha256": "015a874023ad36fb65a02ea1657e4ff892c112055115bfae470747242d07cf21",
+          "w": 1000,
+          "h": 958
+        },
+        {
+          "t": 0.45,
+          "file": "cutout-waffle-grid-t0.45.png",
+          "sha256": "6dc3091e4f621d9a6da7bd54684ce49d542812a24e93517eccd4d6b52f3e7e91",
+          "w": 1000,
+          "h": 958
+        },
+        {
+          "t": 0.7,
+          "file": "cutout-waffle-grid-t0.7.png",
+          "sha256": "4ab81abf90ccb65fff6513ea80ddbd5dabef358c882a56f51f3a5ae0b9059f1f",
+          "w": 1000,
+          "h": 958
+        },
+        {
+          "t": 1,
+          "file": "cutout-waffle-grid-t1.png",
+          "sha256": "bbc3f26d7d297594052bffb8438d4c14b200b3eb3fcbd603027c29db5c727195",
+          "w": 1000,
+          "h": 958
+        }
+      ]
+    },
+    {
+      "style": "meadow",
+      "piece": "asterisk",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "meadow-asterisk-t0.png",
+          "sha256": "6b091f99ff184e0a709b413273bbb596cdfa82c4e00cd5af29018ee9b5d93a37",
+          "w": 1080,
+          "h": 1148
+        },
+        {
+          "t": 0.2,
+          "file": "meadow-asterisk-t0.2.png",
+          "sha256": "90f57769c4fc4b21ffb7634191a3f1d9c26ac179e4cbf5a020b524c43caf164e",
+          "w": 1080,
+          "h": 1148
+        },
+        {
+          "t": 0.45,
+          "file": "meadow-asterisk-t0.45.png",
+          "sha256": "814590c2458d7cb976d028c0e20501e2f1c30a5ea7d68abf66a00a980dd1f553",
+          "w": 1080,
+          "h": 1148
+        },
+        {
+          "t": 0.7,
+          "file": "meadow-asterisk-t0.7.png",
+          "sha256": "b86152db1133f98cdbd1d973a7cb717c62214714aaf57fce222a8686112d06dc",
+          "w": 1080,
+          "h": 1148
+        },
+        {
+          "t": 1,
+          "file": "meadow-asterisk-t1.png",
+          "sha256": "534a3fdd003d7a483e6c3dbbdc22f93766a6d7dd8a55f40372ffc75cbf14ebda",
+          "w": 1080,
+          "h": 1148
+        }
+      ]
+    },
+    {
+      "style": "manga",
+      "piece": "codemap",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "manga-codemap-t0.png",
+          "sha256": "7e07e753a80b9c08702de6b9fd21c4906999365c839f66f4f7810c6709555c79",
+          "w": 1280,
+          "h": 710
+        },
+        {
+          "t": 0.2,
+          "file": "manga-codemap-t0.2.png",
+          "sha256": "25e7a1b8324037cdf4e6064e43df295154458638047572ccc7a03b64e3105742",
+          "w": 1280,
+          "h": 710
+        },
+        {
+          "t": 0.45,
+          "file": "manga-codemap-t0.45.png",
+          "sha256": "0e34f9f36da86af02a9e4209a06a33e186d2777847dceb398a09286581314e3a",
+          "w": 1280,
+          "h": 710
+        },
+        {
+          "t": 0.7,
+          "file": "manga-codemap-t0.7.png",
+          "sha256": "ca8b263431041d1e02edfe258eef4fec48476332dd1f4c12087acb250e41543e",
+          "w": 1280,
+          "h": 710
+        },
+        {
+          "t": 1,
+          "file": "manga-codemap-t1.png",
+          "sha256": "71f24c5738840148de350245953879bd4ca6d97df1e982cf9f2d6fc896820b99",
+          "w": 1280,
+          "h": 710
+        }
+      ]
+    },
+    {
+      "style": "cyber",
+      "piece": "tier",
+      "variant": "hud",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "cyber-tier-hud-t0.png",
+          "sha256": "b8d7ad1d11c72899623b8b95c3d1bb1b4e0b92570b6486540283cd04686311f9",
+          "w": 960,
+          "h": 974
+        },
+        {
+          "t": 0.2,
+          "file": "cyber-tier-hud-t0.2.png",
+          "sha256": "d5de24a64a757414a43b47e7d5163c40b20eb3d88353c8f4b83f9e82d2299886",
+          "w": 960,
+          "h": 974
+        },
+        {
+          "t": 0.45,
+          "file": "cyber-tier-hud-t0.45.png",
+          "sha256": "197bcf3b9dddb528de2c77ca2291caf4360dfb909278349d961d4a040fee6300",
+          "w": 960,
+          "h": 974
+        },
+        {
+          "t": 0.7,
+          "file": "cyber-tier-hud-t0.7.png",
+          "sha256": "6841486fe06f52718a5a70f554a4c389488f0c54487c18ea82827266aa9955ba",
+          "w": 960,
+          "h": 974
+        },
+        {
+          "t": 1,
+          "file": "cyber-tier-hud-t1.png",
+          "sha256": "a5051d8792546090e2c28c6070f22e164ceb207b0d24da491aa9e42be20264ac",
+          "w": 960,
+          "h": 974
+        }
+      ]
+    },
+    {
+      "style": "ink",
+      "piece": "tier",
+      "variant": "grouped",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "ink-tier-grouped-t0.png",
+          "sha256": "a0f9d26340c97ee7b14a895a90b3413594cd65e286e0afc0efeb88c6b07cf0b6",
+          "w": 920,
+          "h": 1304
+        },
+        {
+          "t": 0.2,
+          "file": "ink-tier-grouped-t0.2.png",
+          "sha256": "7a8b00265568cd877426a71024b131ae840ada3152cee62bcf95e9583ac7b8b8",
+          "w": 920,
+          "h": 1304
+        },
+        {
+          "t": 0.45,
+          "file": "ink-tier-grouped-t0.45.png",
+          "sha256": "89064109211cb6fd76bb1a95c891df160bfd716cd8892ddf06c56571c12533e4",
+          "w": 920,
+          "h": 1304
+        },
+        {
+          "t": 0.7,
+          "file": "ink-tier-grouped-t0.7.png",
+          "sha256": "09248d26d1e3f578c82f6a9a9d24672f24e2b172d69347afe39ac0567bbe1f3f",
+          "w": 920,
+          "h": 1304
+        },
+        {
+          "t": 1,
+          "file": "ink-tier-grouped-t1.png",
+          "sha256": "61c44d22eaf4439e2eab3e5edd0bbf969b826aba4de0dce1ca4646e98cb8cd95",
+          "w": 920,
+          "h": 1304
+        }
+      ]
+    },
+    {
+      "style": "glass",
+      "piece": "asterisk",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "glass-asterisk-t0.png",
+          "sha256": "e8c4fb266b484cfbc7b04a29ea775d8f09a5eb3284ac2b7fa60ca0093db0f40f",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 0.2,
+          "file": "glass-asterisk-t0.2.png",
+          "sha256": "d5b80adda5236eb2bf1588df6b998a5504aff9f42f2b71abe45aea6a5f51a19f",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 0.45,
+          "file": "glass-asterisk-t0.45.png",
+          "sha256": "e3affdadf6fc284db20cf6aec4dcee05851d5290a12aa4c67ba1db003f7eec97",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 0.7,
+          "file": "glass-asterisk-t0.7.png",
+          "sha256": "a59271cbbf77f5b3dcf130e474f556e68634ec6fefd13d3e4e02701f23453dc9",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 1,
+          "file": "glass-asterisk-t1.png",
+          "sha256": "8b9f040e1021c9f295fbd671d19bdbea473fe8c6a80ea99f30182bf6c12f6260",
+          "w": 1080,
+          "h": 980
+        }
+      ]
+    },
+    {
+      "style": "film",
+      "piece": "asterisk",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "film-asterisk-t0.png",
+          "sha256": "9c38002a9ceb6046f941f1f7ad44503d6263c507ca7e6158a161958d7a240ceb",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 0.2,
+          "file": "film-asterisk-t0.2.png",
+          "sha256": "becafebbdf1a944d4c33572d4e5a2b3e3746f556b7c65a5bdc42378e80567571",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 0.45,
+          "file": "film-asterisk-t0.45.png",
+          "sha256": "9a7b38563444ebfff0f87d22171bc49fae0ec936295565f037494f9167ade376",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 0.7,
+          "file": "film-asterisk-t0.7.png",
+          "sha256": "193fa397ad676bb4b54cee4a606520f004d44caa9002a70583cb915db0bb4a7a",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 1,
+          "file": "film-asterisk-t1.png",
+          "sha256": "70670383853bc107a46087eff3d816d8d32a4878e68003cea52a90649ea65f90",
+          "w": 1080,
+          "h": 980
+        }
+      ]
+    },
+    {
+      "style": "terminal",
+      "piece": "asterisk",
+      "variant": "default",
+      "sampled_visual": "accepted",
+      "continuous_motion": "not_reviewed",
+      "samples": [
+        {
+          "t": 0,
+          "file": "terminal-asterisk-t0.png",
+          "sha256": "affc64908670cd9fc2aed01b89885479b634624b8fe5c662173e4249676beb0b",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 0.2,
+          "file": "terminal-asterisk-t0.2.png",
+          "sha256": "424c5f7c0ad6f758c67d9838132b53e4e67e8490fa9f3a0969ee96be15479ed4",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 0.45,
+          "file": "terminal-asterisk-t0.45.png",
+          "sha256": "e11f2919ebd0799bade8ef1b073f73ce40bc985c120646505eb4e38bfde15658",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 0.7,
+          "file": "terminal-asterisk-t0.7.png",
+          "sha256": "38a1a8b8883c789b62de7e929d7d8887620355f779aca5bace0a90a218e5af65",
+          "w": 1080,
+          "h": 980
+        },
+        {
+          "t": 1,
+          "file": "terminal-asterisk-t1.png",
+          "sha256": "7b0511d35b8e371399c24f247c276f21f620217944811f9520db7ce4d9ca128d",
+          "w": 1080,
+          "h": 980
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "This is sampled-motion visual evidence for these30 cases only, not all1,738 combinations.",
+    "Continuous GIF rhythm and native interaction need their own evidence.",
+    "Review follows content hashes; a later source commit requires matching generated bytes or a new review."
+  ]
+}

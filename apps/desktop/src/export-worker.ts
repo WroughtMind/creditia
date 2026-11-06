@@ -1,9 +1,13 @@
 // 栅格化和编码只在本次导出的线程中运行，和 CLI 共用格式实现。
 import { initWasm, Resvg } from '@resvg/resvg-wasm';
 import wasmUrl from '@resvg/resvg-wasm/index_bg.wasm?url';
-import { makeExporter, sized, SIZES, type Art, type Raster } from '../../../packages/render/src/export.ts';
+import { type Art, type Raster } from '../../../packages/render/src/export.ts';
 import { fontBytes } from './fonts.ts';
 import type { ExportJob, Exported } from './engine.ts';
+import { exportArtwork } from '../../../packages/render/src/export-job.ts';
+import { timelineFor } from '../../../packages/render/src/timeline.ts';
+import { straightRgba } from '../../../packages/render/src/pixels.ts';
+import { rasterViewport, viewportPixels, viewportPngSvg, retainRasterExtent } from '../../../packages/render/src/raster-viewport.ts';
 
 /** WASM 对象不等 GC 回收；底层异常后的清理失败不能覆盖原始错误。 */
 function using<T extends { free(): void }, R>(value: T, read: (value: T) => R): R {
@@ -28,24 +32,24 @@ async function run({ fmt, fontStyle, art: a, size, frames }: ExportJob): Promise
   const fonts = fontStyle && a.svg.includes('<text') ? await fontBytes(fontStyle, a.svg) : [];
   const opts = (width?: number) => ({ font: { fontBuffers: fonts, loadSystemFonts: false, defaultFontFamily: 'Noto Sans SC' }, fitTo: width ? { mode: 'width' as const, value: Math.round(width) } : undefined });
   const raster: Raster = {
-    png: (svg, w) => using(new Resvg(svg, opts(w)), r => using(r.render(), img => img.asPng())),
-    rgba: (svg, w) => using(new Resvg(svg, opts(w)), r => using(r.render(), img => ({ w: img.width, h: img.height, data: img.pixels }))),
-    flat: svg => using(new Resvg(svg, opts()), r => r.toString()),
+    png: (svg, w) => {
+      const v = rasterViewport(svg, w);
+      const png = using(new Resvg(v?.svg ?? svg, opts(w)), r => using(r.render(), img => img.asPng()));
+      return v ? using(new Resvg(viewportPngSvg(png, v), opts()), r => using(r.render(), img => img.asPng())) : png;
+    },
+    rgba: (svg, w) => {
+      const v = rasterViewport(svg, w);
+      if (v?.window) {
+        const png = using(new Resvg(v.svg, opts(w)), r => using(r.render(), img => img.asPng()));
+        return using(new Resvg(viewportPngSvg(png, v), opts()), r => using(r.render(), img => ({ w: img.width, h: img.height, data: straightRgba(img.pixels) })));
+      }
+      return using(new Resvg(v?.svg ?? svg, opts(w)), r => using(r.render(), img => ({ w: img.width, h: v?.height ?? img.height, data: straightRgba(viewportPixels(img.pixels, v)) })));
+    },
+    flat: svg => retainRasterExtent(svg, using(new Resvg(svg, opts()), r => r.toString())),
   };
-  const ex = makeExporter(raster, deflate);
-  const sz = SIZES.find(x => x.id === size);
-  const fit = (x: Art) => sz?.w ? sized(x, sz.w, sz.h) : x;
-  const enc = new TextEncoder();
-  switch (fmt) {
-    case 'png': return { bytes: ex.png(fit(a), sz?.w ? 1 : 2), mime: 'image/png', ext: 'png' };
-    case 'svg': return { bytes: enc.encode(ex.svg(fit(a))), mime: 'image/svg+xml', ext: 'svg' };
-    case 'pdf': return { bytes: await ex.pdf(fit(a), sz?.id === 'a4' ? 1 : Math.min(3, 4000 / Math.max(a.w, a.h))), mime: 'application/pdf', ext: 'pdf' };
-    case 'html': return { bytes: enc.encode(ex.html([a], { title: a.title })), mime: 'text/html', ext: 'html' };
-    case 'gif': {
-      const fr = (frames ?? [a]).map(fit);
-      return { bytes: ex.gif(fr, { width: Math.min(fr[0].w, 800) }), mime: 'image/gif', ext: 'gif' };
-    }
-  }
+  const timeline = timelineFor(a.selection?.style ?? 'minimal-light', a.selection?.piece ?? '', a);
+  const animation = frames?.length ? { frames, times: frames.map((_, i) => frames.length === 1 ? 1 : i / (frames.length - 1)), timeline } : undefined;
+  return exportArtwork(a, { format: fmt, size, lang: a.selection?.lang ?? 'zh' }, raster, deflate, animation);
 }
 
 self.onmessage = async ({ data }: MessageEvent<ExportJob>) => {

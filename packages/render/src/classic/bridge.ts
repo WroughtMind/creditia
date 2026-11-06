@@ -4,7 +4,7 @@ import { defineStyle, logo, type Style, type Box } from '../style.ts';
 import { el, rect, circle, line, path, r, mix } from '../svg.ts';
 import type { Scene } from '../svg.ts';
 import { buildModel as buildV2, type Model as V2Model, type Group } from '../data.ts';
-import { art as v2Art, frames as v2Frames } from '../registry.ts';
+import { art as v2Art, frame as v2Frame, frames as v2Frames } from '../registry.ts';
 import { TIER_VARIANTS } from '../pieces/tier.ts';
 import { BADGE_VARIANTS } from '../pieces/cards.ts';
 import type { Art } from '../export.ts';
@@ -207,5 +207,9 @@ export function v2ModelOf(raw: any, lang: 'zh' | 'en', group: Group = 'tool', na
 // 分组方式跟着原版模型走（它已经按 auto 选好了），两套渲染器的数字一致
 export const bridgeArt = (id: string, m: { raw: any; group?: Group; named?: boolean }, t: Theme, o: { lang: 'zh' | 'en'; variant?: string }): Art | null =>
   v2Art(id, v2ModelOf(m.raw, o.lang, m.group, m.named), bridgeStyle(t), { variant: o.variant });
-export const bridgeFrames = (id: string, m: { raw: any; group?: Group; named?: boolean }, t: Theme, o: { lang: 'zh' | 'en'; variant?: string }, n = 24): Art[] =>
-  v2Frames(id, v2ModelOf(m.raw, o.lang, m.group, m.named), bridgeStyle(t), { variant: o.variant }, n);
+export const bridgeFrames = (id: string, m: { raw: any; group?: Group; named?: boolean }, t: Theme, o: { lang: 'zh' | 'en'; variant?: string }, n = 24, times?: readonly number[]): Art[] => {
+  const model = v2ModelOf(m.raw, o.lang, m.group, m.named), style = bridgeStyle(t);
+  if (!times) return v2Frames(id, model, style, { variant: o.variant }, n);
+  const full = v2Art(id, model, style, { variant: o.variant });
+  return times.map(time => v2Frame(id, model, style, { variant: o.variant }, time, full)).filter((a): a is Art => a !== null);
+};
