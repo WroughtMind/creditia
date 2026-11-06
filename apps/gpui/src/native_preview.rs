@@ -78,7 +78,7 @@ pub fn rasterize(
     pixel_width: u32,
     cancellation: &Cancellation,
 ) -> Result<Arc<RasterImage>, String> {
-    rasterize_view(svg, pixel_width, None, None, cancellation)
+    rasterize_view(svg, pixel_width, None, None, cancellation, None)
 }
 
 /// Render only a viewport of a tall/deeply zoomed artwork. Region coordinates
@@ -95,7 +95,7 @@ pub fn rasterize_region(
     {
         return Err("Invalid preview region".into());
     }
-    rasterize_view(svg, pixel_width, None, Some(region), cancellation)
+    rasterize_view(svg, pixel_width, None, Some(region), cancellation, None)
 }
 
 /// Integer pixel bounds for adjacent animation tiles. An explicit height avoids
@@ -117,7 +117,13 @@ pub fn rasterize_region_sized(
         Some(pixel_size.1),
         Some(region),
         cancellation,
+        None,
     )
+}
+
+pub(crate) fn rasterize_animation(svg: &str, width: u32, height: u32, region: Option<(f32,f32,f32,f32)>,
+    cancel: &Cancellation, layers: &mut crate::animation_layers::LayerCache) -> Result<Arc<RasterImage>,String> {
+    rasterize_view(svg, width, region.map(|_| height), region, cancel, Some(layers))
 }
 
 fn encode_preview(pixels: resvg::tiny_skia::Pixmap) -> Result<Vec<u8>, png::EncodingError> {
@@ -140,6 +146,7 @@ fn rasterize_view(
     pixel_height: Option<u32>,
     region: Option<(f32, f32, f32, f32)>,
     cancellation: &Cancellation,
+    layers: Option<&mut crate::animation_layers::LayerCache>,
 ) -> Result<Arc<RasterImage>, String> {
     if cancellation.cancelled() {
         return Err("Preview cancelled".into());
@@ -204,7 +211,11 @@ fn rasterize_view(
     }
     let transform =
         resvg::tiny_skia::Transform::from_row(scale, 0.0, 0.0, scale, -x * scale, -y * scale);
-    resvg::render(&tree, transform, &mut pixels.as_mut());
+    let rendered = layers.is_some_and(|cache| cache.render(svg, &options, transform, &mut pixels));
+    if !rendered {
+        pixels.fill(resvg::tiny_skia::Color::TRANSPARENT);
+        resvg::render(&tree, transform, &mut pixels.as_mut());
+    }
     if cancellation.cancelled() {
         return Err("Preview cancelled".into());
     }

@@ -137,6 +137,43 @@ struct Playback {
     started_once: bool,
 }
 impl Playback {
+    // A slow raster must finish before a repeat invalidates its epoch. Let
+    // normal playback follow wall time, but bound outstanding work by the
+    // producer's look-ahead. Its next decoded frame wakes a stalled clock.
+    fn tick(&mut self, control: &crate::animation::PlaybackControl) -> bool {
+        let last = self.times.len() - 1;
+        let now = Instant::now();
+        let duration = self.timeline.duration_ms;
+        let end = duration.saturating_add(self.timeline.hold_ms);
+        let limit = if self.index == last {
+            end
+        } else {
+            let ahead = (self.index + crate::animation::MAX_AHEAD).min(last);
+            (self.times[ahead] * duration as f64).ceil() as u64
+        };
+        let real = now.duration_since(self.started);
+        self.elapsed = real.min(Duration::from_millis(limit));
+        self.started = now - self.elapsed;
+        if self.index == last && self.elapsed.as_millis() >= u128::from(end) {
+            if self.timeline.repeat {
+                self.elapsed = Duration::ZERO;
+                self.started_once = false;
+                self.requested = 0;
+                control.restart();
+            } else {
+                self.playing = false;
+                control.pause();
+            }
+            return false;
+        }
+        let time = self.elapsed.as_millis() as u64;
+        self.requested = if time >= duration { last } else { frame_at(&self.times, &self.timeline, time) };
+        control.set_playhead(self.requested);
+        if let Some((&index, _)) = self.frames.range(..=self.requested).rev().find(|(_, frame)| frame.ready) {
+            self.index = index;
+        }
+        time < limit || self.index == self.requested
+    }
     fn displayed(&self) -> Option<&PlaybackFrame> {
         self.frames
             .get(&self.index)
@@ -1093,7 +1130,6 @@ impl Creditia {
             }
             if let Some(play) = &mut self.playback {
                 if play.playing && !play.suspended {
-                    play.elapsed = play.started.elapsed();
                     play.suspended = true;
                 }
             }
@@ -3021,9 +3057,6 @@ impl Creditia {
                     control.restart();
                 }
             } else if play.playing {
-                if play.started_once && !play.suspended {
-                    play.elapsed = play.started.elapsed();
-                }
                 // The decoder can trail the clock. Pause the frame on screen so
                 // zooming, restoring or resuming cannot jump to an unseen frame.
                 if frame_at(&play.times, &play.timeline, play.elapsed.as_millis() as u64)
@@ -7206,32 +7239,10 @@ impl Render for Creditia {
                 && self.window_visible
                 && !self.reduced_motion
             {
-                play.elapsed = play.started.elapsed();
-                let desired =
-                    frame_at(&play.times, &play.timeline, play.elapsed.as_millis() as u64);
-                play.requested = desired;
                 if let Some(control) = &self.animation_control {
-                    control.set_playhead(desired);
-                }
-                if let Some((&index, _)) = play
-                    .frames
-                    .range(..=desired)
-                    .rev()
-                    .find(|(_, frame)| frame.ready)
-                {
-                    play.index = index;
-                }
-                if !play.timeline.repeat
-                    && play.elapsed.as_millis() as u64
-                        >= play.timeline.duration_ms + play.timeline.hold_ms
-                    && play.index == play.times.len().saturating_sub(1)
-                {
-                    play.playing = false;
-                    if let Some(control) = &self.animation_control {
-                        control.pause();
+                    if control.epoch() == play.epoch && play.tick(control) {
+                        window.request_animation_frame();
                     }
-                } else {
-                    window.request_animation_frame();
                 }
             } else if play.playing
                 && (!animation_visible
@@ -7240,9 +7251,6 @@ impl Render for Creditia {
                     || self.panel.is_some()
                     || self.reduced_motion)
             {
-                if !play.suspended {
-                    play.elapsed = play.started.elapsed();
-                }
                 play.suspended = true;
                 if let Some(control) = &self.animation_control {
                     control.pause();
@@ -8383,7 +8391,27 @@ fn analysis_fraction(progress: &Value) -> Option<f64> {
 }
 #[cfg(test)]
 mod input_tests {
-    use super::key_bindings;
+    use super::{key_bindings, Playback, Timeline};
+    use std::{collections::BTreeMap, time::{Duration, Instant}};
+    #[test]
+    fn slow_paint_cannot_skip_an_entire_animation_cycle() {
+        let control = crate::animation::PlaybackControl::new();
+        let mut play = Playback {
+            frames: BTreeMap::new(), previous: None, times: (0..=20).map(|n| n as f64 / 20.).collect(),
+            timeline: Timeline {duration_ms: 1000, hold_ms: 200, fps: 20, repeat: true},
+            started: Instant::now() - Duration::from_secs(12), elapsed: Duration::ZERO,
+            playing: true, suspended: false, index: 0, requested: 0, epoch: control.epoch(), started_once: true,
+        };
+        let epoch = control.epoch();
+        assert!(!play.tick(&control));
+        assert_eq!(play.requested, crate::animation::MAX_AHEAD);
+        assert_eq!(control.epoch(), epoch);
+        play.index = 20;
+        play.started = Instant::now() - Duration::from_millis(1201);
+        assert!(!play.tick(&control));
+        assert!(!play.started_once);
+        assert_ne!(control.epoch(), epoch);
+    }
     #[test]
     fn all_shortcuts_parse_on_both_platform_families() {
         for modifier in ["cmd", "ctrl"] {

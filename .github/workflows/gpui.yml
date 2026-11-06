@@ -26,8 +26,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name || github.event_name }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name == 'gpui-candidate' && github.sha || github.event_name }}
+  cancel-in-progress: ${{ github.event.label.name != 'gpui-candidate' }}
 
 env:
   CARGO_TERM_COLOR: never
@@ -305,6 +305,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Extract or install each candidate and verify the installed runtime
+        id: installed
+        continue-on-error: true
         run: node packaging/gpui/install-smoke.mjs --installers installers --fixture packages/render/fixtures/catnap.json --output evidence/package-installed/manifest.json
       - name: Exercise the packaged streaming player at native DPI2
         if: runner.os == 'Linux'
@@ -381,7 +383,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Require native unit, visual and input acceptance
-        if: always() && (steps.native-unit.outcome != 'success' || steps.native-pixels.outcome == 'failure' || steps.native-animation.outcome == 'failure' || steps.native-input.outcome == 'failure' || steps.native-services.outcome == 'failure')
+        if: always() && (steps.installed.outcome != 'success' || steps.native-unit.outcome != 'success' || steps.native-pixels.outcome == 'failure' || steps.native-animation.outcome == 'failure' || steps.native-input.outcome == 'failure' || steps.native-services.outcome == 'failure')
         run: |
           echo 'Native unit/visual/input acceptance failed; retained candidates are not release-ready.'
           exit 1

@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import signal
 import subprocess
@@ -88,8 +89,14 @@ def check_platform_input(run, helper, pid, fixture, report):
 
     key("copy")
     wait_for(clipboard_matches, "System clipboard did not contain the current archive")
+    if helper:
+        report["mac_windows_before"] = json.loads(run([str(helper), "inspect", str(pid)]).stdout)
     key("open")
-    wait_for(dialog_open, "Native folder picker did not open", 20)
+    try:
+        wait_for(dialog_open, "Native folder picker did not open", 20)
+    finally:
+        if helper:
+            report["mac_windows_after"] = json.loads(run([str(helper), "inspect", str(pid)]).stdout)
     key("escape")
     wait_for(lambda: not dialog_open(), "Native folder picker did not close")
     report["checks"].append({"id": "system-clipboard-and-folder-dialog", "passed": True,
@@ -109,7 +116,17 @@ def main():
     if sys.platform == "linux" and not args.inside_x11:
         command = ["xvfb-run", "-a", "-s", "-screen 0 1600x1000x24", "dbus-run-session", "--", sys.executable,
                    str(Path(__file__).resolve()), *sys.argv[1:], "--inside-x11"]
-        return subprocess.run(command, timeout=240).returncode
+        # The document portal mounts FUSE under XDG_RUNTIME_DIR. Keep this
+        # directory outside the app fixture until the private bus has stopped.
+        with tempfile.TemporaryDirectory(prefix="creditia-x11-runtime-") as runtime:
+            env = dict(os.environ, XDG_RUNTIME_DIR=runtime)
+            try:
+                return subprocess.run(command, env=env, timeout=240).returncode
+            finally:
+                mount = Path(runtime) / "doc"
+                if os.path.ismount(mount):
+                    unmount = shutil.which("fusermount3") or shutil.which("fusermount")
+                    subprocess.run([unmount, "-u", "-z", str(mount)], check=True)
     if sys.platform not in ("linux", "darwin"):
         raise RuntimeError("This installed GUI check is for macOS and Linux")
     binary, archive, output = Path(args.binary).resolve(), Path(args.archive).resolve(), Path(args.output).resolve()
@@ -135,9 +152,7 @@ def main():
                 return subprocess.run(command, cwd=work, env=env, capture_output=True, text=True, timeout=timeout, check=check)
 
             if sys.platform == "linux":
-                runtime = work / "runtime"
-                runtime.mkdir(mode=0o700)
-                env.update(XDG_RUNTIME_DIR=str(runtime), XDG_SESSION_TYPE="x11")
+                env["XDG_SESSION_TYPE"] = "x11"
                 if args.platform_check:
                     portals = work / "config" / "xdg-desktop-portal"
                     portals.mkdir(parents=True)

@@ -325,6 +325,7 @@ fn run_internal(
     // Started. Subsequent same-epoch work obeys the paused look-ahead limit.
     let mut epoch = first_epoch.wrapping_sub(1);
     let mut next = 0;
+    let mut layers = crate::animation_layers::LayerCache::default();
     loop {
         let (wanted_epoch, index) = control.plan(epoch, next, times.len() - 1)?;
         epoch = wanted_epoch;
@@ -342,7 +343,7 @@ fn run_internal(
         if !control.current(epoch)? {
             continue;
         }
-        let Some(frame) = raster_frame(&art, pixel_width, view, &control, epoch)? else {
+        let Some(frame) = raster_frame(&art, pixel_width, view, &control, epoch, &mut layers)? else {
             continue;
         };
         if control.current(epoch)? {
@@ -533,6 +534,7 @@ fn raster_frame(
     view: Option<FrameView>,
     control: &PlaybackControl,
     epoch: u64,
+    layers: &mut crate::animation_layers::LayerCache,
 ) -> Result<Option<PreparedFrame>, String> {
     let Some(plan) = frame_plan(art, requested, view)? else {
         control.set_visible(false);
@@ -543,15 +545,8 @@ fn raster_frame(
         if !control.current(epoch)? {
             return Ok(None);
         }
-        let raster = match tile.region {
-            Some(region) => native_preview::rasterize_region_sized(
-                &art.svg,
-                (region.x, region.y, region.w, region.h),
-                (tile.width, tile.height),
-                &control.cancellation(),
-            )?,
-            None => native_preview::rasterize(&art.svg, tile.width, &control.cancellation())?,
-        };
+        let raster = native_preview::rasterize_animation(&art.svg, tile.width, tile.height,
+            tile.region.map(|r| (r.x,r.y,r.w,r.h)), &control.cancellation(), layers)?;
         if raster.width as u64 * raster.height as u64 * 4 > DECODED_FRAME_BUDGET {
             return Err("Animation tile exceeded its decoded pixel budget".into());
         }

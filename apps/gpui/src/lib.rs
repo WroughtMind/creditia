@@ -422,6 +422,7 @@ mod tests {
 }
 
 pub mod animation;
+mod animation_layers;
 pub mod app;
 pub mod export_jobs;
 pub mod image_assets;

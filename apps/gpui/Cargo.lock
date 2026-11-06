@@ -1280,6 +1280,7 @@ dependencies = [
  "png 0.18.1",
  "raw-window-handle",
  "resvg 0.48.1",
+ "roxmltree 0.20.0",
  "serde",
  "serde_json",
  "windows 0.62.2",
