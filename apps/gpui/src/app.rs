@@ -1304,8 +1304,7 @@ impl Creditia {
         }
     }
     fn prepare_static_images(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Keep the previous bitmap until GPUI has decoded its replacement. At
-        // most one pending raster exists, bounding this handoff's extra memory.
+        // Keep the previous bitmap until GPUI has decoded its replacement.
         if !self.window_visible {
             return;
         }
@@ -2228,7 +2227,6 @@ impl Creditia {
         if (self.fixture && !self.benchmark)
             || !self.window_visible
             || self.preview_busy
-            || self.tiles.iter().any(|tile| tile.pending_image.is_some())
             || self.raw.is_none()
             || self.catalog.is_none()
             || (self.focused
@@ -2238,6 +2236,17 @@ impl Creditia {
                     .is_some_and(|play| play.displayed().is_some()))
         {
             return;
+        }
+        // Overlap the single raster worker with one small image decode. A
+        // large pending image or a second pending image applies backpressure.
+        let mut pending = self
+            .tiles
+            .iter()
+            .filter_map(|tile| tile.pending_image.as_ref());
+        if let Some(first) = pending.next() {
+            if first.bytes > 8 * 1024 * 1024 || pending.next().is_some() {
+                return;
+            }
         }
         let visible = Rect {
             x: -150.,
@@ -2426,6 +2435,18 @@ impl Creditia {
         }));
     }
     fn evict_distant(&mut self, cx: &mut Context<Self>) {
+        const HIGH_WATER: usize = 128 * 1024 * 1024;
+        // Shared roam textures may be counted twice here, making this a safe
+        // upper bound. Build the reference map only under memory pressure.
+        if self
+            .tiles
+            .iter()
+            .map(|tile| tile.texture_bytes)
+            .sum::<usize>()
+            < HIGH_WATER
+        {
+            return;
+        }
         let mut textures = BTreeMap::<usize, (usize, usize)>::new();
         for tile in &self.tiles {
             if let Some(image) = &tile.image {
@@ -2436,7 +2457,7 @@ impl Creditia {
             }
         }
         let mut bytes = textures.values().map(|entry| entry.0).sum::<usize>();
-        if bytes < 128 * 1024 * 1024 {
+        if bytes < HIGH_WATER {
             return;
         }
         let near = Rect {

@@ -120,6 +120,20 @@ pub fn rasterize_region_sized(
     )
 }
 
+fn encode_preview(pixels: resvg::tiny_skia::Pixmap) -> Result<Vec<u8>, png::EncodingError> {
+    let mut encoded = Vec::new();
+    let mut encoder = png::Encoder::new(&mut encoded, pixels.width(), pixels.height());
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    // GPUI immediately decodes this in-memory texture. Spending time on a
+    // smaller PNG delays the next tile and every frame of a playing artwork.
+    encoder.set_compression(png::Compression::Fast);
+    let mut writer = encoder.write_header()?;
+    writer.write_image_data(&pixels.take_demultiplied())?;
+    writer.finish()?;
+    Ok(encoded)
+}
+
 fn rasterize_view(
     svg: &str,
     pixel_width: u32,
@@ -194,13 +208,12 @@ fn rasterize_view(
     if cancellation.cancelled() {
         return Err("Preview cancelled".into());
     }
-    let png = pixels
-        .encode_png()
-        .map_err(|error| format!("Cannot encode preview: {error}"))?;
+    let pixel_bytes = pixels.data().len();
+    let png = encode_preview(pixels).map_err(|error| format!("Cannot encode preview: {error}"))?;
     let cost = svg
         .len()
         .saturating_add(png.len())
-        .saturating_add(pixels.data().len());
+        .saturating_add(pixel_bytes);
     let image = Arc::new(RasterImage {
         width: pixel_width,
         height: output_height,
@@ -233,6 +246,19 @@ fn rasterize_view(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn preview_png_preserves_translucent_pixels() {
+        let mut pixmap = resvg::tiny_skia::Pixmap::new(2, 1).unwrap();
+        pixmap.fill(resvg::tiny_skia::Color::from_rgba8(101, 40, 210, 97));
+        pixmap.data_mut()[4..].fill(0);
+        let reference = pixmap.encode_png().unwrap();
+        let fast = encode_preview(pixmap).unwrap();
+        assert_eq!(
+            resvg::tiny_skia::Pixmap::decode_png(&reference).unwrap(),
+            resvg::tiny_skia::Pixmap::decode_png(&fast).unwrap()
+        );
+    }
+
     #[test]
     fn scales_preserves_transparency_and_reuses_exact_cache_entry() {
         let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect x="20" y="10" width="40" height="20" fill="#ff0000"/></svg>"##;

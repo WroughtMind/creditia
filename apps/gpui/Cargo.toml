@@ -16,6 +16,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 async-channel = "2"
 base64 = "0.22"
+png = "0.18"
 resvg = { version = "0.48.1", default-features = false, features = ["raster-images"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
