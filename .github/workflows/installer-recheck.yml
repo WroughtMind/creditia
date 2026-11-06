@@ -1,39 +1,49 @@
-name: Recheck sealed GPUI installers
+name: Install the reviewed Linux DEB with APT
 on:
   push:
     branches: [codex/gpui-installer-check]
 permissions: { contents: read, actions: read }
 jobs:
-  verify:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { runner: macos-15-intel, target: x86_64-apple-darwin }
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 35
+  installed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 24.22.2 }
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: python -m pip install Pillow==11.3.0
-      - if: runner.os == 'Linux'
-        run: bash packaging/gpui/linux-libs.sh build
       - uses: actions/download-artifact@v4
         with:
-          name: gpui-candidate-${{ matrix.target }}
+          name: gpui-candidate-x86_64-unknown-linux-gnu
           path: installers
-          run-id: 42264578175
+          run-id: 42270641906
           github-token: ${{ github.token }}
-      - run: node packaging/gpui/install-smoke.mjs --installers installers --fixture packages/render/fixtures/catnap.json --output evidence/installed/manifest.json
-      - if: always() && runner.os == 'Linux'
+      - name: Install through the package manager and open an existing project
+        shell: bash
         run: |
-          tar xf installers/*.tar.gz
-          python packaging/gpui/animation-smoke.py --binary creditia-gpui-x86_64-unknown-linux-gnu/creditia-gpui --archive packages/render/fixtures/catnap.json --output evidence/animation --candidate "$(node -p 'require("./installers/candidate.json").candidate_sha')"
+          set -euo pipefail
+          mkdir -p evidence
+          (cd installers && sha256sum -c SHA256SUMS) | tee evidence/installer-checksums.txt
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=25 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=25 install -y ./installers/*.deb xvfb xauth dbus-x11 openbox xdotool imagemagick x11-utils mesa-vulkan-drivers
+          dpkg-query -W -f='${Package} ${Version} ${Status}\n' creditia-gpui | tee evidence/installed-package.txt
+          command -v creditia-gpui
+          creditia-gpui --check-resources | tee evidence/installed-resources.json
+          export CREDITIA_HOME="$RUNNER_TEMP/reused-library"
+          project="$RUNNER_TEMP/creditia-apt-project"
+          git init "$project"
+          echo 'pub fn hello() {}' > "$project/app.rs"
+          git -C "$project" add app.rs
+          git -C "$project" -c user.name=Creditia -c user.email=qa@example.invalid commit -m 'Existing source archive'
+          /usr/lib/creditia-gpui/creditia-core analyze --repo "$project"
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/apt-runtime"
+          mkdir -m 700 -p "$XDG_RUNTIME_DIR"
+          for phase in launch restart; do
+            python packaging/gpui/gui-smoke.py --binary /usr/bin/creditia-gpui --archive "$project/.creditia/credits.json" --library "$CREDITIA_HOME" --candidate 4435643bde849715f122b82fe9fced570d99c04c --output "evidence/$phase"
+          done
+          sudo apt-get remove -y creditia-gpui
+          test -f "$CREDITIA_HOME/library.sqlite" && test -f "$project/.creditia/credits.json"
+          echo 'Package removed; library and archive preserved.' | tee evidence/uninstall.txt
       - if: always()
         uses: actions/upload-artifact@v4
-        with:
-          name: installer-recheck-${{ matrix.target }}
-          path: evidence
+        with: { name: apt-installed-evidence, path: evidence }
