@@ -12,11 +12,24 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: python -m pip install Pillow==11.3.0
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/gpui-apt/*.deb
+          key: gpui-apt-build-${{ runner.arch }}-${{ hashFiles('packaging/gpui/linux-libs.sh') }}
+          restore-keys: gpui-apt-build-${{ runner.arch }}-
+      - name: Wait for the exact build
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          for i in $(seq 1 30); do
+            if gh api repos/WroughtMind/creditia/actions/runs/42279605157/artifacts --jq '.artifacts[].name' | grep -Fxq gpui-candidate-x86_64-unknown-linux-gnu; then exit 0; fi
+            sleep 10
+          done
+          exit 1
       - uses: actions/download-artifact@v4
         with:
           name: gpui-candidate-x86_64-unknown-linux-gnu
           path: installers
-          run-id: 42270641906
+          run-id: 42279605157
           github-token: ${{ github.token }}
       - name: Install through the package manager and open an existing project
         shell: bash
@@ -24,8 +37,17 @@ jobs:
           set -euo pipefail
           mkdir -p evidence
           (cd installers && sha256sum -c SHA256SUMS) | tee evidence/installer-checksums.txt
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=25 update
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=25 install -y ./installers/*.deb xvfb xauth dbus-x11 openbox xdotool imagemagick x11-utils mesa-vulkan-drivers
+          cache="$RUNNER_TEMP/gpui-apt"
+          sudo install -d -o _apt -g root -m 0700 "$cache/partial"
+          # Use the signed Ubuntu archive over HTTPS, independent of the Azure
+          # mirror which timed out while downloading Mesa in the first attempt.
+          sed 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources > "$RUNNER_TEMP/apt-check.sources"
+          apt_args=(-o Acquire::Retries=2 -o Acquire::https::Timeout=20 -o Acquire::http::Timeout=20 -o "Dir::Cache::archives=$cache" -o "Dir::Etc::sourcelist=$RUNNER_TEMP/apt-check.sources" -o Dir::Etc::sourceparts=-)
+          packages=(./installers/*.deb xvfb xauth dbus-x11 openbox xdotool imagemagick x11-utils mesa-vulkan-drivers)
+          if ! sudo apt-get "${apt_args[@]}" install --no-download --no-install-recommends -y "${packages[@]}"; then
+            sudo apt-get "${apt_args[@]}" update
+            sudo apt-get "${apt_args[@]}" install --no-install-recommends -y "${packages[@]}"
+          fi
           dpkg-query -W -f='${Package} ${Version} ${Status}\n' creditia-gpui | tee evidence/installed-package.txt
           command -v creditia-gpui
           creditia-gpui --check-resources | tee evidence/installed-resources.json
@@ -39,7 +61,7 @@ jobs:
           export XDG_RUNTIME_DIR="$RUNNER_TEMP/apt-runtime"
           mkdir -m 700 -p "$XDG_RUNTIME_DIR"
           for phase in launch restart; do
-            python packaging/gpui/gui-smoke.py --binary /usr/bin/creditia-gpui --archive "$project/.creditia/credits.json" --library "$CREDITIA_HOME" --candidate 4435643bde849715f122b82fe9fced570d99c04c --output "evidence/$phase"
+            python packaging/gpui/gui-smoke.py --binary /usr/bin/creditia-gpui --archive "$project/.creditia/credits.json" --library "$CREDITIA_HOME" --candidate 273068e80af532afd5501e9e9600787420447381 --output "evidence/$phase"
           done
           sudo apt-get remove -y creditia-gpui
           test -f "$CREDITIA_HOME/library.sqlite" && test -f "$project/.creditia/credits.json"
