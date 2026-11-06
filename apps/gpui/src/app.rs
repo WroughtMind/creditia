@@ -2992,7 +2992,7 @@ impl Creditia {
         if let Some(play) = &mut self.playback {
             if restart {
                 play.elapsed = Duration::ZERO;
-                play.started = Instant::now();
+                play.started_once = false;
                 play.playing = true;
                 play.suspended = false;
                 play.requested = 0;
@@ -3000,13 +3000,24 @@ impl Creditia {
                     control.restart();
                 }
             } else if play.playing {
-                if !play.suspended {
+                if play.started_once && !play.suspended {
                     play.elapsed = play.started.elapsed();
                 }
+                // The decoder can trail the clock. Pause the frame on screen so
+                // zooming, restoring or resuming cannot jump to an unseen frame.
+                if frame_at(&play.times, &play.timeline, play.elapsed.as_millis() as u64)
+                    != play.index
+                {
+                    play.elapsed = Duration::from_secs_f64(
+                        play.times[play.index] * play.timeline.duration_ms as f64 / 1000.,
+                    );
+                }
+                play.requested = play.index;
                 play.playing = false;
                 play.suspended = false;
                 if let Some(control) = &self.animation_control {
                     control.pause();
+                    control.set_playhead(play.index);
                 }
             } else {
                 play.started = Instant::now() - play.elapsed;
@@ -3250,6 +3261,13 @@ impl Creditia {
         let Some(play) = &mut self.playback else {
             return;
         };
+        if self
+            .animation_control
+            .as_ref()
+            .is_some_and(|control| control.epoch() != play.epoch)
+        {
+            return;
+        }
         let mut decoding = false;
         for frame in play.frames.values_mut() {
             if !frame.ready {
@@ -4348,11 +4366,11 @@ impl Creditia {
         self.persist_exports();
         self.export_task = Some(cx.spawn(async move |this, cx| {
             let render_cancel = cancellation.clone();
-            let path = job.path;
+            let path = job.path.clone();
             let output_path = path.clone();
             let result = cx
                 .background_spawn(async move {
-                    let output = renderer::request(job.request.materialize(), render_cancel)?;
+                    let output = renderer::request(job.renderer_request(), render_cancel)?;
                     renderer::decode_export(&output, &job.format)
                 })
                 .await;
@@ -7385,7 +7403,7 @@ impl Render for Creditia {
                         view.open_panel(Panel::Settings, window, cx)
                     })),
             );
-        if !self.export_queue.jobs().is_empty() {
+        if !self.export_queue.jobs().is_empty() || self.export_history_error.is_some() {
             tools = tools.child(
                 Button::new("export-history")
                     .ghost()

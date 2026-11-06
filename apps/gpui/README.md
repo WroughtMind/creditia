@@ -69,8 +69,7 @@ The default fixture scope covers 26 desktop styles in Chinese and English,
 captured with light and dark application themes. Empty, loading, failure,
 analysis-progress and export-progress states are also captured in both languages
 and themes. The input case opens an artwork and changes its actual layout.
-Pass `--profile smoke` to the
-fixture generator for the four representative styles during development. The
+CI uses `--profile smoke`: five style/language/theme views and one sample of each transient state. The full combinations remain available for targeted investigation. The
 synthetic render fixture is labeled as such in every evidence manifest. Windows
 uses the packaged executable in a real window: four language/theme cases wait
 for decoded artwork, send keyboard input, assert view state and retain screenshots.

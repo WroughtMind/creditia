@@ -18,6 +18,12 @@ Before then, an explicit repository push that changes
 `packaging/gpui/release-request.json` can request the same operation. The committed
 template has `enabled:false`, so shipping this workflow does not create a release.
 
+During PR development, ordinary updates run the Linux native contracts and representative views.
+When a commit is ready for candidate validation, add the `gpui-candidate` PR label.
+That label event runs the four packaging lanes and the representative same-host comparison.
+Later commits only request daily checks; remove and reapply the label when the next candidate
+is ready. The workflow dispatch options also support candidate runs and opt-in full regressions.
+
 Provide the full **tested** candidate commit recorded in the evidence manifests.
 For a pull request this is normally GitHub's checkout merge commit, not the PR
 branch head. Supply successful run IDs for `gpui`,

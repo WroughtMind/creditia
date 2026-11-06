@@ -381,10 +381,15 @@ def main():
             if state.get("playing") or state["animation"]["index"] != paused_index:
                 raise AssertionError("Restoring a user-paused animation resumed its clock")
             capture("restored-paused", state)
+            before_replay = len(observed.frame_events)
             state = action("replay", lambda: key("ctrl+shift+space"),
                            lambda old, s: s.get("playing") and frame_ready(s)
-                           and s["animation"]["epoch"] > old["animation"]["epoch"]
-                           and s["animation"].get("elapsed_ms") == 0)
+                           and s["animation"]["epoch"] > old["animation"]["epoch"])
+            epoch = state["animation"]["epoch"]
+            if not any(row["animation"].get("index") == 0 and row["animation"].get("decode_ready")
+                       and row["animation"].get("displayed_epoch") == epoch
+                       for row in observed.frame_events[before_replay:]):
+                raise AssertionError("Replay did not display the first decoded frame")
             validate_frame(state)
             action("hide-playing", lambda: xdo("windowminimize", window),
                    lambda _, s: not s.get("visible", True) and (s.get("animation") or {}).get("suspended"))

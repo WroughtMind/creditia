@@ -549,6 +549,51 @@ fn settings_and_persistence(h: &mut Harness, _: &Workspace) {
     h.feature("settings-general","偏好持久化","关闭真实生产窗口并释放视图，再以 Creditia::new 创建新窗口，语言、主题、姓名、项目分组和所选项目从持久文件恢复");
 }
 
+fn recover_export(h: &mut Harness, workspace: &Workspace) {
+    // The old process stopped while rendering. Reopen its exact request through
+    // the normal library startup, with a different project selected.
+    h.close();
+    let mut queue = creditia_gpui::export_jobs::Queue::default();
+    let destination = workspace.root.join("recovered.png");
+    let input = json!({"version":1,"id":"old-export","op":"export","raw":service::credits(ALPHA.into()).unwrap(),
+        "format":"png","style":"minimal-light","piece":"asterisk","size":"native","lang":"zh"});
+    queue
+        .enqueue(input, destination.clone(), "Alpha PNG".into())
+        .unwrap();
+    queue.start_next().unwrap();
+    let revision = service::load_export_jobs().unwrap()["revision"]
+        .as_u64()
+        .unwrap();
+    service::save_export_jobs(revision, &queue.snapshot()).unwrap();
+    h.open();
+    h.ready(BETA);
+    assert!(!destination.exists());
+    h.click("export-history");
+    h.snapshot("interrupted");
+    h.click(("export-retry", 0usize));
+    h.wait("retried export saved", |_| {
+        service::load_export_jobs().unwrap()["queue"]["jobs"][0]["state"] == "saved"
+    });
+    let bytes = fs::read(&destination).unwrap();
+    assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+    let output = format!("{}-recovered.png", h.key);
+    fs::write(h.output.join(&output), &bytes).unwrap();
+    h.artifacts.push(json!({"path":output}));
+    h.close();
+    h.open();
+    h.ready(BETA);
+    h.click("export-history");
+    h.snapshot("saved-after-reopen");
+    let saved = service::load_export_jobs().unwrap();
+    let job = &saved["queue"]["jobs"][0];
+    assert_eq!(job["state"], "saved");
+    assert_eq!(job["attempt"], 2);
+    assert_eq!(fs::read(&destination).unwrap(), bytes);
+    h.record("reopened-queue", saved);
+    h.feature("new-export-options", "恢复不覆盖错误输入或旧任务", "重新打开保存有中断导出的项目库，显式重试原项目的请求并核对 PNG，再次打开窗口后核对历史和文件");
+    h.click("panel-close");
+}
+
 fn remove_projects(h: &mut Harness, workspace: &Workspace) {
     h.shortcut("i");
     assert_eq!(h.state()["panel"], "project");
@@ -634,9 +679,10 @@ pub fn run() {
     let workspace = Workspace::new(&fixture["raw"]);
     let mut cases = vec![];
     let mut h = Harness::new(&output);
-    let scenarios: [(&str, fn(&mut Harness, &Workspace)); 3] = [
+    let scenarios: [(&str, fn(&mut Harness, &Workspace)); 4] = [
         ("services-search", search_and_switch),
         ("services-persistence", settings_and_persistence),
+        ("services-export-recovery", recover_export),
         ("services-removal", remove_projects),
     ];
     let mut failed = false;

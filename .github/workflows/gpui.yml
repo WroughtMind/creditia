@@ -2,6 +2,7 @@ name: gpui
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'apps/gpui/**'
       - 'apps/desktop/src-tauri/**'
@@ -25,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: native-input-v2-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name || github.event_name }}
   cancel-in-progress: true
 
 env:
@@ -37,7 +38,40 @@ env:
   CREDITIA_RESOLVE_LOCK: 0
 
 jobs:
+  daily:
+    name: Native contracts and representative views
+    if: github.event_name == 'pull_request' && github.event.action != 'labeled'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: packages/render/package-lock.json
+      - run: bash packaging/gpui/linux-libs.sh catalog
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/gpui -> target
+      - run: npm ci --prefix packages/render
+      - run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --lib --bins --locked
+      - run: node packaging/gpui/fixtures.mjs --output evidence/fixtures --profile smoke
+      - name: Paint representative desktop views
+        env:
+          CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
+          CREDITIA_VISUAL_OUTPUT: ${{ github.workspace }}/evidence/native
+        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gpui-daily-views
+          path: evidence/native
+          retention-days: 7
+
   mac-icons:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'gpui-candidate'
     name: Compile and verify the original five-petal Mac icon
     runs-on: macos-26
     timeout-minutes: 15
@@ -58,6 +92,7 @@ jobs:
           retention-days: 14
 
   resolve:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'gpui-candidate'
     name: Resolve one dependency graph
     runs-on: ubuntu-24.04
     timeout-minutes: 20

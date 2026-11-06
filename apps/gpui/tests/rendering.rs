@@ -260,9 +260,22 @@ mod native {
         let fixture_manifest: Value =
             serde_json::from_slice(&fs::read(fixtures.join("fixture-manifest.json")).unwrap())
                 .unwrap();
+        let representative = fixture_manifest["profile"] == "smoke";
         let mut cases = vec![];
         for entry in fixture_manifest["files"].as_array().unwrap() {
             for (theme, label) in [(Appearance::Light, "light"), (Appearance::Dark, "dark")] {
+                if representative
+                    && !matches!(
+                        (entry["style"].as_str(), entry["language"].as_str(), label),
+                        (Some("minimal-light"), Some("en"), "light")
+                            | (Some("minimal-light"), Some("zh"), "dark")
+                            | (Some("ink"), Some("zh"), "light")
+                            | (Some("cinema"), Some("en"), "dark")
+                            | (Some("cyber"), Some("zh"), "dark")
+                    )
+                {
+                    continue;
+                }
                 let key = format!(
                     "{}-{}-{label}-wall",
                     entry["style"].as_str().unwrap(),
@@ -279,9 +292,17 @@ mod native {
                 cases.push(match result {Ok(case)=>case,Err(error)=>{let message=error.downcast_ref::<String>().cloned().or_else(||error.downcast_ref::<&str>().map(|s|s.to_string())).unwrap_or_else(||"Native case panicked".into());json!({"key":key,"status":"failed","error":message,"checks":[],"artifacts":[]})}});
             }
         }
-        for state in ["empty", "loading", "error", "analyzing", "exporting"] {
+        for (i, state) in ["empty", "loading", "error", "analyzing", "exporting"]
+            .into_iter()
+            .enumerate()
+        {
             for language in ["zh", "en"] {
                 for (theme, label) in [(Appearance::Light, "light"), (Appearance::Dark, "dark")] {
+                    if representative
+                        && (language, label) != [("zh", "light"), ("en", "dark")][i % 2]
+                    {
+                        continue;
+                    }
                     let key = format!("state-{state}-{language}-{label}");
                     println!("native case: {key}");
                     let input = fixtures.join(format!("minimal-light-{language}.json"));

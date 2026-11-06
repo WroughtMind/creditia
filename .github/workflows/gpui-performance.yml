@@ -2,13 +2,7 @@ name: gpui-performance
 
 on:
   pull_request:
-    paths:
-      - 'apps/gpui/**'
-      - 'apps/desktop/src/**'
-      - 'packages/render/**'
-      - 'crates/**'
-      - 'packaging/gpui-acceptance/**'
-      - '.github/workflows/gpui-performance.yml'
+    types: [labeled]
   workflow_dispatch:
     inputs:
       full_matrix:
@@ -20,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name || github.event_name }}
   cancel-in-progress: true
 
 env:
@@ -38,6 +32,7 @@ env:
 
 jobs:
   production-windows:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'gpui-candidate'
     name: Same-host production desktop comparison
     runs-on: ubuntu-24.04
     timeout-minutes: 120

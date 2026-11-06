@@ -97,6 +97,14 @@ pub struct ActiveJob {
     pub request: Request,
     pub path: PathBuf,
 }
+impl ActiveJob {
+    pub fn renderer_request(&self) -> Value {
+        let mut request = self.request.materialize();
+        request["id"] = json!(format!("export-{}-{}", self.id, self.attempt));
+        request
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Enqueued {
     pub id: u64,
@@ -754,7 +762,9 @@ mod tests {
         queue.retry(first.id).unwrap();
         let retry = queue.start_next().unwrap();
         assert_eq!(retry.path, path("a.png"));
-        assert_eq!(retry.request.materialize()["group"], "model");
+        let request = retry.renderer_request();
+        assert_eq!(request["group"], "model");
+        assert_eq!(request["id"], format!("export-{}-2", retry.id));
         assert!(!queue.finish(first.id, running.attempt, Ok(())));
         assert_eq!(queue.active().unwrap().attempt, retry.attempt);
         assert!(queue.finish(first.id, retry.attempt, Ok(())));
