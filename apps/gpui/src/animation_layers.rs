@@ -261,12 +261,21 @@ fn bounded_shadow(
     let [usvg::Node::Group(group)] = tree.root().children() else {
         return None;
     };
-    // Keep stroked outlines on the original surface: tessellating a stroke
-    // after translating its coordinates can change edge coverage.
-    let [usvg::Node::Path(path)] = group.children() else {
+    // Only solid, untransformed silhouettes are eligible, including the mask.
+    // Stroke tessellation at a shifted origin can change edge pixel coverage.
+    let solid_fill = |node: &usvg::Node| {
+        matches!(node, usvg::Node::Path(path)
+            if path.stroke().is_none() && path.abs_transform().is_identity()
+            && path.fill().is_some_and(|f| matches!(f.paint(), usvg::Paint::Color(_))))
+    };
+    let [source] = group.children() else {
         return None;
     };
-    if path.stroke().is_some() {
+    let mask = group.mask()?;
+    if !solid_fill(source)
+        || mask.mask().is_some()
+        || !mask.root().children().iter().all(solid_fill)
+    {
         return None;
     }
     let [filter] = group.filters() else {
@@ -539,6 +548,9 @@ mod tests {
         let stroked = xml.replace(r#"stroke-width="0""#, r#"stroke-width="1.37""#);
         let stroked_tree = usvg::Tree::from_str(&stroked, &options).unwrap();
         assert!(bounded_shadow(&stroked, &stroked_tree, 2., &options).is_none());
+        let stroked_mask = xml.replace(r#"fill="white""#, r#"fill="white" stroke="black""#);
+        let mask_tree = usvg::Tree::from_str(&stroked_mask, &options).unwrap();
+        assert!(bounded_shadow(&stroked_mask, &mask_tree, 2., &options).is_none());
         let other = xml.replace(r#"operator="in""#, r#"operator="out""#);
         let other_tree = usvg::Tree::from_str(&other, &options).unwrap();
         assert!(bounded_shadow(&other, &other_tree, 2., &options).is_none());
