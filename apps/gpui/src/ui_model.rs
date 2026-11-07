@@ -233,7 +233,13 @@ pub fn masonry(
     while !queue.is_empty() {
         let mut chosen = (0, 0, 1, 0., 0., 0., 0.);
         let mut best_score = f32::INFINITY;
+        let lowest_column = heights.iter().copied().fold(f32::INFINITY, f32::min);
         for (position, index) in queue.iter().copied().enumerate() {
+            // Every remaining score starts at or above this column and pays
+            // at least this position penalty. None can improve the winner.
+            if lowest_column + position as f32 * 60. >= best_score - 1. {
+                break;
+            }
             let tile = &tiles[index];
             let (aw, ah) = dimensions.get(&tile.key).copied().unwrap_or((640., 480.));
             let aw = aw.max(1.);
