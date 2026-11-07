@@ -30,18 +30,10 @@ const run=(program,args,settings={})=>{
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 const artifact=async(name,bytes)=>{await fs.writeFile(path.join(path.dirname(output),name),bytes);report.artifacts.push({path:name,bytes:Buffer.byteLength(bytes),sha256:digest(bytes)});};
 
-async function exercise(root,format,{payloadOnly=false,uninstaller=false}={}){
+async function exercise(root,format,{uninstaller=false}={}){
   const info=JSON.parse(await fs.readFile(path.join(root,'package-info.json'),'utf8'));
   if(info.target!==candidate.target||info.commit!==candidate.candidate_sha)throw new Error(`Wrong ${format} candidate provenance`);
-  if(payloadOnly){
-    // Read-only DMGs also contain an Applications link and volume metadata.
-    // Every sealed payload file must still have its original bytes.
-    for(const item of info.files){
-      if(path.posix.isAbsolute(item.path)||item.path.split('/').includes('..'))throw new Error('Unsafe manifest path');
-      const bytes=await fs.readFile(path.join(root,item.path));
-      if(bytes.length!==item.size||digest(bytes)!==item.sha256)throw new Error(`Installed payload differs: ${item.path}`);
-    }
-  }else if(uninstaller){
+  if(uninstaller){
     // NSIS adds its generated uninstaller; it is not part of the sealed runtime.
     const generated=path.join(root,'uninstall.exe'), parked=path.join(temporary,'uninstall.exe');
     await fs.rename(generated,parked);
@@ -152,12 +144,30 @@ try{
       if(await fs.readlink(path.join(extracted,'usr/bin/creditia-gpui'))!=='../lib/creditia-gpui/creditia-gpui')throw new Error('Invalid installed command link');
       report.checks.push({id:'deb-command-link',passed:true});
     }else if(name.endsWith('.dmg')){
+      // Copy the app as a user would. LaunchServices and helper processes can
+      // otherwise keep the read-only DMG busy after an otherwise successful run.
+      const mount=await fs.mkdtemp(path.join(os.tmpdir(),'creditia-dmg-'));
       let mounted=false;
       try{
-        run('hdiutil',['attach','-readonly','-nobrowse','-mountpoint',extracted,artifact]);mounted=true;
-        run('codesign',['--verify','--deep','--strict',path.join(extracted,'Creditia.app')]);
-        await exercise(extracted,'dmg',{payloadOnly:true});
-      }finally{if(mounted)run('hdiutil',['detach',extracted]);}
+        run('hdiutil',['attach','-readonly','-nobrowse','-mountpoint',mount,artifact]);
+        mounted=true;
+        run('ditto',[path.join(mount,'Creditia.app'),path.join(extracted,'Creditia.app')]);
+        for(const file of ['INSTALL.md','package-info.json']){
+          await fs.copyFile(path.join(mount,file),path.join(extracted,file));
+        }
+      }finally{
+        if(mounted){
+          try{run('hdiutil',['detach',mount]);}
+          catch(error){
+            if(error.status!==16)throw error;
+            run('hdiutil',['detach',mount,'-force']);
+          }
+        }
+        // hdiutil may remove the mountpoint itself. Never recurse into a volume.
+        await fs.rmdir(mount).catch(error=>{if(error.code!=='ENOENT')throw error;});
+      }
+      run('codesign',['--verify','--deep','--strict',path.join(extracted,'Creditia.app')]);
+      await exercise(extracted,'dmg');
     }else if(name.endsWith('-setup.exe')){
       run(artifact,['/S',`/D=${extracted}`]);
       await exercise(extracted,'nsis',{uninstaller:true});
