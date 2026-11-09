@@ -90,7 +90,40 @@ const b64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.lengt
 const b64bytes = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
 // ───────────────────────── 状态 ─────────────────────────
-const store = { get: (k: string) => { try { return localStorage.getItem('creditia.' + k); } catch { return null; } }, set: (k: string, v: string) => { try { localStorage.setItem('creditia.' + k, v); } catch { /* 没有存储也能用 */ } } };
+let sharedPreferencesReady = false;
+let preferenceWrites: Promise<unknown> = Promise.resolve();
+const preferenceKey = (key: string) => ['lang', 'theme', 'view', 'names', 'autofresh', 'fmt', 'size', 'project', 'logo'].includes(key) || key.startsWith('group.') || key.startsWith('autofresh.');
+const store = {
+  get: (key: string) => { try { return localStorage.getItem('creditia.' + key); } catch { return null; } },
+  set: (key: string, value: string) => {
+    try { localStorage.setItem('creditia.' + key, value); } catch { /* Storage can be unavailable in an embedded demo. */ }
+    if (native && sharedPreferencesReady && preferenceKey(key)) {
+      preferenceWrites = preferenceWrites.catch(() => {}).then(() => native('set_legacy_preference', { key: 'creditia.' + key, value }))
+        .catch(error => { console.error('Unable to persist shared preferences', error); toast(L('设置未能保存，请重试', 'Settings could not be saved; please try again'), 5000); });
+    }
+  },
+};
+/** The upgrade bridge runs before the first project is shown. Canonical settings
+ * win on later launches, including after returning from the GPUI application. */
+async function syncSharedPreferences() {
+  if (!native) return;
+  const values: Record<string, string> = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('creditia.') && preferenceKey(key.slice(9))) values[key] = localStorage.getItem(key)!;
+    }
+  } catch { /* An empty import still allows shared settings to be read. */ }
+  const shared: Record<string, string> = await native('import_legacy_preferences', { values });
+  for (const key of Object.keys(values)) {
+    if (!(key in shared)) { try { localStorage.removeItem(key); } catch { /* restricted storage */ } }
+  }
+  for (const [key, value] of Object.entries(shared)) {
+    try { localStorage.setItem(key, value); } catch { /* restricted storage */ }
+  }
+  sharedPreferencesReady = true;
+}
+
 const state = {
   projects: [] as any[], current: null as any, raw: null as any, model: null as Model | null,
   style: kitById(store.get('theme') ?? '') ?? KITS[0],
@@ -269,6 +302,12 @@ function wireMarkTip() {
 
 // ───────────────────────── 启动 ─────────────────────────
 async function boot() {
+  let settingsError: unknown;
+  try { await syncSharedPreferences(); }
+  catch (error) { settingsError = error; }
+  state.style = kitById(store.get('theme') ?? '') ?? KITS[0];
+  state.lang = store.get('lang') === 'en' ? 'en' : 'zh';
+  state.size = store.get('size') ?? 'native';
   bootKits(); state.style.warm();
   const st = document.createElement('style'); st.textContent = INTERACT_CSS; document.head.appendChild(st);
   if (native && OS === 'mac') document.body.classList.add('mac');
@@ -276,6 +315,7 @@ async function boot() {
   document.querySelectorAll<HTMLElement>('[data-icon]').forEach((el) => (el.innerHTML = icon(el.dataset.icon!, el.closest('.pill') ? 14 : 16)));
   $('#pmark').appendChild(mark.el); mark.set(BRAND, { grow: true });
   applyLang(); renderDots(); renderDock(); wireTop(); wireRoam(); wireMarkTip(); wireKeys(); void installMenu();
+  if (settingsError) toast(L('无法同步桌面设置；现有设置仍保留', 'Unable to sync desktop settings; existing settings were preserved'), 5000);
   // 滚动之后顶栏垫一层渐隐的玻璃，作品不再直接透到项目名和按钮后面
   const stageEl = $('#stage');
   stageEl.addEventListener('scroll', () => document.body.classList.toggle('scrolled', stageEl.scrollTop > 8), { passive: true });
@@ -2142,4 +2182,10 @@ async function settings(tab: Tab = settingsTab) {
   }
 }
 
-boot();
+async function startDesktop() {
+  // The native helper injects its own tiny migration script; the full UI does
+  // not start when this binary is being used only to read its original storage.
+  if (native && await native('migration_mode')) return;
+  await boot();
+}
+void startDesktop();

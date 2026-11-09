@@ -523,7 +523,13 @@ test('continuous native ring surfaces fill their antialiased edges before tempor
     animate(out.tree, span - .00001, theme);
     const almost = raster.rgba(decode(), 420);
     let changed = 0;
-    for (let i = 0; i < end.data.length; i += 4) if ([0, 1, 2, 3].some(j => Math.abs(end.data[i + j] - almost.data[i + j]) > 8)) changed++;
+    // The shared raster adapter returns straight RGBA. Compare painted edge
+    // coverage in premultiplied space, including alpha, as this check did before.
+    for (let i = 0; i < end.data.length; i += 4) if ([0, 1, 2, 3].some(j => {
+      const a = end.data[i + j] * (j === 3 ? 1 : end.data[i + 3] / 255);
+      const b = almost.data[i + j] * (j === 3 ? 1 : almost.data[i + 3] / 255);
+      return Math.abs(a - b) > 8;
+    })) changed++;
     assert.ok(changed < 420 * 420 * .001, `${theme.id}: antialiased ring edges must not suddenly fill when the mask disappears`);
   }
 });

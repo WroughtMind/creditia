@@ -14,6 +14,7 @@ import { people } from './pieces/people.ts';
 import { historyLabels } from './history.ts';
 import { motionDuration } from './motion.ts';
 import { scrollSamples, scrollY } from './scroll-motion.ts';
+import { scrollFrameContent } from './scroll-frame.ts';
 
 export interface PieceDef {
   name: string;
@@ -72,21 +73,30 @@ export function art(id: string, m: Model, st: Style, o: PieceOpts = {}): Art | n
   const s = p.render(m, st, o);
   if (!s) return null;
   const name = id === 'versions' ? historyLabels(m.history.basis, m.lang).name : m.lang === 'en' ? p.en : p.name;
-  return { w: s.w, h: s.h, svg: s.toString(), hits: s.hits, bg: s.bg, title: `${m.project} · ${name}`, motion: (s as any).motion };
+  return { w: s.w, h: s.h, svg: s.toString(), hits: s.hits, bg: s.bg, title: `${m.project} · ${name}`, motion: (s as any).motion, selection: { style: st.id, piece: id, lang: m.lang, variant: o.variant ?? st.prefer[id] } };
+}
+/** 桌面播放和导出使用同一时刻采样；full 可复用已经排好的长卷。 */
+export function frame(id: string, m: Model, st: Style, o: PieceOpts = {}, t = 1, full = art(id, m, st, o)): Art | null {
+  // 银幕滚动：一个固定大小的取景框从上往下扫过整张字幕。
+  if (full?.motion?.kind === 'scroll') {
+    const { viewW, viewH } = full.motion;
+    const inner = scrollFrameContent(full.svg, full.w, full.h, full.motion, t, st);
+    const y = Math.round(scrollY(full.motion.keys, t));
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewW}" height="${viewH}" viewBox="0 ${y} ${viewW} ${viewH}" data-creditia-raster="${-y} ${full.h-y}"><rect y="${y}" width="${viewW}" height="${viewH}" fill="${full.bg}"/>${inner}</svg>`;
+    // GIF 仍然只栅格化一次整卷，逐帧按 y 裁图。
+    const hits = full.hits.filter(hit => hit.y + hit.h > y && hit.y < y + viewH).map(hit => { const top = Math.max(0, hit.y - y); return { ...hit, y: top, h: Math.min(viewH, hit.y + hit.h - y) - top }; });
+    return { ...full, w: viewW, h: viewH, svg, hits, motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y, ...(full.motion.material ? { motion: full.motion, progress: t } : {}) } };
+  }
+  return art(id, m, st, { ...o, t });
 }
 /** 动画帧：t 从 0 到 1 */
 export function frames(id: string, m: Model, st: Style, o: PieceOpts = {}, n = 28): Art[] {
   const full = art(id, m, st, o);
   // 银幕滚动：一个固定大小的取景框从上往下扫过整张字幕
   if (full?.motion?.kind === 'scroll') {
-    const { viewW, viewH } = full.motion;
     const samples = scrollSamples(full.motion, n);
-    const inner = full.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
     return samples.map(({ progress, delay }) => {
-      const y = Math.round(scrollY(full.motion!.keys, progress));
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewW}" height="${viewH}" viewBox="0 ${y} ${viewW} ${viewH}"><rect y="${y}" width="${viewW}" height="${viewH}" fill="${full.bg}"/>${inner}</svg>`;
-      // 同一张静态长图，按共享阅读时间线裁窗。
-      return { ...full, w: viewW, h: viewH, svg, hits: [], motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y, ...(full.motion!.material ? { motion: full.motion!, progress } : {}) }, frameDelay: delay };
+      return { ...frame(id, m, st, o, progress, full)!, frameDelay: delay };
     });
   }
   const out: Art[] = [];

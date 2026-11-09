@@ -1,10 +1,12 @@
-# Installs an existing candidate; never builds or publishes a Release.
-name: installer-acceptance
+# Historical Tauri installers use their original verifier. GPUI packages are
+# exercised by the gpui workflow on the four current desktop targets.
+name: Legacy Tauri installer acceptance
 on:
   workflow_dispatch:
     inputs:
       candidate_run:
-        description: Successful release workflow run containing release-candidate
+        description: Historical Tauri release run containing release-candidate
+        default: '40811823090'
         required: true
   workflow_call:
     inputs:
@@ -26,7 +28,9 @@ jobs:
       CANDIDATE_RUN: ${{ inputs.candidate_run }}
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with:
+          ref: 8a0ad5487cbe297e1d4874561f6a886609705c8e
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
       - uses: actions/download-artifact@v4

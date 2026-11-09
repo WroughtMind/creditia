@@ -44,3 +44,18 @@ test('材质长卷与普通帧混用仍保留 CSS 留白颜色，每卷只栅格
     }
   }
 });
+
+
+test('材质图集保留共享时间线、单次播放和透明背景编码', () => {
+  const transparentReel = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="20"><rect width="5" height="20" fill="#ff0000"/></svg>';
+  const frames = [0, 10].map((y, i) => ({ ...sample(y, i), bg: 'transparent', frameDelay: 50, crop: { ...sample(y, i).crop!, svg: transparentReel } }));
+  const { ex, calls } = exporter();
+  const gif = ex.gif(frames, { width: 10, delays: [370, 1230], repeat: -1 });
+  const controls = [...gif.keys()].filter(i => gif[i] === 0x21 && gif[i + 1] === 0xf9 && gif[i + 2] === 4);
+  assert.equal(controls.length, 2);
+  assert.deepEqual(controls.map(i => (gif[i + 4] + 256 * gif[i + 5]) * 10), [370, 1230]);
+  assert.ok(controls.every(i => (gif[i + 3] & 1) === 1), 'transparent palette entry survives the compositor');
+  assert.ok(controls.every(i => (gif[i + 3] >> 2 & 7) === 2), 'transparent frames clear the preceding frame');
+  assert.ok(!new TextDecoder().decode(gif).includes('NETSCAPE2.0'), 'repeat=-1 omits the looping extension');
+  assert.deepEqual(calls, [{ width: 30, height: 20 }], 'one atlas for the entire clip');
+});

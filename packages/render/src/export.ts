@@ -10,9 +10,10 @@ import { scrollTransforms, scrollY, type ScrollMotion } from './scroll-motion.ts
 import { scrollPaperPose, scrollPaperTexture } from './scroll-paper.ts';
 import { scrollAtlas, createScrollCompositor } from './scroll-compositor.ts';
 import { prepareScrollCanvas } from './scroll-player.ts';
+import { rasterExtent } from './raster-viewport.ts';
 
 /** 一张可导出的作品 */
-export interface Art { w: number; h: number; svg: string; hits: Hit[]; bg: string; title: string; motion?: Motion; crop?: Crop; /** 动画采样帧的持续时间（毫秒） */ frameDelay?: number }
+export interface Art { w: number; h: number; svg: string; hits: Hit[]; bg: string; title: string; selection?: { style: string; piece: string; lang: 'zh' | 'en'; variant?: string }; motion?: Motion; crop?: Crop; frameDelay?: number }
 /** 滚动片尾字幕的一帧：整卷 svg 里从 y 开始、高 h 的一段 */
 export interface Crop { svg: string; w: number; h: number; y: number; motion?: ScrollMotion; progress?: number; /** 调整画幅后，裁窗在输出画布内的位置 */ viewport?: { x: number; y: number; w: number; h: number } }
 /** HTML 里的动态：scroll = 片尾字幕在银幕里滚动 */
@@ -20,9 +21,12 @@ export type Motion = ScrollMotion;
 
 export interface Raster {
   png(svg: string, width?: number): Uint8Array;
+  /** Straight (unpremultiplied) RGBA, matching decoded PNG bytes. */
   rgba(svg: string, width?: number): { w: number; h: number; data: Uint8Array };
   /** 文字转路径后的 SVG */
   flat(svg: string): string;
+  /** Font files embedded as data URLs; hosts supply this for selectable SVG text. */
+  embed?(svg: string): string;
 }
 export type Deflate = (data: Uint8Array) => Uint8Array | Promise<Uint8Array>;
 
@@ -53,16 +57,32 @@ export function sized(a: Art, W: number, H: number, pad = 0.06): Art {
   if (!W || !H) return a;
   const k = Math.min((W * (1 - pad * 2)) / a.w, (H * (1 - pad * 2)) / a.h);
   const dx = (W - a.w * k) / 2, dy = (H - a.h * k) / 2;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${a.bg}"/><g transform="translate(${dx.toFixed(2)} ${dy.toFixed(2)}) scale(${k.toFixed(4)})">${a.crop ? a.svg : strip(a.svg)}</g></svg>`;
+  // Preserve the scrolling origin and visible window. Native raster adapters
+  // can defer this named clip until after rendering the complete filtered reel.
+  const content = a.crop
+    ? `<defs><clipPath id="creditia-scroll-viewport"><rect width="${a.w}" height="${a.h}"/></clipPath></defs><g clip-path="url(#creditia-scroll-viewport)"><g transform="translate(0 ${-a.crop.y})">${strip(a.svg)}</g></g>`
+    : strip(a.svg);
+  const extent = rasterExtent(a.svg), actualK = Number(k.toFixed(4)), actualDx = Number(dx.toFixed(2)), actualDy = Number(dy.toFixed(2));
+  const metadata = extent ? ` data-creditia-raster="${actualDy + extent[0] * actualK} ${actualDy + extent[1] * actualK}"${a.crop ? ` data-creditia-window="${actualDx} ${actualDy} ${a.w * actualK} ${a.h * actualK}" data-creditia-bg="${attr(a.bg)}"` : ''}` : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"${metadata}><rect width="${W}" height="${H}" fill="${a.bg}"/><g transform="translate(${dx.toFixed(2)} ${dy.toFixed(2)}) scale(${k.toFixed(4)})">${content}</g></svg>`;
+  // Keep the source reel and map its viewport into the padded output canvas.
+  // GIF can still rasterize one atlas while SVG/PNG retain native crop metadata.
   const viewport = a.crop?.viewport ?? { x: 0, y: 0, w: a.w, h: a.h };
   return { ...a, w: W, h: H, svg, ...(a.crop ? { crop: { ...a.crop, viewport: { x: dx + viewport.x * k, y: dy + viewport.y * k, w: viewport.w * k, h: viewport.h * k } } } : {}), hits: a.hits.map((x) => ({ ...x, x: dx + x.x * k, y: dy + x.y * k, w: x.w * k, h: x.h * k })) };
 }
 
 export function makeExporter(R: Raster, deflate?: Deflate) {
   const png = (a: Art, scale = 2) => R.png(a.svg, a.w * scale);
-  const svg = (a: Art) => R.flat(a.svg).replace(/^<svg/, `<svg role="img" aria-label="${attr(a.title)}"`);
+  const svg = (a: Art, fontMode: 'outline' | 'embed' = 'outline') => {
+    if (fontMode === 'embed' && !R.embed) throw new Error('Font embedding is unavailable in this renderer');
+    // Already outlined Satori art needs no parser/serializer round trip; it
+    // would round existing path coordinates and can change edge pixels.
+    const source = fontMode === 'embed' ? R.embed!(a.svg) : a.svg.includes('<text') ? R.flat(a.svg) : a.svg;
+    return source.replace(/^<svg\b([^>]*?)(\/?)>/, (_root, attributes: string, slash: string) =>
+      `<svg${attributes.replace(/\s+(?:role|aria-label)="[^"]*"/g, '')} role="img" aria-label="${attr(a.title)}"${slash}>`);
+  };
 
-  async function pdf(a: Art, scale = 3): Promise<Uint8Array> {
+  async function pdf(a: Art, scale = 3, pagePoints?: { w: number; h: number }): Promise<Uint8Array> {
     if (!deflate) throw new Error('PDF 需要压缩函数');
     const img = R.rgba(a.svg, a.w * scale);
     const n = img.w * img.h;
@@ -74,12 +94,12 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
       alpha[i] = img.data[i * 4 + 3];
       if (alpha[i] !== 255) opaque = false;
     }
-    const pw = a.w * 0.75, ph = a.h * 0.75; // px → pt
+    const pw = pagePoints?.w ?? a.w * 0.75, ph = pagePoints?.h ?? a.h * 0.75; // CSS px → pt; print presets use their paper dimensions
     return buildPdf(a.title, pw, ph, img.w, img.h, await deflate(rgb), opaque ? null : await deflate(alpha));
   }
 
   /** frames：同一作品在动画各时刻的画面 */
-  function gif(frames: Art[], o: { width?: number; fps?: number; hold?: number } = {}): Uint8Array {
+  function gif(frames: Art[], o: { width?: number; fps?: number; hold?: number; delays?: number[]; repeat?: number } = {}): Uint8Array {
     const enc = GIFEncoder();
     const delay = Math.round(1000 / (o.fps ?? 20));
     const width = o.width ?? Math.min(frames[0].w, 960);
@@ -138,12 +158,17 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
     let elapsed = 0, encoded = 0;
     frames.forEach((f, i) => {
       const img = composite ? pad(composite.render(f.crop!.progress ?? 1, f.crop!.y) as ReturnType<Raster['rgba']>, f, viewport) : whole ? cut(f, whole) : mixedFrame(f);
-      const palette = quantize(img.data, 256, { format: 'rgb565' });
+      const transparent = img.data.some((value, index) => index % 4 === 3 && value < 128);
+      const palette = quantize(img.data, transparent ? 255 : 256, { format: 'rgb565' });
       const index = applyPalette(img.data, palette, 'rgb565');
-      elapsed += i === frames.length - 1 ? (o.hold ?? 2400) : o.fps === undefined ? f.frameDelay ?? delay : delay;
+      if (transparent) {
+        palette.unshift([0, 0, 0]);
+        for (let p = 0; p < index.length; p++) index[p] = img.data[p * 4 + 3] < 128 ? 0 : index[p] + 1;
+      }
+      elapsed += o.delays?.[i] ?? (i === frames.length - 1 ? (o.hold ?? 2400) : o.fps === undefined ? f.frameDelay ?? delay : delay);
       // GIF 只存 10ms；量化累计边界，避免长卷逐帧舍入后偏离 App/HTML 时长。
       const until = Math.round(elapsed / 10) * 10;
-      enc.writeFrame(index, img.w, img.h, { palette, delay: until - encoded, repeat: 0 });
+      enc.writeFrame(index, img.w, img.h, { palette, transparent, transparentIndex: transparent ? 0 : -1, dispose: transparent ? 2 : 0, delay: until - encoded, repeat: o.repeat ?? 0 });
       encoded = until;
     });
     enc.finish();
@@ -151,11 +176,11 @@ export function makeExporter(R: Raster, deflate?: Deflate) {
   }
 
   /** 单文件 HTML：画面是文字转路径后的 SVG，交互层盖在上面。arts 多于一张时排成一页 */
-  function html(arts: Art[], o: { title: string; lang?: string; bg?: string; note?: string; motionWidth?: number } ): string {
+  function html(arts: Art[], o: { title: string; lang?: string; bg?: string; note?: string; fontMode?: 'outline' | 'embed'; reducedMotion?: boolean; motionWidth?: number } ): string {
     const bg = o.bg ?? arts[0]?.bg ?? '#111';
     const materials: any[] = [];
     const blocks = arts.map((a, i) => {
-      const flat = svg(a);
+      const flat = svg(a, o.fontMode);
       if (a.motion?.kind === 'scroll') {
         const m = a.motion;
         if (m.material) {
@@ -202,13 +227,15 @@ body.wall .piece.wide{column-span:all;max-width:100%!important}
 @keyframes rise{from{opacity:0;transform:translateY(16px) scale(.985);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
 footer{font:12px/1.4 Inter,-apple-system,"PingFang SC",sans-serif;color:${lumOf(bg) > 0.5 ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.45)'};text-align:center}
 ${INTERACT_CSS}
+${o.reducedMotion ? '.piece,.screen .reel{animation:none!important}.screen .reel .ct-art{top:0}.ct-hit,.ct-tip{transition:none!important}' : ''}
+@media(prefers-reduced-motion:reduce){.piece,.screen .reel{animation:none!important}.screen .reel .ct-art{top:0}.ct-hit,.ct-tip{transition:none!important}}
 </style>
 </head>
 <body${wall ? ' class="wall"' : ''}>
 ${wall ? `<main>${blocks}</main>` : blocks}
 <footer>${o.note ? esc(o.note) + ' · ' : ''}creditia</footer>
 <script>
-const DATA=${JSON.stringify(data)};
+const DATA=${JSON.stringify(data).replace(/</g, '\\u003c')};
 const placeTip=(${placeTip.toString()});
 const mountHits=(${mountHits.toString()});
 DATA.forEach((d,i)=>{const el=document.getElementById('a'+i);if(el)mountHits(el,d.hits,d.w,d.h,placeTip)});
@@ -225,7 +252,7 @@ MATERIALS.forEach(async config=>{
   const paint=()=>{if(player)player.paint(time);reel.style.transform='translateY('+(-sampleScrollPosition(config.motion.keys,time)/config.atlas.originalH*100)+'%)';figure.dataset.progress=String(time)};
   const tick=now=>{if(!playing)return;time=Math.min(1,(now-origin)/(config.motion.secs*1000));paint();if(time<1)raf=requestAnimationFrame(tick);else playing=false;figure.dataset.playing=String(playing)};
   const play=value=>{cancelAnimationFrame(raf);playing=value&&!reduced.matches&&!!player;figure.dataset.playing=String(playing);if(playing){origin=performance.now()-time*config.motion.secs*1000;raf=requestAnimationFrame(tick)}};
-  const ready=async()=>{if(player||loading||reduced.matches)return;loading=true;try{const bytes=Uint8Array.from(atob(config.source.split(',')[1]),c=>c.charCodeAt(0));player=await prepareMaterialCanvas(new Blob([bytes],{type:'image/svg+xml'}),config.atlas,config.motion,config.width??Math.round(figure.clientWidth*(devicePixelRatio||1)),undefined,makeScrollCompositor,sampleScrollPosition,paperPose,paperTexture);figure.__scrollMetrics=player.metrics;figure.insertBefore(player.canvas,figure.firstChild);figure.classList.add('material-ready');figure.dataset.state='ready';paint();play(true)}catch(error){figure.dataset.state='error';console.error(error)}finally{loading=false}};
+  const ready=async()=>{if(player||loading||reduced.matches||${!!o.reducedMotion})return;loading=true;try{const bytes=Uint8Array.from(atob(config.source.split(',')[1]),c=>c.charCodeAt(0));player=await prepareMaterialCanvas(new Blob([bytes],{type:'image/svg+xml'}),config.atlas,config.motion,config.width??Math.round(figure.clientWidth*(devicePixelRatio||1)),undefined,makeScrollCompositor,sampleScrollPosition,paperPose,paperTexture);figure.__scrollMetrics=player.metrics;figure.insertBefore(player.canvas,figure.firstChild);figure.classList.add('material-ready');figure.dataset.state='ready';paint();play(true)}catch(error){figure.dataset.state='error';console.error(error)}finally{loading=false}};
   figure.querySelector('.replay').onclick=()=>{time=0;paint();play(true)};
   figure.addEventListener('pointerenter',()=>play(false));figure.addEventListener('pointerleave',()=>{if(time<1)play(true)});
   reduced.addEventListener('change',()=>{if(reduced.matches){play(false);reel.style.transform='none'}else{if(player){time=0;paint();play(true)}else ready()}});

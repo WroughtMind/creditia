@@ -2002,7 +2002,7 @@ const OSN = { mac: 'macOS', win: 'Windows', linux: 'Linux' };
 const CHANNELS = DATA.channels;
 const APP = Object.fromEntries(['mac', 'win', 'linux'].map(os => [os, {
   files: CHANNELS.catalog.filter(a => a.os === os).map(a => [
-    a.os === 'mac' ? `${a.arch === 'aarch64' ? 'Apple silicon' : 'Intel'} · .dmg` : a.os === 'win' ? '.exe' : a.bundle === 'appimage' ? '.AppImage' : '.deb', a.file,
+    a.os === 'mac' ? `${a.arch === 'aarch64' ? 'Apple silicon' : 'Intel'} · .${a.bundle}` : a.bundle === 'nsis' ? '.exe' : `.${a.bundle}`, a.file,
   ]),
 }]));
 const SOURCE = `git clone ${REPO} && cd creditia && cargo build --release -p creditia-cli && npm ci --prefix packages/render && cd packages/cli && npm ci && npm link`;
@@ -2048,7 +2048,7 @@ function uHint(w, o) {
   if (w.id === 'cli') return o.k === 'npx' ? (en ? 'Node 22.18+, nothing to install' : '需要 Node 22.18+，不用安装') : (en ? 'Then run creditia analyze in your repo' : '装好后在仓库里运行 creditia analyze');
   if (w.id === 'agent') return o.kind === 'say' ? (en ? 'Paste it into Claude Code, Codex, Cursor…' : '粘贴给 Claude Code、Codex、Cursor 等') : (en ? 'Run in a terminal to add the creditia skill' : '在终端里运行，装上 creditia skill');
   if (w.id === 'ci') return en ? `Save it as ${o.file}; the next push publishes` : `存成 ${o.file}，下次推送就生效`;
-  if (o.kind === 'dl') return `v${VER} · ${archOf(o, en)}`;
+  if (o.kind === 'dl') return `${CHANNELS.desktopTag?.replace(/^gpui-/, '') || 'v' + VER} · ${archOf(o, en)}`;
   if (o.os === 'mac' && o.kind === 'cmd') return en ? 'First launch: see the DMG installation notes' : '首次打开请参考 DMG 安装说明';
   return o.kind === 'dl' ? (en ? `v${VER} · open the installer once downloaded` : `v${VER} · 下载后打开安装包`) : (en ? 'Run in a terminal' : '在终端里运行');
 }
@@ -2062,7 +2062,7 @@ function dlCard(o, en) {
     ? (en ? 'The app uses an ad-hoc signature, without Apple Developer ID signing or notarization. Verify the source and SHA-256, then drag it into Applications. If an unidentified-developer warning appears, try opening it once and use System Settings → Privacy & Security → Open Anyway. If it reports damage, check the download again; do not assume every warning is caused by notarization.' : 'App 使用本地签名，未经 Apple 开发者签名与公证。先核对下载来源与 SHA-256，再拖进「应用程序」。遇到无法验证开发者的提示时，尝试打开一次，再到「系统设置 → 隐私与安全性」点「仍要打开」。若提示已损坏，应先重新核对下载文件，不能一律归因于未公证。')
     : o.os === 'win'
       ? (en ? 'Verify the download source and SHA-256 before running the installer. Windows may show a SmartScreen warning for this unsigned installer.' : '先核对下载来源与 SHA-256，再运行安装程序。安装包未签名，Windows 可能显示 SmartScreen 提示。')
-      : (en ? 'Verify the SHA-256. For an AppImage, grant execute permission before opening it; for a deb, install it with your package manager.' : '先核对 SHA-256。AppImage 需要赋予执行权限再打开；deb 使用系统包管理器安装。');
+      : (en ? 'Verify the SHA-256. Install the DEB with your package manager, or extract the tar.gz and run ./creditia-gpui.' : '先核对 SHA-256。用系统包管理器安装 DEB，或解压 tar.gz 后运行 ./creditia-gpui。');
   const action = o.available
     ? `<a class="ucopy" href="${dq(o.available.url)}" download>${ic}${en ? `Download for ${OSN[o.os]}` : `下载 ${OSN[o.os]} 版`} · ${esc(o.k)}</a>`
     : `<div class="gpending">${en ? `${OSN[o.os]} installer coming soon` : `${OSN[o.os]} 安装包即将推出`}</div>`;

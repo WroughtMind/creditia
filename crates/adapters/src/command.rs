@@ -26,23 +26,45 @@ mod windows_tests {
             NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ))
     }
+    // Use this executable for process-tree ownership tests. A cold PowerShell
+    // launch can consume the entire five-second timeout on a busy Windows
+    // runner before it creates a descendant, which tests shell startup instead
+    // of the cancellation contract.
     fn helper(path: &std::path::Path, end: &str) -> Command {
-        let script = format!(
-            r#"
-$info = New-Object System.Diagnostics.ProcessStartInfo
-$info.FileName = 'powershell.exe'
-$info.Arguments = '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 30"'
-$info.UseShellExecute = $false
-$p = [System.Diagnostics.Process]::Start($info)
-Set-Content -LiteralPath $env:CREDITIA_TEST_PID -Value $p.Id
-{end}
-"#
-        );
-        let mut command = Command::new("powershell.exe");
+        let mut command = Command::new(std::env::current_exe().unwrap());
         command
-            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-            .env("CREDITIA_TEST_PID", path);
+            .args(["--exact", "command::windows_tests::process_owner_helper"])
+            .env("CREDITIA_TEST_PID", path)
+            .env("CREDITIA_TEST_PROCESS_END", end);
         command
+    }
+    #[test]
+    fn process_leaf_helper() {
+        if std::env::var_os("CREDITIA_TEST_PROCESS_LEAF").is_some() {
+            std::thread::sleep(Duration::from_secs(30));
+        }
+    }
+    #[test]
+    fn process_owner_helper() {
+        let Some(path) = std::env::var_os("CREDITIA_TEST_PID") else {
+            return;
+        };
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "command::windows_tests::process_leaf_helper"])
+            .env("CREDITIA_TEST_PROCESS_LEAF", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        std::fs::write(path, child.id().to_string()).unwrap();
+        match std::env::var("CREDITIA_TEST_PROCESS_END").unwrap().as_str() {
+            "exit 0" => std::process::exit(0),
+            "exit 1" => std::process::exit(1),
+            _ => {
+                let _ = child.wait();
+            }
+        }
     }
     fn assert_stopped(path: &std::path::Path) {
         let pid = std::fs::read_to_string(path)

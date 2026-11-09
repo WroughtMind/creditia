@@ -9,6 +9,7 @@
     "node": ">=22.18"
   },
   "scripts": {
+    "bridge": "node tools/bridge.mjs",
     "gallery": "node src/gallery.ts fixtures/catnap.json gallery",
     "test": "node --test test/*.test.ts",
     "metrics": "python3 tools/metrics.py",

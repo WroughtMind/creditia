@@ -33,3 +33,8 @@ spike/projects/
 apps/desktop/src-tauri/binaries/
 dist/
 _site/
+
+# Generated migration validation artifacts
+/evidence/
+/packages/embed/browser-evidence/
+__pycache__/

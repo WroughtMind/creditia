@@ -15,7 +15,7 @@ if (command === 'verify') {
   for (const file of [...apps.map(a => a.file), ...cores.map(coreFile)]) {
     assert.equal(createHash('sha256').update(readFileSync(path.join(input, file))).digest('hex'), sums.get(file), file);
   }
-  console.log('All 10 candidate artifacts match SHA256SUMS');
+  console.log('All desktop and core artifacts match SHA256SUMS');
 } else if (command === 'analyze') {
   mkdirSync(output, { recursive: true });
   const env = { ...process.env, CREDITIA_HOME: path.resolve(output, 'library') };

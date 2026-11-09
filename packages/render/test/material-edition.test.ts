@@ -52,7 +52,8 @@ test('单色文字压印不把灰底轨道或渐变滤成黑色，节目单行�
     animate(tree, time, themeById(id)!);
     const frame = raster.rgba(await satori(tree as any, { width: 200, height: 100, fonts: [] }), 200);
     const center = (45 * 200 + 100) * 4;
-    assert.ok(Math.abs(frame.data[center] * 255 / frame.data[center + 3] - 204) < 2, `${id}/${time}: gray carrier stays gray after alpha is removed`);
+    assert.ok(frame.data[center + 3] > 0, `${id}/${time}: gray carrier remains visible`);
+    assert.ok(Math.abs(frame.data[center] - 204) < 2, `${id}/${time}: straight RGBA preserves the gray carrier`);
     if (id === 'playbill') {
       const xs = [];
       for (let y = 0; y < 100; y++) for (let x = 0; x < 200; x++) if (frame.data[(y * 200 + x) * 4 + 3]) xs.push(x);
