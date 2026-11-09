@@ -7326,9 +7326,37 @@ impl Render for Creditia {
         } else {
             0xFFFFFF94
         });
-        let fg = cx.theme().foreground;
-        let muted = cx.theme().muted_foreground;
-        let border = cx.theme().border;
+        let fg = rgb(if cx.theme().is_dark() {
+            0xF4F4F2
+        } else {
+            0x0E0E0E
+        });
+        let muted = rgb(if cx.theme().is_dark() {
+            0x9C9C98
+        } else {
+            0x6B6B68
+        });
+        let border = rgba(if cx.theme().is_dark() {
+            0xFFFFFF0F
+        } else {
+            0x00000012
+        });
+        let selected = rgba(if cx.theme().is_dark() {
+            0xF4F4F217
+        } else {
+            0x0E0E0E17
+        });
+        let glass_shadow = if cx.theme().is_dark() {
+            vec![
+                BoxShadow::new(px(0.), px(1.), rgba(0x0000004D).into()).blur_radius(px(1.)),
+                BoxShadow::new(px(0.), px(10.), rgba(0x00000073).into()).blur_radius(px(30.)),
+            ]
+        } else {
+            vec![
+                BoxShadow::new(px(0.), px(1.), rgba(0x0000000A).into()).blur_radius(px(1.)),
+                BoxShadow::new(px(0.), px(8.), rgba(0x00000014).into()).blur_radius(px(28.)),
+            ]
+        };
         let title = if self.selected.as_deref() == Some("__all__") {
             self.text("全部项目", "All projects").to_string()
         } else {
@@ -7354,11 +7382,14 @@ impl Render for Creditia {
             .to_string();
         let mut tools = div()
             .flex()
+            .flex_shrink_0()
             .items_center()
-            .gap_1()
-            .p_1()
+            .h(px(36.))
+            .gap(px(2.))
+            .p(px(2.))
             .rounded_full()
             .bg(glass)
+            .shadow(glass_shadow.clone())
             .border_1()
             .border_color(border);
         let group = self.group();
@@ -7382,13 +7413,27 @@ impl Render for Creditia {
             tools = tools.child(
                 Button::new(element)
                     .ghost()
-                    .label(label)
+                    .accessibility_label(label)
                     .h(px(30.))
+                    .px(px(11.))
                     .rounded_full()
-                    .text_size(px(12.))
-                    .when(group == id, |b| b.bg(cx.theme().muted))
+                    .text_color(muted)
+                    .when(group == id, |b| b.bg(selected).text_color(fg))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .font_weight(if group == id {
+                                FontWeight::MEDIUM
+                            } else {
+                                FontWeight::NORMAL
+                            })
+                            .child(label),
+                    )
                     .on_click(cx.listener(move |view, _, _, cx| view.set_group(id, cx))),
             );
+        }
+        if self.has_models != Some(false) {
+            tools = tools.child(div().w(px(1.)).h(px(16.)).mx(px(4.)).bg(border));
         }
         tools = tools
             .child(
@@ -7396,12 +7441,14 @@ impl Render for Creditia {
                     .ghost()
                     .w(px(30.))
                     .h(px(30.))
+                    .p_0()
                     .rounded_full()
+                    .text_color(muted)
                     .icon(crate::ui_icons::icon("wall"))
                     .accessibility_label(self.text("展墙", "Wall"))
                     .tooltip(self.text("展墙", "Wall"))
                     .when(self.preferences.view == "wall" && !self.focused, |b| {
-                        b.bg(cx.theme().muted)
+                        b.bg(selected).text_color(fg)
                     })
                     .on_click(cx.listener(|view, _, _, cx| view.set_view("wall", cx))),
             )
@@ -7410,21 +7457,50 @@ impl Render for Creditia {
                     .ghost()
                     .w(px(30.))
                     .h(px(30.))
+                    .p_0()
                     .rounded_full()
+                    .text_color(muted)
                     .icon(crate::ui_icons::icon("roam"))
                     .accessibility_label(self.text("漫游", "Roam"))
                     .tooltip(self.text("漫游", "Roam"))
                     .when(self.preferences.view == "roam" && !self.focused, |b| {
-                        b.bg(cx.theme().muted)
+                        b.bg(selected).text_color(fg)
                     })
                     .on_click(cx.listener(|view, _, _, cx| view.set_view("roam", cx))),
+            )
+            .child(div().w(px(1.)).h(px(16.)).mx(px(4.)).bg(border))
+            .child(
+                Button::new("toolbar-language")
+                    .ghost()
+                    .w(px(30.))
+                    .h(px(30.))
+                    .p_0()
+                    .rounded_full()
+                    .text_color(muted)
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight::NORMAL)
+                            .child(if self.preferences.language == Language::En {
+                                "EN"
+                            } else {
+                                "中"
+                            }),
+                    )
+                    .accessibility_label(self.text("切换到英文", "Switch to Chinese"))
+                    .tooltip(self.text("切换到英文", "Switch to Chinese"))
+                    .on_click(cx.listener(|view, _, window, cx| {
+                        view.toggle_language(&ToggleLanguage, window, cx)
+                    })),
             )
             .child(
                 Button::new("settings")
                     .ghost()
                     .w(px(30.))
                     .h(px(30.))
+                    .p_0()
                     .rounded_full()
+                    .text_color(muted)
                     .icon(crate::ui_icons::icon("gear"))
                     .accessibility_label(self.text("设置", "Settings"))
                     .tooltip(self.text("设置", "Settings"))
@@ -7490,9 +7566,22 @@ impl Render for Creditia {
             .child(
                 Button::new("switch-project")
                     .ghost()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_size(px(15.))
-                    .label(title)
+                    .min_w_0()
+                    .flex_shrink_1()
+                    .h(px(32.))
+                    .px_0()
+                    .accessibility_label(title.clone())
+                    .child(
+                        div()
+                            .flex()
+                            .min_w_0()
+                            .items_center()
+                            .gap(px(8.))
+                            .text_size(px(15.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(div().max_w(px(340.)).truncate().child(title))
+                            .child(crate::ui_icons::icon("updown").text_color(muted)),
+                    )
                     .on_click(cx.listener(|view, _, window, cx| {
                         view.open_panel(Panel::Projects, window, cx)
                     })),
@@ -7500,6 +7589,10 @@ impl Render for Creditia {
             .child(
                 Button::new("project-settings")
                     .ghost()
+                    .w(px(30.))
+                    .h(px(30.))
+                    .p_0()
+                    .text_color(muted)
                     .icon(crate::ui_icons::icon("more"))
                     .accessibility_label(self.text("项目设置", "Project settings"))
                     .tooltip(self.text("项目设置", "Project settings"))
@@ -7567,24 +7660,31 @@ impl Render for Creditia {
             .absolute()
             .left_0()
             .right_0()
-            .bottom(px(status_height + dock_height + 16.))
+            .bottom(px(status_height + dock_height + 18.))
             .h(px(40.))
             .flex()
             .items_center()
             .gap_1()
-            .px_4()
+            .px(px(18.))
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .p_1()
+                    .h(px(40.))
+                    .p(px(3.))
                     .rounded_full()
                     .bg(glass)
+                    .shadow(glass_shadow)
                     .border_1()
                     .border_color(border)
                     .child(
                         Button::new("style-previous")
                             .ghost()
+                            .w(px(30.))
+                            .h(px(32.))
+                            .p_0()
+                            .rounded_full()
+                            .text_color(muted)
                             .icon(crate::ui_icons::icon("prev"))
                             .accessibility_label(self.text("上一种风格", "Previous style"))
                             .tooltip(self.text("上一种风格", "Previous style"))
@@ -7593,10 +7693,32 @@ impl Render for Creditia {
                     .child(
                         Button::new("styles")
                             .ghost()
-                            .when_some(style_dot, |button, dot| {
-                                button.child(img(dot).w(px(18.)).h(px(18.)))
-                            })
-                            .label(style_name)
+                            .h(px(32.))
+                            .pl(px(6.))
+                            .pr(px(12.))
+                            .rounded_full()
+                            .accessibility_label(style_name.clone())
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(9.))
+                                    .text_size(px(13.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .when_some(style_dot, |row, dot| {
+                                        row.child(
+                                            div()
+                                                .w(px(22.))
+                                                .h(px(22.))
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .child(img(dot).w(px(18.)).h(px(18.))),
+                                        )
+                                    })
+                                    .child(style_name)
+                                    .child(crate::ui_icons::icon("updown").text_color(muted)),
+                            )
                             .on_click(cx.listener(|view, _, window, cx| {
                                 view.open_panel(Panel::Styles, window, cx)
                             })),
@@ -7604,6 +7726,11 @@ impl Render for Creditia {
                     .child(
                         Button::new("style-next")
                             .ghost()
+                            .w(px(30.))
+                            .h(px(32.))
+                            .p_0()
+                            .rounded_full()
+                            .text_color(muted)
                             .icon(crate::ui_icons::icon("next"))
                             .accessibility_label(self.text("下一种风格", "Next style"))
                             .tooltip(self.text("下一种风格", "Next style"))
@@ -8276,17 +8403,16 @@ fn open_creditia_window(
         WindowOptions {
             titlebar: Some(TitlebarOptions {
                 title: Some("creditia".into()),
-                ..Default::default()
+                // Match the original macOS overlay: controls share the 60 px toolbar.
+                appears_transparent: cfg!(target_os = "macos"),
+                traffic_light_position: cfg!(target_os = "macos").then(|| point(px(22.), px(23.))),
             }),
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
                 None,
-                size(
-                    px(if acceptance { 1360. } else { 1380. }),
-                    px(if acceptance { 880. } else { 900. }),
-                ),
+                size(px(1360.), px(880.)),
                 cx,
             ))),
-            window_min_size: Some(size(px(900.), px(620.))),
+            window_min_size: Some(size(px(760.), px(560.))),
             ..Default::default()
         },
         cx,
