@@ -125,7 +125,7 @@ jobs:
       - uses: actions/deploy-pages@v4
 ```
 
-**App**　一面展墙：顶部切换项目，左下角的圆点切换风格，所有作品直接摆出来。悬停作品换版式、选格式导出，作品里的每一块都能悬停看细节；把作品拖到右下角的导出坞也能导出。[在官网上直接试](https://wroughtmind.github.io/creditia/#use)。
+**App**　一面展墙：顶部切换项目，左下角的圆点切换风格，所有作品直接摆出来。桌面中，鼠标悬停作品会播放一次动画，移开恢复静态；点击放大也会自动播放。悬停作品还能换版式、选格式导出，作品里的每一块都能悬停看细节；把作品拖到右下角的导出坞也能导出。[在官网上试作品展示](https://wroughtmind.github.io/creditia/#use)。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="site/app-dark.webp">

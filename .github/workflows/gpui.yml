@@ -63,11 +63,18 @@ jobs:
           CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
           CREDITIA_VISUAL_OUTPUT: ${{ github.workspace }}/evidence/native
         run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked
+      - name: Exercise artwork hover and focused autoplay input
+        env:
+          CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
+          CREDITIA_RUNTIME_OUTPUT: ${{ github.workspace }}/evidence/runtime-autoplay
+        run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked -- autoplay
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: gpui-daily-views
-          path: evidence/native
+          path: |
+            evidence/native
+            evidence/runtime-autoplay
           retention-days: 7
 
   mac-icons:

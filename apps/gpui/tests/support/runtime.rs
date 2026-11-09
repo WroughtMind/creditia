@@ -621,6 +621,154 @@ fn spatial(h: &mut Harness) {
     );
 }
 
+fn hover_autoplay(h: &mut Harness) {
+    h.update(|window, _, _| window.activate_window());
+    h.settle();
+    h.update(|window, cx, _| {
+        window.hover(("artwork", 0usize), cx);
+        window.render_frame(cx);
+    });
+    assert_eq!(
+        h.state()["animation_busy"],
+        false,
+        "reduced motion keeps wall artwork static"
+    );
+    h.click("settings");
+    h.click("reduced-motion");
+    h.click("panel-close");
+    h.update(|window, cx, _| window.hover("settings", cx));
+    h.settle();
+    h.ready();
+    let before = h.state();
+    assert!(before["panel"].is_null());
+    let notifications = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = notifications.clone();
+    let _subscription = h.update(|_, cx, view| {
+        cx.observe(view, move |_, _| {
+            observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        })
+    });
+    let corner = h.update(|window, cx, _| {
+        let bounds = window.find(("artwork", 0usize)).bounds();
+        let x: f32 = bounds.origin.x.into();
+        let y: f32 = bounds.origin.y.into();
+        window.dispatch_event(
+            MouseMoveEvent {
+                position: point(px(x + 1.), px(y - 10.)),
+                pressed_button: None,
+                modifiers: window.modifiers(),
+            }
+            .to_platform_input(),
+            cx,
+        );
+        window.render_frame(cx);
+        (x + 1., y + 1.)
+    });
+    assert_eq!(
+        h.state()["animation_busy"],
+        false,
+        "captions do not trigger artwork playback"
+    );
+    notifications.store(0, std::sync::atomic::Ordering::SeqCst);
+    h.update(|window, cx, _| {
+        window.dispatch_event(
+            MouseMoveEvent {
+                position: point(px(corner.0), px(corner.1)),
+                pressed_button: None,
+                modifiers: window.modifiers(),
+            }
+            .to_platform_input(),
+            cx,
+        );
+    });
+    assert!(
+        notifications.load(std::sync::atomic::Ordering::SeqCst) > 0,
+        "entering blank artwork from its caption must request a redraw without a test-forced frame"
+    );
+    h.update(|window, cx, _| window.render_frame(cx));
+    let hovering = h.state();
+    assert_eq!(
+        hovering["animation_busy"], true,
+        "hovering a decoded artwork must schedule its animation"
+    );
+    for key in ["focused", "selected_tile", "zoom", "pan_x", "pan_y"] {
+        assert_eq!(hovering[key], before[key], "hover playback changed {key}");
+    }
+    // Cancel through real pointer input before the synchronous TestScheduler
+    // polls the long-lived producer. Actual frames have their own visual check.
+    h.update(|window, cx, _| {
+        window.hover("settings", cx);
+        window.render_frame(cx);
+    });
+    let left = h.state();
+    assert_eq!(
+        left["animation_busy"], false,
+        "leaving artwork cancels preparation"
+    );
+    assert!(left["animation"].is_null());
+    h.update(|window, cx, _| {
+        window.hover(("artwork", 0usize), cx);
+        window.render_frame(cx);
+    });
+    assert_eq!(
+        h.state()["animation_busy"],
+        true,
+        "re-entering the same artwork starts a fresh playback"
+    );
+    h.shortcut(",");
+    h.update(|window, cx, _| window.render_frame(cx));
+    assert_eq!(
+        h.state()["animation_busy"],
+        false,
+        "opening a panel cancels hover playback"
+    );
+    // Pointer motion behind a modal still replaces the last artwork position.
+    h.update(|window, cx, _| window.hover("settings", cx));
+    h.press("escape");
+    h.settle();
+    assert!(
+        h.state()["playback_target"].is_null(),
+        "closing a panel cannot reuse stale artwork coordinates"
+    );
+    h.click("roam");
+    h.ready();
+    h.update(|window, cx, _| window.hover(("artwork", 0usize), cx));
+    let roam_before = h.state();
+    assert_eq!(roam_before["animation_busy"], true);
+    h.update(|window, cx, _| {
+        window.scroll(
+            "creditia-root",
+            gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1000.))),
+            cx,
+        )
+    });
+    let roam_after = h.state();
+    assert_ne!(
+        roam_before["playback_target"]["identity"], roam_after["hovered_id"],
+        "the fixed fixture scroll must reach a different artwork"
+    );
+    assert!(
+        roam_after["playback_target"].is_null()
+            || roam_after["playback_target"]["identity"] == roam_after["hovered_id"],
+        "a reused roam index must never keep the old artwork's player"
+    );
+    h.update(|window, cx, _| window.hover("settings", cx));
+    h.click("wall");
+    h.ready();
+    h.click("settings");
+    h.click("reduced-motion");
+    h.click("panel-close");
+    h.settle();
+    h.update(|window, cx, _| {
+        window.hover(("artwork", 0usize), cx);
+        window.render_frame(cx);
+    });
+    let reduced = h.state();
+    assert_eq!(reduced["animation_busy"], false);
+    assert!(reduced["animation"].is_null());
+    h.check("wall-hover-schedules-without-navigation-and-cancels-on-leave", json!({"before":before,"hovering":hovering,"left":left,"reduced":reduced,"roam_before":roam_before,"roam_after":roam_after,"player_frames_executed":false}));
+}
+
 fn focus_autoplay(h: &mut Harness) {
     h.focus("tier");
     let reduced = h.state();
@@ -632,6 +780,7 @@ fn focus_autoplay(h: &mut Harness) {
     h.click("reduced-motion");
     h.click("panel-close");
     assert_eq!(h.state()["reduced_motion"], false);
+    h.update(|window, cx, _| window.hover("settings", cx));
     // This activates only TestPlatform's hidden window, never an OS window.
     h.update(|window, _, _| window.activate_window());
     h.settle();
@@ -639,7 +788,7 @@ fn focus_autoplay(h: &mut Harness) {
     assert_eq!(
         h.state()["animation_busy"],
         false,
-        "the exhibition wall never autoplays"
+        "wall playback stays idle while the pointer is outside artwork"
     );
     let index = h.style("minimal-light")["pieces"]
         .as_array()
@@ -699,6 +848,7 @@ fn focus_autoplay(h: &mut Harness) {
     let restyled = h.autoplay_scheduled("focused style replacement");
     assert_eq!(restyled["style"], "ink");
     h.press("escape");
+    h.update(|window, cx, _| window.hover("settings", cx));
     h.settle();
     let closed = h.state();
     assert_eq!(closed["focused"], false);
@@ -729,7 +879,7 @@ pub fn run() {
     let source: Value =
         serde_json::from_slice(&fs::read(input.join("fixture-manifest.json")).unwrap()).unwrap();
     let mut cases = Vec::new();
-    let scenarios: [(&str, fn(&mut Harness)); 7] = [
+    let scenarios: [(&str, fn(&mut Harness)); 8] = [
         ("runtime-layouts", layouts),
         ("runtime-style-trial", trial_restore),
         ("runtime-style-apply", apply_style),
@@ -737,6 +887,7 @@ pub fn run() {
         ("runtime-preferences", preferences),
         ("runtime-spatial", spatial),
         ("runtime-focus-autoplay", focus_autoplay),
+        ("runtime-hover-autoplay", hover_autoplay),
     ];
     let filter = std::env::args()
         .skip(1)
@@ -774,7 +925,7 @@ pub fn run() {
         });
     }
     let complete = !cases.is_empty() && cases.iter().all(|case| case["status"] == "passed");
-    let manifest = json!({"schema_version":1,"kind":"native-ui","provenance":{"candidate_sha":std::env::var("GITHUB_SHA").ok(),"environment":{"platform":std::env::consts::OS,"arch":std::env::consts::ARCH,"renderer":if cfg!(target_os="macos"){"Metal"}else{"WGPU"}},"fixture":source["fixture"],"profile":"real-shared-renderer-inputs","filter":filter},"method":"Production benchmark constructor with raw archive only; native pointer/keyboard actions regenerate real shared-renderer previews. No precomputed artwork is supplied. Focus autoplay checks scheduling, cancellation, reduced motion and viewport preservation before advancing the blocking player producer. Animation frames, file persistence and project services are outside this suite.","cases":cases,"complete":complete});
+    let manifest = json!({"schema_version":1,"kind":"native-ui","provenance":{"candidate_sha":std::env::var("GITHUB_SHA").ok(),"environment":{"platform":std::env::consts::OS,"arch":std::env::consts::ARCH,"renderer":if cfg!(target_os="macos"){"Metal"}else{"WGPU"}},"fixture":source["fixture"],"profile":"real-shared-renderer-inputs","filter":filter},"method":"Production benchmark constructor with raw archive only; native pointer/keyboard actions regenerate real shared-renderer previews. No precomputed artwork is supplied. Focus and hover autoplay check scheduling, cancellation, reduced motion, viewport preservation, pointer invalidation and roam ownership before advancing the blocking player producer. Animation frames, file persistence and project services are outside this suite.","cases":cases,"complete":complete});
     fs::write(
         output.join("manifest.json"),
         serde_json::to_vec_pretty(&manifest).unwrap(),

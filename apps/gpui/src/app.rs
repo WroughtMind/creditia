@@ -9,7 +9,7 @@ use creditia_desktop_service as service;
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::{ActiveTheme, Disableable, FocusTrapElement, Theme, ThemeMode};
+use gpui_kit::component::{ActiveTheme, Colorize, Disableable, FocusTrapElement, Theme, ThemeMode};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use serde::Deserialize;
@@ -120,6 +120,22 @@ impl PlaybackFrame {
         for (_, image) in self.tiles {
             crate::image_assets::release(image, cx);
         }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PlaybackKind {
+    Focused,
+    Hover,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PlaybackTarget {
+    kind: PlaybackKind,
+    index: usize,
+    identity: String,
+}
+impl PlaybackTarget {
+    fn index(&self) -> usize {
+        self.index
     }
 }
 struct Playback {
@@ -389,6 +405,7 @@ pub struct Creditia {
     focused: bool,
     hover: Option<Hit>,
     hovered_tile: Option<usize>,
+    pointer_inside: bool,
     pointer: (f32, f32),
     drag: Option<DragState>,
     preview_generation: u64,
@@ -396,6 +413,7 @@ pub struct Creditia {
     preview_cancellation: Option<renderer::Cancellation>,
     preview_busy: bool,
     playback: Option<Playback>,
+    playback_target: Option<PlaybackTarget>,
     focus_autoplay_pending: bool,
     animation_control: Option<crate::animation::PlaybackControl>,
     animation_worker: Option<Task<()>>,
@@ -628,6 +646,7 @@ impl Creditia {
             focused: false,
             hover: None,
             hovered_tile: None,
+            pointer_inside: false,
             pointer: (0., 0.),
             drag: None,
             preview_generation: 0,
@@ -635,6 +654,7 @@ impl Creditia {
             preview_cancellation: None,
             preview_busy: false,
             playback: None,
+            playback_target: None,
             focus_autoplay_pending: false,
             animation_control: None,
             animation_worker: None,
@@ -1163,7 +1183,15 @@ impl Creditia {
             self.roam_motion.stop();
             self.hover = None;
             self.hovered_tile = None;
+            self.pointer_inside = false;
             self.drag = None;
+            if self
+                .playback_target
+                .as_ref()
+                .is_some_and(|target| target.kind == PlaybackKind::Hover)
+            {
+                self.stop_playback(cx);
+            }
             if let Some(control) = &self.animation_control {
                 control.set_visible(false);
                 control.pause();
@@ -1334,6 +1362,7 @@ impl Creditia {
     }
     fn stop_playback(&mut self, cx: &mut Context<Self>) {
         self.focus_autoplay_pending = false;
+        self.playback_target = None;
         if let Some(control) = self.animation_control.take() {
             control.cancel();
         }
@@ -3127,13 +3156,118 @@ impl Creditia {
             return;
         }
         self.focus_autoplay_pending = false;
-        self.start_playback(false, true, cx);
+        if let Some(index) = self.selected_tile {
+            if let Some(target) = self.target_for_artwork(PlaybackKind::Focused, index) {
+                self.start_playback(target, false, true, cx);
+            }
+        }
     }
     fn play(&mut self, restart: bool, cx: &mut Context<Self>) {
         self.focus_autoplay_pending = false;
-        self.start_playback(restart, false, cx);
+        if let Some(index) = self.selected_tile {
+            if let Some(target) = self.target_for_artwork(PlaybackKind::Focused, index) {
+                self.start_playback(target, restart, false, cx);
+            }
+        }
     }
-    fn start_playback(&mut self, restart: bool, once: bool, cx: &mut Context<Self>) {
+    fn target_for_artwork(&self, kind: PlaybackKind, index: usize) -> Option<PlaybackTarget> {
+        self.tiles.get(index).map(|tile| PlaybackTarget {
+            kind,
+            index,
+            identity: tile.identity.clone(),
+        })
+    }
+    fn prepare_hover_autoplay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let target = if !self.focused
+            && !self.reduced_motion
+            && self.pointer_inside
+            && self.panel.is_none()
+            && self.drag.is_none()
+            && !self.export_open
+            && self.focus_transition.is_none()
+            && !self.roam_motion.is_active()
+            && self.window_visible
+            && window.is_window_active()
+            && self
+                .artwork_viewport()
+                .contains(self.pointer.0, self.pointer.1)
+        {
+            self.artwork_at(self.pointer)
+                .and_then(|index| self.target_for_artwork(PlaybackKind::Hover, index))
+        } else {
+            None
+        };
+        if self
+            .playback_target
+            .as_ref()
+            .is_some_and(|target| target.kind == PlaybackKind::Hover)
+            && self.playback_target != target
+        {
+            self.stop_playback(cx);
+        }
+        let Some(target) = target else {
+            return;
+        };
+        if self.playback_target.is_some() || self.loading || self.preview_busy || self.raw.is_none()
+        {
+            return;
+        }
+        let tile = &self.tiles[target.index()];
+        if tile.loading
+            || tile.error.is_some()
+            || tile.art.is_none()
+            || tile.pending_image.is_some()
+            || self
+                .piece(&tile.spec.piece)
+                .is_none_or(|piece| piece["animated"] != true)
+            || !tile
+                .image
+                .as_ref()
+                .is_some_and(|image| crate::image_assets::track(image, window, cx).is_some())
+        {
+            return;
+        }
+        self.start_playback(target, false, true, cx);
+    }
+    fn playback_frame(&self, index: usize) -> Option<&PlaybackFrame> {
+        self.playback_target
+            .as_ref()
+            .filter(|target| {
+                target.index() == index
+                    && self
+                        .tiles
+                        .get(index)
+                        .is_some_and(|tile| tile.identity == target.identity)
+            })
+            .and_then(|_| self.playback.as_ref())
+            .and_then(Playback::displayed)
+    }
+    fn configure_playback_view(
+        &self,
+        control: &crate::animation::PlaybackControl,
+        target: &PlaybackTarget,
+    ) {
+        match target.kind {
+            PlaybackKind::Focused => {
+                control.set_viewport(self.viewport, self.viewport_size, self.display_scale)
+            }
+            PlaybackKind::Hover => control.set_artwork_rect(
+                self.screen_rect(target.index()),
+                self.viewport_size,
+                self.display_scale,
+            ),
+        }
+    }
+    fn start_playback(
+        &mut self,
+        target: PlaybackTarget,
+        restart: bool,
+        once: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.playback_target.as_ref() != Some(&target) {
+            self.stop_playback(cx);
+        }
         if self.animation_busy && self.playback.is_none() {
             return;
         }
@@ -3174,7 +3308,7 @@ impl Creditia {
             cx.notify();
             return;
         }
-        let Some(tile) = self.current_tile() else {
+        let Some(tile) = self.tiles.get(target.index()) else {
             return;
         };
         if self
@@ -3186,26 +3320,27 @@ impl Creditia {
         let Some(mut request) = self.artwork_request(&tile.spec, "render") else {
             return;
         };
-        let selected = self.selected_tile;
         let generation = self.preview_generation;
         request["reducedMotion"] = json!(self.reduced_motion);
         let Some(raw) = self.raw.clone() else {
             return;
         };
-        if !self.focused {
+        if target.kind == PlaybackKind::Focused && !self.focused {
             self.saved_viewport = Some(self.viewport);
             self.viewport.reset();
+            self.focused = true;
         }
-        self.focused = true;
+        self.playback_target = Some(target.clone());
         self.animation_busy = true;
         let control = crate::animation::PlaybackControl::new();
-        control.set_viewport(self.viewport, self.viewport_size, self.display_scale);
+        self.configure_playback_view(&control, &target);
         self.animation_cancellation = Some(control.cancellation());
         self.animation_control = Some(control.clone());
         let width = texture_width(self.viewport_size.0, self.display_scale);
         let archive = self.render_archive.clone();
         let projects = self.all_archives.clone();
         let (tx, rx) = async_channel::bounded::<Result<crate::animation::Event, String>>(3);
+        let active_control = control.clone();
         self.animation_worker = Some(cx.background_spawn(async move {
             let result = (|| {
                 let archive = match archive {
@@ -3233,7 +3368,9 @@ impl Creditia {
             while let Ok(event) = rx.recv().await {
                 if this
                     .update(cx, |view, cx| {
-                        if view.preview_generation != generation || view.selected_tile != selected {
+                        if active_control.cancelled() || view.preview_generation != generation
+                            || view.playback_target.as_ref() != Some(&target)
+                            || view.tiles.get(target.index()).is_none_or(|tile| tile.identity != target.identity) {
                             return;
                         }
                         match event {
@@ -4687,15 +4824,33 @@ impl Creditia {
         cx.notify();
         cx.stop_propagation();
     }
-    fn pointer_move(&mut self, event: &MouseMoveEvent, cx: &mut Context<Self>) {
-        if self.panel.is_some() {
-            self.hover = None;
-            return;
+    fn artwork_at(&self, pointer: (f32, f32)) -> Option<usize> {
+        if !self.artwork_viewport().contains(pointer.0, pointer.1) {
+            return None;
         }
+        self.tiles.iter().enumerate().find_map(|(index, _)| {
+            ((!self.focused || self.selected_tile == Some(index))
+                && self.screen_rect(index).contains(pointer.0, pointer.1))
+            .then_some(index)
+        })
+    }
+    fn pointer_move(&mut self, event: &MouseMoveEvent, cx: &mut Context<Self>) {
+        let previous = self
+            .pointer_inside
+            .then(|| self.artwork_at(self.pointer))
+            .flatten();
+        self.pointer_inside = true;
         let x: f32 = event.position.x.into();
         let y: f32 = event.position.y.into();
         let local = (x, y - 60.);
         self.pointer = local;
+        if self.panel.is_some() {
+            self.hover = None;
+            return;
+        }
+        if previous != self.artwork_at(local) {
+            cx.notify();
+        }
         if let Some(drag) = &mut self.drag {
             if event.pressed_button == Some(MouseButton::Left) {
                 let dx = local.0 - drag.last.0;
@@ -4780,16 +4935,19 @@ impl Creditia {
             if !rect.contains(local.0, local.1) {
                 continue;
             }
-            let art = if self.focused {
-                self.playback
-                    .as_ref()
-                    .and_then(Playback::displayed)
-                    .map(|f| f.art.as_ref())
-                    .or(tile.art.as_deref())
-            } else {
-                tile.art.as_deref()
-            };
+            let frame = self.playback_frame(index);
+            let art = frame
+                .map(|frame| frame.art.as_ref())
+                .or(tile.art.as_deref());
             if let Some(art) = art {
+                let rect = if !self.focused && frame.is_some() {
+                    rect.fit_preview(art.w, art.h, self.viewport_size, self.display_scale)
+                } else {
+                    rect
+                };
+                if !rect.contains(local.0, local.1) {
+                    break;
+                }
                 let ax = (local.0 - rect.x) * art.w / rect.w;
                 let ay = (local.1 - rect.y) * art.h / rect.h;
                 found = art
@@ -4952,10 +5110,7 @@ impl Creditia {
             })
             .unwrap_or(&tile.spec.piece)
             .to_string();
-        let animation = self
-            .focused
-            .then(|| self.playback.as_ref().and_then(Playback::displayed))
-            .flatten();
+        let animation = self.playback_frame(index);
         let image = tile.image.clone();
         let mut picture = div()
             .id(("artwork", index))
@@ -4993,6 +5148,25 @@ impl Creditia {
                 }),
             );
         if let Some(frame) = animation {
+            let frame_rect = if self.focused {
+                r
+            } else {
+                r.fit_preview(
+                    frame.art.w,
+                    frame.art.h,
+                    self.viewport_size,
+                    self.display_scale,
+                )
+            };
+            if !self.focused && (frame_rect.w < r.w || frame_rect.h < r.h) {
+                if let Some(bg) = tile
+                    .art
+                    .as_ref()
+                    .and_then(|art| Hsla::parse_hex(&art.bg).ok())
+                {
+                    picture = picture.bg(bg);
+                }
+            }
             for (part, (region, image)) in frame.tiles.iter().enumerate() {
                 let region = region.unwrap_or(Rect {
                     x: 0.,
@@ -5000,7 +5174,7 @@ impl Creditia {
                     w: frame.art.w,
                     h: frame.art.h,
                 });
-                let exact = frame.pixels == texture_width(r.w, self.display_scale)
+                let exact = frame.pixels == texture_width(frame_rect.w, self.display_scale)
                     && self
                         .animation_control
                         .as_ref()
@@ -5018,18 +5192,18 @@ impl Creditia {
                     )
                 } else {
                     (
-                        region.x / frame.art.w * r.w,
-                        region.y / frame.art.h * r.h,
-                        region.w / frame.art.w * r.w,
-                        region.h / frame.art.h * r.h,
+                        region.x / frame.art.w * frame_rect.w,
+                        region.y / frame.art.h * frame_rect.h,
+                        region.w / frame.art.w * frame_rect.w,
+                        region.h / frame.art.h * frame_rect.h,
                     )
                 };
                 picture = picture.child(
                     img(image.clone())
                         .id(("animation-region", part))
                         .absolute()
-                        .left(px(left))
-                        .top(px(top))
+                        .left(px(left + frame_rect.x - r.x))
+                        .top(px(top + frame_rect.y - r.y))
                         .w(px(width))
                         .h(px(height))
                         .object_fit(ObjectFit::Fill),
@@ -7081,6 +7255,15 @@ impl Creditia {
         });
         state["focus_autoplay_pending"] = json!(self.focus_autoplay_pending);
         state["animation_busy"] = json!(self.animation_busy);
+        state["hovered_tile"] = json!(self.hovered_tile);
+        state["hovered_id"] = json!(
+            self.pointer_inside
+                .then(|| self.artwork_at(self.pointer))
+                .flatten()
+                .and_then(|index| self.tiles.get(index))
+                .map(|tile| &tile.identity)
+        );
+        state["playback_target"] = self.playback_target.as_ref().map(|target| json!({"kind":match target.kind { PlaybackKind::Focused => "focused", PlaybackKind::Hover => "hover" },"tile":target.index(),"identity":target.identity})).unwrap_or(Value::Null);
         if let Some(hit) = focused_art.and_then(|art| art.hits.first()) {
             state["first_hit"] = json!({"x":hit.x,"y":hit.y,"w":hit.w,"h":hit.h,"t":hit.t});
         }
@@ -7203,7 +7386,7 @@ impl Render for Creditia {
             || self.notice.is_some()
             || delayed_job
             || self.export_stage.is_some()
-            || self.animation_busy
+            || (self.animation_busy && self.focused)
             || !self.warnings.is_empty()
             || matches!(
                 self.pending_analysis["state"].as_str(),
@@ -7272,12 +7455,14 @@ impl Render for Creditia {
         }
         self.prepare_static_images(window, cx);
         self.prepare_focus_preview(window, cx);
+        self.prepare_hover_autoplay(window, cx);
         self.prepare_focus_autoplay(window, cx);
         let animation_visible = self
-            .selected_tile
+            .playback_target
+            .as_ref()
+            .map(PlaybackTarget::index)
             .is_some_and(|index| self.screen_rect(index).intersects(self.artwork_viewport()));
         if animation_visible
-            && self.focused
             && self.panel.is_none()
             && window.is_window_active()
             && self.window_visible
@@ -7287,15 +7472,15 @@ impl Render for Creditia {
         if let Some(control) = &self.animation_control {
             control.set_visible(
                 animation_visible
-                    && self.focused
                     && self.panel.is_none()
                     && window.is_window_active()
                     && self.window_visible,
             );
-            control.set_viewport(self.viewport, self.viewport_size, self.display_scale);
+            if let Some(target) = &self.playback_target {
+                self.configure_playback_view(control, target);
+            }
         }
         let can_animate = animation_visible
-            && self.focused
             && self.panel.is_none()
             && window.is_window_active()
             && self.window_visible
@@ -7308,28 +7493,13 @@ impl Render for Creditia {
                     control.resume();
                 }
             }
-            if play.playing
-                && !play.suspended
-                && play.started_once
-                && animation_visible
-                && self.focused
-                && self.panel.is_none()
-                && window.is_window_active()
-                && self.window_visible
-                && !self.reduced_motion
-            {
+            if play.playing && !play.suspended && play.started_once && can_animate {
                 if let Some(control) = &self.animation_control {
                     if control.epoch() == play.epoch && play.tick(control) {
                         window.request_animation_frame();
                     }
                 }
-            } else if play.playing
-                && (!animation_visible
-                    || !window.is_window_active()
-                    || !self.window_visible
-                    || self.panel.is_some()
-                    || self.reduced_motion)
-            {
+            } else if play.playing && !can_animate {
                 play.suspended = true;
                 if let Some(control) = &self.animation_control {
                     control.pause();
@@ -7865,7 +8035,7 @@ impl Render for Creditia {
                         view.refresh(cx);
                     })),
             );
-        } else if self.animation_busy {
+        } else if self.animation_busy && self.focused {
             status = status.child(self.text("正在准备动画…", "Preparing animation…"));
         } else if let Some(notice) = &self.notice {
             status = status.child(notice.clone());
@@ -7919,6 +8089,8 @@ impl Render for Creditia {
                 )
             });
         div()
+            .id("creditia-root")
+            .test_support()
             .relative()
             .size_full()
             .flex()
@@ -7986,6 +8158,21 @@ impl Render for Creditia {
                 }
             }))
             .on_mouse_move(cx.listener(|view, event, _, cx| view.pointer_move(event, cx)))
+            .on_hover(cx.listener(|view, inside: &bool, _, cx| {
+                if !*inside {
+                    view.pointer_inside = false;
+                    view.hovered_tile = None;
+                    view.hover = None;
+                    if view
+                        .playback_target
+                        .as_ref()
+                        .is_some_and(|target| target.kind == PlaybackKind::Hover)
+                    {
+                        view.stop_playback(cx);
+                    }
+                    cx.notify();
+                }
+            }))
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|view, event, window, cx| view.pointer_up(event, window, cx)),

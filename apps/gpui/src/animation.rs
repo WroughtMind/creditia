@@ -15,6 +15,7 @@ pub const DECODED_RESIDENT_BUDGET: u64 = 64 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct FrameView {
+    bounds: Option<Rect>,
     viewport: Viewport,
     size: (f32, f32),
     dpi: f32,
@@ -87,10 +88,35 @@ impl PlaybackControl {
             return;
         }
         let view = FrameView {
+            bounds: None,
             viewport,
             size,
             dpi,
         };
+        self.set_view(view);
+    }
+    /// Preview a single artwork in its existing wall/roam slot. The same
+    /// viewport crop and pixel budgets apply as in the focused player.
+    pub fn set_artwork_rect(&self, bounds: Rect, size: (f32, f32), dpi: f32) {
+        if ![bounds.x, bounds.y, bounds.w, bounds.h, size.0, size.1, dpi]
+            .iter()
+            .all(|value| value.is_finite())
+            || bounds.w <= 0.
+            || bounds.h <= 0.
+            || size.0 <= 0.
+            || size.1 <= 0.
+            || dpi <= 0.
+        {
+            return;
+        }
+        self.set_view(FrameView {
+            bounds: Some(bounds),
+            viewport: Viewport::default(),
+            size,
+            dpi,
+        });
+    }
+    fn set_view(&self, view: FrameView) {
         let mut position = self.0.position.lock().unwrap_or_else(|e| e.into_inner());
         if position.view == Some(view) {
             return;
@@ -130,6 +156,9 @@ impl PlaybackControl {
     }
     /// Always cancel through this control so a paused producer wakes as well.
     pub fn cancel(&self) {
+        // Use the waiters' mutex so cancellation cannot slip between their
+        // predicate check and Condvar::wait, losing the only wake-up.
+        let _position = self.0.position.lock().unwrap_or_else(|e| e.into_inner());
         self.0.cancellation.cancel();
         self.0.changed.notify_all();
     }
@@ -181,6 +210,21 @@ impl PlaybackControl {
         // before metadata arrived. Visibility and cancellation continue to gate
         // this work; only the first-frame pause restriction is bypassed.
         self.plan(self.epoch().wrapping_sub(1), 0, 0)
+    }
+    fn wait_for_view_change(&self, epoch: u64) -> Result<(), String> {
+        let mut position = self.0.position.lock().unwrap_or_else(|e| e.into_inner());
+        while position.epoch == epoch && !self.cancelled() {
+            position = self
+                .0
+                .changed
+                .wait(position)
+                .unwrap_or_else(|e| e.into_inner());
+        }
+        if self.cancelled() {
+            Err("Animation cancelled".into())
+        } else {
+            Ok(())
+        }
     }
     fn current(&self, epoch: u64) -> Result<bool, String> {
         if self.cancelled() {
@@ -343,7 +387,9 @@ fn run_internal(
         if !control.current(epoch)? {
             continue;
         }
-        let Some(frame) = raster_frame(&art, pixel_width, view, &control, epoch, &mut layers)? else {
+        let Some(frame) = raster_frame(&art, pixel_width, view, &control, epoch, &mut layers)?
+        else {
+            control.wait_for_view_change(epoch)?;
             continue;
         };
         if control.current(epoch)? {
@@ -435,7 +481,10 @@ fn frame_plan(
             max_resident: resident_limit(bytes),
         }));
     };
-    let rect = focused_rect(art.w, art.h, view.viewport, view.size);
+    let rect = view
+        .bounds
+        .map(|bounds| bounds.fit_preview(art.w, art.h, view.size, view.dpi))
+        .unwrap_or_else(|| focused_rect(art.w, art.h, view.viewport, view.size));
     if rect.w <= 0.
         || rect.h <= 0.
         || !rect.intersects(Rect {
@@ -545,8 +594,14 @@ fn raster_frame(
         if !control.current(epoch)? {
             return Ok(None);
         }
-        let raster = native_preview::rasterize_animation(&art.svg, tile.width, tile.height,
-            tile.region.map(|r| (r.x,r.y,r.w,r.h)), &control.cancellation(), layers)?;
+        let raster = native_preview::rasterize_animation(
+            &art.svg,
+            tile.width,
+            tile.height,
+            tile.region.map(|r| (r.x, r.y, r.w, r.h)),
+            &control.cancellation(),
+            layers,
+        )?;
         if raster.width as u64 * raster.height as u64 * 4 > DECODED_FRAME_BUDGET {
             return Err("Animation tile exceeded its decoded pixel budget".into());
         }
@@ -661,9 +716,160 @@ mod tests {
         }
     }
     #[test]
+    fn hover_frames_fit_the_stable_slot_and_crop_at_display_density() {
+        let art = artwork(1200., 630.);
+        let bounds = Rect {
+            x: -40.,
+            y: -80.,
+            w: 600.,
+            h: 900.,
+        };
+        let fitted = bounds.fit_preview(art.w, art.h, (800., 600.), 1.5);
+        assert_eq!(
+            fitted,
+            Rect {
+                x: -40.,
+                y: 212.5,
+                w: 600.,
+                h: 315.
+            }
+        );
+        let view = FrameView {
+            bounds: Some(bounds),
+            viewport: Viewport::default(),
+            size: (800., 600.),
+            dpi: 1.5,
+        };
+        let plan = frame_plan(&art, 1, Some(view)).unwrap().unwrap();
+        assert_eq!(plan.pixels, 900);
+        assert_eq!(plan.tiles.len(), 1);
+        assert_eq!(
+            plan.tiles[0].width, 840,
+            "offscreen thumbnail pixels are not rasterized"
+        );
+        assert_eq!(plan.tiles[0].height, 473);
+        assert!(plan.decoded_bytes as u64 <= DECODED_FRAME_BUDGET);
+        let scroll = artwork(1200., 1200.);
+        let fitted_scroll = bounds.fit_preview(scroll.w, scroll.h, (800., 600.), 1.5);
+        assert_eq!(
+            fitted_scroll.w, fitted_scroll.h,
+            "scroll viewport is not stretched to the long static slot"
+        );
+        assert_eq!(
+            bounds.h, 900.,
+            "animation fitting never changes the wall slot"
+        );
+    }
+    #[test]
+    fn pixel_rounded_slots_do_not_reposition_clipped_ordinary_artwork() {
+        let art = artwork(1200., 630.);
+        let bounds = Rect {
+            x: 100.,
+            y: -100.,
+            w: 360.5,
+            h: 189.5,
+        };
+        let fitted = bounds.fit_preview(art.w, art.h, (1000., 600.), 2.);
+        assert!(
+            fitted.y < 0.,
+            "hover cannot jump a partly scrolled card to the top of the viewport"
+        );
+        assert!((fitted.y - bounds.y).abs() < 0.5);
+        assert_eq!(fitted.w, bounds.w);
+    }
+    #[test]
+    fn partially_visible_long_rolls_keep_their_scroll_viewport_visible() {
+        let art = artwork(1080., 608.);
+        for y in [400., -700.] {
+            let bounds = Rect {
+                x: 0.,
+                y,
+                w: 360.,
+                h: 809.,
+            };
+            let size = (1000., 600.);
+            let visible = bounds.fit_preview(art.w, art.h, size, 2.);
+            assert!(visible.intersects(Rect {
+                x: 0.,
+                y: 0.,
+                w: size.0,
+                h: size.1
+            }));
+            let view = FrameView {
+                bounds: Some(bounds),
+                viewport: Viewport::default(),
+                size,
+                dpi: 2.,
+            };
+            let plan = frame_plan(&art, 1, Some(view))
+                .unwrap()
+                .expect("a visible long-roll slot must yield a visible animation frame");
+            assert_eq!(plan.pixels, 720);
+            assert!(plan.decoded_bytes > 0);
+        }
+    }
+    #[test]
+    fn invisible_frames_wait_for_geometry_change_and_cancellation_wakes_them() {
+        use std::{sync::mpsc, thread, time::Duration};
+        let control = PlaybackControl::new();
+        control.set_artwork_rect(
+            Rect {
+                x: 0.,
+                y: 2000.,
+                w: 360.,
+                h: 200.,
+            },
+            (1000., 600.),
+            2.,
+        );
+        let epoch = control.epoch();
+        let (tx, rx) = mpsc::channel();
+        let waiting = control.clone();
+        let worker = thread::spawn(move || tx.send(waiting.wait_for_view_change(epoch)).unwrap());
+        assert!(rx.recv_timeout(Duration::from_millis(20)).is_err());
+        control.set_artwork_rect(
+            Rect {
+                x: 0.,
+                y: 100.,
+                w: 360.,
+                h: 200.,
+            },
+            (1000., 600.),
+            2.,
+        );
+        assert!(rx.recv_timeout(Duration::from_secs(1)).unwrap().is_ok());
+        worker.join().unwrap();
+        let waiting = control.clone();
+        let epoch = control.epoch();
+        let worker = thread::spawn(move || waiting.wait_for_view_change(epoch));
+        control.cancel();
+        assert!(worker.join().unwrap().is_err());
+    }
+    #[test]
+    fn hover_geometry_only_invalidates_changed_viewports() {
+        let control = PlaybackControl::new();
+        let bounds = Rect {
+            x: 80.,
+            y: 90.,
+            w: 400.,
+            h: 200.,
+        };
+        control.set_artwork_rect(bounds, (1200., 800.), 2.);
+        let epoch = control.epoch();
+        control.set_artwork_rect(bounds, (1200., 800.), 2.);
+        assert_eq!(control.epoch(), epoch);
+        control.set_artwork_rect(Rect { y: 100., ..bounds }, (1200., 800.), 2.);
+        assert_ne!(control.epoch(), epoch);
+        let moved = control.epoch();
+        control.set_viewport(Viewport::default(), (1200., 800.), 2.);
+        assert_ne!(control.epoch(), moved);
+        assert!(control.view().unwrap().bounds.is_none());
+    }
+    #[test]
     fn hidpi_and_deep_zoom_preserve_density_by_tiling_only_the_visible_viewport() {
         let art = artwork(2000., 1000.);
         let view = FrameView {
+            bounds: None,
             viewport: Viewport {
                 zoom: 6.,
                 ..Viewport::default()
@@ -752,6 +958,7 @@ mod tests {
         for dpi in [1.25, 1.5, 1.75, 2.] {
             for zoom in [1., 1.2, 2.48832, 6.] {
                 let view = FrameView {
+                    bounds: None,
                     viewport: Viewport {
                         zoom,
                         ..Viewport::default()
@@ -779,6 +986,7 @@ mod tests {
             &artwork(2000., 1000.),
             1200,
             Some(FrameView {
+                bounds: None,
                 viewport: Viewport {
                     zoom: 10.,
                     ..Viewport::default()

@@ -125,7 +125,7 @@ jobs:
       - uses: actions/deploy-pages@v4
 ```
 
-**App** — one wall: switch projects at the top, styles with the dots at the bottom left, and every piece is laid out at once. Hover a piece to change its layout or export it, hover any part of it for details, or drag it onto the export dock. [Try it on the website](https://wroughtmind.github.io/creditia/#use).
+**App** — one wall: switch projects at the top, styles with the dots at the bottom left, and every piece is laid out at once. In the desktop app, hovering an artwork plays its animation once; moving away restores the static preview. Opening it also plays once. Hover a piece to change its layout or export it, hover any part of it for details, or drag it onto the export dock. [Try the artwork display on the website](https://wroughtmind.github.io/creditia/#use).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="site/app-dark-en.webp">

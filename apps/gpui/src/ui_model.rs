@@ -12,6 +12,36 @@ pub struct Rect {
     pub h: f32,
 }
 impl Rect {
+    /// Preserve the artwork's proportions inside a stable thumbnail slot.
+    pub fn fit_preview(self, width: f32, height: f32, viewport: (f32, f32), dpi: f32) -> Self {
+        let scale = (self.w / width.max(1.)).min(self.h / height.max(1.));
+        let w = width * scale;
+        let h = height * scale;
+        let mut fitted = Self {
+            x: self.x + (self.w - w) / 2.,
+            y: self.y + (self.h - h) / 2.,
+            w,
+            h,
+        };
+        // A scrolling frame is shorter than its static long-roll slot. Keep
+        // its letterboxed content in the visible part of that slot.
+        // Static slots are rounded to physical pixels; that rounding alone
+        // must not turn a clipped ordinary card into a repositioned letterbox.
+        let pixel = 1. / dpi.max(0.1);
+        if self.w - w > pixel {
+            let left = self.x.max(0.);
+            fitted.x = fitted
+                .x
+                .clamp(left, ((self.x + self.w).min(viewport.0) - w).max(left));
+        }
+        if self.h - h > pixel {
+            let top = self.y.max(0.);
+            fitted.y = fitted
+                .y
+                .clamp(top, ((self.y + self.h).min(viewport.1) - h).max(top));
+        }
+        fitted
+    }
     pub fn contains(self, x: f32, y: f32) -> bool {
         x >= self.x && y >= self.y && x < self.x + self.w && y < self.y + self.h
     }
