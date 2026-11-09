@@ -80,7 +80,7 @@ const classicPieces = uniq([...formEntries.map(m => m[1]), 'badge', ...bridged])
   const v2 = v2Pieces.find(p => p.id === id);
   return {
     id, name: pieceInfo[id]?.zh ?? v2?.name ?? /name: '([^']+)'/.exec(sourceEntry?.[2] ?? '')?.[1] ?? id,
-    variants, animated: id !== 'badge', desktop: classicBoard.some(x => x.id === id),
+    variants, animated: animatedClassic(id), desktop: classicBoard.some(x => x.id === id),
     source: sourceEntry ? at(formsRegistry, sourceEntry[0]) : at(bridge, id === 'badge' ? '  badge: BADGE_VARIANTS' : 'export const BRIDGED ='),
     variantSource: at('packages/render/src/classic/art.ts', 'export const variantsOf ='),
     needsContext: id === 'profile' ? 'projects and person' : id === 'blame' ? 'blame result' : null,
@@ -234,3 +234,4 @@ if(process.argv.includes('--write')) {
   }
   console.log(`Inventory verified: ${styles.length} styles; ${rows.length} style/piece/layout combinations. Visual and GPUI acceptance remain separate.`);
 }
+import { animatedClassic } from '../../packages/render/src/classic/art.ts';

@@ -1,6 +1,7 @@
 // The same clock describes native playback, GIF delays and standalone HTML.
 import type { Art } from './export.ts';
 import { motionProfile } from './motion-profiles.ts';
+import { motionDuration } from './motion.ts';
 
 export interface Timeline { durationMs: number; holdMs: number; fps: number; loop: boolean }
 export interface Animation { frames: Art[]; times: number[]; timeline: Timeline }
@@ -8,9 +9,8 @@ export const clamp = (t: number) => Math.max(0, Math.min(1, t));
 
 export function timelineFor(style: string, piece: string, art: Art, reducedMotion = false): Timeline {
   if (reducedMotion) return { durationMs: 0, holdMs: 0, fps: 20, loop: false };
-  const profile = motionProfile(style);
   const durationMs = art.motion?.kind === 'scroll' ? Math.round(art.motion.secs * 1000)
-    : piece === 'asterisk' ? profile.starMs : profile.durationMs;
+    : motionDuration(piece, art.selection?.variant, style);
   return { durationMs, holdMs: 1600, fps: 20, loop: true };
 }
 

@@ -1,5 +1,5 @@
 //! Real production input/preview integration: no pre-rendered fixture artwork.
-//! File persistence, analysis services and animation playback have separate gates.
+//! Focus autoplay scheduling uses production input; frame playback, persistence and analysis have separate gates.
 use creditia_gpui::app::Creditia;
 use gpui_kit::test::{TestQueryExt, TestWindowExt};
 use gpui_kit::{
@@ -119,6 +119,45 @@ impl Harness {
                 started.elapsed() < Duration::from_secs(90),
                 "real shared-renderer assets did not decode: {state}"
             );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+    fn autoplay_scheduled(&mut self, label: &str) -> Value {
+        let started = Instant::now();
+        loop {
+            let (ready, state) = self.update(|window, cx, view| {
+                window.render_frame(cx);
+                (
+                    view.update(cx, |view, cx| view.fixture_images_ready(window, cx)),
+                    view.read(cx).diagnostic_state(),
+                )
+            });
+            assert!(
+                state["error"].is_null(),
+                "{label}: renderer failed: {state}"
+            );
+            if state["animation_busy"] == true {
+                assert_eq!(state["focused"], true);
+                assert_eq!(state["focus_autoplay_pending"], false);
+                return state;
+            }
+            assert!(
+                !ready,
+                "{label}: a decoded focused artwork did not schedule autoplay: {state}"
+            );
+            assert!(
+                started.elapsed() < Duration::from_secs(90),
+                "{label}: {state}"
+            );
+            // Do not poll the long-lived blocking producer on TestScheduler's
+            // synchronous background executor. Assert scheduling, then cancel
+            // via real input before advancing tasks; Playback has its own tests.
+            self.cx
+                .background_executor()
+                .dispatcher()
+                .as_test()
+                .expect("headless test dispatcher")
+                .tick(false);
             std::thread::sleep(Duration::from_millis(10));
         }
     }
@@ -582,6 +621,100 @@ fn spatial(h: &mut Harness) {
     );
 }
 
+fn focus_autoplay(h: &mut Harness) {
+    h.focus("tier");
+    let reduced = h.state();
+    assert!(reduced["animation"].is_null());
+    assert_eq!(reduced["animation_busy"], false);
+    assert_eq!(reduced["focus_autoplay_pending"], false);
+    h.press("escape");
+    h.click("settings");
+    h.click("reduced-motion");
+    h.click("panel-close");
+    assert_eq!(h.state()["reduced_motion"], false);
+    // This activates only TestPlatform's hidden window, never an OS window.
+    h.update(|window, _, _| window.activate_window());
+    h.settle();
+    h.update(|window, _, _| assert!(window.is_window_active()));
+    assert_eq!(
+        h.state()["animation_busy"],
+        false,
+        "the exhibition wall never autoplays"
+    );
+    let index = h.style("minimal-light")["pieces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .position(|piece| piece["id"] == "tier")
+        .unwrap();
+    h.click("pieces");
+    h.click(("piece", index));
+    // Change the viewport while the entrance/static preview is still pending.
+    h.click("zoom-in");
+    h.update(|window, cx, _| window.drag(point(px(700.), px(450.)), point(px(745.), px(475.)), cx));
+    let positioned = h.state();
+    assert!(positioned["zoom"].as_f64().unwrap() > 1.);
+    let opened = h.autoplay_scheduled("opening a focused artwork");
+    for key in ["zoom", "pan_x", "pan_y"] {
+        assert_eq!(opened[key], positioned[key], "autoplay changed {key}");
+    }
+    h.capture("static-preview-before-autoplay-decoding", false);
+    // Cancel before TestScheduler polls the producer, just as a user can switch
+    // while the real worker is waiting for its first render response.
+    h.click("next-piece");
+    assert_eq!(
+        h.state()["animation_busy"],
+        false,
+        "switching cancels the old producer"
+    );
+    let switched = h.autoplay_scheduled("switching focused artwork");
+    assert_ne!(switched["selected_id"], opened["selected_id"]);
+    // The next wall item can have no variants (for example people). Return to
+    // the known tier selection before exercising rapid layout replacements.
+    h.click("pieces");
+    h.click(("piece", index));
+    h.autoplay_scheduled("returning to an artwork with layouts");
+    h.press("right");
+    h.press("right");
+    assert_eq!(
+        h.state()["animation_busy"],
+        false,
+        "layout replacement cancels the old producer"
+    );
+    let replaced = h.autoplay_scheduled("only the latest focused layout");
+    // Change style through the real modal without the helper's task polling.
+    let style = h.catalog["styles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .position(|style| style["id"] == "ink")
+        .unwrap();
+    h.click("styles");
+    h.click(("style", style));
+    assert_eq!(
+        h.state()["animation_busy"],
+        false,
+        "style replacement cancels the old producer"
+    );
+    let restyled = h.autoplay_scheduled("focused style replacement");
+    assert_eq!(restyled["style"], "ink");
+    h.press("escape");
+    h.settle();
+    let closed = h.state();
+    assert_eq!(closed["focused"], false);
+    assert_eq!(closed["focus_autoplay_pending"], false);
+    assert_eq!(closed["animation_busy"], false);
+    assert!(closed["animation"].is_null());
+    h.check(
+        "focused-autoplay-scheduling-cancellation-and-viewport",
+        json!({
+            "reduced_motion":reduced,"positioned":positioned,"opened":opened,
+            "switched":switched,"replaced":replaced,"restyled":restyled,"closed":closed,
+            "player_frames_executed":false,
+        }),
+    );
+}
+
 pub fn run() {
     let input = PathBuf::from(
         std::env::var("CREDITIA_VISUAL_FIXTURES").expect("canonical fixture directory"),
@@ -596,15 +729,25 @@ pub fn run() {
     let source: Value =
         serde_json::from_slice(&fs::read(input.join("fixture-manifest.json")).unwrap()).unwrap();
     let mut cases = Vec::new();
-    let scenarios: [(&str, fn(&mut Harness)); 6] = [
+    let scenarios: [(&str, fn(&mut Harness)); 7] = [
         ("runtime-layouts", layouts),
         ("runtime-style-trial", trial_restore),
         ("runtime-style-apply", apply_style),
         ("runtime-groups", groups),
         ("runtime-preferences", preferences),
         ("runtime-spatial", spatial),
+        ("runtime-focus-autoplay", focus_autoplay),
     ];
+    let filter = std::env::args()
+        .skip(1)
+        .find(|argument| !argument.starts_with('-'));
     for (key, scenario) in scenarios {
+        if filter
+            .as_deref()
+            .is_some_and(|filter| !key.contains(filter))
+        {
+            continue;
+        }
         println!("native runtime case: {key}");
         let created = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             Harness::new(
@@ -630,8 +773,8 @@ pub fn run() {
             Err(error) => harness.failure(panic_message(error)),
         });
     }
-    let complete = cases.iter().all(|case| case["status"] == "passed");
-    let manifest = json!({"schema_version":1,"kind":"native-ui","provenance":{"candidate_sha":std::env::var("GITHUB_SHA").ok(),"environment":{"platform":std::env::consts::OS,"arch":std::env::consts::ARCH,"renderer":if cfg!(target_os="macos"){"Metal"}else{"WGPU"}},"fixture":source["fixture"],"profile":"real-shared-renderer-inputs"},"method":"Production benchmark constructor with raw archive only; native pointer/keyboard actions regenerate real shared-renderer previews. No precomputed artwork is supplied. File persistence, project services and animation playback are outside this suite.","cases":cases,"complete":complete});
+    let complete = !cases.is_empty() && cases.iter().all(|case| case["status"] == "passed");
+    let manifest = json!({"schema_version":1,"kind":"native-ui","provenance":{"candidate_sha":std::env::var("GITHUB_SHA").ok(),"environment":{"platform":std::env::consts::OS,"arch":std::env::consts::ARCH,"renderer":if cfg!(target_os="macos"){"Metal"}else{"WGPU"}},"fixture":source["fixture"],"profile":"real-shared-renderer-inputs","filter":filter},"method":"Production benchmark constructor with raw archive only; native pointer/keyboard actions regenerate real shared-renderer previews. No precomputed artwork is supplied. Focus autoplay checks scheduling, cancellation, reduced motion and viewport preservation before advancing the blocking player producer. Animation frames, file persistence and project services are outside this suite.","cases":cases,"complete":complete});
     fs::write(
         output.join("manifest.json"),
         serde_json::to_vec_pretty(&manifest).unwrap(),

@@ -1,5 +1,6 @@
 // Satori 对象树的最小工具和共用部件。这里不碰文件系统，Node 和浏览器端都能用。
 import type { Theme } from './themes.ts';
+import { motion } from './motion.ts';
 import { famColor, logoUri } from './brand.ts';
 import { NAMES, type Contributor } from './data.ts';
 import { measure, wrap } from '../svg.ts';
@@ -131,7 +132,7 @@ export function plate(t: Theme, style: Record<string, any>, kids: any[], inner: 
 
 export function bar(t: Theme, c: Contributor, rank: number, height = t.barH, minW = 3): Node {
   return box({ height, borderRadius: t.barRadius, backgroundColor: t.track, width: '100%' },
-    box({ width: `${Math.max(c.pct, 0)}%`, minWidth: minW, height: '100%', borderRadius: t.barRadius, ...fill(c, t, rank, Math.max(2, height / 2), true) }));
+    motion(box({ width: `${Math.max(c.pct, 0)}%`, minWidth: minW, height: '100%', borderRadius: t.barRadius, ...fill(c, t, rank, Math.max(2, height / 2), true) }), 'bar-x'));
 }
 
 /** 背景：Glass 风格在底色上叠几团柔光，颜色取前两名贡献方 */
@@ -160,7 +161,7 @@ export function blocks(c: Contributor, t: Theme, rank: number, n = 10, size = 15
   const k = Math.max(c.pct >= 0.05 ? 1 : 0, Math.round((c.pct / 100) * n));
   const color = c.key === 'unattributed' ? t.faint : famColor(c.key, t, rank);
   return box({ alignItems: 'center', flexShrink: 0 },
-    txt({ fontFamily: MONO_FONT, fontSize: size, color, whiteSpace: 'pre', lineHeight: 1 }, '■'.repeat(k)),
+    motion(txt({ fontFamily: MONO_FONT, fontSize: size, color, whiteSpace: 'pre', lineHeight: 1 }, '■'.repeat(k)), 'bar-x'),
     txt({ fontFamily: MONO_FONT, fontSize: size, color: t.faint, whiteSpace: 'pre', lineHeight: 1 }, '·'.repeat(Math.max(n - k, 0))));
 }
 

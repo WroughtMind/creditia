@@ -60,8 +60,8 @@ export const FONTS: FontFace[] = [
 /** 某个 family 的全部字重 */
 export const facesOf = (family: string) => FONTS.filter((f) => f.family.toLowerCase() === family.toLowerCase());
 
-/** CSS font-family 串 → 引用到的 family 名（去引号） */
-export const familiesIn = (stack: string) => stack.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+/** CSS font-family 串或 SVG 属性 → 引用到的 family 名（解实体、去引号） */
+export const familiesIn = (stack: string) => stack.replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'").split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
 
 /** Legacy badges named system fonts. Pin their existing native fallback so a
  * browser, offline SVG and the native renderer never pick different OS fonts. */

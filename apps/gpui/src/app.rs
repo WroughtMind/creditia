@@ -127,6 +127,7 @@ struct Playback {
     previous: Option<PlaybackFrame>,
     times: Vec<f64>,
     timeline: Timeline,
+    authored_repeat: bool,
     started: Instant,
     elapsed: Duration,
     playing: bool,
@@ -137,6 +138,34 @@ struct Playback {
     started_once: bool,
 }
 impl Playback {
+    fn new(mut timeline: Timeline, times: Vec<f64>, once: bool, epoch: u64) -> Self {
+        let authored_repeat = timeline.repeat;
+        timeline.repeat &= !once;
+        let playing = timeline.duration_ms > 0;
+        Self {
+            frames: BTreeMap::new(),
+            previous: None,
+            times,
+            timeline,
+            authored_repeat,
+            started: Instant::now(),
+            elapsed: Duration::ZERO,
+            playing,
+            suspended: false,
+            index: 0,
+            requested: 0,
+            epoch,
+            started_once: false,
+        }
+    }
+    fn restart(&mut self) {
+        self.timeline.repeat = self.authored_repeat;
+        self.elapsed = Duration::ZERO;
+        self.started_once = false;
+        self.playing = true;
+        self.suspended = false;
+        self.requested = 0;
+    }
     // A slow raster must finish before a repeat invalidates its epoch. Let
     // normal playback follow wall time, but bound outstanding work by the
     // producer's look-ahead. Its next decoded frame wakes a stalled clock.
@@ -167,9 +196,18 @@ impl Playback {
             return false;
         }
         let time = self.elapsed.as_millis() as u64;
-        self.requested = if time >= duration { last } else { frame_at(&self.times, &self.timeline, time) };
+        self.requested = if time >= duration {
+            last
+        } else {
+            frame_at(&self.times, &self.timeline, time)
+        };
         control.set_playhead(self.requested);
-        if let Some((&index, _)) = self.frames.range(..=self.requested).rev().find(|(_, frame)| frame.ready) {
+        if let Some((&index, _)) = self
+            .frames
+            .range(..=self.requested)
+            .rev()
+            .find(|(_, frame)| frame.ready)
+        {
             self.index = index;
         }
         time < limit || self.index == self.requested
@@ -358,6 +396,7 @@ pub struct Creditia {
     preview_cancellation: Option<renderer::Cancellation>,
     preview_busy: bool,
     playback: Option<Playback>,
+    focus_autoplay_pending: bool,
     animation_control: Option<crate::animation::PlaybackControl>,
     animation_worker: Option<Task<()>>,
     animation_task: Option<Task<()>>,
@@ -596,6 +635,7 @@ impl Creditia {
             preview_cancellation: None,
             preview_busy: false,
             playback: None,
+            focus_autoplay_pending: false,
             animation_control: None,
             animation_worker: None,
             animation_task: None,
@@ -1293,6 +1333,7 @@ impl Creditia {
             .unwrap_or(0);
     }
     fn stop_playback(&mut self, cx: &mut Context<Self>) {
+        self.focus_autoplay_pending = false;
         if let Some(control) = self.animation_control.take() {
             control.cancel();
         }
@@ -1520,6 +1561,7 @@ impl Creditia {
         }
         self.saved_viewport = bookmark.saved_viewport;
         self.restore_fixture_artworks();
+        self.focus_autoplay_pending = self.focused && !self.reduced_motion;
     }
     fn rebuild_preserving_view(&mut self, cx: &mut Context<Self>) {
         self.retain_focus_preview(cx);
@@ -2692,7 +2734,11 @@ impl Creditia {
         if entering {
             self.saved_viewport = Some(self.viewport);
         }
+        if focus && self.focused && self.selected_tile != Some(index) {
+            self.retain_focus_preview(cx);
+        }
         self.stop_playback(cx);
+        self.focus_autoplay_pending = focus && !self.reduced_motion;
         self.selected_tile = Some(index);
         self.focused = focus;
         if focus {
@@ -3042,17 +3088,61 @@ impl Creditia {
         self.persist();
         cx.notify();
     }
+    fn prepare_focus_autoplay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.focus_autoplay_pending {
+            return;
+        }
+        if !self.focused || self.reduced_motion {
+            self.focus_autoplay_pending = false;
+            return;
+        }
+        let Some(tile) = self.current_tile() else {
+            return;
+        };
+        if tile.error.is_some()
+            || self
+                .piece(&tile.spec.piece)
+                .is_none_or(|piece| piece["animated"] != true)
+        {
+            self.focus_autoplay_pending = false;
+            return;
+        }
+        // The ordinary preview stays visible during preparation. Consume this
+        // selection only after its own static image has actually decoded.
+        if self.raw.is_none()
+            || self.loading
+            || self.preview_busy
+            || tile.loading
+            || tile.art.is_none()
+            || tile.pending_image.is_some()
+            || self.focus_transition.is_some()
+            || self.panel.is_some()
+            || !self.window_visible
+            || !window.is_window_active()
+            || !tile
+                .image
+                .as_ref()
+                .is_some_and(|image| crate::image_assets::track(image, window, cx).is_some())
+        {
+            return;
+        }
+        self.focus_autoplay_pending = false;
+        self.start_playback(false, true, cx);
+    }
     fn play(&mut self, restart: bool, cx: &mut Context<Self>) {
+        self.focus_autoplay_pending = false;
+        self.start_playback(restart, false, cx);
+    }
+    fn start_playback(&mut self, restart: bool, once: bool, cx: &mut Context<Self>) {
         if self.animation_busy && self.playback.is_none() {
             return;
         }
         if let Some(play) = &mut self.playback {
+            if !once {
+                play.timeline.repeat = play.authored_repeat;
+            }
             if restart {
-                play.elapsed = Duration::ZERO;
-                play.started_once = false;
-                play.playing = true;
-                play.suspended = false;
-                play.requested = 0;
+                play.restart();
                 if let Some(control) = &self.animation_control {
                     control.restart();
                 }
@@ -3099,20 +3189,20 @@ impl Creditia {
         let selected = self.selected_tile;
         let generation = self.preview_generation;
         request["reducedMotion"] = json!(self.reduced_motion);
+        let Some(raw) = self.raw.clone() else {
+            return;
+        };
         if !self.focused {
             self.saved_viewport = Some(self.viewport);
+            self.viewport.reset();
         }
         self.focused = true;
-        self.viewport.reset();
         self.animation_busy = true;
         let control = crate::animation::PlaybackControl::new();
         control.set_viewport(self.viewport, self.viewport_size, self.display_scale);
         self.animation_cancellation = Some(control.cancellation());
         self.animation_control = Some(control.clone());
         let width = texture_width(self.viewport_size.0, self.display_scale);
-        let Some(raw) = self.raw.clone() else {
-            return;
-        };
         let archive = self.render_archive.clone();
         let projects = self.all_archives.clone();
         let (tx, rx) = async_channel::bounded::<Result<crate::animation::Event, String>>(3);
@@ -3152,21 +3242,7 @@ impl Creditia {
                                 timeline,
                                 times,
                             }) => {
-                                let playing = timeline.duration_ms > 0;
-                                view.playback = Some(Playback {
-                                    frames: BTreeMap::new(),
-                                    previous: None,
-                                    times,
-                                    timeline,
-                                    started: Instant::now(),
-                                    elapsed: Duration::ZERO,
-                                    playing,
-                                    suspended: false,
-                                    index: 0,
-                                    requested: 0,
-                                    epoch,
-                                    started_once: false,
-                                })
+                                view.playback = Some(Playback::new(timeline, times, once, epoch));
                             }
                             Ok(crate::animation::Event::Frame {
                                 epoch,
@@ -7003,6 +7079,8 @@ impl Creditia {
             "project":self.selected,"project_count":self.projects.len(),"project_name":self.raw.as_ref().map(|raw|raw["project"]["name"].clone()),"operation_busy":self.operation_busy,"remove_confirm":self.remove_confirm,"search_query":self.search_query,
             "display_scale":self.display_scale,"picker_selected":self.picker_selected,"settings_project":self.settings_id(),"project_settings_ready":self.settings_data().is_some() && self.sign_loaded_for.as_ref()==self.settings_id(),"project_row_menu":self.project_row_menu.as_ref().map(|(id,_)|id),"hover":self.hover.as_ref().map(|hit|&hit.t),"batch":self.batch_results
         });
+        state["focus_autoplay_pending"] = json!(self.focus_autoplay_pending);
+        state["animation_busy"] = json!(self.animation_busy);
         if let Some(hit) = focused_art.and_then(|art| art.hits.first()) {
             state["first_hit"] = json!({"x":hit.x,"y":hit.y,"w":hit.w,"h":hit.h,"t":hit.t});
         }
@@ -7194,6 +7272,7 @@ impl Render for Creditia {
         }
         self.prepare_static_images(window, cx);
         self.prepare_focus_preview(window, cx);
+        self.prepare_focus_autoplay(window, cx);
         let animation_visible = self
             .selected_tile
             .is_some_and(|index| self.screen_rect(index).intersects(self.artwork_viewport()));
@@ -8391,16 +8470,33 @@ fn analysis_fraction(progress: &Value) -> Option<f64> {
 }
 #[cfg(test)]
 mod input_tests {
-    use super::{key_bindings, Playback, Timeline};
-    use std::{collections::BTreeMap, time::{Duration, Instant}};
+    use super::{Playback, Timeline, key_bindings};
+    use std::{
+        collections::BTreeMap,
+        time::{Duration, Instant},
+    };
     #[test]
     fn slow_paint_cannot_skip_an_entire_animation_cycle() {
         let control = crate::animation::PlaybackControl::new();
         let mut play = Playback {
-            frames: BTreeMap::new(), previous: None, times: (0..=20).map(|n| n as f64 / 20.).collect(),
-            timeline: Timeline {duration_ms: 1000, hold_ms: 200, fps: 20, repeat: true},
-            started: Instant::now() - Duration::from_secs(12), elapsed: Duration::ZERO,
-            playing: true, suspended: false, index: 0, requested: 0, epoch: control.epoch(), started_once: true,
+            frames: BTreeMap::new(),
+            previous: None,
+            times: (0..=20).map(|n| n as f64 / 20.).collect(),
+            timeline: Timeline {
+                duration_ms: 1000,
+                hold_ms: 200,
+                fps: 20,
+                repeat: true,
+            },
+            authored_repeat: true,
+            started: Instant::now() - Duration::from_secs(12),
+            elapsed: Duration::ZERO,
+            playing: true,
+            suspended: false,
+            index: 0,
+            requested: 0,
+            epoch: control.epoch(),
+            started_once: true,
         };
         let epoch = control.epoch();
         assert!(!play.tick(&control));
@@ -8411,6 +8507,35 @@ mod input_tests {
         assert!(!play.tick(&control));
         assert!(!play.started_once);
         assert_ne!(control.epoch(), epoch);
+    }
+    #[test]
+    fn one_shot_stops_at_the_final_frame_and_manual_replay_restores_the_authored_loop() {
+        let control = crate::animation::PlaybackControl::new();
+        let epoch = control.epoch();
+        let timeline = Timeline {
+            duration_ms: 1000,
+            hold_ms: 200,
+            fps: 20,
+            repeat: true,
+        };
+        let mut play = Playback::new(timeline.clone(), vec![0., 1.], true, epoch);
+        assert!(!play.timeline.repeat);
+        play.index = 1;
+        play.requested = 1;
+        play.started_once = true;
+        play.started = Instant::now() - Duration::from_millis(1201);
+        assert!(!play.tick(&control));
+        assert!(!play.playing);
+        assert_eq!(play.index, 1);
+        assert_eq!(play.elapsed, Duration::from_millis(1200));
+        assert_eq!(control.epoch(), epoch);
+        play.restart();
+        assert!(play.timeline.repeat);
+        assert!(play.playing);
+        assert_eq!(play.elapsed, Duration::ZERO);
+        assert_eq!(play.requested, 0);
+        let manual = Playback::new(timeline, vec![0., 1.], false, epoch);
+        assert!(manual.timeline.repeat);
     }
     #[test]
     fn all_shortcuts_parse_on_both_platform_families() {

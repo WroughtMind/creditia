@@ -99,7 +99,12 @@ test('SVG time sampling matches exported frames, including scrolling crops', () 
   const style = STYLES.find(s => s.id === 'ink')!;
   for (const [piece, variant] of [['asterisk', undefined], ['roll', 'scroll']] as const) {
     const exported = frames(piece, model, style, { variant }, 4);
-    for (let i = 0; i < exported.length; i++) assert.deepEqual(normalizedArt(frame(piece, model, style, { variant }, i / (exported.length - 1))), normalizedArt(exported[i]));
+    for (let i = 0; i < exported.length; i++) {
+      const { frameDelay, ...image } = exported[i];
+      const time = image.crop?.progress ?? i / (exported.length - 1);
+      assert.deepEqual(normalizedArt(frame(piece, model, style, { variant }, time)), normalizedArt(image));
+      assert.ok(i === exported.length - 1 ? frameDelay! >= 0 : frameDelay! > 0, 'movement samples retain their authored hold; the encoder owns final rest');
+    }
   }
 });
 
@@ -139,7 +144,7 @@ test('sized scrolling GIF keeps both its viewport and chosen canvas', () => {
     crop: { svg: reel, w: 100, h: 200, y },
   });
   const samples = [sized(at(0), 200, 200), sized(at(100), 200, 200)];
-  assert.ok(samples.every(x => !x.crop));
+  for (const sample of samples) assert.deepEqual(sample.crop?.viewport, { x: 12, y: 12, w: 176, h: 176 });
   const pixels = samples.map(x => raster.rgba(x.svg));
   assert.ok(pixels.every(x => x.w === 200 && x.h === 200));
   const center = (img: typeof pixels[number]) => [...img.data.subarray((100 * img.w + 100) * 4, (100 * img.w + 100) * 4 + 4)];
@@ -148,7 +153,7 @@ test('sized scrolling GIF keeps both its viewport and chosen canvas', () => {
   const seen: string[] = [];
   const exporter = makeExporter({ ...raster, rgba(svg, width) { seen.push(svg); return raster.rgba(svg, width); } });
   const gif = exporter.gif(samples, { width: 200 });
-  assert.deepEqual(seen, samples.map(x => x.svg));
+  assert.deepEqual(seen, [reel], 'sizing reuses one reel raster instead of rendering each viewport');
   // GIF logical screen width/height (little endian, after GIF89a).
   assert.equal(gif[6] + (gif[7] << 8), 200);
   assert.equal(gif[8] + (gif[9] << 8), 200);
@@ -186,12 +191,19 @@ test('invalid requests fail explicitly and do not invoke the renderer', async ()
     [{ t: 1.1 }, 'invalid_request'], [{ named: 'false' }, 'invalid_request'],
     [{ output: '/tmp/file' }, 'invalid_request'], [{ piece: 'profile' }, 'missing_data'],
     [{ op: 'export', format: 'exe' }, 'invalid_request'],
-    [{ op: 'export', format: 'gif', piece: 'badge' }, 'not_animated'],
   ] as const) {
     const result = await dispatchRender({ ...request, ...patch }, blocked);
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.error.code, code, JSON.stringify(patch));
   }
+});
+
+test('native compact badges now expose real animation frames and GIF output', async () => {
+  const animation = unwrap(await renderRequest({ ...request, op: 'frames', piece: 'badge', frameCount: 2 }));
+  assert.equal(animation.frames.length, 3);
+  assert.notEqual(normalized(animation.frames[0].svg), normalized(animation.frames[1].svg));
+  const output = unwrap(await renderRequest({ ...request, op: 'export', piece: 'badge', format: 'gif', frameCount: 2, width: 160 }));
+  assert.equal(Buffer.from(output.bytes, 'base64').subarray(0, 6).toString(), 'GIF89a');
 });
 
 test('JSONL transport recovers after malformed and oversized input, then exits on EOF', async () => {
@@ -242,7 +254,8 @@ test('animation samples have one shared duration, exact final geometry and reduc
   const result = unwrap(await renderRequest(options));
   assert.deepEqual(result.times, [0, .25, .5, .75, 1]);
   assert.equal(result.frames.length, 5);
-  assert.equal(result.timeline.durationMs, 2600);
+  const reference = frames('asterisk', buildModel(raw, { lang: 'en' }), STYLES.find(style => style.id === 'ink')!, {}, 2);
+  assert.equal(result.timeline.durationMs, reference[0].frameDelay! * 2, 'native and standalone export use the same authored duration');
   const { frameCount: _count, ...renderOptions } = options;
   const still = unwrap(await renderRequest({ ...renderOptions, op: 'render' }));
   assert.deepEqual(normalizedArt(result.frames.at(-1)), normalizedArt(still.art));

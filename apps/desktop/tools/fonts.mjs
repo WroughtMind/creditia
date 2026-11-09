@@ -2,7 +2,7 @@
 // 中日文字体留 GB2312 的 6,763 个汉字 + 假名 + 常用符号。产物在 src/fonts/（不入库，npm run fonts 生成）。
 // 需要 python3 + fontTools（pip install fonttools）。
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, statSync, readdirSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, statSync, readdirSync, existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { FONTS as V2 } from '../../../packages/render/src/fonts.ts';
@@ -24,14 +24,18 @@ for (let a = 0xb0; a <= 0xf7; a++) for (let b = 0xa1; b <= 0xfe; b++) { const c 
 const textFile = path.join(OUT, '.gb2312.txt');
 writeFileSync(textFile, chars.join('') + '點〇');
 
+// Preserve the typographic family: resvg uses it to match non-regular weights.
+const recipe = 'typographic-family-v1';
+const recipeFile = path.join(OUT, '.subset-recipe');
+const currentRecipe = existsSync(recipeFile) && readFileSync(recipeFile, 'utf8') === recipe;
 const manifest = [];
 for (const f of FONTS) {
   const dir = path.join(path.dirname(require.resolve(`@expo-google-fonts/${f.pkg}/package.json`)), f.dir);
   const ttf = readdirSync(dir).find((x) => x.endsWith('.ttf') && (f.italic || !x.includes('Italic')));
   const name = `${f.family.replace(/\s+/g, '')}-${f.weight}${f.italic ? 'i' : ''}.ttf`;
   const out = path.join(OUT, name);
-  if (!existsSync(out)) {
-    const args = ['-m', 'fontTools.subset', path.join(dir, ttf), `--output-file=${out}`, `--unicodes=${LATIN}`, '--layout-features=*', '--no-hinting'];
+  if (!currentRecipe || !existsSync(out)) {
+    const args = ['-m', 'fontTools.subset', path.join(dir, ttf), `--output-file=${out}`, `--unicodes=${LATIN}`, '--layout-features=*', '--no-hinting', '--name-IDs=0,1,2,3,4,5,6,16,17'];
     if (f.cjk) args.push(`--text-file=${textFile}`);
     execFileSync('python3', args, { stdio: 'inherit' });
   }
@@ -39,3 +43,5 @@ for (const f of FONTS) {
   console.log(name.padEnd(34), `${(statSync(out).size / 1024).toFixed(0)} KB`);
 }
 writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 1));
+
+writeFileSync(recipeFile, recipe);
