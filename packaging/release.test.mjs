@@ -19,7 +19,7 @@ test('checksums and Homebrew cask refer to the final architecture-specific bytes
     for (const a of apps) assert.equal(readFileSync(path.join(dir, a.file + '.sha256'), 'utf8'), `${createHash('sha256').update(a.file).digest('hex')}  ${a.file}\n`);
     const cask = readFileSync(path.join(dir, 'creditia.rb'), 'utf8');
     assert.ok(cask.includes(`version "${version}"`));
-    for (const a of apps.filter(a => a.os === 'mac')) assert.ok(cask.includes(createHash('sha256').update(a.file).digest('hex')));
+    for (const a of apps.filter(a => a.os === 'mac' && a.bundle === 'dmg')) assert.ok(cask.includes(createHash('sha256').update(a.file).digest('hex')));
     assert.ok(!cask.includes('@VERSION@') && !cask.includes('xattr') && !cask.includes('postflight'));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

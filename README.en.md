@@ -161,7 +161,7 @@ Run `creditia agents --json` for the catalogue. The [complete matrix](AGENT_SUPP
 
 ## Install
 
-The CLI is currently available from source. The npm package and app installers are not published yet; official installation channels will be announced on the [website](https://wroughtmind.github.io/creditia/) and [Releases](https://github.com/WroughtMind/creditia/releases).
+The native desktop uses GPUI. Download a DMG for Apple silicon or Intel, an installer or portable ZIP for Windows x64, or a DEB or tar.gz for Linux x64. [Desktop downloads](https://github.com/WroughtMind/creditia/releases/tag/gpui-v0.1.0-rc.1) · [Install and roll back](packaging/gpui/INSTALL.md)
 
 Source installation requires Git, Rust and Node 22.18+:
 
@@ -184,7 +184,7 @@ To install only the analysis core, use the command below. Its executable is name
 cargo install --git https://github.com/WroughtMind/creditia creditia-cli
 ```
 
-App installers are in preparation. macOS builds use ad-hoc signing, without Apple Developer ID signing or notarization. Once released, verify the download source and SHA-256 first. For an unidentified-developer warning, try opening the app once, then use System Settings → Privacy & Security → Open Anyway. If macOS reports damage, check or download the file again; do not assume every warning is caused by notarization. Do not disable Gatekeeper globally.
+The installers include the renderer, fonts and analysis core. macOS packages are ad-hoc signed and Windows installers are unsigned. Verify the download against the release's SHA256SUMS.
 
 See the [release procedure](packaging/RELEASE.md) for packaging and acceptance checks.
 
@@ -212,13 +212,15 @@ crates/
   core/       attribution engine, line hashing, model catalog (name normalization, vendors, providers), config
   adapters/   readers for git and each agent's logs
   store/      library: projects, paths, evidence store, snapshots (SQLite)
+  desktop-service/ shared project, analysis-task, settings and background-collection service
   cli/        the creditia-core binary
 packages/
   schema/     JSON Schema and types for credits.json v0
   render/     rendering: credits.json → SVG scene (style × piece) → PNG / SVG / PDF / GIF / HTML
   cli/        the creditia npm package: records, export, terminal card
   embed/      <creditia-card> web component
-apps/desktop/ Tauri 2 app (wall and export)
+apps/gpui/    GPUI Kit desktop: wall, roam, animation and export
+apps/desktop/ original Tauri desktop and one-time preference migration helper
 site/         website (build.ts) and the images in this README (readme.ts)
 skills/       skill for agents
 spike/        phase-0 validation project (kept for the record)
@@ -230,14 +232,21 @@ spike/        phase-0 validation project (kept for the record)
 <summary><b>Development</b></summary>
 
 ```bash
-cargo build --release && cargo test           # Rust core (end-to-end tests use fake logs in a temp HOME)
-cd packages/render && npm i && npm test       # rendering (every piece × style × layout)
-npm run gallery                               # proof sheet: gallery/index.html
-cd apps/desktop && npm i && npm run fonts && npm run dev   # app in the browser (uses the fixture record)
-npm run core && npm run tauri dev             # native app (core puts the analysis binary where the app bundles it)
+cargo build --release && cargo test           # Rust core and shared desktop service
+npm ci --prefix packages/render
+npm test --prefix packages/render             # artwork, style and layout contracts
+npm run gallery --prefix packages/render      # proof sheet: packages/render/gallery/index.html
+CREDITIA_CORE="$PWD/target/release/creditia-core" cargo run --manifest-path apps/gpui/Cargo.toml
+node --test packaging/gpui/package.test.mjs    # standalone packaging and resource checks
 node site/build.ts                            # website → _site/
 node site/readme.ts                           # README images → .github/readme/
 ```
+
+Run these commands from the repository root. See the [desktop development guide](apps/gpui/README.md)
+for platform dependencies, Windows commands and native screenshot checks, and the
+[installation guide](packaging/gpui/INSTALL.md) for upgrades and rollback. Migration
+completion is determined by the [acceptance report](docs/gpui-migration/README.md)
+for the same build across all four desktop targets.
 
 
 </details>

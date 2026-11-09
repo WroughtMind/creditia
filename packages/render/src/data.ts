@@ -106,7 +106,6 @@ export interface Model {
   /** 作品里写不写开发者这一侧（发了多少消息、审阅几次）。默认不写 */
   showHand: boolean;
   commits: number;
-  units: number;
   linesAdded: number;
   linesSurviving: number;
   tokens: number;
@@ -403,7 +402,7 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
     project: c.project?.name ?? '', lang, group, groupAuto: (o.group ?? 'auto') === 'auto', tools, keyOf,
     range: { from: range.from ?? '', to: range.to ?? '' }, spanDays: span, activeDays: n(t.days),
     agents, all: unknown?.lines ? [...all, unknown] : all, rows, unknown, people, authors, named: o.named, sign, hand, showHand: false,
-    commits: n(t.commits), units: n(t.units), linesAdded: n(t.linesAdded) || total, linesSurviving: n(t.linesSurviving), tokens: n(t.tokens), sessions: n(t.sessions),
+    commits: n(t.commits), linesAdded: n(t.linesAdded) || total, linesSurviving: n(t.linesSurviving), tokens: n(t.tokens), sessions: n(t.sessions),
     verifiedShare: total ? verifiedAll / total : 0,
     versions, history, weeks, days, clock: Array.isArray(c.clock) ? c.clock : [], files, areas, timeline, units: c.units ?? [], reviewers, raw: c,
   };

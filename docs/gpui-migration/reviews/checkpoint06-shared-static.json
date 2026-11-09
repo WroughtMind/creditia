@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "candidate_sha": "ab49059d2aae7ab09253071c399925284a42b2bb",
+  "reviewer": "Codex",
+  "reviewed_at": "2026-11-06",
+  "scope": "共享作品静态画面；四页联系表与通过像素核对的源图。未检查原生窗口或连续动画。",
+  "observations": [
+    "浅色排名和华夫图的颜色、标记及中英字形均可见；深色留存图、影片名单与票据版式保留各自的信息层级。",
+    "报纸与海报排版、字符终端与 CRT 有清楚的材质区别。mono/mosaic 仅靠白色线条区分深色块，与原版像素一致。",
+    "水墨时间线保留纸纹、山影和横向刻度；木刻环图、古籍日历、条幅适配宽窄幅面。",
+    "徽章圆弧文字、草地星号的五瓣与图例、漫画边框和赛博面板均可辨认。"
+  ],
+  "static_cases": [
+    {
+      "row": "classic/minimal-light/tier/original",
+      "evidence": "artworks/shard0/shard-0/batch-0/manifest.json#classic/minimal-light/tier/original/source/zh-auto-named",
+      "image": "artworks/shard0/shard-0/batch-0/images/classic_minimal-light_tier_original_source_zh-auto-named-baseline.png",
+      "sha256": "1e456b9da51ce80fbc5231f7b4533cb46cf2dcaf73a2c790cf5cb2ae815649ef",
+      "candidate_rgba_sha256": "4f862a248e87b2057a68d66e52eb3e5668f82f94dffc36f159e883ddcfbe807f",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/minimal-light/versions/default",
+      "evidence": "artworks/shard7/shard-7/batch-6/manifest.json#classic/minimal-light/versions/default/source/zh-auto-named",
+      "image": "artworks/shard7/shard-7/batch-6/images/classic_minimal-light_versions_default_source_zh-auto-named-baseline.png",
+      "sha256": "b42eae70a13079d1cefb33a0a58a8897e0325404ddc79a456c7293ab0d3387b4",
+      "candidate_rgba_sha256": "e90bae7bd778ab539aabe2dd602d139e4926a4017115cf80d3d62b723734a1e8",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/minimal-light/waffle/original",
+      "evidence": "artworks/shard0/shard-0/batch-6/manifest.json#classic/minimal-light/waffle/original/source/zh-auto-named",
+      "image": "artworks/shard0/shard-0/batch-6/images/classic_minimal-light_waffle_original_source_zh-auto-named-baseline.png",
+      "sha256": "eb2b13f1ee2fcbeff8b737dafe0eebef2b0a33c64ec57d82c16088501f4ba610",
+      "candidate_rgba_sha256": "4566d8b743bec364aba865bba4bc29655ee791516ca83cc237fe397798d2618c",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/minimal-dark/survival/default",
+      "evidence": "artworks/shard5/shard-5/batch-0/manifest.json#classic/minimal-dark/survival/default/source/zh-auto-named",
+      "image": "artworks/shard5/shard-5/batch-0/images/classic_minimal-dark_survival_default_source_zh-auto-named-baseline.png",
+      "sha256": "e3d3429a7c00d0e5bc7854e313d1ded3593b35de8ed9df5afbe07f0be80b4250",
+      "candidate_rgba_sha256": "3ea73c65f86ee363bb81011731038227805a4d137265d4c16d2322bca8e961de",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/glass/stream/default",
+      "evidence": "artworks/shard2/shard-2/batch-1/manifest.json#classic/glass/stream/default/source/zh-auto-named",
+      "image": "artworks/shard2/shard-2/batch-1/images/classic_glass_stream_default_source_zh-auto-named-baseline.png",
+      "sha256": "3c0410c95d03bad1be958c72cde40ba01a36adbcfc0474f0ce9fdea04bb17f72",
+      "candidate_rgba_sha256": "9016e1e7f15f53754e67a9f4cb897ab62d30731bc2c607e6f43c4c1707ccabab",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/film/share/default",
+      "evidence": "artworks/shard3/shard-3/batch-3/manifest.json#classic/film/share/default/source/zh-auto-named",
+      "image": "artworks/shard3/shard-3/batch-3/images/classic_film_share_default_source_zh-auto-named-baseline.png",
+      "sha256": "3847541a790b01a4fc3f5ea761dbb87a56e7647254239939b213d3a78bec3568",
+      "candidate_rgba_sha256": "c0ea0d265804d276f8199f0a3d19cf125c14c9061442b1f107fa79b182f113de",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/cinema/roll/classic",
+      "evidence": "artworks/shard5/shard-5/batch-5/manifest.json#classic/cinema/roll/classic/source/zh-auto-named",
+      "image": "artworks/shard5/shard-5/batch-5/images/classic_cinema_roll_classic_source_zh-auto-named-baseline.png",
+      "sha256": "81c932e6aaf68cef973d7fa91928a7ea3562dbb8bee43b8483fe8d33b9515eaa",
+      "candidate_rgba_sha256": "16b0a2dddd0fa72fea4d8c1f5111788c691d3327e4fa319c5fe01f39a5170e55",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/editorial/receipt/folio",
+      "evidence": "artworks/shard4/shard-4/batch-5/manifest.json#classic/editorial/receipt/folio/source/zh-auto-named",
+      "image": "artworks/shard4/shard-4/batch-5/images/classic_editorial_receipt_folio_source_zh-auto-named-baseline.png",
+      "sha256": "6515d4ee5c3aeefc649209ab6b792406a0d162f6fd09d6a832f6deef372d0308",
+      "candidate_rgba_sha256": "4837c3f893acefe04b82158ca9ccde4686ae29a24b553d071fee5abda442be41",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/broadsheet/people/default",
+      "evidence": "artworks/shard1/shard-1/batch-5/manifest.json#classic/broadsheet/people/default/source/zh-auto-named",
+      "image": "artworks/shard1/shard-1/batch-5/images/classic_broadsheet_people_default_source_zh-auto-named-baseline.png",
+      "sha256": "cf3a8f5710bd811b840947df1b156230a6d4b2caf8589bec754213aa69d6b4c0",
+      "candidate_rgba_sha256": "3293f3fdbbc71064536c4590618fe9ab97575b268791ab8fb53e32df9a540025",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/playbill/area/default",
+      "evidence": "artworks/shard6/shard-6/batch-3/manifest.json#classic/playbill/area/default/source/zh-auto-named",
+      "image": "artworks/shard6/shard-6/batch-3/images/classic_playbill_area_default_source_zh-auto-named-baseline.png",
+      "sha256": "2abbd97a573d99de1d33d76321acf58ea296f62b1470768c3fc22fb3c1958cd7",
+      "candidate_rgba_sha256": "59e8dcfdb202470289efbd8eb524671c5431801aa6645a4429db9a48d9d1be12",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/gala/app/ios",
+      "evidence": "artworks/shard6/shard-6/batch-3/manifest.json#classic/gala/app/ios/source/zh-auto-named",
+      "image": "artworks/shard6/shard-6/batch-3/images/classic_gala_app_ios_source_zh-auto-named-baseline.png",
+      "sha256": "a2f8b67dfd7eb1158c6b4eb94d882411cd62710ec149328067acf1817fb44ec5",
+      "candidate_rgba_sha256": "e945ceb3d2ee3ba63b8afb4c9ffb50009ba8fa0fc73465a77ef9629ce69e3638",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/mono/mosaic/default",
+      "evidence": "artworks/shard0/shard-0/batch-4/manifest.json#classic/mono/mosaic/default/source/zh-auto-named",
+      "image": "artworks/shard0/shard-0/batch-4/images/classic_mono_mosaic_default_source_zh-auto-named-baseline.png",
+      "sha256": "8c11edf2211ab2fb91d2ed0d2d3cf9bebb1f96c493c121f2394c5c06a6939620",
+      "candidate_rgba_sha256": "fcd7be0273385cb074b903d5b77c4c2e04573f1dc1e0ec2ec6b5704238795521",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/poster/settle/default",
+      "evidence": "artworks/shard4/shard-4/batch-6/manifest.json#classic/poster/settle/default/source/zh-auto-named",
+      "image": "artworks/shard4/shard-4/batch-6/images/classic_poster_settle_default_source_zh-auto-named-baseline.png",
+      "sha256": "e1cb70a8ca81506abc50ae42bb17e3d5a5120d9bf20704e4017a663274a876a3",
+      "candidate_rgba_sha256": "42474fb176e51de8b416e042b476a164ffa842b49b742e0fd541368268baddbf",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/terminal/ribbon/default",
+      "evidence": "artworks/shard3/shard-3/batch-5/manifest.json#classic/terminal/ribbon/default/source/zh-auto-named",
+      "image": "artworks/shard3/shard-3/batch-5/images/classic_terminal_ribbon_default_source_zh-auto-named-baseline.png",
+      "sha256": "325965613541afb307da269bb7bc57dbf3a2aa581bce7722d666996a7e77af81",
+      "candidate_rgba_sha256": "9e81921977c67680c6a18681f1940c6fa071fa29df1880c00af4ae884014d43b",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/crt/profile/default",
+      "evidence": "artworks/shard3/shard-3/batch-6/manifest.json#classic/crt/profile/default/source/zh-auto-named",
+      "image": "artworks/shard3/shard-3/batch-6/images/classic_crt_profile_default_source_zh-auto-named-baseline.png",
+      "sha256": "b35088c9cf341ccf6c8f8c87a9c399489c1e2d413c39382fdefe3184a1289a74",
+      "candidate_rgba_sha256": "fc84daa34bad825014a7d27b36b1b8f3a3b46aec6c417b76bec0690cdc54ae2f",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/neon/fetch/default",
+      "evidence": "artworks/shard2/shard-2/batch-7/manifest.json#classic/neon/fetch/default/source/zh-auto-named",
+      "image": "artworks/shard2/shard-2/batch-7/images/classic_neon_fetch_default_source_zh-auto-named-baseline.png",
+      "sha256": "bd572f437a35ab82dd1889ac3d1185fa35797f0d309cf1584ac1c54bf36bf68c",
+      "candidate_rgba_sha256": "878748ffd70f4debf2b3ccc58f4cf55c0218d2fa327053240417c3bbfc3da201",
+      "visual": "accepted"
+    },
+    {
+      "row": "classic/arcade/blame/default",
+      "evidence": "artworks/shard1/shard-1/batch-0/manifest.json#classic/arcade/blame/default/source/zh-auto-named",
+      "image": "artworks/shard1/shard-1/batch-0/images/classic_arcade_blame_default_source_zh-auto-named-baseline.png",
+      "sha256": "a22e901752c5d24658f5911452fad4aca48cd6fe13ad1cca4ba6150a82fa1d57",
+      "candidate_rgba_sha256": "581a73eed7c6e70659824a6549f8100a86d59ccb14560c90e3012e43613ca617",
+      "visual": "accepted"
+    },
+    {
+      "row": "svg/ink/lanes/default",
+      "evidence": "artworks/shard4/shard-4/batch-7/manifest.json#svg/ink/lanes/default/source/zh-auto-named",
+      "image": "artworks/shard4/shard-4/batch-7/images/svg_ink_lanes_default_source_zh-auto-named-baseline.png",
+      "sha256": "7daa9f236bf6ace69488af1a4b2c706c10d5a95ccdfe535dff9b709e48e92143",
+      "candidate_rgba_sha256": "66ce50cfc5918c40a636276dcd755ab1f57269f794a472bc70f9ea922e52e3d1",
+      "visual": "accepted"
+    },
+    {
+      "row": "svg/ukiyoe/evidence/default",
+      "evidence": "artworks/shard5/shard-5/batch-5/manifest.json#svg/ukiyoe/evidence/default/source/zh-auto-named",
+      "image": "artworks/shard5/shard-5/batch-5/images/svg_ukiyoe_evidence_default_source_zh-auto-named-baseline.png",
+      "sha256": "ee59aaa7afad8e786e8a74b3c26c1057ba8c6655dac77e8e95d20a719a65cef2",
+      "candidate_rgba_sha256": "20c6463e333a116bff892ed6b77a6bca79030f576fca6c2450118b7b8922e74e",
+      "visual": "accepted"
+    },
+    {
+      "row": "svg/woodblock/donut/nested",
+      "evidence": "artworks/shard6/shard-6/batch-1/manifest.json#svg/woodblock/donut/nested/source/zh-auto-named",
+      "image": "artworks/shard6/shard-6/batch-1/images/svg_woodblock_donut_nested_source_zh-auto-named-baseline.png",
+      "sha256": "53a46afafc5a3f61eb0f1720cf4b38a1112b49e4ff992bab57b27e929bd5f86c",
+      "candidate_rgba_sha256": "9bcefba4e69a369d4fe7ca23e92e2bd1d8af1b92d8cda1a7fc2708ee43206ffc",
+      "visual": "accepted"
+    },
+    {
+      "row": "svg/baroque/codemap/default",
+      "evidence": "artworks/shard5/shard-5/batch-0/manifest.json#svg/baroque/codemap/default/source/zh-auto-named",
+      "image": "artworks/shard5/shard-5/batch-0/images/svg_baroque_codemap_default_source_zh-auto-named-baseline.png",
+      "sha256": "dcde54b6b67dd86ddd8f44ea58e2071d4828f046b35f01f9d556c572420638f3",
+      "candidate_rgba_sha256": "5d15862798210184d113e4c8d3a0c592de22e38599cf49e46974e8d2bc990d90",
+      "visual": "accepted"
+    },
+    {
+      "row": "svg/grimoire/clock/default",
+      "evidence": "artworks/shard1/shard-1/batch-5/manifest.json#svg/grimoire/clock/default/source/zh-auto-named",
+      "image": "artworks/shard1/shard-1/batch-5/images/svg_grimoire_clock_default_source_zh-auto-named-baseline.png",
+      "sha256": "f2d0ac5338e22df110355f8ce5206ce5fc0a6f59b277099fc3c57bce0a7a542e",
+      "candidate_rgba_sha256": "c6cdc4af471c7a42dc232021d886c3c74ecffd0dd0778eceb4c161ecf28a8f22",
+      "visual": "accepted"
+    },
+    {
+      "row": "svg/manuscript/calendar/default",
+      "evidence": "artworks/shard0/shard-0/batch-3/manifest.json#svg/manuscript/calendar/default/source/zh-auto-named",
+      "image": "artworks/shard0/shard-0/batch-3/images/svg_manuscript_calendar_default_source_zh-auto-named-baseline.png",
+      "sha256": "95b27cefc1067abc36eaf2f5cf4ae184cbd385b872d42792ca59a676e3071d43",
+      "candidate_rgba_sha256": "2fcf83f54f44068ddcc24504695b59fa53be242a633418f7d11de6127bc56a90",
+      "visual": "accepted"
+    },
+    {
+      "row": "svg/pastel/byline/line",
+      "evidence": "artworks/shard7/shard-7/batch-5/manifest.json#svg/pastel/byline/line/source/zh-auto-named",
+      "image": "artworks/shard7/shard-7/batch-5/images/svg_pastel_byline_line_source_zh-auto-named-baseline.png",
+      "sha256": "323ec0b8eb90f529e1edf2d527a9b3affd5a264f1e5210ae7e94ca6faca3be68",
+      "candidate_rgba_sha256": "22d379f2a83a0d3d3c1c753392f6806d810fccbdd0d1ccf565b1c098ed69db79",
+      "visual": "accepted"
+    },
+    {
+      "row": "svg/cutout/badge/emblem",
+      "evidence": "artworks/shard0/shard-0/batch-3/manifest.json#svg/cutout/badge/emblem/source/zh-auto-named",
+      "image": "artworks/shard0/shard-0/batch-3/images/svg_cutout_badge_emblem_source_zh-auto-named-baseline.png",
+      "sha256": "e2fa229f2567a721f514e4e875129dbcf1e8fe89a672945b76281a67e9ba4fcc",
+      "candidate_rgba_sha256": "9c5d07a1c4df5d5807640d82586e903ac200f670ce8f9c8e500f8c7251360c3f",
+      "visual": "accepted"
+    },
+    {
+      "row": "svg/meadow/asterisk/default",
+      "evidence": "artworks/shard2/shard-2/batch-7/manifest.json#svg/meadow/asterisk/default/source/zh-auto-named",
+      "image": "artworks/shard2/shard-2/batch-7/images/svg_meadow_asterisk_default_source_zh-auto-named-baseline.png",
+      "sha256": "f844e83126b28e0b675dce0b6e8b8fc857544370e05eacabeaa68474137b1938",
+      "candidate_rgba_sha256": "a61fc69e596a815fbe9339cb3faf436231a30cd1bad7065d5822dd7db64d0f0b",
+      "visual": "accepted"
+    },
+    {
+      "row": "svg/manga/areas/default",
+      "evidence": "artworks/shard6/shard-6/batch-0/manifest.json#svg/manga/areas/default/source/zh-auto-named",
+      "image": "artworks/shard6/shard-6/batch-0/images/svg_manga_areas_default_source_zh-auto-named-baseline.png",
+      "sha256": "daaa99f90779c9051253676f91fa444a7f16234f8f909bc59581743dd9492eca",
+      "candidate_rgba_sha256": "3d5f301716a40d22af33b0ef7ee3d931bbaf03ad54b9b6ee766931a0dc8c5fa4",
+      "visual": "accepted"
+    },
+    {
+      "row": "svg/cyber/hand/default",
+      "evidence": "artworks/shard2/shard-2/batch-2/manifest.json#svg/cyber/hand/default/source/zh-auto-named",
+      "image": "artworks/shard2/shard-2/batch-2/images/svg_cyber_hand_default_source_zh-auto-named-baseline.png",
+      "sha256": "5e2de373efc60bf2915d0de9bf55b04bfe8946300f573f1814086d2aa83847cd",
+      "candidate_rgba_sha256": "058492ea7634889ac1785c9ee500815b03276fb5d711b0670b7737d5be2bee12",
+      "visual": "accepted"
+    }
+  ],
+  "contact_pages": [
+    {
+      "path": "artwork-families-1.png",
+      "sha256": "ba0d5830f0f2769084ea8ad4df95893754406c5d599cbecd18c2398088db5d38",
+      "rows": [
+        "classic/minimal-light/tier/original",
+        "classic/minimal-light/versions/default",
+        "classic/minimal-light/waffle/original",
+        "classic/minimal-dark/survival/default",
+        "classic/glass/stream/default",
+        "classic/film/share/default",
+        "classic/cinema/roll/classic",
+        "classic/editorial/receipt/folio"
+      ]
+    },
+    {
+      "path": "artwork-families-2.png",
+      "sha256": "a2bdee88e04420cea40b6f702fcd8b121a8a7dd8a2d35d6c1f4b9317ae2552b8",
+      "rows": [
+        "classic/broadsheet/people/default",
+        "classic/playbill/area/default",
+        "classic/gala/app/ios",
+        "classic/mono/mosaic/default",
+        "classic/poster/settle/default",
+        "classic/terminal/ribbon/default",
+        "classic/crt/profile/default",
+        "classic/neon/fetch/default"
+      ]
+    },
+    {
+      "path": "artwork-families-3.png",
+      "sha256": "f8622bfaf4ec76c38752db39f7d3c690ebe2f1eebd8baabcaf70c0399d2dce88",
+      "rows": [
+        "classic/arcade/blame/default",
+        "svg/ink/lanes/default",
+        "svg/ukiyoe/evidence/default",
+        "svg/woodblock/donut/nested",
+        "svg/baroque/codemap/default",
+        "svg/grimoire/clock/default",
+        "svg/manuscript/calendar/default",
+        "svg/pastel/byline/line"
+      ]
+    },
+    {
+      "path": "artwork-families-4.png",
+      "sha256": "ae2deb8acebb25ff2f857b1eef3e4e50cae670a41ba36e4fd7b52db73e878f18",
+      "rows": [
+        "svg/cutout/badge/emblem",
+        "svg/meadow/asterisk/default",
+        "svg/manga/areas/default",
+        "svg/cyber/hand/default"
+      ]
+    }
+  ]
+}

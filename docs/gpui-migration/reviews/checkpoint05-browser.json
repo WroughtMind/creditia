@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "kind": "recorded_visual_review",
+  "reviewer": "Codex /root agent",
+  "recorded_at": "2026-11-05T23:54:53.830190+00:00",
+  "candidate_sha": "f6bc3e9195bd2d01cb306b4dede11f7b8e00cdaa",
+  "source": "Formal GitHub Actions run42130786612, web job127607055712, sealed browser-catalog artifact",
+  "review_method": "Root agent visually reviewed four contact pages built from all32 original formal browser screenshots. This record transcribes the explicit root-agent review.",
+  "bundle_sha256": "956be543f763cb24b460ca939090ce31127b7cd77d8d4be4e5728faa4c3ccb2f",
+  "fixture_sha256": "01eabd550afc1e17ac175f74bf5e3d4b9666930986a2c2e3b743ce10fabda9d9",
+  "observations": [
+    "Text, icons, fonts, textures and artwork frame edges appeared complete in the reviewed screenshots.",
+    "No obvious clipping or font substitution was observed.",
+    "Transparent artwork regions exposed the browser page background."
+  ],
+  "scope": {
+    "screenshots": 32,
+    "desktop_styles": 26,
+    "additional_tool_name_cases": 2,
+    "transparent_cases": 4,
+    "native_ui_reviewed": false,
+    "every_browser_pixel_compared": false,
+    "full_catalog_automated_cases": 1738
+  },
+  "screenshots": [
+    {
+      "path": "screenshots/minimal-light-zh.png",
+      "sha256": "9ddeaaa53b176f8b4df224f59a6c19bca583ae2b6d4d5a75763f420f03f34e59"
+    },
+    {
+      "path": "screenshots/minimal-dark-zh.png",
+      "sha256": "66dcc24a6d69491185007960c0e1b5067a177408149db01b136eb6127541a3d5"
+    },
+    {
+      "path": "screenshots/glass-zh.png",
+      "sha256": "2bf119107442ea22ed45ce6ff94990f35c9e022c27e699fd3280525e7f87f40f"
+    },
+    {
+      "path": "screenshots/film-zh.png",
+      "sha256": "bbee3bec7d6b8a1328551730635ecc4f66bdb8a8f4818def43d52a7cf34a1741"
+    },
+    {
+      "path": "screenshots/cinema-zh.png",
+      "sha256": "8818d9b6be85a06a611ea5e03bd48c54a9c0e3f7327453f801233285a70851e4"
+    },
+    {
+      "path": "screenshots/editorial-zh.png",
+      "sha256": "ced01e632cefeb3120cb44d04fed1ab383f99bdeebfa238c464a2dafca8dedde"
+    },
+    {
+      "path": "screenshots/broadsheet-zh.png",
+      "sha256": "45b24930f24287272df7b4299ef132e2d8abb1cb8f55fcc30ac9e6914ee33fd7"
+    },
+    {
+      "path": "screenshots/playbill-zh.png",
+      "sha256": "434cd58c5964de4344396fc0ce60646fe76d9c79b96b25cd5f7ffca075d98851"
+    },
+    {
+      "path": "screenshots/gala-zh.png",
+      "sha256": "b7d26d98bad176671c165272af228c7a0d956cc46693c95888a463ac8a06b296"
+    },
+    {
+      "path": "screenshots/mono-zh.png",
+      "sha256": "1a19ec347f292573451a007938d6f49b8fb8b318f225b51e8888a4311f746483"
+    },
+    {
+      "path": "screenshots/poster-zh.png",
+      "sha256": "8ed3d2fa336f37f2eff28dc88b7e9eabbeccad40e616e32808763845abd7fb29"
+    },
+    {
+      "path": "screenshots/terminal-zh.png",
+      "sha256": "97daab5f0cb25487bff0845b7f80a0d421ffa46963d64b3edbc38d7663e9c2e5"
+    },
+    {
+      "path": "screenshots/crt-zh.png",
+      "sha256": "b4755aa4f04a2b6854263cc1d37f62325350bdbac71f9605a74897b30bd2be1a"
+    },
+    {
+      "path": "screenshots/neon-zh.png",
+      "sha256": "eea9045a8468934a002b72de37a95a34a427f9bc108d5d89cf65c61bde51da33"
+    },
+    {
+      "path": "screenshots/arcade-zh.png",
+      "sha256": "758f2034819daa64b93d462114a9aa7e605ff22a4fed26b21f45a4e459e25f47"
+    },
+    {
+      "path": "screenshots/ink-zh.png",
+      "sha256": "d413240ab15cd7fc22ab03e96ba8153d8a1b0aa481ec43a6ad37ccb5ba43251d"
+    },
+    {
+      "path": "screenshots/ukiyoe-zh.png",
+      "sha256": "c61c1f281a782d2eb93bf8bd419b9db09d7cfb1f1fb08d43ce5f40601fe015fa"
+    },
+    {
+      "path": "screenshots/woodblock-zh.png",
+      "sha256": "5bb4090d27c612b3de632f523d841f454da04709ab7e2f0e38e98c632eb1cf20"
+    },
+    {
+      "path": "screenshots/baroque-zh.png",
+      "sha256": "ca14a9d65d57501d53cfc75a26d6e381220d94b266c4ed97521c582ec23398a7"
+    },
+    {
+      "path": "screenshots/grimoire-zh.png",
+      "sha256": "068a0c1bcb432f6ee9f440f9f6a4a0a0f27b11718cc26437a7380b7134580830"
+    },
+    {
+      "path": "screenshots/manuscript-zh.png",
+      "sha256": "7cf90f3f48551354d47bc786649a558d559581efa24765d136f2305771cc943c"
+    },
+    {
+      "path": "screenshots/pastel-zh.png",
+      "sha256": "bd2b081ae543fc7fe1ff33edfd670955f3404553b84c9d013af12b90ce543391"
+    },
+    {
+      "path": "screenshots/cutout-zh.png",
+      "sha256": "d5a8e4f0de17290c6cb4f82df78fd4a5a78e9db9b0db0c35ecd7aa1bee2f62c1"
+    },
+    {
+      "path": "screenshots/meadow-zh.png",
+      "sha256": "2973cfa78614b50a331cd431255eaa43bb1905800961d531d4ce011ed4017995"
+    },
+    {
+      "path": "screenshots/manga-zh.png",
+      "sha256": "762c4f25cd0c5262cc2aceddc54b7241b3eecfa0d681cc06c92c8d7b36afa11d"
+    },
+    {
+      "path": "screenshots/cyber-zh.png",
+      "sha256": "25a6b3ceadf8b16fe2184bf3b2429cc2d0919ccb7f7b0caec2c7b6362cfb9454"
+    },
+    {
+      "path": "screenshots/minimal-light-zh-named-tool.png",
+      "sha256": "d72deadefadc504f436cc4ba155a000a40b36fd2f372af9a23266524f3b6ab41"
+    },
+    {
+      "path": "screenshots/ink-zh-named-tool.png",
+      "sha256": "1e39a40cf2a810aca3f41cc0a4a4469e7fdeb59560258ea66ac842451604dc62"
+    },
+    {
+      "path": "screenshots/transparent-tier.png",
+      "sha256": "81d40d10483c4ea21a07454931fab02ab47a87c53b3bdbc24a4dd3d6dc81b16d"
+    },
+    {
+      "path": "screenshots/transparent-receipt.png",
+      "sha256": "f7d51e933b500a3b975f8bceff364dc176b52e6eb59d186ce941f64cb9df14e2"
+    },
+    {
+      "path": "screenshots/transparent-roll.png",
+      "sha256": "67b5763fd6c1c46cf63e1663233d9547194ddffcca72c82d81717eb68f3ad4f5"
+    },
+    {
+      "path": "screenshots/transparent-asterisk.png",
+      "sha256": "98c443c4af60cb8bdeee1b0454ba591d7934650c608a57eccc21d9e5ea06129c"
+    }
+  ],
+  "limitations": [
+    "This review concerns these32 production-browser screenshots only.",
+    "All1,738 canonical catalog/data comparisons are separate automated evidence.",
+    "This record does not accept1,482 native desktop combinations or continuous animation playback."
+  ]
+}

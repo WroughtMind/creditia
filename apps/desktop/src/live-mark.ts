@@ -6,7 +6,6 @@ import { markPaths, MARK_COLORS, MARK_GREY, type Petal } from '../../../packages
 
 export type MarkMode = 'idle' | 'loading' | 'progress' | 'error';
 const RM = matchMedia('(prefers-reduced-motion: reduce)');
-const SLOTS = 6;
 
 // ── 颜色：hex ⇄ OKLCH，过渡时不经过脏灰 ──
 type Lch = [number, number, number];
@@ -72,7 +71,7 @@ export class LiveMark {
   /** 外层负责位置（飞行），里面的 svg 负责转角 */
   readonly el: HTMLSpanElement;
   private svg: SVGSVGElement;
-  private slots: Slot[];
+  private slots: Slot[] = [];
   private shape: Petal[] = BRAND;
   private m: MarkMode = 'idle';
   private p: number | null = 0;
@@ -84,10 +83,6 @@ export class LiveMark {
     this.el.className = 'lm';
     this.el.innerHTML = `<svg class="mk" viewBox="0 0 24 24" aria-hidden="true"></svg>`;
     this.svg = this.el.firstElementChild as SVGSVGElement;
-    this.slots = Array.from({ length: SLOTS }, (_, i) => {
-      const c = toLch(MARK_GREY);
-      return { len: sp(0), op: sp(0), at: sp(i / SLOTS), mix: sp(1), from: c, to: c, color: MARK_GREY };
-    });
     live.add(this);
   }
 
@@ -123,6 +118,10 @@ export class LiveMark {
   private retarget() {
     const shape = this.m === 'progress' || this.m === 'error' ? null : this.shape;
     const n = shape ? shape.length : 5;
+    while (this.slots.length < n) {
+      const c = toLch(MARK_GREY);
+      this.slots.push({ len: sp(0), op: sp(0), at: sp(this.slots.length / n), mix: sp(1), from: c, to: c, color: MARK_GREY });
+    }
     this.slots.forEach((s, i) => {
       let len = 0, op = 0, color = MARK_GREY;
       if (shape) {
@@ -133,7 +132,7 @@ export class LiveMark {
         else { const f = this.p == null ? 0.5 : Math.min(1, Math.max(0, this.p * 5 - i)); len = 0.36 + 0.64 * f; op = 0.32 + 0.68 * f; }
       }
       s.len.to = len; s.op.to = op;
-      s.at.to = i < n ? i / n : i / SLOTS;
+      s.at.to = i < n ? i / n : i / this.slots.length;
       if (color !== s.color) { s.from = this.lch(s); s.to = toLch(color); s.color = color; s.mix.x = 0; s.mix.v = 0; s.mix.to = 1; }
       if (RM.matches) { snap(s.len); snap(s.op); snap(s.at); snap(s.mix); }
     });
@@ -160,11 +159,13 @@ export class LiveMark {
       moving = step(s.mix, 90, 19, dt) || moving;
     });
     moving = step(this.th, 70, 10, dt) || moving;
+    if (!moving) this.slots.length = n;
     this.draw();
     return moving;
   }
   private draw() {
-    const petals: Petal[] = this.slots.map((s) => ({ color: toHex(this.lch(s)), len: Math.max(0, s.len.x), opacity: Math.max(0, Math.min(1, s.op.x)), at: s.at.x }));
+    // 与 SVG 的透明度精度一致：已经不可见的旧瓣不再占据扇区宽度。
+    const petals: Petal[] = this.slots.map((s) => ({ color: toHex(this.lch(s)), len: Math.max(0, s.len.x), opacity: +Math.max(0, Math.min(1, s.op.x)).toFixed(3), at: s.at.x })).filter((p) => p.opacity > 0);
     this.svg.innerHTML = markPaths({ petals, optical: this.o.optical });
     this.svg.style.transform = `rotate(${this.th.x.toFixed(2)}deg)`;
   }

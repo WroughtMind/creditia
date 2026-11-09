@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/adapters", "crates/store", "crates/cli"]
+members = ["crates/core", "crates/adapters", "crates/store", "crates/cli", "crates/desktop-service"]
 # App 单独成一个 workspace：Tauri 依赖大、需要图标，不拖累核心的日常编译
-exclude = ["spike", "apps/desktop/src-tauri"]
+exclude = ["spike", "apps/desktop/src-tauri", "apps/gpui"]
 
 [workspace.package]
 version = "0.1.0"

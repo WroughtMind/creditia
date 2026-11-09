@@ -1,0 +1,161 @@
+# Preserve a draft by default; an explicit request can publish the verified downloads.
+name: gpui-release
+
+on:
+  push:
+    paths:
+      - 'packaging/gpui/release-request.json'
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: 'Exact tested commit (PR runs use the checkout merge SHA recorded in evidence)'
+        required: true
+      native_run:
+        description: 'Successful gpui workflow run ID, including all four packages'
+        required: true
+      performance_run:
+        description: 'Successful gpui-performance workflow run ID'
+        required: true
+      core_run:
+        description: 'Successful ci run ID for core, renderer and browser checks'
+        required: true
+      review_commit:
+        description: 'Immutable commit containing the recorded visual and interaction review'
+        required: true
+      review_path:
+        description: 'Review JSON path; evidence references start with immutable artifact names'
+        required: true
+        default: docs/gpui-migration/reviews/review.json
+      publish_downloads:
+        description: 'Publish the prerelease downloads after matching every uploaded asset digest'
+        type: boolean
+        default: false
+      tag:
+        description: 'New prerelease tag, for example gpui-v0.2.0-rc.1'
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: gpui-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  request:
+    name: Read explicit candidate release request
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-24.04
+    outputs:
+      enabled: ${{ steps.request.outputs.enabled }}
+      candidate_sha: ${{ steps.request.outputs.candidate_sha }}
+      native_run: ${{ steps.request.outputs.native_run }}
+      performance_run: ${{ steps.request.outputs.performance_run }}
+      core_run: ${{ steps.request.outputs.core_run }}
+      review_commit: ${{ steps.request.outputs.review_commit }}
+      review_path: ${{ steps.request.outputs.review_path }}
+      tag: ${{ steps.request.outputs.tag }}
+      publish_downloads: ${{ steps.request.outputs.publish_downloads }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+      - name: Verify release validation contracts
+        run: node --test packaging/gpui/release.test.mjs
+      - name: Validate request without publishing
+        id: request
+        env:
+          CREDITIA_RELEASE_INPUTS: ${{ toJSON(inputs) }}
+        run: node packaging/gpui/release.mjs request --file packaging/gpui/release-request.json
+
+  prepare:
+    name: Verify immutable packages and complete acceptance evidence
+    needs: request
+    if: needs.request.outputs.enabled == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      manifest_sha256: ${{ steps.prepare.outputs.manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.request.outputs.candidate_sha }}
+          path: tested-candidate
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+      - name: Verify release validation contracts
+        run: node --test packaging/gpui/release.test.mjs
+      - name: Download, verify and recompute the full release gate
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ needs.request.outputs.candidate_sha }}
+          NATIVE_RUN: ${{ needs.request.outputs.native_run }}
+          PERFORMANCE_RUN: ${{ needs.request.outputs.performance_run }}
+          CORE_RUN: ${{ needs.request.outputs.core_run }}
+          REVIEW_COMMIT: ${{ needs.request.outputs.review_commit }}
+          REVIEW_PATH: ${{ needs.request.outputs.review_path }}
+          RELEASE_TAG: ${{ needs.request.outputs.tag }}
+        run: |
+          node packaging/gpui/release.mjs prepare \
+            --candidate-root tested-candidate --candidate-sha "$CANDIDATE_SHA" \
+            --native-run "$NATIVE_RUN" \
+            --performance-run "$PERFORMANCE_RUN" --core-run "$CORE_RUN" \
+            --review-commit "$REVIEW_COMMIT" --review-path "$REVIEW_PATH" \
+            --tag "$RELEASE_TAG" --output prepared
+      - name: Preserve acceptance gate diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpui-release-gate-diagnostics
+          path: |
+            prepared/report/**
+            prepared/review.json
+            prepared/provenance.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Preserve verified assets and combined acceptance report
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpui-verified-prerelease
+          path: |
+            prepared/assets/**
+            prepared/release-bundle.json
+            prepared/release-notes.md
+          if-no-files-found: error
+          retention-days: 90
+
+  draft:
+    name: Create the reviewed draft prerelease
+    needs: [request, prepare]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: gpui-prerelease-${{ needs.request.outputs.tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.prepare.outputs.artifact_id }}
+          merge-multiple: true
+          path: prepared
+      - name: Recheck the sealed bundle and create a draft prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANIFEST_SHA256: ${{ needs.prepare.outputs.manifest_sha256 }}
+          PUBLISH_DOWNLOADS: ${{ needs.request.outputs.publish_downloads }}
+        run: node packaging/gpui/release.mjs publish --root prepared --manifest-sha256 "$MANIFEST_SHA256" --publish-downloads "$PUBLISH_DOWNLOADS"
