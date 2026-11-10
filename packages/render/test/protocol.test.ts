@@ -12,6 +12,7 @@ import { buildModel, art, frame, frames, STYLES, raster } from '../src/index.ts'
 import { makeExporter, sized, type Art } from '../src/export.ts';
 import * as C from '../src/classic/index.ts';
 import { serve } from '../tools/bridge.mjs';
+import { nativeFonts } from '../src/fonts.ts';
 
 const raw = JSON.parse(readFileSync(new URL('../fixtures/catnap.json', import.meta.url), 'utf8'));
 const request = { version: 1, id: 1, op: 'render', style: 'minimal-light', piece: 'asterisk', raw, lang: 'en', group: 'auto', named: true };
@@ -92,6 +93,19 @@ test('flatten preserves already outlined classic artwork and outlines SVG text',
   const svg = unwrap(await dispatchRender({ ...request, flatten: true }, backend)).art;
   assert.equal(flattened, 1);
   assert.ok(!svg.svg.includes('<text'));
+});
+
+test('native text carries the shared face selection and fallback order outside the artwork', async () => {
+  for (const style of ['ink', 'baroque', 'grimoire', 'cyber']) {
+    const archive = { ...raw, project: { ...raw.project, name: 'Ω → 中文' } };
+    const result = unwrap(await renderRequest({ ...request, raw: archive, style, piece: 'tier', flatten: false }));
+    assert.deepEqual(result.fontFaces, nativeFonts(result.art.svg));
+    assert.equal(Object.hasOwn(result.art, 'fontFaces'), false);
+    const first = result.fontFaces[0];
+    assert.equal(first.pkg, 'inter');
+    const outlined = unwrap(await renderRequest({ ...request, raw: archive, style, piece: 'tier', flatten: true }));
+    assert.equal(Object.hasOwn(outlined, 'fontFaces'), false);
+  }
 });
 
 test('SVG time sampling matches exported frames, including scrolling crops', () => {

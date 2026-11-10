@@ -17,6 +17,7 @@ import { creditsBlock, fetchSegs, embedSnippet } from './text.ts';
 import { mergeCredits } from './merge.ts';
 import { motionProfile } from './motion-profiles.ts';
 import { markSvg, sharePetals } from './mark.ts';
+import { nativeFonts } from './fonts.ts';
 
 export const PROTOCOL_VERSION = 1;
 export const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
@@ -252,6 +253,7 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
     if (op === 'render') {
       const result = await at(reducedMotion ? 1 : t);
       return success(id, { art: flatten ? flattenArt(result) : result,
+        ...(!flatten && result ? { fontFaces: nativeFonts(result.svg) } : {}),
         timeline: original ? timelineFor(styleId, pieceId, original, reducedMotion || !piece.animated) : null });
     }
     if (!original) fail('missing_data', 'This archive does not contain enough data for the selected piece');

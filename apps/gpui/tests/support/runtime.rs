@@ -1,7 +1,7 @@
 //! Real production input/preview integration: no pre-rendered fixture artwork.
 //! File persistence, analysis services and animation playback have separate gates.
 use creditia_gpui::app::Creditia;
-use gpui_kit::test::{TestQueryExt, TestWindowExt};
+use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, App, AppContext, Bounds, ElementId, Entity, HeadlessAppContext, InputEvent,
     MouseMoveEvent, Window, WindowBounds, WindowOptions, assets::Assets, point, px, size,
@@ -27,7 +27,7 @@ struct Harness {
     feature_checks: Vec<Value>,
 }
 impl Harness {
-    fn new(raw: Value, catalog: Value, output: &Path, key: &str) -> Self {
+    fn new(raw: Value, catalog: Value, output: &Path, key: &str, viewport: (f32, f32)) -> Self {
         let mut cx = HeadlessAppContext::with_platform(
             gpui_kit::platform::current_platform(true).text_system(),
             Arc::new(Assets),
@@ -41,7 +41,7 @@ impl Harness {
                     WindowOptions {
                         window_bounds: Some(WindowBounds::Windowed(Bounds {
                             origin: Default::default(),
-                            size: size(px(1440.), px(1000.)),
+                            size: size(px(viewport.0), px(viewport.1)),
                         })),
                         show: false,
                         focus: false,
@@ -287,7 +287,6 @@ fn layouts(h: &mut Harness) {
         .map(|variant| variant["id"].as_str().unwrap().to_string())
         .collect();
     assert!(variants.len() > 2);
-    h.click("layouts");
     h.click(("variant", 0usize));
     h.ready();
     assert_eq!(h.state()["selected_variant"], variants[0]);
@@ -314,7 +313,6 @@ fn layouts(h: &mut Harness) {
     h.ready();
     assert_eq!(h.state()["selected_variant"], variants[2]);
     let settled = h.capture("settled-third-layout", true);
-    h.click("layouts");
     h.click(("variant", variants.len() - 1));
     // Intentionally issue new selections before the background renderer settles.
     h.press("right");
@@ -444,6 +442,7 @@ fn preferences(h: &mut Harness) {
     let private = h.capture("private-names", true);
     h.shortcut(",");
     assert_eq!(h.state()["panel"], "settings");
+    h.click("settings-tab-export");
     h.click("names-settings");
     assert_eq!(h.state()["named"], true);
     h.click("panel-close");
@@ -454,7 +453,8 @@ fn preferences(h: &mut Harness) {
         "name visibility must regenerate artwork pixels"
     );
     h.shortcut(",");
-    h.click("language");
+    h.click("settings-tab-general");
+    h.click("settings-language-zh");
     assert_eq!(h.state()["language"], "zh");
     h.click("panel-close");
     h.ready();
@@ -523,7 +523,7 @@ fn spatial(h: &mut Harness) {
         "tier fixture needs an actual hover hit region"
     );
     hover_first_hit(h, &first);
-    h.click("zoom-in");
+    h.shortcut("=");
     h.ready();
     h.update(|window, cx, _| window.drag(point(px(700.), px(450.)), point(px(765.), px(485.)), cx));
     h.ready();
@@ -544,7 +544,7 @@ fn spatial(h: &mut Harness) {
     assert!((after["pan_x"].as_f64().unwrap() - before["pan_x"].as_f64().unwrap()).abs() > 100.);
     assert!((after["pan_y"].as_f64().unwrap() - before["pan_y"].as_f64().unwrap()).abs() > 50.);
     let zoom = after["zoom"].as_f64().unwrap();
-    h.click("zoom-in");
+    h.shortcut("=");
     h.ready();
     assert!(h.state()["zoom"].as_f64().unwrap() > zoom);
     h.capture("roam-drag-zoom", false);
@@ -564,12 +564,30 @@ fn spatial(h: &mut Harness) {
     h.ready();
     h.shortcut("e");
     assert_eq!(h.state()["export_open"], true);
-    h.update(|window, _, _| assert!(window.find("close-export-dock").visible()));
+    h.update(|window, _, _| assert!(window.find("export-dock").visible()));
     h.capture("export-dock", false);
-    h.click("close-export-dock");
+    h.press("escape");
     assert_eq!(h.state()["export_open"], false);
     let state = h.state();
     h.check("actual-hover-roam-drag-zoom-and-export-dock",json!({"hover_title":first["t"],"drag_before":before,"drag_after":after,"state":state,"export_file_written":false}));
+    h.focus("share");
+    for _ in 0..10 {
+        h.shortcut("=");
+    }
+    h.ready();
+    let state = h.state();
+    let region = &state["focused_preview"]["region"];
+    assert!(
+        region.is_object(),
+        "deep zoom must exercise the actual cropped preview path"
+    );
+    let rect = &state["focused_rect"];
+    let scale = rect["w"].as_f64().unwrap() / state["art_width"].as_f64().unwrap();
+    assert!(
+        rect["y"].as_f64().unwrap() + region["y"].as_f64().unwrap() * scale <= -59.5,
+        "static preview must cover the strip behind the toolbar"
+    );
+    h.capture("deep-zoom-top-coverage", false);
     h.feature(
         "hover",
         "平移和缩放后命中准确",
@@ -580,6 +598,162 @@ fn spatial(h: &mut Harness) {
         "方向键移动、Home/0 回原点",
         "漫游中 Right/Down 改变对应坐标，0 与 Home 均恢复已记录的原点坐标",
     );
+}
+
+fn responsive(h: &mut Harness) {
+    h.settle();
+    h.ready();
+    let inside = |h: &mut Harness, id: &'static str| {
+        let id = if id == "panel" && h.state()["panel"] == "settings" {
+            "creditia-panel"
+        } else {
+            id
+        };
+        let bounds = h.update(|window, _, _| window.find(id).bounds());
+        assert!(
+            f32::from(bounds.left()) >= 17. && f32::from(bounds.top()) >= 17.,
+            "{id} escapes top/left: {bounds:?}"
+        );
+        assert!(
+            f32::from(bounds.right()) <= 743. && f32::from(bounds.bottom()) <= 543.,
+            "{id} escapes bottom/right: {bounds:?}"
+        );
+    };
+    h.click("switch-project");
+    inside(h, "panel");
+    let (menu, trigger) = h.update(|window, _, _| {
+        (
+            window.find("panel").bounds().left(),
+            window.find("switch-project").bounds().left(),
+        )
+    });
+    assert_eq!(menu, trigger);
+    h.capture("small-projects", false);
+    h.click("switch-project");
+    assert!(
+        h.state()["panel"].is_null(),
+        "the project trigger must also close its menu"
+    );
+    h.click("styles");
+    inside(h, "panel");
+    h.capture("small-styles", false);
+    h.click("styles");
+    assert!(
+        h.state()["panel"].is_null(),
+        "the style trigger must also close its menu"
+    );
+    h.click("settings");
+    inside(h, "panel");
+    for tab in [
+        "settings-tab-general",
+        "settings-tab-export",
+        "settings-tab-data",
+        "settings-tab-about",
+    ] {
+        h.click(tab);
+        inside(h, "panel");
+    }
+    h.capture("small-settings", false);
+    h.click("panel-close");
+    h.focus("tier");
+    let before = h.state()["focused_rect"].clone();
+    assert!(before["y"].as_f64().unwrap() + before["h"].as_f64().unwrap() <= 560. - 92. + 1.);
+    h.capture("small-focus", false);
+    h.click("focus-export");
+    inside(h, "export-dock");
+    assert_eq!(
+        h.state()["focused_rect"],
+        before,
+        "opening Export must not resize the artwork"
+    );
+    h.capture("small-export", false);
+    h.click("focus-export");
+    assert_eq!(
+        h.state()["export_open"],
+        false,
+        "the export trigger must close its menu"
+    );
+    h.click("focus-export");
+    h.press("escape");
+    assert_eq!(h.state()["focused"], true);
+    assert_eq!(h.state()["export_open"], false);
+    h.click("focus-export");
+    h.click("copy-archive-export");
+    let started = Instant::now();
+    loop {
+        h.cx.run_until_parked();
+        h.update(|window, cx, _| window.render_frame(cx));
+        if h.state()["operation_busy"] != true {
+            break;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(15),
+            "copy Markdown did not finish"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let markdown = h.update(|_, cx, _| {
+        cx.read_from_clipboard()
+            .and_then(|item| item.text())
+            .unwrap()
+    });
+    assert!(
+        markdown.contains("<!-- creditia:start -->") && markdown.contains("<!-- creditia:end -->"),
+        "Copy CREDITS.md must produce Markdown markers"
+    );
+    assert!(serde_json::from_str::<Value>(&markdown).is_err());
+    h.click("styles");
+    inside(h, "panel");
+    h.capture("small-focus-styles", false);
+    h.check("small-window-overlay-and-focus-bounds", json!({"width":760,"height":560,"focused_rect":before,"export_does_not_resize_artwork":true,"all_settings_tabs":true}));
+}
+
+fn card_layout(h: &mut Harness) {
+    for mode in ["wall", "roam"] {
+        h.click(mode);
+        h.ready();
+        h.focus("tier");
+        h.click("focus-close-top");
+        h.ready();
+        let before = h.state();
+        let index = before["selected_tile"].as_u64().unwrap() as usize;
+        h.update(|window, cx, _| window.hover(("artwork", index), cx));
+        h.click(("tile-next-layout", index));
+        h.ready();
+        let after = h.state();
+        assert_eq!(after["focused"], false);
+        assert_eq!(after["selected_piece"], before["selected_piece"]);
+        assert_eq!(after["view"], mode);
+        assert_ne!(
+            after["selected_variant"], before["selected_variant"],
+            "the card arrow must change its layout"
+        );
+        h.capture(&format!("{mode}-card-layout"), false);
+    }
+    h.check(
+        "card-layout-arrows-change-the-current-artwork",
+        json!({"wall":true,"roam":true}),
+    );
+}
+
+fn overlay_motion(h: &mut Harness) {
+    h.click("settings");
+    h.click("reduced-motion");
+    assert_eq!(h.state()["reduced_motion"], false);
+    h.click("panel-close");
+    h.settle();
+    h.click("styles");
+    h.click("styles");
+    h.click("styles");
+    h.settle();
+    assert_eq!(h.state()["panel"], "styles");
+    h.click("pieces");
+    h.settle();
+    assert_eq!(h.state()["panel"], "pieces");
+    h.press("escape");
+    h.settle();
+    assert!(h.state()["panel"].is_null());
+    h.check("animated-overlays-reverse-and-switch-during-transitions",json!({"reduced_motion":false,"reopen_during_close":true,"switch_panel":true,"escape":true}));
 }
 
 pub fn run() {
@@ -596,13 +770,16 @@ pub fn run() {
     let source: Value =
         serde_json::from_slice(&fs::read(input.join("fixture-manifest.json")).unwrap()).unwrap();
     let mut cases = Vec::new();
-    let scenarios: [(&str, fn(&mut Harness)); 6] = [
+    let scenarios: [(&str, fn(&mut Harness)); 9] = [
         ("runtime-layouts", layouts),
         ("runtime-style-trial", trial_restore),
         ("runtime-style-apply", apply_style),
         ("runtime-groups", groups),
         ("runtime-preferences", preferences),
         ("runtime-spatial", spatial),
+        ("runtime-responsive", responsive),
+        ("runtime-card-layout", card_layout),
+        ("runtime-overlay-motion", overlay_motion),
     ];
     for (key, scenario) in scenarios {
         println!("native runtime case: {key}");
@@ -612,6 +789,11 @@ pub fn run() {
                 fixture["catalog"].clone(),
                 &output,
                 key,
+                if key == "runtime-responsive" {
+                    (760., 560.)
+                } else {
+                    (1440., 1000.)
+                },
             )
         }));
         let mut harness = match created {

@@ -1,13 +1,13 @@
 //! Incremental artwork playback. The shared engine owns time sampling; this
 //! producer prepares only the current frame and a small bounded look-ahead.
 use crate::{
-    native_preview::{self, RasterImage},
-    renderer,
-    ui_model::{Artwork, Rect, Timeline, Viewport, focused_rect, texture_width},
+    native_preview, renderer,
+    ui_model::{Artwork, Rect, Timeline, Viewport, artwork_viewport, focused_rect, texture_width},
 };
 use serde_json::{Value, json};
 use std::sync::{Arc, Condvar, Mutex};
 
+const RASTER_LANES: usize = 2;
 pub const MAX_AHEAD: usize = 6;
 pub const MAX_RESIDENT_FRAMES: usize = 8;
 pub const DECODED_FRAME_BUDGET: u64 = 8 * 1024 * 1024;
@@ -43,6 +43,7 @@ struct Shared {
     position: Mutex<Position>,
     changed: Condvar,
     cancellation: renderer::Cancellation,
+    user_cancelled: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Clone)]
@@ -58,6 +59,7 @@ impl PlaybackControl {
             position: Mutex::new(Position::default()),
             changed: Condvar::new(),
             cancellation: renderer::Cancellation::default(),
+            user_cancelled: std::sync::atomic::AtomicBool::new(false),
         }))
     }
     pub fn cancellation(&self) -> renderer::Cancellation {
@@ -130,6 +132,18 @@ impl PlaybackControl {
     }
     /// Always cancel through this control so a paused producer wakes as well.
     pub fn cancel(&self) {
+        self.0
+            .user_cancelled
+            .store(true, std::sync::atomic::Ordering::Release);
+        self.halt();
+    }
+    pub fn user_cancelled(&self) -> bool {
+        self.0
+            .user_cancelled
+            .load(std::sync::atomic::Ordering::Acquire)
+    }
+    // Stop the paired producer after a failure without reporting a user cancel.
+    fn halt(&self) {
         self.0.cancellation.cancel();
         self.0.changed.notify_all();
     }
@@ -206,7 +220,9 @@ impl PlaybackControl {
 
 pub struct FrameTile {
     pub region: Option<Rect>,
-    pub raster: Arc<RasterImage>,
+    pub width: u32,
+    pub height: u32,
+    pub image: Arc<gpui_kit::RenderImage>,
 }
 
 pub enum Event {
@@ -225,6 +241,8 @@ pub enum Event {
         pixels: u32,
         decoded_bytes: usize,
         max_resident: usize,
+        generation_micros: u64,
+        raster_micros: u64,
     },
 }
 
@@ -236,7 +254,7 @@ pub fn run(
     mut request: Value,
     pixel_width: u32,
     control: PlaybackControl,
-    send: impl FnMut(Event) -> Result<(), String>,
+    send: impl FnMut(Event) -> Result<(), String> + Send,
 ) -> Result<(), String> {
     let raw = request
         .as_object_mut()
@@ -263,7 +281,7 @@ pub fn run_with_archive(
     archive: renderer::RenderArchive,
     pixel_width: u32,
     control: PlaybackControl,
-    send: impl FnMut(Event) -> Result<(), String>,
+    send: impl FnMut(Event) -> Result<(), String> + Send,
 ) -> Result<(), String> {
     if request.get("raw").is_some() || request.get("archiveId").is_some() {
         return Err("Animation archive handles cannot be combined with raw/archiveId".into());
@@ -285,19 +303,22 @@ fn render_frame(
         None => renderer::request_with_priority(request.clone(), control.cancellation(), 0),
     }
 }
+fn frame_artwork(result: &Value) -> Result<Artwork, String> {
+    Artwork::from_result(result)
+}
 fn run_internal(
     mut request: Value,
     archive: Option<renderer::RenderArchive>,
     pixel_width: u32,
     control: PlaybackControl,
-    mut send: impl FnMut(Event) -> Result<(), String>,
+    mut send: impl FnMut(Event) -> Result<(), String> + Send,
 ) -> Result<(), String> {
     let object = request
         .as_object_mut()
         .ok_or("Animation request must be an object")?;
     object.remove("frameCount");
     object.insert("op".into(), json!("render"));
-    object.insert("flatten".into(), json!(true));
+    object.insert("flatten".into(), json!(false));
     let first_time = if request["reducedMotion"] == true {
         1.0
     } else {
@@ -309,8 +330,7 @@ fn run_internal(
     // after preparation instead of abandoning the producer before Started.
     control.initial_plan()?;
     let result = render_frame(&request, archive.as_ref(), &control)?;
-    let first: Artwork = serde_json::from_value(result["art"].clone())
-        .map_err(|e| format!("Invalid first animation frame: {e}"))?;
+    let first = frame_artwork(&result)?;
     let timeline: Timeline = serde_json::from_value(result["timeline"].clone())
         .map_err(|e| format!("Invalid animation timeline: {e}"))?;
     let times = playback_times(&timeline);
@@ -321,54 +341,131 @@ fn run_internal(
         times: times.clone(),
     })?;
     let mut first = Some(Arc::new(first));
-    // Prepare one initial frame even if the user pauses immediately after
-    // Started. Subsequent same-epoch work obeys the paused look-ahead limit.
-    let mut epoch = first_epoch.wrapping_sub(1);
-    let mut next = 0;
-    let mut layers = crate::animation_layers::LayerCache::default();
-    loop {
-        let (wanted_epoch, index) = control.plan(epoch, next, times.len() - 1)?;
-        epoch = wanted_epoch;
-        let view = control.view();
-        let art = if index == 0 && first.is_some() {
-            first.take().unwrap()
-        } else {
-            request["t"] = json!(times[index]);
-            let result = render_frame(&request, archive.as_ref(), &control)?;
-            Arc::new(
-                serde_json::from_value::<Artwork>(result["art"].clone())
-                    .map_err(|e| format!("Invalid animation frame: {e}"))?,
-            )
-        };
-        if !control.current(epoch)? {
-            continue;
-        }
-        let Some(frame) = raster_frame(&art, pixel_width, view, &control, epoch, &mut layers)? else {
-            continue;
-        };
-        if control.current(epoch)? {
-            control.set_resident_limit(epoch, frame.max_resident);
-            send(Event::Frame {
-                epoch,
-                index,
-                art,
-                tiles: frame.tiles,
-                pixels: frame.pixels,
-                decoded_bytes: frame.decoded_bytes,
-                max_resident: frame.max_resident,
-            })?;
-        }
-        next = index + 1;
+    struct Generated {
+        epoch: u64,
+        index: usize,
+        art: Arc<Artwork>,
+        view: Option<FrameView>,
+        generation_micros: u64,
     }
+    // SVG generation runs in the renderer process; native rasterization runs
+    // on this bounded CPU lane. Overlap the two instead of serializing their
+    // costs on every frame. Only one generated SVG may wait for the rasterizer.
+    let (tx, rx) = std::sync::mpsc::sync_channel::<Generated>(1);
+    let first_failure = std::sync::OnceLock::<String>::new();
+    std::thread::scope(|scope| {
+        let raster_failure = &first_failure;
+        let raster_control = control.clone();
+        let raster = scope.spawn(move || {
+            let result: Result<(), String> = (|| {
+                let mut layers = std::array::from_fn(|_| {
+                    crate::animation_layers::LayerCache::bounded(
+                        crate::animation_layers::BUDGET / RASTER_LANES,
+                    )
+                });
+                while let Ok(generated) = rx.recv() {
+                    let Generated {
+                        epoch,
+                        index,
+                        art,
+                        view,
+                        generation_micros,
+                    } = generated;
+                    if !raster_control.current(epoch)? {
+                        continue;
+                    }
+                    let started = std::time::Instant::now();
+                    let Some(frame) =
+                        raster_frame(&art, pixel_width, view, &raster_control, epoch, &mut layers)?
+                    else {
+                        continue;
+                    };
+                    let raster_micros = started.elapsed().as_micros() as u64;
+                    if raster_control.current(epoch)? {
+                        raster_control.set_resident_limit(epoch, frame.max_resident);
+                        send(Event::Frame {
+                            epoch,
+                            index,
+                            art,
+                            tiles: frame.tiles,
+                            pixels: frame.pixels,
+                            decoded_bytes: frame.decoded_bytes,
+                            max_resident: frame.max_resident,
+                            generation_micros,
+                            raster_micros,
+                        })?;
+                    }
+                }
+                Ok(())
+            })();
+            if let Err(error) = &result {
+                let _ = raster_failure.set(error.clone());
+                raster_control.halt();
+            }
+            result
+        });
+        let generated = (|| -> Result<(), String> {
+            // Prepare one initial frame even if paused immediately after Started.
+            let mut epoch = first_epoch.wrapping_sub(1);
+            let mut next = 0;
+            loop {
+                let (wanted_epoch, index) = control.plan(epoch, next, times.len() - 1)?;
+                epoch = wanted_epoch;
+                let view = control.view();
+                let started = std::time::Instant::now();
+                let art = if index == 0 && first.is_some() {
+                    first.take().unwrap()
+                } else {
+                    request["t"] = json!(times[index]);
+                    let result = render_frame(&request, archive.as_ref(), &control)?;
+                    Arc::new(frame_artwork(&result)?)
+                };
+                if !control.current(epoch)? {
+                    continue;
+                }
+                if let Some(plan) = frame_plan(&art, pixel_width, view)? {
+                    control.set_resident_limit(epoch, plan.max_resident);
+                }
+                tx.send(Generated {
+                    epoch,
+                    index,
+                    art,
+                    view,
+                    generation_micros: started.elapsed().as_micros() as u64,
+                })
+                .map_err(|_| "Animation rasterizer stopped".to_string())?;
+                next = index + 1;
+            }
+        })();
+        drop(tx);
+        if let Err(error) = &generated {
+            let _ = first_failure.set(error.clone());
+            control.halt();
+        }
+        let prepared = raster
+            .join()
+            .map_err(|_| "Animation rasterizer panicked".to_string())?;
+        // Publish the initiating fault before cancelling its paired worker.
+        // Secondary cancellation errors must not hide the useful diagnosis.
+        if let Some(error) = first_failure.get() {
+            Err(error.clone())
+        } else {
+            prepared.and(generated)
+        }
+    })
 }
 
 pub fn playback_times(timeline: &Timeline) -> Vec<f64> {
     if timeline.duration_ms == 0 {
         return vec![1.0];
     }
-    // Native playback can sample more densely than GIF without changing the
-    // action definition. Long clips remain bounded to 120 indexed samples.
-    let steps = (timeline.duration_ms.saturating_mul(60).div_ceil(1000)).clamp(1, 119) as usize;
+    // Only the look-ahead images are resident. Sampling a long clip at the
+    // display cadence must not reduce it to a fixed number of still pictures.
+    let steps = timeline
+        .duration_ms
+        .saturating_mul(60)
+        .div_ceil(1000)
+        .max(1) as usize;
     (0..=steps)
         .map(|index| index as f64 / steps as f64)
         .collect()
@@ -436,15 +533,8 @@ fn frame_plan(
         }));
     };
     let rect = focused_rect(art.w, art.h, view.viewport, view.size);
-    if rect.w <= 0.
-        || rect.h <= 0.
-        || !rect.intersects(Rect {
-            x: 0.,
-            y: 0.,
-            w: view.size.0,
-            h: view.size.1,
-        })
-    {
+    let clip = artwork_viewport(view.size, true);
+    if rect.w <= 0. || rect.h <= 0. || !rect.intersects(clip) {
         return Ok(None);
     }
     let physical_width = f64::from(rect.w) * f64::from(view.dpi);
@@ -458,17 +548,19 @@ fn frame_plan(
     let scale = full_width / f64::from(art.w);
     let logical_scale = f64::from(rect.w) / f64::from(art.w);
     let full_height = (f64::from(art.h) * scale).ceil();
-    let x0 = ((-f64::from(rect.x) / logical_scale).max(0.) * scale)
+    let x0 = (((f64::from(clip.x) - f64::from(rect.x)) / logical_scale).max(0.) * scale)
         .floor()
         .clamp(0., full_width) as u64;
-    let y0 = ((-f64::from(rect.y) / logical_scale).max(0.) * scale)
+    let y0 = (((f64::from(clip.y) - f64::from(rect.y)) / logical_scale).max(0.) * scale)
         .floor()
         .clamp(0., full_height) as u64;
-    let x1 = (((f64::from(view.size.0) - f64::from(rect.x)) / logical_scale).min(f64::from(art.w))
+    let x1 = (((f64::from(clip.x + clip.w) - f64::from(rect.x)) / logical_scale)
+        .min(f64::from(art.w))
         * scale)
         .ceil()
         .clamp(0., full_width) as u64;
-    let y1 = (((f64::from(view.size.1) - f64::from(rect.y)) / logical_scale).min(f64::from(art.h))
+    let y1 = (((f64::from(clip.y + clip.h) - f64::from(rect.y)) / logical_scale)
+        .min(f64::from(art.h))
         * scale)
         .ceil()
         .clamp(0., full_height) as u64;
@@ -490,6 +582,7 @@ fn frame_plan(
         let tile_width = (x1 - x).min(8192) as u32;
         let max_height = (DECODED_FRAME_BUDGET / 4 / u64::from(tile_width))
             .min(32768)
+            .min(height.div_ceil(RASTER_LANES as u64))
             .max(1);
         let mut y = y0;
         while y < y1 {
@@ -534,27 +627,73 @@ fn raster_frame(
     view: Option<FrameView>,
     control: &PlaybackControl,
     epoch: u64,
-    layers: &mut crate::animation_layers::LayerCache,
+    layers: &mut [crate::animation_layers::LayerCache; RASTER_LANES],
 ) -> Result<Option<PreparedFrame>, String> {
     let Some(plan) = frame_plan(art, requested, view)? else {
         control.set_visible(false);
         return Ok(None);
     };
-    let mut tiles = Vec::with_capacity(plan.tiles.len());
-    for tile in plan.tiles {
-        if !control.current(epoch)? {
-            return Ok(None);
+    // Two bounded lanes retain one cache each (48 MiB combined). They render
+    // disjoint physical rows; the image's pixel density and total size stay
+    // unchanged. SVG generation overlaps this work on its own bounded lane.
+    let prepared = std::thread::scope(|scope| {
+        let jobs = layers
+            .iter_mut()
+            .enumerate()
+            .map(|(lane, cache)| {
+                let plans = &plan.tiles;
+                scope.spawn(move || -> Result<Vec<(usize, FrameTile)>, String> {
+                    let mut tiles = Vec::new();
+                    for (index, tile) in plans
+                        .iter()
+                        .enumerate()
+                        .filter(|(index, _)| index % RASTER_LANES == lane)
+                    {
+                        if !control.current(epoch)? {
+                            return Ok(vec![]);
+                        }
+                        let image = native_preview::rasterize_animation(
+                            &art.svg,
+                            tile.width,
+                            tile.height,
+                            Some(
+                                tile.region
+                                    .map(|r| (r.x, r.y, r.w, r.h))
+                                    .unwrap_or((0., 0., art.w, art.h)),
+                            ),
+                            &control.cancellation(),
+                            cache,
+                            &art.font_faces,
+                        )?;
+                        tiles.push((
+                            index,
+                            FrameTile {
+                                region: tile.region,
+                                width: tile.width,
+                                height: tile.height,
+                                image,
+                            },
+                        ));
+                    }
+                    Ok(tiles)
+                })
+            })
+            .collect::<Vec<_>>();
+        let mut tiles = Vec::with_capacity(plan.tiles.len());
+        for job in jobs {
+            tiles.extend(
+                job.join()
+                    .map_err(|_| "Animation raster lane panicked".to_string())??,
+            );
         }
-        let raster = native_preview::rasterize_animation(&art.svg, tile.width, tile.height,
-            tile.region.map(|r| (r.x,r.y,r.w,r.h)), &control.cancellation(), layers)?;
-        if raster.width as u64 * raster.height as u64 * 4 > DECODED_FRAME_BUDGET {
-            return Err("Animation tile exceeded its decoded pixel budget".into());
-        }
-        tiles.push(FrameTile {
-            region: tile.region,
-            raster,
-        });
+        Ok::<_, String>(tiles)
+    })?;
+    if !control.current(epoch)? {
+        return Ok(None);
     }
+    let mut prepared = prepared;
+    prepared.sort_by_key(|(index, _)| *index);
+    let tiles = prepared.into_iter().map(|(_, tile)| tile).collect();
     Ok(Some(PreparedFrame {
         tiles,
         pixels: plan.pixels,
@@ -568,6 +707,19 @@ mod tests {
     use super::*;
     use std::sync::mpsc;
     use std::time::Duration;
+    #[test]
+    fn producer_failure_stops_work_without_becoming_a_user_cancel() {
+        let failed = PlaybackControl::new();
+        failed.halt();
+        assert!(failed.cancelled());
+        assert!(
+            !failed.user_cancelled(),
+            "the UI must still report internal failures"
+        );
+        let stopped = PlaybackControl::new();
+        stopped.cancel();
+        assert!(stopped.cancelled() && stopped.user_cancelled());
+    }
     #[test]
     fn tall_frames_never_escape_the_decoded_budget_via_a_minimum_width() {
         for (width, height) in [(1080., 720.), (100., 30000.), (1080., 1000000.)] {
@@ -635,17 +787,22 @@ mod tests {
         );
     }
     #[test]
-    fn sampled_times_include_both_endpoints_and_remain_bounded() {
+    fn long_clips_keep_display_cadence_without_retaining_all_frames() {
         let timeline = Timeline {
-            duration_ms: 5000,
+            duration_ms: 14000,
             hold_ms: 1000,
             fps: 20,
             repeat: true,
         };
         let times = playback_times(&timeline);
-        assert_eq!(times.len(), 120);
+        assert_eq!(times.len(), 841);
         assert_eq!(times.first(), Some(&0.));
         assert_eq!(times.last(), Some(&1.));
+        assert!(
+            times
+                .windows(2)
+                .all(|pair| (pair[1] - pair[0]) * 14000. <= 1000. / 60. + 1e-9)
+        );
         assert_eq!(playback_times(&Timeline::default()), vec![1.]);
     }
 
@@ -658,7 +815,29 @@ mod tests {
             title: String::new(),
             bg: String::new(),
             motion: None,
+            font_faces: vec![],
         }
+    }
+    #[test]
+    fn animated_tiles_cover_the_same_top_and_bottom_as_the_canvas() {
+        let art = artwork(1080., 1080.);
+        let view = FrameView {
+            viewport: Viewport {
+                y: -180.,
+                zoom: 2.,
+                ..Viewport::default()
+            },
+            size: (1360., 820.),
+            dpi: 2.,
+        };
+        let rect = focused_rect(art.w, art.h, view.viewport, view.size);
+        let clip = artwork_viewport(view.size, true);
+        let plan = frame_plan(&art, 1, Some(view)).unwrap().unwrap();
+        let scale = rect.w / art.w;
+        let first = plan.tiles.first().unwrap().region.unwrap();
+        let last = plan.tiles.last().unwrap().region.unwrap();
+        assert!(rect.y + first.y * scale <= clip.y + 0.5);
+        assert!(rect.y + (last.y + last.h) * scale >= (clip.y + clip.h).min(rect.y + rect.h) - 0.5);
     }
     #[test]
     fn hidpi_and_deep_zoom_preserve_density_by_tiling_only_the_visible_viewport() {

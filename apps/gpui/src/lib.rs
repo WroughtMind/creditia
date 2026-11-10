@@ -427,6 +427,7 @@ pub mod app;
 pub mod export_jobs;
 pub mod image_assets;
 pub mod live_mark;
+pub mod material;
 pub mod native_preview;
 pub mod platform_ui;
 pub mod preference_writer;

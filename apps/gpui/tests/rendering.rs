@@ -33,7 +33,7 @@ mod native {
         Appearance,
         app::{Creditia, Fixture},
     };
-    use gpui_kit::test::{TestQueryExt, TestWindowExt};
+    use gpui_kit::test::TestWindowExt;
     use gpui_kit::{
         AnyWindowHandle, AppContext, Bounds, Entity, HeadlessAppContext, WindowBounds,
         WindowOptions, assets::Assets, px, size,
@@ -155,7 +155,7 @@ mod native {
                 Some("empty") => assert!(window.find("first-project").visible()),
                 Some("loading") => assert_eq!(view.read(cx).diagnostic_state()["loading"], true),
                 Some("error") => assert!(window.find("retry").visible()),
-                Some("analyzing") => assert!(window.find("cancel-analysis").visible()),
+                Some("analyzing") => assert!(window.find("cancel-analysis-inline").visible()),
                 Some("exporting") => assert!(window.find("cancel-export").visible()),
                 _ => {}
             }
@@ -190,7 +190,14 @@ mod native {
                 window.click("roam", cx);
                 assert_eq!(view.read(cx).diagnostic_state()["view"], "roam");
                 let before = view.read(cx).diagnostic_state()["zoom"].as_f64().unwrap();
-                window.click("zoom-in", cx);
+                window.press(
+                    if cfg!(target_os = "macos") {
+                        "cmd-="
+                    } else {
+                        "ctrl-="
+                    },
+                    cx,
+                );
                 assert!(view.read(cx).diagnostic_state()["zoom"].as_f64().unwrap() > before);
                 window.render_frame(cx);
             })
@@ -205,6 +212,7 @@ mod native {
                 window.click("wall", cx);
                 assert_eq!(view.read(cx).diagnostic_state()["view"], "wall");
                 window.click("settings", cx);
+                window.click("settings-tab-export", cx);
                 assert!(window.find("names-settings").visible());
                 let before = view.read(cx).diagnostic_state()["named"].as_bool().unwrap();
                 window.click("names-settings", cx);
@@ -226,7 +234,6 @@ mod native {
             wait_assets(&mut cx, handle, &view);
             let before = cx.capture_screenshot(handle).unwrap();
             cx.update_window(handle, |_, window, cx| {
-                window.click("layouts", cx);
                 window.click(("variant", variant_index), cx);
                 assert_eq!(
                     view.read(cx).diagnostic_state()["selected_variant"],

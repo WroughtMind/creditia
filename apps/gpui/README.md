@@ -37,6 +37,20 @@ does not depend on a source checkout, a globally installed Node, or remote fonts
 - GPUI owns window and input behavior, the exhibition wall and roam viewport,
   hit testing, controls and image lifetime. The native preview module rasterizes
   at a scale chosen for the current viewport.
+- Playback streams decoded native pixels into GPUI rather than encoding and
+  decoding a PNG for each frame. Sampling follows the authored duration at 60 Hz;
+  late samples are skipped instead of stretching the animation. Two raster lanes
+  render disjoint physical rows on the same pixel grid. The shared renderer also
+  supplies the exact packaged font faces and fallback order for native text.
+- Static previews use that same native font path. This preserves SVG text paint
+  servers (for example Baroque's gold title) through focus, playback and stopping,
+  instead of relying on the shared SVG serializer to convert text into paths.
+- Fixed filtered layers and non-stitching turbulence can reuse their original
+  pixels. The narrow resvg patch is documented in
+  [vendor/resvg/CREDITIA.md](vendor/resvg/CREDITIA.md). Static previews and noise
+  each have a separate 64 MiB cache; layer caches share 48 MiB and the player's
+  retained frames have a separate 64 MiB budget. These are component budgets,
+  not a limit on total process memory.
 - Legacy WebView preferences are read by the bundled one-time helper under the
   original application identity. Old storage is retained for rollback.
 
@@ -120,6 +134,24 @@ These captures establish rendering and the interactions asserted in the tests.
 They do not by themselves establish animation behavior, system dialogs,
 accessibility, or physical-device GPU behavior. The matrix comparison and process-tree benchmark tools keep those
 results separate and record incomplete checks explicitly.
+
+Two diagnostic examples exercise the same producer without desktop input:
+
+```sh
+cargo run --manifest-path apps/gpui/Cargo.toml --release --example playback_profile -- evidence/fixtures/minimal-light-en.json ink tier rows 6
+cargo run --manifest-path apps/gpui/Cargo.toml --release --example playback_conformance -- evidence/fixtures/minimal-light-en.json evidence/playback-conformance
+```
+
+Use the renderer overrides above when these release executables run outside a
+package. The profile reports SVG generation and prepared native pixels at DPI 2,
+not monitor FPS. The comparison records exact pixel identity and PSNR separately:
+it checks representative native font shaping for all 26 styles in both languages,
+missing-glyph fallback, and selected production frames with raster lanes and
+layer/noise caches. These diagnostics report measured raster differences for
+visual review, including edge/filter sampling across resvg releases and
+offscreen color quantization. They do not declare pixel equivalence or replace
+the strict shared renderer identity gate. Neither example measures GPU
+presentation.
 
 ## Packages and release evidence
 

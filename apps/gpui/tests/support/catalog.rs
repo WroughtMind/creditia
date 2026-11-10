@@ -1,6 +1,6 @@
 //! Every desktop artwork/layout is selected and painted by the production view.
 use creditia_gpui::app::{Creditia, Fixture};
-use gpui_kit::test::{TestQueryExt, TestWindowExt};
+use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, AppContext, Bounds, Entity, HeadlessAppContext, WindowBounds, WindowOptions,
     assets::Assets, px, size,
@@ -91,8 +91,6 @@ pub fn run() {
                     assert_eq!(view.read(cx).diagnostic_state()["selected_piece"], row["piece"], "the piece selector must preserve the requested selection");
                     assert_eq!(view.read(cx).diagnostic_state()["focused"], true);
                     if let Some(index) = row["variant_index"].as_u64() {
-                        window.click("layouts", cx);
-                        assert_eq!(view.read(cx).diagnostic_state()["panel"], "layouts");
                         window.click(("variant", index as usize), cx);
                     }
                     window.render_frame(cx);

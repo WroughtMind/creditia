@@ -111,7 +111,7 @@ impl Workspace {
         let beta = create(BETA, "Beta Studio", "path-only-second");
         // Seed a real retained evidence row before application workers exist.
         // This is fixture setup, not a substitute for a UI service callback.
-        let seed = Command::new("python")
+        let seed = Command::new("python3")
             .args(["-c", "import sqlite3,sys\nc=sqlite3.connect(sys.argv[1])\nc.execute('insert into evidence(project,rel,key,src,model,session,ts,tab) values(?,?,?,?,?,?,?,?)',(sys.argv[2],'README.md',17,'claude-code','fixture-model','native-fixture-session',1770000000,0))\nc.commit()\nc.close()"])
             .arg(Library::open().unwrap().path()).arg(BETA).output().unwrap();
         assert!(
@@ -360,7 +360,11 @@ impl Harness {
 }
 impl Drop for Harness {
     fn drop(&mut self) {
-        self.close();
+        // A failed GPUI update may already have removed the window. Keep the
+        // original test failure from becoming a second panic during unwinding.
+        if !std::thread::panicking() {
+            self.close();
+        }
     }
 }
 
@@ -512,9 +516,11 @@ fn settings_and_persistence(h: &mut Harness, _: &Workspace) {
     h.snapshot("saved-project-settings");
     h.click("panel-close");
     h.click("settings");
-    h.click("language");
+    h.click("settings-language-zh");
     h.click("appearance");
+    h.click("settings-tab-export");
     h.click("names-settings");
+    h.click("settings-tab-general");
     h.click("ring");
     h.click("auto-analyze");
     h.wait("global default enabled", |_| {
@@ -591,7 +597,7 @@ fn recover_export(h: &mut Harness, workspace: &Workspace) {
     assert_eq!(fs::read(&destination).unwrap(), bytes);
     h.record("reopened-queue", saved);
     h.feature("new-export-options", "恢复不覆盖错误输入或旧任务", "重新打开保存有中断导出的项目库，显式重试原项目的请求并核对 PNG，再次打开窗口后核对历史和文件");
-    h.click("panel-close");
+    h.press("escape");
 }
 
 fn remove_projects(h: &mut Harness, workspace: &Workspace) {

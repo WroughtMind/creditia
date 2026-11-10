@@ -152,6 +152,40 @@ pub fn ui_font_files() -> Result<Vec<PathBuf>, String> {
     ui_font_files_in(&roots)
 }
 
+/// Artwork fonts come from the same finite packaged font tree as the shared
+/// renderer. Read once off the UI thread; never consult system/user fonts.
+pub fn artwork_font_files(faces: &[crate::ui_model::FontFace]) -> Result<Vec<PathBuf>, String> {
+    let interface = ui_font_files()?;
+    let root = interface[0]
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::parent)
+        .ok_or("Invalid packaged font directory")?;
+    let mut fonts = Vec::new();
+    for face in faces {
+        if [&face.pkg, &face.dir].iter().any(|part| {
+            part.is_empty()
+                || !part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        }) {
+            return Err("Invalid packaged font face".into());
+        }
+        let directory = root.join(&face.pkg).join(&face.dir);
+        let file = std::fs::read_dir(directory)
+            .map_err(|error| error.to_string())?
+            .filter_map(Result::ok)
+            .map(|file| file.path())
+            .find(|file| {
+                file.extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("ttf"))
+            })
+            .ok_or("A requested artwork font is missing")?;
+        fonts.push(file);
+    }
+    Ok(fonts)
+}
+
 fn ui_font_files_in(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     for root in roots {
         let fonts = root.join("node_modules/@expo-google-fonts");
