@@ -21,7 +21,8 @@ const request = { version: 1, id: 1, op: 'render', style: 'minimal-light', piece
 const normalized = (s: string) => s
   .replace(/(\bid="|url\(#|\bhref="#)c[0-9a-z]+(?=-)/g, '$1scene')
   .replace(/(\bid="|url\(#|\bhref="#)s[0-9a-z]+(?=_)/g, '$1satori');
-const normalizedArt = (a: Art | null) => a && ({ ...a, svg: normalized(a.svg), ...(a.crop ? { crop: { ...a.crop, svg: normalized(a.crop.svg) } } : {}) });
+const summarizedHits = (hits: Art['hits']) => hits.map(hit => ({ ...hit, summary: hit.summary ?? (hit.d ?? []).join(' · ') }));
+const normalizedArt = (a: Art | null) => a && ({ ...a, hits: summarizedHits(a.hits), svg: normalized(a.svg), ...(a.crop ? { crop: { ...a.crop, svg: normalized(a.crop.svg) } } : {}) });
 const unwrap = (response: Awaited<ReturnType<typeof renderRequest>>): any => {
   assert.equal(response.ok, true, response.ok ? '' : JSON.stringify(response.error));
   return response.ok ? response.result : null;
@@ -76,11 +77,39 @@ test('native classic output and sampled animation use existing layout and motion
   const expected = await C.art('tier', model, theme, { lang: 'en', variant: 'original' });
   const actual = unwrap(await renderRequest({ ...request, piece: 'tier', variant: 'original' })).art;
   assert.equal(normalized(actual.svg), normalized(expected!.svg));
-  assert.deepEqual(actual.hits, expected!.hits);
+  assert.deepEqual(actual.hits, summarizedHits(expected!.hits));
   for (const [piece, variant] of [['tier', 'original'], ['roll', 'crawl'], ['roll', 'scroll'], ['roll', 'troupe']]) {
     const animation = await C.frames(piece, model, theme, { lang: 'en', variant }, 2);
     const sampled = unwrap(await renderRequest({ ...request, piece, variant, t: 0.5 })).art;
     assert.equal(normalized(sampled.svg), normalized(animation[1].svg), `${piece}/${variant}`);
+  }
+});
+
+test('compact native hover summaries retain model shares and non-model metrics', async () => {
+  for (const lang of ['en', 'zh']) {
+    const tier = unwrap(await renderRequest({ ...request, style: 'ink', piece: 'tier', lang })).art;
+    const contributor = tier.hits.find(hit => hit.k && /\d/.test(hit.summary));
+    assert.ok(contributor, `${lang}: contributor summary`);
+    assert.match(contributor.summary, /\d/);
+    assert.ok(contributor.summary.includes('%'), `${lang}: contribution share`);
+    const versions = unwrap(await renderRequest({ ...request, style: 'ink', piece: 'versions', lang })).art;
+    const versionHits = versions.hits.filter(hit => hit.d?.some(line => /^\d{4}-\d{2}-\d{2}$/.test(line)));
+    assert.ok(versionHits.length > 0);
+    for (const hit of versionHits) {
+      assert.match(hit.summary, /\d/);
+      assert.ok(hit.summary.includes(lang === 'zh' ? '行' : 'lines'));
+      assert.ok(hit.d.includes(hit.summary.split(' · ')[0]), 'summary retains the line count rather than only the date');
+    }
+    const evidence = unwrap(await renderRequest({ ...request, style: 'ink', piece: 'evidence', lang })).art;
+    const proved = evidence.hits.filter(hit => hit.d?.some(line => /Line logs|日志/.test(line)));
+    assert.ok(proved.length > 0);
+    for (const hit of proved) assert.equal(hit.summary, hit.d.join(' · '), 'all evidence counts remain visible');
+    for (const piece of ['survival', 'areas']) {
+      const result = unwrap(await renderRequest({ ...request, style: 'ink', piece, lang })).art;
+      const local = result.hits.filter(hit => hit.d?.some(line => piece === 'areas' ? /lines in|里.*行/.test(line) : /retained|留存/.test(line)));
+      assert.ok(local.length > 0, `${lang}: ${piece} local metrics`);
+      for (const hit of local) assert.equal(hit.summary, hit.d[0], `${piece}: summary uses the hovered metric's scope`);
+    }
   }
 });
 

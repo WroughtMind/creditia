@@ -1,8 +1,41 @@
 //! The original desktop shell icons, preserving its 16 px grid and stroke geometry.
 use gpui_kit::component::Icon;
 
+/// Use the same sourced logo assets as the artwork renderer. Unknown keys have
+/// no invented brand mark; their visible contributor name remains sufficient.
+pub fn contributor(key: &str) -> Option<Icon> {
+    let tool = key.strip_prefix("a:").unwrap_or(key).split('/').next()?;
+    let bytes: &'static [u8] = match tool {
+        "codex" | "openai" => include_bytes!("../../../packages/render/assets/logos/openai.svg"),
+        "claude" | "claude-code" | "anthropic" => {
+            include_bytes!("../../../packages/render/assets/logos/claude.svg")
+        }
+        "cursor" => include_bytes!("../../../packages/render/assets/logos/cursor.svg"),
+        "gemini" | "gemini-cli" => {
+            include_bytes!("../../../packages/render/assets/logos/geminicli.svg")
+        }
+        "copilot" | "github-copilot" => {
+            include_bytes!("../../../packages/render/assets/logos/githubcopilot.svg")
+        }
+        "kimi" | "kimi-code" => include_bytes!("../../../packages/render/assets/logos/kimi.svg"),
+        "qwen" | "qwen-code" => include_bytes!("../../../packages/render/assets/logos/qwen.svg"),
+        "continue" => include_bytes!("../../../packages/render/assets/logos/continue.svg"),
+        "windsurf" => include_bytes!("../../../packages/render/assets/logos/windsurf.svg"),
+        "deepseek" => include_bytes!("../../../packages/render/assets/logos/deepseek.svg"),
+        _ => return None,
+    };
+    Some(Icon::default().data(bytes))
+}
+
 pub fn icon(name: &str) -> Icon {
     let svg: &'static [u8] = match name {
+        "file" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5.5L9.5 2Z"/><path d="M9 2v4h4M5.5 9h5M5.5 11.5H9"/></svg>"#,
+        "pen" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 2 4 4-7 7-4 1 1-4 6-8ZM9 4l3 3M3 14l3-3"/></svg>"#,
+        "film" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1.5"/><path d="M5 2v12M11 2v12M2 6h3M2 10h3M11 6h3M11 10h3"/></svg>"#,
+        "globe" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><ellipse cx="8" cy="8" rx="2.5" ry="6"/><path d="M2 8h12"/></svg>"#,
+        "code" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 4-4 4 4 4M11 4l4 4-4 4M9 2 7 14"/></svg>"#,
+        "text" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h12M2 6.5h8M2 10h12M2 13.5h8"/></svg>"#,
+        "json" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 2H4a1 1 0 0 0-1 1v3.5L1.5 8 3 9.5V13a1 1 0 0 0 1 1h1.5M10.5 2H12a1 1 0 0 1 1 1v3.5L14.5 8 13 9.5V13a1 1 0 0 1-1 1h-1.5"/></svg>"#,
         "layout" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.25" y="2.25" width="11.5" height="11.5" rx="1.5"/><path d="M2.5 6h11M7.25 6v7.5"/></svg>"#,
         "down" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"/></svg>"#,
         "play" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.75 13 8l-8 5.25z"/></svg>"#,

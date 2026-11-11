@@ -104,6 +104,9 @@ impl Harness {
         loop {
             self.cx.run_until_parked();
             let (ready, state) = self.update(|window, cx, view| {
+                // The test window has no display link to request the final
+                // settled-resolution/crop frame after geometry changes.
+                view.update(cx, |_, cx| cx.notify());
                 window.render_frame(cx);
                 let ready = view.update(cx, |view, cx| view.fixture_images_ready(window, cx));
                 (ready, view.read(cx).diagnostic_state())
@@ -135,7 +138,12 @@ impl Harness {
         let started = Instant::now();
         while started.elapsed() < Duration::from_millis(220) {
             self.cx.run_until_parked();
-            self.update(|window, cx, _| window.render_frame(cx));
+            self.update(|window, cx, view| {
+                // Headless windows have no display-link callbacks. Invalidate
+                // once per sampled frame so real-time transitions can finish.
+                view.update(cx, |_, cx| cx.notify());
+                window.render_frame(cx);
+            });
             std::thread::sleep(Duration::from_millis(10));
         }
     }
@@ -189,6 +197,10 @@ impl Harness {
         self.ready();
     }
     fn focus(&mut self, piece: &str) {
+        if self.state()["export_workspace"] == true {
+            self.click("export-back");
+            self.ready();
+        }
         if self.state()["focused"] == true {
             self.press("escape");
             self.ready();
@@ -212,7 +224,14 @@ impl Harness {
         let bounds = self.update(|window, cx, view| {
             // Move the pointer away from artwork so tooltip/caption changes
             // cannot masquerade as a regenerated artwork in pixel comparisons.
-            window.hover("styles", cx);
+            window.hover(
+                if view.read(cx).diagnostic_state()["export_workspace"] == true {
+                    "export-title"
+                } else {
+                    "styles"
+                },
+                cx,
+            );
             window.render_frame(cx);
             if artwork_only {
                 let state = view.read(cx).diagnostic_state();
@@ -603,12 +622,12 @@ fn spatial(h: &mut Harness) {
     h.ready();
     h.shortcut("e");
     assert_eq!(h.state()["export_open"], true);
-    h.update(|window, _, _| assert!(window.find("export-dock").visible()));
-    h.capture("export-dock", false);
+    h.update(|window, _, _| assert!(window.find("export-workspace").visible()));
+    h.capture("export-workspace", false);
     h.press("escape");
     assert_eq!(h.state()["export_open"], false);
     let state = h.state();
-    h.check("actual-hover-roam-drag-zoom-and-export-dock",json!({"hover_title":first["t"],"drag_before":before,"drag_after":after,"state":state,"export_file_written":false}));
+    h.check("actual-hover-roam-drag-zoom-and-export-workspace",json!({"hover_title":first["t"],"drag_before":before,"drag_after":after,"state":state,"export_file_written":false}));
     h.focus("share");
     for _ in 0..10 {
         h.shortcut("=");
@@ -730,17 +749,11 @@ fn reviewed_interactions(h: &mut Harness) {
     h.focus("tier");
     let dock_width =
         h.update(|window, _, _| f32::from(window.find("focus-dock").bounds().size.width));
-    let gif = h.catalog["formats"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|format| format["id"] != "md")
-        .position(|format| format["id"] == "gif")
-        .unwrap();
     // Start with the saved GIF preference. OS save prompts are deliberately
     // outside this input scenario; the test platform waits for their response.
     assert_eq!(h.state()["export_format"], "gif");
     h.focus("badge");
+    h.capture("static-dock", false);
     h.update(|window, _, _| {
         assert!(window.find("static-artwork").visible());
         assert!(
@@ -754,13 +767,14 @@ fn reviewed_interactions(h: &mut Harness) {
         true,
         "saved GIF cannot lock the export entry"
     );
-    h.click(("format", gif));
+    h.click("export-format-gif");
     assert_eq!(
         h.state()["export_open"],
         true,
         "unsupported GIF must not start an export"
     );
-    assert_eq!(h.state()["export_format"], "gif");
+    assert_eq!(h.state()["export_format"], "png");
+    h.ready();
     h.capture("static-export-with-gif-disabled", false);
     h.press("escape");
     h.press("escape");
@@ -802,6 +816,146 @@ fn reviewed_interactions(h: &mut Harness) {
     // A deterministic headless executor cannot run both on the same thread.
     // Completion and producer controls have separate unit checks; real-window
     // play/pause/resume/replay remains a manual acceptance step.
+}
+
+fn export_workspace(h: &mut Harness) {
+    h.focus("tier");
+    let before = h.state();
+    h.click("focus-export");
+    h.ready();
+    assert_eq!(h.state()["export_workspace"], true);
+    assert_eq!(h.state()["export_preview"]["image_ready"], true);
+    h.capture("png", false);
+    for id in ["svg", "json", "png"] {
+        h.click(format!("export-format-{id}"));
+    }
+    h.ready();
+    assert_eq!(h.state()["export_format"], "png");
+    assert_eq!(h.state()["export_preview"]["image_ready"], true);
+    assert_eq!(h.state()["export_preview"]["text_ready"], false);
+    for id in ["svg", "pdf", "gif", "html"] {
+        h.click(format!("export-format-{id}"));
+        h.ready();
+        let state = h.state();
+        assert_eq!(state["export_format"], id);
+        assert_eq!(
+            state["export_prompt_busy"], false,
+            "choosing a format only previews it"
+        );
+        assert!(
+            state["export_preview"]["error"].is_null(),
+            "preview failed: {state}"
+        );
+    }
+    for id in ["embed", "md", "txt", "json"] {
+        h.click(format!("export-format-{id}"));
+        h.ready();
+        let state = h.state();
+        assert_eq!(
+            state["export_preview"]["text_ready"], true,
+            "text preview must come from the renderer: {state}"
+        );
+        h.click("export-primary");
+        let copied = h.update(|_, cx, _| {
+            cx.read_from_clipboard()
+                .and_then(|item| item.text())
+                .unwrap()
+        });
+        match id {
+            "md" => assert!(
+                copied.contains("<!-- creditia:start -->")
+                    && copied.contains("<!-- creditia:end -->")
+            ),
+            "json" => assert_eq!(
+                serde_json::from_str::<Value>(&copied).unwrap()["project"]["name"],
+                "catnap"
+            ),
+            "embed" => assert!(copied.contains("credits.json") && copied.contains("creditia")),
+            _ => assert!(copied.contains("catnap")),
+        }
+        assert_eq!(
+            h.state()["export_workspace"],
+            true,
+            "copy remains in the current workspace"
+        );
+        h.capture(&format!("{id}-copied"), false);
+    }
+    h.click("export-format-png");
+    h.ready();
+    h.click("export-size");
+    h.press("down");
+    h.press("down");
+    h.press("enter");
+    h.ready();
+    assert_ne!(h.state()["export_size"], "native");
+    let revision = h.state()["export_preview"]["revision"].as_u64().unwrap();
+    h.click("transparent");
+    h.ready();
+    assert!(h.state()["export_preview"]["revision"].as_u64().unwrap() > revision);
+    assert!(h.state()["export_preview"]["error"].is_null());
+    h.capture("framed-transparent", false);
+    h.shortcut("=");
+    assert_eq!(
+        h.state()["zoom"],
+        before["zoom"],
+        "export shortcuts must not move the hidden artwork"
+    );
+    h.click("export-back");
+    h.ready();
+    assert_eq!(h.state()["focused_rect"], before["focused_rect"]);
+    assert_eq!(h.state()["export_workspace"], false);
+    let state = h.state();
+    h.check("same-window-format-preview-copy-parameters-and-return",json!({"state":state,"real_renderer":true,"copied_formats":["embed","md","txt","json"],"system_save_dialog_exercised":false}));
+
+    // Review the approved material and information hierarchy in the app's
+    // Chinese dark appearance, using regenerated Grimoire artwork.
+    h.press("escape");
+    h.choose_style("grimoire");
+    h.click("group-model");
+    h.ready();
+    h.focus("tier");
+    h.shortcut(",");
+    h.click("settings-tab-general");
+    h.click("settings-language-zh");
+    h.click("appearance");
+    assert_eq!(h.state()["appearance"], "dark");
+    h.click("panel-close");
+    h.ready();
+    h.capture("dark-focus", false);
+    let first = h.state()["first_hit"].clone();
+    hover_first_hit(h, &first);
+    let name = format!("{}-dark-hover.png", h.key);
+    h.cx.capture_screenshot(h.handle)
+        .unwrap()
+        .save(h.output.join(&name))
+        .unwrap();
+    h.artifacts.push(json!({"path":name}));
+    h.click("focus-export");
+    h.click("export-format-png");
+    h.ready();
+    h.capture("dark-png", false);
+    h.click("export-format-md");
+    h.ready();
+    h.capture("dark-markdown", false);
+    h.click("export-back");
+    h.shortcut(",");
+    h.click("appearance");
+    h.click("appearance");
+    assert_eq!(h.state()["appearance"], "light");
+    h.click("panel-close");
+    h.ready();
+    let first = h.state()["first_hit"].clone();
+    hover_first_hit(h, &first);
+    let name = format!("{}-light-hover.png", h.key);
+    h.cx.capture_screenshot(h.handle)
+        .unwrap()
+        .save(h.output.join(&name))
+        .unwrap();
+    h.artifacts.push(json!({"path":name}));
+    h.check(
+        "chinese-workspace-and-compact-hover-in-dark-and-light",
+        json!({"real_renderer":true,"hover_title":first["t"]}),
+    );
 }
 
 fn responsive(h: &mut Harness) {
@@ -880,25 +1034,53 @@ fn responsive(h: &mut Harness) {
     assert!(before["y"].as_f64().unwrap() + before["h"].as_f64().unwrap() <= 560. - 92. + 1.);
     h.capture("small-focus", false);
     h.click("focus-export");
-    inside(h, "export-dock");
+    h.ready();
+    h.update(|window, _, _| {
+        let bounds = window.find("export-workspace").bounds();
+        assert_eq!(bounds.origin, point(px(0.), px(0.)));
+        assert_eq!(bounds.size, size(px(760.), px(560.)));
+        for id in ["export-primary", "export-preview", "export-size"] {
+            let b = window.find(id).bounds();
+            assert!(
+                b.left() >= px(0.)
+                    && b.top() >= px(0.)
+                    && b.right() <= px(760.)
+                    && b.bottom() <= px(560.),
+                "{id} is outside the export workspace: {b:?}"
+            );
+        }
+    });
     assert_eq!(
         h.state()["focused_rect"],
         before,
         "opening Export must not resize the artwork"
     );
     h.capture("small-export", false);
-    h.click("focus-export");
-    assert_eq!(
-        h.state()["export_open"],
-        false,
-        "the export trigger must close its menu"
-    );
+    h.click("export-format-svg");
+    h.ready();
+    h.update(|window, _, _| {
+        for id in ["export-primary", "export-size", "transparent", "font-mode"] {
+            let b = window.find(id).bounds();
+            assert!(
+                b.left() >= px(0.)
+                    && b.top() >= px(0.)
+                    && b.right() <= px(760.)
+                    && b.bottom() <= px(560.),
+                "{id} is outside the narrow SVG workspace: {b:?}"
+            );
+        }
+    });
+    h.capture("small-svg-options", false);
+    h.click("export-back");
+    assert_eq!(h.state()["export_open"], false);
     h.click("focus-export");
     h.press("escape");
     assert_eq!(h.state()["focused"], true);
     assert_eq!(h.state()["export_open"], false);
     h.click("focus-export");
-    h.click("copy-archive-export");
+    h.click("export-format-md");
+    h.ready();
+    h.click("export-primary");
     let started = Instant::now();
     loop {
         h.cx.run_until_parked();
@@ -922,6 +1104,7 @@ fn responsive(h: &mut Harness) {
         "Copy CREDITS.md must produce Markdown markers"
     );
     assert!(serde_json::from_str::<Value>(&markdown).is_err());
+    h.click("export-back");
     h.click("styles");
     inside(h, "panel");
     h.capture("small-focus-styles", false);
@@ -972,7 +1155,11 @@ fn overlay_motion(h: &mut Harness) {
     assert_eq!(h.state()["panel"], "pieces");
     h.press("escape");
     h.settle();
-    assert!(h.state()["panel"].is_null());
+    assert!(
+        h.state()["panel"].is_null(),
+        "Escape did not close the overlay: {}",
+        h.state()
+    );
     h.check("animated-overlays-reverse-and-switch-during-transitions",json!({"reduced_motion":false,"reopen_during_close":true,"switch_panel":true,"escape":true}));
 }
 
@@ -990,7 +1177,7 @@ pub fn run() {
     let source: Value =
         serde_json::from_slice(&fs::read(input.join("fixture-manifest.json")).unwrap()).unwrap();
     let mut cases = Vec::new();
-    let scenarios: [(&str, fn(&mut Harness)); 10] = [
+    let scenarios: [(&str, fn(&mut Harness)); 11] = [
         ("runtime-layouts", layouts),
         ("runtime-style-trial", trial_restore),
         ("runtime-style-apply", apply_style),
@@ -1001,8 +1188,15 @@ pub fn run() {
         ("runtime-card-layout", card_layout),
         ("runtime-overlay-motion", overlay_motion),
         ("runtime-reviewed-interactions", reviewed_interactions),
+        ("runtime-export-workspace", export_workspace),
     ];
     for (key, scenario) in scenarios {
+        if std::env::var("CREDITIA_RUNTIME_CASE")
+            .ok()
+            .is_some_and(|selected| selected != key)
+        {
+            continue;
+        }
         println!("native runtime case: {key}");
         let created = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             Harness::new(

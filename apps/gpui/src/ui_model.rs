@@ -135,6 +135,8 @@ pub struct Hit {
     pub t: String,
     #[serde(default)]
     pub d: Vec<String>,
+    #[serde(default)]
+    pub summary: Option<String>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct FontFace {

@@ -501,6 +501,88 @@ pub fn preview(image: Arc<Image>, rect: Rect, corners: Corners<Pixels>) -> impl 
     .inset_0()
 }
 
+/// Fit an export canvas and clip the image's own corners, not its letterbox.
+pub fn contained_preview(image: Arc<Image>, radius: f32, transparent: bool) -> impl IntoElement {
+    canvas(
+        move |_, window, cx| image_assets::use_image(&image, window, cx),
+        move |bounds, decoded, window, _| {
+            if let Some(decoded) = decoded {
+                let source = decoded.size(0);
+                let width = source.width.0 as f32;
+                let height = source.height.0 as f32;
+                if width <= 0. || height <= 0. {
+                    return;
+                }
+                let scale = (f32::from(bounds.size.width) / width)
+                    .min(f32::from(bounds.size.height) / height);
+                let (width, height) = (width * scale, height * scale);
+                let fitted = Bounds::new(
+                    bounds.origin
+                        + point(
+                            px((f32::from(bounds.size.width) - width) / 2.),
+                            px((f32::from(bounds.size.height) - height) / 2.),
+                        ),
+                    size(px(width), px(height)),
+                );
+                if transparent {
+                    // The grid is a preview backing only. It never becomes
+                    // part of the renderer's exported transparent pixels.
+                    let cols = (width / 12.).floor().max(1.) as usize;
+                    let rows = (height / 12.).floor().max(1.) as usize;
+                    let (cw, ch) = (width / cols as f32, height / rows as f32);
+                    let corner = px(radius.min(width / 2.).min(height / 2.));
+                    for row in 0..rows {
+                        for col in 0..cols {
+                            let (x, y) = (col as f32 * cw, row as f32 * ch);
+                            window.paint_quad(quad(
+                                Bounds::new(
+                                    fitted.origin + point(px(x), px(y)),
+                                    size(px(cw), px(ch)),
+                                ),
+                                Corners {
+                                    top_left: if row == 0 && col == 0 { corner } else { px(0.) },
+                                    top_right: if row == 0 && col + 1 == cols {
+                                        corner
+                                    } else {
+                                        px(0.)
+                                    },
+                                    bottom_left: if row + 1 == rows && col == 0 {
+                                        corner
+                                    } else {
+                                        px(0.)
+                                    },
+                                    bottom_right: if row + 1 == rows && col + 1 == cols {
+                                        corner
+                                    } else {
+                                        px(0.)
+                                    },
+                                },
+                                rgb(if (row + col) % 2 == 0 {
+                                    0xeeeeea
+                                } else {
+                                    0xdadad6
+                                }),
+                                px(0.),
+                                transparent_black(),
+                                BorderStyle::Solid,
+                            ));
+                        }
+                    }
+                }
+                let _ = window.paint_image(
+                    fitted,
+                    fitted,
+                    Corners::all(px(radius.min(width / 2.).min(height / 2.))),
+                    decoded,
+                    0,
+                    false,
+                );
+            }
+        },
+    )
+    .size_full()
+}
+
 /// A prepared playback frame goes straight to the atlas; no PNG conversion or
 /// asynchronous decoder is involved. Record completed painting after upload.
 pub fn frame_preview(

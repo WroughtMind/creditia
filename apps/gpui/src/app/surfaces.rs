@@ -43,6 +43,79 @@ fn switch(id: impl Into<ElementId>, on: bool, p: Palette) -> Button {
 }
 
 impl Creditia {
+    pub(super) fn hover_card(&self, cx: &mut Context<Self>) -> AnyElement {
+        let Some(hit) = &self.hover else {
+            return div().into_any_element();
+        };
+        let p = Palette::of(cx);
+        let summary = hit
+            .summary
+            .as_ref()
+            .filter(|summary| !summary.trim().is_empty());
+        let width = 300.0_f32.min((self.viewport_size.0 - 16.).max(1.));
+        let pointer = (self.pointer.0, self.pointer.1 + 60.);
+        let left_side = pointer.0 + width + 20. > self.viewport_size.0 - 8.;
+        let mut title = div()
+            .flex()
+            .items_center()
+            .gap(px(9.))
+            .h(px(20.))
+            .text_size(px(13.))
+            .line_height(px(20.))
+            .font_weight(FontWeight::MEDIUM);
+        if let Some(icon) = hit.k.as_deref().and_then(crate::ui_icons::contributor) {
+            title = title.child(icon.text_color(p.ink).size(px(17.)));
+        }
+        title = title.child(div().flex_1().min_w_0().truncate().child(hit.t.clone()));
+        let card = div()
+            .id("evidence-tooltip")
+            .test_support()
+            .relative()
+            .w(px(width))
+            .max_h(px((self.viewport_size.1 - 84.).max(1.)))
+            .overflow_hidden()
+            .p(px(16.))
+            .rounded(px(13.))
+            .shadow(p.shadows())
+            .text_color(p.ink)
+            .child(crate::material::surface(
+                self.backdrop_image.clone(),
+                rgb(if p.dark { 0x232321 } else { 0xF8F8F4 })
+                    .opacity(if p.dark { 0.94 } else { 0.96 })
+                    .into(),
+                13.,
+                p,
+            ))
+            .child(title)
+            .when_some(summary, |card, summary| {
+                card.child(
+                    div()
+                        .mt(px(9.))
+                        .text_size(px(16.))
+                        .line_height(px(24.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .whitespace_normal()
+                        .child(summary.clone()),
+                )
+            });
+        anchored()
+            .anchor(if left_side {
+                Anchor::TopRight
+            } else {
+                Anchor::TopLeft
+            })
+            .position(point(
+                px(if left_side {
+                    pointer.0 - 16.
+                } else {
+                    pointer.0 + 20.
+                }),
+                px((pointer.1 + 18.).max(68.)),
+            ))
+            .snap_to_window_with_margin(px(8.))
+            .child(card)
+            .into_any_element()
+    }
     pub(super) fn focus_controls(&self, cx: &mut Context<Self>) -> AnyElement {
         let p = Palette::of(cx);
         let piece = self.selected_piece();
@@ -371,302 +444,6 @@ impl Creditia {
             }
         }
         root.into_any_element()
-    }
-
-    pub(super) fn export_surface(&self, cx: &mut Context<Self>) -> AnyElement {
-        if !self.export_open {
-            return div().into_any_element();
-        }
-        let p = Palette::of(cx);
-        let dragging = self
-            .drag
-            .as_ref()
-            .is_some_and(|drag| drag.moved && drag.tile.is_some());
-        let window_height = self.viewport_size.1 + 60.;
-        let formats = self.ui_export_formats();
-        let width = if dragging {
-            (formats.len() as f32 * 100. + 12.).min(self.viewport_size.0 - 40.)
-        } else {
-            236.
-        };
-        let mut choices = div()
-            .id("export-formats")
-            .track_scroll(&self.format_bounds)
-            .flex()
-            .gap(px(if dragging { 8. } else { 1. }));
-        choices = if dragging {
-            choices.flex_wrap()
-        } else {
-            choices.flex_col()
-        };
-        for (index, format) in formats.iter().enumerate() {
-            let Some(id) = format["id"].as_str() else {
-                continue;
-            };
-            let id = id.to_string();
-            let drop_id = id.clone();
-            let unavailable_reason = self.export_unavailable_reason(&id);
-            let disabled = unavailable_reason.is_some();
-            let button = Button::new(("format", index))
-                .ghost()
-                .rounded(px(10.))
-                .text_color(p.ink)
-                .when(dragging, |button| button.w(px(92.)))
-                .when(!dragging, |button| button.w_full())
-                .h(px(if dragging { 74. } else { 32. }))
-                .px(px(10.))
-                .shell_label(id.to_uppercase())
-                .when(dragging, |button| {
-                    button.border_1().border_color(p.ink.opacity(0.55))
-                })
-                .when(self.export_hovered == Some(index), |button| {
-                    button.bg(p.ink).text_color(p.bg)
-                })
-                .disabled(disabled)
-                .on_click(cx.listener(move |view, _, window, cx| {
-                    view.export_format = id.clone();
-                    view.preferences.export_format = id.clone();
-                    view.persist();
-                    view.export_open = false;
-                    view.export_artwork(&ExportArtwork, window, cx);
-                }));
-            choices = choices.child(
-                div()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .when(!dragging, |row| row.w_full())
-                    .on_mouse_up(
-                        MouseButton::Left,
-                        cx.listener(move |view, _, window, cx| {
-                            if !disabled
-                                && view
-                                    .drag
-                                    .as_ref()
-                                    .is_some_and(|drag| drag.moved && drag.tile.is_some())
-                            {
-                                if let Some(drag) = view.drag.take() {
-                                    view.selected_tile = drag.tile;
-                                }
-                                view.export_hovered = None;
-                                view.export_open = false;
-                                view.export_format = drop_id.clone();
-                                view.preferences.export_format = drop_id.clone();
-                                view.persist();
-                                view.export_artwork(&ExportArtwork, window, cx);
-                                cx.stop_propagation();
-                            }
-                        }),
-                    )
-                    .child(button)
-                    .when_some(unavailable_reason, |row, reason| {
-                        row.child(
-                            div()
-                                .px(px(10.))
-                                .pb(px(5.))
-                                .text_size(px(10.))
-                                .text_color(p.soft)
-                                .child(reason),
-                        )
-                    }),
-            );
-        }
-        let mut sizes = div()
-            .id("export-sizes")
-            .track_scroll(&self.size_bounds)
-            .flex()
-            .flex_wrap()
-            .gap(px(2.))
-            .p(px(3.))
-            .rounded(px(10.))
-            .bg(p.glass);
-        for (index, size) in self
-            .catalog
-            .as_ref()
-            .and_then(|catalog| catalog["sizes"].as_array())
-            .into_iter()
-            .flatten()
-            .enumerate()
-        {
-            let Some(id) = size["id"].as_str() else {
-                continue;
-            };
-            let id = id.to_string();
-            let label = if id == "native" {
-                self.text("原尺寸", "Original").to_string()
-            } else {
-                id.to_uppercase()
-            };
-            sizes = sizes.child(
-                Button::new(("size", index))
-                    .ghost()
-                    .h(px(26.))
-                    .px(px(9.))
-                    .rounded(px(8.))
-                    .shell_label(label)
-                    .when(self.export_size == id, |button| {
-                        button.bg(p.ink).text_color(p.bg)
-                    })
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        view.export_size = id.clone();
-                        view.preferences.export_size = id.clone();
-                        view.persist();
-                        cx.notify();
-                    })),
-            );
-        }
-        let mut content = div()
-            .id("export-dock")
-            .test_support()
-            .relative()
-            .occlude()
-            .w(px(width))
-            .max_h(px(window_height - 100.))
-            .overflow_y_scroll()
-            .p(px(if dragging { 10. } else { 4. }))
-            .flex()
-            .flex_col()
-            .gap(px(if dragging { 10. } else { 4. }))
-            .rounded(px(if dragging { 20. } else { 14. }))
-            .shadow(p.shadows())
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .child(crate::material::surface(
-                self.backdrop_image.clone(),
-                p.solid,
-                if dragging { 20. } else { 14. },
-                p,
-            ));
-        if dragging {
-            content = content.child(
-                div()
-                    .px(px(4.))
-                    .text_size(px(12.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(self.text("松手导出为", "Drop to export")),
-            );
-        }
-        content = content.child(choices);
-        if !dragging {
-            content = content
-                .child(div().h(px(1.)).mx(px(6.)).my(px(3.)).bg(p.edge))
-                .child(
-                    Button::new("copy-archive-export")
-                        .ghost()
-                        .h(px(32.))
-                        .rounded(px(10.))
-                        .shell_label(self.text("复制 CREDITS.md", "Copy CREDITS.md"))
-                        .on_click(cx.listener(|view, _, _, cx| {
-                            view.copy_export_format("md", cx);
-                            view.export_open = false;
-                        })),
-                );
-        }
-        content = content.child(sizes);
-        if !dragging {
-            content = content
-                .child(
-                    Button::new("transparent")
-                        .ghost()
-                        .h(px(28.))
-                        .rounded(px(10.))
-                        .shell_label(if self.transparent {
-                            self.text("透明背景 ✓", "Transparent background ✓")
-                        } else {
-                            self.text("透明背景", "Transparent background")
-                        })
-                        .on_click(cx.listener(|view, _, _, cx| {
-                            view.transparent = !view.transparent;
-                            cx.notify();
-                        })),
-                )
-                .child(
-                    Button::new("font-mode")
-                        .ghost()
-                        .h(px(28.))
-                        .rounded(px(10.))
-                        .shell_label(if self.font_mode == "embed" {
-                            self.text("字体嵌入", "Embed fonts")
-                        } else {
-                            self.text("文字转路径", "Outline fonts")
-                        })
-                        .on_click(cx.listener(|view, _, _, cx| {
-                            view.font_mode = if view.font_mode == "embed" {
-                                "outline"
-                            } else {
-                                "embed"
-                            }
-                            .into();
-                            cx.notify();
-                        })),
-                )
-                .child(
-                    Button::new("copy-export")
-                        .ghost()
-                        .h(px(28.))
-                        .rounded(px(10.))
-                        .shell_label(self.text("复制作品", "Copy artwork"))
-                        .disabled(
-                            self.export_unavailable_reason(self.copy_export_format_id())
-                                .is_some()
-                                || self.operation_busy,
-                        )
-                        .on_click(cx.listener(|view, _, _, cx| view.copy_export(cx))),
-                )
-                .on_mouse_down_out(cx.listener(|view, event: &MouseDownEvent, _, cx| {
-                    if view.surface_anchors.contains(
-                        if view.focused {
-                            "focus-export"
-                        } else {
-                            "card-export"
-                        },
-                        event.position,
-                    ) {
-                        return;
-                    }
-                    view.export_open = false;
-                    view.drag = None;
-                    cx.stop_propagation();
-                    cx.notify();
-                }));
-        }
-        let mut layer = div().absolute().inset_0();
-        if dragging {
-            layer = layer
-                .flex()
-                .items_end()
-                .justify_center()
-                .pb(px(26.))
-                .child(content);
-        } else {
-            let (anchor, position) = if self.focused {
-                (
-                    Anchor::BottomRight,
-                    self.surface_anchors
-                        .get("focus-export")
-                        .map(|bounds| point(bounds.right() + px(6.), bounds.top() - px(12.)))
-                        .unwrap_or(point(
-                            px(self.viewport_size.0 / 2. + width / 2.),
-                            px(window_height - 78.),
-                        )),
-                )
-            } else {
-                (
-                    Anchor::TopRight,
-                    self.selected_tile
-                        .map(|index| self.screen_rect(index))
-                        .map(|rect| point(px(rect.x + rect.w + 6.), px(rect.y + 48.)))
-                        .unwrap_or(point(px(self.viewport_size.0 / 2. + width / 2.), px(66.))),
-                )
-            };
-            layer = layer.child(
-                anchored()
-                    .anchor(anchor)
-                    .position(position)
-                    .snap_to_window_with_margin(px(18.))
-                    .child(content),
-            );
-        }
-        layer.into_any_element()
     }
 
     pub(super) fn settings_content(&self, cx: &mut Context<Self>) -> AnyElement {

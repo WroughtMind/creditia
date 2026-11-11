@@ -6,8 +6,10 @@ use crate::{
     progress_text,
 };
 use crate::{native_preview, renderer, ui_model::*};
+mod export;
 mod surfaces;
 use creditia_desktop_service as service;
+use export::{ExportFormat, ExportPreview};
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
@@ -408,9 +410,7 @@ pub struct Creditia {
     export_task: Option<Task<()>>,
     export_cancellation: Option<renderer::Cancellation>,
     export_open: bool,
-    format_bounds: ScrollHandle,
-    size_bounds: ScrollHandle,
-    export_hovered: Option<usize>,
+    export_preview: ExportPreview,
     fixture: bool,
     fixture_artworks: BTreeMap<(String, String, String), Option<Arc<Artwork>>>,
     benchmark: bool,
@@ -654,9 +654,7 @@ impl Creditia {
             export_task: None,
             export_cancellation: None,
             export_open: false,
-            format_bounds: ScrollHandle::new(),
-            size_bounds: ScrollHandle::new(),
-            export_hovered: None,
+            export_preview: ExportPreview::default(),
             fixture,
             fixture_artworks: BTreeMap::new(),
             benchmark: false,
@@ -868,6 +866,7 @@ impl Creditia {
         view
     }
     fn release_images(&mut self, cx: &mut App) {
+        self.export_preview.clear(cx);
         if let Some(pending) = self.backdrop_pending.take() {
             for image in std::iter::once(pending.image)
                 .chain(pending.background)
@@ -3395,6 +3394,9 @@ impl Creditia {
         if self.fixture && !self.benchmark && (self.raw.is_none() || self.loading) {
             return true;
         }
+        if self.export_workspace_open() {
+            return self.export_preview.ready();
+        }
         if self.backdrop_task.is_some() || self.backdrop_pending.is_some() {
             return false;
         }
@@ -3591,6 +3593,9 @@ impl Creditia {
         }));
     }
     fn open_panel(&mut self, panel: Panel, window: &mut Window, cx: &mut Context<Self>) {
+        if self.export_workspace_open() {
+            self.close_export_workspace(cx);
+        }
         self.roam_motion.stop();
         self.drag = None;
         self.hovered_tile = None;
@@ -4239,18 +4244,33 @@ impl Creditia {
         let close = self.export_open && self.selected_tile == Some(index);
         self.selected_tile = Some(index);
         self.export_open = !close;
+        if close {
+            self.export_preview.clear(cx);
+        } else {
+            if self
+                .export_unavailable_reason(&self.export_format)
+                .is_some()
+            {
+                self.export_format =
+                    if self.current_tile().is_some_and(|tile| tile.error.is_some()) {
+                        "md"
+                    } else {
+                        "png"
+                    }
+                    .into();
+            }
+            if !self
+                .catalog
+                .as_ref()
+                .and_then(|c| c["sizes"].as_array())
+                .is_some_and(|sizes| sizes.iter().any(|size| size["id"] == self.export_size))
+            {
+                self.export_size = "native".into();
+            }
+            self.notice = None;
+        }
         self.hover = None;
         cx.notify();
-    }
-    fn ui_export_formats(&self) -> Vec<Value> {
-        self.catalog
-            .as_ref()
-            .and_then(|catalog| catalog["formats"].as_array())
-            .into_iter()
-            .flatten()
-            .filter(|format| format["id"] != "md")
-            .cloned()
-            .collect()
     }
     fn export_history_writable(&self) -> bool {
         self.fixture
@@ -4289,7 +4309,8 @@ impl Creditia {
             &self.preferences,
             format,
             &self.export_size,
-            self.transparent,
+            self.transparent
+                && ExportFormat::from_id(format).is_some_and(ExportFormat::transparency),
             &self.font_mode,
         )?;
         if !self.all_archives.is_empty() {
@@ -4585,7 +4606,6 @@ impl Creditia {
 
     fn cancel_current(&mut self, _: &CancelCurrent, window: &mut Window, cx: &mut Context<Self>) {
         if self.drag.take().is_some() {
-            self.export_hovered = None;
             self.roam_motion.stop();
             cx.notify();
             return;
@@ -4598,8 +4618,7 @@ impl Creditia {
         if self.panel.is_some() {
             self.close_panel(window, cx);
         } else if self.export_open {
-            self.export_open = false;
-            cx.notify();
+            self.close_export_workspace(cx);
         } else if self.focused {
             self.close_focus(cx);
         } else if self.export_stage.is_some() {
@@ -4607,59 +4626,6 @@ impl Creditia {
         } else {
             self.cancel(&CancelAnalysis, window, cx);
         }
-    }
-    fn copy_export(&mut self, cx: &mut Context<Self>) {
-        let format = self.copy_export_format_id().to_owned();
-        self.copy_export_format(&format, cx);
-    }
-    fn copy_export_format_id(&self) -> &str {
-        if ["svg", "html", "md", "txt", "json", "embed"].contains(&self.export_format.as_str()) {
-            &self.export_format
-        } else {
-            "svg"
-        }
-    }
-    fn copy_export_format(&mut self, format: &str, cx: &mut Context<Self>) {
-        if self.operation_busy || self.export_unavailable_reason(format).is_some() {
-            return;
-        }
-        let request = match self.export_request_format(format) {
-            Ok(value) => value,
-            Err(error) => {
-                self.error = Some(error);
-                return;
-            }
-        };
-        let format = format.to_string();
-        self.operation_busy = true;
-        self.operation_task = Some(cx.spawn(async move |this, cx| {
-            let result = cx
-                .background_spawn(async move {
-                    let output = renderer::request(request, renderer::Cancellation::default())?;
-                    let bytes = renderer::decode_export(&output, &format)?;
-                    let text = String::from_utf8(bytes).map_err(|e| e.to_string())?;
-                    Ok::<_, String>(if format == "md" {
-                        format!(
-                            "# Credits\n\n<!-- creditia:start -->\n\n{}\n\n<!-- creditia:end -->\n",
-                            text.trim_end()
-                        )
-                    } else {
-                        text
-                    })
-                })
-                .await;
-            let _ = this.update(cx, |view, cx| {
-                view.operation_busy = false;
-                match result {
-                    Ok(text) => {
-                        cx.write_to_clipboard(ClipboardItem::new_string(text));
-                        view.notice = Some(view.text("已复制", "Copied").into());
-                    }
-                    Err(error) => view.error = Some(error),
-                }
-                cx.notify();
-            });
-        }));
     }
     fn wheel(&mut self, event: &ScrollEvent, cx: &mut Context<Self>) {
         self.roam_motion.stop();
@@ -4711,7 +4677,7 @@ impl Creditia {
         cx.stop_propagation();
     }
     fn pointer_move(&mut self, event: &MouseMoveEvent, cx: &mut Context<Self>) {
-        if self.panel.is_some() {
+        if self.panel.is_some() || self.export_workspace_open() {
             self.hover = None;
             return;
         }
@@ -4740,31 +4706,6 @@ impl Creditia {
                     }
                 }
                 drag.last = local;
-                if drag.tile.is_some() && drag.moved {
-                    let formats = self.ui_export_formats().len();
-                    self.export_hovered = nearest_child(&self.format_bounds, formats, x, y);
-                    if self.export_hovered.is_none() {
-                        let size_count = self
-                            .catalog
-                            .as_ref()
-                            .and_then(|c| c["sizes"].as_array())
-                            .map(Vec::len)
-                            .unwrap_or(0);
-                        if let Some(index) = nearest_child(&self.size_bounds, size_count, x, y) {
-                            if let Some(size) = self
-                                .catalog
-                                .as_ref()
-                                .and_then(|c| c["sizes"][index]["id"].as_str())
-                            {
-                                if self.export_size != size {
-                                    self.export_size = size.into();
-                                    self.preferences.export_size = size.into();
-                                    self.persist();
-                                }
-                            }
-                        }
-                    }
-                }
                 self.hover = None;
                 cx.notify();
                 return;
@@ -4837,8 +4778,7 @@ impl Creditia {
             cx.notify();
         }
     }
-    fn pointer_up(&mut self, event: &MouseUpEvent, window: &mut Window, cx: &mut Context<Self>) {
-        self.export_hovered = None;
+    fn pointer_up(&mut self, event: &MouseUpEvent, _window: &mut Window, cx: &mut Context<Self>) {
         if self.panel.is_some() {
             self.drag = None;
             return;
@@ -4873,19 +4813,6 @@ impl Creditia {
         let x: f32 = event.position.x.into();
         let y: f32 = event.position.y.into();
         let local = (x, y - 60.);
-        let formats = self.ui_export_formats();
-        if let Some(index) = nearest_child(&self.format_bounds, formats.len(), x, y) {
-            if let Some(format) = formats[index]["id"].as_str() {
-                self.selected_tile = Some(from);
-                if self.export_unavailable_reason(format).is_none() {
-                    self.export_format = format.into();
-                    self.preferences.export_format = format.into();
-                    self.persist();
-                    self.export_artwork(&ExportArtwork, window, cx);
-                    return;
-                }
-            }
-        }
         let to = self
             .rects
             .iter()
@@ -4902,6 +4829,8 @@ impl Creditia {
                 self.persist();
             }
             cx.notify();
+        } else {
+            self.toggle_export(from, cx);
         }
     }
 }
@@ -5517,41 +5446,8 @@ impl Creditia {
                 }
             }
         }
-        if let Some(hit) = &self.hover {
-            let w = 300.;
-            let h = 54. + hit.d.len().min(8) as f32 * 22.;
-            let x = if self.pointer.0 + 20. + w > self.viewport_size.0 {
-                self.pointer.0 - w - 14.
-            } else {
-                self.pointer.0 + 20.
-            }
-            .max(8.);
-            let y = if self.pointer.1 + 20. + h > self.viewport_size.1 {
-                self.pointer.1 - h - 12.
-            } else {
-                self.pointer.1 + 20.
-            }
-            .max(8.);
-            stage = stage.child(
-                div()
-                    .id("evidence-tooltip")
-                    .absolute()
-                    .left(px(x))
-                    .top(px(y))
-                    .w(px(w))
-                    .p_3()
-                    .rounded_lg()
-                    .bg(cx.theme().foreground)
-                    .text_color(cx.theme().background)
-                    .text_size(px(12.))
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child(hit.t.clone()))
-                    .children(
-                        hit.d
-                            .iter()
-                            .take(8)
-                            .map(|line| div().mt_1().child(line.clone())),
-                    ),
-            );
+        if self.hover.is_some() {
+            stage = stage.child(self.hover_card(cx));
         }
         stage.into_any_element()
     }
@@ -5641,6 +5537,7 @@ impl Creditia {
             && (self.export_open
                 || self.panel.is_some()
                 || self.notice.is_some()
+                || self.hover.is_some()
                 || self.error.is_some())
         {
             if let Some(index) = self.selected_tile {
@@ -7221,6 +7118,12 @@ impl Creditia {
             "display_scale":self.display_scale,"picker_selected":self.picker_selected,"settings_project":self.settings_id(),"project_settings_ready":self.settings_data().is_some() && self.sign_loaded_for.as_ref()==self.settings_id(),"project_row_menu":self.project_row_menu.as_ref().map(|(id,_)|id),"hover":self.hover.as_ref().map(|hit|&hit.t),"batch":self.batch_results
         });
         state["export_format"] = json!(self.export_format);
+        state["panel_closing"] = json!(self.panel_closing);
+        state["drag_active"] = json!(self.drag.is_some());
+        state["export_size"] = json!(self.export_size);
+        state["export_prompt_busy"] = json!(self.export_prompt_busy);
+        state["export_workspace"] = json!(self.export_workspace_open());
+        state["export_preview"] = self.export_preview.diagnostic();
         state["can_export"] = json!(self.can_export());
         state["export_unavailable"] = json!(self.export_unavailable_reason(&self.export_format));
         if let Some(hit) = focused_art.and_then(|art| art.hits.first()) {
@@ -7395,9 +7298,11 @@ impl Render for Creditia {
         }
         self.prepare_static_images(window, cx);
         self.prepare_focus_preview(window, cx);
-        let animation_visible = self
-            .selected_tile
-            .is_some_and(|index| self.screen_rect(index).intersects(self.artwork_viewport()));
+        self.refresh_export_preview(window, cx);
+        let animation_visible = !self.export_workspace_open()
+            && self
+                .selected_tile
+                .is_some_and(|index| self.screen_rect(index).intersects(self.artwork_viewport()));
         if animation_visible
             && self.focused
             && self.panel.is_none()
@@ -8097,8 +8002,13 @@ impl Render for Creditia {
             );
         }
         self.refresh_backdrop(window, cx);
-        let stage = self.render_stage(window, cx);
-        let export = self.export_surface(cx);
+        let in_export = self.export_workspace_open();
+        let stage = if in_export {
+            div().into_any_element()
+        } else {
+            self.render_stage(window, cx)
+        };
+        let export = self.render_export_workspace(cx);
         let modal = self.render_panel(cx);
         let ghost = self
             .drag
@@ -8112,8 +8022,7 @@ impl Render for Creditia {
                     return None;
                 }
                 let source = drag.source?;
-                let in_dock = self.export_hovered.is_some();
-                let width = art.w.min(if in_dock { 120. } else { 240. });
+                let width = art.w.min(240.);
                 let height = width * art.h / art.w;
                 let fx = ((drag.start.0 - source.x) / source.w).clamp(0., 1.);
                 let fy = ((drag.start.1 - source.y) / source.h).clamp(0., 1.);
@@ -8140,7 +8049,11 @@ impl Render for Creditia {
             .text_size(px(13.))
             .line_height(relative(1.45))
             .track_focus(&self.focus)
-            .key_context("Creditia")
+            .key_context(if in_export {
+                "CreditiaExport"
+            } else {
+                "Creditia"
+            })
             .on_action(cx.listener(|_, _: &MinimizeWindow, window, _| window.minimize_window()))
             .on_action(cx.listener(|_, _: &FullScreen, window, _| window.toggle_fullscreen()))
             .on_action(cx.listener(Self::open_project))
@@ -8153,8 +8066,9 @@ impl Render for Creditia {
             .on_action(cx.listener(Self::cycle_appearance))
             .on_action(cx.listener(Self::toggle_motion))
             .on_action(cx.listener(|view, _: &ExportArtwork, _, cx| {
-                view.export_open = true;
-                cx.notify();
+                if let Some(index) = view.selected_tile {
+                    view.toggle_export(index, cx);
+                }
             }))
             .on_action(cx.listener(|_, _: &CloseWindow, window, _| window.remove_window()))
             .on_action(cx.listener(Self::cancel_export))
@@ -8233,25 +8147,27 @@ impl Render for Creditia {
                     }))
                 },
             )
-            .child(
-                div()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .right_0()
-                    .occlude()
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|view, _, _, cx| {
-                            view.drag = None;
-                            cx.stop_propagation();
-                        }),
-                    )
-                    .child(toolbar),
-            )
-            .child(controls)
+            .when(!in_export, |root| {
+                root.child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .occlude()
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|view, _, _, cx| {
+                                view.drag = None;
+                                cx.stop_propagation();
+                            }),
+                        )
+                        .child(toolbar),
+                )
+            })
+            .when(!in_export, |root| root.child(controls))
             .child(export)
-            .when(status_height > 0. && !delayed_job, |root| {
+            .when(!in_export && status_height > 0. && !delayed_job, |root| {
                 root.child(
                     div()
                         .absolute()
@@ -8443,6 +8359,10 @@ fn key_bindings(modifier: &str) -> Vec<KeyBinding> {
         KeyBinding::new(shortcut("shift-r"), Refresh, Some("Creditia")),
         KeyBinding::new(shortcut("shift-c"), CopyArchive, Some("Creditia")),
         KeyBinding::new("escape", CancelCurrent, Some("Creditia")),
+        KeyBinding::new("escape", CancelCurrent, Some("CreditiaExport")),
+        KeyBinding::new(shortcut("w"), CloseWindow, Some("CreditiaExport")),
+        KeyBinding::new(shortcut("m"), MinimizeWindow, Some("CreditiaExport")),
+        KeyBinding::new(shortcut("e"), ExportArtwork, Some("CreditiaExport")),
         KeyBinding::new(shortcut("="), ZoomIn, Some("Creditia")),
         KeyBinding::new(shortcut("-"), ZoomOut, Some("Creditia")),
         KeyBinding::new(shortcut("0"), ResetZoom, Some("Creditia")),
@@ -8809,7 +8729,7 @@ mod input_tests {
     #[test]
     fn all_shortcuts_parse_on_both_platform_families() {
         for modifier in ["cmd", "ctrl"] {
-            assert_eq!(key_bindings(modifier).len(), 30);
+            assert_eq!(key_bindings(modifier).len(), 34);
         }
     }
 }
@@ -8830,27 +8750,4 @@ fn project_date(stamp: i64, language: &Language) -> String {
     } else {
         format!("{month}/{day}/{year}")
     }
-}
-
-fn nearest_child(handle: &ScrollHandle, count: usize, x: f32, y: f32) -> Option<usize> {
-    let mut nearest = None;
-    let mut distance = f32::INFINITY;
-    for index in 0..count {
-        let Some(bounds) = handle.bounds_for_item(index) else {
-            continue;
-        };
-        let left: f32 = bounds.origin.x.into();
-        let top: f32 = bounds.origin.y.into();
-        let width: f32 = bounds.size.width.into();
-        let height: f32 = bounds.size.height.into();
-        if x < left - 14. || x > left + width + 14. || y < top - 5. || y > top + height + 5. {
-            continue;
-        }
-        let d = (x - left - width / 2.).abs();
-        if d < distance {
-            nearest = Some(index);
-            distance = d;
-        }
-    }
-    nearest
 }

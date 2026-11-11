@@ -244,6 +244,7 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
       if (!theme || bridged) return frame(pieceId, svgModel, style, { variant }, time, original);
       return (await backend.classicFrames(pieceId, model, theme, ctx, 24, [time]))[0] ?? null;
     };
+    const summarizeArt = (a: Art | null) => a && ({ ...a, hits: a.hits.map(hit => ({ ...hit, summary: hit.summary ?? (hit.d ?? []).join(' · ') })) });
     const flattenArt = (a: Art | null) => {
       if (!a) return null;
       if (a.svg.includes('<text')) a.svg = backend.raster.flat(a.svg);
@@ -251,7 +252,7 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
       return a;
     };
     if (op === 'render') {
-      const result = await at(reducedMotion ? 1 : t);
+      const result = summarizeArt(await at(reducedMotion ? 1 : t));
       return success(id, { art: flatten ? flattenArt(result) : result,
         ...(!flatten && result ? { fontFaces: nativeFonts(result.svg) } : {}),
         timeline: original ? timelineFor(styleId, pieceId, original, reducedMotion || !piece.animated) : null });
@@ -268,7 +269,7 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
       return { frames: generated, times, timeline };
     };
     if (op === 'frames') {
-      const animation = await animate(); if (flatten) animation.frames = animation.frames.map(a => flattenArt(a)!);
+      const animation = await animate(); animation.frames = animation.frames.map(a => summarizeArt(a)!); if (flatten) animation.frames = animation.frames.map(a => flattenArt(a)!);
       return success(id, animation);
     }
     const animation = (format === 'gif' || format === 'html' && piece.animated) ? await animate() : undefined;

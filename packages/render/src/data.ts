@@ -440,13 +440,13 @@ export function hanzi(x: number): string {
 export const hanziDigits = (x: number | string) => String(x).split('').map((d) => '〇一二三四五六七八九'[+d] ?? d).join('');
 
 /** 悬停提示的内容：每个贡献方一份 */
-export function tipOf(m: Model, a: Agent): { k: string; t: string; d: string[] } {
+export function tipOf(m: Model, a: Agent): { k: string; t: string; d: string[]; summary: string } {
   const zh = m.lang === 'zh';
   const head = zh ? `${fmt(a.lines)} 行 · ${pct(a.pct)}` : `${fmt(a.lines)} lines · ${pct(a.pct)}`;
-  if (a.kind === 'unknown') return { k: a.key, t: a.name, d: [head, zh ? '找不到证据，不算到任何人头上' : 'No evidence for anyone, so not credited'] };
-  if (a.kind === 'person') return { k: a.key, t: a.name, d: [head, zh ? '这位贡献者的提交里没有 AI 线索（不说明没用 AI）' : 'No AI trace in their commits (which doesn\'t mean no AI was used)'] };
+  if (a.kind === 'unknown') return { summary: head, k: a.key, t: a.name, d: [head, zh ? '找不到证据，不算到任何人头上' : 'No evidence for anyone, so not credited'] };
+  if (a.kind === 'person') return { summary: head, k: a.key, t: a.name, d: [head, zh ? '这位贡献者的提交里没有 AI 线索（不说明没用 AI）' : 'No AI trace in their commits (which doesn\'t mean no AI was used)'] };
   // 折叠行：列出全部成员
-  if (a.members) return { k: a.key, t: a.name, d: [head, ...a.members.map((x) => `${x.name} ${pct(x.pct)}`)] };
+  if (a.members) return { summary: head, k: a.key, t: a.name, d: [head, ...a.members.map((x) => `${x.name} ${pct(x.pct)}`)] };
   const d = [head];
   if (a.models.length) d.push(a.models.slice(0, 3).map((x) => `${x.name} ${Math.round(x.share * 100)}%`).join(' · '));
   if (a.model) d.push(zh ? `用 ${a.toolName}` : `via ${a.toolName}`);
@@ -454,5 +454,5 @@ export function tipOf(m: Model, a: Agent): { k: string; t: string; d: string[] }
   if (a.sessions) d.push(zh ? `${a.sessions} 个会话${a.tokens ? ` · ${compact(a.tokens)} token` : ''}` : `${a.sessions} sessions${a.tokens ? ` · ${compact(a.tokens)} tokens` : ''}`);
   if (a.verified) d.push(zh ? `${Math.round(a.verified * 100)}% 能在日志里对上` : `${Math.round(a.verified * 100)}% line-level evidence`);
   if (a.providers.length) d.push((zh ? '通过 ' : 'via ') + a.providers.join(' · '));
-  return { k: a.key, t: a.name, d };
+  return { summary: head, k: a.key, t: a.name, d };
 }

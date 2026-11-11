@@ -369,7 +369,7 @@ export function versions(m: Model, st: Style, o: PieceOpts): Scene | null {
     const label = v.tag === 'unreleased' ? T(m, '未发布', 'Unreleased') : v.tag;
     s.text(label, x + bw / 2, p.y + p.h + 28, { font: st.f.label, size: 14, fill: st.c.soft, anchor: 'middle', maxW: p.w / n - 16 });
     st.num(s, compact(v.total), x + bw / 2, y - 12, 16, 'middle', { fill: st.c.soft });
-    s.hit(x - 10, p.y, bw + 20, p.h + 40, { t: label, d: [v.date, T(m, `${fmt(v.total)} 行`, `${fmt(v.total)} lines`), ...keys.filter((q) => v.by[q]).slice(0, 4).map((q) => `${agentOf(m, q)?.name ?? q} ${Math.round((v.by[q] / v.total) * 100)}%`)].filter(Boolean) });
+    s.hit(x - 10, p.y, bw + 20, p.h + 40, { t: label, summary: [T(m, `${fmt(v.total)} 行`, `${fmt(v.total)} lines`), ...keys.filter(q => v.by[q]).slice(0, 4).map(q => `${agentOf(m, q)?.name ?? q} ${Math.round((v.by[q] / v.total) * 100)}%`)].join(' · '), d: [v.date, T(m, `${fmt(v.total)} 行`, `${fmt(v.total)} lines`), ...keys.filter((q) => v.by[q]).slice(0, 4).map((q) => `${agentOf(m, q)?.name ?? q} ${Math.round((v.by[q] / v.total) * 100)}%`)].filter(Boolean) });
   });
   st.rule(s, p.x, p.y + p.h, p.w, 'thin');
   return s;
@@ -396,7 +396,8 @@ export function survival(m: Model, st: Style, o: PieceOpts): Scene | null {
     else s.add(rect(x0, y + 10, wa, 26, { fill: colorOf(st, a), opacity: 0.25, rx: Math.min(st.radius, 6) }));
     st.bar(s, x0, y + 10, Math.max(2, ws), 26, colorOf(st, a), i);
     st.num(s, `${Math.round(a.survival * 100)}%`, p.x + p.w, y + 32, 22, 'end');
-    s.hit(p.x, y, p.w, rowH - 6, { ...tip(m, a), d: [T(m, `新增 ${fmt(a.lines)} 行，留存 ${fmt(a.surviving)} 行`, `${fmt(a.lines)} added, ${fmt(a.surviving)} retained`), ...tip(m, a).d.slice(1)] });
+    const summary = T(m, `新增 ${fmt(a.lines)} 行，留存 ${fmt(a.surviving)} 行`, `${fmt(a.lines)} added, ${fmt(a.surviving)} retained`);
+    s.hit(p.x, y, p.w, rowH - 6, { ...tip(m, a), summary, d: [summary, ...tip(m, a).d.slice(1)] });
   });
   return s;
 }
@@ -531,7 +532,8 @@ export function evidence(m: Model, st: Style, o: PieceOpts): Scene | null {
       x += ww;
     });
     st.num(s, `${Math.round((pf.verified / tot) * 100)}%`, p.x + p.w, y + 32, 22, 'end');
-    s.hit(p.x, y, p.w, rowH - 6, { ...tip(m, a), d: PROOF.filter((q) => pf[q.k] > 0).map((q) => T(m, `${q.zh} ${fmt(pf[q.k])} 行`, `${q.en}: ${fmt(pf[q.k])} lines`)) });
+    const details = PROOF.filter(q => pf[q.k] > 0).map(q => T(m, `${q.zh} ${fmt(pf[q.k])} 行`, `${q.en}: ${fmt(pf[q.k])} lines`));
+    s.hit(p.x, y, p.w, rowH - 6, { ...tip(m, a), summary: details.join(' · '), d: details });
   });
   // 图例：浓淡说明
   let lx = x0;
@@ -575,7 +577,8 @@ export function areas(m: Model, st: Style, o: PieceOpts): Scene | null {
       // 百分比写在色块下面：色块的颜色由风格定，字压在上面不一定看得清
       if (ww > 52 && k >= 1) s.text(`${Math.round((v / r.tot) * 100)}%`, x + 2, y + 70, { font: st.f.body, size: 13, fill: st.c.soft });
       const tk = tipKey(m, key);
-      s.hit(x, y + 8, ww, 46, { ...tk, d: [T(m, `${r.name}里 ${fmt(v)} 行，占 ${Math.round((v / r.tot) * 100)}%`, `${fmt(v)} lines in ${r.name}, ${Math.round((v / r.tot) * 100)}%`), ...(tk.d ?? []).slice(1)] });
+      const summary = T(m, `${r.name}里 ${fmt(v)} 行，占 ${Math.round((v / r.tot) * 100)}%`, `${fmt(v)} lines in ${r.name}, ${Math.round((v / r.tot) * 100)}%`);
+      s.hit(x, y + 8, ww, 46, { ...tk, summary, d: [summary, ...(tk.d ?? []).slice(1)] });
       x += ww;
     }
   });
