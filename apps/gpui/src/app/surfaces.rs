@@ -45,47 +45,29 @@ fn switch(id: impl Into<ElementId>, on: bool, p: Palette) -> Button {
 impl Creditia {
     pub(super) fn focus_controls(&self, cx: &mut Context<Self>) -> AnyElement {
         let p = Palette::of(cx);
-        let mut layouts = div()
-            .id("focus-layouts")
-            .flex()
-            .min_w_0()
-            .overflow_x_scroll()
-            .gap(px(2.));
-        for (index, variant) in self
-            .selected_piece()
-            .and_then(|piece| piece["variants"].as_array())
-            .into_iter()
-            .flatten()
-            .enumerate()
-        {
-            let id = variant["id"].as_str().unwrap_or("").to_string();
-            let name = variant[if self.preferences.language == Language::En {
-                "en"
-            } else {
-                "name"
-            }]
-            .as_str()
-            .unwrap_or(&id)
-            .to_string();
-            let selected = self
-                .current_tile()
-                .and_then(|tile| tile.spec.variant.as_ref())
-                == Some(&id);
-            layouts = layouts.child(
-                Button::new(("variant", index))
-                    .ghost()
-                    .h(px(30.))
-                    .px(px(12.))
-                    .rounded_full()
-                    .shell_label(name)
-                    .when(selected, |button| button.bg(p.ink).text_color(p.bg))
-                    .on_click(
-                        cx.listener(move |view, _, _, cx| view.choose_variant(id.clone(), cx)),
-                    ),
-            );
-        }
+        let piece = self.selected_piece();
+        let variants = piece.and_then(|piece| piece["variants"].as_array());
+        let variant_id = self
+            .current_tile()
+            .and_then(|tile| tile.spec.variant.as_deref());
+        let variant_name = variants
+            .and_then(|variants| {
+                variants
+                    .iter()
+                    .find(|variant| variant["id"].as_str() == variant_id)
+            })
+            .and_then(|variant| {
+                variant[if self.preferences.language == Language::En {
+                    "en"
+                } else {
+                    "name"
+                }]
+                .as_str()
+            })
+            .unwrap_or(self.text("原版", "Original"));
+        let layout_tip = format!("{}：{}", self.text("版式", "Layout"), variant_name);
         let style = self.style();
-        let name = style
+        let style_name = style
             .and_then(|style| {
                 style[if self.preferences.language == Language::En {
                     "en"
@@ -94,66 +76,78 @@ impl Creditia {
                 }]
                 .as_str()
             })
-            .unwrap_or("")
-            .to_string();
-        let mut strip = div()
-            .relative()
-            .occlude()
+            .unwrap_or("");
+        let style_tip = format!("{}：{}", self.text("风格", "Style"), style_name);
+        let swatch = self
+            .current_tile()
+            .and_then(|tile| tile.image.clone())
+            .map(|image| {
+                img(image)
+                    .w(px(20.))
+                    .h(px(20.))
+                    .object_fit(ObjectFit::Cover)
+                    .rounded(px(5.))
+                    .into_any_element()
+            })
+            .unwrap_or_else(|| {
+                img(style_dot(
+                    style.and_then(|style| style["dot"].as_str()).unwrap_or(""),
+                ))
+                .w(px(20.))
+                .h(px(20.))
+                .into_any_element()
+            });
+        let mut editing = div()
+            .id("focus-editing")
             .flex()
             .items_center()
-            .gap(px(6.))
-            .p(px(6.))
-            .rounded_full()
-            .max_w(px((self.viewport_size.0 - 168.).max(1.)))
-            .shadow(p.shadows())
-            .child(crate::material::surface(
-                self.backdrop_image.clone(),
-                p.glass,
-                22.,
-                p,
-            ))
-            .child(layouts)
-            .child(div().w(px(1.)).h(px(18.)).flex_shrink_0().bg(p.edge))
+            .gap(px(2.))
+            .child(
+                self.surface_anchors.wrap(
+                    "focus-layout",
+                    Button::new("focus-layout")
+                        .ghost()
+                        .w(px(42.))
+                        .h(px(36.))
+                        .p_0()
+                        .rounded(px(10.))
+                        .accessibility_label(layout_tip.clone())
+                        .tooltip(layout_tip)
+                        .disabled(variants.is_none_or(|variants| variants.len() < 2))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .child(crate::ui_icons::icon("layout"))
+                                .child(crate::ui_icons::icon("down").size(px(10.))),
+                        )
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.open_panel(Panel::Layouts, window, cx)
+                        })),
+                ),
+            )
             .child(
                 self.surface_anchors.wrap(
                     "focus-style",
                     Button::new("styles")
                         .ghost()
-                        .h(px(30.))
-                        .px(px(12.))
-                        .rounded_full()
-                        .accessibility_label(name.clone())
+                        .w(px(42.))
+                        .h(px(36.))
+                        .p_0()
+                        .rounded(px(10.))
+                        .accessibility_label(style_tip.clone())
+                        .tooltip(style_tip)
                         .child(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap(px(7.))
-                                .text_size(px(12.))
-                                .when_some(
-                                    style.and_then(|style| style["dot"].as_str()),
-                                    |row, dot| row.child(img(style_dot(dot)).w(px(16.)).h(px(16.))),
-                                )
-                                .child(name),
+                                .gap(px(4.))
+                                .child(swatch)
+                                .child(crate::ui_icons::icon("down").size(px(10.))),
                         )
                         .on_click(cx.listener(|view, _, window, cx| {
                             view.open_panel(Panel::Styles, window, cx)
-                        })),
-                ),
-            )
-            .child(div().w(px(1.)).h(px(18.)).flex_shrink_0().bg(p.edge))
-            .child(
-                self.surface_anchors.wrap(
-                    "focus-export",
-                    Button::new("focus-export")
-                        .ghost()
-                        .h(px(30.))
-                        .px(px(12.))
-                        .rounded_full()
-                        .shell_label(self.text("导出", "Export"))
-                        .disabled(!self.can_export())
-                        .on_click(cx.listener(|view, _, _, cx| {
-                            view.export_open = !view.export_open;
-                            cx.notify();
                         })),
                 ),
             );
@@ -162,51 +156,157 @@ impl Creditia {
             .as_ref()
             .is_some_and(|styles| styles.current != styles.original)
         {
-            strip = strip.child(
+            editing = editing.child(
                 Button::new("apply-focus-style")
                     .ghost()
-                    .h(px(30.))
-                    .px(px(12.))
-                    .rounded_full()
-                    .border_1()
-                    .border_color(p.edge)
-                    .shell_label(self.text("设为全局风格", "Use for all cards"))
+                    .w(px(36.))
+                    .h(px(36.))
+                    .p_0()
+                    .rounded(px(10.))
+                    .icon(crate::ui_icons::icon("check"))
+                    .accessibility_label(self.text("设为全局风格", "Use for all cards"))
+                    .tooltip(self.text("设为全局风格", "Use for all cards"))
                     .on_click(cx.listener(|view, _, _, cx| view.apply_focus_style(cx))),
             );
         }
-        if self
-            .selected_piece()
-            .is_some_and(|piece| piece["animated"] == true)
-        {
-            strip = strip
-                .child(div().w(px(1.)).h(px(18.)).flex_shrink_0().bg(p.edge))
-                .child(
-                    Button::new("play")
-                        .ghost()
-                        .h(px(30.))
-                        .px(px(10.))
+        let mut playback = div()
+            .id("focus-playback")
+            .relative()
+            .flex()
+            .items_center()
+            .justify_center()
+            .w(px(if self.preferences.language == Language::En {
+                96.
+            } else {
+                74.
+            }))
+            .h(px(36.))
+            .flex_shrink_0();
+        if piece.is_some_and(|piece| piece["animated"] == true) {
+            let playing = self.playback.as_ref().is_some_and(|play| play.playing);
+            let ended = self.playback.as_ref().is_some_and(|play| play.ended);
+            let name = if self.animation_busy {
+                self.text("准备播放…", "Preparing playback…")
+            } else if playing {
+                self.text("暂停", "Pause")
+            } else if ended {
+                self.text("从头重播", "Replay from start")
+            } else if self.playback.is_some() {
+                self.text("继续播放", "Continue playback")
+            } else {
+                self.text("播放一次", "Play once")
+            };
+            playback = playback.child(
+                Button::new("play")
+                    .ghost()
+                    .w(px(36.))
+                    .h(px(36.))
+                    .p_0()
+                    .rounded(px(10.))
+                    .icon(crate::ui_icons::icon(if playing {
+                        "pause"
+                    } else if ended {
+                        "replay"
+                    } else {
+                        "play"
+                    }))
+                    .accessibility_label(name)
+                    .tooltip(name)
+                    .disabled(self.animation_busy)
+                    .on_click(cx.listener(|view, _, _, cx| view.play(false, cx))),
+            );
+            if let Some(play) = &self.playback {
+                let progress = (play.elapsed.as_secs_f32() * 1000.
+                    / play.timeline.duration_ms.max(1) as f32)
+                    .clamp(0., 1.);
+                playback = playback.child(
+                    div()
+                        .id("playback-progress")
+                        .absolute()
+                        .bottom_0()
+                        .left(px(9.))
+                        .right(px(9.))
+                        .h(px(2.))
                         .rounded_full()
-                        .shell_label(if self.playback.as_ref().is_some_and(|play| play.playing) {
-                            self.text("暂停", "Pause")
-                        } else {
-                            self.text("播放", "Play")
-                        })
-                        .disabled(self.animation_busy)
-                        .on_click(cx.listener(|view, _, _, cx| view.play(false, cx))),
-                )
-                .child(
-                    Button::new("replay")
-                        .ghost()
-                        .w(px(30.))
-                        .h(px(30.))
-                        .p_0()
-                        .rounded_full()
-                        .icon(crate::ui_icons::icon("refresh"))
-                        .accessibility_label(self.text("重播", "Replay"))
-                        .disabled(self.animation_busy)
-                        .on_click(cx.listener(|view, _, _, cx| view.play(true, cx))),
+                        .overflow_hidden()
+                        .bg(p.edge)
+                        .child(
+                            div()
+                                .h_full()
+                                .w(relative(progress))
+                                .rounded_full()
+                                .bg(p.ink.opacity(0.65)),
+                        ),
                 );
+            }
+        } else {
+            playback = playback.child(
+                div()
+                    .id("static-artwork")
+                    .test_support()
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .text_size(px(10.))
+                    .text_color(p.soft)
+                    .child(crate::ui_icons::icon("image").size(px(12.)))
+                    .child(self.text("静态作品", "Static artwork")),
+            );
         }
+        let separator = || {
+            div()
+                .w(px(1.))
+                .h(px(20.))
+                .mx(px(12.))
+                .flex_shrink_0()
+                .bg(p.edge)
+        };
+        let strip = div()
+            .id("focus-dock")
+            .test_support()
+            .relative()
+            .occlude()
+            .flex()
+            .items_center()
+            .p(px(6.))
+            .rounded(px(18.))
+            .max_w(px((self.viewport_size.0 - 48.).max(1.)))
+            .shadow(p.shadows())
+            .child(crate::material::surface(
+                self.backdrop_image.clone(),
+                p.glass,
+                18.,
+                p,
+            ))
+            .child(editing)
+            .child(separator())
+            .child(playback)
+            .child(separator())
+            .child(
+                self.surface_anchors.wrap(
+                    "focus-export",
+                    Button::new("focus-export")
+                        .ghost()
+                        .w(px(36.))
+                        .h(px(36.))
+                        .p_0()
+                        .rounded(px(10.))
+                        .bg(p.ink)
+                        .text_color(p.bg)
+                        .icon(crate::ui_icons::icon("export"))
+                        .accessibility_label(self.text("导出作品", "Export artwork"))
+                        .tooltip(self.text("导出作品", "Export artwork"))
+                        .disabled(
+                            self.selected_tile
+                                .is_none_or(|index| !self.can_open_export_for(index)),
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            if let Some(index) = view.selected_tile {
+                                view.toggle_export(index, cx);
+                            }
+                        })),
+                ),
+            );
         let mut root = div().absolute().inset_0().child(
             div()
                 .absolute()
@@ -305,10 +405,8 @@ impl Creditia {
             };
             let id = id.to_string();
             let drop_id = id.clone();
-            let disabled = id == "gif"
-                && self
-                    .selected_piece()
-                    .is_none_or(|piece| piece["animated"] != true);
+            let unavailable_reason = self.export_unavailable_reason(&id);
+            let disabled = unavailable_reason.is_some();
             let button = Button::new(("format", index))
                 .ghost()
                 .rounded(px(10.))
@@ -335,6 +433,8 @@ impl Creditia {
             choices = choices.child(
                 div()
                     .min_w_0()
+                    .flex()
+                    .flex_col()
                     .when(!dragging, |row| row.w_full())
                     .on_mouse_up(
                         MouseButton::Left,
@@ -358,7 +458,17 @@ impl Creditia {
                             }
                         }),
                     )
-                    .child(button),
+                    .child(button)
+                    .when_some(unavailable_reason, |row, reason| {
+                        row.child(
+                            div()
+                                .px(px(10.))
+                                .pb(px(5.))
+                                .text_size(px(10.))
+                                .text_color(p.soft)
+                                .child(reason),
+                        )
+                    }),
             );
         }
         let mut sizes = div()
@@ -495,7 +605,11 @@ impl Creditia {
                         .h(px(28.))
                         .rounded(px(10.))
                         .shell_label(self.text("复制作品", "Copy artwork"))
-                        .disabled(!self.can_export() || self.operation_busy)
+                        .disabled(
+                            self.export_unavailable_reason(self.copy_export_format_id())
+                                .is_some()
+                                || self.operation_busy,
+                        )
                         .on_click(cx.listener(|view, _, _, cx| view.copy_export(cx))),
                 )
                 .on_mouse_down_out(cx.listener(|view, event: &MouseDownEvent, _, cx| {

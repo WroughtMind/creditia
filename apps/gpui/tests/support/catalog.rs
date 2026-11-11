@@ -90,7 +90,8 @@ pub fn run() {
                     window.click(("piece", row["piece_index"].as_u64().unwrap() as usize), cx);
                     assert_eq!(view.read(cx).diagnostic_state()["selected_piece"], row["piece"], "the piece selector must preserve the requested selection");
                     assert_eq!(view.read(cx).diagnostic_state()["focused"], true);
-                    if let Some(index) = row["variant_index"].as_u64() {
+                    if let Some(index) = row["variant_index"].as_u64().filter(|_| view.read(cx).diagnostic_state()["selected_variant"] != row["variant"]) {
+                        window.click("focus-layout", cx);
                         window.click(("variant", index as usize), cx);
                     }
                     window.render_frame(cx);

@@ -234,6 +234,8 @@ mod native {
             wait_assets(&mut cx, handle, &view);
             let before = cx.capture_screenshot(handle).unwrap();
             cx.update_window(handle, |_, window, cx| {
+                window.click("focus-layout", cx);
+                assert_eq!(view.read(cx).diagnostic_state()["panel"], "layouts");
                 window.click(("variant", variant_index), cx);
                 assert_eq!(
                     view.read(cx).diagnostic_state()["selected_variant"],

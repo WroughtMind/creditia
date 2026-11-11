@@ -1,10 +1,12 @@
 //! Real production input/preview integration: no pre-rendered fixture artwork.
 //! File persistence, analysis services and animation playback have separate gates.
 use creditia_gpui::app::Creditia;
+use creditia_gpui::{Appearance, Language, Preferences};
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, App, AppContext, Bounds, ElementId, Entity, HeadlessAppContext, InputEvent,
-    MouseMoveEvent, Window, WindowBounds, WindowOptions, assets::Assets, point, px, size,
+    MouseMoveEvent, PinchEvent, ScrollDelta, ScrollEvent, TouchPhase, Window, WindowBounds,
+    WindowOptions, assets::Assets, point, px, size,
 };
 use serde_json::{Value, json};
 use std::{
@@ -27,7 +29,14 @@ struct Harness {
     feature_checks: Vec<Value>,
 }
 impl Harness {
-    fn new(raw: Value, catalog: Value, output: &Path, key: &str, viewport: (f32, f32)) -> Self {
+    fn new(
+        raw: Value,
+        catalog: Value,
+        output: &Path,
+        key: &str,
+        viewport: (f32, f32),
+        preferences: Preferences,
+    ) -> Self {
         let mut cx = HeadlessAppContext::with_platform(
             gpui_kit::platform::current_platform(true).text_system(),
             Arc::new(Assets),
@@ -48,7 +57,7 @@ impl Harness {
                         ..Default::default()
                     },
                     cx,
-                    |window, cx| cx.new(|cx| Creditia::benchmark(raw, window, cx)),
+                    |window, cx| cx.new(|cx| Creditia::benchmark(raw, preferences, window, cx)),
                 )
             })
             .expect("production benchmark window opens");
@@ -180,6 +189,10 @@ impl Harness {
         self.ready();
     }
     fn focus(&mut self, piece: &str) {
+        if self.state()["focused"] == true {
+            self.press("escape");
+            self.ready();
+        }
         let style = self.state()["style"].as_str().unwrap().to_string();
         let index = self.style(&style)["pieces"]
             .as_array()
@@ -257,8 +270,24 @@ impl Harness {
         );
         pixels
     }
+    fn artwork_pixels(&mut self) -> (gpui_kit::Size<gpui_kit::DevicePixels>, Vec<u8>) {
+        self.update(|window, cx, view| {
+            let image = view
+                .update(cx, |view, cx| view.fixture_artwork_image(window, cx))
+                .expect("decoded artwork is ready");
+            (
+                image.size(0),
+                image.as_bytes(0).expect("artwork has pixels").to_vec(),
+            )
+        })
+    }
     fn failure(&mut self, error: String) -> Value {
-        let state = self.state();
+        let state = self
+            .cx
+            .update_window(self.handle, |_, _, cx| {
+                self.view.read(cx).diagnostic_state()
+            })
+            .unwrap_or_else(|error| json!({"window_unavailable":error.to_string()}));
         if let Ok(image) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.cx
                 .capture_screenshot(self.handle)
@@ -287,6 +316,8 @@ fn layouts(h: &mut Harness) {
         .map(|variant| variant["id"].as_str().unwrap().to_string())
         .collect();
     assert!(variants.len() > 2);
+    h.click("focus-layout");
+    assert_eq!(h.state()["panel"], "layouts");
     h.click(("variant", 0usize));
     h.ready();
     assert_eq!(h.state()["selected_variant"], variants[0]);
@@ -312,7 +343,10 @@ fn layouts(h: &mut Harness) {
     h.press("right");
     h.ready();
     assert_eq!(h.state()["selected_variant"], variants[2]);
-    let settled = h.capture("settled-third-layout", true);
+    h.capture("settled-third-layout", true);
+    let settled = h.artwork_pixels();
+    let settled_rect = h.state()["focused_rect"].clone();
+    h.click("focus-layout");
     h.click(("variant", variants.len() - 1));
     // Intentionally issue new selections before the background renderer settles.
     h.press("right");
@@ -320,9 +354,14 @@ fn layouts(h: &mut Harness) {
     h.press("right");
     h.ready();
     assert_eq!(h.state()["selected_variant"], variants[2]);
-    let rapid = h.capture("rapid-final-layout", true);
-    assert_eq!(
-        settled, rapid,
+    h.capture("rapid-final-layout", true);
+    let rapid = h.artwork_pixels();
+    assert_eq!(h.state()["focused_rect"], settled_rect);
+    // swap_variant can rearrange other wall cards behind the transparent
+    // corners. Compare the actual foreground image bound to GPUI, not that
+    // path-dependent composited background. No pixel tolerance is applied.
+    assert!(
+        settled == rapid,
         "obsolete render responses must not replace the latest layout pixels"
     );
     h.press("escape");
@@ -600,6 +639,171 @@ fn spatial(h: &mut Harness) {
     );
 }
 
+fn reviewed_interactions(h: &mut Harness) {
+    h.click("roam");
+    h.ready();
+    let before = h.state();
+    let center = (970., 360.);
+    h.update(|window, cx, _| {
+        // No preceding pointer move: the gesture's actual position is the anchor.
+        window.dispatch_event(
+            PinchEvent {
+                position: point(px(center.0), px(center.1 + 60.)),
+                delta: 0.4,
+                phase: TouchPhase::Moved,
+                ..Default::default()
+            }
+            .to_platform_input(),
+            cx,
+        );
+        window.render_frame(cx);
+    });
+    let zoomed = h.state();
+    let z0 = before["zoom"].as_f64().unwrap();
+    let z1 = zoomed["zoom"].as_f64().unwrap();
+    assert!((z1 / z0 - 1.4).abs() < 0.001);
+    for (field, anchor) in [("pan_x", center.0), ("pan_y", center.1)] {
+        let original = (anchor as f64 - before[field].as_f64().unwrap()) / z0;
+        let current = (anchor as f64 - zoomed[field].as_f64().unwrap()) / z1;
+        assert!(
+            (original - current).abs() < 0.01,
+            "pinch anchor moved: {field}"
+        );
+    }
+    for _ in 0..6 {
+        h.update(|window, cx, _| {
+            window.dispatch_event(
+                PinchEvent {
+                    position: point(px(center.0), px(center.1 + 60.)),
+                    delta: -0.08,
+                    phase: TouchPhase::Moved,
+                    ..Default::default()
+                }
+                .to_platform_input(),
+                cx,
+            );
+            window.render_frame(cx);
+        });
+    }
+    let zoomed = h.state();
+    let zoom = zoomed["zoom"].as_f64().unwrap();
+    assert!(zoom < z0);
+    for (field, anchor) in [("pan_x", center.0), ("pan_y", center.1)] {
+        let original = (anchor as f64 - before[field].as_f64().unwrap()) / z0;
+        let current = (anchor as f64 - zoomed[field].as_f64().unwrap()) / zoom;
+        assert!(
+            (original - current).abs() < 0.01,
+            "continuous zoom-out anchor moved: {field}"
+        );
+    }
+    h.update(|window, cx, _| {
+        window.dispatch_event(
+            ScrollEvent {
+                position: point(px(970.), px(420.)),
+                delta: ScrollDelta::Pixels(point(px(46.), px(-32.))),
+                touch_phase: TouchPhase::Moved,
+                ..Default::default()
+            }
+            .to_platform_input(),
+            cx,
+        );
+        window.render_frame(cx);
+    });
+    let panned = h.state();
+    assert!(
+        (panned["pan_x"].as_f64().unwrap() - zoomed["pan_x"].as_f64().unwrap() - 46.).abs() < 0.01
+    );
+    assert!(
+        (panned["pan_y"].as_f64().unwrap() - zoomed["pan_y"].as_f64().unwrap() + 32.).abs() < 0.01
+    );
+    h.focus("tier");
+    h.press("escape");
+    let restored = h.state();
+    for field in ["pan_x", "pan_y", "zoom"] {
+        assert_eq!(restored[field], panned[field]);
+    }
+    h.check(
+        "pointer-anchored-pinch-pan-and-focus-return",
+        json!({"before":before,"zoomed":zoomed,"panned":panned,"restored":restored}),
+    );
+
+    h.focus("tier");
+    let dock_width =
+        h.update(|window, _, _| f32::from(window.find("focus-dock").bounds().size.width));
+    let gif = h.catalog["formats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|format| format["id"] != "md")
+        .position(|format| format["id"] == "gif")
+        .unwrap();
+    // Start with the saved GIF preference. OS save prompts are deliberately
+    // outside this input scenario; the test platform waits for their response.
+    assert_eq!(h.state()["export_format"], "gif");
+    h.focus("badge");
+    h.update(|window, _, _| {
+        assert!(window.find("static-artwork").visible());
+        assert!(
+            (f32::from(window.find("focus-dock").bounds().size.width) - dock_width).abs() < 0.01
+        );
+    });
+    assert_eq!(h.state()["can_export"], false);
+    h.click("focus-export");
+    assert_eq!(
+        h.state()["export_open"],
+        true,
+        "saved GIF cannot lock the export entry"
+    );
+    h.click(("format", gif));
+    assert_eq!(
+        h.state()["export_open"],
+        true,
+        "unsupported GIF must not start an export"
+    );
+    assert_eq!(h.state()["export_format"], "gif");
+    h.capture("static-export-with-gif-disabled", false);
+    h.press("escape");
+    h.press("escape");
+    h.click("wall");
+    h.ready();
+    h.focus("badge");
+    h.press("escape");
+    let rect = h.state()["selected_rect"].clone();
+    let scroll = 450. - rect["y"].as_f64().unwrap() - rect["h"].as_f64().unwrap() / 2.;
+    h.update(|window, cx, _| {
+        window.dispatch_event(
+            ScrollEvent {
+                position: point(px(700.), px(450.)),
+                delta: ScrollDelta::Pixels(point(px(0.), px(scroll as f32))),
+                ..Default::default()
+            }
+            .to_platform_input(),
+            cx,
+        );
+        window.render_frame(cx);
+    });
+    h.ready();
+    let index = h.state()["selected_tile"].as_u64().unwrap() as usize;
+    h.update(|window, cx, _| window.hover(("artwork", index), cx));
+    h.click(("tile-export", index));
+    assert_eq!(
+        h.state()["export_open"],
+        true,
+        "wall and focus must use the same availability rule"
+    );
+    h.press("escape");
+    let state = h.state();
+    h.check(
+        "static-label-stable-dock-and-export-entry-with-saved-gif",
+        json!({"state":state,"file_written":false,"initial_export_preference":"gif","system_save_dialog_exercised":false}),
+    );
+
+    // The continuous producer blocks while waiting for UI playhead updates.
+    // A deterministic headless executor cannot run both on the same thread.
+    // Completion and producer controls have separate unit checks; real-window
+    // play/pause/resume/replay remains a manual acceptance step.
+}
+
 fn responsive(h: &mut Harness) {
     h.settle();
     h.ready();
@@ -656,6 +860,22 @@ fn responsive(h: &mut Harness) {
     h.capture("small-settings", false);
     h.click("panel-close");
     h.focus("tier");
+    h.click("focus-layout");
+    inside(h, "panel");
+    h.capture("small-layout-menu", false);
+    h.click(("variant", 0usize));
+    h.ready();
+    assert!(
+        h.state()["panel"].is_null(),
+        "choosing a layout closes its menu"
+    );
+    h.click("focus-layout");
+    h.click("focus-layout");
+    h.settle();
+    assert!(
+        h.state()["panel"].is_null(),
+        "layout trigger closes its menu"
+    );
     let before = h.state()["focused_rect"].clone();
     assert!(before["y"].as_f64().unwrap() + before["h"].as_f64().unwrap() <= 560. - 92. + 1.);
     h.capture("small-focus", false);
@@ -770,7 +990,7 @@ pub fn run() {
     let source: Value =
         serde_json::from_slice(&fs::read(input.join("fixture-manifest.json")).unwrap()).unwrap();
     let mut cases = Vec::new();
-    let scenarios: [(&str, fn(&mut Harness)); 9] = [
+    let scenarios: [(&str, fn(&mut Harness)); 10] = [
         ("runtime-layouts", layouts),
         ("runtime-style-trial", trial_restore),
         ("runtime-style-apply", apply_style),
@@ -780,6 +1000,7 @@ pub fn run() {
         ("runtime-responsive", responsive),
         ("runtime-card-layout", card_layout),
         ("runtime-overlay-motion", overlay_motion),
+        ("runtime-reviewed-interactions", reviewed_interactions),
     ];
     for (key, scenario) in scenarios {
         println!("native runtime case: {key}");
@@ -793,6 +1014,18 @@ pub fn run() {
                     (760., 560.)
                 } else {
                     (1440., 1000.)
+                },
+                Preferences {
+                    language: Language::En,
+                    appearance: Appearance::Light,
+                    named: false,
+                    export_format: if key == "runtime-reviewed-interactions" {
+                        "gif"
+                    } else {
+                        "png"
+                    }
+                    .into(),
+                    ..Default::default()
                 },
             )
         }));

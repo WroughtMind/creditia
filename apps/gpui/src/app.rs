@@ -77,6 +77,7 @@ enum JobEvent {
 enum Panel {
     Projects,
     Styles,
+    Layouts,
     Pieces,
     Settings,
     Project,
@@ -132,6 +133,7 @@ struct Playback {
     started: Instant,
     elapsed: Duration,
     playing: bool,
+    ended: bool,
     suspended: bool,
     index: usize,
     requested: usize,
@@ -140,7 +142,7 @@ struct Playback {
 }
 impl Playback {
     // Follow elapsed time. Missing a raster skips samples rather than slowing
-    // the whole animation. A repeat still waits for the last frame to paint.
+    // the whole animation. Completion still waits for the last frame to paint.
     fn tick(&mut self, control: &crate::animation::PlaybackControl) -> bool {
         let last = self.times.len() - 1;
         let now = Instant::now();
@@ -170,15 +172,9 @@ impl Playback {
                 now.duration_since(*painted) >= Duration::from_millis(self.timeline.hold_ms)
             })
         {
-            if self.timeline.repeat {
-                self.elapsed = Duration::ZERO;
-                self.started_once = false;
-                self.requested = 0;
-                control.restart();
-            } else {
-                self.playing = false;
-                control.pause();
-            }
+            self.playing = false;
+            self.ended = true;
+            control.pause();
             return false;
         }
         time < duration || self.index == last
@@ -848,18 +844,13 @@ impl Creditia {
         }
     }
 
-    pub fn benchmark(raw: Value, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mut view = Self::base(
-            Preferences {
-                language: Language::En,
-                appearance: Appearance::Light,
-                named: false,
-                ..Default::default()
-            },
-            true,
-            window,
-            cx,
-        );
+    pub fn benchmark(
+        raw: Value,
+        preferences: Preferences,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut view = Self::base(preferences, true, window, cx);
         view.benchmark = true;
         view.selected = Some("fixture".into());
         view.preferences.last_project = view.selected.clone();
@@ -3093,10 +3084,11 @@ impl Creditia {
             return;
         }
         if let Some(play) = &mut self.playback {
-            if restart {
+            if restart || play.ended {
                 play.elapsed = Duration::ZERO;
                 play.started_once = false;
                 play.playing = true;
+                play.ended = false;
                 play.suspended = false;
                 play.requested = 0;
                 if let Some(control) = &self.animation_control {
@@ -3195,9 +3187,12 @@ impl Creditia {
                         match event {
                             Ok(crate::animation::Event::Started {
                                 epoch,
-                                timeline,
+                                mut timeline,
                                 times,
                             }) => {
+                                // Preview playback is one-shot. The renderer's
+                                // authored timeline remains intact for exports.
+                                timeline.repeat = false;
                                 let playing = timeline.duration_ms > 0;
                                 view.playback = Some(Playback {
                                     frames: BTreeMap::new(),
@@ -3207,6 +3202,7 @@ impl Creditia {
                                     started: Instant::now(),
                                     elapsed: Duration::ZERO,
                                     playing,
+                                    ended: false,
                                     suspended: false,
                                     index: 0,
                                     requested: 0,
@@ -3386,9 +3382,21 @@ impl Creditia {
             self.animation_busy = false;
         }
     }
+    #[cfg(feature = "visual-test")]
+    pub fn fixture_artwork_image(
+        &self,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Option<Arc<RenderImage>> {
+        let image = self.current_tile()?.image.as_ref()?;
+        crate::image_assets::track(image, window, cx)
+    }
     pub fn fixture_images_ready(&self, window: &mut Window, cx: &mut App) -> bool {
         if self.fixture && !self.benchmark && (self.raw.is_none() || self.loading) {
             return true;
+        }
+        if self.backdrop_task.is_some() || self.backdrop_pending.is_some() {
+            return false;
         }
         if self
             .focus_transition
@@ -4196,14 +4204,43 @@ impl Creditia {
         self.current_tile().and_then(|t| self.piece(&t.spec.piece))
     }
     fn can_export(&self) -> bool {
-        self.raw.is_some()
-            && self.current_tile().is_some_and(|tile| {
-                ["txt", "md", "json", "embed"].contains(&self.export_format.as_str())
-                    || (tile.art.is_some() && tile.error.is_none())
-            })
+        self.export_unavailable_reason(&self.export_format)
+            .is_none()
             && !self.export_prompt_busy
-            && (self.export_format != "gif"
-                || self.selected_piece().is_some_and(|p| p["animated"] == true))
+    }
+    fn export_unavailable_reason(&self, format: &str) -> Option<&'static str> {
+        let Some(tile) = self.current_tile().filter(|_| self.raw.is_some()) else {
+            return Some(self.text("请先选择作品", "Select an artwork first"));
+        };
+        if format == "gif"
+            && self
+                .selected_piece()
+                .is_none_or(|piece| piece["animated"] != true)
+        {
+            return Some(self.text("静态作品不支持 GIF", "Static artwork does not support GIF"));
+        }
+        if !["txt", "md", "json", "embed"].contains(&format) {
+            if tile.error.is_some() {
+                return Some(self.text("作品预览不可用", "Artwork preview is unavailable"));
+            }
+            if tile.art.is_none() {
+                return Some(self.text("作品预览准备中", "Preparing artwork preview"));
+            }
+        }
+        None
+    }
+    fn can_open_export_for(&self, index: usize) -> bool {
+        self.raw.is_some() && self.tiles.get(index).is_some() && !self.export_prompt_busy
+    }
+    fn toggle_export(&mut self, index: usize, cx: &mut Context<Self>) {
+        if !self.can_open_export_for(index) {
+            return;
+        }
+        let close = self.export_open && self.selected_tile == Some(index);
+        self.selected_tile = Some(index);
+        self.export_open = !close;
+        self.hover = None;
+        cx.notify();
     }
     fn ui_export_formats(&self) -> Vec<Value> {
         self.catalog
@@ -4572,17 +4609,18 @@ impl Creditia {
         }
     }
     fn copy_export(&mut self, cx: &mut Context<Self>) {
-        let format = if ["svg", "html", "md", "txt", "json", "embed"]
-            .contains(&self.export_format.as_str())
-        {
-            self.export_format.clone()
-        } else {
-            "svg".into()
-        };
+        let format = self.copy_export_format_id().to_owned();
         self.copy_export_format(&format, cx);
     }
+    fn copy_export_format_id(&self) -> &str {
+        if ["svg", "html", "md", "txt", "json", "embed"].contains(&self.export_format.as_str()) {
+            &self.export_format
+        } else {
+            "svg"
+        }
+    }
     fn copy_export_format(&mut self, format: &str, cx: &mut Context<Self>) {
-        if self.operation_busy {
+        if self.operation_busy || self.export_unavailable_reason(format).is_some() {
             return;
         }
         let request = match self.export_request_format(format) {
@@ -4632,7 +4670,11 @@ impl Creditia {
             if !self.focused && self.preferences.view != "roam" {
                 self.set_view("roam", cx);
             }
-            self.zoom_at((-dy * 0.006).exp(), self.pointer.0, self.pointer.1);
+            self.zoom_at(
+                (-dy * 0.006).exp(),
+                event.position.x.into(),
+                f32::from(event.position.y) - 60.,
+            );
         } else {
             self.viewport.y += if event.modifiers.shift && dx == 0. {
                 0.
@@ -4647,6 +4689,23 @@ impl Creditia {
                 };
             }
         }
+        self.hover = None;
+        cx.notify();
+        cx.stop_propagation();
+    }
+    fn pinch(&mut self, event: &PinchEvent, cx: &mut Context<Self>) {
+        if self.panel.is_some() || !event.delta.is_finite() || event.delta <= -1. {
+            return;
+        }
+        self.roam_motion.stop();
+        if !self.focused && self.preferences.view != "roam" {
+            self.set_view("roam", cx);
+        }
+        self.zoom_at(
+            1. + event.delta,
+            event.position.x.into(),
+            f32::from(event.position.y) - 60.,
+        );
         self.hover = None;
         cx.notify();
         cx.stop_propagation();
@@ -4817,12 +4876,8 @@ impl Creditia {
         let formats = self.ui_export_formats();
         if let Some(index) = nearest_child(&self.format_bounds, formats.len(), x, y) {
             if let Some(format) = formats[index]["id"].as_str() {
-                if format != "gif"
-                    || self
-                        .selected_piece()
-                        .is_some_and(|piece| piece["animated"] == true)
-                {
-                    self.selected_tile = Some(from);
+                self.selected_tile = Some(from);
+                if self.export_unavailable_reason(format).is_none() {
                     self.export_format = format.into();
                     self.preferences.export_format = format.into();
                     self.persist();
@@ -5220,14 +5275,16 @@ impl Creditia {
                         "card-export",
                         Button::new(("tile-export", index))
                             .ghost()
+                            .w(px(26.))
                             .h(px(26.))
-                            .px(px(10.))
+                            .p_0()
                             .rounded_full()
-                            .shell_label(self.text("导出", "Export"))
+                            .icon(crate::ui_icons::icon("export"))
+                            .accessibility_label(self.text("导出作品", "Export artwork"))
+                            .tooltip(self.text("导出作品", "Export artwork"))
+                            .disabled(!self.can_open_export_for(index))
                             .on_click(cx.listener(move |view, _, _, cx| {
-                                view.selected_tile = Some(index);
-                                view.export_open = !view.export_open;
-                                cx.notify();
+                                view.toggle_export(index, cx);
                             })),
                     ),
                 );
@@ -5250,6 +5307,7 @@ impl Creditia {
             .size_full()
             .overflow_hidden()
             .on_scroll(cx.listener(|view, event, _, cx| view.wheel(event, cx)))
+            .on_pinch(cx.listener(|view, event, _, cx| view.pinch(event, cx)))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|view, event: &MouseDownEvent, _, cx| {
@@ -5676,6 +5734,7 @@ impl Creditia {
         let title = match panel {
             Panel::Projects => self.text("项目作品库", "Project library"),
             Panel::Styles => self.text("风格", "Styles"),
+            Panel::Layouts => self.text("版式", "Layout"),
             Panel::Pieces => self.text("全部作品", "All artworks"),
             Panel::Blame => self.text("逐行归因", "Line attribution"),
             Panel::Exports => self.text("导出任务", "Export tasks"),
@@ -6108,6 +6167,49 @@ impl Creditia {
                             .on_click(
                                 cx.listener(move |view, _, _, cx| view.choose_style(index, cx)),
                             ),
+                    );
+                }
+                body = body.child(choices);
+            }
+            Panel::Layouts => {
+                let palette = Palette::of(cx);
+                let mut choices = div().flex().flex_col().gap(px(2.));
+                let selected = self
+                    .current_tile()
+                    .and_then(|tile| tile.spec.variant.as_deref());
+                for (index, variant) in self
+                    .selected_piece()
+                    .and_then(|piece| piece["variants"].as_array())
+                    .into_iter()
+                    .flatten()
+                    .enumerate()
+                {
+                    let id = variant["id"].as_str().unwrap_or("").to_owned();
+                    let name = variant[if self.preferences.language == Language::En {
+                        "en"
+                    } else {
+                        "name"
+                    }]
+                    .as_str()
+                    .unwrap_or(&id)
+                    .to_owned();
+                    choices = choices.child(
+                        Button::new(("variant", index))
+                            .ghost()
+                            .w_full()
+                            .h(px(34.))
+                            .rounded(px(9.))
+                            .justify_start()
+                            .shell_label(name)
+                            .when(selected == Some(id.as_str()), |button| {
+                                button
+                                    .bg(palette.ink.opacity(0.06))
+                                    .icon(crate::ui_icons::icon("check"))
+                            })
+                            .on_click(cx.listener(move |view, _, window, cx| {
+                                view.choose_variant(id.clone(), cx);
+                                view.close_panel(window, cx);
+                            })),
                     );
                 }
                 body = body.child(choices);
@@ -6619,11 +6721,12 @@ impl Creditia {
         let window_width = self.viewport_size.0;
         let popover = matches!(
             panel,
-            Panel::Projects | Panel::Styles | Panel::Pieces | Panel::Exports
+            Panel::Projects | Panel::Styles | Panel::Layouts | Panel::Pieces | Panel::Exports
         );
         let desired_width: f32 = match panel {
             Panel::Projects => 440.,
             Panel::Styles => 400.,
+            Panel::Layouts => 236.,
             Panel::Exports => 460.,
             Panel::Pieces => 400.,
             Panel::Settings => 720.,
@@ -6631,7 +6734,7 @@ impl Creditia {
         };
         let width = desired_width.min((window_width - 40.).max(1.));
         let max_height = match panel {
-            Panel::Styles | Panel::Pieces => {
+            Panel::Styles | Panel::Layouts | Panel::Pieces => {
                 (window_height * 0.7).min(520.).min(window_height - 88.)
             }
             Panel::Projects => window_height - 72.,
@@ -6878,7 +6981,7 @@ impl Creditia {
             modal = modal.on_mouse_down_out(cx.listener(
                 move |view, event: &MouseDownEvent, window, cx| {
                     let triggers: &[&str] = if view.focused {
-                        &["focus-style", "exports-trigger"]
+                        &["focus-style", "focus-layout", "exports-trigger"]
                     } else {
                         &[
                             "project-trigger",
@@ -7033,8 +7136,12 @@ impl Creditia {
                     ),
                 ),
                 Panel::Exports => (Anchor::TopRight, point(px(window_width - 16.), px(66.))),
-                Panel::Styles if self.focused => {
-                    let bounds = self.surface_anchors.get("focus-style");
+                Panel::Styles | Panel::Layouts if self.focused => {
+                    let bounds = self.surface_anchors.get(if panel == Panel::Layouts {
+                        "focus-layout"
+                    } else {
+                        "focus-style"
+                    });
                     (
                         Anchor::BottomLeft,
                         point(
@@ -7109,12 +7216,19 @@ impl Creditia {
             "zoom":self.viewport.zoom,"pan_x":self.viewport.x,"pan_y":self.viewport.y,"tile_count":self.tiles.len(),"style":self.style().map(|style|style["id"].clone()),"global_style":self.preferences.style,
             "language":self.preferences.language.code(),"appearance":self.preferences.appearance,"export_open":self.export_open,"preview_generation":self.preview_generation,"preview_busy":self.preview_busy,"error":self.error,
             "reduced_motion":self.reduced_motion,"preview_style":self.focus_styles.as_ref().is_some_and(|styles|styles.current!=styles.original),"playing":self.playback.as_ref().is_some_and(|p|p.playing&&!p.suspended),"loading":self.loading,
-            "panel":self.panel.map(|p|match p{Panel::Projects=>"projects",Panel::Styles=>"styles",Panel::Pieces=>"pieces",Panel::Blame=>"blame",Panel::Exports=>"exports",Panel::Settings=>"settings",Panel::Project=>"project",Panel::Details=>"details"}),
+            "panel":self.panel.map(|p|match p{Panel::Projects=>"projects",Panel::Styles=>"styles",Panel::Layouts=>"layouts",Panel::Pieces=>"pieces",Panel::Blame=>"blame",Panel::Exports=>"exports",Panel::Settings=>"settings",Panel::Project=>"project",Panel::Details=>"details"}),
             "project":self.selected,"project_count":self.projects.len(),"project_name":self.raw.as_ref().map(|raw|raw["project"]["name"].clone()),"operation_busy":self.operation_busy,"remove_confirm":self.remove_confirm,"search_query":self.search_query,
             "display_scale":self.display_scale,"picker_selected":self.picker_selected,"settings_project":self.settings_id(),"project_settings_ready":self.settings_data().is_some() && self.sign_loaded_for.as_ref()==self.settings_id(),"project_row_menu":self.project_row_menu.as_ref().map(|(id,_)|id),"hover":self.hover.as_ref().map(|hit|&hit.t),"batch":self.batch_results
         });
+        state["export_format"] = json!(self.export_format);
+        state["can_export"] = json!(self.can_export());
+        state["export_unavailable"] = json!(self.export_unavailable_reason(&self.export_format));
         if let Some(hit) = focused_art.and_then(|art| art.hits.first()) {
             state["first_hit"] = json!({"x":hit.x,"y":hit.y,"w":hit.w,"h":hit.h,"t":hit.t});
+        }
+        if let Some(index) = self.selected_tile {
+            let rect = self.screen_rect(index);
+            state["selected_rect"] = json!({"x":rect.x,"y":rect.y,"w":rect.w,"h":rect.h});
         }
         if self.focused {
             if let Some(index) = self.selected_tile {
@@ -7127,7 +7241,7 @@ impl Creditia {
         }
         if let Some(play) = &self.playback {
             let displayed = play.displayed();
-            state["animation"] = json!({"epoch":play.epoch,"displayed_epoch":displayed.map(|f|f.epoch),"index":play.index,"requested":play.requested,"playing":play.playing&&!play.suspended,"intent_playing":play.playing,"paused":!play.playing||play.suspended,"suspended":play.suspended,"frame_pixels":displayed.map(|f|f.pixels),"chunks":displayed.map(|f|&f.regions),"resident_frames":play.frames.len()+usize::from(play.previous.is_some()),"resident_bytes":play.frames.values().map(|f|f.decoded_bytes).sum::<usize>()+play.previous.as_ref().map(|f|f.decoded_bytes).unwrap_or(0),"decode_ready":displayed.is_some_and(|f|f.ready),"painted":displayed.is_some_and(|f|f.painted.get().is_some()),"elapsed_ms":play.elapsed.as_millis(),"timeline":{"duration_ms":play.timeline.duration_ms,"hold_ms":play.timeline.hold_ms,"fps":play.timeline.fps,"repeat":play.timeline.repeat,"frame_count":play.times.len()},"sample_time":play.times.get(play.index)});
+            state["animation"] = json!({"epoch":play.epoch,"displayed_epoch":displayed.map(|f|f.epoch),"index":play.index,"requested":play.requested,"playing":play.playing&&!play.suspended,"intent_playing":play.playing,"ended":play.ended,"paused":!play.playing||play.suspended,"suspended":play.suspended,"frame_pixels":displayed.map(|f|f.pixels),"chunks":displayed.map(|f|&f.regions),"resident_frames":play.frames.len()+usize::from(play.previous.is_some()),"resident_bytes":play.frames.values().map(|f|f.decoded_bytes).sum::<usize>()+play.previous.as_ref().map(|f|f.decoded_bytes).unwrap_or(0),"decode_ready":displayed.is_some_and(|f|f.ready),"painted":displayed.is_some_and(|f|f.painted.get().is_some()),"elapsed_ms":play.elapsed.as_millis(),"timeline":{"duration_ms":play.timeline.duration_ms,"hold_ms":play.timeline.hold_ms,"fps":play.timeline.fps,"repeat":play.timeline.repeat,"frame_count":play.times.len()},"sample_time":play.times.get(play.index)});
         }
         state
     }
@@ -7378,7 +7492,7 @@ impl Render for Creditia {
             }).collect::<Vec<_>>());
             if let Some(play) = &self.playback {
                 let displayed = play.displayed();
-                state["animation"] = json!({"epoch":play.epoch,"displayed_epoch":displayed.map(|f|f.epoch),"index":play.index,"requested":play.requested,"playing":play.playing&&!play.suspended,"intent_playing":play.playing,"paused":!play.playing||play.suspended,"suspended":play.suspended,"visible":can_animate,"frame_pixels":displayed.map(|f|f.pixels),"chunks":displayed.map(|f|&f.regions),"resident_frames":play.frames.len()+usize::from(play.previous.is_some()),"resident_bytes":play.frames.values().map(|f|f.decoded_bytes).sum::<usize>()+play.previous.as_ref().map(|f|f.decoded_bytes).unwrap_or(0),"decode_ready":displayed.is_some_and(|f|f.ready),"painted":displayed.is_some_and(|f|f.painted.get().is_some()),"elapsed_ms":play.elapsed.as_millis(),"timeline":{"duration_ms":play.timeline.duration_ms,"hold_ms":play.timeline.hold_ms,"fps":play.timeline.fps,"repeat":play.timeline.repeat,"frame_count":play.times.len()},"sample_time":play.times.get(play.index)});
+                state["animation"] = json!({"epoch":play.epoch,"displayed_epoch":displayed.map(|f|f.epoch),"index":play.index,"requested":play.requested,"playing":play.playing&&!play.suspended,"intent_playing":play.playing,"ended":play.ended,"paused":!play.playing||play.suspended,"suspended":play.suspended,"visible":can_animate,"frame_pixels":displayed.map(|f|f.pixels),"chunks":displayed.map(|f|&f.regions),"resident_frames":play.frames.len()+usize::from(play.previous.is_some()),"resident_bytes":play.frames.values().map(|f|f.decoded_bytes).sum::<usize>()+play.previous.as_ref().map(|f|f.decoded_bytes).unwrap_or(0),"decode_ready":displayed.is_some_and(|f|f.ready),"painted":displayed.is_some_and(|f|f.painted.get().is_some()),"elapsed_ms":play.elapsed.as_millis(),"timeline":{"duration_ms":play.timeline.duration_ms,"hold_ms":play.timeline.hold_ms,"fps":play.timeline.fps,"repeat":play.timeline.repeat,"frame_count":play.times.len()},"sample_time":play.times.get(play.index)});
             }
             let visible = Rect {
                 x: 0.,
@@ -8505,7 +8619,17 @@ fn open_creditia_window(
         move |window, cx| {
             cx.new(|cx| {
                 let mut view = if let Some(raw) = benchmark {
-                    Creditia::benchmark(raw, window, cx)
+                    Creditia::benchmark(
+                        raw,
+                        Preferences {
+                            language: Language::En,
+                            appearance: Appearance::Light,
+                            named: false,
+                            ..Default::default()
+                        },
+                        window,
+                        cx,
+                    )
                 } else {
                     match fixture {
                         Some(fixture) => {
@@ -8610,7 +8734,7 @@ mod input_tests {
         time::{Duration, Instant},
     };
     #[test]
-    fn slow_paint_cannot_skip_an_entire_animation_cycle() {
+    fn preview_completes_once_after_the_final_frame_has_painted() {
         let control = crate::animation::PlaybackControl::new();
         let mut play = Playback {
             frames: BTreeMap::new(),
@@ -8625,6 +8749,7 @@ mod input_tests {
             started: Instant::now() - Duration::from_secs(12),
             elapsed: Duration::ZERO,
             playing: true,
+            ended: false,
             suspended: false,
             index: 0,
             requested: 0,
@@ -8662,15 +8787,24 @@ mod input_tests {
             },
         );
         play.started = Instant::now() - Duration::from_millis(1201);
-        assert!(play.tick(&control), "last frame must paint before looping");
+        assert!(
+            play.tick(&control),
+            "last frame must paint before completing"
+        );
         assert_eq!(control.epoch(), epoch);
         play.frames[&20]
             .painted
             .set(Instant::now() - Duration::from_millis(201))
             .unwrap();
         assert!(!play.tick(&control));
-        assert!(!play.started_once);
-        assert_ne!(control.epoch(), epoch);
+        assert!(!play.playing);
+        assert!(play.ended);
+        assert_eq!(play.index, 20);
+        assert_eq!(
+            control.epoch(),
+            epoch,
+            "completion never restarts the producer"
+        );
     }
     #[test]
     fn all_shortcuts_parse_on_both_platform_families() {

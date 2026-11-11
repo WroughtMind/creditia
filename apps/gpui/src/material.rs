@@ -351,10 +351,13 @@ fn inside_rounded(x: f32, y: f32, r: Rect, radius: f32) -> bool {
     if x < r.x || y < r.y || x > r.x + r.w || y > r.y + r.h {
         return false;
     }
-    let radius = radius.min(r.w / 2.).min(r.h / 2.);
-    let cx = x.clamp(r.x + radius, r.x + r.w - radius);
-    let cy = y.clamp(r.y + radius, r.y + r.h - radius);
-    (x - cx).powi(2) + (y - cy).powi(2) <= radius.powi(2)
+    let (half_w, half_h) = (r.w / 2., r.h / 2.);
+    let radius = radius.min(half_w).min(half_h);
+    // At a capsule's short side the inset interval has zero width. Computing
+    // its two endpoints separately can reverse them through f32 rounding.
+    let dx = ((x - (r.x + half_w)).abs() - (half_w - radius)).max(0.);
+    let dy = ((y - (r.y + half_h)).abs() - (half_h - radius)).max(0.);
+    dx.powi(2) + dy.powi(2) <= radius.powi(2)
 }
 fn sample_bgra(bytes: &[u8], width: usize, height: usize, x: f32, y: f32) -> [f32; 4] {
     let (x0, y0) = (x.floor() as usize, y.floor() as usize);
@@ -536,6 +539,24 @@ pub fn image_corners(region: Rect, width: f32, height: f32) -> Corners<Pixels> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn fractional_capsule_bounds_keep_their_center_inside() {
+        for (width, height) in [(341., 20.), (20., 341.), (1., 0.1)] {
+            let rect = super::Rect {
+                x: 298.3736,
+                y: 298.3736,
+                w: width,
+                h: height,
+            };
+            assert!(super::inside_rounded(
+                rect.x + width / 2.,
+                rect.y + height / 2.,
+                rect,
+                10.
+            ));
+            assert!(!super::inside_rounded(rect.x - 1., rect.y, rect, 10.));
+        }
+    }
     use super::{gaussian_blur, sample_bgra};
     #[test]
     fn blur_preserves_uniform_surfaces_and_softens_real_edges() {
