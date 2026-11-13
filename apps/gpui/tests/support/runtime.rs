@@ -99,6 +99,12 @@ impl Harness {
             }
         ));
     }
+    fn export_format(&mut self, id: &str) {
+        if self.state()["export_formats_open"] != true {
+            self.click("export-format");
+        }
+        self.click(format!("export-format-{id}"));
+    }
     fn ready(&mut self) {
         let started = Instant::now();
         loop {
@@ -226,7 +232,7 @@ impl Harness {
             // cannot masquerade as a regenerated artwork in pixel comparisons.
             window.hover(
                 if view.read(cx).diagnostic_state()["export_workspace"] == true {
-                    "export-title"
+                    "export-format"
                 } else {
                     "styles"
                 },
@@ -767,7 +773,7 @@ fn reviewed_interactions(h: &mut Harness) {
         true,
         "saved GIF cannot lock the export entry"
     );
-    h.click("export-format-gif");
+    h.export_format("gif");
     assert_eq!(
         h.state()["export_open"],
         true,
@@ -777,6 +783,10 @@ fn reviewed_interactions(h: &mut Harness) {
     h.ready();
     h.capture("static-export-with-gif-disabled", false);
     h.press("escape");
+    assert_eq!(h.state()["export_formats_open"], false);
+    assert_eq!(h.state()["export_open"], true);
+    h.press("escape");
+    assert_eq!(h.state()["export_open"], false);
     h.press("escape");
     h.click("wall");
     h.ready();
@@ -825,16 +835,28 @@ fn export_workspace(h: &mut Harness) {
     h.ready();
     assert_eq!(h.state()["export_workspace"], true);
     assert_eq!(h.state()["export_preview"]["image_ready"], true);
+    assert_eq!(h.state()["focused_rect"], before["focused_rect"]);
+    h.update(|window, _, _| {
+        assert!(
+            window
+                .find((
+                    "artwork",
+                    before["selected_tile"].as_u64().unwrap() as usize
+                ))
+                .visible()
+        );
+        assert!(window.find("export-dock").visible());
+    });
     h.capture("png", false);
     for id in ["svg", "json", "png"] {
-        h.click(format!("export-format-{id}"));
+        h.export_format(id);
     }
     h.ready();
     assert_eq!(h.state()["export_format"], "png");
     assert_eq!(h.state()["export_preview"]["image_ready"], true);
     assert_eq!(h.state()["export_preview"]["text_ready"], false);
     for id in ["svg", "pdf", "gif", "html"] {
-        h.click(format!("export-format-{id}"));
+        h.export_format(id);
         h.ready();
         let state = h.state();
         assert_eq!(state["export_format"], id);
@@ -848,7 +870,7 @@ fn export_workspace(h: &mut Harness) {
         );
     }
     for id in ["embed", "md", "txt", "json"] {
-        h.click(format!("export-format-{id}"));
+        h.export_format(id);
         h.ready();
         let state = h.state();
         assert_eq!(
@@ -880,7 +902,29 @@ fn export_workspace(h: &mut Harness) {
         );
         h.capture(&format!("{id}-copied"), false);
     }
-    h.click("export-format-png");
+    assert_eq!(h.state()["success_notice"], "Copied");
+    // The headless executor owns a virtual timer clock; wall-clock sleeping
+    // cannot expire production executor timers. Re-copy also replaces its timer.
+    h.cx.run_until_parked();
+    h.cx.advance_clock(Duration::from_secs(2));
+    h.click("export-primary");
+    h.cx.run_until_parked();
+    h.cx.advance_clock(Duration::from_secs(1));
+    h.cx.run_until_parked();
+    assert_eq!(
+        h.state()["success_notice"],
+        "Copied",
+        "an older timer must not dismiss a newer success"
+    );
+    h.cx.advance_clock(Duration::from_secs(2));
+    h.cx.run_until_parked();
+    h.update(|window, cx, _| window.render_frame(cx));
+    assert!(
+        h.state()["success_notice"].is_null(),
+        "copy feedback must dismiss after three seconds"
+    );
+    assert_eq!(h.state()["focused_rect"], before["focused_rect"]);
+    h.export_format("png");
     h.ready();
     h.click("export-size");
     h.press("down");
@@ -898,7 +942,7 @@ fn export_workspace(h: &mut Harness) {
     assert_eq!(
         h.state()["zoom"],
         before["zoom"],
-        "export shortcuts must not move the hidden artwork"
+        "export shortcuts must not move the artwork"
     );
     h.click("export-back");
     h.ready();
@@ -931,10 +975,10 @@ fn export_workspace(h: &mut Harness) {
         .unwrap();
     h.artifacts.push(json!({"path":name}));
     h.click("focus-export");
-    h.click("export-format-png");
+    h.export_format("png");
     h.ready();
     h.capture("dark-png", false);
-    h.click("export-format-md");
+    h.export_format("md");
     h.ready();
     h.capture("dark-markdown", false);
     h.click("export-back");
@@ -1036,10 +1080,10 @@ fn responsive(h: &mut Harness) {
     h.click("focus-export");
     h.ready();
     h.update(|window, _, _| {
-        let bounds = window.find("export-workspace").bounds();
-        assert_eq!(bounds.origin, point(px(0.), px(0.)));
-        assert_eq!(bounds.size, size(px(760.), px(560.)));
-        for id in ["export-primary", "export-preview", "export-size"] {
+        let bounds = window.find("export-dock").bounds();
+        assert!(bounds.size.width < px(760.));
+        assert!(bounds.size.height < px(60.));
+        for id in ["export-primary", "export-dock", "export-size"] {
             let b = window.find(id).bounds();
             assert!(
                 b.left() >= px(0.)
@@ -1056,7 +1100,7 @@ fn responsive(h: &mut Harness) {
         "opening Export must not resize the artwork"
     );
     h.capture("small-export", false);
-    h.click("export-format-svg");
+    h.export_format("svg");
     h.ready();
     h.update(|window, _, _| {
         for id in ["export-primary", "export-size", "transparent", "font-mode"] {
@@ -1078,7 +1122,7 @@ fn responsive(h: &mut Harness) {
     assert_eq!(h.state()["focused"], true);
     assert_eq!(h.state()["export_open"], false);
     h.click("focus-export");
-    h.click("export-format-md");
+    h.export_format("md");
     h.ready();
     h.click("export-primary");
     let started = Instant::now();

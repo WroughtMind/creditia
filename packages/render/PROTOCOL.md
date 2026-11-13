@@ -67,6 +67,12 @@ layouts use the existing reveal/rise implementation. Bridged and SVG pieces use
 Omitting `t` produces the complete static artwork. This exposes the mainline
 motion; it does not claim the planned new style-specific animations are complete.
 
+`render` also accepts an optional `size` from the export canvas presets. Each
+sample uses the same proportional fit, padding, background and hit-region
+transform as the exported artwork; the animation timeline stays unchanged.
+Omit it or use `native` to keep the artwork's original dimensions. The native
+GIF preview uses this option to preview the selected output canvas in place.
+
 `projects` accepts up to 50 archive objects for classic profile artwork; `person`
 is an optional label and `blame` is the existing blame result object.
 

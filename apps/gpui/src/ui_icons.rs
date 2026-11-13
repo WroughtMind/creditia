@@ -29,6 +29,7 @@ pub fn contributor(key: &str) -> Option<Icon> {
 
 pub fn icon(name: &str) -> Icon {
     let svg: &'static [u8] = match name {
+        "transparent" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></svg>"#,
         "file" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5.5L9.5 2Z"/><path d="M9 2v4h4M5.5 9h5M5.5 11.5H9"/></svg>"#,
         "pen" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 2 4 4-7 7-4 1 1-4 6-8ZM9 4l3 3M3 14l3-3"/></svg>"#,
         "film" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1.5"/><path d="M5 2v12M11 2v12M2 6h3M2 10h3M11 6h3M11 10h3"/></svg>"#,

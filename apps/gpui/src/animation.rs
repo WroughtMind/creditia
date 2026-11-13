@@ -18,6 +18,7 @@ struct FrameView {
     viewport: Viewport,
     size: (f32, f32),
     dpi: f32,
+    bounds: Option<(Rect, Rect)>,
 }
 struct Position {
     playhead: usize,
@@ -92,6 +93,37 @@ impl PlaybackControl {
             viewport,
             size,
             dpi,
+            bounds: None,
+        };
+        let mut position = self.0.position.lock().unwrap_or_else(|e| e.into_inner());
+        if position.view == Some(view) {
+            return;
+        }
+        position.view = Some(view);
+        position.epoch = position.epoch.wrapping_add(1);
+        self.0.changed.notify_all();
+    }
+    /// Export previews use the existing artwork rectangle, without changing
+    /// focus or moving the user's canvas. Raster/crop against those same bounds.
+    pub fn set_artwork_view(&self, rect: Rect, clip: Rect, size: (f32, f32), dpi: f32) {
+        if ![
+            rect.x, rect.y, rect.w, rect.h, clip.x, clip.y, clip.w, clip.h, dpi,
+        ]
+        .iter()
+        .all(|value| value.is_finite())
+            || rect.w <= 0.
+            || rect.h <= 0.
+            || clip.w <= 0.
+            || clip.h <= 0.
+            || dpi <= 0.
+        {
+            return;
+        }
+        let view = FrameView {
+            viewport: Viewport::default(),
+            size,
+            dpi,
+            bounds: Some((rect, clip)),
         };
         let mut position = self.0.position.lock().unwrap_or_else(|e| e.into_inner());
         if position.view == Some(view) {
@@ -532,8 +564,12 @@ fn frame_plan(
             max_resident: resident_limit(bytes),
         }));
     };
-    let rect = focused_rect(art.w, art.h, view.viewport, view.size);
-    let clip = artwork_viewport(view.size, true);
+    let (rect, clip) = view.bounds.unwrap_or_else(|| {
+        (
+            focused_rect(art.w, art.h, view.viewport, view.size),
+            artwork_viewport(view.size, true),
+        )
+    });
     if rect.w <= 0. || rect.h <= 0. || !rect.intersects(clip) {
         return Ok(None);
     }
@@ -819,6 +855,38 @@ mod tests {
         }
     }
     #[test]
+    fn inline_export_raster_uses_the_existing_artwork_bounds() {
+        let art = artwork(400., 560.);
+        let rect = Rect {
+            x: 280.,
+            y: 72.,
+            w: 280.,
+            h: 392.,
+        };
+        let clip = Rect {
+            x: 0.,
+            y: 0.,
+            w: 1000.,
+            h: 680.,
+        };
+        let view = FrameView {
+            viewport: Viewport::default(),
+            size: (1000., 680.),
+            dpi: 2.,
+            bounds: Some((rect, clip)),
+        };
+        let plan = frame_plan(&art, 1, Some(view)).unwrap().unwrap();
+        assert_eq!(plan.pixels, 560);
+        assert!(plan.tiles.iter().all(|tile| tile.width == 560));
+        assert_eq!(plan.tiles.iter().map(|tile| tile.height).sum::<u32>(), 784);
+        assert_eq!(plan.decoded_bytes, 560 * 784 * 4);
+        let hidden = FrameView {
+            bounds: Some((Rect { x: 1100., ..rect }, clip)),
+            ..view
+        };
+        assert!(frame_plan(&art, 1, Some(hidden)).unwrap().is_none());
+    }
+    #[test]
     fn animated_tiles_cover_the_same_top_and_bottom_as_the_canvas() {
         let art = artwork(1080., 1080.);
         let view = FrameView {
@@ -829,6 +897,7 @@ mod tests {
             },
             size: (1360., 820.),
             dpi: 2.,
+            bounds: None,
         };
         let rect = focused_rect(art.w, art.h, view.viewport, view.size);
         let clip = artwork_viewport(view.size, true);
@@ -849,6 +918,7 @@ mod tests {
             },
             size: (1920., 1080.),
             dpi: 2.,
+            bounds: None,
         };
         let plan = frame_plan(&art, 1200, Some(view)).unwrap().unwrap();
         // The 1100-point focus width at 6× zoom and 2× DPI lands on an integer.
@@ -937,6 +1007,7 @@ mod tests {
                     },
                     size: (1360., 820.),
                     dpi,
+                    bounds: None,
                 };
                 let rect = focused_rect(art.w, art.h, view.viewport, view.size);
                 let width = texture_width(rect.w, dpi);
@@ -964,6 +1035,7 @@ mod tests {
                 },
                 size: (8000., 6000.),
                 dpi: 2.,
+                bounds: None,
             }),
         );
         assert!(

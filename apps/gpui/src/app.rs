@@ -331,6 +331,8 @@ pub struct Creditia {
     error: Option<String>,
     warnings: Vec<String>,
     notice: Option<String>,
+    success_notice: Option<String>,
+    success_notice_task: Option<Task<()>>,
     progress: Option<Value>,
     job_busy: bool,
     cancelling: bool,
@@ -410,6 +412,7 @@ pub struct Creditia {
     export_task: Option<Task<()>>,
     export_cancellation: Option<renderer::Cancellation>,
     export_open: bool,
+    export_formats_open: bool,
     export_preview: ExportPreview,
     fixture: bool,
     fixture_artworks: BTreeMap<(String, String, String), Option<Arc<Artwork>>>,
@@ -577,6 +580,8 @@ impl Creditia {
             error: None,
             warnings: vec![],
             notice: None,
+            success_notice: None,
+            success_notice_task: None,
             progress: None,
             job_busy: false,
             cancelling: false,
@@ -654,6 +659,7 @@ impl Creditia {
             export_task: None,
             export_cancellation: None,
             export_open: false,
+            export_formats_open: false,
             export_preview: ExportPreview::default(),
             fixture,
             fixture_artworks: BTreeMap::new(),
@@ -1324,6 +1330,17 @@ impl Creditia {
             .and_then(|c| c["styles"].as_array())
             .and_then(|s| s.iter().position(|entry| entry["id"] == style))
             .unwrap_or(0);
+    }
+    fn show_success(&mut self, message: String, cx: &mut Context<Self>) {
+        self.success_notice = Some(message);
+        self.success_notice_task = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_secs(3)).await;
+            let _ = this.update(cx, |view, cx| {
+                view.success_notice = None;
+                cx.notify();
+            });
+        }));
+        cx.notify();
     }
     fn stop_playback(&mut self, cx: &mut Context<Self>) {
         if let Some(control) = self.animation_control.take() {
@@ -2225,11 +2242,15 @@ impl Creditia {
                 .as_ref()
                 .and_then(|tile| tile.art.as_deref())
                 .or_else(|| {
-                    self.playback
-                        .as_ref()
-                        .and_then(Playback::displayed)
-                        .map(|f| f.art.as_ref())
-                        .or_else(|| self.tiles.get(index).and_then(|t| t.art.as_deref()))
+                    if self.export_workspace_open() {
+                        self.tiles.get(index).and_then(|tile| tile.art.as_deref())
+                    } else {
+                        self.playback
+                            .as_ref()
+                            .and_then(Playback::displayed)
+                            .map(|frame| frame.art.as_ref())
+                            .or_else(|| self.tiles.get(index).and_then(|tile| tile.art.as_deref()))
+                    }
                 });
             let (w, h) = art.map(|a| (a.w, a.h)).unwrap_or((640., 480.));
             focused_rect(w, h, self.viewport, self.viewport_size)
@@ -3136,14 +3157,19 @@ impl Creditia {
         let selected = self.selected_tile;
         let generation = self.preview_generation;
         request["reducedMotion"] = json!(self.reduced_motion);
-        if !self.focused {
-            self.saved_viewport = Some(self.viewport);
+        if self.export_animation() {
+            request["size"] = json!(self.export_size);
+            request["transparent"] = json!(false);
+        } else {
+            if !self.focused {
+                self.saved_viewport = Some(self.viewport);
+            }
+            self.focused = true;
+            self.viewport.reset();
         }
-        self.focused = true;
-        self.viewport.reset();
         self.animation_busy = true;
         let control = crate::animation::PlaybackControl::new();
-        control.set_viewport(self.viewport, self.viewport_size, self.display_scale);
+        self.configure_playback_view(&control);
         self.animation_cancellation = Some(control.cancellation());
         self.animation_control = Some(control.clone());
         let width = texture_width(self.viewport_size.0, self.display_scale);
@@ -3395,6 +3421,13 @@ impl Creditia {
             return true;
         }
         if self.export_workspace_open() {
+            if self.export_animation() {
+                return self
+                    .playback
+                    .as_ref()
+                    .and_then(Playback::displayed)
+                    .is_some_and(|frame| frame.painted.get().is_some());
+            }
             return self.export_preview.ready();
         }
         if self.backdrop_task.is_some() || self.backdrop_pending.is_some() {
@@ -4242,11 +4275,21 @@ impl Creditia {
             return;
         }
         let close = self.export_open && self.selected_tile == Some(index);
-        self.selected_tile = Some(index);
-        self.export_open = !close;
         if close {
-            self.export_preview.clear(cx);
-        } else {
+            self.close_export_workspace(cx);
+            return;
+        }
+        if self.selected_tile != Some(index) {
+            self.stop_playback(cx);
+        }
+        self.selected_tile = Some(index);
+        self.roam_motion.stop();
+        self.export_open = true;
+        {
+            if self.playback.as_ref().is_some_and(|play| play.playing) {
+                self.play(false, cx);
+            }
+            self.export_formats_open = false;
             if self
                 .export_unavailable_reason(&self.export_format)
                 .is_some()
@@ -4460,7 +4503,7 @@ impl Creditia {
                     Ok(Ok(Some(path))) => match view.export_queue.enqueue(snapshot, path, filename)
                     {
                         Ok(queued) => {
-                            view.notice = Some(
+                            view.show_success(
                                 view.text(
                                     if queued.deduplicated {
                                         "该任务已在导出队列中"
@@ -4474,6 +4517,7 @@ impl Creditia {
                                     },
                                 )
                                 .into(),
+                                cx,
                             );
                             view.persist_exports();
                             view.pump_exports(cx);
@@ -4507,8 +4551,7 @@ impl Creditia {
         self.persist_exports();
         self.export_task = Some(cx.spawn(async move |this, cx| {
             let render_cancel = cancellation.clone();
-            let path = job.path.clone();
-            let output_path = path.clone();
+            let output_path = job.path.clone();
             let result = cx
                 .background_spawn(async move {
                     let output = renderer::request(job.renderer_request(), render_cancel)?;
@@ -4546,16 +4589,10 @@ impl Creditia {
                 let cancelled = view.export_cancel_requested && result.is_err();
                 if cancelled {
                     view.export_queue.finish_cancelled(id, attempt);
-                    view.notice = Some(view.text("已取消导出", "Export cancelled").into());
+                    view.show_success(view.text("已取消导出", "Export cancelled").into(), cx);
                 } else {
                     match &result {
-                        Ok(()) => {
-                            view.notice = Some(format!(
-                                "{} {}",
-                                view.text("已保存", "Saved"),
-                                path.display()
-                            ))
-                        }
+                        Ok(()) => view.show_success(view.text("已保存", "Saved").into(), cx),
                         Err(error) => view.error = Some(error.clone()),
                     }
                     view.export_queue.finish(id, attempt, result);
@@ -4618,6 +4655,11 @@ impl Creditia {
         if self.panel.is_some() {
             self.close_panel(window, cx);
         } else if self.export_open {
+            if self.export_formats_open {
+                self.export_formats_open = false;
+                cx.notify();
+                return;
+            }
             self.close_export_workspace(cx);
         } else if self.focused {
             self.close_focus(cx);
@@ -4887,8 +4929,8 @@ impl Creditia {
             })
             .unwrap_or(&tile.spec.piece)
             .to_string();
-        let animation = self
-            .focused
+        let export_preview = selected && self.export_workspace_open();
+        let animation = (selected && (self.focused || self.export_animation()))
             .then(|| self.playback.as_ref().and_then(Playback::displayed))
             .flatten();
         let image = tile.image.clone();
@@ -4905,6 +4947,12 @@ impl Creditia {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |view, event: &MouseDownEvent, _, cx| {
+                    if view.export_workspace_open() {
+                        view.export_formats_open = false;
+                        cx.stop_propagation();
+                        cx.notify();
+                        return;
+                    }
                     view.pointer = (event.position.x.into(), f32::from(event.position.y) - 60.);
                     if view.panel.is_some() {
                         cx.stop_propagation();
@@ -4928,7 +4976,41 @@ impl Creditia {
                     cx.notify();
                 }),
             );
-        if let Some(frame) = animation {
+        let export_image = if export_preview && !self.export_animation() {
+            self.export_preview.displayed_image()
+        } else {
+            None
+        };
+        if let Some(image) = export_image {
+            picture = picture.child(crate::material::contained_preview(
+                image.clone(),
+                10.,
+                self.transparent
+                    && ExportFormat::from_id(&self.export_format)
+                        .is_some_and(ExportFormat::transparency),
+            ));
+        } else if let Some(frame) = animation {
+            let bounds = if self.export_animation() {
+                self.export_frame_rect()
+                    .map(|rect| Rect {
+                        x: rect.x - r.x,
+                        y: rect.y - r.y,
+                        ..rect
+                    })
+                    .unwrap_or(Rect {
+                        x: 0.,
+                        y: 0.,
+                        w: r.w,
+                        h: r.h,
+                    })
+            } else {
+                Rect {
+                    x: 0.,
+                    y: 0.,
+                    w: r.w,
+                    h: r.h,
+                }
+            };
             for (part, (region, image)) in frame.tiles.iter().enumerate() {
                 let region = region.unwrap_or(Rect {
                     x: 0.,
@@ -4936,7 +5018,7 @@ impl Creditia {
                     w: frame.art.w,
                     h: frame.art.h,
                 });
-                let exact = frame.pixels == texture_width(r.w, self.display_scale)
+                let exact = frame.pixels == texture_width(bounds.w, self.display_scale)
                     && self
                         .animation_control
                         .as_ref()
@@ -4954,17 +5036,17 @@ impl Creditia {
                     )
                 } else {
                     (
-                        region.x / frame.art.w * r.w,
-                        region.y / frame.art.h * r.h,
-                        region.w / frame.art.w * r.w,
-                        region.h / frame.art.h * r.h,
+                        region.x / frame.art.w * bounds.w,
+                        region.y / frame.art.h * bounds.h,
+                        region.w / frame.art.w * bounds.w,
+                        region.h / frame.art.h * bounds.h,
                     )
                 };
                 picture = picture.child(crate::material::frame_preview(
                     image.clone(),
                     Rect {
-                        x: left,
-                        y: top,
+                        x: left + bounds.x,
+                        y: top + bounds.y,
                         w: width,
                         h: height,
                     },
@@ -5056,10 +5138,31 @@ impl Creditia {
                     },
                 );
         }
+        let framed_export = export_preview
+            && self.export_size != "native"
+            && ExportFormat::from_id(&self.export_format).is_some_and(|format| format.visual());
+        let edge_rect = if framed_export {
+            self.export_frame_rect().map(|rect| Rect {
+                x: rect.x - r.x,
+                y: rect.y - r.y,
+                ..rect
+            })
+        } else {
+            None
+        }
+        .unwrap_or(Rect {
+            x: 0.,
+            y: 0.,
+            w: r.w,
+            h: r.h,
+        });
         picture = picture.child(
             div()
                 .absolute()
-                .inset_0()
+                .left(px(edge_rect.x))
+                .top(px(edge_rect.y))
+                .w(px(edge_rect.w))
+                .h(px(edge_rect.h))
                 .rounded(px(10.))
                 .border_1()
                 .border_color(if self.hovered_tile == Some(index) {
@@ -5079,9 +5182,11 @@ impl Creditia {
             .top(px(r.y + 60.))
             .w(px(r.w))
             .rounded(px(10.))
-            .shadow(vec![
-                BoxShadow::new(px(0.), px(12.), rgba(0x00000014).into()).blur_radius(px(32.)),
-            ])
+            .when(!framed_export, |card| {
+                card.shadow(vec![
+                    BoxShadow::new(px(0.), px(12.), rgba(0x00000014).into()).blur_radius(px(32.)),
+                ])
+            })
             .child(picture);
         if !self.focused {
             let palette = Palette::of(cx);
@@ -5240,6 +5345,12 @@ impl Creditia {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|view, event: &MouseDownEvent, _, cx| {
+                    if view.export_workspace_open() {
+                        view.export_formats_open = false;
+                        cx.stop_propagation();
+                        cx.notify();
+                        return;
+                    }
                     view.pointer = (event.position.x.into(), f32::from(event.position.y) - 60.);
                     if view.panel.is_some() {
                         cx.stop_propagation();
@@ -7123,6 +7234,9 @@ impl Creditia {
         state["export_size"] = json!(self.export_size);
         state["export_prompt_busy"] = json!(self.export_prompt_busy);
         state["export_workspace"] = json!(self.export_workspace_open());
+        state["export_formats_open"] = json!(self.export_formats_open);
+        state["success_notice"] = json!(self.success_notice);
+        state["notice"] = json!(self.notice);
         state["export_preview"] = self.export_preview.diagnostic();
         state["can_export"] = json!(self.can_export());
         state["export_unavailable"] = json!(self.export_unavailable_reason(&self.export_format));
@@ -7231,6 +7345,7 @@ impl Render for Creditia {
             && self.activity_age() >= Duration::from_secs(2);
         let status_height = if self.error.is_some()
             || self.notice.is_some()
+            || self.success_notice.is_some()
             || delayed_job
             || self.export_stage.is_some()
             || self.animation_busy
@@ -7299,12 +7414,13 @@ impl Render for Creditia {
         self.prepare_static_images(window, cx);
         self.prepare_focus_preview(window, cx);
         self.refresh_export_preview(window, cx);
-        let animation_visible = !self.export_workspace_open()
+        let playback_context = self.focused || self.export_animation();
+        let animation_visible = (!self.export_workspace_open() || self.export_animation())
             && self
                 .selected_tile
                 .is_some_and(|index| self.screen_rect(index).intersects(self.artwork_viewport()));
         if animation_visible
-            && self.focused
+            && playback_context
             && self.panel.is_none()
             && window.is_window_active()
             && self.window_visible
@@ -7314,15 +7430,15 @@ impl Render for Creditia {
         if let Some(control) = &self.animation_control {
             control.set_visible(
                 animation_visible
-                    && self.focused
+                    && playback_context
                     && self.panel.is_none()
                     && window.is_window_active()
                     && self.window_visible,
             );
-            control.set_viewport(self.viewport, self.viewport_size, self.display_scale);
+            self.configure_playback_view(control);
         }
         let can_animate = animation_visible
-            && self.focused
+            && playback_context
             && self.panel.is_none()
             && window.is_window_active()
             && self.window_visible
@@ -7339,7 +7455,7 @@ impl Render for Creditia {
                 && !play.suspended
                 && play.started_once
                 && animation_visible
-                && self.focused
+                && playback_context
                 && self.panel.is_none()
                 && window.is_window_active()
                 && self.window_visible
@@ -7986,6 +8102,8 @@ impl Render for Creditia {
             status = status.child(self.text("正在准备动画…", "Preparing animation…"));
         } else if let Some(notice) = &self.notice {
             status = status.child(notice.clone());
+        } else if let Some(message) = &self.success_notice {
+            status = status.child(message.clone());
         }
         if !self.warnings.is_empty() {
             status = status.child(
@@ -8003,12 +8121,8 @@ impl Render for Creditia {
         }
         self.refresh_backdrop(window, cx);
         let in_export = self.export_workspace_open();
-        let stage = if in_export {
-            div().into_any_element()
-        } else {
-            self.render_stage(window, cx)
-        };
-        let export = self.render_export_workspace(cx);
+        let stage = self.render_stage(window, cx);
+        let export = self.render_export_dock(cx);
         let modal = self.render_panel(cx);
         let ghost = self
             .drag
@@ -8147,7 +8261,7 @@ impl Render for Creditia {
                     }))
                 },
             )
-            .when(!in_export, |root| {
+            .when(true, |root| {
                 root.child(
                     div()
                         .absolute()
@@ -8167,7 +8281,7 @@ impl Render for Creditia {
             })
             .when(!in_export, |root| root.child(controls))
             .child(export)
-            .when(!in_export && status_height > 0. && !delayed_job, |root| {
+            .when(status_height > 0. && !delayed_job, |root| {
                 root.child(
                     div()
                         .absolute()

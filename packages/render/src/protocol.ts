@@ -9,7 +9,7 @@ import { variantsOf, defaultVariant, animatedClassic } from './classic/art.ts';
 import { BRIDGED, isBridged, bridgeStyle, v2ModelOf } from './classic/bridge.ts';
 import type { Theme } from './classic/themes.ts';
 import type { Style } from './style.ts';
-import { FORMATS, SIZES, type Art, type Raster, type Deflate } from './export.ts';
+import { FORMATS, SIZES, sized, type Art, type Raster, type Deflate } from './export.ts';
 import { exportArtwork, exportSize, encoded, type GraphicFormat } from './export-job.ts';
 import { timelineFor, sampleTimes, type Animation } from './timeline.ts';
 import { CLASSIC_BOARD, V2_BOARD } from './boards.ts';
@@ -135,7 +135,7 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
     const op = input.op;
     const simple: Record<string, string[]> = { catalog: [], status: [], archive: ['archiveId', 'raw', 'projects'], release: ['archiveId'], merge: ['projects', 'lang'], mark: ['raw', 'archiveId', 'lang', 'group', 'named', 'sign'] };
     const common = ['style', 'renderer', 'piece', 'variant', 'lang', 'group', 'named', 'sign', 'raw', 'archiveId', 'projects', 'person', 'blame', 'transparent', 'fontMode', 'reducedMotion'];
-    const extra = op === 'render' ? ['t', 'flatten'] : op === 'frames' ? ['frameCount', 'flatten'] : op === 'export' ? ['format', 'size', 'frameCount', 'scale', 'width', 'by'] : simple[op];
+    const extra = op === 'render' ? ['t', 'flatten', 'size'] : op === 'frames' ? ['frameCount', 'flatten'] : op === 'export' ? ['format', 'size', 'frameCount', 'scale', 'width', 'by'] : simple[op];
     if (!extra) fail('invalid_request', 'Unknown operation');
     const allowed = new Set(['version', 'id', 'op', ...(simple[op] ? extra : [...common, ...extra])]);
     for (const key of Object.keys(input)) if (!allowed.has(key)) fail('invalid_request', `Unknown option: ${key}`);
@@ -220,6 +220,9 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
     if (op === 'frames' || op === 'export') {
       if (!Number.isSafeInteger(n) || n < 1 || n > 120) fail('invalid_request', 'frameCount must be from 1 to 120');
     }
+    if (op === 'render' && input.size !== undefined) {
+      try { exportSize(input.size); } catch { fail('invalid_request', 'Unknown or excessive export size'); }
+    }
     if (op === 'export') {
       if (!GRAPHIC_FORMATS.has(format)) fail('invalid_request', 'Unsupported export format');
       try { exportSize(input.size ?? 'native'); } catch { fail('invalid_request', 'Unknown or excessive export size'); }
@@ -252,7 +255,9 @@ export async function dispatchRender(input: unknown, backend: RenderBackend, ses
       return a;
     };
     if (op === 'render') {
-      const result = summarizeArt(await at(reducedMotion ? 1 : t));
+      const frame = await at(reducedMotion ? 1 : t);
+      const canvas = input.size === undefined ? undefined : exportSize(input.size);
+      const result = summarizeArt(frame && canvas?.w ? sized(frame, canvas.w, canvas.h) : frame);
       return success(id, { art: flatten ? flattenArt(result) : result,
         ...(!flatten && result ? { fontFaces: nativeFonts(result.svg) } : {}),
         timeline: original ? timelineFor(styleId, pieceId, original, reducedMotion || !piece.animated) : null });

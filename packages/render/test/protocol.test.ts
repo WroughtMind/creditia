@@ -85,6 +85,21 @@ test('native classic output and sampled animation use existing layout and motion
   }
 });
 
+test('native animated export preview uses the selected export canvas and unchanged timeline', async () => {
+  for (const [piece, variant] of [['tier', 'original'], ['roll', 'scroll']]) {
+    const selection = { ...request, piece, variant, t: 0.5, flatten: false };
+    const original = unwrap(await renderRequest(selection));
+    const preview = unwrap(await renderRequest({ ...selection, size: 'square' }));
+    assert.deepEqual(normalizedArt(preview.art), normalizedArt(sized(original.art, 1080, 1080)));
+    assert.deepEqual(preview.timeline, original.timeline);
+    const last = unwrap(await renderRequest({ ...selection, t: 1, size: 'square' })).art;
+    assert.notEqual(normalized(preview.art.svg), normalized(last.svg), `${piece}: time sampling must animate`);
+  }
+  const invalid = await renderRequest({ ...request, size: 'no-such-size' });
+  assert.equal(invalid.ok, false);
+  assert.equal(invalid.ok ? '' : invalid.error.code, 'invalid_request');
+});
+
 test('compact native hover summaries retain model shares and non-model metrics', async () => {
   for (const lang of ['en', 'zh']) {
     const tier = unwrap(await renderRequest({ ...request, style: 'ink', piece: 'tier', lang })).art;
