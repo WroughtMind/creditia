@@ -574,7 +574,9 @@ fn recover_export(h: &mut Harness, workspace: &Workspace) {
     h.open();
     h.ready(BETA);
     assert!(!destination.exists());
-    h.click("export-history");
+    h.update(|window, cx, _| {
+        window.dispatch_action(Box::new(creditia_gpui::app::ExportHistory), cx);
+    });
     h.snapshot("interrupted");
     h.click(("export-retry", 0usize));
     h.wait("retried export saved", |_| {
@@ -588,7 +590,9 @@ fn recover_export(h: &mut Harness, workspace: &Workspace) {
     h.close();
     h.open();
     h.ready(BETA);
-    h.click("export-history");
+    h.update(|window, cx, _| {
+        window.dispatch_action(Box::new(creditia_gpui::app::ExportHistory), cx);
+    });
     h.snapshot("saved-after-reopen");
     let saved = service::load_export_jobs().unwrap();
     let job = &saved["queue"]["jobs"][0];

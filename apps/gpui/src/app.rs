@@ -40,6 +40,7 @@ actions!(
         CycleAppearance,
         ToggleMotion,
         ExportArtwork,
+        ExportHistory,
         CancelExport,
         SwitchProject,
         Settings,
@@ -5745,7 +5746,7 @@ impl Creditia {
             Panel::Layouts => self.text("版式", "Layout"),
             Panel::Pieces => self.text("全部作品", "All artworks"),
             Panel::Blame => self.text("逐行归因", "Line attribution"),
-            Panel::Exports => self.text("导出任务", "Export tasks"),
+            Panel::Exports => self.text("导出记录", "Export history"),
             Panel::Settings => self.text("设置", "Settings"),
             Panel::Project => self.text("项目设置", "Project settings"),
             Panel::Details => self.text("归因与证据", "Attribution & evidence"),
@@ -6271,7 +6272,7 @@ impl Creditia {
                         );
                 }
                 if self.export_queue.jobs().is_empty() {
-                    body = body.child(self.text("尚无导出任务", "No export jobs yet"));
+                    body = body.child(self.text("尚无导出记录", "No export history yet"));
                 }
                 for (index, job) in self.export_queue.jobs().iter().enumerate().rev() {
                     let id = job.id;
@@ -6989,14 +6990,13 @@ impl Creditia {
             modal = modal.on_mouse_down_out(cx.listener(
                 move |view, event: &MouseDownEvent, window, cx| {
                     let triggers: &[&str] = if view.focused {
-                        &["focus-style", "focus-layout", "exports-trigger"]
+                        &["focus-style", "focus-layout"]
                     } else {
                         &[
                             "project-trigger",
                             "style-trigger",
                             "pieces-trigger",
                             "settings-trigger",
-                            "exports-trigger",
                         ]
                     };
                     if triggers
@@ -7705,23 +7705,6 @@ impl Render for Creditia {
                         })),
                 ),
             );
-        if !self.export_queue.jobs().is_empty() || self.export_history_error.is_some() {
-            tools = tools.child(
-                self.surface_anchors.wrap(
-                    "exports-trigger",
-                    Button::new("export-history")
-                        .ghost()
-                        .shell_label(format!(
-                            "{} {}",
-                            self.text("任务", "Jobs"),
-                            self.export_queue.jobs().len()
-                        ))
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.open_panel(Panel::Exports, window, cx)
-                        })),
-                ),
-            );
-        }
         let mark = if self.preferences.logo == "star" {
             self.live_mark.render(
                 self.progress.as_ref().and_then(analysis_fraction),
@@ -7856,25 +7839,6 @@ impl Render for Creditia {
                         .child(title.to_string()),
                 )
                 .child(div().flex_1())
-                .when(
-                    !self.export_queue.jobs().is_empty() || self.export_history_error.is_some(),
-                    |bar| {
-                        bar.child(
-                            self.surface_anchors.wrap(
-                                "exports-trigger",
-                                Button::new("export-history")
-                                    .ghost()
-                                    .h(px(30.))
-                                    .rounded_full()
-                                    .bg(palette.glass)
-                                    .shell_label(self.text("导出任务", "Export tasks"))
-                                    .on_click(cx.listener(|view, _, window, cx| {
-                                        view.open_panel(Panel::Exports, window, cx)
-                                    })),
-                            ),
-                        )
-                    },
-                )
                 .child(
                     Button::new("focus-close-top")
                         .ghost()
@@ -8185,6 +8149,9 @@ impl Render for Creditia {
                 }
             }))
             .on_action(cx.listener(|_, _: &CloseWindow, window, _| window.remove_window()))
+            .on_action(cx.listener(|view, _: &ExportHistory, window, cx| {
+                view.open_panel(Panel::Exports, window, cx);
+            }))
             .on_action(cx.listener(Self::cancel_export))
             .on_action(cx.listener(Self::cancel_current))
             .on_action(cx.listener(|view, _: &SwitchProject, window, cx| {
@@ -8412,6 +8379,8 @@ fn install_menus(language: &Language, cx: &mut App) {
             items: vec![
                 MenuItem::action(language.text("导出作品…", "Export artwork…"), ExportArtwork),
                 MenuItem::action(language.text("取消导出", "Cancel export"), CancelExport),
+                MenuItem::separator(),
+                MenuItem::action(language.text("导出记录…", "Export history…"), ExportHistory),
             ],
         },
     ]);
