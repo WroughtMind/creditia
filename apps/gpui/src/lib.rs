@@ -293,8 +293,10 @@ pub fn export_filename(request: &Value) -> String {
             cleaned.to_string()
         }
     };
+    let format = request["format"].as_str().unwrap_or("png");
+    let extension = if format == "embed" { "html" } else { format };
     format!(
-        "{}-{}-{}-{}-{}.{}",
+        "{}-{}-{}-{}-{}{}.{}",
         component(
             request["raw"]["project"]["name"]
                 .as_str()
@@ -304,7 +306,8 @@ pub fn export_filename(request: &Value) -> String {
         component(request["style"].as_str().unwrap_or("style")),
         component(request["variant"].as_str().unwrap_or("default")),
         component(request["size"].as_str().unwrap_or("native")),
-        request["format"].as_str().unwrap_or("png")
+        if format == "embed" { "-embed" } else { "" },
+        extension
     )
 }
 
@@ -312,6 +315,15 @@ pub fn export_filename(request: &Value) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn embedded_components_save_as_html_without_colliding_with_standalone_pages() {
+        let mut request = json!({"raw":{"project":{"name":"catnap"}},"format":"embed"});
+        let embed = export_filename(&request);
+        request["format"] = json!("html");
+        assert!(embed.ends_with("-embed.html"));
+        assert_ne!(embed, export_filename(&request));
+    }
 
     #[test]
     fn unicode_export_names_fit_filesystem_component_limits() {

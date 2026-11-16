@@ -407,13 +407,14 @@ pub struct Creditia {
     export_size: String,
     transparent: bool,
     font_mode: String,
-    export_label: String,
+    failed_export: Option<u64>,
     export_stage: Option<ExportStage>,
     export_cancel_requested: bool,
     export_task: Option<Task<()>>,
     export_cancellation: Option<renderer::Cancellation>,
     export_open: bool,
     export_formats_open: bool,
+    export_options_open: bool,
     export_preview: ExportPreview,
     fixture: bool,
     fixture_artworks: BTreeMap<(String, String, String), Option<Arc<Artwork>>>,
@@ -654,13 +655,14 @@ impl Creditia {
             export_active: None,
             transparent: false,
             font_mode: "outline".into(),
-            export_label: String::new(),
+            failed_export: None,
             export_stage: None,
             export_cancel_requested: false,
             export_task: None,
             export_cancellation: None,
             export_open: false,
             export_formats_open: false,
+            export_options_open: false,
             export_preview: ExportPreview::default(),
             fixture,
             fixture_artworks: BTreeMap::new(),
@@ -799,7 +801,15 @@ impl Creditia {
             }
             "exporting" => {
                 view.export_stage = Some(ExportStage::Rendering);
-                view.export_label = "creditia-minimal-light-tier-native.png".into();
+            }
+            "exporting-analyzing" => {
+                view.export_stage = Some(ExportStage::Rendering);
+                view.job_busy = true;
+                view.progress = Some(json!({"stage":"logs","done":2,"total":5}));
+                view.activity_since = Some(Instant::now() - Duration::from_secs(3));
+                if !fixture.message.is_empty() {
+                    view.error = Some(fixture.message);
+                }
             }
             _ => {}
         }
@@ -1240,9 +1250,10 @@ impl Creditia {
                     Ok(value) => {
                         view.preferences = Preferences::read(&value);
                         view.migration_error = None;
-                        view.notice = Some(
+                        view.show_success(
                             view.text("已导入原有桌面设置", "Previous desktop settings imported")
                                 .into(),
+                            cx,
                         );
                         view.reduced_motion = view.preferences.reduced_motion
                             || (!view.fixture
@@ -1971,8 +1982,7 @@ impl Creditia {
                                             if view.selected==selection_at_start {view.selected=value["id"].as_str().map(str::to_string);}
                                             view.batch_opened=true;
                                         }
-                                        view.notice =
-                                            Some(view.text("分析完成", "Analysis complete").into());
+                                        view.show_success(view.text("分析完成", "Analysis complete").into(), cx);
                                         view.refresh(cx);
                                     }
                                     Err(error) if view.cancelling || error.code == "cancelled" => {
@@ -1980,9 +1990,7 @@ impl Creditia {
                                             view.batch_results
                                                 .insert(path, json!({"state":"cancelled"}));
                                         }
-                                        view.notice = Some(
-                                            view.text("已取消分析", "Analysis cancelled").into(),
-                                        );
+                                        view.show_success(view.text("已取消分析", "Analysis cancelled").into(), cx);
                                     }
                                     Err(error) => {
                                         if let Some(path) = view.active_add.take() {
@@ -2044,7 +2052,7 @@ impl Creditia {
             match serde_json::to_string_pretty(raw.as_ref()) {
                 Ok(text) => {
                     cx.write_to_clipboard(ClipboardItem::new_string(text));
-                    self.notice = Some(self.text("档案已复制", "Archive copied").into());
+                    self.show_success(self.text("档案已复制", "Archive copied").into(), cx);
                 }
                 Err(error) => self.error = Some(error.to_string()),
             }
@@ -3578,9 +3586,10 @@ impl Creditia {
                                     view.start_next_project(cx);
                                     if !event["error"].is_null() {
                                         if event["error"]["code"] == "cancelled" {
-                                            view.notice = Some(
+                                            view.show_success(
                                                 view.text("已取消分析", "Analysis cancelled")
                                                     .into(),
+                                                cx,
                                             );
                                         } else {
                                             view.notice = crate::ui_reports::error_text(
@@ -3904,7 +3913,7 @@ impl Creditia {
         let Some(id) = self.settings_id().cloned() else {
             return;
         };
-        let directory = match service::export_dir() {
+        let directory = match service::default_export_dir() {
             Ok(path) => path,
             Err(error) => {
                 self.error = Some(error.to_string());
@@ -3941,10 +3950,10 @@ impl Creditia {
                 .await;
             let _ = this.update(cx, |view, cx| {
                 match result {
-                    Ok(()) => {
-                        view.notice =
-                            Some(view.text("证据档案已保存", "Evidence archive saved").into())
-                    }
+                    Ok(()) => view.show_success(
+                        view.text("证据档案已保存", "Evidence archive saved").into(),
+                        cx,
+                    ),
                     Err(error) => view.error = Some(error),
                 }
                 cx.notify();
@@ -4063,7 +4072,7 @@ impl Creditia {
                 view.collect = service::collect_info();
                 match result {
                     Ok(_) => {
-                        view.notice = Some(view.text("已更新", "Updated").into());
+                        view.show_success(view.text("已更新", "Updated").into(), cx);
                         view.fetch_details(cx);
                     }
                     Err(error) => {
@@ -4106,8 +4115,10 @@ impl Creditia {
                         } else if view.settings_id() == Some(&selection) {
                             view.settings_details = Some(details);
                         }
-                        view.notice =
-                            Some(view.text("显示设置已保存", "Display settings saved").into());
+                        view.show_success(
+                            view.text("显示设置已保存", "Display settings saved").into(),
+                            cx,
+                        );
                     }
                     Err(error) => {
                         view.error = Some(crate::ui_reports::failure(
@@ -4291,6 +4302,7 @@ impl Creditia {
                 self.play(false, cx);
             }
             self.export_formats_open = false;
+            self.export_options_open = false;
             if self
                 .export_unavailable_reason(&self.export_format)
                 .is_some()
@@ -4482,7 +4494,7 @@ impl Creditia {
                 return;
             }
         };
-        let directory = match service::export_dir() {
+        let directory = match service::default_export_dir() {
             Ok(directory) => directory,
             Err(error) => {
                 self.error = Some(error.to_string());
@@ -4491,6 +4503,8 @@ impl Creditia {
             }
         };
         let filename = export_filename(&snapshot);
+        self.export_formats_open = false;
+        self.export_options_open = false;
         let prompt = cx.prompt_for_new_path(&directory, Some(&filename));
         self.export_prompt_busy = true;
         self.export_dialog_task = Some(cx.spawn(async move |this, cx| {
@@ -4503,23 +4517,8 @@ impl Creditia {
                     }
                     Ok(Ok(Some(path))) => match view.export_queue.enqueue(snapshot, path, filename)
                     {
-                        Ok(queued) => {
-                            view.show_success(
-                                view.text(
-                                    if queued.deduplicated {
-                                        "该任务已在导出队列中"
-                                    } else {
-                                        "已加入导出队列"
-                                    },
-                                    if queued.deduplicated {
-                                        "This export is already queued"
-                                    } else {
-                                        "Export queued"
-                                    },
-                                )
-                                .into(),
-                                cx,
-                            );
+                        Ok(_) => {
+                            view.failed_export = None;
                             view.persist_exports();
                             view.pump_exports(cx);
                         }
@@ -4545,7 +4544,6 @@ impl Creditia {
         let attempt = job.attempt;
         self.export_active = Some((id, attempt));
         self.export_stage = Some(ExportStage::Rendering);
-        self.export_label = job.label.clone();
         self.export_cancel_requested = false;
         let cancellation = renderer::Cancellation::default();
         self.export_cancellation = Some(cancellation.clone());
@@ -4556,7 +4554,12 @@ impl Creditia {
             let result = cx
                 .background_spawn(async move {
                     let output = renderer::request(job.renderer_request(), render_cancel)?;
-                    renderer::decode_export(&output, &job.format)
+                    let bytes = renderer::decode_export(&output, &job.format)?;
+                    if job.format == "md" {
+                        export::export_text(ExportFormat::Md, bytes).map(String::into_bytes)
+                    } else {
+                        Ok(bytes)
+                    }
                 })
                 .await;
             let result = match result {
@@ -4594,7 +4597,7 @@ impl Creditia {
                 } else {
                     match &result {
                         Ok(()) => view.show_success(view.text("已保存", "Saved").into(), cx),
-                        Err(error) => view.error = Some(error.clone()),
+                        Err(_) => view.failed_export = Some(id),
                     }
                     view.export_queue.finish(id, attempt, result);
                 }
@@ -4615,6 +4618,9 @@ impl Creditia {
         }
         match self.export_queue.retry(id) {
             Ok(()) => {
+                if self.failed_export == Some(id) {
+                    self.failed_export = None;
+                }
                 self.persist_exports();
                 self.pump_exports(cx);
             }
@@ -4656,8 +4662,9 @@ impl Creditia {
         if self.panel.is_some() {
             self.close_panel(window, cx);
         } else if self.export_open {
-            if self.export_formats_open {
+            if self.export_formats_open || self.export_options_open {
                 self.export_formats_open = false;
+                self.export_options_open = false;
                 cx.notify();
                 return;
             }
@@ -4950,6 +4957,7 @@ impl Creditia {
                 cx.listener(move |view, event: &MouseDownEvent, _, cx| {
                     if view.export_workspace_open() {
                         view.export_formats_open = false;
+                        view.export_options_open = false;
                         cx.stop_propagation();
                         cx.notify();
                         return;
@@ -5254,6 +5262,8 @@ impl Creditia {
                         .border_dashed()
                         .border_color(palette.ink.opacity(0.55)),
                 );
+            }
+            if hovered && !(self.export_workspace_open() && selected) {
                 let mut bar = div()
                     .absolute()
                     .top(px(-24.))
@@ -5348,6 +5358,7 @@ impl Creditia {
                 cx.listener(|view, event: &MouseDownEvent, _, cx| {
                     if view.export_workspace_open() {
                         view.export_formats_open = false;
+                        view.export_options_open = false;
                         cx.stop_propagation();
                         cx.notify();
                         return;
@@ -6814,7 +6825,6 @@ impl Creditia {
                 );
             for (id, icon, name) in [
                 ("general", "gear", self.text("通用", "General")),
-                ("export", "export", self.text("导出", "Export")),
                 ("data", "folder", self.text("数据", "Data")),
                 ("about", "info", self.text("关于", "About")),
             ] {
@@ -7177,39 +7187,6 @@ impl Creditia {
         };
         Some(layer.child(modal).children(row_menu).into_any_element())
     }
-    fn choose_export_directory(&mut self, cx: &mut Context<Self>) {
-        let prompt = cx.prompt_for_paths(PathPromptOptions {
-            files: false,
-            directories: true,
-            multiple: false,
-            prompt: Some(self.text("导出目录", "Export directory").into()),
-        });
-        self.dialog_task = Some(cx.spawn(async move |this, cx| {
-            let result = prompt.await;
-            let _ = this.update(cx, |view, cx| {
-                match result {
-                    Ok(Ok(Some(paths))) => {
-                        if let Some(path) = paths.first() {
-                            let path = path.to_string_lossy().into_owned();
-                            view.operation(
-                                move || {
-                                    service::edit_app_settings(|settings| {
-                                        settings["exportDir"] = json!(path)
-                                    })?;
-                                    Ok(Value::Null)
-                                },
-                                cx,
-                            );
-                        }
-                    }
-                    Ok(Ok(None)) => {}
-                    Ok(Err(error)) => view.error = Some(error.to_string()),
-                    Err(error) => view.error = Some(error.to_string()),
-                }
-                cx.notify();
-            });
-        }));
-    }
 }
 impl Creditia {
     pub fn diagnostic_state(&self) -> Value {
@@ -7235,6 +7212,8 @@ impl Creditia {
         state["export_prompt_busy"] = json!(self.export_prompt_busy);
         state["export_workspace"] = json!(self.export_workspace_open());
         state["export_formats_open"] = json!(self.export_formats_open);
+        state["export_options_open"] = json!(self.export_options_open);
+        state["failed_export"] = json!(self.failed_export);
         state["success_notice"] = json!(self.success_notice);
         state["notice"] = json!(self.notice);
         state["export_preview"] = self.export_preview.diagnostic();
@@ -7343,21 +7322,6 @@ impl Render for Creditia {
         self.sync_activity(cx);
         let delayed_job = (self.job_busy || self.automatic_job.is_some())
             && self.activity_age() >= Duration::from_secs(2);
-        let status_height = if self.error.is_some()
-            || self.notice.is_some()
-            || self.success_notice.is_some()
-            || delayed_job
-            || self.export_stage.is_some()
-            || self.animation_busy
-            || !self.warnings.is_empty()
-            || matches!(
-                self.pending_analysis["state"].as_str(),
-                Some("interrupted" | "failed" | "cancelled")
-            ) {
-            24.
-        } else {
-            0.
-        };
         if self.reduced_motion || !self.window_visible || !window.is_window_active() {
             self.roam_motion.stop();
         }
@@ -7773,42 +7737,7 @@ impl Render for Creditia {
                     .flex_shrink_1(),
             )
             .when(delayed_job, |toolbar| {
-                toolbar.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .min_w_0()
-                        .child(
-                            div()
-                                .max_w(px(300.))
-                                .text_size(px(12.))
-                                .text_color(muted)
-                                .truncate()
-                                .child(
-                                    self.progress
-                                        .as_ref()
-                                        .map(|progress| {
-                                            progress_text(progress, &self.preferences.language)
-                                        })
-                                        .unwrap_or_else(|| {
-                                            self.text("正在分析…", "Analyzing…").into()
-                                        }),
-                                ),
-                        )
-                        .child(
-                            Button::new("cancel-analysis-inline")
-                                .ghost()
-                                .h(px(22.))
-                                .px(px(9.))
-                                .rounded_full()
-                                .bg(palette.glass)
-                                .shell_label(self.text("取消", "Cancel"))
-                                .on_click(cx.listener(|view, _, window, cx| {
-                                    view.cancel(&CancelAnalysis, window, cx)
-                                })),
-                        ),
-                )
+                toolbar.child(self.analysis_progress(cx))
             })
             .child(div().flex_1())
             .child(tools);
@@ -7830,6 +7759,7 @@ impl Render for Creditia {
                 .flex_shrink_0()
                 .flex()
                 .items_center()
+                .gap_2()
                 .pl(px(if cfg!(target_os = "macos") { 94. } else { 60. }))
                 .pr_4()
                 .child(
@@ -7838,6 +7768,9 @@ impl Render for Creditia {
                         .text_size(px(15.))
                         .child(title.to_string()),
                 )
+                .when(delayed_job, |toolbar| {
+                    toolbar.child(self.analysis_progress(cx))
+                })
                 .child(div().flex_1())
                 .child(
                     Button::new("focus-close-top")
@@ -7988,105 +7921,17 @@ impl Render for Creditia {
         } else {
             controls.into_any_element()
         };
-        let mut status = div()
-            .min_h(px(status_height))
-            .rounded_full()
-            .relative()
-            .child(crate::material::surface(
-                self.backdrop_image.clone(),
-                palette.solid,
-                20.,
-                palette,
-            ))
-            .shadow(palette.shadows())
-            .flex_shrink_0()
-            .flex()
-            .items_center()
-            .gap_2()
-            .px(px(16.))
-            .py(px(9.))
-            .text_size(px(13.))
-            .text_color(fg);
-        if let Some(stage) = self.export_stage {
-            let label = match stage {
-                ExportStage::Rendering => self.text("正在导出…", "Exporting…"),
-                ExportStage::Writing => self.text("正在保存…", "Saving…"),
-            };
-            status = status
-                .child(format!("{} · {}", label, self.export_label))
-                .child(
-                    Button::new("cancel-export")
-                        .ghost()
-                        .shell_label(self.text("取消", "Cancel"))
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.cancel_export(&CancelExport, window, cx)
-                        })),
-                );
-        } else if delayed_job {
-            status = status
-                .child(
-                    self.progress
-                        .as_ref()
-                        .map(|p| progress_text(p, &self.preferences.language))
-                        .unwrap_or_else(|| self.text("正在分析…", "Analyzing…").into()),
-                )
-                .child(
-                    Button::new("cancel-analysis")
-                        .ghost()
-                        .shell_label(self.text("取消", "Cancel"))
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.cancel(&CancelAnalysis, window, cx)
-                        })),
-                );
-        } else if matches!(
-            self.pending_analysis["state"].as_str(),
-            Some("interrupted" | "failed" | "cancelled")
-        ) {
-            status = status
-                .child(self.text("上次任务尚未完成", "The previous task did not finish"))
-                .child(
-                    Button::new("resume-analysis")
-                        .ghost()
-                        .shell_label(self.text("继续分析", "Resume analysis"))
-                        .on_click(
-                            cx.listener(|view, _, _, cx| view.start_job_mode(None, true, cx)),
-                        ),
-                );
-        } else if let Some(error) = &self.error {
-            status = status.child(error.clone()).child(
-                Button::new("retry")
-                    .ghost()
-                    .shell_label(self.text("重试", "Retry"))
-                    .on_click(cx.listener(|view, _, _, cx| {
-                        view.error = None;
-                        view.refresh(cx);
-                    })),
-            );
-        } else if self.animation_busy {
-            status = status.child(self.text("正在准备动画…", "Preparing animation…"));
-        } else if let Some(notice) = &self.notice {
-            status = status.child(notice.clone());
-        } else if let Some(message) = &self.success_notice {
-            status = status.child(message.clone());
-        }
-        if !self.warnings.is_empty() {
-            status = status.child(
-                Button::new("analysis-warnings")
-                    .ghost()
-                    .shell_label(format!(
-                        "{} ({})",
-                        self.text("分析提示", "Analysis notes"),
-                        self.warnings.len()
-                    ))
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        view.open_panel(Panel::Details, window, cx)
-                    })),
-            );
-        }
         self.refresh_backdrop(window, cx);
         let in_export = self.export_workspace_open();
         let stage = self.render_stage(window, cx);
         let export = self.render_export_dock(cx);
+        let general_feedback = self.general_feedback(cx);
+        let export_feedback = if in_export {
+            None
+        } else {
+            self.export_feedback(cx)
+        };
+
         let modal = self.render_panel(cx);
         let ghost = self
             .drag
@@ -8248,18 +8093,19 @@ impl Render for Creditia {
             })
             .when(!in_export, |root| root.child(controls))
             .child(export)
-            .when(status_height > 0. && !delayed_job, |root| {
-                root.child(
-                    div()
-                        .absolute()
-                        .top(px(70.))
-                        .left(px((width * 0.15).max(18.)))
-                        .w(px(width * 0.7))
-                        .flex()
-                        .justify_center()
-                        .child(status),
-                )
-            })
+            .child(
+                div()
+                    .absolute()
+                    .top(px(70.))
+                    .left_0()
+                    .right_0()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(8.))
+                    .children(general_feedback)
+                    .children(export_feedback),
+            )
             .children(ghost)
             .children(modal)
     }

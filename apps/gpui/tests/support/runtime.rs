@@ -506,7 +506,7 @@ fn preferences(h: &mut Harness) {
     let private = h.capture("private-names", true);
     h.shortcut(",");
     assert_eq!(h.state()["panel"], "settings");
-    h.click("settings-tab-export");
+    h.click("settings-tab-general");
     h.click("names-settings");
     assert_eq!(h.state()["named"], true);
     h.click("panel-close");
@@ -848,6 +848,11 @@ fn export_workspace(h: &mut Harness) {
         assert!(window.find("export-dock").visible());
     });
     h.capture("png", false);
+    h.click("export-options");
+    assert_eq!(h.state()["export_options_open"], true);
+    h.click("export-format");
+    assert_eq!(h.state()["export_options_open"], false);
+    assert_eq!(h.state()["export_formats_open"], true);
     for id in ["svg", "json", "png"] {
         h.export_format(id);
     }
@@ -877,7 +882,7 @@ fn export_workspace(h: &mut Harness) {
             state["export_preview"]["text_ready"], true,
             "text preview must come from the renderer: {state}"
         );
-        h.click("export-primary");
+        h.click("export-copy");
         let copied = h.update(|_, cx, _| {
             cx.read_from_clipboard()
                 .and_then(|item| item.text())
@@ -907,7 +912,7 @@ fn export_workspace(h: &mut Harness) {
     // cannot expire production executor timers. Re-copy also replaces its timer.
     h.cx.run_until_parked();
     h.cx.advance_clock(Duration::from_secs(2));
-    h.click("export-primary");
+    h.click("export-copy");
     h.cx.run_until_parked();
     h.cx.advance_clock(Duration::from_secs(1));
     h.cx.run_until_parked();
@@ -933,10 +938,19 @@ fn export_workspace(h: &mut Harness) {
     h.ready();
     assert_ne!(h.state()["export_size"], "native");
     let revision = h.state()["export_preview"]["revision"].as_u64().unwrap();
+    h.click("export-options");
     h.click("transparent");
     h.ready();
     assert!(h.state()["export_preview"]["revision"].as_u64().unwrap() > revision);
     assert!(h.state()["export_preview"]["error"].is_null());
+    h.press("escape");
+    assert_eq!(h.state()["export_options_open"], false);
+    assert_eq!(h.state()["export_open"], true);
+    h.click("export-options");
+    let selected = h.state()["selected_tile"].as_u64().unwrap() as usize;
+    h.click(("artwork", selected));
+    assert_eq!(h.state()["export_options_open"], false);
+    assert_eq!(h.state()["export_open"], true);
     h.capture("framed-transparent", false);
     h.shortcut("=");
     assert_eq!(
@@ -1048,7 +1062,6 @@ fn responsive(h: &mut Harness) {
     inside(h, "panel");
     for tab in [
         "settings-tab-general",
-        "settings-tab-export",
         "settings-tab-data",
         "settings-tab-about",
     ] {
@@ -1102,8 +1115,15 @@ fn responsive(h: &mut Harness) {
     h.capture("small-export", false);
     h.export_format("svg");
     h.ready();
+    h.click("export-options");
     h.update(|window, _, _| {
-        for id in ["export-primary", "export-size", "transparent", "font-mode"] {
+        for id in [
+            "export-primary",
+            "export-size",
+            "export-options-panel",
+            "transparent",
+            "font-mode",
+        ] {
             let b = window.find(id).bounds();
             assert!(
                 b.left() >= px(0.)
@@ -1115,6 +1135,9 @@ fn responsive(h: &mut Harness) {
         }
     });
     h.capture("small-svg-options", false);
+    h.press("escape");
+    assert_eq!(h.state()["export_options_open"], false);
+    assert_eq!(h.state()["export_open"], true);
     h.click("export-back");
     assert_eq!(h.state()["export_open"], false);
     h.click("focus-export");
@@ -1124,7 +1147,7 @@ fn responsive(h: &mut Harness) {
     h.click("focus-export");
     h.export_format("md");
     h.ready();
-    h.click("export-primary");
+    h.click("export-copy");
     let started = Instant::now();
     loop {
         h.cx.run_until_parked();
@@ -1176,10 +1199,30 @@ fn card_layout(h: &mut Harness) {
             "the card arrow must change its layout"
         );
         h.capture(&format!("{mode}-card-layout"), false);
+        h.shortcut("e");
+        h.ready();
+        assert_eq!(h.state()["focused"], false);
+        assert_eq!(h.state()["selected_rect"], after["selected_rect"]);
+        let export_state = h.state();
+        let export_index = export_state["selected_tile"].as_u64().unwrap() as usize;
+        h.update(|window, cx, _| window.hover(("artwork", export_index), cx));
+        h.capture(&format!("{mode}-card-export"), false);
+        h.update(|window, cx, _| {
+            window.render_frame(cx);
+            assert!(window.find("export-dock").visible());
+            for control in ["tile-previous-layout", "tile-next-layout", "tile-export"] {
+                assert!(
+                    window.find_all((control, export_index)).is_empty(),
+                    "export retained a duplicate corner tool: {control}; state={export_state}"
+                );
+            }
+        });
+        h.press("escape");
+        assert_eq!(h.state()["selected_rect"], after["selected_rect"]);
     }
     h.check(
-        "card-layout-arrows-change-the-current-artwork",
-        json!({"wall":true,"roam":true}),
+        "card-layout-and-export-keep-the-current-artwork",
+        json!({"wall":true,"roam":true,"export_hides_corner_tools":true,"export_keeps_artwork_position":true}),
     );
 }
 

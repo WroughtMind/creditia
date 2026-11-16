@@ -22,7 +22,7 @@ fn row(label: &'static str, control: impl IntoElement, p: Palette) -> Div {
         .child(div().flex_1().min_w_0())
         .child(control)
 }
-fn switch(id: impl Into<ElementId>, on: bool, p: Palette) -> Button {
+pub(super) fn switch(id: impl Into<ElementId>, on: bool, p: Palette) -> Button {
     Button::new(id)
         .ghost()
         .w(px(32.))
@@ -43,6 +43,284 @@ fn switch(id: impl Into<ElementId>, on: bool, p: Palette) -> Button {
 }
 
 impl Creditia {
+    pub(super) fn feedback_surface(
+        &self,
+        content: AnyElement,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let p = Palette::of(cx);
+        div()
+            .relative()
+            .occlude()
+            .max_w(px((self.viewport_size.0 - 36.).max(1.)))
+            .min_w_0()
+            .rounded_full()
+            .px(px(16.))
+            .py(px(9.))
+            .text_size(px(13.))
+            .text_color(p.ink)
+            .shadow(p.shadows())
+            .child(crate::material::surface(
+                self.backdrop_image.clone(),
+                p.solid,
+                20.,
+                p,
+            ))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|view, _, _, cx| {
+                    view.drag = None;
+                    cx.stop_propagation();
+                }),
+            )
+            .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(content)
+            .into_any_element()
+    }
+
+    pub(super) fn general_feedback(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let mut rows = Vec::new();
+        if let Some(error) = &self.error {
+            let history_error = self.export_history_error.as_ref() == Some(error);
+            let pending = self
+                .export_queue
+                .jobs()
+                .iter()
+                .any(|job| job.state.pending());
+            rows.push(
+                self.feedback_surface(
+                    div()
+                        .id("feedback-error")
+                        .test_support()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .min_w_0()
+                        .child(div().flex_1().min_w_0().truncate().child(error.clone()))
+                        .child(
+                            Button::new("retry")
+                                .ghost()
+                                .shell_label(if history_error {
+                                    self.text("重新读取导出记录", "Reload export history")
+                                } else {
+                                    self.text("重试", "Retry")
+                                })
+                                .disabled(history_error && pending)
+                                .on_click(cx.listener(move |view, _, _, cx| {
+                                    view.error = None;
+                                    if history_error {
+                                        view.reload_export_history(cx);
+                                    } else {
+                                        view.refresh(cx);
+                                    }
+                                })),
+                        )
+                        .into_any_element(),
+                    cx,
+                ),
+            );
+        }
+        if !self.job_busy
+            && self.automatic_job.is_none()
+            && matches!(
+                self.pending_analysis["state"].as_str(),
+                Some("interrupted" | "failed" | "cancelled")
+            )
+        {
+            rows.push(
+                self.feedback_surface(
+                    div()
+                        .id("analysis-recovery")
+                        .test_support()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(self.text("上次任务尚未完成", "The previous task did not finish"))
+                        .child(
+                            Button::new("resume-analysis")
+                                .ghost()
+                                .shell_label(self.text("继续分析", "Resume analysis"))
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.start_job_mode(None, true, cx)
+                                })),
+                        )
+                        .into_any_element(),
+                    cx,
+                ),
+            );
+        }
+        if let Some(notice) = self
+            .notice
+            .as_ref()
+            .filter(|notice| self.error.as_ref() != Some(notice))
+        {
+            rows.push(
+                self.feedback_surface(
+                    div()
+                        .id("notice")
+                        .test_support()
+                        .min_w_0()
+                        .child(notice.clone())
+                        .into_any_element(),
+                    cx,
+                ),
+            );
+        }
+        if let Some(message) = &self.success_notice {
+            rows.push(
+                self.feedback_surface(
+                    div()
+                        .id("success-notice")
+                        .test_support()
+                        .child(message.clone())
+                        .into_any_element(),
+                    cx,
+                ),
+            );
+        }
+        if self.animation_busy && self.error.is_none() {
+            rows.push(
+                self.feedback_surface(
+                    div()
+                        .child(self.text("正在准备动画…", "Preparing animation…"))
+                        .into_any_element(),
+                    cx,
+                ),
+            );
+        }
+        rows
+    }
+
+    pub(super) fn export_feedback(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let mut rows = Vec::new();
+        let project_name = self
+            .raw
+            .as_ref()
+            .and_then(|raw| raw["project"]["name"].as_str());
+        if let Some(stage) = self.export_stage {
+            let other_project = self
+                .export_active
+                .and_then(|(id, _)| self.export_queue.job(id))
+                .and_then(|job| job.request.as_ref())
+                .and_then(|request| request.project_name())
+                .filter(|name| Some(*name) != project_name)
+                .map(str::to_owned);
+            let label = match stage {
+                ExportStage::Rendering => self.text("正在导出…", "Exporting…"),
+                ExportStage::Writing => self.text("正在保存…", "Saving…"),
+            };
+            rows.push(
+                self.feedback_surface(
+                    div()
+                        .id("export-progress")
+                        .test_support()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .children(other_project)
+                        .child(label)
+                        .child(
+                            Button::new("cancel-export")
+                                .ghost()
+                                .shell_label(self.text("取消", "Cancel"))
+                                .on_click(cx.listener(|view, _, window, cx| {
+                                    view.cancel_export(&CancelExport, window, cx);
+                                })),
+                        )
+                        .into_any_element(),
+                    cx,
+                ),
+            );
+        }
+        if let Some(job) = self.failed_export_job() {
+            let id = job.id;
+            let other_project = job
+                .request
+                .as_ref()
+                .and_then(|request| request.project_name())
+                .filter(|name| Some(*name) != project_name)
+                .map(str::to_owned);
+            rows.push(
+                self.feedback_surface(
+                    div()
+                        .id("export-failure")
+                        .test_support()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .min_w_0()
+                        .children(other_project)
+                        .child(self.text("导出失败", "Export failed"))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .child(job.error.clone().unwrap_or_default()),
+                        )
+                        .when(self.export_history_writable(), |row| {
+                            row.child(
+                                Button::new("retry-failed-export")
+                                    .ghost()
+                                    .shell_label(self.text("重试导出", "Retry export"))
+                                    .on_click(cx.listener(move |view, _, _, cx| {
+                                        view.retry_export_job(id, cx)
+                                    })),
+                            )
+                        })
+                        .into_any_element(),
+                    cx,
+                ),
+            );
+        }
+        (!rows.is_empty()).then(|| {
+            div()
+                .flex()
+                .flex_col()
+                .items_center()
+                .gap(px(8.))
+                .children(rows)
+                .into_any_element()
+        })
+    }
+
+    pub(super) fn analysis_progress(&self, cx: &mut Context<Self>) -> AnyElement {
+        let p = Palette::of(cx);
+        div()
+            .id("analysis-progress")
+            .test_support()
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .min_w_0()
+            .child(
+                div()
+                    .max_w(px(300.))
+                    .text_size(px(12.))
+                    .text_color(p.soft)
+                    .truncate()
+                    .child(
+                        self.progress
+                            .as_ref()
+                            .map(|progress| progress_text(progress, &self.preferences.language))
+                            .unwrap_or_else(|| self.text("正在分析…", "Analyzing…").into()),
+                    ),
+            )
+            .child(
+                Button::new("cancel-analysis-inline")
+                    .ghost()
+                    .h(px(22.))
+                    .px(px(9.))
+                    .rounded_full()
+                    .bg(p.glass)
+                    .shell_label(self.text("取消", "Cancel"))
+                    .on_click(cx.listener(|view, _, window, cx| {
+                        view.cancel(&CancelAnalysis, window, cx);
+                    })),
+            )
+            .into_any_element()
+    }
+
     pub(super) fn hover_card(&self, cx: &mut Context<Self>) -> AnyElement {
         let Some(hit) = &self.hover else {
             return div().into_any_element();
@@ -576,6 +854,15 @@ impl Creditia {
                             view.preferences.auto_analyze = !view.preferences.auto_analyze; view.persist();
                             if let Some(background) = &view.background { background.refresh(); } cx.notify();
                         }))));
+                content = content.child(row(
+                    self.text("写其他贡献者的名字", "Show contributor names"),
+                    switch("names-settings", self.preferences.named, p)
+                        .accessibility_label(
+                            self.text("写其他贡献者的名字", "Show contributor names"),
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| view.set_names(cx))),
+                    p,
+                ));
                 if let Some(error) = &self.migration_error {
                     content = content.child(div().mt_3().child(error.clone())).child(
                         Button::new("retry-settings-migration")
@@ -587,84 +874,6 @@ impl Creditia {
                             .on_click(cx.listener(|view, _, _, cx| view.retry_migration(cx))),
                     );
                 }
-            }
-            "export" => {
-                content = content.child(heading(self.text("导出", "Export"), p));
-                let directory = service::export_dir()
-                    .map(|path| path.to_string_lossy().into_owned())
-                    .unwrap_or_else(|error| error.to_string());
-                content = content.child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap(px(8.))
-                        .py(px(9.))
-                        .border_b_1()
-                        .border_color(p.edge)
-                        .child(
-                            div()
-                                .text_color(p.soft)
-                                .child(self.text("保存到", "Save to")),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_size(px(11.))
-                                .text_color(p.soft)
-                                .truncate()
-                                .child(crate::material::short_path(&directory)),
-                        )
-                        .child(
-                            Button::new("export-directory")
-                                .ghost()
-                                .h(px(26.))
-                                .rounded_full()
-                                .bg(p.glass)
-                                .shell_label(self.text("更改…", "Change…"))
-                                .on_click(
-                                    cx.listener(|view, _, _, cx| view.choose_export_directory(cx)),
-                                ),
-                        )
-                        .child(
-                            Button::new("reset-export-directory")
-                                .ghost()
-                                .h(px(26.))
-                                .rounded_full()
-                                .shell_label(self.text("恢复默认", "Reset"))
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    view.operation(
-                                        || service::reset_export_dir().map(Value::String),
-                                        cx,
-                                    )
-                                })),
-                        )
-                        .child(
-                            Button::new("open-export-directory")
-                                .ghost()
-                                .h(px(26.))
-                                .rounded_full()
-                                .shell_label(self.text("打开", "Open"))
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    match service::export_dir() {
-                                        Ok(path) => cx.reveal_path(&path),
-                                        Err(error) => view.error = Some(error.to_string()),
-                                    }
-                                    cx.notify();
-                                })),
-                        ),
-                );
-                content = content.child(row(
-                    self.text("写其他贡献者的名字", "Show contributor names"),
-                    switch("names-settings", self.preferences.named, p)
-                        .accessibility_label(
-                            self.text("写其他贡献者的名字", "Show contributor names"),
-                        )
-                        .on_click(cx.listener(|view, _, _, cx| view.set_names(cx))),
-                    p,
-                ));
-                content = content.child(div().mt(px(6.)).text_size(px(12.)).text_color(p.faint).child(self.text("格式和尺寸在每张作品的「导出」里挑，App 会记住上次用的。也可以把作品拖到下面的导出坞上。", "Pick format and size from each card’s Export menu; the app remembers your last choice. You can also drag a card onto the export dock.")));
             }
             "data" => {
                 content = content

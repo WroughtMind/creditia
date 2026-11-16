@@ -119,7 +119,7 @@ impl ExportPreview {
     }
 }
 
-fn export_text(format: ExportFormat, bytes: Vec<u8>) -> Result<String, String> {
+pub(super) fn export_text(format: ExportFormat, bytes: Vec<u8>) -> Result<String, String> {
     let text = String::from_utf8(bytes).map_err(|error| error.to_string())?;
     Ok(if format == ExportFormat::Md {
         format!(
@@ -132,6 +132,12 @@ fn export_text(format: ExportFormat, bytes: Vec<u8>) -> Result<String, String> {
 }
 
 impl Creditia {
+    pub(super) fn failed_export_job(&self) -> Option<&crate::export_jobs::Job> {
+        self.export_queue
+            .job(self.failed_export?)
+            .filter(|job| job.state == crate::export_jobs::State::Failed)
+    }
+
     pub(super) fn export_workspace_open(&self) -> bool {
         self.export_open
             && !self
@@ -148,6 +154,7 @@ impl Creditia {
         }
         self.export_open = false;
         self.export_formats_open = false;
+        self.export_options_open = false;
         self.export_preview.clear(cx);
         self.hover = None;
         cx.notify();
@@ -161,6 +168,7 @@ impl Creditia {
         }
         self.export_format = format.id().into();
         self.export_formats_open = false;
+        self.export_options_open = false;
         self.preferences.export_format = self.export_format.clone();
         self.persist();
         cx.notify();
@@ -391,6 +399,7 @@ impl Creditia {
                     .disabled(self.export_prompt_busy)
                     .on_click(cx.listener(|view, _, _, cx| {
                         view.export_formats_open = !view.export_formats_open;
+                        view.export_options_open = false;
                         cx.notify();
                     })),
             );
@@ -447,49 +456,22 @@ impl Creditia {
                         menu
                     }),
             );
-            if format.transparency() {
+            if format.transparency() || format.fonts() {
                 dock = dock.child(
-                    Button::new("transparent")
+                    Button::new("export-options")
                         .ghost()
+                        .w(px(34.))
                         .h(px(34.))
-                        .px(px(8.))
+                        .p_0()
                         .rounded(px(10.))
-                        .when(self.transparent, |b| b.bg(p.selected))
+                        .when(self.export_options_open, |b| b.bg(p.selected))
                         .disabled(self.export_prompt_busy)
-                        .icon(crate::ui_icons::icon("transparent"))
-                        .shell_label(self.text("透明", "Alpha"))
-                        .accessibility_label(self.text("透明背景", "Transparent background"))
-                        .tooltip(self.text("透明背景", "Transparent background"))
+                        .icon(crate::ui_icons::icon("parameters"))
+                        .accessibility_label(self.text("导出参数", "Export options"))
+                        .tooltip(self.text("导出参数", "Export options"))
                         .on_click(cx.listener(|view, _, _, cx| {
-                            view.transparent = !view.transparent;
-                            cx.notify();
-                        })),
-                );
-            }
-            if format.fonts() {
-                dock = dock.child(
-                    Button::new("font-mode")
-                        .ghost()
-                        .h(px(34.))
-                        .px(px(8.))
-                        .rounded(px(10.))
-                        .when(self.font_mode == "outline", |b| b.bg(p.selected))
-                        .disabled(self.export_prompt_busy)
-                        .icon(crate::ui_icons::icon(if self.font_mode == "outline" {
-                            "check"
-                        } else {
-                            "text"
-                        }))
-                        .shell_label(self.text("转路径", "Outline"))
-                        .accessibility_label(self.text("文字转路径", "Outline text"))
-                        .tooltip(self.text("文字转路径", "Outline text"))
-                        .on_click(cx.listener(|view, _, _, cx| {
-                            view.font_mode = if view.font_mode == "outline" {
-                                "embed"
-                            } else {
-                                "outline"
-                            }
-                            .into();
+                            view.export_options_open = !view.export_options_open;
+                            view.export_formats_open = false;
                             cx.notify();
                         })),
                 );
@@ -531,11 +513,27 @@ impl Creditia {
                     .on_click(cx.listener(|view, _, _, cx| view.play(false, cx))),
             );
         }
-        let unavailable = if format.visual() {
-            !self.can_export() || !self.export_history_writable()
-        } else {
-            self.export_preview.text.is_none()
-        };
+        if !format.visual() {
+            dock = dock.child(
+                Button::new("export-copy")
+                    .ghost()
+                    .w(px(34.))
+                    .h(px(34.))
+                    .p_0()
+                    .rounded(px(10.))
+                    .icon(crate::ui_icons::icon("copy"))
+                    .accessibility_label(self.text("复制", "Copy"))
+                    .tooltip(self.text("复制", "Copy"))
+                    .disabled(self.export_preview.text.is_none() || self.export_prompt_busy)
+                    .on_click(cx.listener(|view, _, _, cx| {
+                        if let Some(text) = &view.export_preview.text {
+                            cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+                            view.show_success(view.text("已复制", "Copied").into(), cx);
+                        }
+                    })),
+            );
+        }
+        let unavailable = !self.can_export() || !self.export_history_writable();
         dock = dock.child(
             Button::new("export-primary")
                 .h(px(34.))
@@ -543,36 +541,22 @@ impl Creditia {
                 .rounded_full()
                 .bg(p.ink)
                 .text_color(p.bg)
-                .icon(crate::ui_icons::icon(if format.visual() {
-                    "export"
-                } else {
-                    "copy"
-                }))
-                .shell_label(if format.visual() {
-                    self.text("导出", "Export")
-                } else {
-                    self.text("复制", "Copy")
-                })
+                .icon(crate::ui_icons::icon("export"))
+                .shell_label(self.text("导出", "Export"))
                 .disabled(unavailable || self.export_prompt_busy)
-                .on_click(cx.listener(move |view, _, window, cx| {
-                    if format.visual() {
-                        view.export_artwork(&ExportArtwork, window, cx);
-                    } else if let Some(text) = &view.export_preview.text {
-                        cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
-                        view.show_success(view.text("已复制", "Copied").into(), cx);
-                    }
+                .on_click(cx.listener(|view, _, window, cx| {
+                    view.export_artwork(&ExportArtwork, window, cx);
                 })),
         );
-        let mut root = div().absolute().inset_0().child(
-            div()
-                .absolute()
-                .left_0()
-                .right_0()
-                .bottom(px(18.))
-                .flex()
-                .justify_center()
-                .child(dock),
-        );
+        let mut stack = div()
+            .absolute()
+            .left_0()
+            .right_0()
+            .bottom(px(18.))
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap(px(10.));
         if self.export_formats_open {
             let mut grid = div()
                 .id("export-formats")
@@ -630,56 +614,104 @@ impl Creditia {
                 }
                 grid = grid.child(row);
             }
-            root = root.child(
-                div()
-                    .absolute()
-                    .left_0()
-                    .right_0()
-                    .bottom(px(80.))
-                    .flex()
-                    .justify_center()
-                    .child(grid),
-            );
+            stack = stack.child(grid);
+        }
+        if self.export_options_open && format.visual() {
+            let mut options = div()
+                .id("export-options-panel")
+                .test_support()
+                .relative()
+                .occlude()
+                .flex()
+                .flex_col()
+                .w(px(240.))
+                .p(px(14.))
+                .gap(px(14.))
+                .rounded(px(16.))
+                .shadow(p.shadows())
+                .border_1()
+                .border_color(p.edge)
+                .child(crate::material::surface(
+                    self.backdrop_image.clone(),
+                    p.glass,
+                    16.,
+                    p,
+                ))
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation());
+            if format.transparency() {
+                options = options.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .child(self.text("透明背景", "Transparent background"))
+                        .child(div().flex_1())
+                        .child(
+                            super::surfaces::switch("transparent", self.transparent, p)
+                                .accessibility_label(
+                                    self.text("透明背景", "Transparent background"),
+                                )
+                                .disabled(self.export_prompt_busy)
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.transparent = !view.transparent;
+                                    cx.notify();
+                                })),
+                        ),
+                );
+            }
+            if format.fonts() {
+                options = options.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .child(self.text("文字转路径", "Outline text"))
+                        .child(div().flex_1())
+                        .child(
+                            super::surfaces::switch("font-mode", self.font_mode == "outline", p)
+                                .accessibility_label(self.text("文字转路径", "Outline text"))
+                                .disabled(self.export_prompt_busy)
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.font_mode = if view.font_mode == "outline" {
+                                        "embed"
+                                    } else {
+                                        "outline"
+                                    }
+                                    .into();
+                                    cx.notify();
+                                })),
+                        ),
+                );
+            }
+            stack = stack.child(options);
         }
         if let Some(error) = &self.export_preview.error {
-            root = root.child(
-                div()
-                    .absolute()
-                    .left_0()
-                    .right_0()
-                    .bottom(px(80.))
-                    .flex()
-                    .justify_center()
-                    .child(
-                        div()
-                            .relative()
-                            .occlude()
-                            .rounded(px(12.))
-                            .p(px(10.))
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(crate::material::surface(
-                                self.backdrop_image.clone(),
-                                p.solid,
-                                12.,
-                                p,
-                            ))
-                            .child(error.clone())
-                            .child(
-                                Button::new("retry-export-preview")
-                                    .ghost()
-                                    .icon(crate::ui_icons::icon("replay"))
-                                    .accessibility_label(self.text("重试预览", "Retry preview"))
-                                    .on_click(cx.listener(|view, _, _, cx| {
-                                        view.export_preview.clear(cx);
-                                        cx.notify();
-                                    })),
-                            ),
-                    ),
+            stack = stack.child(
+                self.feedback_surface(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(div().min_w_0().flex_1().truncate().child(error.clone()))
+                        .child(
+                            Button::new("retry-export-preview")
+                                .ghost()
+                                .icon(crate::ui_icons::icon("replay"))
+                                .accessibility_label(self.text("重试预览", "Retry preview"))
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.export_preview.clear(cx);
+                                    cx.notify();
+                                })),
+                        )
+                        .into_any_element(),
+                    cx,
+                ),
             );
         }
-        root.into_any_element()
+        div()
+            .absolute()
+            .inset_0()
+            .child(stack.children(self.export_feedback(cx)).child(dock))
+            .into_any_element()
     }
 }
 
