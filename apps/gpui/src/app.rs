@@ -7,7 +7,9 @@ use crate::{
 use crate::{native_preview, renderer, ui_model::*};
 use creditia_desktop_service as service;
 use gpui_kit::TestSupportExt as _;
+use gpui_kit::component::Selectable;
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::{ActiveTheme, Disableable, FocusTrapElement, Theme, ThemeMode};
 use gpui_kit::prelude::FluentBuilder;
@@ -3442,6 +3444,25 @@ impl Creditia {
         }
     }
     pub fn fixture_images_ready(&self, window: &mut Window, cx: &mut App) -> bool {
+        // A settled surface includes its actual UI previews, not placeholder boxes.
+        if self.panel == Some(Panel::Settings) {
+            for id in ["star", "star-mono", "orb", "ring", "color", "mono"] {
+                if crate::image_assets::track(&logo_image(id), window, cx).is_none() {
+                    return false;
+                }
+            }
+        }
+        if self.panel == Some(Panel::Styles) {
+            if let Some(styles) = self.catalog.as_ref().and_then(|c| c["styles"].as_array()) {
+                for style in styles {
+                    if let Some(dot) = style["dot"].as_str() {
+                        if crate::image_assets::track(&style_dot(dot), window, cx).is_none() {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
         if self.fixture && !self.benchmark && (self.raw.is_none() || self.loading) {
             return true;
         }
@@ -5578,7 +5599,11 @@ impl Creditia {
                         Button::new(("format", index))
                             .ghost()
                             .label(id.to_uppercase())
-                            .when(chosen || self.export_hovered == Some(index), |button| {
+                            .w(px(80.))
+                            .h(px(32.))
+                            .selected(chosen)
+                            .toggled(chosen)
+                            .when(self.export_hovered == Some(index), |button| {
                                 button.bg(cx.theme().muted)
                             })
                             .disabled(disabled)
@@ -5612,14 +5637,28 @@ impl Creditia {
             let label = if id == "native" {
                 self.text("原尺寸", "Original").to_string()
             } else {
-                format!("{} {}×{}", id, size["w"], size["h"])
+                format!(
+                    "{} {}×{}",
+                    match id.as_str() {
+                        "og" => self.text("横版", "Landscape"),
+                        "square" => self.text("方形", "Square"),
+                        "portrait" => self.text("竖版", "Portrait"),
+                        "story" => self.text("长图", "Story"),
+                        "a4" => "A4",
+                        _ => id.as_str(),
+                    },
+                    size["w"],
+                    size["h"]
+                )
             };
             let chosen = self.export_size == id;
             sizes = sizes.child(
                 Button::new(("size", index))
                     .ghost()
                     .label(label)
-                    .when(chosen, |b| b.bg(cx.theme().muted))
+                    .h(px(32.))
+                    .selected(chosen)
+                    .toggled(chosen)
                     .on_click(cx.listener(move |view, _, _, cx| {
                         view.export_size = id.clone();
                         view.preferences.export_size = id.clone();
@@ -5636,13 +5675,15 @@ impl Creditia {
                     .justify_between()
                     .child(buttons)
                     .child(
-                        Button::new("close-export-dock")
-                            .ghost()
-                            .label("×")
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.export_open = false;
-                                cx.notify();
-                            })),
+                        crate::ui_controls::icon_button(
+                            "close-export-dock",
+                            "close",
+                            self.text("关闭导出面板", "Close export panel"),
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            view.export_open = false;
+                            cx.notify();
+                        })),
                     ),
             )
             .child(sizes)
@@ -5652,13 +5693,9 @@ impl Creditia {
                     .items_center()
                     .gap_2()
                     .child(
-                        Button::new("transparent")
-                            .ghost()
-                            .label(if self.transparent {
-                                self.text("透明背景 ✓", "Transparent ✓")
-                            } else {
-                                self.text("透明背景", "Transparent")
-                            })
+                        Checkbox::new("transparent")
+                            .checked(self.transparent)
+                            .label(self.text("透明背景", "Transparent"))
                             .on_click(cx.listener(|view, _, _, cx| {
                                 view.transparent = !view.transparent;
                                 cx.notify();
@@ -5744,20 +5781,23 @@ impl Creditia {
                     }));
                 if items.iter().any(|id| id == "__all__") {
                     rows = rows.child(
-                        Button::new("all-projects")
-                            .ghost()
-                            .label(format!(
+                        crate::ui_controls::row_button(
+                            "all-projects",
+                            format!(
                                 "{} · {}",
                                 self.text("全部项目", "All projects"),
                                 self.projects.len()
-                            ))
-                            .when(self.picker_selected.as_deref() == Some("__all__"), |b| {
-                                b.bg(cx.theme().muted)
-                            })
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.panel = None;
-                                view.show_all_projects(cx)
-                            })),
+                            ),
+                            "wall",
+                        )
+                        .toggled(self.selected.as_deref() == Some("__all__"))
+                        .when(self.picker_selected.as_deref() == Some("__all__"), |b| {
+                            b.bg(cx.theme().muted)
+                        })
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            view.panel = None;
+                            view.show_all_projects(cx)
+                        })),
                     );
                 }
                 for (index, project) in self
@@ -5773,9 +5813,6 @@ impl Creditia {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .when_some(self.project_marks.get(&project.id), |row, mark| {
-                                row.child(img(mark.image.clone()).w(px(24.)).h(px(24.)))
-                            })
                             .rounded_md()
                             .when(self.picker_selected.as_ref() == Some(&id), |row| {
                                 row.bg(cx.theme().muted)
@@ -5784,7 +5821,33 @@ impl Creditia {
                                 Button::new(("choose-project", index))
                                     .ghost()
                                     .flex_1()
-                                    .h(px(58.))
+                                    .h(px(64.))
+                                    .px_2()
+                                    .accessibility_label(project.name.clone())
+                                    .tooltip(project.name.clone())
+                                    .child(
+                                        div()
+                                            .w(px(32.))
+                                            .h(px(32.))
+                                            .flex_shrink_0()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .when(
+                                                self.project_marks.get(&project.id).is_none(),
+                                                |slot| slot.child(crate::ui_icons::icon("folder")),
+                                            )
+                                            .when_some(
+                                                self.project_marks.get(&project.id),
+                                                |slot, mark| {
+                                                    slot.child(
+                                                        img(mark.image.clone())
+                                                            .w(px(24.))
+                                                            .h(px(24.)),
+                                                    )
+                                                },
+                                            ),
+                                    )
                                     .child(
                                         div()
                                             .w_full()
@@ -5798,10 +5861,19 @@ impl Creditia {
                                                     .flex()
                                                     .justify_between()
                                                     .gap_3()
-                                                    .child(project.name.clone())
                                                     .child(
-                                                        div().text_xs().text_color(muted).child(
-                                                            if !project.exists {
+                                                        div()
+                                                            .flex_1()
+                                                            .min_w_0()
+                                                            .truncate()
+                                                            .child(project.name.clone()),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .flex_shrink_0()
+                                                            .text_xs()
+                                                            .text_color(muted)
+                                                            .child(if !project.exists {
                                                                 self.text(
                                                                     "目录不在了",
                                                                     "Folder missing",
@@ -5819,8 +5891,7 @@ impl Creditia {
                                                                         )
                                                                     })
                                                                     .unwrap_or_default()
-                                                            },
-                                                        ),
+                                                            }),
                                                     ),
                                             )
                                             .child(
@@ -5838,42 +5909,42 @@ impl Creditia {
                                     })),
                             )
                             .child(
-                                Button::new(("project-more", index))
-                                    .ghost()
-                                    .icon(crate::ui_icons::icon("more"))
-                                    .accessibility_label(self.text("更多", "More"))
-                                    .on_click(cx.listener(
-                                        move |view, event: &ClickEvent, window, cx| {
-                                            if view
-                                                .project_row_menu
-                                                .as_ref()
-                                                .is_some_and(|(id, _)| id == &more_id)
-                                            {
-                                                view.project_row_menu = None;
-                                            } else {
-                                                let point = event.position();
-                                                let x: f32 = point.x.into();
-                                                let y: f32 = point.y.into();
-                                                let size = window.viewport_size();
-                                                let width: f32 = size.width.into();
-                                                let height: f32 = size.height.into();
-                                                view.project_row_menu = Some((
-                                                    more_id.clone(),
-                                                    (
-                                                        (x - 216.)
-                                                            .clamp(8., (width - 240.).max(8.)),
-                                                        if y + 190. > height - 8. {
-                                                            (y - 190.).max(8.)
-                                                        } else {
-                                                            y + 4.
-                                                        },
-                                                    ),
-                                                ));
-                                            }
-                                            cx.stop_propagation();
-                                            cx.notify();
-                                        },
-                                    )),
+                                crate::ui_controls::icon_button(
+                                    ("project-more", index),
+                                    "more",
+                                    self.text("项目操作", "Project actions"),
+                                )
+                                .on_click(cx.listener(
+                                    move |view, event: &ClickEvent, window, cx| {
+                                        if view
+                                            .project_row_menu
+                                            .as_ref()
+                                            .is_some_and(|(id, _)| id == &more_id)
+                                        {
+                                            view.project_row_menu = None;
+                                        } else {
+                                            let point = event.position();
+                                            let x: f32 = point.x.into();
+                                            let y: f32 = point.y.into();
+                                            let size = window.viewport_size();
+                                            let width: f32 = size.width.into();
+                                            let height: f32 = size.height.into();
+                                            view.project_row_menu = Some((
+                                                more_id.clone(),
+                                                (
+                                                    (x - 216.).clamp(8., (width - 240.).max(8.)),
+                                                    if y + 190. > height - 8. {
+                                                        (y - 190.).max(8.)
+                                                    } else {
+                                                        y + 4.
+                                                    },
+                                                ),
+                                            ));
+                                        }
+                                        cx.stop_propagation();
+                                        cx.notify();
+                                    },
+                                )),
                             ),
                     );
                 }
@@ -6087,26 +6158,24 @@ impl Creditia {
                             choices.child(div().w_full().h(px(1.)).my_2().bg(cx.theme().border));
                     }
                     choices = choices.child(
-                        Button::new(("style", index))
-                            .ghost()
-                            .when_some(style["dot"].as_str(), |button, dot| {
-                                button.child(img(style_dot(dot)).w(px(20.)).h(px(20.)))
-                            })
-                            .label(name)
-                            .disabled(
-                                self.focused
-                                    && self.current_tile().is_some_and(|tile| {
-                                        !style["pieces"].as_array().is_some_and(|pieces| {
-                                            pieces
-                                                .iter()
-                                                .any(|piece| piece["id"] == tile.spec.piece)
-                                        })
-                                    }),
-                            )
-                            .when(index == self.style_index, |b| b.bg(cx.theme().muted))
-                            .on_click(
-                                cx.listener(move |view, _, _, cx| view.choose_style(index, cx)),
-                            ),
+                        crate::ui_controls::choice_button(
+                            ("style", index),
+                            name,
+                            index == self.style_index,
+                            style["dot"].as_str().map(|dot| {
+                                img(style_dot(dot)).w(px(20.)).h(px(20.)).into_any_element()
+                            }),
+                        )
+                        .w(px(164.))
+                        .disabled(
+                            self.focused
+                                && self.current_tile().is_some_and(|tile| {
+                                    !style["pieces"].as_array().is_some_and(|pieces| {
+                                        pieces.iter().any(|piece| piece["id"] == tile.spec.piece)
+                                    })
+                                }),
+                        )
+                        .on_click(cx.listener(move |view, _, _, cx| view.choose_style(index, cx))),
                     );
                 }
                 body = body.child(choices);
@@ -6156,10 +6225,8 @@ impl Creditia {
                     let active =
                         self.current_tile().and_then(|t| t.spec.variant.as_ref()) == Some(&id);
                     body = body.child(
-                        Button::new(("variant", index))
-                            .ghost()
-                            .label(label)
-                            .when(active, |b| b.bg(cx.theme().muted))
+                        crate::ui_controls::choice_button(("variant", index), label, active, None)
+                            .w_full()
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 view.choose_variant(id.clone(), cx);
                                 view.panel = None;
@@ -6321,95 +6388,90 @@ impl Creditia {
 
                 body = body
                     .child(
-                        Button::new("language")
-                            .ghost()
-                            .label(self.text("语言：中文 → English", "Language: English → 中文"))
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                view.toggle_language(&ToggleLanguage, window, cx)
-                            })),
+                        crate::ui_controls::value_button(
+                            "language",
+                            self.text("语言", "Language"),
+                            self.text("中文", "English"),
+                            cx,
+                        )
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.toggle_language(&ToggleLanguage, window, cx)
+                        })),
                     )
                     .child(
-                        Button::new("appearance")
-                            .ghost()
-                            .label(format!(
-                                "{}：{:?}",
-                                self.text("外观", "Appearance"),
-                                self.preferences.appearance
-                            ))
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                view.cycle_appearance(&CycleAppearance, window, cx)
-                            })),
+                        crate::ui_controls::value_button(
+                            "appearance",
+                            self.text("外观", "Appearance"),
+                            match self.preferences.appearance {
+                                Appearance::System => self.text("跟随系统", "System"),
+                                Appearance::Light => self.text("浅色", "Light"),
+                                Appearance::Dark => self.text("深色", "Dark"),
+                            },
+                            cx,
+                        )
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.cycle_appearance(&CycleAppearance, window, cx)
+                        })),
                     )
                     .child(
-                        Button::new("reduced-motion")
-                            .ghost()
-                            .label(format!(
-                                "{} {}",
-                                self.text("减少动态效果", "Reduced motion"),
-                                if self.preferences.reduced_motion {
-                                    "✓"
-                                } else {
-                                    "○"
-                                }
-                            ))
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                view.toggle_motion(&ToggleMotion, window, cx)
-                            })),
+                        crate::ui_controls::toggle_button(
+                            "reduced-motion",
+                            self.text("减少动态效果", "Reduced motion"),
+                            self.preferences.reduced_motion,
+                            true,
+                            cx,
+                        )
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.toggle_motion(&ToggleMotion, window, cx)
+                        })),
                     )
                     .child(
-                        Button::new("names-settings")
-                            .ghost()
-                            .label(format!(
-                                "{} {}",
-                                self.text("显示贡献者姓名", "Contributor names"),
-                                if self.preferences.named { "✓" } else { "○" }
-                            ))
-                            .on_click(cx.listener(|view, _, _, cx| view.set_names(cx))),
+                        crate::ui_controls::toggle_button(
+                            "names-settings",
+                            self.text("显示贡献者姓名", "Contributor names"),
+                            self.preferences.named,
+                            true,
+                            cx,
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| view.set_names(cx))),
                     )
                     .child(
-                        Button::new("auto-analyze")
-                            .ghost()
-                            .label(format!(
-                                "{} {}",
-                                self.text(
-                                    "有新提交时自动分析",
-                                    "Analyze new commits automatically"
-                                ),
-                                if self.preferences.auto_analyze {
-                                    "✓"
-                                } else {
-                                    "○"
-                                }
-                            ))
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.preferences.auto_analyze = !view.preferences.auto_analyze;
-                                view.persist();
-                                if let Some(bg) = &view.background {
-                                    bg.refresh();
-                                }
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .text_color(muted)
-                            .child(self.text("后台采集", "Background collection")),
+                        crate::ui_controls::toggle_button(
+                            "auto-analyze",
+                            self.text("有新提交时自动分析", "Analyze new commits automatically"),
+                            self.preferences.auto_analyze,
+                            true,
+                            cx,
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            view.preferences.auto_analyze = !view.preferences.auto_analyze;
+                            view.persist();
+                            if let Some(bg) = &view.background {
+                                bg.refresh();
+                            }
+                            cx.notify();
+                        })),
                     );
-                let mut logos = div().flex().flex_wrap().gap_1();
+                let mut logos = div().flex().flex_wrap().gap_2();
                 for (id, label) in [
-                    ("star", "✳"),
-                    ("star-mono", "✳ Mono"),
-                    ("orb", "Orb"),
-                    ("ring", "Ring"),
-                    ("color", "Color"),
-                    ("mono", "Mono"),
+                    ("star", self.text("星号", "Asterisk")),
+                    ("star-mono", self.text("单色星号", "Mono asterisk")),
+                    ("orb", self.text("流体", "Orb")),
+                    ("ring", self.text("圆环", "Ring")),
+                    ("color", self.text("彩色", "Color")),
+                    ("mono", self.text("单色", "Mono")),
                 ] {
                     logos = logos.child(
                         Button::new(id)
                             .ghost()
-                            .label(label)
-                            .when(self.preferences.logo == id, |b| b.bg(cx.theme().muted))
+                            .w(px(44.))
+                            .h(px(40.))
+                            .p_0()
+                            .child(img(logo_image(id)).w(px(24.)).h(px(24.)))
+                            .accessibility_label(label)
+                            .tooltip(label)
+                            .selected(self.preferences.logo == id)
+                            .toggled(self.preferences.logo == id)
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 view.preferences.logo = id.into();
                                 crate::image_assets::release(view.logo_image.clone(), cx);
@@ -6420,8 +6482,18 @@ impl Creditia {
                     );
                 }
                 body = body
-                    .child(div().text_color(muted).child(self.text("标志", "Logo")))
-                    .child(logos);
+                    .child(
+                        div()
+                            .text_color(muted)
+                            .child(self.text("应用标志", "App icon")),
+                    )
+                    .child(logos)
+                    .child(
+                        div()
+                            .mt_3()
+                            .text_color(muted)
+                            .child(self.text("后台采集", "Background collection")),
+                    );
                 let on = self.collect["on"].as_bool().unwrap_or(false);
                 let agent = self.collect["agent"]["on"].as_bool().unwrap_or(false);
                 let supported = self.collect["agent"]["supported"]
@@ -6444,7 +6516,8 @@ impl Creditia {
                         Button::new(id)
                             .ghost()
                             .label(label)
-                            .when(mode == id, |b| b.bg(cx.theme().muted))
+                            .selected(mode == id)
+                            .toggled(mode == id)
                             .disabled(self.operation_busy || (id == "always" && !supported))
                             .on_click(
                                 cx.listener(move |view, _, _, cx| view.set_collection_mode(id, cx)),
@@ -6462,51 +6535,56 @@ impl Creditia {
                             })),
                     )
                     .child(
-                        Button::new("export-directory")
-                            .ghost()
-                            .label(self.text("更改导出目录…", "Change export directory…"))
-                            .on_click(
-                                cx.listener(|view, _, _, cx| view.choose_export_directory(cx)),
-                            ),
+                        crate::ui_controls::row_button(
+                            "export-directory",
+                            self.text("更改导出目录…", "Change export directory…"),
+                            "folder",
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| view.choose_export_directory(cx))),
                     )
                     .child(
-                        Button::new("open-export-directory")
-                            .ghost()
-                            .label(self.text("打开导出目录", "Open export directory"))
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                match service::export_dir() {
-                                    Ok(path) => cx.reveal_path(&path),
-                                    Err(error) => view.error = Some(error.to_string()),
-                                }
-                                cx.notify();
-                            })),
+                        crate::ui_controls::row_button(
+                            "open-export-directory",
+                            self.text("打开导出目录", "Open export directory"),
+                            "folder",
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            match service::export_dir() {
+                                Ok(path) => cx.reveal_path(&path),
+                                Err(error) => view.error = Some(error.to_string()),
+                            }
+                            cx.notify();
+                        })),
                     )
                     .child(
-                        Button::new("reset-export-directory")
-                            .ghost()
-                            .label(self.text("恢复默认导出目录", "Reset export directory"))
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.operation(
-                                    || service::reset_export_dir().map(Value::String),
-                                    cx,
-                                )
-                            })),
+                        crate::ui_controls::row_button(
+                            "reset-export-directory",
+                            self.text("恢复默认导出目录", "Reset export directory"),
+                            "refresh",
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            view.operation(|| service::reset_export_dir().map(Value::String), cx)
+                        })),
                     )
                     .child(
-                        Button::new("open-library")
-                            .ghost()
-                            .label(self.text("打开本地档案库", "Open local archive library"))
-                            .on_click(cx.listener(|_, _, _, cx| {
-                                cx.reveal_path(Path::new(&service::library_path()))
-                            })),
+                        crate::ui_controls::row_button(
+                            "open-library",
+                            self.text("打开本地档案库", "Open local archive library"),
+                            "folder",
+                        )
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            cx.reveal_path(Path::new(&service::library_path()))
+                        })),
                     )
                     .child(
-                        Button::new("diagnostics")
-                            .ghost()
-                            .label(self.text("环境检查", "Diagnostics"))
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.load_diagnostics(cx);
-                            })),
+                        crate::ui_controls::row_button(
+                            "diagnostics",
+                            self.text("环境检查", "Diagnostics"),
+                            "info",
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            view.load_diagnostics(cx);
+                        })),
                     );
                 for (label, value) in
                     crate::ui_reports::report_rows(&self.collect, &self.preferences.language)
@@ -6518,11 +6596,16 @@ impl Creditia {
                             .child(format!("{label}: {value}")),
                     );
                 }
-                body = body.child(div().mt_3().text_xs().text_color(muted).child(format!(
-                    "Creditia {} · GPUI Kit\n{}",
-                    env!("CARGO_PKG_VERSION"),
-                    service::library_path()
-                ))).child(div().text_sm().child(self.text("看清 AI 工具在仓库里写了多少，再把它做成 README、发版说明和作品集的署名。", "See what AI tools wrote in your repositories, then create credits for README files, releases and portfolios."))).child(div().text_xs().text_color(muted).child(self.text("只在本机运行，不上传代码或记录。", "Runs on this computer. No code or logs are uploaded.")));
+                body = body
+                    .child(div().mt_3().text_xs().text_color(muted).child(format!(
+                        "Creditia {} · GPUI Kit\n{}",
+                        env!("CARGO_PKG_VERSION"),
+                        service::library_path()
+                    )))
+                    .child(div().text_xs().text_color(muted).child(self.text(
+                        "只在本机运行，不上传代码或记录。",
+                        "Runs on this computer. No code or logs are uploaded.",
+                    )));
             }
             Panel::Project => {
                 body = body.child(
@@ -6597,6 +6680,12 @@ impl Creditia {
                 body = body
                     .child(
                         div()
+                            .text_sm()
+                            .text_color(muted)
+                            .child(self.text("作品署名（可选）", "Artwork signature (optional)")),
+                    )
+                    .child(
+                        div()
                             .id("project-signature")
                             .test_support()
                             .track_focus(&self.sign_input.read(cx).focus_handle(cx))
@@ -6631,7 +6720,8 @@ impl Creditia {
                         Button::new(("project-auto", index))
                             .ghost()
                             .label(label)
-                            .when(current_auto == mode, |b| b.bg(cx.theme().muted))
+                            .selected(current_auto == mode)
+                            .toggled(current_auto == mode)
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 if let Some(id) = view.settings_id().cloned() {
                                     view.preferences
@@ -6668,17 +6758,17 @@ impl Creditia {
                         })
                         .unwrap_or(false);
                     body = body.child(
-                        Button::new(which)
-                            .ghost()
-                            .label(format!(
-                                "{} {}",
-                                self.text(zh, en),
-                                if on { "✓" } else { "○" }
-                            ))
-                            .disabled(self.operation_busy || !known || !exists)
-                            .on_click(cx.listener(move |view, _, _, cx| {
-                                view.set_integration(which, !on, cx)
-                            })),
+                        crate::ui_controls::toggle_button(
+                            which,
+                            self.text(zh, en),
+                            on,
+                            !self.operation_busy && known && exists,
+                            cx,
+                        )
+                        .disabled(self.operation_busy || !known || !exists)
+                        .on_click(
+                            cx.listener(move |view, _, _, cx| view.set_integration(which, !on, cx)),
+                        ),
                     );
                     if let Some(details) = self.settings_data() {
                         if let Some(path) = details["integrations"][which]["path"].as_str() {
@@ -6773,65 +6863,77 @@ impl Creditia {
                 }
                 body = body
                     .child(
-                        Button::new("evidence-export")
-                            .ghost()
-                            .label(self.text("导出证据档案…", "Export evidence archive…"))
-                            .disabled(self.operation_busy || self.job_busy)
-                            .on_click(cx.listener(|view, _, _, cx| view.export_evidence(cx))),
+                        crate::ui_controls::row_button(
+                            "evidence-export",
+                            self.text("导出证据档案…", "Export evidence archive…"),
+                            "export",
+                        )
+                        .disabled(self.operation_busy || self.job_busy)
+                        .on_click(cx.listener(|view, _, _, cx| view.export_evidence(cx))),
                     )
                     .child(
-                        Button::new("evidence-import")
-                            .ghost()
-                            .label(self.text("导入证据档案…", "Import evidence archive…"))
-                            .disabled(self.operation_busy || self.job_busy)
-                            .on_click(cx.listener(|view, _, _, cx| view.import_evidence(cx))),
+                        crate::ui_controls::row_button(
+                            "evidence-import",
+                            self.text("导入证据档案…", "Import evidence archive…"),
+                            "folder",
+                        )
+                        .disabled(self.operation_busy || self.job_busy)
+                        .on_click(cx.listener(|view, _, _, cx| view.import_evidence(cx))),
                     )
                     .child(
-                        Button::new("blame-query")
-                            .ghost()
-                            .label(self.text("查询逐行归因…", "Trace a line…"))
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                if let Some(id) = view.settings_id().cloned() {
-                                    if view.selected.as_ref() != Some(&id) {
-                                        view.select(id, cx);
-                                    }
+                        crate::ui_controls::row_button(
+                            "blame-query",
+                            self.text("查询逐行归因…", "Trace a line…"),
+                            "search",
+                        )
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            if let Some(id) = view.settings_id().cloned() {
+                                if view.selected.as_ref() != Some(&id) {
+                                    view.select(id, cx);
                                 }
-                                view.open_panel(Panel::Blame, window, cx)
-                            })),
+                            }
+                            view.open_panel(Panel::Blame, window, cx)
+                        })),
                     );
                 body = body
                     .child(
-                        Button::new("link-path")
-                            .ghost()
-                            .disabled(
-                                self.operation_busy
-                                    || self.settings_current().is_none_or(|p| !p.exists),
-                            )
-                            .label(self.text("关联目录…", "Link directory…"))
-                            .on_click(cx.listener(|view, _, _, cx| view.link_folder(cx))),
+                        crate::ui_controls::row_button(
+                            "link-path",
+                            self.text("关联目录…", "Link directory…"),
+                            "link",
+                        )
+                        .disabled(
+                            self.operation_busy
+                                || self.settings_current().is_none_or(|p| !p.exists),
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| view.link_folder(cx))),
                     )
                     .child(
-                        Button::new("reveal")
-                            .ghost()
-                            .disabled(self.settings_current().is_none_or(|p| !p.exists))
-                            .label(self.text("打开所在位置", "Reveal folder"))
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                view.reveal_project(&RevealProject, window, cx)
-                            })),
+                        crate::ui_controls::row_button(
+                            "reveal",
+                            self.text("打开所在位置", "Reveal folder"),
+                            "folder",
+                        )
+                        .disabled(self.settings_current().is_none_or(|p| !p.exists))
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.reveal_project(&RevealProject, window, cx)
+                        })),
                     )
                     .child(
-                        Button::new("remove-project")
-                            .ghost()
-                            .label(if self.remove_confirm {
+                        crate::ui_controls::row_button(
+                            "remove-project",
+                            if self.remove_confirm {
                                 self.text("确认移除，证据仍保留", "Confirm removal; evidence stays")
                             } else {
                                 self.text(
                                     "从作品库移除（保留证据）",
                                     "Remove from library (keep evidence)",
                                 )
-                            })
-                            .disabled(self.operation_busy)
-                            .on_click(cx.listener(|view, _, _, cx| view.remove_project(cx))),
+                            },
+                            "remove",
+                        )
+                        .disabled(self.operation_busy)
+                        .on_click(cx.listener(|view, _, _, cx| view.remove_project(cx))),
                     );
             }
             Panel::Details => {
@@ -6909,13 +7011,13 @@ impl Creditia {
                     .items_center()
                     .child(div().text_lg().child(title))
                     .child(
-                        Button::new("panel-close")
-                            .track_focus(&self.panel_close_focus)
-                            .ghost()
-                            .label(self.text("关闭", "Close"))
-                            .on_click(
-                                cx.listener(|view, _, window, cx| view.close_panel(window, cx)),
-                            ),
+                        crate::ui_controls::icon_button(
+                            "panel-close",
+                            "close",
+                            self.text("关闭", "Close"),
+                        )
+                        .track_focus(&self.panel_close_focus)
+                        .on_click(cx.listener(|view, _, window, cx| view.close_panel(window, cx))),
                     ),
             )
             .child(
@@ -6956,45 +7058,63 @@ impl Creditia {
                         .border_color(cx.theme().border)
                         .on_click(|_, _, cx| cx.stop_propagation())
                         .child(
-                            Button::new("row-analyze")
-                                .ghost()
-                                .label(self.text("重新分析", "Re-analyze"))
-                                .disabled(
-                                    !project.exists
-                                        || self.job_busy
-                                        || self.automatic_job.is_some(),
-                                )
-                                .on_click(cx.listener(move |view, _, _, cx| {
+                            crate::ui_controls::row_button(
+                                "row-analyze",
+                                self.text("重新分析", "Re-analyze"),
+                                "refresh",
+                            )
+                            .h(px(32.))
+                            .disabled(
+                                !project.exists || self.job_busy || self.automatic_job.is_some(),
+                            )
+                            .on_click(cx.listener(
+                                move |view, _, _, cx| {
                                     view.project_row_menu = None;
                                     view.start_job_target(None, false, Some(analyze.clone()), cx)
-                                })),
+                                },
+                            )),
                         )
                         .child(
-                            Button::new("row-reveal")
-                                .ghost()
-                                .label(self.text("打开所在位置", "Reveal folder"))
-                                .disabled(!project.exists)
-                                .on_click(cx.listener(move |view, _, _, cx| {
+                            crate::ui_controls::row_button(
+                                "row-reveal",
+                                self.text("打开所在位置", "Reveal folder"),
+                                "folder",
+                            )
+                            .h(px(32.))
+                            .disabled(!project.exists)
+                            .on_click(cx.listener(
+                                move |view, _, _, cx| {
                                     view.project_row_menu = None;
                                     cx.reveal_path(Path::new(&path));
                                     cx.notify();
-                                })),
+                                },
+                            )),
                         )
                         .child(
-                            Button::new("row-settings")
-                                .ghost()
-                                .label(self.text("项目设置…", "Project settings…"))
-                                .on_click(cx.listener(move |view, _, window, cx| {
+                            crate::ui_controls::row_button(
+                                "row-settings",
+                                self.text("项目设置…", "Project settings…"),
+                                "gear",
+                            )
+                            .h(px(32.))
+                            .on_click(cx.listener(
+                                move |view, _, window, cx| {
                                     view.open_project_settings(settings.clone(), false, window, cx)
-                                })),
+                                },
+                            )),
                         )
                         .child(
-                            Button::new("row-remove")
-                                .ghost()
-                                .label(self.text("从作品库移除…", "Remove from library…"))
-                                .on_click(cx.listener(move |view, _, window, cx| {
+                            crate::ui_controls::row_button(
+                                "row-remove",
+                                self.text("从作品库移除…", "Remove from library…"),
+                                "remove",
+                            )
+                            .h(px(32.))
+                            .on_click(cx.listener(
+                                move |view, _, window, cx| {
                                     view.open_project_settings(remove.clone(), true, window, cx)
-                                })),
+                                },
+                            )),
                         ),
                 )
             });
@@ -7465,7 +7585,8 @@ impl Render for Creditia {
                     .h(px(32.))
                     .rounded_full()
                     .text_size(px(12.))
-                    .when(group == id, |b| b.bg(cx.theme().muted))
+                    .selected(group == id)
+                    .toggled(group == id)
                     .on_click(cx.listener(move |view, _, _, cx| view.set_group(id, cx))),
             );
         }
@@ -8413,15 +8534,45 @@ fn bottom_fade(dark: bool) -> Arc<Image> {
 }
 
 fn logo_image(id: &str) -> Arc<Image> {
-    let svg = match id {
-        "star-mono" => include_str!("../../../packages/render/assets/creditia/logo-star-mono.svg"),
-        "orb" => include_str!("../../../packages/render/assets/creditia/logo-orb.svg"),
-        "ring" => include_str!("../../../packages/render/assets/creditia/logo-ring.svg"),
-        "color" => include_str!("../../../packages/render/assets/creditia/logo-color.svg"),
-        "mono" => include_str!("../../../packages/render/assets/creditia/logo.svg"),
-        _ => include_str!("../../../packages/render/assets/creditia/logo-star.svg"),
-    };
-    Arc::new(Image::from_bytes(ImageFormat::Svg, svg.as_bytes().to_vec()))
+    static LOGOS: std::sync::OnceLock<BTreeMap<&'static str, Arc<Image>>> =
+        std::sync::OnceLock::new();
+    let logos = LOGOS.get_or_init(|| {
+        [
+            (
+                "star",
+                include_str!("../../../packages/render/assets/creditia/logo-star.svg"),
+            ),
+            (
+                "star-mono",
+                include_str!("../../../packages/render/assets/creditia/logo-star-mono.svg"),
+            ),
+            (
+                "orb",
+                include_str!("../../../packages/render/assets/creditia/logo-orb.svg"),
+            ),
+            (
+                "ring",
+                include_str!("../../../packages/render/assets/creditia/logo-ring.svg"),
+            ),
+            (
+                "color",
+                include_str!("../../../packages/render/assets/creditia/logo-color.svg"),
+            ),
+            (
+                "mono",
+                include_str!("../../../packages/render/assets/creditia/logo.svg"),
+            ),
+        ]
+        .into_iter()
+        .map(|(name, svg)| {
+            (
+                name,
+                Arc::new(Image::from_bytes(ImageFormat::Svg, svg.as_bytes().to_vec())),
+            )
+        })
+        .collect()
+    });
+    logos.get(id).unwrap_or_else(|| &logos["star"]).clone()
 }
 
 fn telemetry_enabled() -> bool {
