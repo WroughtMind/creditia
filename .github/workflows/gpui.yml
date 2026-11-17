@@ -43,6 +43,10 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action != 'labeled'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      # These tests decode real SVGs and composite glass pixels. Optimize the
+      # raster loops while retaining test-profile debug assertions.
+      CARGO_PROFILE_TEST_OPT_LEVEL: 2
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
