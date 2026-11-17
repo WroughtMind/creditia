@@ -1,10 +1,11 @@
 // 星号：这个项目自己的 *。瓣长是各家写了多少，下面是项目名、一行份额、一行出处——官网页尾 creditia 给自己署名的那一张。
-import { Scene, rect, ease, measure } from '../svg.ts';
+import { Scene, rect, ease, measure, path, r } from '../svg.ts';
+import { phase, styleProgress, drawGroup } from '../motion.ts';
+import { materialEnter, materialReveal, materialOrder } from '../material-motion.ts';
 import type { Model } from '../data.ts';
 import { pct } from '../data.ts';
 import type { Style } from '../style.ts';
 import { markPaths, sharePetals } from '../mark.ts';
-import { petalMotion } from '../timeline.ts';
 import { colorOf, tip, canvas, range, summary, type PieceOpts } from './common.ts';
 
 export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
@@ -29,15 +30,82 @@ export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
   const { s, c } = canvas(m, st, W, innerH, M);
   const cx = c.x + c.w / 2;
   let y = c.y + 70;
-  // 星号：各瓣依次长出来
+  // 各材质独立处理花瓣动作，最终瓣长由份额决定。
   const petals = sharePetals(ag.map((a) => ({ tool: a.key, lines: a.lines, color: colorOf(st, a) })), st.c.faint)
-    .map((p, i, all) => { const e = petalMotion(st.id, t, i, all.length); return { ...p, at: i / all.length + e.turn, len: (p.len ?? 1) * e.growth, opacity: (p.opacity ?? 1) * e.opacity }; });
-  s.add(`<g transform="translate(${+(cx - SZ / 2).toFixed(2)} ${y}) scale(${+(SZ / 24).toFixed(4)})">${markPaths({ petals })}</g>`);
+    .map((p) => ({ ...p, len: (p.len ?? 1), opacity: (p.opacity ?? 1) }));
+  const transform = `translate(${+(cx - SZ / 2).toFixed(2)} ${y}) scale(${+(SZ / 24).toFixed(4)})`;
+  const paths = markPaths({ petals });
+  if (t >= 1) s.add(`<g transform="${transform}">${paths}</g>`);
+  else if (st.id === 'ink') {
+    // 恢复原来的逐瓣生长：圆头随长度一起展开，保留原来的错峰与缓出。
+    const growing = petals.map((p, i) => {
+      const e = ease(t, i, petals.length);
+      return { ...p, len: p.len * (0.3 + 0.7 * e), opacity: p.opacity * e };
+    });
+    s.add(`<g transform="${transform}">${markPaths({ petals: growing })}</g>`);
+  } else {
+    (paths.match(/<path\b[^>]*\/>/g) ?? []).forEach((p, i) => {
+      // 星号是绕中轴排的瓣，成对揭幕从顶瓣向两侧展开，不把列表的中间项当作画面中心。
+      const pair = Math.min(i, petals.length - i) / Math.max(1, Math.floor(petals.length / 2));
+      const scan = (1 - Math.cos(i / petals.length * Math.PI * 2)) / 2;
+      const order = st.id === 'grimoire' ? i / Math.max(1, petals.length - 1) : st.id === 'crt' ? scan
+        : ['cinema', 'playbill', 'gala', 'baroque', 'pastel', 'glass'].includes(st.id) ? pair
+        : materialOrder(st, i, petals.length, st.id === 'manuscript' ? 1 : petals.length);
+      const k = styleProgress(st, t, order * 0.35, 0.62 + order * 0.35);
+      const points = polygonPoints(p), scale = SZ / 24;
+      const minX = Math.min(...points.map(([x]) => x)), minY = Math.min(...points.map(([, y]) => y));
+      const bounds = { x: cx - SZ / 2 + minX * scale, y: y + minY * scale,
+        w: (Math.max(...points.map(([x]) => x)) - minX) * scale, h: (Math.max(...points.map(([, y]) => y)) - minY) * scale };
+      const draw = () => drawGroup(s, { transform }, () => s.add(p));
+      const a = -Math.PI / 2 + i / petals.length * Math.PI * 2;
+      if (k >= 1) { draw(); return; }
+      if (['cyber', 'neon'].includes(st.id)) {
+        // markPaths 输出的是封闭折线路径，按实际线段求周长，resvg 无须支持 pathLength。
+        const length = points.reduce((sum, [x, y], j) => {
+          const next = points[(j + 1) % points.length];
+          return sum + Math.hypot(next[0] - x, next[1] - y);
+        }, 0);
+        const d = /\bd="([^"]+)"/.exec(p)![1];
+        const fill = /\bfill="([^"]+)"/.exec(p)![1];
+        materialEnter(s, st, k, bounds, () => drawGroup(s, { transform }, () => {
+        drawGroup(s, { opacity: phase(k, 0.56, 0.9) }, () => s.add(p));
+        s.add(path(d, { fill: 'none', stroke: fill, strokeWidth: 0.1,
+          strokeOpacity: petals[i].opacity * (1 - phase(k, 0.85, 1)),
+          strokeDasharray: length, strokeDashoffset: length * (1 - phase(k, 0, 0.64)),
+          visibility: k <= 0 ? 'hidden' : undefined }));
+        }), 'mark');
+      } else if (['film', 'broadsheet', 'woodblock', 'grimoire'].includes(st.id)) {
+        // 乳剂、网线、木纹在每瓣的真实轮廓内成像，不把瓣长当作播放进度。
+        materialReveal(s, st, k, bounds, 'up', draw);
+      } else if (st.id === 'editorial') {
+        // 校样星瓣按各自完整真轮廓落墨；压印前沿留在已有底墨内，不把瓣长当进度。
+        materialEnter(s, st, k, bounds, draw, 'data');
+      } else if (st.id === 'cinema') {
+        // 完整金瓣像镜头光圈绕花心转开；左右对称，瓣长始终是贡献的真值。
+        const turn = (i === 0 ? -12 : i <= petals.length / 2 ? -18 : 18) * (1 - k);
+        drawGroup(s, { transform }, () => drawGroup(s, { transform: `rotate(${r(turn)} 12 12)`, opacity: phase(k, 0, 0.14), visibility: k <= 0 ? 'hidden' : undefined }, () => s.add(p)));
+      } else if (st.id === 'playbill') {
+        // 台翼按瓣所在的左右方位送入整片纸，顶瓣从上方归位；不裁开数据形状。
+        const dx = i === 0 ? 0 : (i <= petals.length / 2 ? 2.4 : -2.4) * (1 - k);
+        const dy = i === 0 ? -2 * (1 - k) : 0;
+        drawGroup(s, { transform }, () => drawGroup(s, { transform: `translate(${r(dx)} ${r(dy)})`, opacity: phase(k, 0, 0.14), visibility: k <= 0 ? 'hidden' : undefined }, () => s.add(p)));
+      } else if (st.id === 'meadow') {
+        // 花瓣从花心轻轻舒展，保留每瓣的完整形状与份额；不是整张卡片上浮。
+        const turn = (i % 2 ? -1 : 1) * 7 * (1 - k) ** 2;
+        materialEnter(s, st, k, bounds, () => drawGroup(s, { transform }, () => drawGroup(s, { transform: `rotate(${r(turn)} 12 12)`, visibility: k <= 0 ? 'hidden' : undefined }, () => s.add(p))), 'data');
+      } else if (st.id === 'cutout') {
+        const rest = 1 - k;
+        // 每瓣是一张完整纸片，绕自身落位，保持轮廓和面积不变。
+        const px = points.reduce((sum, point) => sum + point[0], 0) / points.length;
+        const py = points.reduce((sum, point) => sum + point[1], 0) / points.length;
+        drawGroup(s, { transform }, () => drawGroup(s, { transform: `translate(${r(Math.cos(a) * 3.2 * rest)} ${r(-2.2 * rest)}) rotate(${r((i % 2 ? -14 : 14) * rest)} ${r(px)} ${r(py)})`, visibility: k <= 0 ? 'hidden' : undefined }, () => s.add(p)));
+      } else materialEnter(s, st, k, bounds, draw, 'mark');
+    });
+  }
   s.hit(cx - SZ / 2, y, SZ, SZ, { t: m.project || 'Untitled', d: ag.map((a) => `${a.name} ${pct(a.pct)}`) });
   y += SZ * 0.86 + 104; // 星号下面两瓣只伸到画框的 86%
   st.title(s, m.project || 'Untitled', cx, y, 60, 'middle', { maxW: c.w - pad * 2 });
   y += 56;
-  const k = ease(t, 0, 1);
   for (const ln of lines) {
     let x = cx - ln.w / 2;
     for (const it of ln.it) {
@@ -46,7 +114,7 @@ export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
       else st.bar(s, x, y - 15, 14, 14, color, it.a.rank);
       const nx = x + 14 + 12;
       const nw = s.text(it.name, nx, y, { font: st.f.body, size: FS, fill: st.c.ink });
-      st.num(s, pct(it.p * k), nx + nw + 12, y, FS, 'start', { fill: st.c.soft });
+      st.num(s, pct(it.p), nx + nw + 12, y, FS, 'start', { fill: st.c.soft });
       s.hit(x - 4, y - 30, it.w + 8, 42, tip(m, it.a));
       x += it.w + GAP;
     }
@@ -55,4 +123,10 @@ export function asterisk(m: Model, st: Style, o: PieceOpts): Scene | null {
   y += 34;
   st.label(s, [summary(m), range(m)].filter(Boolean).join(' · '), cx, y, { anchor: 'middle', size: 15, fill: st.c.soft, maxW: c.w - pad * 2 });
   return s;
+}
+
+/** markPaths 的 M/L/Z 顶点就是最终轮廓，用于描线周长与纸片转轴。 */
+function polygonPoints(p: string): [number, number][] {
+  const d = /\bd="([^"]+)"/.exec(p)![1];
+  return [...d.matchAll(/[ML](-?[\d.]+)\s+(-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
 }

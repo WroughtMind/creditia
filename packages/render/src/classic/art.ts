@@ -8,7 +8,8 @@ import { pieceName } from './catalog.ts';
 import { FIT_KEY, BODY_KEY, CONTENT_KEY } from './ui.ts';
 import { enTree, enSvg } from './i18n.ts';
 import { BRIDGED, BRIDGED_LAYOUTS, isBridged, bridgeArt, bridgeFrames } from './bridge.ts';
-import { reveal, rise, RISING } from './motion.ts';
+import { animate, terminalCursorTargets, placeTerminalCursors } from './motion.ts';
+import { motionDuration } from '../motion.ts';
 import { hitsOf, type Seen } from './hits.ts';
 import { portableFontFamilies } from '../fonts.ts';
 
@@ -20,7 +21,7 @@ const tidy = (svg: string, w: number, h: number) => svg.replace(/satori_/g, `s${
   // satori 给 1px 高的虚线边框算出负高度的遮罩，浏览器会报错；归零
   .replace(/ (width|height)="-[\d.]+"/g, ' $1="0"')
   // 阴影滤镜的区域是元素的好几倍，栅格化时很吃内存；画布外本来看不见，收到画布以内
-  .replace(/<filter id="([^"]+)" x="[^"]*" y="[^"]*" width="[^"]*" height="[^"]*"/g, `<filter id="$1" filterUnits="userSpaceOnUse" x="0" y="0" width="${w}" height="${h}"`);
+  .replace(/<filter\b([^>]*)>/g, (_, attrs: string) => `<filter${attrs.replace(/\s(?:x|y|width|height|filterUnits)="[^"]*"/g, '')} filterUnits="userSpaceOnUse" x="0" y="0" width="${w}" height="${h}">`);
 
 // Interactive playback samples one frame at a time. Reuse the fitted tree from
 // the still picture rather than running every layout/measurement pass again.
@@ -174,7 +175,7 @@ export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, sator
   if (id === 'badge') {
     const svg = portableFontFamilies(ctx.lang === 'en' ? enSvg(badge(m, t)) : badge(m, t));
     const w = Number(/width="([\d.]+)"/.exec(svg)?.[1] ?? 200), h = Number(/height="([\d.]+)"/.exec(svg)?.[1] ?? 28);
-    return { w, h, svg, hits: [], bg: 'transparent', title, selection: { style: t.id, piece: id, lang: ctx.lang } };
+    return { w, h, svg, hits: [], bg: 'transparent', title, selection: { style: t.id, piece: id, lang: ctx.lang, variant: ctx.variant ?? defaultVariant(id, t) } };
   }
   const f = FORMS[id];
   if (!f) throw new Error(`未知卡片：${id}`);
@@ -188,18 +189,25 @@ export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, sator
   if (ctx.lang === 'en') enTree(out.tree);
   const seen: Seen[] = [];
   const svg = tidy(await fitted(out, satori, fonts, seen), out.w, out.h);
+  if (t.family === 'terminal') placeTerminalCursors(terminalCursorTargets(out.tree), seen);
   rememberLayout(layoutKey(id, m, t, ctx), out.tree, out.w, out.h);
-  return { w: out.w, h: out.h, svg, hits: hitsOf(seen, m, t, ctx.lang, out.w, out.h), bg: ctx.transparent ? 'transparent' : t.bg, title, selection: { style: t.id, piece: id, lang: ctx.lang } };
+  return { w: out.w, h: out.h, svg, hits: hitsOf(seen, m, t, ctx.lang, out.w, out.h), bg: ctx.transparent ? 'transparent' : t.bg, title, selection: { style: t.id, piece: id, lang: ctx.lang, variant: ctx.variant ?? defaultVariant(id, t) } };
 }
 
-/** 会动的作品：徽章是单独的小 SVG，不做动画；其余原版作品都能出帧 */
-export const animatedClassic = (id: string) => id !== 'badge' && (!!FORMS[id] || BRIDGED.includes(id));
+/** 原版形式、原生 SVG 徽章和桥接作品都能出帧。 */
+export const animatedClassic = (id: string) => id === 'badge' || !!FORMS[id] || BRIDGED.includes(id);
 
-/** 动画帧：t 从 0 到 1。排版（统一宽度、放大）只量一次，每帧在排好的树上改透明度和条形长度，再出一遍图 */
+/** Sample the already fitted semantic groups at the requested times. */
 export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, satori: Satori, fonts: any[], n = 24, times?: readonly number[]): Promise<Art[]> {
   if (isBridged(id, ctx.variant)) return bridgeFrames(id, m, t, ctx, n, times);
+  const samples = times ?? Array.from({ length: n + 1 }, (_, i) => i / n);
+  const frameDelay = motionDuration(id, ctx.variant, t.id) / n;
+  if (id === 'badge') {
+    const still = (await classicArt(id, m, t, ctx, satori, fonts))!;
+    return samples.map(k => ({ ...still, svg: portableFontFamilies(ctx.lang === 'en' ? enSvg(badge(m, t, k)) : badge(m, t, k)), frameDelay }));
+  }
   const f = FORMS[id];
-  if (!f || id === 'badge') return [];
+  if (!f) return [];
   if (ctx.fontMode === 'embed') { const draw = satori; satori = (tree, options) => draw(tree, { ...options, embedFont: false }); }
   const key = layoutKey(id, m, t, ctx);
   let layout = layouts.get(key);
@@ -212,19 +220,19 @@ export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, sa
       delete out.tree.props.style.backgroundImage;
     }
     if (ctx.lang === 'en') enTree(out.tree);
-    await fitted(out, satori, fonts);
+    const groups = t.family === 'terminal' ? terminalCursorTargets(out.tree) : [];
+    const positions: Seen[] = [];
+    await fitted(out, satori, fonts, groups.length ? positions : undefined);
+    if (groups.length) placeTerminalCursors(groups, positions);
     layout = rememberLayout(key, out.tree, out.w, out.h);
   }
-  const variant = ctx.variant ?? f.def?.(t);
-  const rising = id === 'roll' && RISING.has(variant ?? '');
   const title = `${m.project || 'credits'} · ${pieceName(id, ctx.lang, m.raw)}`;
   const frames: Art[] = [];
-  for (const k of times ?? Array.from({ length: n + 1 }, (_, i) => i / n)) {
-    let tree = JSON.parse(layout.tree);
-    if (rising) tree = rise(tree, k, layout.w, layout.h, ctx.transparent ? 'transparent' : t.bg);
-    else reveal(tree, k, t.id, id);
+  for (const k of samples) {
+    const tree = JSON.parse(layout.tree);
+    animate(tree, k, t);
     const svg = tidy(await satori(tree, { width: layout.w, height: layout.h, fonts }), layout.w, layout.h);
-    frames.push({ w: layout.w, h: layout.h, svg, hits: [], bg: ctx.transparent ? 'transparent' : t.bg, title, selection: { style: t.id, piece: id, lang: ctx.lang } });
+    frames.push({ w: layout.w, h: layout.h, svg, hits: [], bg: ctx.transparent ? 'transparent' : t.bg, title, frameDelay, selection: { style: t.id, piece: id, lang: ctx.lang, variant: ctx.variant ?? defaultVariant(id, t) } });
   }
   return frames;
 }

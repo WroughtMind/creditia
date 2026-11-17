@@ -12,7 +12,9 @@ import { codemap } from './pieces/map.ts';
 import { asterisk } from './pieces/asterisk.ts';
 import { people } from './pieces/people.ts';
 import { historyLabels } from './history.ts';
-import { materialSvg } from './material-motion.ts';
+import { motionDuration } from './motion.ts';
+import { scrollSamples, scrollY } from './scroll-motion.ts';
+import { scrollFrameContent } from './scroll-frame.ts';
 
 export interface PieceDef {
   name: string;
@@ -32,9 +34,9 @@ export const PIECES: Record<string, PieceDef> = {
   share: { name: '分享图', en: 'Share Card', q: '链接预览、社交媒体', qEn: 'Link previews, social posts', animated: true, render: share },
   hand: { name: '开发者', en: 'Developers', q: '提示词与审阅', qEn: 'Prompts and reviews', animated: true, render: hand },
   people: { name: '贡献者', en: 'Contributors', q: '每位提交者的提交里各工具占多少', qEn: 'What each committer\'s commits were written with', animated: true, render: people },
-  receipt: { name: '小票', en: 'Receipt', q: '工期、会话与 Token', qEn: 'Time, sessions, and tokens spent', variants: RECEIPT_VARIANTS, render: receipt },
-  badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', qEn: 'README, profile page', variants: BADGE_VARIANTS, render: badge },
-  byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', variants: BYLINE_VARIANTS, render: byline },
+  receipt: { name: '小票', en: 'Receipt', q: '工期、会话与 Token', qEn: 'Time, sessions, and tokens spent', variants: RECEIPT_VARIANTS, animated: true, render: receipt },
+  badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', qEn: 'README, profile page', variants: BADGE_VARIANTS, animated: true, render: badge },
+  byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', variants: BYLINE_VARIANTS, animated: true, render: byline },
   roll: { name: '片尾字幕', en: 'Credits Roll', q: '分工与角色表', qEn: 'Contributors and roles', variants: ROLL_VARIANTS, animated: true, render: roll },
   donut: { name: '环形图', en: 'Donut', q: '代码占比', qEn: 'Shares', variants: DONUT_VARIANTS, animated: true, render: donut },
   waffle: { name: '华夫饼图', en: 'Waffle', q: '百格占比', qEn: 'One square is 1%', variants: WAFFLE_VARIANTS, animated: true, render: waffle },
@@ -71,28 +73,34 @@ export function art(id: string, m: Model, st: Style, o: PieceOpts = {}): Art | n
   const s = p.render(m, st, o);
   if (!s) return null;
   const name = id === 'versions' ? historyLabels(m.history.basis, m.lang).name : m.lang === 'en' ? p.en : p.name;
-  return { w: s.w, h: s.h, svg: materialSvg(s, st.id, o.t, id), hits: s.hits, bg: s.bg, title: `${m.project} · ${name}`, motion: (s as any).motion, selection: { style: st.id, piece: id, lang: m.lang } };
+  return { w: s.w, h: s.h, svg: s.toString(), hits: s.hits, bg: s.bg, title: `${m.project} · ${name}`, motion: (s as any).motion, selection: { style: st.id, piece: id, lang: m.lang, variant: o.variant ?? st.prefer[id] } };
 }
 /** 桌面播放和导出使用同一时刻采样；full 可复用已经排好的长卷。 */
 export function frame(id: string, m: Model, st: Style, o: PieceOpts = {}, t = 1, full = art(id, m, st, o)): Art | null {
   // 银幕滚动：一个固定大小的取景框从上往下扫过整张字幕。
   if (full?.motion?.kind === 'scroll') {
     const { viewW, viewH } = full.motion;
-    const travel = Math.max(0, full.h - viewH);
-    const inner = full.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
-    const y = Math.round(travel * t);
+    const inner = scrollFrameContent(full.svg, full.w, full.h, full.motion, t, st);
+    const y = Math.round(scrollY(full.motion.keys, t));
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewW}" height="${viewH}" viewBox="0 ${y} ${viewW} ${viewH}" data-creditia-raster="${-y} ${full.h-y}"><rect y="${y}" width="${viewW}" height="${viewH}" fill="${full.bg}"/>${inner}</svg>`;
     // GIF 仍然只栅格化一次整卷，逐帧按 y 裁图。
     const hits = full.hits.filter(hit => hit.y + hit.h > y && hit.y < y + viewH).map(hit => { const top = Math.max(0, hit.y - y); return { ...hit, y: top, h: Math.min(viewH, hit.y + hit.h - y) - top }; });
-    return { ...full, w: viewW, h: viewH, svg, hits, motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y } };
+    return { ...full, w: viewW, h: viewH, svg, hits, motion: undefined, crop: { svg: full.svg, w: full.w, h: full.h, y, ...(full.motion.material ? { motion: full.motion, progress: t } : {}) } };
   }
   return art(id, m, st, { ...o, t });
 }
 /** 动画帧：t 从 0 到 1 */
 export function frames(id: string, m: Model, st: Style, o: PieceOpts = {}, n = 28): Art[] {
   const full = art(id, m, st, o);
-  const steps = full?.motion?.kind === 'scroll' ? Math.max(n, 60) : n;
+  // 银幕滚动：一个固定大小的取景框从上往下扫过整张字幕
+  if (full?.motion?.kind === 'scroll') {
+    const samples = scrollSamples(full.motion, n);
+    return samples.map(({ progress, delay }) => {
+      return { ...frame(id, m, st, o, progress, full)!, frameDelay: delay };
+    });
+  }
   const out: Art[] = [];
-  for (let i = 0; i <= steps; i++) { const a = frame(id, m, st, o, i / steps, full); if (a) out.push(a); }
+  const frameDelay = motionDuration(id, o.variant ?? st.prefer[id], st.id) / n;
+  for (let i = 0; i <= n; i++) { const a = art(id, m, st, { ...o, t: i / n }); if (a) out.push({ ...a, frameDelay }); }
   return out;
 }

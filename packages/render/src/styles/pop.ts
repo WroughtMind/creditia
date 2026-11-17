@@ -115,10 +115,10 @@ export const terminal: Style = defineStyle({
       if (rnd() < 0.45) continue;
       const len = 4 + Math.floor(rnd() * 14), y0 = b.y + rnd() * b.h * 0.7;
       for (let k = 0; k < len; k++) {
-        const glyph = glyphs[Math.floor(rnd() * glyphs.length)], y = y0 + k * 20;
-        // A fully off-canvas opacity group triggers a resvg 0.35 bounds panic.
-        // Keep sampling the seeded stream so every visible column stays exact.
-        if (y > s.h + 20) continue;
+        const y = y0 + k * 20, glyph = glyphs[Math.floor(rnd() * glyphs.length)];
+        // 完全落在纸面外的字不生成；短署名条里的越界字会触发 resvg 的空区域错误。
+        // 仍消耗随机数，保持其余字符的位置和内容不变。
+        if (y - 16 > b.y + b.h) continue;
         cols.push(el('text', { x, y, fontFamily: 'DotGothic16, JetBrains Mono', fontSize: 16, fill: PH, opacity: r(0.04 + 0.16 * (k / len)) }, esc(glyph)));
       }
     }

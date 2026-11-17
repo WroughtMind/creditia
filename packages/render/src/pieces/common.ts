@@ -64,7 +64,6 @@ export function canvas(m: Model, st: Style, W: number, innerH: number, M = 34, f
   const s = new Scene(W, H);
   st.ground(s, { x: 0, y: 0, w: W, h: H }, m);
   const c = st.plate(s, { x: M, y: M + R.top, w: W - M * 2, h: innerH + inset });
-  s.markContent();
   return { s, c, H };
 }
 

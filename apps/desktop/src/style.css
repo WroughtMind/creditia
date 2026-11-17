@@ -261,6 +261,11 @@ body.mac #focus .fhead { left: 94px; }
 #focus .big { max-height: calc(100vh - 230px); max-width: min(1100px, 100%); overflow: auto; border-radius: var(--r-2); box-shadow: var(--lift); scrollbar-width: none; transition: opacity var(--dur-2) var(--ease); }
 #focus .big.loading { opacity: .55; }
 #focus .big .art svg { display: block; width: 100%; height: auto; }
+#focus .art .focus-motion-frame { display: block; position: absolute; inset: 0; width: 100%; height: auto; pointer-events: none; }
+#focus .art.motion-playing > img:not(.focus-motion-frame) { visibility: hidden; }
+#focus .art.motion-playing .ct-hits { visibility: hidden; }
+#focus .art.motion-scroll > img { display: none; }
+#focus .focus-motion-screen { position: relative; width: 100%; overflow: hidden; }
 #focus .nav { position: fixed; top: 50%; translate: 0 -50%; width: 40px; height: 40px; border: 0; border-radius: var(--r-pill); display: grid; place-items: center; cursor: pointer; color: var(--ink); }
 #focus .nav.prev { left: 22px; } #focus .nav.next { right: 22px; }
 #focus .nav:hover { background: var(--glass2); }

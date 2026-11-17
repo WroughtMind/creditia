@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { referencedFonts, portableFontFamilies } from '../src/fonts.ts';
+import { referencedFonts, portableFontFamilies, familiesIn } from '../src/fonts.ts';
 
 test('font selection includes actual fallback faces and inherited tspan weights without loading unrelated families', () => {
   const svg = '<svg><g font-family="Inter, Noto Sans SC" font-weight="700"><text>字<tspan font-family="Noto Serif SC" font-weight="500">中</tspan></text></g><text font-family="Courier Prime" font-style="italic">words</text></svg>';
@@ -19,4 +19,10 @@ test('legacy badges and unspecified font families use the bundled native fallbac
   const pinned = '<svg><text font-family="Inter, Noto Sans SC">name</text></svg>';
   assert.equal(portableFontFamilies(pinned), pinned);
   assert.deepEqual(referencedFonts('<svg><text font-family="noto sans sc" font-weight="600">name</text></svg>').map(f => f.weight), [700]);
+});
+
+
+test('SVG entity-quoted families resolve the same bundled faces as CSS stacks', () => {
+  assert.deepEqual(familiesIn('&quot;Press Start 2P&quot;, &#39;Noto Sans SC&#39;'), ['Press Start 2P', 'Noto Sans SC']);
+  assert.deepEqual(referencedFonts('<svg><text font-family="&quot;Press Start 2P&quot;, &apos;Noto Sans SC&apos;">字</text></svg>').map(f => f.family), ['Press Start 2P', 'Noto Sans SC']);
 });

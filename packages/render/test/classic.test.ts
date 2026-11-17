@@ -129,7 +129,7 @@ test('原版作品有悬停细节：名字所在的行、色块，在画面以�
 
 test('原版作品会动：条形从零长出来，滚字升上来，最后一帧就是静态图', async () => {
   const t = themeById('minimal-light')!;
-  assert.ok(!animatedClassic('badge'));
+  assert.ok(animatedClassic('badge'));
   const fr = await frames('tier', m, t, { lang: 'zh' }, 6);
   assert.equal(fr.length, 7);
   assert.notEqual(fr[0].svg, fr[6].svg);

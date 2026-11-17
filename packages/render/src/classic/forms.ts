@@ -4,6 +4,7 @@
 // 风格之间靠 family 拉开距离：同一种形式在六个家族里是不同的排版结构，而不是换个颜色。
 // 片尾字幕和小票另有可选的版式变体（variant）。
 import type { Theme } from './themes.ts';
+import { animateBadge, motion, sequence, stage } from './motion.ts';
 import type { Model, Contributor } from './data.ts';
 import { fmt, pct, compact, nameOf } from './data.ts';
 import { BOTS, colorOf, famColor, logoSvg } from './brand.ts';
@@ -133,7 +134,7 @@ function tierMinimal(m: Model, t: Theme, s: number, withTitle: boolean): Out {
         withTitle ? txt({ fontFamily: t.display, fontSize: 18 * s, fontWeight: t.displayWeight, color: t.ink }, m.project) : null,
         label(t, 'Credits', 10 * s)),
       m.director ? txt({ fontSize: 12 * s, color: t.soft }, m.director) : null),
-    col({}, ...rows.map(row)),
+    col({}, ...sequence(rows.map(row))),
     humanLine(m, t, s),
     box({ height: 46 * s, alignItems: 'flex-end', borderTop: `1px solid ${t.line}`, paddingBottom: 2 * s },
       txt({ fontSize: 12 * s, color: t.soft, fontFamily: t.sans }, [m.commits && `${fmt(m.commits)} 次提交`, m.linesAdded && `${fmt(m.linesAdded)} 行`].filter(Boolean).join('  ·  ')))) };
@@ -178,7 +179,7 @@ function tierFilm(m: Model, t: Theme, s: number, withTitle: boolean): Out {
       withTitle ? txt({ fontFamily: t.display, fontSize: 36 * s, color: t.ink, lineHeight: 1.05, textAlign: 'center' }, m.project) : null,
       m.director ? txt({ fontFamily: t.display, fontSize: 15 * s, color: t.soft }, `由 ${m.director} 主导`) : null,
       txt({ fontSize: 11 * s, color: t.accent, letterSpacing: 5 * s, marginTop: 2 * s }, '· · ·')),
-    col({ width: '100%' }, ...rows.map(row)),
+    col({ width: '100%' }, ...sequence(rows.map(row))),
     humanLine(m, t, s),
     box({ height: 44 * s, alignItems: 'flex-end', justifyContent: 'center', width: '100%' },
       txt({ fontSize: 10 * s, color: t.soft, letterSpacing: 2.2 * s, textTransform: 'uppercase' }, [m.commits && `${fmt(m.commits)} 次提交`, m.linesAdded && `${fmt(m.linesAdded)} 行`].filter(Boolean).join(' · ')))) };
@@ -202,7 +203,7 @@ function tierTerminal(m: Model, t: Theme, s: number, withTitle: boolean): Out {
       txt({ marginLeft: 'auto', fontFamily: MONO_FONT, fontSize: 12 * s, color: t.faint }, withTitle ? m.project : '')),
     col({ padding: `${14 * s}px ${18 * s}px ${16 * s}px` },
       m.director ? txt({ fontFamily: MONO_FONT, fontSize: 12 * s, color: t.faint, marginBottom: 8 * s }, `# 由 ${m.director} 主导`) : null,
-      ...rows.map((r, i) => row(r, i === rows.length - 1)),
+      ...sequence(rows.map((r, i) => row(r, i === rows.length - 1)), 'print'),
       humanLine(m, t, s),
       txt({ fontFamily: MONO_FONT, fontSize: 11 * s, color: t.faint, marginTop: 12 * s }, [
         m.commits && `+${fmt(m.commits)} commits`, m.linesAdded && `+${fmt(m.linesAdded)} lines`,
@@ -227,7 +228,7 @@ function tierEditorial(m: Model, t: Theme, s: number, withTitle: boolean): Out {
         label(t, 'Credits', 10 * s, { color: t.soft })),
       m.director ? txt({ fontFamily: t.display, fontSize: 15 * s, color: t.soft }, `由 ${m.director} 主导`) : null,
       box({ height: 3 * s, backgroundColor: t.ink, marginTop: 4 * s })),
-    col({}, ...rows.map(row)),
+    col({}, ...sequence(rows.map(row))),
     humanLine(m, t, s),
     box({ marginTop: 10 * s, borderTop: `2px solid ${t.ink}`, paddingTop: 10 * s, alignItems: 'center', justifyContent: 'space-between' },
       txt({ fontSize: 11 * s, color: t.soft, letterSpacing: 1.4 * s, textTransform: 'uppercase' }, [m.commits && `${fmt(m.commits)} 次提交`, m.linesAdded && `${fmt(m.linesAdded)} 行`].filter(Boolean).join('  ·  ')),
@@ -249,7 +250,7 @@ function tierMono(m: Model, t: Theme, s: number, withTitle: boolean): Out {
       txt({ color: '#FFFFFF', fontSize: 15 * s, fontWeight: 700, letterSpacing: 1 * s, textTransform: 'uppercase', fontFamily: t.display }, m.project),
       txt({ marginLeft: 'auto', color: 'rgba(255,255,255,0.72)', fontSize: 10 * s, letterSpacing: 2 * s, textTransform: 'uppercase' }, 'Credits')) : null,
     m.director ? txt({ padding: `${6 * s}px ${16 * s}px 0`, fontSize: 12 * s, color: t.soft }, m.director) : null,
-    col({ padding: `0 ${16 * s}px`, flexGrow: 1 }, ...rows.map(row), humanLine(m, t, s)),
+    col({ padding: `0 ${16 * s}px`, flexGrow: 1 }, ...sequence(rows.map(row)), humanLine(m, t, s)),
     box({ height: 46 * s, backgroundColor: t.ink, alignItems: 'center', padding: `0 ${16 * s}px` },
       txt({ color: '#FFFFFF', fontSize: 11 * s, letterSpacing: 1.2 * s, textTransform: 'uppercase' }, [m.commits && `${fmt(m.commits)} 次提交`, m.linesAdded && `${fmt(m.linesAdded)} 行`].filter(Boolean).join('  ·  ')))) };
 }
@@ -273,7 +274,7 @@ function tierGlass(m: Model, t: Theme, s: number, withTitle: boolean): Out {
         withTitle ? txt({ fontFamily: t.display, fontSize: 20 * s, fontWeight: t.displayWeight, color: '#14161C' }, m.project) : null,
         label(t, 'Credits', 10 * s, { color: '#5E6472' })),
       m.director ? txt({ fontSize: 12 * s, color: '#5E6472' }, m.director) : null),
-    col({}, ...rows.map(pill)),
+    col({}, ...sequence(rows.map(pill))),
     humanLine(m, t, s),
     box({ height: 44 * s, alignItems: 'flex-end', justifyContent: 'space-between', paddingTop: 12 * s },
       txt({ fontSize: 12 * s, color: '#5E6472' }, [m.commits && `${fmt(m.commits)} 次提交`, m.linesAdded && `${fmt(m.linesAdded)} 行`].filter(Boolean).join('  ·  ')))) };
@@ -283,6 +284,9 @@ function tierGlass(m: Model, t: Theme, s: number, withTitle: boolean): Out {
 
 /** 分享图 1200×630：按家族构图 */
 export function share(m: Model, t: Theme): Out {
+  return stage(shareScene(m, t), 'title');
+}
+function shareScene(m: Model, t: Theme): Out {
   const W = 1200, H = 630;
   const ym = (d: string) => d.slice(0, 7).replace('-', '.');
   const range = m.range.from && m.range.to ? `${ym(m.range.from)} — ${ym(m.range.to)}` : '';
@@ -312,7 +316,7 @@ export function share(m: Model, t: Theme): Out {
         txt({ fontSize: 19, fontWeight: 500, color: r.key === 'unattributed' ? t.soft : t.ink }, r.name),
         box({ flex: 1, margin: '0 10px', ...dotline(t) }),
         txt({ fontFamily: t.num, fontSize: 26, color: t.ink }, pct(r.pct)));
-      const colOf = (rs: Contributor[]) => col({ flex: 1, gap: 0 }, ...rs.map(line));
+      const colOf = (rs: Contributor[]) => col({ flex: 1, gap: 0 }, ...sequence(rs.map(line)));
       return { w: W, h: H, tree: col({ width: W, height: H, padding: '42px 68px 36px', backgroundColor: t.bg, color: t.ink, fontFamily: t.sans },
         box({ alignItems: 'baseline', justifyContent: 'space-between' },
           box({ alignItems: 'center', gap: 10 },
@@ -467,6 +471,9 @@ export function share(m: Model, t: Theme): Out {
 
 /** 署名行：一句话。按家族用不同排版 */
 export function byline(m: Model, t: Theme, lang: 'zh' | 'en'): Out {
+  return stage(bylineScene(m, t, lang), 'signature');
+}
+function bylineScene(m: Model, t: Theme, lang: 'zh' | 'en'): Out {
   const tools = m.rows.filter((r) => r.kind === 'agent' && isAi(r.key)).map((r) => r.name);
   const list = (a: string[], and: string, sep: string) => (a.length < 2 ? a.join('') : `${a.slice(0, -1).join(sep)}${and}${a[a.length - 1]}`);
   const who = m.director;
@@ -474,7 +481,7 @@ export function byline(m: Model, t: Theme, lang: 'zh' | 'en'): Out {
     ? (who ? `${who} 与 ${list(tools, ' 和 ', '、')} 共同完成` : `与 ${list(tools, ' 和 ', '、')} 共同完成`)
     : (who ? `Made by ${who} with ${list(tools, ' & ', ', ')}` : `Made with ${list(tools, ' & ', ', ')}`);
   const W = 1200, H = 120;
-  const logos = (size: number, color?: string) => box({ gap: 10, alignItems: 'center' }, ...m.rows.filter((r) => r.kind === 'agent' && isAi(r.key)).map((r) => mark(r.key, t, size, color)));
+  const logos = (size: number, color?: string) => box({ gap: 10, alignItems: 'center' }, ...sequence(m.rows.filter((r) => r.kind === 'agent' && isAi(r.key)).map((r) => mark(r.key, t, size, color)), 'cell'));
   switch (t.family) {
     case 'film':
       return { w: W, h: H, tree: col({ width: W, height: H, justifyContent: 'center', gap: 12, ...backdrop(t, keysOf(m)) },
@@ -552,7 +559,10 @@ export function byline(m: Model, t: Theme, lang: 'zh' | 'en'): Out {
 // ═════════════════════════ 徽章 ═════════════════════════
 
 /** 徽章：原生 SVG（README），不经 Satori。每种家族一种画法 */
-export function badge(m: Model, t: Theme): string {
+export function badge(m: Model, t: Theme, time = 1): string {
+  return animateBadge(badgeScene(m, t), time, t);
+}
+function badgeScene(m: Model, t: Theme): string {
   const top = m.rows.filter((r) => r.kind === 'agent' && isAi(r.key) && r.pct > 0).slice(0, 3);
   const names = top.map((r) => r.name);
   const vtext = top.length ? top.map((r) => `${r.name} ${Math.round(r.pct)}%`).join('  ·  ') : `${fmt(m.linesAdded)} 行`;
@@ -770,6 +780,13 @@ function packNames(names: string[], f: { family: string; weight: number }, size:
  *  cast 卡司表 / scroll 双栏滚屏 / cards 卡串 / end 终卡 / block 压缩 billing block / program 剧场节目单 */
 export function roll(m: Model, t: Theme, variant?: string): Out {
   const v = variant ?? ROLL_DEFAULT[t.family] ?? 'classic';
+  const scrolling = v === 'crawl' || v === 'scroll';
+  const kind = scrolling ? 'credits' : ['cards'].includes(v) ? 'card' : ['program', 'columns', 'block', 'billing'].includes(v) ? 'print' : 'title';
+  const out = rollScene(m, t, v);
+  return v === 'cards' || scrolling ? out : stage(out, kind);
+}
+function rollScene(m: Model, t: Theme, variant?: string): Out {
+  const v = variant ?? ROLL_DEFAULT[t.family] ?? 'classic';
   const blocks = rollBlocks(m);
   const W = 1080, H = 1350;
   const serif = t.display !== t.sans;
@@ -792,7 +809,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
     return { w: W, h: H, tree: col({ width: W, height: H, padding: '120px 110px 90px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
       label(t, 'Credits', 12),
       txt({ fontFamily: t.display, fontSize: serif ? 76 : 58, fontWeight: t.displayWeight, margin: '18px 0 30px', lineHeight: 1.05 }, m.project),
-      col({ flex: 1, justifyContent: 'center' }, ...blocks.map(rowB)),
+      col({ flex: 1, justifyContent: 'center' }, ...sequence(blocks.map(rowB), 'credits')),
       box({ borderTop: `2px solid ${t.ink}`, paddingTop: 16 },
         txt({ fontSize: 12, color: t.soft, letterSpacing: 1.6, textTransform: 'uppercase' }, totals))) };
   }
@@ -806,7 +823,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
     return { w: W, h: H, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', padding: '0 100px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
       txt({ fontFamily: t.display, fontSize: serif ? 110 : 84, fontWeight: t.displayWeight, letterSpacing: serif ? 2 : -2, lineHeight: 1, textAlign: 'center' }, m.project),
       box({ width: 80, height: 2, backgroundColor: t.accent, margin: '40px 0 46px' }),
-      box({ flexWrap: 'wrap', justifyContent: 'center', alignItems: 'baseline', maxWidth: 680 }, ...items),
+      box({ flexWrap: 'wrap', justifyContent: 'center', alignItems: 'baseline', maxWidth: 680 }, ...sequence(items, 'print')),
       txt({ marginTop: 40, fontSize: 11, color: t.faint, letterSpacing: 2.6, textTransform: 'uppercase' }, totals)) };
   }
 
@@ -838,7 +855,8 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
     const lines = seq.map((node, i) => {
       const d = n > 1 ? Math.abs(i - (n - 1) / 2) / ((n - 1) / 2) : 0;
       const o = d <= 0.5 ? 1 : 1 - Math.pow((d - 0.5) / 0.5, 1.5) * 0.82;
-      return box({ justifyContent: 'center', opacity: Math.round(o * 100) / 100 }, node);
+      // 职务与整组名字同刻进入，渐隐载体保持静态，避免整页滤镜染黑上下留白。
+      return motion(box({ justifyContent: 'center', opacity: Math.round(o * 100) / 100 }, node), 'credits', i === 0 ? 0 : Math.ceil(i / 2), blocks.length + 1);
     });
     return { w: W, h: H, tree: box({ width: W, height: H, alignItems: 'center', justifyContent: 'center', ...backdrop(t, keysOf(m)) },
       col({ width: W, height: H, position: 'relative', justifyContent: 'center', gap: 40, padding: '0 80px' },
@@ -861,7 +879,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
       label(t, 'cast', 13, { letterSpacing: 8 }),
       txt({ fontFamily: t.display, fontSize: 60 * fs, fontWeight: t.displayWeight, margin: '14px 0 10px', textAlign: 'center' }, m.project),
       ornament(t, 12),
-      col({ marginTop: 40 }, ...rows.map(row)),
+      col({ marginTop: 40 }, ...sequence(rows.map(row))),
       label(t, 'in order of appearance', 12, { marginTop: 46 })) };
   }
 
@@ -874,12 +892,12 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
         ...b.people.map((p) => col({ alignItems: 'center', gap: 4 },
           txt({ fontFamily: t.display, fontSize: 34 * fs, fontWeight: t.displayWeight, color: t.ink, textAlign: 'center' }, p.name),
           p.model ? txt({ fontFamily: MONO_FONT, fontSize: 13, color: t.faint }, p.model) : null)));
-      (i % 2 ? R : L).push(node);
+      (i % 2 ? R : L).push(motion(node, 'credits', i + 1, blocks.length + 1));
     });
     const fade = (top: boolean) => box({ position: 'absolute', [top ? 'top' : 'bottom']: 0, left: 0, width: W, height: 200, backgroundImage: `linear-gradient(to ${top ? 'bottom' : 'top'}, ${t.bg} 0%, ${t.bg}00 100%)` });
     return { w: W, h: H, tree: box({ width: W, height: H, position: 'relative', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
       col({ position: 'absolute', top: 0, left: 0, width: W, height: H, alignItems: 'center', justifyContent: 'center', gap: 36, padding: '0 70px' },
-        txt({ fontFamily: t.display, fontSize: 48 * fs, fontWeight: t.displayWeight, textAlign: 'center' }, m.project),
+        motion(txt({ fontFamily: t.display, fontSize: 48 * fs, fontWeight: t.displayWeight, textAlign: 'center' }, m.project), 'title'),
         box({ width: '100%', justifyContent: 'center', alignItems: 'flex-start' },
           col({ flex: 1, alignItems: 'center' }, ...L),
           box({ width: 1, alignSelf: 'stretch', backgroundColor: hair(t), margin: '0 10px' }),
@@ -892,15 +910,17 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
     const rad = Math.min(t.radius, 14);
     const card = (b: { role: string; people: RollPerson[] }) => col({ width: 440, padding: '26px 30px', ...surface(t, { borderRadius: rad }), gap: 14 },
       label(t, b.role, 12, { letterSpacing: 4 }),
-      ...b.people.map((p) => box({ alignItems: 'baseline', gap: 12, flexWrap: 'wrap' },
+      ...sequence(b.people.map((p) => box({ alignItems: 'baseline', gap: 12, flexWrap: 'wrap' },
         p.key ? mark(p.key, t, 24) : null,
         txt({ fontFamily: t.display, fontSize: 32 * fs, fontWeight: t.displayWeight, color: t.ink }, p.name),
-        p.model ? txt({ fontFamily: MONO_FONT, fontSize: 13, color: t.faint }, p.model) : null)));
+        p.model ? txt({ fontFamily: MONO_FONT, fontSize: 13, color: t.faint }, p.model) : null)), 'print'));
+    const cards = sequence(blocks.map(card), 'card');
+    for (const node of cards) node.motionCue.columns = 2;
     return { w: W, h: H, tree: col({ width: W, height: H, alignItems: 'center', justifyContent: 'center', gap: 24, padding: '0 80px', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans },
       col({ width: 904, padding: '34px 40px', ...surface(t, { borderRadius: rad }), alignItems: 'center', gap: 10 },
         label(t, 'credits', 12, { letterSpacing: 6 }),
         txt({ fontFamily: t.display, fontSize: 56 * fs, fontWeight: t.displayWeight, textAlign: 'center' }, m.project)),
-      box({ flexWrap: 'wrap', gap: 24, justifyContent: 'center', width: 904 }, ...blocks.map(card)),
+      box({ flexWrap: 'wrap', gap: 24, justifyContent: 'center', width: 904 }, ...cards),
       label(t, totals, 11, { marginTop: 8 })) };
   }
 
@@ -948,7 +968,7 @@ export function roll(m: Model, t: Theme, variant?: string): Out {
         txt({ fontFamily: t.display, fontSize: 64 * fs, fontWeight: t.displayWeight, textAlign: 'center' }, m.project),
         m.director ? txt({ fontSize: 16, color: t.soft }, `导演 ${m.director}`) : null,
         ornament(t, 12, { marginTop: 6 })),
-      col({ marginTop: 40, flexGrow: 1, justifyContent: 'center' }, ...acts.map(act), box({ borderTop: `1px solid ${hair(t)}` })),
+      col({ marginTop: 40, flexGrow: 1, justifyContent: 'center' }, ...sequence(acts.map(act), 'print'), box({ borderTop: `1px solid ${hair(t)}` })),
       col({ alignItems: 'center', gap: 8, marginTop: 30 },
         label(t, 'cast 演职员', 11, { letterSpacing: 4 }),
         txt({ fontSize: 16, color: t.soft, textAlign: 'center', lineHeight: 1.6 }, blocks.map((b) => `${b.role} ${b.people.map((p) => p.name).join('、')}`).join('   ·   ')))) };
@@ -973,7 +993,7 @@ export const RECEIPT_DEFAULT: Record<string, string> = {
 
 /** 精力小票：只回答"花了多少精力"。四种版式：清单 / 热敏纸 / 财务单 / 电影票 */
 export function receipt(m: Model, t: Theme, variant?: string): Out {
-  return monoGrey(t, receiptOf(m, t, variant));
+  return stage(monoGrey(t, receiptOf(m, t, variant)), 'sheet');
 }
 function receiptOf(m: Model, t: Theme, variant?: string): Out {
   const v = variant ?? RECEIPT_DEFAULT[t.family] ?? 'slip';
@@ -990,11 +1010,17 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
 
   if (v === 'thermal') {
     const paper = '#FCFBF6', ink = '#1A1713';
-    const dot = (k: string, val: string) => {
+    const dot = (k: string, val: string, order?: number) => {
       const n = Math.max(3, 33 - [...k].reduce((a, c) => a + (/[一-鿿]/.test(c) ? 2 : 1), 0) - [...val].length);
-      return box({ justifyContent: 'space-between' },
+      const row = box({ justifyContent: 'space-between' },
         txt({ fontFamily: MONO_FONT, fontSize: 21, color: ink }, k),
         txt({ fontFamily: MONO_FONT, fontSize: 21, color: ink, whiteSpace: 'pre' }, `${'.'.repeat(n)} ${val}`));
+      if (t.family === 'neon' && order !== undefined) {
+        row.props.children.forEach((node: Node) => motion(node, 'neon-print', order, items.length));
+        motion(row, 'neon-guide', order, items.length);
+        row.motionCue.guide = { width: 640 - 58 * 2, textChild: 1 };
+      }
+      return row;
     };
     const bars = Array.from({ length: 42 }, (_, i) => { const hsh = (m.project.charCodeAt(i % Math.max(m.project.length, 1)) * 31 + i * 7) % 10; return box({ width: 1 + (hsh % 3), height: 54, backgroundColor: ink, marginRight: 2 }); });
     return { w: W, h: H, tree: box({ width: W, height: H, alignItems: 'center', justifyContent: 'center', ...backdrop(t, keysOf(m)) },
@@ -1003,7 +1029,7 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
           txt({ fontFamily: MONO_FONT, fontSize: 13, letterSpacing: 4, color: ink }, 'C R E D I T I A'),
           txt({ fontFamily: MONO_FONT, fontSize: 40, fontWeight: 700, color: ink, textAlign: 'center' }, m.project)),
         txt({ fontFamily: MONO_FONT, fontSize: 18, color: ink, margin: '26px 0 10px', whiteSpace: 'pre' }, '- '.repeat(19) + '-'),
-        col({ gap: 12 }, ...items.map(([k, val]) => dot(k, val))),
+        col({ gap: 12 }, ...(t.family === 'neon' ? items.map(([k, val], i) => dot(k, val, i)) : sequence(items.map(([k, val]) => dot(k, val)), 'print'))),
         txt({ fontFamily: MONO_FONT, fontSize: 18, color: ink, margin: '10px 0', whiteSpace: 'pre' }, '- '.repeat(19) + '-'),
         dot('合计', m.linesAdded ? `+${fmt(m.linesAdded)}` : `${fmt(m.commits)}`),
         col({ alignItems: 'center', gap: 8, marginTop: 30 },
@@ -1027,7 +1053,7 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
         txt({ fontFamily: t.display, fontSize: 52, fontWeight: t.displayWeight, margin: '16px 0 6px' }, m.project),
         txt({ fontSize: 13, color: t.soft, marginBottom: 18 }, '工作记录 · 精力清单'),
         box({ borderTop: `3px solid ${t.ink}` }),
-        col({}, ...items.map(([k, val, sub]) => row(k, val, sub))),
+        col({}, ...sequence(items.map(([k, val, sub]) => row(k, val, sub)), 'print')),
         box({ marginTop: 6, borderTop: `1px solid ${hair(t)}`, paddingTop: 14, alignItems: 'baseline', justifyContent: 'space-between' },
           label(t, 'Total', 12),
           txt({ fontFamily: t.num, fontSize: 30, color: t.ink }, m.linesSurviving ? `${fmt(m.linesSurviving)} 行至今仍在` : `${fmt(m.linesAdded)} 行`)),
@@ -1036,12 +1062,21 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
 
   if (v === 'stub') {
     const paper = '#EDE6D8', pInk = '#12110F';
-    const row = (k: string, val: string) => box({ alignItems: 'baseline', padding: '9px 0', borderBottom: '1px dashed rgba(18,17,16,0.28)' },
-      txt({ fontFamily: t.sans, fontSize: 15, color: 'rgba(18,17,16,0.62)' }, k),
-      box({ flex: 1, margin: '0 10px', ...dotline(t, 'rgba(18,17,16,0.4)') }),
-      txt({ fontFamily: MONO_FONT, fontSize: 17, fontWeight: 700, color: pInk }, val));
+    const row = (k: string, val: string, order: number, total: number) => {
+      const name = txt({ fontFamily: t.sans, fontSize: 15, color: 'rgba(18,17,16,0.62)' }, k);
+      const leader = box({ flex: 1, margin: '0 10px', ...dotline(t, 'rgba(18,17,16,0.4)') });
+      const value = txt({ fontFamily: MONO_FONT, fontSize: 17, fontWeight: 700, color: pInk }, val);
+      if (t.family === 'neon') {
+        motion(name, 'neon-print', order, total); motion(value, 'neon-print', order, total);
+        motion(leader, 'neon-guide', order, total);
+      }
+      return box({ alignItems: 'baseline', padding: '9px 0', borderBottom: '1px dashed rgba(18,17,16,0.28)' }, name, leader, value);
+    };
     const half = Math.ceil(items.length / 2);
-    const colOf = (its: [string, string, string?][]) => col({ flex: 1 }, ...its.map(([k, val]) => row(k, val)));
+    const colOf = (its: [string, string, string?][]) => {
+      const rows = its.map(([k, val], i) => row(k, val, i, its.length));
+      return col({ flex: 1 }, ...(t.family === 'neon' ? rows : sequence(rows, 'print')));
+    };
     return { w: W, h: H, tree: box({ width: W, height: H, alignItems: 'center', justifyContent: 'center', ...backdrop(t, keysOf(m)) },
       box({ width: 1000, height: 560, backgroundColor: paper, color: pInk, fontFamily: t.sans, borderRadius: 4, overflow: 'hidden' },
         col({ flex: 1, padding: '44px 48px' },
@@ -1084,8 +1119,8 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
           m.director ? txt({ fontSize: 14, color: dim('88') }, `署名 ${m.director}`) : null),
         box({ borderTop: `2px dashed ${dim('55')}` }),
         box({ padding: '24px 52px 40px', gap: 60 },
-          col({ flex: 1 }, ...items.slice(0, mid).map(([k, val]) => row(k, val))),
-          col({ flex: 1 }, ...items.slice(mid).map(([k, val]) => row(k, val)))))) };
+          col({ flex: 1 }, ...sequence(items.slice(0, mid).map(([k, val]) => row(k, val)), 'print')),
+          col({ flex: 1 }, ...sequence(items.slice(mid).map(([k, val]) => row(k, val)), 'print'))))) };
   }
 
   if (v === 'ledger') {
@@ -1093,11 +1128,20 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
     const pInk = '#20242E';
     const paper = '#F7F3E8';
     const rules = 'repeating-linear-gradient(0deg, transparent 0px, transparent 45px, rgba(32,36,46,0.13) 45px, rgba(32,36,46,0.13) 46px)';
-    const row = (k: string, val: string) => col({ height: 46, justifyContent: 'center' },
-      box({ alignItems: 'baseline' },
+    const row = (k: string, val: string, order: number) => {
+      const words = box({ alignItems: 'baseline' },
         txt({ fontSize: 17, color: 'rgba(32,36,46,0.72)' }, k),
         box({ flex: 1 }),
-        txt({ fontFamily: MONO_FONT, fontSize: 20, color: pInk }, val)));
+        txt({ fontFamily: MONO_FONT, fontSize: 20, color: pInk }, val));
+      const line = col({ height: 46, justifyContent: 'center' }, words);
+      if (t.family === 'neon') {
+        motion(words, 'neon-print', order, items.length);
+        motion(line, 'neon-guide', order, items.length);
+        // 原横格在每个 46px 行槽的第 42px；短光迹贴着它走，不扫过上方字面。
+        line.motionCue.guide = { x: 0, y: 41, width: 760 - 3 - 1 - 44 * 2 };
+      }
+      return line;
+    };
     return { w: W, h: H, tree: box({ width: W, height: H, alignItems: 'center', justifyContent: 'center', ...backdrop(t, keysOf(m)) },
       col({ width: 760, backgroundColor: paper, color: pInk, boxShadow: '0 30px 80px rgba(0,0,0,0.45)', border: '1px solid rgba(32,36,46,0.25)', backgroundImage: rules, borderLeft: '3px solid #A8352A' },
         col({ padding: '40px 44px 10px', gap: 8 },
@@ -1107,7 +1151,7 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
           txt({ fontFamily: t.display, fontSize: 50, color: pInk }, m.project)),
         col({ padding: '0 44px 32px' },
           box({ borderTop: `2px solid ${pInk}`, marginBottom: 6 }),
-          ...items.map(([k, val]) => row(k, val)),
+          ...(t.family === 'neon' ? items.map(([k, val], i) => row(k, val, i)) : sequence(items.map(([k, val], i) => row(k, val, i)), 'print')),
           box({ borderTop: `2px solid ${pInk}`, marginTop: 6, paddingTop: 12, alignItems: 'baseline', justifyContent: 'space-between' },
             txt({ fontSize: 14, letterSpacing: 2, textTransform: 'uppercase', color: 'rgba(32,36,46,0.7)' }, 'Total 合计'),
             txt({ fontFamily: t.num, fontSize: 26, color: pInk }, `${fmt(m.linesSurviving || m.linesAdded)} 行`)),
@@ -1135,7 +1179,7 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
         txt({ fontFamily: MONO_FONT, fontSize: 15, color: hexA(fg, '88'), textAlign: 'center' }, `${m.range.from.replaceAll('-', '.')} — ${m.range.to.replaceAll('-', '.')}`),
         // 点线按纸面内容宽度（560 减去左右留白）能放下几组「· 」来排，不越出纸边
         txt({ fontFamily: MONO_FONT, fontSize: 17, color: hexA(fg, '66'), whiteSpace: 'pre', marginTop: 18, alignSelf: 'center' }, '· '.repeat(Math.floor((560 - 56 * 2) / measure('· ', { family: MONO_FONT, weight: 400 }, 17))).trimEnd()),
-        col({ flexGrow: 1, marginTop: 6 }, ...items.map(([k, val]) => row(k, val))),
+        col({ flexGrow: 1, marginTop: 6 }, ...sequence(items.map(([k, val]) => row(k, val)), 'print')),
         box({ borderTop: `2px solid ${hexA(fg, '66')}`, paddingTop: 12, justifyContent: 'space-between' },
           txt({ fontFamily: MONO_FONT, fontSize: 20, color: fg, fontWeight: 700 }, '合计 TOTAL'),
           txt({ fontFamily: MONO_FONT, fontSize: 20, color: fg }, m.linesAdded ? `+${fmt(m.linesAdded)}` : `${fmt(m.commits)}`)),
@@ -1168,8 +1212,8 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
           txt({ fontFamily: t.display, fontSize: t.display === t.sans ? 46 : 54, fontWeight: t.displayWeight, color: t.ink, textAlign: 'center', marginTop: 6 }, m.project),
           txt({ fontFamily: t.num, fontSize: 17, color: t.faint }, range)),
         box({ marginTop: 20, justifyContent: 'center' }, ornament(t, 14)),
-        col({ marginTop: 10 }, ...items.map(([k, val]) => row(k, val))),
-        lines.length ? col({ marginTop: 22, paddingTop: 14, borderTop: `2px dashed ${t.line}` }, label(t, '明细', 12, { marginBottom: 6 }), ...lines.map(line)) : null,
+        col({ marginTop: 10 }, ...sequence(items.map(([k, val]) => row(k, val)), 'print')),
+        lines.length ? col({ marginTop: 22, paddingTop: 14, borderTop: `2px dashed ${t.line}` }, label(t, '明细', 12, { marginBottom: 6 }), ...sequence(lines.map(line), 'print')) : null,
         box({ flexGrow: 1, minHeight: 18 }),
         box({ borderTop: `2px solid ${t.accent}`, marginTop: 12, paddingTop: 14, justifyContent: 'space-between', alignItems: 'baseline' },
           label(t, '合计 TOTAL', 15, { color: t.accent }),
@@ -1189,11 +1233,11 @@ function receiptOf(m: Model, t: Theme, variant?: string): Out {
       txt({ fontFamily: t.display, fontSize: t.display === t.sans ? 44 : 54, fontWeight: t.displayWeight, color: t.ink }, m.project)),
     rule,
     col({ padding: '20px 0' },
-      ...items.map(([k, val, sub]) => col({ padding: '13px 0' },
+      ...sequence(items.map(([k, val, sub]) => col({ padding: '13px 0' },
         box({ justifyContent: 'space-between', alignItems: 'baseline' },
           txt({ fontSize: 20, color: t.soft }, k),
           txt({ fontSize: 26, fontFamily: t.num === t.sans ? MONO_FONT : t.num, color: t.ink }, val)),
-        sub ? txt({ alignSelf: 'flex-end', fontSize: 15, color: t.faint, marginTop: 6, fontFamily: MONO_FONT }, sub) : null))),
+        sub ? txt({ alignSelf: 'flex-end', fontSize: 15, color: t.faint, marginTop: 6, fontFamily: MONO_FONT }, sub) : null)), 'print')),
     rule,
     box({ justifyContent: 'center', marginTop: 28, gap: 14 }, ...m.rows.filter((r) => r.kind === 'agent' && isAi(r.key)).map((r) => mark(r.key, t, 22, t.soft))));
   return { w: W, h: H, tree: box({ width: W, height: H, alignItems: 'center', justifyContent: 'center', ...backdrop(t, keysOf(m)), color: t.ink, fontFamily: t.sans }, paper) };
@@ -1235,8 +1279,8 @@ export function term(cmd: string, lines: Seg[][], t: Theme, m?: Model): Out {
       chrome,
       col({ padding: '16px 36px 40px', fontSize: 19, color: fg },
         t.family === 'terminal' || t.family === 'mono' ? null : box({ height: lh, alignItems: 'center' }, txt({ color: soft, whiteSpace: 'pre' }, '❯ '), txt({}, cmd)),
-        ...lines.map((ln) => box({ height: lh, alignItems: 'center' },
-          ...ln.map((s) => txt({ whiteSpace: 'pre', color: s.color ? famColor(s.color, tt, s.rank ?? 0) : s.dim ? soft : fg, fontWeight: s.bold ? 700 : 400 }, s.text || ' '))))))) };
+        ...lines.map((ln, i) => motion(box({ height: lh, alignItems: 'center' },
+          ...ln.map((s) => txt({ whiteSpace: 'pre', color: s.color ? famColor(s.color, tt, s.rank ?? 0) : s.dim ? soft : fg, fontWeight: s.bold ? 700 : 400 }, s.text || ' '))), 'print', i, lines.length))))) };
 }
 
 // ═════════════════════════ App 内致谢页 ═════════════════════════
@@ -1263,7 +1307,7 @@ function appThemed(m: Model, t: Theme): Out {
       txt({ fontFamily: t.labelFont, fontSize: 15 * s, color: t.accent, letterSpacing: Math.round(15 * s * t.labelTrack * 0.5) }, '‹ 关于'),
       txt({ position: 'absolute', left: 0, right: 0, justifyContent: 'center', fontFamily: t.display, fontSize: 19 * s, fontWeight: t.displayWeight, color: t.ink }, '致谢')),
     box({ height: 52 * s, alignItems: 'flex-end', padding: `0 ${4 * s}px ${10 * s}px`, flexShrink: 0 }, label(t, m.project, 13 * s)),
-    plate(t, { borderRadius: Math.min(t.radius, 12) * s, flexShrink: 0 }, [col({}, ...rows.map((r, i) => cellRow(r, i < rows.length - 1)))]),
+    plate(t, { borderRadius: Math.min(t.radius, 12) * s, flexShrink: 0 }, [col({}, ...sequence(rows.map((r, i) => cellRow(r, i < rows.length - 1))))]),
     txt({ fontFamily: t.num, fontSize: 13 * s, color: t.soft, margin: `${12 * s}px ${4 * s}px` }, `${fmt(m.commits)} 次提交 · ${fmt(m.linesAdded)} 行`)) };
 }
 
@@ -1274,10 +1318,17 @@ function appIos(m: Model, t: Theme): Out {
   const H = (54 + 44 + 20 + (m.director ? 92 : 0) + 30 + rows.length * 50 + (m.humans.length ? 40 : 0) + 40 + 40) * s;
   const ios = t.dark ? { bg: '#000000', cell: '#1C1C1E', sep: 'rgba(84,84,88,0.6)', blue: '#0A84FF' } : { bg: '#F2F2F7', cell: '#FFFFFF', sep: 'rgba(60,60,67,0.18)', blue: '#007AFF' };
   const head = (s2: string) => txt({ fontSize: 13 * s, color: t.soft, margin: `${22 * s}px ${16 * s}px ${7 * s}px`, letterSpacing: 0.4 }, s2);
-  const cellRow = (r: Contributor, border: boolean) => box({ alignItems: 'center', gap: 12 * s, height: 50 * s, paddingRight: 16 * s, borderBottom: border ? `${0.5 * s}px solid ${ios.sep}` : 'none' },
-    mark(r.key, { ...t, ink: t.dark ? '#FFFFFF' : '#000000' } as Theme, 22 * s),
-    txt({ fontSize: 17 * s, color: r.key === 'unattributed' ? t.soft : t.dark ? '#FFFFFF' : '#000000' }, r.name),
-    txt({ marginLeft: 'auto', fontSize: 17 * s, color: t.soft }, pct(r.pct)));
+  const cellRow = (r: Contributor, order: number) => {
+    const children = [
+      mark(r.key, { ...t, ink: t.dark ? '#FFFFFF' : '#000000' } as Theme, 22 * s),
+      txt({ fontSize: 17 * s, color: r.key === 'unattributed' ? t.soft : t.dark ? '#FFFFFF' : '#000000' }, r.name),
+      txt({ marginLeft: 'auto', fontSize: 17 * s, color: t.soft }, pct(r.pct)),
+    ];
+    // 台翼只带动同一行的图标、整组姓名和真值；设置页的分隔线留在原格内。
+    if (t.family === 'playbill') children.forEach((node) => motion(node, 'row', order, rows.length));
+    const row = box({ alignItems: 'center', gap: 12 * s, height: 50 * s, paddingRight: 16 * s, borderBottom: order < rows.length - 1 ? `${0.5 * s}px solid ${ios.sep}` : 'none' }, ...children);
+    return t.family === 'playbill' ? row : motion(row, 'row', order, rows.length);
+  };
   return { w: W, h: H, tree: col({ width: W, height: H, backgroundColor: ios.bg, color: t.ink, fontFamily: 'Inter, Noto Sans SC', padding: `${54 * s}px ${16 * s}px 0` },
     box({ height: 44 * s, alignItems: 'center', position: 'relative' },
       txt({ fontSize: 17 * s, color: ios.blue }, '‹ 关于'),
@@ -1286,7 +1337,7 @@ function appIos(m: Model, t: Theme): Out {
     m.director ? box({ backgroundColor: ios.cell, borderRadius: 10 * s, padding: `${13 * s}px ${16 * s}px` }, txt({ fontSize: 17 * s }, m.director)) : null,
     head(m.project),
     col({ backgroundColor: ios.cell, borderRadius: 10 * s, paddingLeft: 16 * s },
-      ...rows.map((r, i) => cellRow(r, i < rows.length - 1))),
+      ...rows.map(cellRow)),
     m.humans.length ? box({ margin: `${8 * s}px ${16 * s}px 0`, fontSize: 13 * s, color: t.soft }, `贡献者 · ${m.humans.map((x) => `${x.name} ${pct(x.pct)}`).join('　')}`) : null,
     txt({ fontSize: 13 * s, color: t.soft, margin: `${8 * s}px ${16 * s}px` }, `${fmt(m.commits)} 次提交 · ${fmt(m.linesAdded)} 行`)) };
 }
@@ -1397,7 +1448,7 @@ export function waffle(m: Model, t: Theme): Out {
       ...Array.from({ length: 10 }, (_, y) => box({ height: 44, alignItems: 'center' },
         ...Array.from({ length: 10 }, (_, x) => {
           const r = seq[y * 10 + x];
-          return txt({ fontFamily: MONO_FONT, fontSize: 44, lineHeight: 1, letterSpacing: 14, color: r ? (r.key === 'unattributed' ? t.faint : famColor(r.key, t, rankOf(m, r.key))) : 'rgba(215,222,229,0.14)' }, r ? '■' : '·');
+          return motion(txt({ fontFamily: MONO_FONT, fontSize: 44, lineHeight: 1, letterSpacing: 14, color: r ? (r.key === 'unattributed' ? t.faint : famColor(r.key, t, rankOf(m, r.key))) : 'rgba(215,222,229,0.14)' }, r ? '■' : '·'), 'cell', y * 10 + x, 100);
         }))));
     return frame(m, t, W, H, '一格 = 1%', box({ flex: 1, gap: 96, alignItems: 'center' },
       grid,
@@ -1417,7 +1468,9 @@ export function waffle(m: Model, t: Theme): Out {
     ...Array.from({ length: 10 }, (_, y) => box({ gap: G },
       ...Array.from({ length: 10 }, (_, x) => {
         const r = seq[y * 10 + x];
-        return box({ width: S, height: S, borderRadius: cr, ...(r ? fill(r, t, rankOf(m, r.key), 4) : { backgroundColor: t.track }) });
+        const cell = motion(box({ width: S, height: S, borderRadius: cr, ...(r ? fill(r, t, rankOf(m, r.key), 4) : { backgroundColor: t.track }) }), 'cell', y * 10 + x, 100);
+        cell.motionCue.plane = 'count';
+        return cell;
       }))));
   const side = col({ flex: 1, justifyContent: 'center', gap: 28 },
     col({ gap: 6 },
@@ -1467,8 +1520,8 @@ export function donut(m: Model, t: Theme): Out {
   let a1 = 0;
   const term = t.family === 'terminal' ? glyphSvg(t, glyphRing(R, R, r0 - w / 2, r0 + w / 2, m.rows.map((r, i) => ({ a0: a1, a1: (a1 += r.pct / 100), c: r.key === 'unattributed' ? 'url(#u)' : famColor(r.key, t, i) })))) : '';
   const ring = box({ position: 'relative', width: 2 * R, height: 2 * R, alignItems: 'center', justifyContent: 'center' },
-    term ? svgImage(`<svg xmlns="http://www.w3.org/2000/svg" width="${2 * R}" height="${2 * R}">${term}</svg>`, 2 * R, 2 * R, { position: 'absolute', left: 0, top: 0 }) :
-    svgImage(`<svg xmlns="http://www.w3.org/2000/svg" width="${2 * R}" height="${2 * R}">${pat}${neon ? NEON_GLOW(2 * R, 2 * R, 8) : ''}<circle cx="${R}" cy="${R}" r="${r0}" fill="none" stroke="${t.track}" stroke-width="${w}"/>${neon ? `<g filter="url(#ng)" opacity="0.95">${arcs}</g>` : ''}${arcs}</svg>`, 2 * R, 2 * R, { position: 'absolute', left: 0, top: 0 }),
+    term ? motion(svgImage(`<svg xmlns="http://www.w3.org/2000/svg" width="${2 * R}" height="${2 * R}">${term}</svg>`, 2 * R, 2 * R, { position: 'absolute', left: 0, top: 0 }), 'radial') :
+    motion(svgImage(`<svg xmlns="http://www.w3.org/2000/svg" width="${2 * R}" height="${2 * R}">${pat}${neon ? NEON_GLOW(2 * R, 2 * R, 8) : ''}<circle cx="${R}" cy="${R}" r="${r0}" fill="none" stroke="${t.track}" stroke-width="${w}"/>${neon ? `<g filter="url(#ng)" opacity="0.95">${arcs}</g>` : ''}${arcs}</svg>`, 2 * R, 2 * R, { position: 'absolute', left: 0, top: 0 }), 'radial'),
     col({ alignItems: 'center', gap: 6 },
       txt({ fontFamily: t.num, fontSize: t.family === 'film' ? 56 : 48, color: t.ink, letterSpacing: -1 }, compact(m.linesAdded)),
       label(t, '行', 13)));
@@ -1537,10 +1590,12 @@ export function area(m: Model, t: Theme): Out | null {
   }
   const grid = [0.25, 0.5, 0.75].map((f) => `<line x1="0" x2="${CW}" y1="${CH * f}" y2="${CH * f}" stroke="${t.family === 'editorial' ? 'rgba(18,17,16,0.25)' : t.line}" stroke-width="1"/>`).join('');
   const lit = edges.length ? `${NEON_GLOW(CW, CH, 6)}<g filter="url(#ng)">${edges.join('')}</g>${edges.join('')}` : '';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CW}" height="${CH}">${pat}${grid}${paths.join('')}${lit}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CW}" height="${CH}">${pat}${grid}<g data-creditia-area="true">${paths.join('')}${lit}</g></svg>`;
   const from = m.range.from ? Date.parse(m.range.from) : 0;
   const lbl = (i: number) => txt({ fontSize: 14, color: t.soft, letterSpacing: 1 }, weekLabel(weeks[i].week, i === 0 ? from : 0));
-  return frame(m, t, 1200, 700, '每周新增代码', col({ gap: 14 }, svgImage(svg, CW, CH), box({ justifyContent: 'space-between', width: CW }, lbl(0), lbl(Math.floor(weeks.length / 2)), lbl(weeks.length - 1))));
+  const plot = motion(svgImage(svg, CW, CH), 'area');
+  if (t.family === 'terminal') plot.motionCue.grid = TG;
+  return frame(m, t, 1200, 700, '每周新增代码', col({ gap: 14 }, plot, box({ justifyContent: 'space-between', width: CW }, lbl(0), lbl(Math.floor(weeks.length / 2)), lbl(weeks.length - 1))));
 }
 
 /** 泳道：每个工具一条，会话画成横条 */
@@ -1555,14 +1610,30 @@ export function lanes(m: Model, t: Theme): Out | null {
   const from = Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), 1) / 1000 - tz;
   const LW = 1040 - 170, LH = 64;
   const X = (ts: number) => ((ts - from) / (t1 - from)) * LW;
-  const rows = keys.map((k) => box({ alignItems: 'center', height: LH, borderBottom: `1px solid ${hair(t)}` },
+  const rows = keys.map((k) => {
+    const color = famColor(k, t, rankOf(m, k));
+    const row = box({ alignItems: 'center', height: LH, borderBottom: `1px solid ${hair(t)}` },
     box({ width: 175, alignItems: 'center', gap: 10 },
       term ? txt({ fontFamily: MONO_FONT, fontSize: 13, color: t.faint }, '├─') : null,
       mark(k, t, term ? 15 : 18),
       txt({ fontSize: term ? 15 : 17, fontFamily: term ? MONO_FONT : t.sans }, m.rows.find((r) => r.key === k)?.name ?? nameOf(k))),
     box({ position: 'relative', width: LW, height: 20 },
-      ...ss.filter((s) => g(s.contributor) === k).map((s) =>
-        ((w) => box({ position: 'absolute', left: X(s.start), top: 0, width: w, height: 20, borderRadius: term ? 0 : t.barRadius ? 3 : 0, ...(t.family === 'neon' && w >= 6 ? neonTube(famColor(k, t, rankOf(m, k))) : { backgroundColor: famColor(k, t, rankOf(m, k)), opacity: 0.9 }) }))(Math.max(X(s.end) - X(s.start), 2))))));
+      t.family === 'neon' ? (() => {
+        // 与真实会话共用 plot 原点；外层 flex 的实际缩宽不能让读头错位。
+        const light = motion(box({ position: 'absolute', left: 0, top: (LH - 20) / 2 + 20 - 2, width: '100%', height: 2 }), 'neon-lane');
+        light.motionCue.lane = color; light.motionCue.guide = { x: 0, y: 0, width: LW };
+        return light;
+      })() : null,
+      ['editorial', 'mono', 'cinema', 'playbill', 'gala', 'crt'].includes(t.family)
+        ? motion(box({ position: 'absolute', left: 0, top: (LH - 20) / 2 + 20 - 1, width: '100%', height: 1 }), 'lane-rule') : null,
+      ...ss.filter((s) => g(s.contributor) === k).map((s) => {
+        const w = Math.max(X(s.end) - X(s.start), 2);
+        const bar = motion(box({ position: 'absolute', left: X(s.start), top: 0, width: w, height: 20, borderRadius: term ? 0 : t.barRadius ? 3 : 0, ...(t.family === 'neon' && w >= 6 ? neonTube(color) : { backgroundColor: color, opacity: 0.9 }) }), 'bar-x', s.start - from, t1 - from + 1);
+        if (['neon', 'editorial', 'mono', 'cinema', 'playbill', 'gala', 'crt'].includes(t.family)) bar.motionCue.lane = color;
+        return bar;
+      })));
+    return row;
+  });
   const ticks: Node[] = [];
   for (let d = from; d <= t1 - 4 * 86400; d += 86400) {
     const cn = new Date((d + tz) * 1000);
@@ -1589,10 +1660,17 @@ export function clock(m: Model, t: Theme): Out | null {
     : top ? hex(famColor(top.key, t)) : t.dark ? '240,238,233' : '22,21,20';
   const cr = t.family === 'glass' ? 9 : t.barRadius ? 7 : 0;
   const ff = t.family === 'terminal' ? MONO_FONT : t.sans;
+  // 同一日相邻的真实活跃小时构成一段；霓虹按整段接通，不凭空加线路或伪造强度。
+  let runCount = 0;
+  const runs = c.map(row => { let run = -1; return row.map(v => { if (!v) { run = -1; return -1; } if (run < 0) run = runCount++; return run; }); });
   const grid = col({ gap: G, justifyContent: 'center', flex: 1 },
     ...c.map((row, i) => box({ alignItems: 'center', gap: G },
       txt({ width: 40, fontSize: 14, color: t.soft, fontFamily: ff }, `周${wd[i]}`),
-      ...row.map((v) => box({ width: S, height: S, borderRadius: cr, backgroundColor: v ? `rgba(${base},${(0.12 + 0.88 * Math.pow(v / max, 0.9)).toFixed(3)})` : t.track })))),
+      ...row.map((v, hr) => {
+        const cell = motion(box({ width: S, height: S, borderRadius: cr, backgroundColor: v ? `rgba(${base},${(0.12 + 0.88 * Math.pow(v / max, 0.9)).toFixed(3)})` : t.track }), 'intensity', hr, 24);
+        Object.assign(cell.motionCue!, { row: i, column: hr, rows: c.length, columns: row.length, level: max ? v / max : 0, run: runs[i][hr], runs: runCount });
+        return cell;
+      }))),
     box({ marginLeft: 40 + G, gap: G, marginTop: 6 },
       ...Array.from({ length: 24 }, (_, hr) => txt({ width: S, justifyContent: 'center', fontSize: 13, color: t.soft, fontFamily: ff }, hr % 6 === 0 ? `${hr}时` : ''))));
   return frame(m, t, 1200, 620, `${fmt(m.commits)} 次提交`, grid, false);
@@ -1629,10 +1707,13 @@ export function versions(m: Model, t: Theme): Out | null {
     return svgImage(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="${nr * TG}">${glyphSvg(t, runs)}</svg>`, 96, nr * TG);
   };
   const bars = order.map((v, i) => col({ alignItems: 'center', width: 200, flexShrink: 0 },
-    t.family === 'terminal' ? box({ height: BH, alignItems: 'flex-end' }, termBar(v, i)) : box({ height: BH, alignItems: 'flex-end' },
+    t.family === 'terminal' ? (() => {
+      const glyphs = termBar(v, i), node = motion(box({ height: BH, alignItems: 'flex-end' }, glyphs), 'bar-y', i, order.length);
+      node.motionCue.grid = TG; node.motionCue.travel = glyphs.props.width; return node;
+    })() : motion(box({ height: BH, alignItems: 'flex-end' },
       // 霓虹：每根柱子整体一圈光晕（光晕按柱子算，不按每一段，出图不慢）
       col({ width: 96, height: (totals[i] / max) * BH, borderRadius: t.family === 'glass' ? 10 : t.barRadius ? 8 : 0, overflow: 'hidden', flexDirection: 'column-reverse', gap: 2, boxShadow: t.family === 'neon' ? `0 0 16px ${famColor(stack.find((k) => by[v][k]) ?? '', t, 0)}88` : undefined },
-        ...stack.map((k, j) => (by[v][k] ? box({ height: `${(by[v][k] / totals[i]) * 100}%`, minHeight: 2, ...fill({ key: k }, t, j, 3) }) : null)))),
+        ...stack.map((k, j) => (by[v][k] ? box({ height: `${(by[v][k] / totals[i]) * 100}%`, minHeight: 2, ...fill({ key: k }, t, j, 3) }) : null)))), 'bar-y', i, order.length),
     txt({ marginTop: 22, fontFamily: t.num === t.sans ? MONO_FONT : t.num, fontSize: 22, color: t.ink, textAlign: 'center', wordBreak: 'break-all' }, v === 'unreleased' ? (m.lang === 'en' ? 'Unreleased' : '未发布') : v),
     txt({ marginTop: 6, fontSize: 14, color: t.soft }, `${buckets[i].date ? `${buckets[i].date.replaceAll('-', '.')} · ` : ''}${compact(totals[i])} ${m.lang === 'en' ? 'lines' : '行'}`)));
   // 版本说明和图例之间留出一截（表头高的体裁里两行几乎贴在一起）；放不下时和泳道一样出图前量一遍再加高
@@ -1646,7 +1727,7 @@ export function settle(m: Model, t: Theme): Out | null {
   const W = 1200, H = 560;
   if (t.family === 'terminal') {
     const bar = (p: number, color: string) => box({ alignItems: 'center' },
-      txt({ fontFamily: MONO_FONT, fontSize: 28, color, whiteSpace: 'pre' }, '■'.repeat(Math.max(1, Math.round(p / 5)))),
+      motion(txt({ fontFamily: MONO_FONT, fontSize: 28, color, whiteSpace: 'pre' }, '■'.repeat(Math.max(1, Math.round(p / 5)))), 'bar-x'),
       txt({ fontFamily: MONO_FONT, fontSize: 28, color: t.faint, whiteSpace: 'pre' }, '·'.repeat(20 - Math.max(1, Math.round(p / 5)))));
     const row = (k: string, b: Node, v: string) => box({ alignItems: 'center', gap: 22 },
       txt({ fontFamily: MONO_FONT, fontSize: 20, color: t.soft, width: 120 }, k), b,
@@ -1657,15 +1738,17 @@ export function settle(m: Model, t: Theme): Out | null {
         txt({ fontFamily: MONO_FONT, fontSize: 18 }, 'creditia survive'),
         txt({ fontFamily: MONO_FONT, fontSize: 15, color: t.faint }, '# 新增与留存对比')),
       col({ flex: 1, justifyContent: 'center', gap: 36 },
-        row('新增', bar(100, t.ink), fmt(m.linesAdded)),
-        row('留存', bar(keep, t.accent), `${fmt(m.linesSurviving)}  ·  ${Math.round(keep)}%`))) };
+        ...sequence([
+          row('新增', bar(100, t.ink), fmt(m.linesAdded)),
+          row('留存', bar(keep, t.accent), `${fmt(m.linesSurviving)}  ·  ${Math.round(keep)}%`),
+        ], 'print'))) };
   }
   const step = (k: string, v: string, p: number, solid: boolean) => col({ gap: 16 },
     box({ justifyContent: 'space-between', alignItems: 'baseline' },
       label(t, k, 14),
       txt({ fontFamily: t.num, fontSize: 30, color: t.ink }, v)),
     box({ height: Math.max(t.barH * 3, 14), borderRadius: t.family === 'glass' ? 99 : t.barRadius, backgroundColor: t.track },
-      box({ width: `${p}%`, height: '100%', borderRadius: t.family === 'glass' ? 99 : t.barRadius, ...(t.family === 'neon' ? neonTube(solid ? t.accent : t.soft, true) : { backgroundColor: solid ? t.ink : t.faint }) })));
+      motion(box({ width: `${p}%`, height: '100%', borderRadius: t.family === 'glass' ? 99 : t.barRadius, ...(t.family === 'neon' ? neonTube(solid ? t.accent : t.soft, true) : { backgroundColor: solid ? t.ink : t.faint }) }), 'bar-x')));
   return { w: W, h: H, tree: page(m, t, W, H, [72, 96, 72, 96], { justifyContent: 'space-between' },
     box({ alignItems: 'baseline', justifyContent: 'space-between' },
       txt({ fontFamily: t.display, fontSize: t.display === t.sans ? 30 : 38, fontWeight: t.displayWeight }, m.project),
@@ -1705,7 +1788,7 @@ export function ribbon(m: Model, t: Theme): Out | null {
       txt({ fontFamily: MONO_FONT, fontSize: 12, color: t.faint, width: 92, flexShrink: 0 }, mk),
       ...ds.map((d) => {
         const k = keyOf(d);
-        return txt({ fontFamily: MONO_FONT, fontSize: 15, lineHeight: 1, letterSpacing: 6, color: k ? (k === 'unattributed' ? t.faint : famColor(k, t, rankOf(m, k))) : 'rgba(215,222,229,0.15)' }, k ? '■' : '·');
+        return motion(txt({ fontFamily: MONO_FONT, fontSize: 15, lineHeight: 1, letterSpacing: 6, color: k ? (k === 'unattributed' ? t.faint : famColor(k, t, rankOf(m, k))) : 'rgba(215,222,229,0.15)' }, k ? '■' : '·'), 'cell', dates.indexOf(d), n);
       })));
     return frame(m, t, W, 280 + rows.length * 38, `${n} 天`, col({ gap: 6, justifyContent: 'center', flex: 1 }, ...rows));
   }
@@ -1716,7 +1799,7 @@ export function ribbon(m: Model, t: Theme): Out | null {
       const g2 = ((inner - 28) - cnt * 16) / Math.max(cnt - 1, 1);
       return box({ gap: g2 }, ...Array.from({ length: cnt }, () => box({ width: 16, height: 12, borderRadius: 3, backgroundColor: t.bg, flexShrink: 0 })));
     };
-    const frames = box({ gap, height: 168 }, ...dates.map((d) => box({ width: cw, height: 168, ...stOf(keyOf(d)) })));
+    const frames = box({ gap, height: 168 }, ...dates.map((d, i) => motion(box({ width: cw, height: 168, ...stOf(keyOf(d)) }), 'cell', i, n)));
     const strip = col({ width: inner, backgroundColor: '#1B1914', padding: '9px 14px', gap: 9, borderRadius: 4, alignSelf: 'center' }, hole(), frames, hole());
     const marks: Node[] = [];
     for (let i = 0; i < n; i++) { const dd = new Date(start + i * 86400000); if (dd.getUTCDate() === 1 || i === 0) marks.push(txt({ position: 'absolute', left: 14 + i * (cw + gap), fontSize: 13, color: t.soft, letterSpacing: 1 }, `${dd.getUTCMonth() + 1}月`)); }
@@ -1727,7 +1810,9 @@ export function ribbon(m: Model, t: Theme): Out | null {
   const cells: Node[] = [], marks: Node[] = [];
   for (let i = 0; i < n; i++) {
     const dd = new Date(start + i * 86400000);
-    cells.push(box({ width: cw, height: 180, borderRadius: radius, ...stOf(keyOf(dates[i])) }));
+    const day = motion(box({ width: cw, height: 180, borderRadius: radius, ...stOf(keyOf(dates[i])) }), 'cell', i, n);
+    if (t.id === 'minimal-light' || t.id === 'minimal-dark') day.motionCue.plane = 'time';
+    cells.push(day);
     if (dd.getUTCDate() === 1 || i === 0) marks.push(txt({ position: 'absolute', left: i * (cw + gap), fontSize: 14, color: t.soft, letterSpacing: 1 }, `${dd.getUTCMonth() + 1}月`));
   }
   return frame(m, t, W, 500, `${n} 天`, col({ gap: 14 }, box({ gap }, ...cells), box({ position: 'relative', height: 20 }, ...marks)));
@@ -1745,7 +1830,11 @@ export function mosaic(m: Model, t: Theme): Out | null {
   }).sort((a, b) => b.v - a.v);
   const rects = squarify(items, bw, bh);
   const g = ({ mono: 3, film: 2, editorial: 2, terminal: 1 } as Record<string, number>)[t.family] ?? 2;
-  const tiles = rects.map((q) => box({ position: 'absolute', left: q.x, top: q.y, width: Math.max(q.w - g, 0.5), height: Math.max(q.h - g, 0.5), borderRadius: t.family === 'glass' && q.w > 10 && q.h > 10 ? 5 : t.barRadius && q.w > 10 && q.h > 10 ? 3 : 0, ...fill({ key: q.key }, t, rankOf(m, q.key), 3) }));
+  const tiles = rects.map((q) => {
+    const tile = motion(box({ position: 'absolute', left: q.x, top: q.y, width: Math.max(q.w - g, 0.5), height: Math.max(q.h - g, 0.5), borderRadius: t.family === 'glass' && q.w > 10 && q.h > 10 ? 5 : t.barRadius && q.w > 10 && q.h > 10 ? 3 : 0, ...fill({ key: q.key }, t, rankOf(m, q.key), 3) }), 'cell', q.x / bw + q.y / bh, 3);
+    tile.motionCue.plane = 'area';
+    return tile;
+  });
   return frame(m, t, W, H, `${fmt(files.length)} 个文件 · 现存 ${fmt(m.linesSurviving)} 行`, box({ position: 'relative', width: bw, height: bh }, ...tiles));
 }
 function squarify(items: { v: number; key: string }[], W: number, H: number) {
@@ -1789,7 +1878,7 @@ export function profile(person: string, projects: Model[], t: Theme): Out {
       txt({ fontFamily: t.display, fontSize: 24, fontWeight: t.displayWeight }, p.project),
       txt({ fontSize: 15, color: t.soft, fontFamily: MONO_FONT }, `${fmt(p.linesAdded)} 行`)),
     box({ height: t.family === 'film' ? 4 : t.barH * 2, borderRadius: t.family === 'glass' ? 99 : t.barRadius, overflow: 'hidden', backgroundColor: t.track, gap: 2 },
-      ...p.rows.map((r, i) => box({ width: `${r.pct}%`, height: '100%', ...fill(r, t, i, 3) }))));
+      ...p.rows.map((r, i) => motion(box({ width: `${r.pct}%`, height: '100%', ...fill(r, t, i, 3) }), 'bar-x'))));
   return { w: W, h: H, tree: box({ width: W, height: H, padding: '72px 80px', gap: 96, ...backdrop(t, [...tools.keys()]), color: t.ink, fontFamily: t.sans },
     col({ width: 340, gap: 0 },
       txt({ fontFamily: t.display, fontSize: t.display === t.sans ? 44 : 54, fontWeight: t.displayWeight, letterSpacing: t.display === t.sans ? -1 : 0 }, person),
@@ -1797,7 +1886,7 @@ export function profile(person: string, projects: Model[], t: Theme): Out {
       col({ marginTop: 'auto', gap: 18 },
         box({ alignItems: 'baseline', gap: 10 }, txt({ fontFamily: t.num, fontSize: 40, color: t.ink }, compact(lines)), txt({ fontSize: 16, color: t.soft }, `行 · ${projects.length} 个作品`)),
         box({ gap: 14 }, ...[...tools.entries()].filter(([k]) => isAi(k)).sort((a, b) => b[1] - a[1]).map(([k]) => mark(k, t, 24, t.soft))))),
-    col({ flex: 1, gap: 36, justifyContent: 'center' }, ...projects.map(proj))) };
+    col({ flex: 1, gap: 36, justifyContent: 'center' }, ...sequence(projects.map(proj)))) };
 }
 
 // ───────────────────────── 辅助 ─────────────────────────
@@ -1859,7 +1948,7 @@ export function tierStyled(m: Model, t: Theme, s: number, withTitle: boolean): O
   const totals = [m.commits && `${fmt(m.commits)} 次提交`, m.linesAdded && `${fmt(m.linesAdded)} 行`].filter(Boolean).join(t.family === 'crt' ? '   ' : '  ·  ');
   return { w: W, h: H, tree: plate(t, { width: W, height: H }, [
     tierHead(cfg.head, m, t, s, withTitle),
-    col({}, ...laid.map((x) => x.node)),
+    col({}, ...sequence(laid.map((x) => x.node))),
     humanLine(m, t, s),
     tierFoot(t, s, totals, m),
   ], { justifyContent: 'space-between' }) };

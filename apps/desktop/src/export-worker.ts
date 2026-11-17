@@ -4,6 +4,7 @@ import wasmUrl from '@resvg/resvg-wasm/index_bg.wasm?url';
 import { type Art, type Raster } from '../../../packages/render/src/export.ts';
 import { fontBytes } from './fonts.ts';
 import type { ExportJob, Exported } from './engine.ts';
+import { flattenSvg } from '../../../packages/render/src/flatten.ts';
 import { exportArtwork } from '../../../packages/render/src/export-job.ts';
 import { timelineFor } from '../../../packages/render/src/timeline.ts';
 import { straightRgba } from '../../../packages/render/src/pixels.ts';
@@ -45,10 +46,10 @@ async function run({ fmt, fontStyle, art: a, size, frames }: ExportJob): Promise
       }
       return using(new Resvg(v?.svg ?? svg, opts(w)), r => using(r.render(), img => ({ w: img.width, h: v?.height ?? img.height, data: straightRgba(viewportPixels(img.pixels, v)) })));
     },
-    flat: svg => retainRasterExtent(svg, using(new Resvg(svg, opts()), r => r.toString())),
+    flat: svg => retainRasterExtent(svg, flattenSvg(svg, source => using(new Resvg(source, opts()), r => r.toString()))),
   };
   const timeline = timelineFor(a.selection?.style ?? 'minimal-light', a.selection?.piece ?? '', a);
-  const animation = frames?.length ? { frames, times: frames.map((_, i) => frames.length === 1 ? 1 : i / (frames.length - 1)), timeline } : undefined;
+  const animation = frames?.length ? { frames, times: frames.map((frame, i) => frame.crop?.progress ?? (frames.length === 1 ? 1 : i / (frames.length - 1))), timeline } : undefined;
   return exportArtwork(a, { format: fmt, size, lang: a.selection?.lang ?? 'zh' }, raster, deflate, animation);
 }
 

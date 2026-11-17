@@ -2740,6 +2740,9 @@ impl Creditia {
         if entering {
             self.saved_viewport = Some(self.viewport);
         }
+        if focus && self.focused && self.selected_tile != Some(index) {
+            self.retain_focus_preview(cx);
+        }
         self.stop_playback(cx);
         self.selected_tile = Some(index);
         self.focused = focus;
@@ -3164,15 +3167,18 @@ impl Creditia {
         let selected = self.selected_tile;
         let generation = self.preview_generation;
         request["reducedMotion"] = json!(self.reduced_motion);
+        let Some(raw) = self.raw.clone() else {
+            return;
+        };
         if self.export_animation() {
             request["size"] = json!(self.export_size);
             request["transparent"] = json!(false);
         } else {
             if !self.focused {
                 self.saved_viewport = Some(self.viewport);
+                self.viewport.reset();
             }
             self.focused = true;
-            self.viewport.reset();
         }
         self.animation_busy = true;
         let control = crate::animation::PlaybackControl::new();
@@ -3180,9 +3186,6 @@ impl Creditia {
         self.animation_cancellation = Some(control.cancellation());
         self.animation_control = Some(control.clone());
         let width = texture_width(self.viewport_size.0, self.display_scale);
-        let Some(raw) = self.raw.clone() else {
-            return;
-        };
         let archive = self.render_archive.clone();
         let projects = self.all_archives.clone();
         let (tx, rx) = async_channel::bounded::<Result<crate::animation::Event, String>>(3);
@@ -7198,6 +7201,7 @@ impl Creditia {
             "project":self.selected,"project_count":self.projects.len(),"project_name":self.raw.as_ref().map(|raw|raw["project"]["name"].clone()),"operation_busy":self.operation_busy,"remove_confirm":self.remove_confirm,"search_query":self.search_query,
             "display_scale":self.display_scale,"picker_selected":self.picker_selected,"settings_project":self.settings_id(),"project_settings_ready":self.settings_data().is_some() && self.sign_loaded_for.as_ref()==self.settings_id(),"project_row_menu":self.project_row_menu.as_ref().map(|(id,_)|id),"hover":self.hover.as_ref().map(|hit|&hit.t),"batch":self.batch_results
         });
+        state["animation_busy"] = json!(self.animation_busy);
         state["export_format"] = json!(self.export_format);
         state["panel_closing"] = json!(self.panel_closing);
         state["drag_active"] = json!(self.drag.is_some());

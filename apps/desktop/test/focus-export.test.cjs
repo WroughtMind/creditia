@@ -13,7 +13,7 @@ function scene() {
   const exports = [], notices = [], classes = new Set();
   const kits = Object.fromEntries(['A', 'B', 'C'].map(id => [id, {
     id, variants: () => ['original', 'alt'], current: () => 'original', pieceName: () => id,
-    variantName: x => x, name: () => id, preview: async () => ({ blob: id }),
+    variantName: x => x, name: () => id, preview: async () => ({ blob: id }), animated: () => false,
   }]));
   const xp = { disabled: true }, element = {
     style: {}, classList: { add: n => classes.add(n), remove: n => classes.delete(n), toggle() {} },
@@ -30,6 +30,7 @@ function scene() {
     resolveGroup: () => 'tool', MODEL_VARIANTS: {}, closeBtn: () => '', esc: x => x, L: (_zh, en) => en,
     icon: () => '', innerHeight: 900, mountPreview() {}, releasePreview() {}, mountRoamHits() {},
     drawArt: async (_id, _variant, kit) => artwork(kit.id), kitById: id => kits[id], closeFormats() {},
+    addEventListener() {}, removeEventListener() {},
     toggleFormats: (_host, _id, run) => run('png'), doExport: (_fmt, _id, _key, options) => exports.push(options),
     toast: (...args) => notices.push(args), errText: String, closeFocus: null, focusKeys: null,
   });
@@ -97,4 +98,16 @@ test('an earlier global layout completion cannot enable export while the last ch
   s.click({ act: 'export' }); assert.equal(s.exports.length, 0);
   last.resolve(); await tick();
   assert.equal(s.xp.disabled, false);
+});
+
+test('changing layout, style or closing cancels focused motion while static export remains available', async () => {
+  const s = scene(), motions = [];
+  s.kits.A.animated = s.kits.B.animated = () => true;
+  s.ctx.motionDuration = () => 1600;
+  s.ctx.playFocusMotion = () => { const job = { cancelled: false }; motions.push(job); return () => job.cancelled = true; };
+  s.ctx.openFocus('share', 'share#'); await tick();
+  assert.equal(s.xp.disabled, false); assert.equal(motions.length, 1);
+  s.click({ v: 'alt' }); assert(motions[0].cancelled); await tick();
+  s.click({ s: 'B' }); assert(motions[1].cancelled); await tick();
+  s.ctx.closeFocus(); assert(motions[2].cancelled);
 });

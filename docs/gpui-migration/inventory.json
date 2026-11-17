@@ -775,7 +775,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -793,7 +793,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -814,7 +814,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -842,7 +842,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -881,7 +881,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -899,7 +899,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -917,7 +917,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -935,7 +935,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": "projects and person"
@@ -953,7 +953,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -971,7 +971,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": "blame result"
@@ -992,7 +992,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1013,7 +1013,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1034,7 +1034,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1052,7 +1052,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1070,7 +1070,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1088,7 +1088,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1106,7 +1106,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1124,7 +1124,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1139,7 +1139,7 @@
           "emblem",
           "split"
         ],
-        "animated": false,
+        "animated": true,
         "desktop": true,
         "source": {
           "path": "packages/render/src/classic/bridge.ts",
@@ -1148,7 +1148,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1166,7 +1166,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1184,7 +1184,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1202,7 +1202,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1220,7 +1220,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1238,7 +1238,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1256,7 +1256,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1274,7 +1274,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1292,7 +1292,7 @@
         },
         "variantSource": {
           "path": "packages/render/src/classic/art.ts",
-          "line": 164,
+          "line": 165,
           "anchor": "export const variantsOf ="
         },
         "needsContext": null
@@ -1316,7 +1316,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 30,
+          "line": 32,
           "anchor": "  tier: { name: '署名榜', en: 'Credits', q: '工具与模型占比', qEn: 'Contribution shares by tool and model', variants: TIER_VARIANTS, animated: true, render: tier },"
         }
       },
@@ -1328,7 +1328,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 31,
+          "line": 33,
           "anchor": "  asterisk: { name: '星号', en: 'Asterisk', q: '各家份额长成的 *', qEn: 'Shares grown into an asterisk', animated: true, render: asterisk },"
         }
       },
@@ -1340,7 +1340,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 32,
+          "line": 34,
           "anchor": "  share: { name: '分享图', en: 'Share Card', q: '链接预览、社交媒体', qEn: 'Link previews, social posts', animated: true, render: share },"
         }
       },
@@ -1352,7 +1352,7 @@
         "desktop": false,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 33,
+          "line": 35,
           "anchor": "  hand: { name: '开发者', en: 'Developers', q: '提示词与审阅', qEn: 'Prompts and reviews', animated: true, render: hand },"
         }
       },
@@ -1364,7 +1364,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 34,
+          "line": 36,
           "anchor": "  people: { name: '贡献者', en: 'Contributors', q: '每位提交者的提交里各工具占多少', qEn: 'What each committer\\'s commits were written with', animated: true, render: people },"
         }
       },
@@ -1376,12 +1376,12 @@
           "ticket",
           "itemized"
         ],
-        "animated": false,
+        "animated": true,
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 35,
-          "anchor": "  receipt: { name: '小票', en: 'Receipt', q: '工期、会话与 Token', qEn: 'Time, sessions, and tokens spent', variants: RECEIPT_VARIANTS, render: receipt },"
+          "line": 37,
+          "anchor": "  receipt: { name: '小票', en: 'Receipt', q: '工期、会话与 Token', qEn: 'Time, sessions, and tokens spent', variants: RECEIPT_VARIANTS, animated: true, render: receipt },"
         }
       },
       {
@@ -1393,12 +1393,12 @@
           "emblem",
           "split"
         ],
-        "animated": false,
+        "animated": true,
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 36,
-          "anchor": "  badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', qEn: 'README, profile page', variants: BADGE_VARIANTS, render: badge },"
+          "line": 38,
+          "anchor": "  badge: { name: '徽章', en: 'Badge', q: 'README、个人主页', qEn: 'README, profile page', variants: BADGE_VARIANTS, animated: true, render: badge },"
         }
       },
       {
@@ -1408,12 +1408,12 @@
           "line",
           "models"
         ],
-        "animated": false,
+        "animated": true,
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 37,
-          "anchor": "  byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', variants: BYLINE_VARIANTS, render: byline },"
+          "line": 39,
+          "anchor": "  byline: { name: '署名行', en: 'Byline', q: '页脚、关于页', qEn: 'Footer, about page', variants: BYLINE_VARIANTS, animated: true, render: byline },"
         }
       },
       {
@@ -1433,7 +1433,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 38,
+          "line": 40,
           "anchor": "  roll: { name: '片尾字幕', en: 'Credits Roll', q: '分工与角色表', qEn: 'Contributors and roles', variants: ROLL_VARIANTS, animated: true, render: roll },"
         }
       },
@@ -1448,7 +1448,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 39,
+          "line": 41,
           "anchor": "  donut: { name: '环形图', en: 'Donut', q: '代码占比', qEn: 'Shares', variants: DONUT_VARIANTS, animated: true, render: donut },"
         }
       },
@@ -1463,7 +1463,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 40,
+          "line": 42,
           "anchor": "  waffle: { name: '华夫饼图', en: 'Waffle', q: '百格占比', qEn: 'One square is 1%', variants: WAFFLE_VARIANTS, animated: true, render: waffle },"
         }
       },
@@ -1475,7 +1475,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 41,
+          "line": 43,
           "anchor": "  stream: { name: '河流图', en: 'Stream', q: '每周新增', qEn: 'New code each week', animated: true, render: stream },"
         }
       },
@@ -1487,7 +1487,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 42,
+          "line": 44,
           "anchor": "  lanes: { name: '会话泳道', en: 'Sessions', q: '会话时间线', qEn: 'Session timeline by tool', animated: true, render: lanes },"
         }
       },
@@ -1499,7 +1499,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 43,
+          "line": 45,
           "anchor": "  clock: { name: '作息打卡', en: 'Punch Card', q: '活跃时段', qEn: 'Weekday × hour', animated: true, render: clock },"
         }
       },
@@ -1511,7 +1511,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 44,
+          "line": 46,
           "anchor": "  versions: { name: '版本柱状图', en: 'Releases', q: '各版本贡献', qEn: 'Code contributions per release', animated: true, render: versions },"
         }
       },
@@ -1523,7 +1523,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 45,
+          "line": 47,
           "anchor": "  survival: { name: '留存', en: 'Retention', q: '新增与留存对比', qEn: 'Code retention comparison', animated: true, render: survival },"
         }
       },
@@ -1535,7 +1535,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 46,
+          "line": 48,
           "anchor": "  mosaic: { name: '文件马赛克', en: 'File Mosaic', q: '各文件代码归属', qEn: 'Current codebase composition', animated: true, render: mosaic },"
         }
       },
@@ -1547,7 +1547,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 47,
+          "line": 49,
           "anchor": "  calendar: { name: '日历', en: 'Calendar', q: '活跃日历', qEn: 'Daily activity calendar', animated: true, render: calendar },"
         }
       },
@@ -1559,7 +1559,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 48,
+          "line": 50,
           "anchor": "  evidence: { name: '出处', en: 'Evidence', q: '归因依据', qEn: 'Evidence levels for each line', animated: true, render: evidence },"
         }
       },
@@ -1571,7 +1571,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 49,
+          "line": 51,
           "anchor": "  areas: { name: '板块', en: 'Areas', q: '各模块代码归属', qEn: 'Contributions by area and folder', animated: true, render: areas },"
         }
       },
@@ -1583,7 +1583,7 @@
         "desktop": true,
         "source": {
           "path": "packages/render/src/registry.ts",
-          "line": 50,
+          "line": 52,
           "anchor": "  codemap: { name: '代码地图', en: 'Code Map', q: '代码归属地图', qEn: 'Line-by-line attribution map', animated: true, render: codemap },"
         }
       }
@@ -1904,7 +1904,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1878,
+        "line": 1907,
         "anchor": "function welcome()"
       }
     },
@@ -1923,7 +1923,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1611,
+        "line": 1640,
         "anchor": "function toggleMenu()"
       }
     },
@@ -1943,7 +1943,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1713,
+        "line": 1742,
         "anchor": "function rowMenu("
       }
     },
@@ -1963,7 +1963,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 353,
+        "line": 355,
         "anchor": "async function openProject("
       }
     },
@@ -1982,7 +1982,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 406,
+        "line": 408,
         "anchor": "async function creditsOf("
       }
     },
@@ -2002,7 +2002,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 413,
+        "line": 415,
         "anchor": "async function refreshIfChanged("
       }
     },
@@ -2020,7 +2020,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 514,
+        "line": 516,
         "anchor": "function renderGroup()"
       }
     },
@@ -2040,7 +2040,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 586,
+        "line": 588,
         "anchor": "async function paint()"
       }
     },
@@ -2059,7 +2059,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 709,
+        "line": 711,
         "anchor": "function layout("
       }
     },
@@ -2078,7 +2078,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 795,
+        "line": 797,
         "anchor": "async function changeVariant("
       }
     },
@@ -2097,7 +2097,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1256,
+        "line": 1284,
         "anchor": "function mountRoamHits("
       }
     },
@@ -2119,7 +2119,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1037,
+        "line": 1039,
         "anchor": "function openFocus("
       }
     },
@@ -2141,7 +2141,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1361,
+        "line": 1389,
         "anchor": "function wireRoam()"
       }
     },
@@ -2161,7 +2161,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1464,
+        "line": 1492,
         "anchor": "function toggleStyles()"
       }
     },
@@ -2180,7 +2180,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 841,
+        "line": 843,
         "anchor": "function toggleFormats("
       }
     },
@@ -2200,7 +2200,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 873,
+        "line": 875,
         "anchor": "function renderExports()"
       }
     },
@@ -2220,7 +2220,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 975,
+        "line": 977,
         "anchor": "function startDrag("
       }
     },
@@ -2240,7 +2240,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1788,
+        "line": 1817,
         "anchor": "async function withProgress"
       }
     },
@@ -2259,7 +2259,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 228,
+        "line": 230,
         "anchor": "function syncStatus()"
       }
     },
@@ -2276,7 +2276,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1936,
+        "line": 1965,
         "anchor": "function showWarnings("
       }
     },
@@ -2297,7 +2297,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1954,
+        "line": 1983,
         "anchor": "function projectSettings("
       }
     },
@@ -2317,7 +2317,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 497,
+        "line": 499,
         "anchor": "async function setPlug("
       }
     },
@@ -2336,7 +2336,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1743,
+        "line": 1772,
         "anchor": "async function removeProject("
       }
     },
@@ -2354,7 +2354,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 2025,
+        "line": 2054,
         "anchor": "async function settings("
       }
     },
@@ -2373,7 +2373,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 2025,
+        "line": 2054,
         "anchor": "async function settings("
       }
     },
@@ -2393,7 +2393,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 2025,
+        "line": 2054,
         "anchor": "async function settings("
       }
     },
@@ -2410,7 +2410,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 2025,
+        "line": 2054,
         "anchor": "async function settings("
       }
     },
@@ -2429,7 +2429,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1572,
+        "line": 1601,
         "anchor": "async function installMenu()"
       }
     },
@@ -2448,7 +2448,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1562,
+        "line": 1591,
         "anchor": "function wireKeys()"
       }
     },
@@ -2466,7 +2466,7 @@
       "migration": "pending",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1521,
+        "line": 1550,
         "anchor": "async function setLang("
       }
     },
@@ -2578,7 +2578,7 @@
       "en": "Switch Project…",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1541,
+        "line": 1570,
         "anchor": "{ id: 'switch', key: 'K', label: () => L('切换项目…', 'Switch Project…')"
       }
     },
@@ -2589,7 +2589,7 @@
       "en": "Add Folder…",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1542,
+        "line": 1571,
         "anchor": "{ id: 'add', key: 'O', label: () => L('添加文件夹…', 'Add Folder…')"
       }
     },
@@ -2600,7 +2600,7 @@
       "en": "Re-analyze",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1543,
+        "line": 1572,
         "anchor": "{ id: 'reanalyze', key: 'R', label: () => L('重新分析', 'Re-analyze')"
       }
     },
@@ -2611,7 +2611,7 @@
       "en": "Project Settings…",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1544,
+        "line": 1573,
         "anchor": "{ id: 'project', key: 'I', label: () => L('项目设置…', 'Project Settings…')"
       }
     },
@@ -2622,7 +2622,7 @@
       "en": "Settings…",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1545,
+        "line": 1574,
         "anchor": "{ id: 'settings', key: ',', label: () => L('设置…', 'Settings…')"
       }
     },
@@ -2633,7 +2633,7 @@
       "en": "Wall",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1546,
+        "line": 1575,
         "anchor": "{ id: 'wall', key: '1', label: () => L('墙', 'Wall')"
       }
     },
@@ -2644,7 +2644,7 @@
       "en": "Roam",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1547,
+        "line": 1576,
         "anchor": "{ id: 'roam', key: '2', label: () => L('漫游', 'Roam')"
       }
     },
@@ -2655,7 +2655,7 @@
       "en": "Previous Style",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1548,
+        "line": 1577,
         "anchor": "{ id: 'prevstyle', key: '[', label: () => L('上一种风格', 'Previous Style')"
       }
     },
@@ -2666,7 +2666,7 @@
       "en": "Next Style",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1549,
+        "line": 1578,
         "anchor": "{ id: 'nextstyle', key: ']', label: () => L('下一种风格', 'Next Style')"
       }
     },
@@ -2677,7 +2677,7 @@
       "en": "Export…",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1550,
+        "line": 1579,
         "anchor": "{ id: 'export', key: 'E', label: () => L('导出…', 'Export…')"
       }
     }
@@ -2688,7 +2688,7 @@
       "action": "close topmost popup/dialog/export list",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1025,
+        "line": 1027,
         "anchor": "function closeTop()"
       }
     },
@@ -2697,7 +2697,7 @@
       "action": "open focused wall artwork",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 773,
+        "line": 775,
         "anchor": "artEl.addEventListener('keydown'"
       }
     },
@@ -2706,7 +2706,7 @@
       "action": "previous/next layout in focus",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1153,
+        "line": 1181,
         "anchor": "  focusKeys = (e) =>"
       }
     },
@@ -2715,7 +2715,7 @@
       "action": "previous/next artwork in focus",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1153,
+        "line": 1181,
         "anchor": "  focusKeys = (e) =>"
       }
     },
@@ -2724,7 +2724,7 @@
       "action": "pan roam viewport",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1361,
+        "line": 1389,
         "anchor": "function wireRoam()"
       }
     },
@@ -2733,7 +2733,7 @@
       "action": "return roam viewport home",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1361,
+        "line": 1389,
         "anchor": "function wireRoam()"
       }
     },
@@ -2742,7 +2742,7 @@
       "action": "select/open searched project",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1686,
+        "line": 1715,
         "anchor": "  q.onkeydown ="
       }
     },
@@ -2751,7 +2751,7 @@
       "action": "horizontal roam scroll",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 1361,
+        "line": 1389,
         "anchor": "function wireRoam()"
       }
     }
@@ -3051,7 +3051,7 @@
       "key": "creditia.logo",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 76,
+        "line": 78,
         "anchor": "'logo'"
       }
     },
@@ -3059,7 +3059,7 @@
       "key": "creditia.theme",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 93,
+        "line": 95,
         "anchor": "'theme'"
       }
     },
@@ -3067,7 +3067,7 @@
       "key": "creditia.lang",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 93,
+        "line": 95,
         "anchor": "'lang'"
       }
     },
@@ -3075,7 +3075,7 @@
       "key": "creditia.size",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 93,
+        "line": 95,
         "anchor": "'size'"
       }
     },
@@ -3083,7 +3083,7 @@
       "key": "creditia.mark.full.{projectId}",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 145,
+        "line": 147,
         "anchor": "'mark.full.'"
       }
     },
@@ -3091,7 +3091,7 @@
       "key": "creditia.project",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 93,
+        "line": 95,
         "anchor": "'project'"
       }
     },
@@ -3099,7 +3099,7 @@
       "key": "creditia.autofresh",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 93,
+        "line": 95,
         "anchor": "'autofresh'"
       }
     },
@@ -3107,7 +3107,7 @@
       "key": "creditia.autofresh.{projectId}",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 93,
+        "line": 95,
         "anchor": "'autofresh.'"
       }
     },
@@ -3115,7 +3115,7 @@
       "key": "creditia.names",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 93,
+        "line": 95,
         "anchor": "'names'"
       }
     },
@@ -3123,7 +3123,7 @@
       "key": "creditia.group.{projectId}",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 93,
+        "line": 95,
         "anchor": "'group.'"
       }
     },
@@ -3131,7 +3131,7 @@
       "key": "creditia.dims",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 563,
+        "line": 565,
         "anchor": "'dims'"
       }
     },
@@ -3139,7 +3139,7 @@
       "key": "creditia.fmt",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 93,
+        "line": 95,
         "anchor": "'fmt'"
       }
     },
@@ -3147,7 +3147,7 @@
       "key": "creditia.view",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 93,
+        "line": 95,
         "anchor": "'view'"
       }
     }
@@ -3157,7 +3157,7 @@
       "id": "not_in_library",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 160,
+        "line": 162,
         "anchor": "  not_in_library:"
       }
     },
@@ -3165,7 +3165,7 @@
       "id": "no_credits",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 161,
+        "line": 163,
         "anchor": "  no_credits:"
       }
     },
@@ -3173,7 +3173,7 @@
       "id": "dir_missing",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 162,
+        "line": 164,
         "anchor": "  dir_missing:"
       }
     },
@@ -3181,7 +3181,7 @@
       "id": "core_missing",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 163,
+        "line": 165,
         "anchor": "  core_missing:"
       }
     },
@@ -3189,7 +3189,7 @@
       "id": "core_failed",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 164,
+        "line": 166,
         "anchor": "  core_failed:"
       }
     },
@@ -3197,7 +3197,7 @@
       "id": "busy",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 165,
+        "line": 167,
         "anchor": "  busy:"
       }
     },
@@ -3205,7 +3205,7 @@
       "id": "cancelled",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 166,
+        "line": 168,
         "anchor": "  cancelled:"
       }
     },
@@ -3213,7 +3213,7 @@
       "id": "no_home",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 167,
+        "line": 169,
         "anchor": "  no_home:"
       }
     },
@@ -3221,7 +3221,7 @@
       "id": "io",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 168,
+        "line": 170,
         "anchor": "  io:"
       }
     },
@@ -3229,7 +3229,7 @@
       "id": "store",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 169,
+        "line": 171,
         "anchor": "  store:"
       }
     },
@@ -3237,7 +3237,7 @@
       "id": "not_allowed",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 170,
+        "line": 172,
         "anchor": "  not_allowed:"
       }
     },
@@ -3245,7 +3245,7 @@
       "id": "switch_failed",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 171,
+        "line": 173,
         "anchor": "  switch_failed:"
       }
     },
@@ -3253,7 +3253,7 @@
       "id": "agent_failed",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 172,
+        "line": 174,
         "anchor": "  agent_failed:"
       }
     },
@@ -3261,7 +3261,7 @@
       "id": "unsupported",
       "source": {
         "path": "apps/desktop/src/main.ts",
-        "line": 173,
+        "line": 175,
         "anchor": "  unsupported:"
       }
     }
@@ -3325,7 +3325,7 @@
       "condition": null,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 30,
+        "line": 34,
         "anchor": "{ id: 'png'"
       }
     },
@@ -3337,7 +3337,7 @@
       "condition": null,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 31,
+        "line": 35,
         "anchor": "{ id: 'svg'"
       }
     },
@@ -3349,7 +3349,7 @@
       "condition": null,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 32,
+        "line": 36,
         "anchor": "{ id: 'pdf'"
       }
     },
@@ -3361,7 +3361,7 @@
       "condition": "animated artwork only",
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 33,
+        "line": 37,
         "anchor": "{ id: 'gif'"
       }
     },
@@ -3373,7 +3373,7 @@
       "condition": null,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 34,
+        "line": 38,
         "anchor": "{ id: 'html'"
       }
     },
@@ -3385,7 +3385,7 @@
       "condition": "clipboard with file fallback",
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 35,
+        "line": 39,
         "anchor": "{ id: 'md'"
       }
     },
@@ -3397,7 +3397,7 @@
       "condition": "shared declaration; hidden in desktop/CLI list",
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 36,
+        "line": 40,
         "anchor": "{ id: 'embed'"
       }
     }
@@ -3411,7 +3411,7 @@
       "desktop": true,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 41,
+        "line": 45,
         "anchor": "{ id: 'native'"
       }
     },
@@ -3423,7 +3423,7 @@
       "desktop": true,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 42,
+        "line": 46,
         "anchor": "{ id: 'og'"
       }
     },
@@ -3435,7 +3435,7 @@
       "desktop": true,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 43,
+        "line": 47,
         "anchor": "{ id: 'square'"
       }
     },
@@ -3447,7 +3447,7 @@
       "desktop": true,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 44,
+        "line": 48,
         "anchor": "{ id: 'portrait'"
       }
     },
@@ -3459,7 +3459,7 @@
       "desktop": true,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 45,
+        "line": 49,
         "anchor": "{ id: 'story'"
       }
     },
@@ -3471,7 +3471,7 @@
       "desktop": false,
       "source": {
         "path": "packages/render/src/export.ts",
-        "line": 46,
+        "line": 50,
         "anchor": "{ id: 'a4'"
       }
     }
@@ -3648,7 +3648,7 @@
       "sources": [
         {
           "path": "apps/desktop/src/export-worker.ts",
-          "line": 52,
+          "line": 53,
           "anchor": "return exportArtwork("
         },
         {
@@ -3696,7 +3696,7 @@
     },
     {
       "path": "apps/desktop/src/export-worker.ts",
-      "sha256": "dcfff8a8161e4ea6be448c88db266fe2233389b0c9d774aa0d459bc7a6c71de3"
+      "sha256": "3924d9d0dedc4cfc568f0c780eee7ffa0d0b1cc1c5e0eb216af68b6047f9787d"
     },
     {
       "path": "apps/desktop/src/fonts.ts",
@@ -3704,7 +3704,7 @@
     },
     {
       "path": "apps/desktop/src/kits.ts",
-      "sha256": "8558737d73873d4c9cd685581c0a6200c8e347c61e6196b35d890e96fb2f2609"
+      "sha256": "344d0ec48a4eda2b045ec2f26050f7003039341b7161e5270a32aba18dd277dd"
     },
     {
       "path": "apps/desktop/src/live-mark.ts",
@@ -3716,7 +3716,7 @@
     },
     {
       "path": "apps/desktop/src/main.ts",
-      "sha256": "9c80f805d3c0062b75fae07a1b2894393f5dbd7807bb9a0c5dbc7154ce58ce78"
+      "sha256": "7b498bf1242109ac6150a154c9a443338b5329b68f9800bd66e1a2437f30e090"
     },
     {
       "path": "apps/desktop/src/roam-preview.ts",
@@ -3724,7 +3724,7 @@
     },
     {
       "path": "apps/desktop/src/style.css",
-      "sha256": "61260c450095466fbdc939db0a5adeae437ad987a17c12486548798efb9658f7"
+      "sha256": "d31973880c75a4dad3e1821710278b4ff6dcbd66b9ebc9ae35f3c7b5d4d0b621"
     },
     {
       "path": "apps/desktop/src/wall.ts",
@@ -3760,7 +3760,7 @@
     },
     {
       "path": "packages/render/src/classic/art.ts",
-      "sha256": "b53e3e21f0c33acc3f1d4a9e94ad9bbfca384a5ad7aa0c7a0cfa8cd6a8e2b130"
+      "sha256": "af686108702b5059e6d83e83fcf4707d6c393deef23718eadb7759753f433119"
     },
     {
       "path": "packages/render/src/classic/bridge.ts",
@@ -3776,11 +3776,11 @@
     },
     {
       "path": "packages/render/src/classic/forms.ts",
-      "sha256": "d4cdff98bb40759c06187d7e822fc32031ecbf78801963e7dad0aa12bf5dfe71"
+      "sha256": "4d989a82007012b246342e40901fceb2228ecce350c88f19e331abb5a53c662d"
     },
     {
       "path": "packages/render/src/classic/motion.ts",
-      "sha256": "8e2ce7d2df8c4faa602a572069e3ab2469ee19900e8d12184542a7c6b06f6b59"
+      "sha256": "18920d8901fd14d0ef90c22f055218bb0f87771d7aac2a6868ee2b9cd9cde72e"
     },
     {
       "path": "packages/render/src/classic/registry.ts",
@@ -3788,7 +3788,7 @@
     },
     {
       "path": "packages/render/src/classic/rolls.ts",
-      "sha256": "3d862b28485e05747ac6224a65e6ee20124631b7846e382ef154f004b73ab084"
+      "sha256": "99fdeb3bdb2773bbccd606d6564057f2037a9b243339871cc69f0e7d8e12d991"
     },
     {
       "path": "packages/render/src/classic/themes.ts",
@@ -3800,11 +3800,11 @@
     },
     {
       "path": "packages/render/src/export.ts",
-      "sha256": "fb7a65ea40a07196f270767f7b603963fb155049ff902f64af0c4b03355c6749"
+      "sha256": "e5aea63944967537e3fd5fe681b46f31967c6243078c70954675584faf3aec2e"
     },
     {
       "path": "packages/render/src/fonts.ts",
-      "sha256": "7e4218969f3634ad9417d54473dfa84b1eafaa3f5a0e9cc9549c0c41a37a88f6"
+      "sha256": "e9ed7f84918b0097422d52c51f01dea737ae136d0776fb02521ab5cd726a1141"
     },
     {
       "path": "packages/render/src/mark.ts",
@@ -3812,23 +3812,23 @@
     },
     {
       "path": "packages/render/src/pieces/cards.ts",
-      "sha256": "932318b33b5e8acd695ae86c536f291396b5d4d01be46af964fc72ba8ccc9d2d"
+      "sha256": "0f449d2171f9f8e82c2d6dbc6ac95c3f1edae8b2d692f63b9237647d5dde0d1c"
     },
     {
       "path": "packages/render/src/pieces/charts.ts",
-      "sha256": "6eeb200692c8096793329eeb86189333e9f860bc739ee4b521fb4dc8d724f600"
+      "sha256": "033053191d273ddac1f131c3d696af94848be77f97be1cf953ab99671dbb12d2"
     },
     {
       "path": "packages/render/src/pieces/roll.ts",
-      "sha256": "16ab0778ad5d552cd315ef930f556a3ea324ffe2ef32df4a04b3e956bd598d6d"
+      "sha256": "afa5495a4e83c25e794d34c8fc4d60bb9998e51ef4b43e3d56635059dc76cd34"
     },
     {
       "path": "packages/render/src/pieces/tier.ts",
-      "sha256": "d8419ea63a3ea262f6ad15ac1d134aacb13da8f83e3c3e3526d02071bf9aef28"
+      "sha256": "b34767268203fcf7b56bceb3a099616ee03eac30e3024a62763923bbd0e17592"
     },
     {
       "path": "packages/render/src/registry.ts",
-      "sha256": "b056f1a194e1a5d40f0b775ac5c3893c917b1c567d0f8767f7ffcda883b7127c"
+      "sha256": "b5a944397f36591ece0953b71939e1c018224383e7164b53f63a8566de009443"
     },
     {
       "path": "packages/render/src/styles/base.ts",
@@ -3848,7 +3848,7 @@
     },
     {
       "path": "packages/render/src/styles/pop.ts",
-      "sha256": "f97563fa1c0126e1e64c72e28477f832f7787cc88ba5f85743165be5e579f13a"
+      "sha256": "1185ef7c6a975d6713e88087de512619d5927be5c8c192c6f7a9c4bcd89545ca"
     },
     {
       "path": "packages/render/src/styles/story.ts",

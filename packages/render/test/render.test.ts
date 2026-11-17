@@ -11,10 +11,21 @@ import { hanzi, modelName, resolveGroup } from '../src/data.ts';
 import * as C from '../src/classic/data.ts';
 import { creditsOf } from '../src/pieces/roll.ts';
 import { markOf } from '../src/pieces/common.ts';
+import { el } from '../src/svg.ts';
+import { familiesIn } from '../src/fonts.ts';
 
 const raw = JSON.parse(readFileSync(new URL('../fixtures/catnap.json', import.meta.url), 'utf8'));
 const m = buildModel(raw);
 const ex = makeExporter(raster, (d) => new Uint8Array(deflateSync(d)));
+
+test('带数字词的像素字体在浏览器 SVG 中正确引用，导出字形不变', () => {
+  const text = el('text', { x: 4, y: 32, fontFamily: 'Press Start 2P, Noto Sans SC', fontSize: 22, fill: '#fff' }, 'catnap 48.3%');
+  assert.match(text, /font-family="&quot;Press Start 2P&quot;, Noto Sans SC"/);
+  assert.deepEqual(familiesIn(/font-family="([^"]+)"/.exec(text)![1]), ['Press Start 2P', 'Noto Sans SC']);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="45">${text}</svg>`;
+  const old = svg.replace(/&quot;Press Start 2P&quot;/g, 'Press Start 2P');
+  assert.deepEqual(raster.rgba(svg, 300).data, raster.rgba(old, 300).data);
+});
 
 test('模型：agent 按工具归组，其他贡献者按名字进排名，合计 100%，没有主导者', () => {
   assert.deepEqual(m.rows.map((r) => r.key), ['claude-code', 'codex', 'cursor', 'kimi', 'grok', 'h:mara okafor', 'unattributed']);

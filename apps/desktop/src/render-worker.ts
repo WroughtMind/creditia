@@ -2,13 +2,14 @@
 import * as C from '../../../packages/render/src/classic/data.ts';
 import * as V from '../../../packages/render/src/data.ts';
 import { themeById } from '../../../packages/render/src/classic/themes.ts';
-import { prepare, warm, render as classicRender } from '../../../packages/render/src/classic/browser.ts';
+import { prepare, warm, render as classicRender, frames as classicFrames } from '../../../packages/render/src/classic/browser.ts';
 import { STYLES } from '../../../packages/render/src/styles/index.ts';
-import { art as v2Art } from '../../../packages/render/src/registry.ts';
+import { art as v2Art, frames as v2Frames } from '../../../packages/render/src/registry.ts';
 import { fontFiles, fontBytes } from './fonts.ts';
 import { bridgeStyle } from '../../../packages/render/src/classic/bridge.ts';
 import { Resvg, initWasm } from '@resvg/resvg-wasm';
 import wasmUrl from '@resvg/resvg-wasm/index_bg.wasm?url';
+import { flattenSvg } from '../../../packages/render/src/flatten.ts';
 
 prepare(fontFiles());
 let rasterReady: Promise<void> | undefined;
@@ -22,10 +23,11 @@ async function preview(svg: string, style: string, classic: boolean) {
   await (rasterReady ??= initWasm(fetch(wasmUrl)));
   const styleSpec = classic ? bridgeStyle(themeById(style)!) : STYLES.find((s) => s.id === style)!;
   const fonts = await fontBytes(styleSpec, svg);
-  const image = new Resvg(svg, {font:{fontBuffers:fonts,loadSystemFonts:false,defaultFontFamily:'Noto Sans SC'}});
-  try {
-    return new Blob([image.toString()], {type:'image/svg+xml'});
-  } finally { image.free(); }
+  const outlined = flattenSvg(svg, source => {
+    const image = new Resvg(source, {font:{fontBuffers:fonts,loadSystemFonts:false,defaultFontFamily:'Noto Sans SC'}});
+    try { return image.toString(); } finally { image.free(); }
+  });
+  return new Blob([outlined], {type:'image/svg+xml'});
 }
 self.onmessage = async ({ data }) => {
   const { seq, style, lang, group, named, id, variant, classic } = data;
@@ -37,6 +39,14 @@ self.onmessage = async ({ data }) => {
     if (!modelKey || modelKey[0] !== current || modelKey[1] !== lang || modelKey[2] !== group || modelKey[3] !== classic || modelKey[4] !== named) {
       model = classic ? C.buildModel(current, { director: false, lang, group, named }) : V.buildModel(current, { lang, named, sign: '', group });
       modelKey = [current, lang, group, classic, named];
+    }
+    if (data.frames) {
+      const frames = classic ? await classicFrames(id, model, themeById(style)!, { lang, variant }, 24) : v2Frames(id, model, STYLES.find((s) => s.id === style)!, { variant }, 24);
+      // 独立动画任务按顺序转路径，避免同时持有多份 WASM 树。
+      const output = [];
+      for (const frame of frames) output.push(data.previews ? await preview(frame.svg, style, classic) : frame);
+      self.postMessage({ frames: output });
+      return;
     }
     const a = classic ? await classicRender(id, model, themeById(style)!, { lang, variant }) : v2Art(id, model, STYLES.find((s) => s.id === style)!, { variant });
     self.postMessage({ seq, art: a });

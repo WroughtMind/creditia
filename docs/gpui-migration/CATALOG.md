@@ -59,7 +59,7 @@ SVG 注册表另有 `minimal/noir/glass/cinema/terminal`；桌面为避免重复
 | clock | 作息图 | 默认 | 是 | 是 | [packages/render/src/classic/registry.ts:29](../../packages/render/src/classic/registry.ts#L29) |
 | versions | 版本柱状图 | 默认 | 是 | 是 | [packages/render/src/classic/registry.ts:30](../../packages/render/src/classic/registry.ts#L30) |
 | settle | 沉淀 | 默认 | 是 | 是 | [packages/render/src/classic/registry.ts:31](../../packages/render/src/classic/registry.ts#L31) |
-| badge | 徽章 | original, flat, stack, emblem, split | 是 | 否 | [packages/render/src/classic/bridge.ts:188](../../packages/render/src/classic/bridge.ts#L188) |
+| badge | 徽章 | original, flat, stack, emblem, split | 是 | 是 | [packages/render/src/classic/bridge.ts:188](../../packages/render/src/classic/bridge.ts#L188) |
 | stream | 河流图 | 默认 | 是 | 是 | [packages/render/src/classic/bridge.ts:183](../../packages/render/src/classic/bridge.ts#L183) |
 | survival | 留存 | 默认 | 是 | 是 | [packages/render/src/classic/bridge.ts:183](../../packages/render/src/classic/bridge.ts#L183) |
 | evidence | 出处 | 默认 | 是 | 是 | [packages/render/src/classic/bridge.ts:183](../../packages/render/src/classic/bridge.ts#L183) |
@@ -73,27 +73,27 @@ SVG 注册表另有 `minimal/noir/glass/cinema/terminal`；桌面为避免重复
 
 | 作品 | 名称 | 版式 | 桌面 | 可生成动画帧 | 源码 |
 |---|---|---|---|---|---|
-| tier | 署名榜 | rows, center, podium, vertical, hud, stats, split, grouped | 是 | 是 | [packages/render/src/registry.ts:30](../../packages/render/src/registry.ts#L30) |
-| asterisk | 星号 | 默认 | 是 | 是 | [packages/render/src/registry.ts:31](../../packages/render/src/registry.ts#L31) |
-| share | 分享图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:32](../../packages/render/src/registry.ts#L32) |
-| hand | 开发者 | 默认 | 共享模块额外能力 | 是 | [packages/render/src/registry.ts:33](../../packages/render/src/registry.ts#L33) |
-| people | 贡献者 | 默认 | 是 | 是 | [packages/render/src/registry.ts:34](../../packages/render/src/registry.ts#L34) |
-| receipt | 小票 | slip, ticket, itemized | 是 | 否 | [packages/render/src/registry.ts:35](../../packages/render/src/registry.ts#L35) |
-| badge | 徽章 | flat, stack, emblem, split | 是 | 否 | [packages/render/src/registry.ts:36](../../packages/render/src/registry.ts#L36) |
-| byline | 署名行 | line, models | 是 | 否 | [packages/render/src/registry.ts:37](../../packages/render/src/registry.ts#L37) |
-| roll | 片尾字幕 | classic, scroll, card, vertical, ed, billing, terminal, troupe | 是 | 是 | [packages/render/src/registry.ts:38](../../packages/render/src/registry.ts#L38) |
-| donut | 环形图 | ring, nested | 是 | 是 | [packages/render/src/registry.ts:39](../../packages/render/src/registry.ts#L39) |
-| waffle | 华夫饼图 | grid, blocks | 是 | 是 | [packages/render/src/registry.ts:40](../../packages/render/src/registry.ts#L40) |
-| stream | 河流图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:41](../../packages/render/src/registry.ts#L41) |
-| lanes | 会话泳道 | 默认 | 是 | 是 | [packages/render/src/registry.ts:42](../../packages/render/src/registry.ts#L42) |
-| clock | 作息打卡 | 默认 | 是 | 是 | [packages/render/src/registry.ts:43](../../packages/render/src/registry.ts#L43) |
-| versions | 版本柱状图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:44](../../packages/render/src/registry.ts#L44) |
-| survival | 留存 | 默认 | 是 | 是 | [packages/render/src/registry.ts:45](../../packages/render/src/registry.ts#L45) |
-| mosaic | 文件马赛克 | 默认 | 是 | 是 | [packages/render/src/registry.ts:46](../../packages/render/src/registry.ts#L46) |
-| calendar | 日历 | 默认 | 是 | 是 | [packages/render/src/registry.ts:47](../../packages/render/src/registry.ts#L47) |
-| evidence | 出处 | 默认 | 是 | 是 | [packages/render/src/registry.ts:48](../../packages/render/src/registry.ts#L48) |
-| areas | 板块 | 默认 | 是 | 是 | [packages/render/src/registry.ts:49](../../packages/render/src/registry.ts#L49) |
-| codemap | 代码地图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:50](../../packages/render/src/registry.ts#L50) |
+| tier | 署名榜 | rows, center, podium, vertical, hud, stats, split, grouped | 是 | 是 | [packages/render/src/registry.ts:32](../../packages/render/src/registry.ts#L32) |
+| asterisk | 星号 | 默认 | 是 | 是 | [packages/render/src/registry.ts:33](../../packages/render/src/registry.ts#L33) |
+| share | 分享图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:34](../../packages/render/src/registry.ts#L34) |
+| hand | 开发者 | 默认 | 共享模块额外能力 | 是 | [packages/render/src/registry.ts:35](../../packages/render/src/registry.ts#L35) |
+| people | 贡献者 | 默认 | 是 | 是 | [packages/render/src/registry.ts:36](../../packages/render/src/registry.ts#L36) |
+| receipt | 小票 | slip, ticket, itemized | 是 | 是 | [packages/render/src/registry.ts:37](../../packages/render/src/registry.ts#L37) |
+| badge | 徽章 | flat, stack, emblem, split | 是 | 是 | [packages/render/src/registry.ts:38](../../packages/render/src/registry.ts#L38) |
+| byline | 署名行 | line, models | 是 | 是 | [packages/render/src/registry.ts:39](../../packages/render/src/registry.ts#L39) |
+| roll | 片尾字幕 | classic, scroll, card, vertical, ed, billing, terminal, troupe | 是 | 是 | [packages/render/src/registry.ts:40](../../packages/render/src/registry.ts#L40) |
+| donut | 环形图 | ring, nested | 是 | 是 | [packages/render/src/registry.ts:41](../../packages/render/src/registry.ts#L41) |
+| waffle | 华夫饼图 | grid, blocks | 是 | 是 | [packages/render/src/registry.ts:42](../../packages/render/src/registry.ts#L42) |
+| stream | 河流图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:43](../../packages/render/src/registry.ts#L43) |
+| lanes | 会话泳道 | 默认 | 是 | 是 | [packages/render/src/registry.ts:44](../../packages/render/src/registry.ts#L44) |
+| clock | 作息打卡 | 默认 | 是 | 是 | [packages/render/src/registry.ts:45](../../packages/render/src/registry.ts#L45) |
+| versions | 版本柱状图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:46](../../packages/render/src/registry.ts#L46) |
+| survival | 留存 | 默认 | 是 | 是 | [packages/render/src/registry.ts:47](../../packages/render/src/registry.ts#L47) |
+| mosaic | 文件马赛克 | 默认 | 是 | 是 | [packages/render/src/registry.ts:48](../../packages/render/src/registry.ts#L48) |
+| calendar | 日历 | 默认 | 是 | 是 | [packages/render/src/registry.ts:49](../../packages/render/src/registry.ts#L49) |
+| evidence | 出处 | 默认 | 是 | 是 | [packages/render/src/registry.ts:50](../../packages/render/src/registry.ts#L50) |
+| areas | 板块 | 默认 | 是 | 是 | [packages/render/src/registry.ts:51](../../packages/render/src/registry.ts#L51) |
+| codemap | 代码地图 | 默认 | 是 | 是 | [packages/render/src/registry.ts:52](../../packages/render/src/registry.ts#L52) |
 
 `profile` 需要项目集合与个人上下文；`blame` 需要溯源结果；`hand` 未列入默认桌面展墙。台账仍保留这些注册能力。经典主题追加版式经 `classic/bridge.ts` 使用其自己的颜色、字体及框线；不等于直接套用 SVG 风格。
 
@@ -101,51 +101,51 @@ SVG 注册表另有 `minimal/noir/glass/cinema/terminal`；桌面为避免重复
 
 | 操作 | macOS / Windows、Linux | 源码 |
 |---|---|---|
-| 切换项目… | CmdOrCtrl+K | [apps/desktop/src/main.ts:1541](../../apps/desktop/src/main.ts#L1541) |
-| 添加文件夹… | CmdOrCtrl+O | [apps/desktop/src/main.ts:1542](../../apps/desktop/src/main.ts#L1542) |
-| 重新分析 | CmdOrCtrl+R | [apps/desktop/src/main.ts:1543](../../apps/desktop/src/main.ts#L1543) |
-| 项目设置… | CmdOrCtrl+I | [apps/desktop/src/main.ts:1544](../../apps/desktop/src/main.ts#L1544) |
-| 设置… | CmdOrCtrl+, | [apps/desktop/src/main.ts:1545](../../apps/desktop/src/main.ts#L1545) |
-| 墙 | CmdOrCtrl+1 | [apps/desktop/src/main.ts:1546](../../apps/desktop/src/main.ts#L1546) |
-| 漫游 | CmdOrCtrl+2 | [apps/desktop/src/main.ts:1547](../../apps/desktop/src/main.ts#L1547) |
-| 上一种风格 | CmdOrCtrl+[ | [apps/desktop/src/main.ts:1548](../../apps/desktop/src/main.ts#L1548) |
-| 下一种风格 | CmdOrCtrl+] | [apps/desktop/src/main.ts:1549](../../apps/desktop/src/main.ts#L1549) |
-| 导出… | CmdOrCtrl+E | [apps/desktop/src/main.ts:1550](../../apps/desktop/src/main.ts#L1550) |
+| 切换项目… | CmdOrCtrl+K | [apps/desktop/src/main.ts:1570](../../apps/desktop/src/main.ts#L1570) |
+| 添加文件夹… | CmdOrCtrl+O | [apps/desktop/src/main.ts:1571](../../apps/desktop/src/main.ts#L1571) |
+| 重新分析 | CmdOrCtrl+R | [apps/desktop/src/main.ts:1572](../../apps/desktop/src/main.ts#L1572) |
+| 项目设置… | CmdOrCtrl+I | [apps/desktop/src/main.ts:1573](../../apps/desktop/src/main.ts#L1573) |
+| 设置… | CmdOrCtrl+, | [apps/desktop/src/main.ts:1574](../../apps/desktop/src/main.ts#L1574) |
+| 墙 | CmdOrCtrl+1 | [apps/desktop/src/main.ts:1575](../../apps/desktop/src/main.ts#L1575) |
+| 漫游 | CmdOrCtrl+2 | [apps/desktop/src/main.ts:1576](../../apps/desktop/src/main.ts#L1576) |
+| 上一种风格 | CmdOrCtrl+[ | [apps/desktop/src/main.ts:1577](../../apps/desktop/src/main.ts#L1577) |
+| 下一种风格 | CmdOrCtrl+] | [apps/desktop/src/main.ts:1578](../../apps/desktop/src/main.ts#L1578) |
+| 导出… | CmdOrCtrl+E | [apps/desktop/src/main.ts:1579](../../apps/desktop/src/main.ts#L1579) |
 
 ## 页面和操作
 
 | 功能 | 阶段 | 基线 | 检查项 |
 |---|---|---|---|
-| 首次打开与项目发现 | 4 | [apps/desktop/src/main.ts:1878](../../apps/desktop/src/main.ts#L1878) | 扫描本地含 AI 记录的 Git 仓库；默认选择前三个候选项目；逐个选择或批量分析；手动选择文件夹；扫描中、无候选、扫描失败与重试；逐项运行、完成、失败、取消状态 |
-| 项目切换与搜索 | 4 | [apps/desktop/src/main.ts:1611](../../apps/desktop/src/main.ts#L1611) | 按名称和路径搜索；已加入、尚未添加、全部项目分区；目录丢失和上次分析日期；后台发现与星号补齐时保留焦点及更多菜单；方向键选择、回车打开、点击外部关闭 |
-| 项目更多菜单 | 4 | [apps/desktop/src/main.ts:1713](../../apps/desktop/src/main.ts#L1713) | 重新分析；在系统文件管理器中打开；项目设置；移除前确认；已删除目录禁用不适用操作；菜单边缘避让 |
-| 打开和切换档案 | 3 | [apps/desktop/src/main.ts:353](../../apps/desktop/src/main.ts#L353) | 读取项目档案及版本戳；丢弃过期项目请求；释放旧漫游预览与排版任务；未分析提示与立即分析；读取失败可理解的错误状态；保留项目名称与星号缓存 |
-| 全部项目汇总 | 3 | [apps/desktop/src/main.ts:406](../../apps/desktop/src/main.ts#L406) | 多个项目时显示全部项目入口；合并档案且文件和 PR 带项目名；无法读取的档案遵循现有跳过规则；工具和模型分组；汇总名称跟随语言 |
-| 外部变更和自动增量更新 | 3 | [apps/desktop/src/main.ts:413](../../apps/desktop/src/main.ts#L413) | 窗口回到前台、可见性变化和定时检查；比较档案版本和 Git HEAD；新提交触发增量分析；保持滚动位置与已选版式；后台任务避免重复运行；项目级设置覆盖全局默认 |
-| 工具与模型切换 | 4 | [apps/desktop/src/main.ts:514](../../apps/desktop/src/main.ts#L514) | 自动、工具、模型分组语义；没有模型记录时隐藏切换；逐项目记住偏好；作品、文字输出、星号与悬停数据一致 |
-| 展墙 | 4 | [apps/desktop/src/main.ts:586](../../apps/desktop/src/main.ts#L586) | 保持两套作品顺序、重复徽章版式和跨列布局；占位与首屏渐进绘制；只发布当前项目和风格的结果；空作品和排版错误处理；交互区域及无障碍标签；中英文尺寸缓存 |
-| 响应式展墙排版 | 4 | [apps/desktop/src/main.ts:709](../../apps/desktop/src/main.ts#L709) | 窗口改变尺寸后重新排版；宽作品 span；按作品原始纵横比排布；最小窗口尺寸；滚动与标题区状态 |
-| 版式切换 | 4 | [apps/desktop/src/main.ts:795](../../apps/desktop/src/main.ts#L795) | 前后版式循环；风格默认版式；连续点击只应用最后一次；同作品相关墙砖同步；失败保持可用旧作品 |
-| 作品悬停详情 | 4 | [apps/desktop/src/main.ts:1256](../../apps/desktop/src/main.ts#L1256) | 文字和图形命中区域；比例与值的语义保持；屏幕边缘避让；平移和缩放后命中准确；失焦和销毁时清理浮层 |
-| 作品放大视图 | 4 | [apps/desktop/src/main.ts:1037](../../apps/desktop/src/main.ts#L1037) | 点击及 Enter/Space 打开；上下切作品、左右切版式；局部试用其它支持该作品的风格；设为全局风格；输出正在看的作品和版式；加载时禁用导出；失败重试；关闭后恢复原键盘焦点 |
-| 漫游画布 | 4 | [apps/desktop/src/main.ts:1361](../../apps/desktop/src/main.ts#L1361) | 鼠标拖动、滚轮和触控板双轴移动；Shift 滚轮横移；惯性滑动与中断；每轮切换作品版式；仅挂载可见区附近作品；点击放大及悬停导出；方向键移动、Home/0 回原点；重进漫游和窗口缩放的位置保持 |
-| 风格选择 | 4 | [apps/desktop/src/main.ts:1464](../../apps/desktop/src/main.ts#L1464) | 26 个桌面风格及顺序；15 个经典主题与新风格间分隔；逐个前后切换；风格圆点和名称；关闭及边缘定位；记住上次风格 |
-| 作品导出菜单 | 7 | [apps/desktop/src/main.ts:841](../../apps/desktop/src/main.ts#L841) | PNG/SVG/PDF/GIF/HTML 与复制 Markdown；仅动画作品可选 GIF；记住格式和尺寸；原尺寸、横图、方图、竖图、竖屏；复制失败可另存 Markdown 文件 |
-| 导出任务 | 7 | [apps/desktop/src/main.ts:873](../../apps/desktop/src/main.ts#L873) | 运行、已保存、失败计数；相同输入和选项去重；任务名包含作品、版式、风格与尺寸；切换项目后任务仍完成到原请求；显示保存位置、系统定位、关闭完成任务；错误不吞掉、允许再次发起 |
-| 拖放导出坞 | 4 | [apps/desktop/src/main.ts:975](../../apps/desktop/src/main.ts#L975) | 拖起作品显示预览和导出坞；PNG/SVG/PDF/HTML 目标；拖动中选择尺寸；格式按钮间缝隙按最近目标；取消和释放清理；轻点仍打开放大视图 |
-| 分析任务与取消 | 3 | [apps/desktop/src/main.ts:1788](../../apps/desktop/src/main.ts#L1788) | 真实 Rust 核心分析与结构化进度；等待、分析中、取消中、完成、失败；前台阻塞与后台分析区分；停止子进程及收尾；不允许重入；取消后可再次分析 |
-| 分析状态与星号 | 4 | [apps/desktop/src/main.ts:228](../../apps/desktop/src/main.ts#L228) | 300ms 和 2s 的延迟呈现；顶部与中央星号位置；每瓣份额与加载、进度、错误动作；程序坞或任务栏进度同步；完成提示与警告入口 |
-| 分析警告 | 4 | [apps/desktop/src/main.ts:1936](../../apps/desktop/src/main.ts#L1936) | 结构化警告数量；逐条查看分析问题；关闭和语言同步 |
-| 项目设置 | 4 | [apps/desktop/src/main.ts:1954](../../apps/desktop/src/main.ts#L1954) | 上次分析及重新分析；跟随默认、自动跟上、关闭；Git 提交盖章和发版/PR 工作流接入；接入状态失败重试；主目录、自动发现、手动关联路径；关联和解除关联文件夹；移除前确认 |
-| 提交与发布接入 | 3 | [apps/desktop/src/main.ts:497](../../apps/desktop/src/main.ts#L497) | 安装及卸载提交 hook；安装及卸载发布工作流；显示实际会修改的位置；非 GitHub 仓库状态；已发布档案与 hook 依赖提示；忙碌和失败恢复 |
-| 移除及重新加入 | 3 | [apps/desktop/src/main.ts:1743](../../apps/desktop/src/main.ts#L1743) | 只移除列表记录；保留本地证据、缓存和仓库文件；可立即加回来；当前项目和全部项目视图正确更新；最后一个项目移除后回首次打开 |
-| 通用设置 | 2 | [apps/desktop/src/main.ts:2025](../../apps/desktop/src/main.ts#L2025) | 中英文；程序坞图标选择；自动跟上新提交默认值；偏好持久化 |
-| 导出设置 | 7 | [apps/desktop/src/main.ts:2025](../../apps/desktop/src/main.ts#L2025) | 选择保存目录；恢复默认目录；打开导出目录；是否显示其他贡献者姓名；默认目录不可用时的错误 |
-| 数据设置 | 3 | [apps/desktop/src/main.ts:2025](../../apps/desktop/src/main.ts#L2025) | 显示并打开项目库位置；关闭、App 打开时、一直备份三档；macOS 后台任务支持范围；备份运行和最近结果；AI 工具诊断及不同来源状态；诊断失败可重试 |
-| 关于 | 2 | [apps/desktop/src/main.ts:2025](../../apps/desktop/src/main.ts#L2025) | 应用版本；项目说明；本机运行说明 |
-| 系统菜单与窗口 | 2 | [apps/desktop/src/main.ts:1572](../../apps/desktop/src/main.ts#L1572) | macOS 应用、编辑、项目、显示、窗口菜单；剪切、复制、粘贴、全选及撤销重做；系统隐藏、退出、全屏、最小化、关闭；菜单快捷键与 UI 命令共用；语言切换重建菜单 |
-| 快捷键与焦点 | 2 | [apps/desktop/src/main.ts:1562](../../apps/desktop/src/main.ts#L1562) | 十个 Cmd/Ctrl 命令；局部方向键与 Escape；输入框不被漫游方向键抢占；对话框关闭后焦点返回；欢迎页只允许可用命令 |
-| 中英文切换 | 2 | [apps/desktop/src/main.ts:1521](../../apps/desktop/src/main.ts#L1521) | 菜单、设置、导出、错误、提示同步；作品文字与历史标签同步；数字和日期格式；中文字体覆盖 |
+| 首次打开与项目发现 | 4 | [apps/desktop/src/main.ts:1907](../../apps/desktop/src/main.ts#L1907) | 扫描本地含 AI 记录的 Git 仓库；默认选择前三个候选项目；逐个选择或批量分析；手动选择文件夹；扫描中、无候选、扫描失败与重试；逐项运行、完成、失败、取消状态 |
+| 项目切换与搜索 | 4 | [apps/desktop/src/main.ts:1640](../../apps/desktop/src/main.ts#L1640) | 按名称和路径搜索；已加入、尚未添加、全部项目分区；目录丢失和上次分析日期；后台发现与星号补齐时保留焦点及更多菜单；方向键选择、回车打开、点击外部关闭 |
+| 项目更多菜单 | 4 | [apps/desktop/src/main.ts:1742](../../apps/desktop/src/main.ts#L1742) | 重新分析；在系统文件管理器中打开；项目设置；移除前确认；已删除目录禁用不适用操作；菜单边缘避让 |
+| 打开和切换档案 | 3 | [apps/desktop/src/main.ts:355](../../apps/desktop/src/main.ts#L355) | 读取项目档案及版本戳；丢弃过期项目请求；释放旧漫游预览与排版任务；未分析提示与立即分析；读取失败可理解的错误状态；保留项目名称与星号缓存 |
+| 全部项目汇总 | 3 | [apps/desktop/src/main.ts:408](../../apps/desktop/src/main.ts#L408) | 多个项目时显示全部项目入口；合并档案且文件和 PR 带项目名；无法读取的档案遵循现有跳过规则；工具和模型分组；汇总名称跟随语言 |
+| 外部变更和自动增量更新 | 3 | [apps/desktop/src/main.ts:415](../../apps/desktop/src/main.ts#L415) | 窗口回到前台、可见性变化和定时检查；比较档案版本和 Git HEAD；新提交触发增量分析；保持滚动位置与已选版式；后台任务避免重复运行；项目级设置覆盖全局默认 |
+| 工具与模型切换 | 4 | [apps/desktop/src/main.ts:516](../../apps/desktop/src/main.ts#L516) | 自动、工具、模型分组语义；没有模型记录时隐藏切换；逐项目记住偏好；作品、文字输出、星号与悬停数据一致 |
+| 展墙 | 4 | [apps/desktop/src/main.ts:588](../../apps/desktop/src/main.ts#L588) | 保持两套作品顺序、重复徽章版式和跨列布局；占位与首屏渐进绘制；只发布当前项目和风格的结果；空作品和排版错误处理；交互区域及无障碍标签；中英文尺寸缓存 |
+| 响应式展墙排版 | 4 | [apps/desktop/src/main.ts:711](../../apps/desktop/src/main.ts#L711) | 窗口改变尺寸后重新排版；宽作品 span；按作品原始纵横比排布；最小窗口尺寸；滚动与标题区状态 |
+| 版式切换 | 4 | [apps/desktop/src/main.ts:797](../../apps/desktop/src/main.ts#L797) | 前后版式循环；风格默认版式；连续点击只应用最后一次；同作品相关墙砖同步；失败保持可用旧作品 |
+| 作品悬停详情 | 4 | [apps/desktop/src/main.ts:1284](../../apps/desktop/src/main.ts#L1284) | 文字和图形命中区域；比例与值的语义保持；屏幕边缘避让；平移和缩放后命中准确；失焦和销毁时清理浮层 |
+| 作品放大视图 | 4 | [apps/desktop/src/main.ts:1039](../../apps/desktop/src/main.ts#L1039) | 点击及 Enter/Space 打开；上下切作品、左右切版式；局部试用其它支持该作品的风格；设为全局风格；输出正在看的作品和版式；加载时禁用导出；失败重试；关闭后恢复原键盘焦点 |
+| 漫游画布 | 4 | [apps/desktop/src/main.ts:1389](../../apps/desktop/src/main.ts#L1389) | 鼠标拖动、滚轮和触控板双轴移动；Shift 滚轮横移；惯性滑动与中断；每轮切换作品版式；仅挂载可见区附近作品；点击放大及悬停导出；方向键移动、Home/0 回原点；重进漫游和窗口缩放的位置保持 |
+| 风格选择 | 4 | [apps/desktop/src/main.ts:1492](../../apps/desktop/src/main.ts#L1492) | 26 个桌面风格及顺序；15 个经典主题与新风格间分隔；逐个前后切换；风格圆点和名称；关闭及边缘定位；记住上次风格 |
+| 作品导出菜单 | 7 | [apps/desktop/src/main.ts:843](../../apps/desktop/src/main.ts#L843) | PNG/SVG/PDF/GIF/HTML 与复制 Markdown；仅动画作品可选 GIF；记住格式和尺寸；原尺寸、横图、方图、竖图、竖屏；复制失败可另存 Markdown 文件 |
+| 导出任务 | 7 | [apps/desktop/src/main.ts:875](../../apps/desktop/src/main.ts#L875) | 运行、已保存、失败计数；相同输入和选项去重；任务名包含作品、版式、风格与尺寸；切换项目后任务仍完成到原请求；显示保存位置、系统定位、关闭完成任务；错误不吞掉、允许再次发起 |
+| 拖放导出坞 | 4 | [apps/desktop/src/main.ts:977](../../apps/desktop/src/main.ts#L977) | 拖起作品显示预览和导出坞；PNG/SVG/PDF/HTML 目标；拖动中选择尺寸；格式按钮间缝隙按最近目标；取消和释放清理；轻点仍打开放大视图 |
+| 分析任务与取消 | 3 | [apps/desktop/src/main.ts:1817](../../apps/desktop/src/main.ts#L1817) | 真实 Rust 核心分析与结构化进度；等待、分析中、取消中、完成、失败；前台阻塞与后台分析区分；停止子进程及收尾；不允许重入；取消后可再次分析 |
+| 分析状态与星号 | 4 | [apps/desktop/src/main.ts:230](../../apps/desktop/src/main.ts#L230) | 300ms 和 2s 的延迟呈现；顶部与中央星号位置；每瓣份额与加载、进度、错误动作；程序坞或任务栏进度同步；完成提示与警告入口 |
+| 分析警告 | 4 | [apps/desktop/src/main.ts:1965](../../apps/desktop/src/main.ts#L1965) | 结构化警告数量；逐条查看分析问题；关闭和语言同步 |
+| 项目设置 | 4 | [apps/desktop/src/main.ts:1983](../../apps/desktop/src/main.ts#L1983) | 上次分析及重新分析；跟随默认、自动跟上、关闭；Git 提交盖章和发版/PR 工作流接入；接入状态失败重试；主目录、自动发现、手动关联路径；关联和解除关联文件夹；移除前确认 |
+| 提交与发布接入 | 3 | [apps/desktop/src/main.ts:499](../../apps/desktop/src/main.ts#L499) | 安装及卸载提交 hook；安装及卸载发布工作流；显示实际会修改的位置；非 GitHub 仓库状态；已发布档案与 hook 依赖提示；忙碌和失败恢复 |
+| 移除及重新加入 | 3 | [apps/desktop/src/main.ts:1772](../../apps/desktop/src/main.ts#L1772) | 只移除列表记录；保留本地证据、缓存和仓库文件；可立即加回来；当前项目和全部项目视图正确更新；最后一个项目移除后回首次打开 |
+| 通用设置 | 2 | [apps/desktop/src/main.ts:2054](../../apps/desktop/src/main.ts#L2054) | 中英文；程序坞图标选择；自动跟上新提交默认值；偏好持久化 |
+| 导出设置 | 7 | [apps/desktop/src/main.ts:2054](../../apps/desktop/src/main.ts#L2054) | 选择保存目录；恢复默认目录；打开导出目录；是否显示其他贡献者姓名；默认目录不可用时的错误 |
+| 数据设置 | 3 | [apps/desktop/src/main.ts:2054](../../apps/desktop/src/main.ts#L2054) | 显示并打开项目库位置；关闭、App 打开时、一直备份三档；macOS 后台任务支持范围；备份运行和最近结果；AI 工具诊断及不同来源状态；诊断失败可重试 |
+| 关于 | 2 | [apps/desktop/src/main.ts:2054](../../apps/desktop/src/main.ts#L2054) | 应用版本；项目说明；本机运行说明 |
+| 系统菜单与窗口 | 2 | [apps/desktop/src/main.ts:1601](../../apps/desktop/src/main.ts#L1601) | macOS 应用、编辑、项目、显示、窗口菜单；剪切、复制、粘贴、全选及撤销重做；系统隐藏、退出、全屏、最小化、关闭；菜单快捷键与 UI 命令共用；语言切换重建菜单 |
+| 快捷键与焦点 | 2 | [apps/desktop/src/main.ts:1591](../../apps/desktop/src/main.ts#L1591) | 十个 Cmd/Ctrl 命令；局部方向键与 Escape；输入框不被漫游方向键抢占；对话框关闭后焦点返回；欢迎页只允许可用命令 |
+| 中英文切换 | 2 | [apps/desktop/src/main.ts:1550](../../apps/desktop/src/main.ts#L1550) | 菜单、设置、导出、错误、提示同步；作品文字与历史标签同步；数字和日期格式；中文字体覆盖 |
 | 连续缩放与像素密度 | 4 | 本次新增要求 | GPUI 画布连续缩放；缩放锚点和拖动坐标一致；不同 DPI 字体及纹理清晰；缓存按缩放档和像素密度失效 |
 | 系统明暗主题 | 2 | 本次新增要求 | 应用外壳跟随系统或用户选择；外壳主题与作品风格分别持久化；原生标题栏及控件规范 |
 | 完整动作定义与减少动态效果 | 6 | 本次新增要求 | 26 风格逐件动作审定；星号逐瓣、有机形变、水墨展开、片尾滚动；桌面与动画导出同一时间轴；连续操作、中断、重播；遵循系统及应用减少动态效果设置；不可见动画暂停 |
