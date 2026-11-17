@@ -7462,7 +7462,7 @@ impl Render for Creditia {
                 Button::new(element)
                     .ghost()
                     .label(label)
-                    .h(px(30.))
+                    .h(px(32.))
                     .rounded_full()
                     .text_size(px(12.))
                     .when(group == id, |b| b.bg(cx.theme().muted))
@@ -7471,42 +7471,21 @@ impl Render for Creditia {
         }
         tools = tools
             .child(
-                Button::new("wall")
-                    .ghost()
-                    .w(px(30.))
-                    .h(px(30.))
-                    .rounded_full()
-                    .icon(crate::ui_icons::icon("wall"))
-                    .accessibility_label(self.text("展墙", "Wall"))
-                    .tooltip(self.text("展墙", "Wall"))
+                crate::ui_controls::icon_button("wall", "wall", self.text("展墙", "Wall"))
                     .when(self.preferences.view == "wall" && !self.focused, |b| {
                         b.bg(cx.theme().muted)
                     })
                     .on_click(cx.listener(|view, _, _, cx| view.set_view("wall", cx))),
             )
             .child(
-                Button::new("roam")
-                    .ghost()
-                    .w(px(30.))
-                    .h(px(30.))
-                    .rounded_full()
-                    .icon(crate::ui_icons::icon("roam"))
-                    .accessibility_label(self.text("漫游", "Roam"))
-                    .tooltip(self.text("漫游", "Roam"))
+                crate::ui_controls::icon_button("roam", "roam", self.text("漫游", "Roam"))
                     .when(self.preferences.view == "roam" && !self.focused, |b| {
                         b.bg(cx.theme().muted)
                     })
                     .on_click(cx.listener(|view, _, _, cx| view.set_view("roam", cx))),
             )
             .child(
-                Button::new("settings")
-                    .ghost()
-                    .w(px(30.))
-                    .h(px(30.))
-                    .rounded_full()
-                    .icon(crate::ui_icons::icon("gear"))
-                    .accessibility_label(self.text("设置", "Settings"))
-                    .tooltip(self.text("设置", "Settings"))
+                crate::ui_controls::icon_button("settings", "gear", self.text("设置", "Settings"))
                     .on_click(cx.listener(|view, _, window, cx| {
                         view.open_panel(Panel::Settings, window, cx)
                     })),
@@ -7577,17 +7556,15 @@ impl Render for Creditia {
                     })),
             )
             .child(
-                Button::new("project-settings")
-                    .ghost()
-                    .icon(crate::ui_icons::icon("more"))
-                    .accessibility_label(self.text("项目设置", "Project settings"))
-                    .tooltip(self.text("项目设置", "Project settings"))
-                    .disabled(
-                        self.selected.is_none() || self.selected.as_deref() == Some("__all__"),
-                    )
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        view.open_panel(Panel::Project, window, cx)
-                    })),
+                crate::ui_controls::icon_button(
+                    "project-settings",
+                    "more",
+                    self.text("项目设置", "Project settings"),
+                )
+                .disabled(self.selected.is_none() || self.selected.as_deref() == Some("__all__"))
+                .on_click(
+                    cx.listener(|view, _, window, cx| view.open_panel(Panel::Project, window, cx)),
+                ),
             )
             .child(div().flex_1())
             .child(tools);
@@ -7619,14 +7596,13 @@ impl Render for Creditia {
                 )
                 .child(div().flex_1())
                 .child(
-                    Button::new("focus-close-top")
-                        .ghost()
-                        .rounded_full()
-                        .bg(glass)
-                        .icon(crate::ui_icons::icon("close"))
-                        .accessibility_label(self.text("返回展览", "Return to exhibition"))
-                        .tooltip(self.text("返回展览", "Return to exhibition"))
-                        .on_click(cx.listener(|view, _, _, cx| view.close_focus(cx))),
+                    crate::ui_controls::icon_button(
+                        "focus-close-top",
+                        "close",
+                        self.text("返回展览", "Return to exhibition"),
+                    )
+                    .bg(glass)
+                    .on_click(cx.listener(|view, _, _, cx| view.close_focus(cx))),
                 )
                 .into_any_element()
         } else {
@@ -7662,12 +7638,12 @@ impl Render for Creditia {
                     .border_1()
                     .border_color(border)
                     .child(
-                        Button::new("style-previous")
-                            .ghost()
-                            .icon(crate::ui_icons::icon("prev"))
-                            .accessibility_label(self.text("上一种风格", "Previous style"))
-                            .tooltip(self.text("上一种风格", "Previous style"))
-                            .on_click(cx.listener(|view, _, _, cx| view.step_style(-1, cx))),
+                        crate::ui_controls::icon_button(
+                            "style-previous",
+                            "prev",
+                            self.text("上一种风格", "Previous style"),
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| view.step_style(-1, cx))),
                     )
                     .child(
                         Button::new("styles")
@@ -7681,20 +7657,16 @@ impl Render for Creditia {
                             })),
                     )
                     .child(
-                        Button::new("style-next")
-                            .ghost()
-                            .icon(crate::ui_icons::icon("next"))
-                            .accessibility_label(self.text("下一种风格", "Next style"))
-                            .tooltip(self.text("下一种风格", "Next style"))
-                            .on_click(cx.listener(|view, _, _, cx| view.step_style(1, cx))),
+                        crate::ui_controls::icon_button(
+                            "style-next",
+                            "next",
+                            self.text("下一种风格", "Next style"),
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| view.step_style(1, cx))),
                     ),
             )
             .child(
-                Button::new("pieces")
-                    .ghost()
-                    .icon(crate::ui_icons::icon("more"))
-                    .accessibility_label(self.text("作品", "Artworks"))
-                    .tooltip(self.text("作品", "Artworks"))
+                crate::ui_controls::icon_button("pieces", "more", self.text("作品", "Artworks"))
                     .on_click(cx.listener(|view, _, window, cx| {
                         view.open_panel(Panel::Pieces, window, cx)
                     })),
@@ -7712,24 +7684,22 @@ impl Render for Creditia {
                         })),
                 )
                 .child(
-                    Button::new("previous-piece")
-                        .ghost()
-                        .icon(crate::ui_icons::icon("prev"))
-                        .accessibility_label(self.text("上一件作品", "Previous artwork"))
-                        .tooltip(self.text("上一件作品", "Previous artwork"))
-                        .on_click(
-                            cx.listener(|view, _, _, cx| view.keyboard_navigation(false, -1, cx)),
-                        ),
+                    crate::ui_controls::icon_button(
+                        "previous-piece",
+                        "prev",
+                        self.text("上一件作品", "Previous artwork"),
+                    )
+                    .on_click(
+                        cx.listener(|view, _, _, cx| view.keyboard_navigation(false, -1, cx)),
+                    ),
                 )
                 .child(
-                    Button::new("next-piece")
-                        .ghost()
-                        .icon(crate::ui_icons::icon("next"))
-                        .accessibility_label(self.text("下一件作品", "Next artwork"))
-                        .tooltip(self.text("下一件作品", "Next artwork"))
-                        .on_click(
-                            cx.listener(|view, _, _, cx| view.keyboard_navigation(false, 1, cx)),
-                        ),
+                    crate::ui_controls::icon_button(
+                        "next-piece",
+                        "next",
+                        self.text("下一件作品", "Next artwork"),
+                    )
+                    .on_click(cx.listener(|view, _, _, cx| view.keyboard_navigation(false, 1, cx))),
                 )
                 .child(
                     Button::new("play")
@@ -7746,23 +7716,23 @@ impl Render for Creditia {
                         .on_click(cx.listener(|view, _, _, cx| view.play(false, cx))),
                 )
                 .child(
-                    Button::new("replay")
-                        .ghost()
-                        .icon(crate::ui_icons::icon("refresh"))
-                        .accessibility_label(self.text("重播", "Replay"))
-                        .tooltip(self.text("重播", "Replay"))
-                        .disabled(self.animation_busy)
-                        .on_click(cx.listener(|view, _, _, cx| view.play(true, cx))),
+                    crate::ui_controls::icon_button(
+                        "replay",
+                        "refresh",
+                        self.text("重播", "Replay"),
+                    )
+                    .disabled(self.animation_busy)
+                    .on_click(cx.listener(|view, _, _, cx| view.play(true, cx))),
                 )
                 .child(
-                    Button::new("focus-close")
-                        .ghost()
-                        .icon(crate::ui_icons::icon("close"))
-                        .accessibility_label(self.text("返回展览", "Return to exhibition"))
-                        .tooltip(self.text("返回展览", "Return to exhibition"))
-                        .on_click(cx.listener(|view, _, _, cx| {
-                            view.close_focus(cx);
-                        })),
+                    crate::ui_controls::icon_button(
+                        "focus-close",
+                        "close",
+                        self.text("返回展览", "Return to exhibition"),
+                    )
+                    .on_click(cx.listener(|view, _, _, cx| {
+                        view.close_focus(cx);
+                    })),
                 );
         }
         if self.focused
@@ -7781,24 +7751,31 @@ impl Render for Creditia {
         if self.focused || self.preferences.view == "roam" {
             controls = controls
                 .child(
-                    Button::new("zoom-out")
-                        .ghost()
-                        .label("−")
-                        .on_click(cx.listener(|view, _, _, cx| view.zoom(1. / 1.2, cx))),
+                    crate::ui_controls::icon_button(
+                        "zoom-out",
+                        "zoomOut",
+                        self.text("缩小", "Zoom out"),
+                    )
+                    .on_click(cx.listener(|view, _, _, cx| view.zoom(1. / 1.2, cx))),
                 )
                 .child(
                     Button::new("zoom-reset")
                         .ghost()
+                        .w(px(64.))
+                        .accessibility_label(self.text("重置缩放", "Reset zoom"))
+                        .tooltip(self.text("重置缩放", "Reset zoom"))
                         .label(format!("{}%", (self.viewport.zoom * 100.).round() as i32))
                         .on_click(cx.listener(|view, _, _, cx| {
                             view.reset_viewport(cx);
                         })),
                 )
                 .child(
-                    Button::new("zoom-in")
-                        .ghost()
-                        .label("+")
-                        .on_click(cx.listener(|view, _, _, cx| view.zoom(1.2, cx))),
+                    crate::ui_controls::icon_button(
+                        "zoom-in",
+                        "zoomIn",
+                        self.text("放大", "Zoom in"),
+                    )
+                    .on_click(cx.listener(|view, _, _, cx| view.zoom(1.2, cx))),
                 );
         }
         let mut status = div()
