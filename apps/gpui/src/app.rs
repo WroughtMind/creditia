@@ -414,7 +414,6 @@ pub struct Creditia {
     export_cancellation: Option<renderer::Cancellation>,
     export_open: bool,
     export_formats_open: bool,
-    export_options_open: bool,
     export_preview: ExportPreview,
     fixture: bool,
     fixture_artworks: BTreeMap<(String, String, String), Option<Arc<Artwork>>>,
@@ -662,7 +661,6 @@ impl Creditia {
             export_cancellation: None,
             export_open: false,
             export_formats_open: false,
-            export_options_open: false,
             export_preview: ExportPreview::default(),
             fixture,
             fixture_artworks: BTreeMap::new(),
@@ -4302,7 +4300,6 @@ impl Creditia {
                 self.play(false, cx);
             }
             self.export_formats_open = false;
-            self.export_options_open = false;
             if self
                 .export_unavailable_reason(&self.export_format)
                 .is_some()
@@ -4504,7 +4501,6 @@ impl Creditia {
         };
         let filename = export_filename(&snapshot);
         self.export_formats_open = false;
-        self.export_options_open = false;
         let prompt = cx.prompt_for_new_path(&directory, Some(&filename));
         self.export_prompt_busy = true;
         self.export_dialog_task = Some(cx.spawn(async move |this, cx| {
@@ -4662,9 +4658,8 @@ impl Creditia {
         if self.panel.is_some() {
             self.close_panel(window, cx);
         } else if self.export_open {
-            if self.export_formats_open || self.export_options_open {
+            if self.export_formats_open {
                 self.export_formats_open = false;
-                self.export_options_open = false;
                 cx.notify();
                 return;
             }
@@ -4957,7 +4952,6 @@ impl Creditia {
                 cx.listener(move |view, event: &MouseDownEvent, _, cx| {
                     if view.export_workspace_open() {
                         view.export_formats_open = false;
-                        view.export_options_open = false;
                         cx.stop_propagation();
                         cx.notify();
                         return;
@@ -5358,7 +5352,6 @@ impl Creditia {
                 cx.listener(|view, event: &MouseDownEvent, _, cx| {
                     if view.export_workspace_open() {
                         view.export_formats_open = false;
-                        view.export_options_open = false;
                         cx.stop_propagation();
                         cx.notify();
                         return;
@@ -7212,7 +7205,6 @@ impl Creditia {
         state["export_prompt_busy"] = json!(self.export_prompt_busy);
         state["export_workspace"] = json!(self.export_workspace_open());
         state["export_formats_open"] = json!(self.export_formats_open);
-        state["export_options_open"] = json!(self.export_options_open);
         state["failed_export"] = json!(self.failed_export);
         state["success_notice"] = json!(self.success_notice);
         state["notice"] = json!(self.notice);

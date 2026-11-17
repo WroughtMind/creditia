@@ -846,13 +846,17 @@ fn export_workspace(h: &mut Harness) {
                 .visible()
         );
         assert!(window.find("export-dock").visible());
+        assert_eq!(window.find("transparent").checked(), Some(false));
+        assert!(window.find_all("editable-text").is_empty());
+        assert!(window.find_all("export-options").is_empty());
+        assert!(window.find_all("export-options-panel").is_empty());
     });
     h.capture("png", false);
-    h.click("export-options");
-    assert_eq!(h.state()["export_options_open"], true);
     h.click("export-format");
-    assert_eq!(h.state()["export_options_open"], false);
     assert_eq!(h.state()["export_formats_open"], true);
+    h.press("escape");
+    assert_eq!(h.state()["export_formats_open"], false);
+    assert_eq!(h.state()["export_open"], true);
     for id in ["svg", "json", "png"] {
         h.export_format(id);
     }
@@ -873,11 +877,66 @@ fn export_workspace(h: &mut Harness) {
             state["export_preview"]["error"].is_null(),
             "preview failed: {state}"
         );
+        h.update(|window, _, _| {
+            assert_eq!(
+                window.find_all("transparent").len(),
+                usize::from(id == "svg")
+            );
+            assert_eq!(
+                window.find_all("editable-text").len(),
+                usize::from(id == "svg" || id == "html")
+            );
+        });
+        if id == "svg" {
+            h.update(|window, _, _| {
+                assert_eq!(window.find("editable-text").checked(), Some(false));
+                assert_eq!(
+                    window.find("editable-text").label(),
+                    Some("Keep editable text")
+                );
+            });
+            h.capture("svg-options-off", false);
+            let revision = state["export_preview"]["revision"].as_u64().unwrap();
+            h.click("editable-text");
+            h.ready();
+            assert!(h.state()["export_preview"]["revision"].as_u64().unwrap() > revision);
+            h.update(|window, _, _| {
+                assert_eq!(window.find("editable-text").checked(), Some(true));
+                assert_eq!(window.find("transparent").checked(), Some(false));
+            });
+            h.click("transparent");
+            h.ready();
+            h.update(|window, _, _| {
+                assert_eq!(window.find("editable-text").checked(), Some(true));
+                assert_eq!(window.find("transparent").checked(), Some(true));
+            });
+            assert_eq!(h.state()["focused_rect"], before["focused_rect"]);
+            h.capture("svg-options-on", false);
+            h.click("editable-text");
+            h.click("transparent");
+            h.ready();
+        } else if id == "html" {
+            let revision = state["export_preview"]["revision"].as_u64().unwrap();
+            h.click("editable-text");
+            h.ready();
+            assert!(h.state()["export_preview"]["revision"].as_u64().unwrap() > revision);
+            h.update(|window, _, _| {
+                assert_eq!(window.find("editable-text").checked(), Some(true));
+            });
+            assert_eq!(h.state()["focused_rect"], before["focused_rect"]);
+            h.capture("html-editable-on", false);
+            h.click("editable-text");
+            h.ready();
+        }
     }
     for id in ["embed", "md", "txt", "json"] {
         h.export_format(id);
         h.ready();
         let state = h.state();
+        h.update(|window, _, _| {
+            assert!(window.find_all("transparent").is_empty());
+            assert!(window.find_all("editable-text").is_empty());
+        });
         assert_eq!(
             state["export_preview"]["text_ready"], true,
             "text preview must come from the renderer: {state}"
@@ -938,19 +997,14 @@ fn export_workspace(h: &mut Harness) {
     h.ready();
     assert_ne!(h.state()["export_size"], "native");
     let revision = h.state()["export_preview"]["revision"].as_u64().unwrap();
-    h.click("export-options");
     h.click("transparent");
     h.ready();
     assert!(h.state()["export_preview"]["revision"].as_u64().unwrap() > revision);
     assert!(h.state()["export_preview"]["error"].is_null());
-    h.press("escape");
-    assert_eq!(h.state()["export_options_open"], false);
-    assert_eq!(h.state()["export_open"], true);
-    h.click("export-options");
     let selected = h.state()["selected_tile"].as_u64().unwrap() as usize;
     h.click(("artwork", selected));
-    assert_eq!(h.state()["export_options_open"], false);
     assert_eq!(h.state()["export_open"], true);
+    h.update(|window, _, _| assert_eq!(window.find("transparent").checked(), Some(true)));
     h.capture("framed-transparent", false);
     h.shortcut("=");
     assert_eq!(
@@ -992,6 +1046,21 @@ fn export_workspace(h: &mut Harness) {
     h.export_format("png");
     h.ready();
     h.capture("dark-png", false);
+    for format in ["svg", "html"] {
+        h.export_format(format);
+        h.ready();
+        h.update(|window, _, _| {
+            assert_eq!(window.find("editable-text").label(), Some("保留可编辑文字"));
+            assert_eq!(window.find("editable-text").checked(), Some(false));
+        });
+        h.click("editable-text");
+        h.ready();
+        h.update(|window, _, _| {
+            assert_eq!(window.find("editable-text").checked(), Some(true));
+        });
+        h.capture(&format!("dark-zh-{format}-editable"), false);
+        h.click("editable-text");
+    }
     h.export_format("md");
     h.ready();
     h.capture("dark-markdown", false);
@@ -1115,14 +1184,12 @@ fn responsive(h: &mut Harness) {
     h.capture("small-export", false);
     h.export_format("svg");
     h.ready();
-    h.click("export-options");
     h.update(|window, _, _| {
         for id in [
             "export-primary",
             "export-size",
-            "export-options-panel",
             "transparent",
-            "font-mode",
+            "editable-text",
         ] {
             let b = window.find(id).bounds();
             assert!(
@@ -1134,11 +1201,17 @@ fn responsive(h: &mut Harness) {
             );
         }
     });
-    h.capture("small-svg-options", false);
+    h.capture("small-svg-options-off", false);
+    h.click("transparent");
+    h.click("editable-text");
+    h.ready();
+    h.update(|window, _, _| {
+        assert_eq!(window.find("transparent").checked(), Some(true));
+        assert_eq!(window.find("editable-text").checked(), Some(true));
+    });
+    assert_eq!(h.state()["focused_rect"], before);
+    h.capture("small-svg-options-on", false);
     h.press("escape");
-    assert_eq!(h.state()["export_options_open"], false);
-    assert_eq!(h.state()["export_open"], true);
-    h.click("export-back");
     assert_eq!(h.state()["export_open"], false);
     h.click("focus-export");
     h.press("escape");

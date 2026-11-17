@@ -154,7 +154,6 @@ impl Creditia {
         }
         self.export_open = false;
         self.export_formats_open = false;
-        self.export_options_open = false;
         self.export_preview.clear(cx);
         self.hover = None;
         cx.notify();
@@ -168,7 +167,6 @@ impl Creditia {
         }
         self.export_format = format.id().into();
         self.export_formats_open = false;
-        self.export_options_open = false;
         self.preferences.export_format = self.export_format.clone();
         self.persist();
         cx.notify();
@@ -343,7 +341,7 @@ impl Creditia {
             .occlude()
             .flex()
             .items_center()
-            .gap(px(8.))
+            .gap(px(4.))
             .h(px(46.))
             .p(px(5.))
             .rounded_full()
@@ -399,7 +397,6 @@ impl Creditia {
                     .disabled(self.export_prompt_busy)
                     .on_click(cx.listener(|view, _, _, cx| {
                         view.export_formats_open = !view.export_formats_open;
-                        view.export_options_open = false;
                         cx.notify();
                     })),
             );
@@ -457,21 +454,58 @@ impl Creditia {
                     }),
             );
             if format.transparency() || format.fonts() {
+                dock = dock.child(div().w(px(1.)).h(px(19.)).mx(px(3.)).bg(p.edge));
+            }
+            if format.transparency() {
                 dock = dock.child(
-                    Button::new("export-options")
+                    Button::new("transparent")
                         .ghost()
-                        .w(px(34.))
                         .h(px(34.))
-                        .p_0()
+                        .px(px(8.))
                         .rounded(px(10.))
-                        .when(self.export_options_open, |b| b.bg(p.selected))
+                        .when(self.transparent, |b| b.bg(p.selected))
+                        .toggled(self.transparent)
                         .disabled(self.export_prompt_busy)
-                        .icon(crate::ui_icons::icon("parameters"))
-                        .accessibility_label(self.text("导出参数", "Export options"))
-                        .tooltip(self.text("导出参数", "Export options"))
+                        .icon(crate::ui_icons::icon(if self.transparent {
+                            "check"
+                        } else {
+                            "transparent"
+                        }))
+                        .shell_label(self.text("透明", "Transparent"))
+                        .accessibility_label(self.text("透明背景", "Transparent background"))
+                        .tooltip(self.text("透明背景", "Transparent background"))
                         .on_click(cx.listener(|view, _, _, cx| {
-                            view.export_options_open = !view.export_options_open;
-                            view.export_formats_open = false;
+                            view.transparent = !view.transparent;
+                            cx.notify();
+                        })),
+                );
+            }
+            if format.fonts() {
+                let editable = self.font_mode == "embed";
+                dock = dock.child(
+                    Button::new("editable-text")
+                        .ghost()
+                        .h(px(34.))
+                        .px(px(8.))
+                        .rounded(px(10.))
+                        .when(editable, |b| b.bg(p.selected))
+                        .toggled(editable)
+                        .disabled(self.export_prompt_busy)
+                        .icon(crate::ui_icons::icon(if editable {
+                            "check"
+                        } else {
+                            "editable-text"
+                        }))
+                        .shell_label(self.text("可编辑文字", "Editable text"))
+                        .accessibility_label(self.text("保留可编辑文字", "Keep editable text"))
+                        .tooltip(self.text("保留可编辑文字", "Keep editable text"))
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            view.font_mode = if view.font_mode == "outline" {
+                                "embed"
+                            } else {
+                                "outline"
+                            }
+                            .into();
                             cx.notify();
                         })),
                 );
@@ -615,74 +649,6 @@ impl Creditia {
                 grid = grid.child(row);
             }
             stack = stack.child(grid);
-        }
-        if self.export_options_open && format.visual() {
-            let mut options = div()
-                .id("export-options-panel")
-                .test_support()
-                .relative()
-                .occlude()
-                .flex()
-                .flex_col()
-                .w(px(240.))
-                .p(px(14.))
-                .gap(px(14.))
-                .rounded(px(16.))
-                .shadow(p.shadows())
-                .border_1()
-                .border_color(p.edge)
-                .child(crate::material::surface(
-                    self.backdrop_image.clone(),
-                    p.glass,
-                    16.,
-                    p,
-                ))
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation());
-            if format.transparency() {
-                options = options.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .child(self.text("透明背景", "Transparent background"))
-                        .child(div().flex_1())
-                        .child(
-                            super::surfaces::switch("transparent", self.transparent, p)
-                                .accessibility_label(
-                                    self.text("透明背景", "Transparent background"),
-                                )
-                                .disabled(self.export_prompt_busy)
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    view.transparent = !view.transparent;
-                                    cx.notify();
-                                })),
-                        ),
-                );
-            }
-            if format.fonts() {
-                options = options.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .child(self.text("文字转路径", "Outline text"))
-                        .child(div().flex_1())
-                        .child(
-                            super::surfaces::switch("font-mode", self.font_mode == "outline", p)
-                                .accessibility_label(self.text("文字转路径", "Outline text"))
-                                .disabled(self.export_prompt_busy)
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    view.font_mode = if view.font_mode == "outline" {
-                                        "embed"
-                                    } else {
-                                        "outline"
-                                    }
-                                    .into();
-                                    cx.notify();
-                                })),
-                        ),
-                );
-            }
-            stack = stack.child(options);
         }
         if let Some(error) = &self.export_preview.error {
             stack = stack.child(
