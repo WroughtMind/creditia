@@ -62,6 +62,7 @@ jobs:
         env:
           CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
           CREDITIA_VISUAL_OUTPUT: ${{ github.workspace }}/evidence/native
+          CREDITIA_APP_EVENTS: ${{ github.workspace }}/evidence/native/window-events.jsonl
         run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked
       - uses: actions/upload-artifact@v4
         if: always()
