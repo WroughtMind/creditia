@@ -74,6 +74,9 @@ impl Request {
     pub fn format(&self) -> &str {
         self.parameters["format"].as_str().unwrap_or("png")
     }
+    pub(crate) fn project_name(&self) -> Option<&str> {
+        self.archive["raw"]["project"]["name"].as_str()
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -1,10 +1,9 @@
-//! Cache stationary Satori shadows while streaming a changing scene. Each
-//! shadow is rendered by resvg with the original transform, before subsequent
-//! paint operations. Other SVGs use the ordinary full-tree path.
+//! Cache stationary filters and paint servers while streaming changing artwork.
+//! Original SVG geometry, paint order and pixel density are preserved.
 use resvg::{tiny_skia, usvg};
 use std::collections::{HashMap, VecDeque};
 
-const BUDGET: usize = 48 * 1024 * 1024;
+pub(crate) const BUDGET: usize = 48 * 1024 * 1024;
 const FULL_LAYER_PIXEL_LIMIT: u64 = 16 * 1024 * 1024;
 const FULL_LAYER_CACHE_BUDGET: usize = 8 * 1024 * 1024;
 
@@ -74,15 +73,72 @@ impl ShadowRows {
             }
         }
     }
+    fn composite(&self, output: &mut tiny_skia::Pixmap) {
+        let stride = output.width() as usize * 4;
+        for (row, line) in self
+            .rows
+            .iter()
+            .zip(output.data_mut().chunks_exact_mut(stride))
+        {
+            for run in row {
+                for pixel in line[run.x as usize * 4..run.end as usize * 4].chunks_exact_mut(4) {
+                    composite_pixel(pixel, &run.rgba);
+                }
+            }
+        }
+    }
+}
+
+enum CachedPixels {
+    Bitmap(tiny_skia::Pixmap),
+    Rows {
+        width: u32,
+        height: u32,
+        rows: ShadowRows,
+    },
+}
+impl CachedPixels {
+    fn new(pixels: tiny_skia::Pixmap) -> Self {
+        if let Some(rows) =
+            ShadowRows::encode(&pixels).filter(|rows| rows.bytes < pixels.data().len())
+        {
+            Self::Rows {
+                width: pixels.width(),
+                height: pixels.height(),
+                rows,
+            }
+        } else {
+            Self::Bitmap(pixels)
+        }
+    }
+    fn size(&self) -> (u32, u32) {
+        match self {
+            Self::Bitmap(p) => (p.width(), p.height()),
+            Self::Rows { width, height, .. } => (*width, *height),
+        }
+    }
+    fn bytes(&self) -> usize {
+        match self {
+            Self::Bitmap(p) => p.data().len(),
+            Self::Rows { rows, .. } => rows.bytes,
+        }
+    }
+    fn composite(&self, output: &mut tiny_skia::Pixmap) {
+        match self {
+            Self::Bitmap(p) => composite_cached(output, p),
+            Self::Rows { rows, .. } => rows.composite(output),
+        }
+    }
 }
 
 #[derive(Default)]
 pub(crate) struct LayerCache {
-    layers: VecDeque<(String, tiny_skia::Transform, tiny_skia::Pixmap)>,
+    layers: VecDeque<(String, tiny_skia::Transform, CachedPixels)>,
     bytes: usize,
     full_layers: VecDeque<(String, tiny_skia::Transform, ShadowRows)>,
     full_bytes: usize,
     oversized: VecDeque<(u64, tiny_skia::Transform)>,
+    budget: Option<usize>,
 }
 
 fn shadow_hash(xml: &str) -> u64 {
@@ -90,6 +146,36 @@ fn shadow_hash(xml: &str) -> u64 {
     let mut hash = DefaultHasher::new();
     xml.hash(&mut hash);
     hash.finish()
+}
+
+/// Cached layers are already aligned premultiplied pixels. Avoid sending each
+/// one through tiny-skia's floating-point image shader and resampling pipeline.
+fn composite_cached(output: &mut tiny_skia::Pixmap, source: &tiny_skia::Pixmap) {
+    debug_assert_eq!(
+        (output.width(), output.height()),
+        (source.width(), source.height())
+    );
+    for (dst, src) in output
+        .data_mut()
+        .chunks_exact_mut(4)
+        .zip(source.data().chunks_exact(4))
+    {
+        composite_pixel(dst, src);
+    }
+}
+
+fn composite_pixel(dst: &mut [u8], src: &[u8]) {
+    match src[3] {
+        0 => {}
+        255 => dst.copy_from_slice(src),
+        alpha => {
+            let inverse = u16::from(255 - alpha);
+            for channel in 0..4 {
+                let product = u16::from(dst[channel]) * inverse + 128;
+                dst[channel] = src[channel] + ((product + (product >> 8)) >> 8) as u8;
+            }
+        }
+    }
 }
 
 fn definition(tag: &str) -> bool {
@@ -105,11 +191,11 @@ fn url_id(value: &str) -> Option<&str> {
 
 enum Layer {
     Paint(String),
-    Shadow(String),
+    Cached(String),
 }
 
 fn layers(svg: &str) -> Option<Vec<Layer>> {
-    if svg.len() > 2 * 1024 * 1024 || !svg.contains("filter=\"url(#s") {
+    if svg.len() > 2 * 1024 * 1024 || !svg.contains("url(#") {
         return None;
     }
     let mut opts = roxmltree::ParsingOptions::default();
@@ -164,13 +250,101 @@ fn layers(svg: &str) -> Option<Vec<Layer>> {
         }
     }
     if root
-        .children()
-        .filter(|n| n.attribute("filter").is_some())
-        .count()
-        > 4
+        .descendants()
+        .filter(|node| node.is_element())
+        .any(|node| {
+            node.attributes().any(|attr| {
+                attr.name() == "mix-blend-mode"
+                    || attr.name() == "style" && attr.value().contains("mix-blend-mode")
+                    || attr.value().contains("BackgroundImage")
+                    || attr.value().contains("BackgroundAlpha")
+            })
+        })
     {
         return None;
     }
+    // Paint servers may reference other gradients, patterns and masks. Keep the
+    // whole dependency closure, including internal IDs, in each immutable key.
+    let fragment = |child: roxmltree::Node<'_, '_>| {
+        let mut needed = Vec::new();
+        let mut scan = vec![child];
+        while let Some(node) = scan.pop() {
+            for element in node.descendants().filter(|n| n.is_element()) {
+                for attr in element.attributes() {
+                    let mut references = attr
+                        .value()
+                        .split("url(#")
+                        .skip(1)
+                        .map(|s| s.split_once(')').map(|s| s.0))
+                        .collect::<Option<Vec<_>>>()?;
+                    if attr.name() == "href" {
+                        if let Some(id) = attr.value().strip_prefix('#') {
+                            references.push(id);
+                        } else if !attr.value().starts_with("data:") {
+                            return None;
+                        }
+                    }
+                    for id in references {
+                        if !needed.contains(&id) {
+                            needed.push(id);
+                            scan.push(*ids.get(id)?);
+                        }
+                    }
+                }
+            }
+        }
+        // A referenced ID inside another included definition is already present.
+        let definitions = needed
+            .iter()
+            .filter_map(|id| {
+                let node = ids[id];
+                let range = node.range();
+                (!needed.iter().any(|other| {
+                    other != id && {
+                        let outer = ids[other].range();
+                        outer.start <= range.start && outer.end >= range.end
+                    }
+                }))
+                .then_some(node)
+            })
+            .collect::<Vec<_>>();
+        let mut xml = format!(
+            "{open}<defs>{}</defs>{}</svg>",
+            definitions
+                .iter()
+                .map(|n| &svg[n.range()])
+                .collect::<String>(),
+            &svg[child.range()]
+        );
+        let mut local_ids = Vec::new();
+        for node in definitions.iter().copied().chain(std::iter::once(child)) {
+            for id in node.descendants().filter_map(|n| n.attribute("id")) {
+                if !local_ids.contains(&id) {
+                    local_ids.push(id);
+                }
+            }
+        }
+        let mut prefix = "creditia-cache-".to_string();
+        while xml.contains(&prefix) {
+            prefix.push('_');
+        }
+        for (index, id) in local_ids.iter().enumerate() {
+            let key = format!("{prefix}{index}");
+            for quote in ['\"', '\''] {
+                xml = xml
+                    .replace(
+                        &format!("id={quote}{id}{quote}"),
+                        &format!("id={quote}{key}{quote}"),
+                    )
+                    .replace(
+                        &format!("href={quote}#{id}{quote}"),
+                        &format!("href={quote}#{key}{quote}"),
+                    );
+            }
+            xml = xml.replace(&format!("url(#{id})"), &format!("url(#{key})"));
+        }
+        Some(xml)
+    };
     let mut sections = Vec::new();
     let mut paint = String::new();
     let flush = |paint: &mut String, out: &mut Vec<Layer>| {
@@ -184,6 +358,34 @@ fn layers(svg: &str) -> Option<Vec<Layer>> {
         .filter(|n| n.is_element() && !definition(n.tag_name().name()))
     {
         let source = &svg[child.range()];
+        // Fixed mountains, paper fibres and grain are expensive filtered
+        // layers. Retain each complete source and its referenced definitions;
+        // changing geometry/filter parameters still produce a different key.
+        // Only generated definition identities are normalized across frames.
+        let filtered = (|| {
+            let filter = *ids.get(url_id(child.attribute("filter")?)?)?;
+            if !filter.has_tag_name("filter") {
+                return None;
+            }
+            fragment(child)
+        })();
+        // Repeated grids, scan lines and hatch patterns are fixed material,
+        // not part of the changing text/chart. Cache their exact self-contained
+        // SVG, normalizing only the renderer's per-frame definition identity.
+        let material = (|| {
+            if source.matches("url(").count() != 1 || source.contains("href=") {
+                return None;
+            }
+            let id = child.attributes().find_map(|attr| url_id(attr.value()))?;
+            let definition = *ids.get(id)?;
+            if !matches!(
+                definition.tag_name().name(),
+                "pattern" | "linearGradient" | "radialGradient"
+            ) {
+                return None;
+            }
+            fragment(child)
+        })();
         let shadow = (|| {
             if !child.has_tag_name("g")
                 || child
@@ -233,9 +435,9 @@ fn layers(svg: &str) -> Option<Vec<Layer>> {
                     .replace(&format!("url(#{prefix}_"), "url(#layer_"),
             )
         })();
-        if let Some(shadow) = shadow {
+        if let Some(shadow) = shadow.or(filtered).or(material) {
             flush(&mut paint, &mut sections);
-            sections.push(Layer::Shadow(shadow));
+            sections.push(Layer::Cached(shadow));
         } else {
             paint.push_str(source);
         }
@@ -368,6 +570,12 @@ fn bounded_shadow(
 }
 
 impl LayerCache {
+    pub(crate) fn bounded(budget: usize) -> Self {
+        Self {
+            budget: Some(budget.min(BUDGET)),
+            ..Default::default()
+        }
+    }
     // Preserve the artwork's physical pixel grid across cropped tiles and
     // panning. resvg otherwise runs the full-art blur once for *each* tile.
     fn crop_shadow(
@@ -430,7 +638,7 @@ impl LayerCache {
             let bounded = bounded_shadow(xml, tree, scale, options);
             resvg::render(bounded.as_ref().unwrap_or(tree), world, &mut full.as_mut());
             let Some(rows) = ShadowRows::encode(&full) else {
-                // At most four filtered groups are eligible per artwork.
+                // Remember failed compression attempts without retaining pixels.
                 self.oversized.push_back((shadow_hash(xml), world));
                 if self.oversized.len() > 4 {
                     self.oversized.pop_front();
@@ -471,12 +679,11 @@ impl LayerCache {
                     };
                     resvg::render(&tree, transform, &mut output.as_mut());
                 }
-                Layer::Shadow(xml) => {
+                Layer::Cached(xml) => {
                     let same = self.layers.iter().position(|(s, t, p)| {
                         s == &xml
                             && *t == transform
-                            && p.width() == output.width()
-                            && p.height() == output.height()
+                            && p.size() == (output.width(), output.height())
                     });
                     let entry = if let Some(index) = same {
                         self.layers.remove(index).unwrap()
@@ -491,21 +698,15 @@ impl LayerCache {
                         if !self.crop_shadow(&xml, &tree, transform, &mut pix, options) {
                             resvg::render(&tree, transform, &mut pix.as_mut());
                         }
-                        self.bytes += pix.data().len() + xml.len();
-                        (xml, transform, pix)
+                        let pixels = CachedPixels::new(pix);
+                        self.bytes += pixels.bytes() + xml.len();
+                        (xml, transform, pixels)
                     };
-                    output.draw_pixmap(
-                        0,
-                        0,
-                        entry.2.as_ref(),
-                        &tiny_skia::PixmapPaint::default(),
-                        tiny_skia::Transform::identity(),
-                        None,
-                    );
+                    entry.2.composite(output);
                     self.layers.push_back(entry);
-                    while self.bytes + self.full_bytes > BUDGET {
+                    while self.bytes + self.full_bytes > self.budget.unwrap_or(BUDGET) {
                         let (xml, _, pix) = self.layers.pop_front().unwrap();
-                        self.bytes -= pix.data().len() + xml.len();
+                        self.bytes -= pix.bytes() + xml.len();
                     }
                 }
             }
@@ -517,6 +718,206 @@ impl LayerCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nested_pattern_gradients_and_masks_reuse_only_identical_dependencies() {
+        let options = usvg::Options::default();
+        let mut cache = LayerCache::default();
+        for (serial, x, color, entries) in [
+            ("s1", 4, "#d89d41", 1),
+            ("s2", 30, "#d89d41", 1),
+            ("s3", 51, "#4c73bd", 2),
+        ] {
+            let svg = format!(
+                r##"<svg xmlns="http://www.w3.org/2000/svg" width="96" height="64"><defs><radialGradient id="{serial}-g"><stop stop-color="{color}"/><stop offset="1" stop-color="#101624"/></radialGradient><mask id="{serial}-m"><rect width="96" height="64" fill="white"/></mask><pattern id="{serial}-p" width="96" height="64" patternUnits="userSpaceOnUse"><rect width="96" height="64" fill="url(#{serial}-g)" mask="url(#{serial}-m)"/></pattern></defs><rect width="96" height="64" fill="url(#{serial}-p)"/><rect x="{x}" y="8" width="22" height="30" fill="#f3e600"/></svg>"##
+            );
+            let mut expected = tiny_skia::Pixmap::new(192, 128).unwrap();
+            let mut actual = expected.clone();
+            let transform = tiny_skia::Transform::from_scale(2., 2.);
+            resvg::render(
+                &usvg::Tree::from_str(&svg, &options).unwrap(),
+                transform,
+                &mut expected.as_mut(),
+            );
+            assert!(cache.render(&svg, &options, transform, &mut actual));
+            assert!(
+                expected
+                    .data()
+                    .iter()
+                    .zip(actual.data())
+                    .all(|(a, b)| a.abs_diff(*b) <= 1)
+            );
+            assert_eq!(cache.layers.len(), entries);
+        }
+    }
+
+    #[test]
+    fn compact_layers_preserve_pixels_and_translucent_compositing() {
+        let mut source = tiny_skia::Pixmap::new(480, 320).unwrap();
+        let mut paint = tiny_skia::Paint::default();
+        paint.set_color_rgba8(47, 63, 95, 31);
+        source.fill_rect(
+            tiny_skia::Rect::from_xywh(45., 80., 365., 92.).unwrap(),
+            &paint,
+            tiny_skia::Transform::identity(),
+            None,
+        );
+        let original = source.clone();
+        let compressed = CachedPixels::new(source);
+        assert!(matches!(compressed, CachedPixels::Rows { .. }));
+        assert!(compressed.bytes() < original.data().len());
+        let mut expected = tiny_skia::Pixmap::new(480, 320).unwrap();
+        expected.fill(tiny_skia::Color::from_rgba8(239, 237, 229, 137));
+        let mut actual = expected.clone();
+        composite_cached(&mut expected, &original);
+        compressed.composite(&mut actual);
+        assert_eq!(actual.data(), expected.data());
+        if let CachedPixels::Rows { rows, .. } = compressed {
+            let mut decoded = tiny_skia::Pixmap::new(480, 320).unwrap();
+            rows.crop(0, 0, &mut decoded);
+            assert_eq!(decoded.data(), original.data());
+        }
+    }
+
+    #[test]
+    fn aligned_cache_compositing_matches_the_image_shader() {
+        let mut source = tiny_skia::Pixmap::new(256, 1).unwrap();
+        for (alpha, pixel) in source.data_mut().chunks_exact_mut(4).enumerate() {
+            pixel.copy_from_slice(&[
+                (alpha / 2) as u8,
+                (alpha / 3) as u8,
+                alpha as u8,
+                alpha as u8,
+            ]);
+        }
+        for color in [
+            tiny_skia::Color::TRANSPARENT,
+            tiny_skia::Color::from_rgba8(80, 90, 10, 120),
+            tiny_skia::Color::from_rgba8(255, 255, 255, 255),
+        ] {
+            let mut expected = source.clone();
+            expected.fill(color);
+            let mut actual = expected.clone();
+            expected.draw_pixmap(
+                0,
+                0,
+                source.as_ref(),
+                &tiny_skia::PixmapPaint::default(),
+                tiny_skia::Transform::identity(),
+                None,
+            );
+            composite_cached(&mut actual, &source);
+            let max_difference = expected
+                .data()
+                .iter()
+                .zip(actual.data())
+                .map(|(a, b)| a.abs_diff(*b))
+                .max()
+                .unwrap();
+            assert!(
+                max_difference <= 1,
+                "source-over differs by {max_difference} levels"
+            );
+        }
+    }
+
+    #[test]
+    fn repeated_material_patterns_keep_live_content_and_definition_changes() {
+        let options = usvg::Options::default();
+        let mut cache = LayerCache::default();
+        for (serial, x, color, entries) in [
+            ("a", 5, "cyan", 1),
+            ("b", 24, "cyan", 1),
+            ("c", 43, "yellow", 2),
+        ] {
+            let svg = format!(
+                r##"<svg xmlns="http://www.w3.org/2000/svg" width="96" height="64"><defs><pattern id="{serial}-grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0 0H8V8" stroke="{color}" stroke-opacity="0.3" fill="none"/></pattern></defs><rect width="96" height="64" fill="#08090d"/><rect width="96" height="64" fill="url(#{serial}-grid)"/><rect x="{x}" y="10" width="23" height="40" fill="red"/></svg>"##
+            );
+            let tree = usvg::Tree::from_str(&svg, &options).unwrap();
+            let transform = tiny_skia::Transform::from_scale(2., 2.);
+            let mut expected = tiny_skia::Pixmap::new(192, 128).unwrap();
+            let mut actual = expected.clone();
+            resvg::render(&tree, transform, &mut expected.as_mut());
+            assert!(cache.render(&svg, &options, transform, &mut actual));
+            let max_difference = expected
+                .data()
+                .iter()
+                .zip(actual.data())
+                .map(|(a, b)| a.abs_diff(*b))
+                .max()
+                .unwrap();
+            assert!(
+                max_difference <= 1,
+                "pattern compositing differs by {max_difference} levels"
+            );
+            assert_eq!(cache.layers.len(), entries);
+        }
+    }
+
+    #[test]
+    fn filtered_background_reuses_transitive_paint_without_freezing_the_foreground() {
+        let options = usvg::Options::default();
+        let mut cache = LayerCache::default();
+        for (serial, x, color, entries) in [
+            ("c1", 5, "#d87f31", 1),
+            ("c2", 25, "#d87f31", 1),
+            ("c3", 47, "#327fbd", 2),
+        ] {
+            let svg = format!(
+                r##"<svg xmlns="http://www.w3.org/2000/svg" width="96" height="64"><defs><filter id="{serial}-blur"><feGaussianBlur stdDeviation="2.2"/></filter><linearGradient id="{serial}-paint"><stop stop-color="{color}"/><stop offset="1" stop-color="#121a2c"/></linearGradient></defs><rect width="96" height="64" fill="#08090d"/><g filter="url(#{serial}-blur)"><path d="M10 54L33 14L84 55Z" fill="url(#{serial}-paint)"/></g><rect x="{x}" y="8" width="26" height="39" fill="#f3e600"/></svg>"##
+            );
+            let transform = tiny_skia::Transform::from_scale(2., 2.);
+            let mut expected = tiny_skia::Pixmap::new(192, 128).unwrap();
+            let mut actual = expected.clone();
+            resvg::render(
+                &usvg::Tree::from_str(&svg, &options).unwrap(),
+                transform,
+                &mut expected.as_mut(),
+            );
+            assert!(cache.render(&svg, &options, transform, &mut actual));
+            assert!(
+                expected
+                    .data()
+                    .iter()
+                    .zip(actual.data())
+                    .all(|(a, b)| a.abs_diff(*b) <= 1)
+            );
+            assert_eq!(cache.layers.len(), entries);
+        }
+    }
+
+    #[test]
+    fn stationary_grain_is_cached_across_namespaces_without_freezing_content() {
+        let options = usvg::Options::default();
+        let mut cache = LayerCache::default();
+        for (serial, x) in [("c1", 5), ("c2", 25), ("c3", 47)] {
+            let svg = format!(
+                r##"<svg xmlns="http://www.w3.org/2000/svg" width="96" height="64" viewBox="0 0 96 64"><defs><filter id="{serial}-grain"><feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="3" seed="41"/><feColorMatrix type="saturate" values="0"/></filter></defs><rect width="96" height="64" fill="#08090d"/><rect x="{x}" y="8" width="26" height="39" fill="#f3e600"/><g filter="url(#{serial}-grain)" opacity="0.06"><rect width="96" height="64" fill="white"/></g></svg>"##
+            );
+            let mut original = tiny_skia::Pixmap::new(192, 128).unwrap();
+            let mut actual = original.clone();
+            let transform = tiny_skia::Transform::from_scale(2., 2.);
+            let tree = usvg::Tree::from_str(&svg, &options).unwrap();
+            resvg::render(&tree, transform, &mut original.as_mut());
+            assert!(cache.render(&svg, &options, transform, &mut actual));
+            let max_difference = original
+                .data()
+                .iter()
+                .zip(actual.data())
+                .map(|(a, b)| a.abs_diff(*b))
+                .max()
+                .unwrap();
+            assert!(
+                max_difference <= 1,
+                "cached grain differs by {max_difference} levels"
+            );
+            assert_eq!(
+                cache.layers.len(),
+                1,
+                "the fixed grain must reuse one image while the foreground moves"
+            );
+        }
+    }
 
     #[test]
     fn bounded_shadow_matches_the_full_filter_on_fractional_pixel_grids() {

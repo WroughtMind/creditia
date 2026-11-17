@@ -43,6 +43,10 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action != 'labeled'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      # These tests decode real SVGs and composite glass pixels. Optimize the
+      # raster loops while retaining test-profile debug assertions.
+      CARGO_PROFILE_TEST_OPT_LEVEL: 2
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -62,6 +66,7 @@ jobs:
         env:
           CREDITIA_VISUAL_FIXTURES: ${{ github.workspace }}/evidence/fixtures
           CREDITIA_VISUAL_OUTPUT: ${{ github.workspace }}/evidence/native
+          CREDITIA_APP_EVENTS: ${{ github.workspace }}/evidence/native/window-events.jsonl
         run: cargo test --manifest-path apps/gpui/Cargo.toml --features visual-test --test rendering --locked
       - uses: actions/upload-artifact@v4
         if: always()

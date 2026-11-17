@@ -83,6 +83,42 @@ pub fn focused_rect(art_width: f32, art_height: f32, viewport: Viewport, size: (
         h: height,
     }
 }
+
+/// Canvas-local clipping: the stage paints behind the 60px overlay toolbar.
+/// Focus leaves the bottom strip clear without cutting into the fitted image.
+pub fn artwork_viewport(size: (f32, f32), focused: bool) -> Rect {
+    Rect {
+        x: 0.,
+        y: -60.,
+        w: size.0,
+        h: if focused {
+            (size.1 - 32.).max(1.)
+        } else {
+            size.1 + 60.
+        },
+    }
+}
+
+#[cfg(test)]
+mod focus_geometry_tests {
+    use super::*;
+    #[test]
+    fn ordinary_focused_artwork_fits_without_losing_its_bottom_edge() {
+        for (width, height) in [(760., 560.), (1360., 880.)] {
+            let size = (width, height - 60.);
+            let clip = artwork_viewport(size, true);
+            for art in [(1000., 1000.), (1200., 630.)] {
+                let rect = focused_rect(art.0, art.1, Viewport::default(), size);
+                assert!(rect.x >= clip.x && rect.y >= clip.y);
+                assert!(rect.x + rect.w <= clip.x + clip.w);
+                assert!(
+                    rect.y + rect.h <= clip.y + clip.h,
+                    "{width}×{height}: artwork bottom is clipped"
+                );
+            }
+        }
+    }
+}
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct Hit {
     #[serde(default)]
@@ -99,6 +135,13 @@ pub struct Hit {
     pub t: String,
     #[serde(default)]
     pub d: Vec<String>,
+    #[serde(default)]
+    pub summary: Option<String>,
+}
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct FontFace {
+    pub pkg: String,
+    pub dir: String,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Artwork {
@@ -113,6 +156,21 @@ pub struct Artwork {
     pub bg: String,
     #[serde(default)]
     pub motion: Option<Value>,
+    #[serde(default, rename = "fontFaces")]
+    pub font_faces: Vec<FontFace>,
+}
+impl Artwork {
+    pub fn from_result(result: &Value) -> Result<Self, String> {
+        let mut artwork: Self = serde_json::from_value(result["art"].clone())
+            .map_err(|error| format!("Invalid artwork: {error}"))?;
+        artwork.font_faces = result
+            .get("fontFaces")
+            .map(|faces| serde_json::from_value(faces.clone()))
+            .transpose()
+            .map_err(|error| format!("Invalid artwork font faces: {error}"))?
+            .unwrap_or_default();
+        Ok(artwork)
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TileSpec {

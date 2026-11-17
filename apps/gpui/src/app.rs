@@ -1,11 +1,15 @@
 //! Production desktop view. Fixture construction uses the same render tree and
 //! event handlers while keeping project data and filesystem services isolated.
+use crate::material::{Palette, ShellLabel};
 use crate::{
     Appearance, Language, Preferences, Project, export_filename, export_with_preferences,
     progress_text,
 };
 use crate::{native_preview, renderer, ui_model::*};
+mod export;
+mod surfaces;
 use creditia_desktop_service as service;
+use export::{ExportFormat, ExportPreview};
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
@@ -36,6 +40,7 @@ actions!(
         CycleAppearance,
         ToggleMotion,
         ExportArtwork,
+        ExportHistory,
         CancelExport,
         SwitchProject,
         Settings,
@@ -75,12 +80,11 @@ enum JobEvent {
 enum Panel {
     Projects,
     Styles,
-    Pieces,
     Layouts,
+    Pieces,
     Settings,
     Project,
     Details,
-    Diagnostics,
     Blame,
     Exports,
 }
@@ -108,9 +112,11 @@ struct Tile {
 }
 struct PlaybackFrame {
     epoch: u64,
+    index: usize,
     ready: bool,
     art: Arc<Artwork>,
-    tiles: Vec<(Option<Rect>, Arc<Image>)>,
+    tiles: Vec<(Option<Rect>, Arc<RenderImage>)>,
+    painted: Arc<std::sync::OnceLock<Instant>>,
     pixels: u32,
     decoded_bytes: usize,
     regions: Vec<Value>,
@@ -118,7 +124,7 @@ struct PlaybackFrame {
 impl PlaybackFrame {
     fn release(self, cx: &mut App) {
         for (_, image) in self.tiles {
-            crate::image_assets::release(image, cx);
+            crate::image_assets::release_frame(image, cx);
         }
     }
 }
@@ -127,10 +133,10 @@ struct Playback {
     previous: Option<PlaybackFrame>,
     times: Vec<f64>,
     timeline: Timeline,
-    authored_repeat: bool,
     started: Instant,
     elapsed: Duration,
     playing: bool,
+    ended: bool,
     suspended: bool,
     index: usize,
     requested: usize,
@@ -138,63 +144,16 @@ struct Playback {
     started_once: bool,
 }
 impl Playback {
-    fn new(mut timeline: Timeline, times: Vec<f64>, once: bool, epoch: u64) -> Self {
-        let authored_repeat = timeline.repeat;
-        timeline.repeat &= !once;
-        let playing = timeline.duration_ms > 0;
-        Self {
-            frames: BTreeMap::new(),
-            previous: None,
-            times,
-            timeline,
-            authored_repeat,
-            started: Instant::now(),
-            elapsed: Duration::ZERO,
-            playing,
-            suspended: false,
-            index: 0,
-            requested: 0,
-            epoch,
-            started_once: false,
-        }
-    }
-    fn restart(&mut self) {
-        self.timeline.repeat = self.authored_repeat;
-        self.elapsed = Duration::ZERO;
-        self.started_once = false;
-        self.playing = true;
-        self.suspended = false;
-        self.requested = 0;
-    }
-    // A slow raster must finish before a repeat invalidates its epoch. Let
-    // normal playback follow wall time, but bound outstanding work by the
-    // producer's look-ahead. Its next decoded frame wakes a stalled clock.
+    // Follow elapsed time. Missing a raster skips samples rather than slowing
+    // the whole animation. Completion still waits for the last frame to paint.
     fn tick(&mut self, control: &crate::animation::PlaybackControl) -> bool {
         let last = self.times.len() - 1;
         let now = Instant::now();
         let duration = self.timeline.duration_ms;
         let end = duration.saturating_add(self.timeline.hold_ms);
-        let limit = if self.index == last {
-            end
-        } else {
-            let ahead = (self.index + crate::animation::MAX_AHEAD).min(last);
-            (self.times[ahead] * duration as f64).ceil() as u64
-        };
-        let real = now.duration_since(self.started);
-        self.elapsed = real.min(Duration::from_millis(limit));
-        self.started = now - self.elapsed;
-        if self.index == last && self.elapsed.as_millis() >= u128::from(end) {
-            if self.timeline.repeat {
-                self.elapsed = Duration::ZERO;
-                self.started_once = false;
-                self.requested = 0;
-                control.restart();
-            } else {
-                self.playing = false;
-                control.pause();
-            }
-            return false;
-        }
+        self.elapsed = now
+            .duration_since(self.started)
+            .min(Duration::from_millis(end));
         let time = self.elapsed.as_millis() as u64;
         self.requested = if time >= duration {
             last
@@ -210,7 +169,18 @@ impl Playback {
         {
             self.index = index;
         }
-        time < limit || self.index == self.requested
+        let last_painted = self.frames.get(&last).and_then(|frame| frame.painted.get());
+        if time >= end
+            && last_painted.is_some_and(|painted| {
+                now.duration_since(*painted) >= Duration::from_millis(self.timeline.hold_ms)
+            })
+        {
+            self.playing = false;
+            self.ended = true;
+            control.pause();
+            return false;
+        }
+        time < duration || self.index == last
     }
     fn displayed(&self) -> Option<&PlaybackFrame> {
         self.frames
@@ -313,9 +283,15 @@ pub struct Creditia {
     return_focus: Option<FocusHandle>,
     panel_tween: Option<Tween>,
     panel_closing: bool,
-    dock_height: f32,
-    dock_tween: Option<Tween>,
-    dock_target: f32,
+    settings_tab: &'static str,
+    backdrop_pending: Option<crate::material::RasterBackdrop>,
+    backdrop_image: Option<Arc<Image>>,
+    backdrop_background: Option<Arc<Image>>,
+    backdrop_top: Option<Arc<Image>>,
+    backdrop_key: Option<u64>,
+    backdrop_task: Option<Task<()>>,
+    backdrop_error: Option<String>,
+    surface_anchors: crate::material::Anchors,
     focus_transition: Option<FocusTransition>,
     focus_styles: Option<FocusStyles>,
     focus_placeholder: Option<Tile>,
@@ -356,6 +332,8 @@ pub struct Creditia {
     error: Option<String>,
     warnings: Vec<String>,
     notice: Option<String>,
+    success_notice: Option<String>,
+    success_notice_task: Option<Task<()>>,
     progress: Option<Value>,
     job_busy: bool,
     cancelling: bool,
@@ -396,7 +374,6 @@ pub struct Creditia {
     preview_cancellation: Option<renderer::Cancellation>,
     preview_busy: bool,
     playback: Option<Playback>,
-    focus_autoplay_pending: bool,
     animation_control: Option<crate::animation::PlaybackControl>,
     animation_worker: Option<Task<()>>,
     animation_task: Option<Task<()>>,
@@ -430,15 +407,14 @@ pub struct Creditia {
     export_size: String,
     transparent: bool,
     font_mode: String,
-    export_label: String,
+    failed_export: Option<u64>,
     export_stage: Option<ExportStage>,
     export_cancel_requested: bool,
     export_task: Option<Task<()>>,
     export_cancellation: Option<renderer::Cancellation>,
     export_open: bool,
-    format_bounds: ScrollHandle,
-    size_bounds: ScrollHandle,
-    export_hovered: Option<usize>,
+    export_formats_open: bool,
+    export_preview: ExportPreview,
     fixture: bool,
     fixture_artworks: BTreeMap<(String, String, String), Option<Arc<Artwork>>>,
     benchmark: bool,
@@ -468,9 +444,13 @@ impl Creditia {
         cx.set_reduce_motion(reduced_motion);
         let focus = cx.focus_handle().tab_stop(true);
         focus.focus(window, cx);
-        let sign_input = cx.new(|cx| InputState::new(window, cx).placeholder("署名 / Signature"));
-        let search_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("搜索项目 / Search projects"));
+        let sign_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(preferences.language.text("署名", "Signature"))
+        });
+        let search_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(preferences.language.text("搜索项目", "Search projects"))
+        });
         let blame_file = cx.new(|cx| InputState::new(window, cx).placeholder("src/main.rs"));
         let blame_line = cx.new(|cx| InputState::new(window, cx).default_value("1"));
         let subscriptions = vec![
@@ -551,9 +531,15 @@ impl Creditia {
             return_focus: None,
             panel_tween: None,
             panel_closing: false,
-            dock_height: 0.,
-            dock_tween: None,
-            dock_target: 0.,
+            settings_tab: "general",
+            backdrop_pending: None,
+            backdrop_image: None,
+            backdrop_background: None,
+            backdrop_top: None,
+            backdrop_key: None,
+            backdrop_task: None,
+            backdrop_error: None,
+            surface_anchors: Default::default(),
             focus_transition: None,
             focus_styles: None,
             focus_placeholder: None,
@@ -595,6 +581,8 @@ impl Creditia {
             error: None,
             warnings: vec![],
             notice: None,
+            success_notice: None,
+            success_notice_task: None,
             progress: None,
             job_busy: false,
             cancelling: false,
@@ -635,7 +623,6 @@ impl Creditia {
             preview_cancellation: None,
             preview_busy: false,
             playback: None,
-            focus_autoplay_pending: false,
             animation_control: None,
             animation_worker: None,
             animation_task: None,
@@ -667,15 +654,14 @@ impl Creditia {
             export_active: None,
             transparent: false,
             font_mode: "outline".into(),
-            export_label: String::new(),
+            failed_export: None,
             export_stage: None,
             export_cancel_requested: false,
             export_task: None,
             export_cancellation: None,
             export_open: false,
-            format_bounds: ScrollHandle::new(),
-            size_bounds: ScrollHandle::new(),
-            export_hovered: None,
+            export_formats_open: false,
+            export_preview: ExportPreview::default(),
             fixture,
             fixture_artworks: BTreeMap::new(),
             benchmark: false,
@@ -724,7 +710,7 @@ impl Creditia {
                     Appearance::Light => Theme::change(ThemeMode::Light, None, cx),
                     Appearance::Dark => Theme::change(ThemeMode::Dark, None, cx),
                 }
-                Theme::update(cx, |theme| theme.font_family = "Inter".into());
+                Theme::update(cx, crate::material::configure_theme);
                 view.load_export_history(jobs, cx);
                 crate::image_assets::release(view.logo_image.clone(), cx);
                 view.logo_image = logo_image(&view.preferences.logo);
@@ -813,7 +799,15 @@ impl Creditia {
             }
             "exporting" => {
                 view.export_stage = Some(ExportStage::Rendering);
-                view.export_label = "creditia-minimal-light-tier-native.png".into();
+            }
+            "exporting-analyzing" => {
+                view.export_stage = Some(ExportStage::Rendering);
+                view.job_busy = true;
+                view.progress = Some(json!({"stage":"logs","done":2,"total":5}));
+                view.activity_since = Some(Instant::now() - Duration::from_secs(3));
+                if !fixture.message.is_empty() {
+                    view.error = Some(fixture.message);
+                }
             }
             _ => {}
         }
@@ -863,18 +857,13 @@ impl Creditia {
         }
     }
 
-    pub fn benchmark(raw: Value, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mut view = Self::base(
-            Preferences {
-                language: Language::En,
-                appearance: Appearance::Light,
-                named: false,
-                ..Default::default()
-            },
-            true,
-            window,
-            cx,
-        );
+    pub fn benchmark(
+        raw: Value,
+        preferences: Preferences,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut view = Self::base(preferences, true, window, cx);
         view.benchmark = true;
         view.selected = Some("fixture".into());
         view.preferences.last_project = view.selected.clone();
@@ -892,6 +881,25 @@ impl Creditia {
         view
     }
     fn release_images(&mut self, cx: &mut App) {
+        self.export_preview.clear(cx);
+        if let Some(pending) = self.backdrop_pending.take() {
+            for image in std::iter::once(pending.image)
+                .chain(pending.background)
+                .chain(pending.top)
+            {
+                crate::image_assets::release(image, cx);
+            }
+        }
+        for image in [
+            self.backdrop_image.take(),
+            self.backdrop_background.take(),
+            self.backdrop_top.take(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            crate::image_assets::release(image, cx);
+        }
         self.live_mark.release(cx);
         self.center_mark.release(cx);
         for mark in self.project_marks.values() {
@@ -1240,9 +1248,10 @@ impl Creditia {
                     Ok(value) => {
                         view.preferences = Preferences::read(&value);
                         view.migration_error = None;
-                        view.notice = Some(
+                        view.show_success(
                             view.text("已导入原有桌面设置", "Previous desktop settings imported")
                                 .into(),
+                            cx,
                         );
                         view.reduced_motion = view.preferences.reduced_motion
                             || (!view.fixture
@@ -1253,7 +1262,7 @@ impl Creditia {
                             Appearance::Light => Theme::change(ThemeMode::Light, None, cx),
                             Appearance::Dark => Theme::change(ThemeMode::Dark, None, cx),
                         }
-                        Theme::update(cx, |theme| theme.font_family = "Inter".into());
+                        Theme::update(cx, crate::material::configure_theme);
                         install_menus(&view.preferences.language, cx);
                         crate::image_assets::release(view.logo_image.clone(), cx);
                         view.logo_image = logo_image(&view.preferences.logo);
@@ -1332,8 +1341,18 @@ impl Creditia {
             .and_then(|s| s.iter().position(|entry| entry["id"] == style))
             .unwrap_or(0);
     }
+    fn show_success(&mut self, message: String, cx: &mut Context<Self>) {
+        self.success_notice = Some(message);
+        self.success_notice_task = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_secs(3)).await;
+            let _ = this.update(cx, |view, cx| {
+                view.success_notice = None;
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
     fn stop_playback(&mut self, cx: &mut Context<Self>) {
-        self.focus_autoplay_pending = false;
         if let Some(control) = self.animation_control.take() {
             control.cancel();
         }
@@ -1561,7 +1580,6 @@ impl Creditia {
         }
         self.saved_viewport = bookmark.saved_viewport;
         self.restore_fixture_artworks();
-        self.focus_autoplay_pending = self.focused && !self.reduced_motion;
     }
     fn rebuild_preserving_view(&mut self, cx: &mut Context<Self>) {
         self.retain_focus_preview(cx);
@@ -1962,8 +1980,7 @@ impl Creditia {
                                             if view.selected==selection_at_start {view.selected=value["id"].as_str().map(str::to_string);}
                                             view.batch_opened=true;
                                         }
-                                        view.notice =
-                                            Some(view.text("分析完成", "Analysis complete").into());
+                                        view.show_success(view.text("分析完成", "Analysis complete").into(), cx);
                                         view.refresh(cx);
                                     }
                                     Err(error) if view.cancelling || error.code == "cancelled" => {
@@ -1971,9 +1988,7 @@ impl Creditia {
                                             view.batch_results
                                                 .insert(path, json!({"state":"cancelled"}));
                                         }
-                                        view.notice = Some(
-                                            view.text("已取消分析", "Analysis cancelled").into(),
-                                        );
+                                        view.show_success(view.text("已取消分析", "Analysis cancelled").into(), cx);
                                     }
                                     Err(error) => {
                                         if let Some(path) = view.active_add.take() {
@@ -2035,7 +2050,7 @@ impl Creditia {
             match serde_json::to_string_pretty(raw.as_ref()) {
                 Ok(text) => {
                     cx.write_to_clipboard(ClipboardItem::new_string(text));
-                    self.notice = Some(self.text("档案已复制", "Archive copied").into());
+                    self.show_success(self.text("档案已复制", "Archive copied").into(), cx);
                 }
                 Err(error) => self.error = Some(error.to_string()),
             }
@@ -2093,7 +2108,7 @@ impl Creditia {
         }));
     }
     fn artwork_request(&self, spec: &TileSpec, op: &str) -> Option<Value> {
-        let mut request = json!({"version":1,"id":format!("{}:{}",self.preview_generation,spec.key),"op":op,"style":self.style()?["id"],"piece":spec.piece,"lang":self.preferences.language.code(),"group":self.group(),"named":self.preferences.named,"flatten":true});
+        let mut request = json!({"version":1,"id":format!("{}:{}",self.preview_generation,spec.key),"op":op,"style":self.style()?["id"],"piece":spec.piece,"lang":self.preferences.language.code(),"group":self.group(),"named":self.preferences.named,"flatten":false});
         if let Some(variant) = &spec.variant {
             request["variant"] = json!(variant);
         }
@@ -2234,11 +2249,15 @@ impl Creditia {
                 .as_ref()
                 .and_then(|tile| tile.art.as_deref())
                 .or_else(|| {
-                    self.playback
-                        .as_ref()
-                        .and_then(Playback::displayed)
-                        .map(|f| f.art.as_ref())
-                        .or_else(|| self.tiles.get(index).and_then(|t| t.art.as_deref()))
+                    if self.export_workspace_open() {
+                        self.tiles.get(index).and_then(|tile| tile.art.as_deref())
+                    } else {
+                        self.playback
+                            .as_ref()
+                            .and_then(Playback::displayed)
+                            .map(|frame| frame.art.as_ref())
+                            .or_else(|| self.tiles.get(index).and_then(|tile| tile.art.as_deref()))
+                    }
                 });
             let (w, h) = art.map(|a| (a.w, a.h)).unwrap_or((640., 480.));
             focused_rect(w, h, self.viewport, self.viewport_size)
@@ -2273,27 +2292,19 @@ impl Creditia {
         }
     }
     fn artwork_viewport(&self) -> Rect {
-        Rect {
-            x: 0.,
-            y: 0.,
-            w: self.viewport_size.0,
-            h: if self.focused {
-                (self.viewport_size.1 - 154.).max(120.)
-            } else {
-                self.viewport_size.1
-            },
-        }
+        crate::ui_model::artwork_viewport(self.viewport_size, self.focused)
     }
-    fn crop_for_art(&self, art: &Artwork, r: Rect, pixels: u32, margin: f32) -> Option<Rect> {
+    fn crop_for_art(&self, art: &Artwork, r: Rect, pixels: u32) -> Option<Rect> {
         let height = pixels as f32 * art.h / art.w;
         if pixels as f32 * height < 16_000_000. && height < 16384. && pixels < 16384 {
             return None;
         }
         let scale = r.w / art.w;
-        let x = ((-r.x - margin) / scale).clamp(0., art.w);
-        let y = ((-r.y - margin) / scale).clamp(0., art.h);
-        let right = ((self.viewport_size.0 - r.x + margin) / scale).clamp(x, art.w);
-        let bottom = ((self.viewport_size.1 - r.y + margin) / scale).clamp(y, art.h);
+        let clip = self.artwork_viewport();
+        let x = ((clip.x - r.x) / scale).clamp(0., art.w);
+        let y = ((clip.y - r.y) / scale).clamp(0., art.h);
+        let right = ((clip.x + clip.w - r.x) / scale).clamp(x, art.w);
+        let bottom = ((clip.y + clip.h - r.y) / scale).clamp(y, art.h);
         Some(Rect {
             x,
             y,
@@ -2348,7 +2359,7 @@ impl Creditia {
                 let needs_crop = tile
                     .art
                     .as_deref()
-                    .and_then(|art| self.crop_for_art(art, r, pixels, 0.))
+                    .and_then(|art| self.crop_for_art(art, r, pixels))
                     .is_some_and(|required| {
                         tile.image_region.is_none_or(|have| {
                             have.x > required.x + 1.
@@ -2408,10 +2419,7 @@ impl Creditia {
                             if result["art"].is_null() {
                                 return Err("__empty__".into());
                             }
-                            Arc::new(
-                                serde_json::from_value::<Artwork>(result["art"].clone())
-                                    .map_err(|e| e.to_string())?,
-                            )
+                            Arc::new(Artwork::from_result(&result)?)
                         }
                     };
                     let height = pixels as f32 * art.h / art.w;
@@ -2448,16 +2456,14 @@ impl Creditia {
                     } else {
                         None
                     };
-                    let raster = if let Some(r) = region {
-                        native_preview::rasterize_region(
-                            &art.svg,
-                            (r.x, r.y, r.w, r.h),
-                            texture_width(pixels as f32 * r.w / art.w, 1.),
-                            &cancellation,
-                        )?
-                    } else {
-                        native_preview::rasterize(&art.svg, pixels, &cancellation)?
-                    };
+                    let raster = native_preview::rasterize_artwork_region(
+                        &art,
+                        region
+                            .map(|r| texture_width(pixels as f32 * r.w / art.w, 1.))
+                            .unwrap_or(pixels),
+                        region.map(|r| (r.x, r.y, r.w, r.h)),
+                        &cancellation,
+                    )?;
                     Ok((art, raster, region, archive))
                 })
                 .await;
@@ -2738,7 +2744,6 @@ impl Creditia {
             self.retain_focus_preview(cx);
         }
         self.stop_playback(cx);
-        self.focus_autoplay_pending = focus && !self.reduced_motion;
         self.selected_tile = Some(index);
         self.focused = focus;
         if focus {
@@ -2757,6 +2762,7 @@ impl Creditia {
         cx.notify();
     }
     fn close_focus(&mut self, cx: &mut Context<Self>) {
+        self.export_open = false;
         if self.restore_global_style(cx) {
             cx.notify();
             return;
@@ -2863,6 +2869,9 @@ impl Creditia {
             self.move_piece(delta, cx);
             return;
         }
+        self.cycle_variant(delta, cx);
+    }
+    fn cycle_variant(&mut self, delta: isize, cx: &mut Context<Self>) {
         let Some(tile) = self.current_tile() else {
             return;
         };
@@ -2930,7 +2939,13 @@ impl Creditia {
                 spec.key = crate::roam::canonical_key(&piece, Some(&variant));
             }
             self.persist();
-            self.rebuild_tiles(cx);
+            self.clear_preview(cx);
+            self.viewport = bookmark.viewport;
+            if bookmark.focused {
+                self.rebuild_tiles(cx);
+            } else {
+                self.sync_roam(cx);
+            }
             self.restore_bookmark(bookmark);
         } else {
             let specs = self
@@ -3042,11 +3057,18 @@ impl Creditia {
         self.zoom_at(factor, self.viewport_size.0 / 2., self.viewport_size.1 / 2.);
         cx.notify();
     }
-    fn toggle_language(&mut self, _: &ToggleLanguage, _: &mut Window, cx: &mut Context<Self>) {
+    fn toggle_language(&mut self, _: &ToggleLanguage, window: &mut Window, cx: &mut Context<Self>) {
         self.preferences.language = match self.preferences.language {
             Language::Zh => Language::En,
             Language::En => Language::Zh,
         };
+        let language = self.preferences.language.clone();
+        self.search_input.update(cx, |input, cx| {
+            input.set_placeholder(language.text("搜索项目", "Search projects"), window, cx)
+        });
+        self.sign_input.update(cx, |input, cx| {
+            input.set_placeholder(language.text("署名", "Signature"), window, cx)
+        });
         self.persist();
         install_menus(&self.preferences.language, cx);
         if self.selected.as_deref() == Some("__all__") && !self.fixture {
@@ -3079,7 +3101,6 @@ impl Creditia {
         if self.reduced_motion {
             self.focus_transition = None;
             self.panel_tween = None;
-            self.dock_tween = None;
             if self.panel_closing {
                 self.panel_closing = false;
                 self.panel = None;
@@ -3088,61 +3109,18 @@ impl Creditia {
         self.persist();
         cx.notify();
     }
-    fn prepare_focus_autoplay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.focus_autoplay_pending {
-            return;
-        }
-        if !self.focused || self.reduced_motion {
-            self.focus_autoplay_pending = false;
-            return;
-        }
-        let Some(tile) = self.current_tile() else {
-            return;
-        };
-        if tile.error.is_some()
-            || self
-                .piece(&tile.spec.piece)
-                .is_none_or(|piece| piece["animated"] != true)
-        {
-            self.focus_autoplay_pending = false;
-            return;
-        }
-        // The ordinary preview stays visible during preparation. Consume this
-        // selection only after its own static image has actually decoded.
-        if self.raw.is_none()
-            || self.loading
-            || self.preview_busy
-            || tile.loading
-            || tile.art.is_none()
-            || tile.pending_image.is_some()
-            || self.focus_transition.is_some()
-            || self.panel.is_some()
-            || !self.window_visible
-            || !window.is_window_active()
-            || !tile
-                .image
-                .as_ref()
-                .is_some_and(|image| crate::image_assets::track(image, window, cx).is_some())
-        {
-            return;
-        }
-        self.focus_autoplay_pending = false;
-        self.start_playback(false, true, cx);
-    }
     fn play(&mut self, restart: bool, cx: &mut Context<Self>) {
-        self.focus_autoplay_pending = false;
-        self.start_playback(restart, false, cx);
-    }
-    fn start_playback(&mut self, restart: bool, once: bool, cx: &mut Context<Self>) {
         if self.animation_busy && self.playback.is_none() {
             return;
         }
         if let Some(play) = &mut self.playback {
-            if !once {
-                play.timeline.repeat = play.authored_repeat;
-            }
-            if restart {
-                play.restart();
+            if restart || play.ended {
+                play.elapsed = Duration::ZERO;
+                play.started_once = false;
+                play.playing = true;
+                play.ended = false;
+                play.suspended = false;
+                play.requested = 0;
                 if let Some(control) = &self.animation_control {
                     control.restart();
                 }
@@ -3192,14 +3170,19 @@ impl Creditia {
         let Some(raw) = self.raw.clone() else {
             return;
         };
-        if !self.focused {
-            self.saved_viewport = Some(self.viewport);
-            self.viewport.reset();
+        if self.export_animation() {
+            request["size"] = json!(self.export_size);
+            request["transparent"] = json!(false);
+        } else {
+            if !self.focused {
+                self.saved_viewport = Some(self.viewport);
+                self.viewport.reset();
+            }
+            self.focused = true;
         }
-        self.focused = true;
         self.animation_busy = true;
         let control = crate::animation::PlaybackControl::new();
-        control.set_viewport(self.viewport, self.viewport_size, self.display_scale);
+        self.configure_playback_view(&control);
         self.animation_cancellation = Some(control.cancellation());
         self.animation_control = Some(control.clone());
         let width = texture_width(self.viewport_size.0, self.display_scale);
@@ -3224,7 +3207,7 @@ impl Creditia {
                 )
             })();
             if let Err(error) = result {
-                if !control.cancelled() {
+                if !control.user_cancelled() {
                     let _ = tx.send(Err(error)).await;
                 }
             }
@@ -3239,10 +3222,28 @@ impl Creditia {
                         match event {
                             Ok(crate::animation::Event::Started {
                                 epoch,
-                                timeline,
+                                mut timeline,
                                 times,
                             }) => {
-                                view.playback = Some(Playback::new(timeline, times, once, epoch));
+                                // Preview playback is one-shot. The renderer's
+                                // authored timeline remains intact for exports.
+                                timeline.repeat = false;
+                                let playing = timeline.duration_ms > 0;
+                                view.playback = Some(Playback {
+                                    frames: BTreeMap::new(),
+                                    previous: None,
+                                    times,
+                                    timeline,
+                                    started: Instant::now(),
+                                    elapsed: Duration::ZERO,
+                                    playing,
+                                    ended: false,
+                                    suspended: false,
+                                    index: 0,
+                                    requested: 0,
+                                    epoch,
+                                    started_once: false,
+                                })
                             }
                             Ok(crate::animation::Event::Frame {
                                 epoch,
@@ -3252,6 +3253,7 @@ impl Creditia {
                                 pixels,
                                 decoded_bytes,
                                 max_resident,
+                                ..
                             }) => {
                                 if view
                                     .animation_control
@@ -3283,26 +3285,17 @@ impl Creditia {
                                     }
                                     let frame = PlaybackFrame {
                                         epoch,
-                                        ready: false,
+                                        index,
+                                        ready: true,
+                                        painted: Arc::new(std::sync::OnceLock::new()),
                                         art,
                                         pixels,
                                         decoded_bytes,
                                         regions: tiles.iter().map(|tile| json!({
-                                            "width":tile.raster.width,"height":tile.raster.height,
+                                            "width":tile.width,"height":tile.height,
                                             "region":tile.region.map(|r| json!({"x":r.x,"y":r.y,"w":r.w,"h":r.h}))
                                         })).collect(),
-                                        tiles: tiles
-                                            .into_iter()
-                                            .map(|tile| {
-                                                (
-                                                    tile.region,
-                                                    Arc::new(Image::from_bytes(
-                                                        ImageFormat::Png,
-                                                        tile.raster.png.clone(),
-                                                    )),
-                                                )
-                                            })
-                                            .collect(),
+                                        tiles: tiles.into_iter().map(|tile| (tile.region, tile.image)).collect(),
                                     };
                                     if let Some(old) = play.frames.insert(index, frame) {
                                         old.release(cx);
@@ -3370,11 +3363,8 @@ impl Creditia {
                                 }
                             }
                             Err(error) => {
-                                view.animation_busy = false;
+                                view.stop_playback(cx);
                                 view.error = Some(error);
-                                if let Some(play) = &mut view.playback {
-                                    play.playing = false;
-                                }
                             }
                         }
                         cx.notify();
@@ -3387,7 +3377,7 @@ impl Creditia {
         }));
         cx.notify();
     }
-    fn prepare_playback_images(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn prepare_playback_images(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let Some(play) = &mut self.playback else {
             return;
         };
@@ -3397,20 +3387,6 @@ impl Creditia {
             .is_some_and(|control| control.epoch() != play.epoch)
         {
             return;
-        }
-        let mut decoding = false;
-        for frame in play.frames.values_mut() {
-            if !frame.ready {
-                let mut ready = true;
-                for (_, image) in &frame.tiles {
-                    ready &= crate::image_assets::track(image, window, cx).is_some();
-                }
-                frame.ready = ready;
-                decoding |= !frame.ready;
-            }
-        }
-        if decoding {
-            window.request_animation_frame();
         }
         let desired = if play.started_once { play.requested } else { 0 };
         let next = play
@@ -3441,9 +3417,31 @@ impl Creditia {
             self.animation_busy = false;
         }
     }
+    #[cfg(feature = "visual-test")]
+    pub fn fixture_artwork_image(
+        &self,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Option<Arc<RenderImage>> {
+        let image = self.current_tile()?.image.as_ref()?;
+        crate::image_assets::track(image, window, cx)
+    }
     pub fn fixture_images_ready(&self, window: &mut Window, cx: &mut App) -> bool {
         if self.fixture && !self.benchmark && (self.raw.is_none() || self.loading) {
             return true;
+        }
+        if self.export_workspace_open() {
+            if self.export_animation() {
+                return self
+                    .playback
+                    .as_ref()
+                    .and_then(Playback::displayed)
+                    .is_some_and(|frame| frame.painted.get().is_some());
+            }
+            return self.export_preview.ready();
+        }
+        if self.backdrop_task.is_some() || self.backdrop_pending.is_some() {
+            return false;
         }
         if self
             .focus_transition
@@ -3468,11 +3466,7 @@ impl Creditia {
                 if frame.pixels < texture_width(r.w, window.scale_factor()) {
                     return false;
                 }
-                return !frame.tiles.is_empty()
-                    && frame
-                        .tiles
-                        .iter()
-                        .all(|(_, image)| crate::image_assets::track(image, window, cx).is_some());
+                return !frame.tiles.is_empty() && frame.painted.get().is_some();
             }
         }
         let visible = Rect {
@@ -3503,7 +3497,7 @@ impl Creditia {
             if let Some(required) = tile
                 .art
                 .as_deref()
-                .and_then(|art| self.crop_for_art(art, r, pixels, 0.))
+                .and_then(|art| self.crop_for_art(art, r, pixels))
             {
                 if tile.image_region.is_none_or(|have| {
                     have.x > required.x + 1.
@@ -3593,9 +3587,10 @@ impl Creditia {
                                     view.start_next_project(cx);
                                     if !event["error"].is_null() {
                                         if event["error"]["code"] == "cancelled" {
-                                            view.notice = Some(
+                                            view.show_success(
                                                 view.text("已取消分析", "Analysis cancelled")
                                                     .into(),
+                                                cx,
                                             );
                                         } else {
                                             view.notice = crate::ui_reports::error_text(
@@ -3642,6 +3637,9 @@ impl Creditia {
         }));
     }
     fn open_panel(&mut self, panel: Panel, window: &mut Window, cx: &mut Context<Self>) {
+        if self.export_workspace_open() {
+            self.close_export_workspace(cx);
+        }
         self.roam_motion.stop();
         self.drag = None;
         self.hovered_tile = None;
@@ -3668,7 +3666,7 @@ impl Creditia {
             to: 1.,
             started: Instant::now(),
         });
-        self.panel_close_focus.focus(window, cx);
+        self.panel_focus.focus(window, cx);
         self.remove_confirm = false;
         self.hover = None;
         if panel == Panel::Project && self.panel.is_some() {
@@ -3916,7 +3914,7 @@ impl Creditia {
         let Some(id) = self.settings_id().cloned() else {
             return;
         };
-        let directory = match service::export_dir() {
+        let directory = match service::default_export_dir() {
             Ok(path) => path,
             Err(error) => {
                 self.error = Some(error.to_string());
@@ -3953,10 +3951,10 @@ impl Creditia {
                 .await;
             let _ = this.update(cx, |view, cx| {
                 match result {
-                    Ok(()) => {
-                        view.notice =
-                            Some(view.text("证据档案已保存", "Evidence archive saved").into())
-                    }
+                    Ok(()) => view.show_success(
+                        view.text("证据档案已保存", "Evidence archive saved").into(),
+                        cx,
+                    ),
                     Err(error) => view.error = Some(error),
                 }
                 cx.notify();
@@ -4044,8 +4042,7 @@ impl Creditia {
         }));
         cx.notify();
     }
-    fn load_diagnostics(&mut self, cx: &mut Context<Self>) {
-        self.panel = Some(Panel::Diagnostics);
+    fn request_diagnostics(&mut self, cx: &mut Context<Self>) {
         self.report = None;
         if self.fixture {
             return;
@@ -4076,7 +4073,7 @@ impl Creditia {
                 view.collect = service::collect_info();
                 match result {
                     Ok(_) => {
-                        view.notice = Some(view.text("已更新", "Updated").into());
+                        view.show_success(view.text("已更新", "Updated").into(), cx);
                         view.fetch_details(cx);
                     }
                     Err(error) => {
@@ -4119,8 +4116,10 @@ impl Creditia {
                         } else if view.settings_id() == Some(&selection) {
                             view.settings_details = Some(details);
                         }
-                        view.notice =
-                            Some(view.text("显示设置已保存", "Display settings saved").into());
+                        view.show_success(
+                            view.text("显示设置已保存", "Display settings saved").into(),
+                            cx,
+                        );
                     }
                     Err(error) => {
                         view.error = Some(crate::ui_reports::failure(
@@ -4256,14 +4255,78 @@ impl Creditia {
         self.current_tile().and_then(|t| self.piece(&t.spec.piece))
     }
     fn can_export(&self) -> bool {
-        self.raw.is_some()
-            && self.current_tile().is_some_and(|tile| {
-                ["txt", "md", "json", "embed"].contains(&self.export_format.as_str())
-                    || (tile.art.is_some() && tile.error.is_none())
-            })
+        self.export_unavailable_reason(&self.export_format)
+            .is_none()
             && !self.export_prompt_busy
-            && (self.export_format != "gif"
-                || self.selected_piece().is_some_and(|p| p["animated"] == true))
+    }
+    fn export_unavailable_reason(&self, format: &str) -> Option<&'static str> {
+        let Some(tile) = self.current_tile().filter(|_| self.raw.is_some()) else {
+            return Some(self.text("请先选择作品", "Select an artwork first"));
+        };
+        if format == "gif"
+            && self
+                .selected_piece()
+                .is_none_or(|piece| piece["animated"] != true)
+        {
+            return Some(self.text("静态作品不支持 GIF", "Static artwork does not support GIF"));
+        }
+        if !["txt", "md", "json", "embed"].contains(&format) {
+            if tile.error.is_some() {
+                return Some(self.text("作品预览不可用", "Artwork preview is unavailable"));
+            }
+            if tile.art.is_none() {
+                return Some(self.text("作品预览准备中", "Preparing artwork preview"));
+            }
+        }
+        None
+    }
+    fn can_open_export_for(&self, index: usize) -> bool {
+        self.raw.is_some() && self.tiles.get(index).is_some() && !self.export_prompt_busy
+    }
+    fn toggle_export(&mut self, index: usize, cx: &mut Context<Self>) {
+        if !self.can_open_export_for(index) {
+            return;
+        }
+        let close = self.export_open && self.selected_tile == Some(index);
+        if close {
+            self.close_export_workspace(cx);
+            return;
+        }
+        if self.selected_tile != Some(index) {
+            self.stop_playback(cx);
+        }
+        self.selected_tile = Some(index);
+        self.roam_motion.stop();
+        self.export_open = true;
+        {
+            if self.playback.as_ref().is_some_and(|play| play.playing) {
+                self.play(false, cx);
+            }
+            self.export_formats_open = false;
+            if self
+                .export_unavailable_reason(&self.export_format)
+                .is_some()
+            {
+                self.export_format =
+                    if self.current_tile().is_some_and(|tile| tile.error.is_some()) {
+                        "md"
+                    } else {
+                        "png"
+                    }
+                    .into();
+            }
+            if !self
+                .catalog
+                .as_ref()
+                .and_then(|c| c["sizes"].as_array())
+                .is_some_and(|sizes| sizes.iter().any(|size| size["id"] == self.export_size))
+            {
+                self.export_size = "native".into();
+            }
+            self.notice = None;
+        }
+        self.hover = None;
+        cx.notify();
     }
     fn export_history_writable(&self) -> bool {
         self.fixture
@@ -4274,6 +4337,9 @@ impl Creditia {
                     .is_some_and(|journal| !journal.blocked()))
     }
     fn export_request(&self) -> Result<Value, String> {
+        self.export_request_format(&self.export_format)
+    }
+    fn export_request_format(&self, format: &str) -> Result<Value, String> {
         let raw = self.raw.as_ref().ok_or("No archive")?;
         let catalog = self.catalog.as_ref().ok_or("No artwork catalog")?;
         let tile = self.current_tile().ok_or("No artwork selected")?;
@@ -4297,9 +4363,10 @@ impl Creditia {
             catalog,
             (self.style_index, piece_index, variant_index),
             &self.preferences,
-            &self.export_format,
+            format,
             &self.export_size,
-            self.transparent,
+            self.transparent
+                && ExportFormat::from_id(format).is_some_and(ExportFormat::transparency),
             &self.font_mode,
         )?;
         if !self.all_archives.is_empty() {
@@ -4427,7 +4494,7 @@ impl Creditia {
                 return;
             }
         };
-        let directory = match service::export_dir() {
+        let directory = match service::default_export_dir() {
             Ok(directory) => directory,
             Err(error) => {
                 self.error = Some(error.to_string());
@@ -4436,6 +4503,7 @@ impl Creditia {
             }
         };
         let filename = export_filename(&snapshot);
+        self.export_formats_open = false;
         let prompt = cx.prompt_for_new_path(&directory, Some(&filename));
         self.export_prompt_busy = true;
         self.export_dialog_task = Some(cx.spawn(async move |this, cx| {
@@ -4448,22 +4516,8 @@ impl Creditia {
                     }
                     Ok(Ok(Some(path))) => match view.export_queue.enqueue(snapshot, path, filename)
                     {
-                        Ok(queued) => {
-                            view.notice = Some(
-                                view.text(
-                                    if queued.deduplicated {
-                                        "该任务已在导出队列中"
-                                    } else {
-                                        "已加入导出队列"
-                                    },
-                                    if queued.deduplicated {
-                                        "This export is already queued"
-                                    } else {
-                                        "Export queued"
-                                    },
-                                )
-                                .into(),
-                            );
+                        Ok(_) => {
+                            view.failed_export = None;
                             view.persist_exports();
                             view.pump_exports(cx);
                         }
@@ -4489,19 +4543,22 @@ impl Creditia {
         let attempt = job.attempt;
         self.export_active = Some((id, attempt));
         self.export_stage = Some(ExportStage::Rendering);
-        self.export_label = job.label.clone();
         self.export_cancel_requested = false;
         let cancellation = renderer::Cancellation::default();
         self.export_cancellation = Some(cancellation.clone());
         self.persist_exports();
         self.export_task = Some(cx.spawn(async move |this, cx| {
             let render_cancel = cancellation.clone();
-            let path = job.path.clone();
-            let output_path = path.clone();
+            let output_path = job.path.clone();
             let result = cx
                 .background_spawn(async move {
                     let output = renderer::request(job.renderer_request(), render_cancel)?;
-                    renderer::decode_export(&output, &job.format)
+                    let bytes = renderer::decode_export(&output, &job.format)?;
+                    if job.format == "md" {
+                        export::export_text(ExportFormat::Md, bytes).map(String::into_bytes)
+                    } else {
+                        Ok(bytes)
+                    }
                 })
                 .await;
             let result = match result {
@@ -4535,17 +4592,11 @@ impl Creditia {
                 let cancelled = view.export_cancel_requested && result.is_err();
                 if cancelled {
                     view.export_queue.finish_cancelled(id, attempt);
-                    view.notice = Some(view.text("已取消导出", "Export cancelled").into());
+                    view.show_success(view.text("已取消导出", "Export cancelled").into(), cx);
                 } else {
                     match &result {
-                        Ok(()) => {
-                            view.notice = Some(format!(
-                                "{} {}",
-                                view.text("已保存", "Saved"),
-                                path.display()
-                            ))
-                        }
-                        Err(error) => view.error = Some(error.clone()),
+                        Ok(()) => view.show_success(view.text("已保存", "Saved").into(), cx),
+                        Err(_) => view.failed_export = Some(id),
                     }
                     view.export_queue.finish(id, attempt, result);
                 }
@@ -4566,6 +4617,9 @@ impl Creditia {
         }
         match self.export_queue.retry(id) {
             Ok(()) => {
+                if self.failed_export == Some(id) {
+                    self.failed_export = None;
+                }
                 self.persist_exports();
                 self.pump_exports(cx);
             }
@@ -4595,7 +4649,6 @@ impl Creditia {
 
     fn cancel_current(&mut self, _: &CancelCurrent, window: &mut Window, cx: &mut Context<Self>) {
         if self.drag.take().is_some() {
-            self.export_hovered = None;
             self.roam_motion.stop();
             cx.notify();
             return;
@@ -4607,57 +4660,20 @@ impl Creditia {
 
         if self.panel.is_some() {
             self.close_panel(window, cx);
+        } else if self.export_open {
+            if self.export_formats_open {
+                self.export_formats_open = false;
+                cx.notify();
+                return;
+            }
+            self.close_export_workspace(cx);
         } else if self.focused {
             self.close_focus(cx);
-        } else if self.export_open {
-            self.export_open = false;
-            cx.notify();
         } else if self.export_stage.is_some() {
             self.cancel_export(&CancelExport, window, cx);
         } else {
             self.cancel(&CancelAnalysis, window, cx);
         }
-    }
-    fn copy_export(&mut self, cx: &mut Context<Self>) {
-        if self.operation_busy {
-            return;
-        }
-        let mut request = match self.export_request() {
-            Ok(value) => value,
-            Err(error) => {
-                self.error = Some(error);
-                return;
-            }
-        };
-        let format = if ["svg", "html", "md", "txt", "json", "embed"]
-            .contains(&self.export_format.as_str())
-        {
-            self.export_format.clone()
-        } else {
-            "svg".into()
-        };
-        request["format"] = json!(format);
-        self.operation_busy = true;
-        self.operation_task = Some(cx.spawn(async move |this, cx| {
-            let result = cx
-                .background_spawn(async move {
-                    let output = renderer::request(request, renderer::Cancellation::default())?;
-                    let bytes = renderer::decode_export(&output, &format)?;
-                    String::from_utf8(bytes).map_err(|e| e.to_string())
-                })
-                .await;
-            let _ = this.update(cx, |view, cx| {
-                view.operation_busy = false;
-                match result {
-                    Ok(text) => {
-                        cx.write_to_clipboard(ClipboardItem::new_string(text));
-                        view.notice = Some(view.text("已复制", "Copied").into());
-                    }
-                    Err(error) => view.error = Some(error),
-                }
-                cx.notify();
-            });
-        }));
     }
     fn wheel(&mut self, event: &ScrollEvent, cx: &mut Context<Self>) {
         self.roam_motion.stop();
@@ -4668,7 +4684,11 @@ impl Creditia {
             if !self.focused && self.preferences.view != "roam" {
                 self.set_view("roam", cx);
             }
-            self.zoom_at((-dy * 0.006).exp(), self.pointer.0, self.pointer.1);
+            self.zoom_at(
+                (-dy * 0.006).exp(),
+                event.position.x.into(),
+                f32::from(event.position.y) - 60.,
+            );
         } else {
             self.viewport.y += if event.modifiers.shift && dx == 0. {
                 0.
@@ -4687,8 +4707,25 @@ impl Creditia {
         cx.notify();
         cx.stop_propagation();
     }
+    fn pinch(&mut self, event: &PinchEvent, cx: &mut Context<Self>) {
+        if self.panel.is_some() || !event.delta.is_finite() || event.delta <= -1. {
+            return;
+        }
+        self.roam_motion.stop();
+        if !self.focused && self.preferences.view != "roam" {
+            self.set_view("roam", cx);
+        }
+        self.zoom_at(
+            1. + event.delta,
+            event.position.x.into(),
+            f32::from(event.position.y) - 60.,
+        );
+        self.hover = None;
+        cx.notify();
+        cx.stop_propagation();
+    }
     fn pointer_move(&mut self, event: &MouseMoveEvent, cx: &mut Context<Self>) {
-        if self.panel.is_some() {
+        if self.panel.is_some() || self.export_workspace_open() {
             self.hover = None;
             return;
         }
@@ -4717,36 +4754,6 @@ impl Creditia {
                     }
                 }
                 drag.last = local;
-                if drag.tile.is_some() && drag.moved {
-                    let formats = self
-                        .catalog
-                        .as_ref()
-                        .and_then(|c| c["formats"].as_array())
-                        .map(Vec::len)
-                        .unwrap_or(0);
-                    self.export_hovered = nearest_child(&self.format_bounds, formats, x, y);
-                    if self.export_hovered.is_none() {
-                        let size_count = self
-                            .catalog
-                            .as_ref()
-                            .and_then(|c| c["sizes"].as_array())
-                            .map(Vec::len)
-                            .unwrap_or(0);
-                        if let Some(index) = nearest_child(&self.size_bounds, size_count, x, y) {
-                            if let Some(size) = self
-                                .catalog
-                                .as_ref()
-                                .and_then(|c| c["sizes"][index]["id"].as_str())
-                            {
-                                if self.export_size != size {
-                                    self.export_size = size.into();
-                                    self.preferences.export_size = size.into();
-                                    self.persist();
-                                }
-                            }
-                        }
-                    }
-                }
                 self.hover = None;
                 cx.notify();
                 return;
@@ -4819,8 +4826,7 @@ impl Creditia {
             cx.notify();
         }
     }
-    fn pointer_up(&mut self, event: &MouseUpEvent, window: &mut Window, cx: &mut Context<Self>) {
-        self.export_hovered = None;
+    fn pointer_up(&mut self, event: &MouseUpEvent, _window: &mut Window, cx: &mut Context<Self>) {
         if self.panel.is_some() {
             self.drag = None;
             return;
@@ -4828,6 +4834,9 @@ impl Creditia {
         let Some(drag) = self.drag.take() else {
             return;
         };
+        if drag.moved && drag.tile.is_some() {
+            self.export_open = false;
+        }
         if !drag.moved {
             if let Some(index) = drag.clicked_tile {
                 if !self.focused {
@@ -4852,34 +4861,6 @@ impl Creditia {
         let x: f32 = event.position.x.into();
         let y: f32 = event.position.y.into();
         let local = (x, y - 60.);
-        let formats = self
-            .catalog
-            .as_ref()
-            .and_then(|c| c["formats"].as_array())
-            .cloned()
-            .unwrap_or_default();
-        if let Some(index) = nearest_child(&self.format_bounds, formats.len(), x, y) {
-            if let Some(format) = formats[index]["id"].as_str() {
-                if format != "gif"
-                    || self
-                        .selected_piece()
-                        .is_some_and(|piece| piece["animated"] == true)
-                {
-                    self.selected_tile = Some(from);
-                    self.export_format = format.into();
-                    self.preferences.export_format = format.into();
-                    self.persist();
-                    self.export_artwork(&ExportArtwork, window, cx);
-                    return;
-                }
-            }
-        }
-        if local.1 >= self.viewport_size.1 - 12. {
-            self.selected_tile = Some(from);
-            self.export_open = true;
-            cx.notify();
-            return;
-        }
         let to = self
             .rects
             .iter()
@@ -4896,6 +4877,8 @@ impl Creditia {
                 self.persist();
             }
             cx.notify();
+        } else {
+            self.toggle_export(from, cx);
         }
     }
 }
@@ -4952,8 +4935,8 @@ impl Creditia {
             })
             .unwrap_or(&tile.spec.piece)
             .to_string();
-        let animation = self
-            .focused
+        let export_preview = selected && self.export_workspace_open();
+        let animation = (selected && (self.focused || self.export_animation()))
             .then(|| self.playback.as_ref().and_then(Playback::displayed))
             .flatten();
         let image = tile.image.clone();
@@ -4969,7 +4952,14 @@ impl Creditia {
             .when(dragging, |picture| picture.opacity(0.3))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |view, _: &MouseDownEvent, _, cx| {
+                cx.listener(move |view, event: &MouseDownEvent, _, cx| {
+                    if view.export_workspace_open() {
+                        view.export_formats_open = false;
+                        cx.stop_propagation();
+                        cx.notify();
+                        return;
+                    }
+                    view.pointer = (event.position.x.into(), f32::from(event.position.y) - 60.);
                     if view.panel.is_some() {
                         cx.stop_propagation();
                         return;
@@ -4992,7 +4982,41 @@ impl Creditia {
                     cx.notify();
                 }),
             );
-        if let Some(frame) = animation {
+        let export_image = if export_preview && !self.export_animation() {
+            self.export_preview.displayed_image()
+        } else {
+            None
+        };
+        if let Some(image) = export_image {
+            picture = picture.child(crate::material::contained_preview(
+                image.clone(),
+                10.,
+                self.transparent
+                    && ExportFormat::from_id(&self.export_format)
+                        .is_some_and(ExportFormat::transparency),
+            ));
+        } else if let Some(frame) = animation {
+            let bounds = if self.export_animation() {
+                self.export_frame_rect()
+                    .map(|rect| Rect {
+                        x: rect.x - r.x,
+                        y: rect.y - r.y,
+                        ..rect
+                    })
+                    .unwrap_or(Rect {
+                        x: 0.,
+                        y: 0.,
+                        w: r.w,
+                        h: r.h,
+                    })
+            } else {
+                Rect {
+                    x: 0.,
+                    y: 0.,
+                    w: r.w,
+                    h: r.h,
+                }
+            };
             for (part, (region, image)) in frame.tiles.iter().enumerate() {
                 let region = region.unwrap_or(Rect {
                     x: 0.,
@@ -5000,7 +5024,7 @@ impl Creditia {
                     w: frame.art.w,
                     h: frame.art.h,
                 });
-                let exact = frame.pixels == texture_width(r.w, self.display_scale)
+                let exact = frame.pixels == texture_width(bounds.w, self.display_scale)
                     && self
                         .animation_control
                         .as_ref()
@@ -5018,22 +5042,24 @@ impl Creditia {
                     )
                 } else {
                     (
-                        region.x / frame.art.w * r.w,
-                        region.y / frame.art.h * r.h,
-                        region.w / frame.art.w * r.w,
-                        region.h / frame.art.h * r.h,
+                        region.x / frame.art.w * bounds.w,
+                        region.y / frame.art.h * bounds.h,
+                        region.w / frame.art.w * bounds.w,
+                        region.h / frame.art.h * bounds.h,
                     )
                 };
-                picture = picture.child(
-                    img(image.clone())
-                        .id(("animation-region", part))
-                        .absolute()
-                        .left(px(left))
-                        .top(px(top))
-                        .w(px(width))
-                        .h(px(height))
-                        .object_fit(ObjectFit::Fill),
-                );
+                picture = picture.child(crate::material::frame_preview(
+                    image.clone(),
+                    Rect {
+                        x: left + bounds.x,
+                        y: top + bounds.y,
+                        w: width,
+                        h: height,
+                    },
+                    crate::material::image_corners(region, frame.art.w, frame.art.h),
+                    (part + 1 == frame.tiles.len()).then(|| frame.painted.clone()),
+                    telemetry_enabled().then_some((frame.epoch, frame.index)),
+                ));
             }
         } else if let Some(image) = image {
             if let (Some(region), Some(art)) = (tile.image_region, tile.art.as_deref()) {
@@ -5055,34 +5081,31 @@ impl Creditia {
                         region.h / art.h * r.h,
                     )
                 };
-                picture = picture.child(
-                    img(image)
-                        .id(("artwork-image", index))
-                        .absolute()
-                        .left(px(left))
-                        .top(px(top))
-                        .w(px(width))
-                        .h(px(height))
-                        .object_fit(ObjectFit::Fill),
-                );
+                picture = picture.child(crate::material::preview(
+                    image,
+                    Rect {
+                        x: left,
+                        y: top,
+                        w: width,
+                        h: height,
+                    },
+                    crate::material::image_corners(region, art.w, art.h),
+                ));
             } else {
-                picture = picture.child(
-                    img(image)
-                        .id(("artwork-image", index))
-                        .absolute()
-                        .left_0()
-                        .top_0()
-                        .w(px(r.w))
-                        .h(px(if tile.image_size.0 > 0 {
+                picture = picture.child(crate::material::preview(
+                    image,
+                    Rect {
+                        x: 0.,
+                        y: 0.,
+                        w: r.w,
+                        h: if tile.image_size.0 > 0 {
                             r.w * tile.image_size.1 as f32 / tile.image_size.0 as f32
                         } else {
                             r.h
-                        }))
-                        .object_fit(ObjectFit::Fill)
-                        .with_fallback(|| {
-                            div().child("Unable to decode artwork").into_any_element()
-                        }),
-                );
+                        },
+                    },
+                    Corners::all(px(10.)),
+                ));
             }
         } else {
             picture = picture
@@ -5091,7 +5114,7 @@ impl Creditia {
                 .flex_col()
                 .items_center()
                 .justify_center()
-                .child(div().text_sm().text_color(muted).child(
+                .child(div().text_size(px(12.)).text_color(muted).child(
                     if tile.error.as_deref() == Some("__empty__") {
                         self.text("暂无相应数据", "No data for this piece")
                             .to_string()
@@ -5109,7 +5132,7 @@ impl Creditia {
                         picture.child(
                             Button::new(("retry-artwork", index))
                                 .ghost()
-                                .label(self.text("重试", "Retry"))
+                                .shell_label(self.text("重试", "Retry"))
                                 .on_click(cx.listener(move |view, _, _, cx| {
                                     if let Some(tile) = view.tiles.get_mut(index) {
                                         tile.error = None;
@@ -5121,10 +5144,31 @@ impl Creditia {
                     },
                 );
         }
+        let framed_export = export_preview
+            && self.export_size != "native"
+            && ExportFormat::from_id(&self.export_format).is_some_and(|format| format.visual());
+        let edge_rect = if framed_export {
+            self.export_frame_rect().map(|rect| Rect {
+                x: rect.x - r.x,
+                y: rect.y - r.y,
+                ..rect
+            })
+        } else {
+            None
+        }
+        .unwrap_or(Rect {
+            x: 0.,
+            y: 0.,
+            w: r.w,
+            h: r.h,
+        });
         picture = picture.child(
             div()
                 .absolute()
-                .inset_0()
+                .left(px(edge_rect.x))
+                .top(px(edge_rect.y))
+                .w(px(edge_rect.w))
+                .h(px(edge_rect.h))
                 .rounded(px(10.))
                 .border_1()
                 .border_color(if self.hovered_tile == Some(index) {
@@ -5141,17 +5185,20 @@ impl Creditia {
         let mut card = div()
             .absolute()
             .left(px(r.x))
-            .top(px(r.y))
+            .top(px(r.y + 60.))
             .w(px(r.w))
             .rounded(px(10.))
-            .shadow(vec![
-                BoxShadow::new(px(0.), px(12.), rgba(0x00000014).into()).blur_radius(px(32.)),
-            ])
+            .when(!framed_export, |card| {
+                card.shadow(vec![
+                    BoxShadow::new(px(0.), px(12.), rgba(0x00000014).into()).blur_radius(px(32.)),
+                ])
+            })
             .child(picture);
         if !self.focused {
+            let palette = Palette::of(cx);
             let variant_id = tile.spec.variant.as_deref().unwrap_or("");
-            let variant = self
-                .piece(&tile.spec.piece)
+            let piece = self.piece(&tile.spec.piece);
+            let variant = piece
                 .and_then(|piece| piece["variants"].as_array())
                 .and_then(|variants| variants.iter().find(|variant| variant["id"] == variant_id))
                 .and_then(|variant| {
@@ -5164,67 +5211,127 @@ impl Creditia {
                 })
                 .unwrap_or(variant_id)
                 .to_string();
+            let hovered = self.hovered_tile == Some(index) || (self.export_open && selected);
+            let purpose = piece
+                .and_then(|piece| {
+                    piece[if self.preferences.language == Language::En {
+                        "qEn"
+                    } else {
+                        "q"
+                    }]
+                    .as_str()
+                })
+                .unwrap_or("")
+                .to_string();
             card = card.child(
                 div()
                     .absolute()
-                    .top(px(-26.))
+                    .bottom(relative(1.))
+                    .mb(px(7.))
                     .left_0()
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .h(px(22.))
-                    .text_xs()
-                    .text_color(muted)
+                    .max_w(px(r.w * 0.58))
+                    .text_size(px(12.))
+                    .text_color(if hovered { palette.ink } else { palette.soft })
                     .child(
                         div()
                             .flex()
-                            .gap_2()
-                            .max_w(px(r.w * 0.58))
-                            .overflow_hidden()
-                            .child(title)
-                            .child(variant),
+                            .gap(px(6.))
+                            .child(div().truncate().child(title))
+                            .child(div().text_color(palette.faint).truncate().child(variant)),
                     )
-                    .when(self.hovered_tile == Some(index) || selected, |caption| {
+                    .when(hovered && !purpose.is_empty(), |caption| {
                         caption.child(
                             div()
-                                .flex()
-                                .gap_1()
-                                .child(
-                                    Button::new(("tile-focus", index))
-                                        .ghost()
-                                        .icon(crate::ui_icons::icon("search"))
-                                        .accessibility_label(self.text("放大作品", "Open artwork"))
-                                        .tooltip(self.text("放大作品", "Open artwork"))
-                                        .h(px(22.))
-                                        .w(px(24.))
-                                        .on_click(cx.listener(move |view, _, _, cx| {
-                                            view.select_tile(index, true, cx)
-                                        })),
-                                )
-                                .child(
-                                    Button::new(("tile-export", index))
-                                        .ghost()
-                                        .icon(crate::ui_icons::icon("export"))
-                                        .accessibility_label(
-                                            self.text("导出作品", "Export artwork"),
-                                        )
-                                        .tooltip(self.text("导出作品", "Export artwork"))
-                                        .h(px(22.))
-                                        .w(px(24.))
-                                        .on_click(cx.listener(move |view, _, _, cx| {
-                                            view.selected_tile = Some(index);
-                                            view.export_open = true;
-                                            cx.notify();
-                                        })),
-                                ),
+                                .text_size(px(11.))
+                                .text_color(palette.faint)
+                                .truncate()
+                                .child(purpose),
                         )
                     }),
             );
-        }
-        if self.hovered_tile == Some(index) {
-            card = card.border_color(border);
+            if hovered {
+                card = card.child(
+                    div()
+                        .absolute()
+                        .inset(px(-9.))
+                        .rounded(px(14.))
+                        .border_1()
+                        .border_dashed()
+                        .border_color(palette.ink.opacity(0.55)),
+                );
+            }
+            if hovered && !(self.export_workspace_open() && selected) {
+                let mut bar = div()
+                    .absolute()
+                    .top(px(-24.))
+                    .right(px(-6.))
+                    .flex()
+                    .items_center()
+                    .gap(px(2.))
+                    .p(px(3.))
+                    .rounded_full()
+                    .shadow(palette.shadows())
+                    .child(crate::material::surface(
+                        self.backdrop_image.clone(),
+                        palette.glass,
+                        16.,
+                        palette,
+                    ));
+                if piece
+                    .and_then(|piece| piece["variants"].as_array())
+                    .is_some_and(|variants| variants.len() > 1)
+                {
+                    for (id, icon, direction, name) in [
+                        (
+                            "tile-previous-layout",
+                            "prev",
+                            -1,
+                            self.text("上一种版式", "Previous layout"),
+                        ),
+                        (
+                            "tile-next-layout",
+                            "next",
+                            1,
+                            self.text("下一种版式", "Next layout"),
+                        ),
+                    ] {
+                        bar = bar.child(
+                            Button::new((id, index))
+                                .ghost()
+                                .w(px(26.))
+                                .h(px(26.))
+                                .p_0()
+                                .rounded_full()
+                                .icon(crate::ui_icons::icon(icon))
+                                .accessibility_label(name)
+                                .tooltip(name)
+                                .on_click(cx.listener(move |view, _, _, cx| {
+                                    view.selected_tile = Some(index);
+                                    view.cycle_variant(direction, cx);
+                                })),
+                        );
+                    }
+                }
+                bar = bar.child(
+                    self.surface_anchors.wrap(
+                        "card-export",
+                        Button::new(("tile-export", index))
+                            .ghost()
+                            .w(px(26.))
+                            .h(px(26.))
+                            .p_0()
+                            .rounded_full()
+                            .icon(crate::ui_icons::icon("export"))
+                            .accessibility_label(self.text("导出作品", "Export artwork"))
+                            .tooltip(self.text("导出作品", "Export artwork"))
+                            .disabled(!self.can_open_export_for(index))
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                view.toggle_export(index, cx);
+                            })),
+                    ),
+                );
+                card = card.child(bar);
+            }
         }
         card.into_any_element()
     }
@@ -5242,9 +5349,17 @@ impl Creditia {
             .size_full()
             .overflow_hidden()
             .on_scroll(cx.listener(|view, event, _, cx| view.wheel(event, cx)))
+            .on_pinch(cx.listener(|view, event, _, cx| view.pinch(event, cx)))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|view, _, _, cx| {
+                cx.listener(|view, event: &MouseDownEvent, _, cx| {
+                    if view.export_workspace_open() {
+                        view.export_formats_open = false;
+                        cx.stop_propagation();
+                        cx.notify();
+                        return;
+                    }
+                    view.pointer = (event.position.x.into(), f32::from(event.position.y) - 60.);
                     if view.panel.is_some() {
                         cx.stop_propagation();
                         return;
@@ -5263,38 +5378,15 @@ impl Creditia {
                 }),
             );
         if self.focused {
-            let viewport = self.saved_viewport.unwrap_or_default();
-            for (index, tile) in self.tiles.iter().enumerate() {
-                let Some(image) = tile.image.clone().filter(|_| tile.image_region.is_none()) else {
-                    continue;
-                };
-                let Some(rect) = self
-                    .rects
-                    .get(index)
-                    .copied()
-                    .map(|rect| rect.transformed(viewport))
-                else {
-                    continue;
-                };
-                if !rect.intersects(visible) {
-                    continue;
-                }
-                stage = stage.child(
-                    div()
-                        .absolute()
-                        .left(px(rect.x))
-                        .top(px(rect.y))
-                        .w(px(rect.w))
-                        .h(px(rect.h))
-                        .opacity(0.12)
-                        .child(
-                            img(image)
-                                .size_full()
-                                .rounded(px(10.))
-                                .object_fit(ObjectFit::Contain),
-                        ),
-                );
-            }
+            let palette = Palette::of(cx);
+            stage = stage.child(crate::material::surface(
+                self.backdrop_background
+                    .clone()
+                    .or_else(|| self.backdrop_image.clone()),
+                palette.bg.opacity(0.72),
+                0.,
+                palette,
+            ));
         }
         if self.loading {
             if self.activity_age() >= Duration::from_millis(300) {
@@ -5362,14 +5454,14 @@ impl Creditia {
                 .child(
                     Button::new("discover-projects")
                         .ghost()
-                        .label(self.text("查找本机项目…", "Find local projects…"))
+                        .shell_label(self.text("查找本机项目…", "Find local projects…"))
                         .on_click(cx.listener(|view, _, window, cx| {
                             view.open_panel(Panel::Projects, window, cx)
                         })),
                 )
                 .child(
                     Button::new("first-project")
-                        .label(if self.selected.is_some() {
+                        .shell_label(if self.selected.is_some() {
                             self.text("分析项目", "Analyze project")
                         } else {
                             self.text("添加项目…", "Add project…")
@@ -5402,7 +5494,7 @@ impl Creditia {
                     choices = choices.child(
                         Button::new(("welcome-project", index))
                             .ghost()
-                            .label(format!("{} {}", if picked { "✓" } else { "○" }, name))
+                            .shell_label(format!("{} {}", if picked { "✓" } else { "○" }, name))
                             .disabled(self.job_busy)
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 if let Some(at) =
@@ -5417,12 +5509,14 @@ impl Creditia {
                     );
                 }
                 if let Some(error) = &self.discovery_error {
-                    choices = choices.child(div().text_sm().child(error.clone())).child(
-                        Button::new("welcome-retry")
-                            .ghost()
-                            .label(self.text("重新查找", "Try again"))
-                            .on_click(cx.listener(|view, _, _, cx| view.retry_discovery(cx))),
-                    );
+                    choices = choices
+                        .child(div().text_size(px(12.)).child(error.clone()))
+                        .child(
+                            Button::new("welcome-retry")
+                                .ghost()
+                                .shell_label(self.text("重新查找", "Try again"))
+                                .on_click(cx.listener(|view, _, _, cx| view.retry_discovery(cx))),
+                        );
                 } else if self.discovered.as_ref().is_some_and(Vec::is_empty) {
                     choices = choices.child(self.text(
                         "没有找到含 AI 记录的项目，可以选择一个文件夹。",
@@ -5432,7 +5526,7 @@ impl Creditia {
                 if !self.discovery_selected.is_empty() {
                     choices = choices.child(
                         Button::new("welcome-analyze")
-                            .label(format!(
+                            .shell_label(format!(
                                 "{} ({})",
                                 self.text("分析所选项目", "Analyze selected"),
                                 self.discovery_selected.len()
@@ -5461,7 +5555,7 @@ impl Creditia {
                                 .left_0()
                                 .top_0()
                                 .w_full()
-                                .h(px((self.viewport_size.1 - 154.).max(120.)))
+                                .h(px(self.artwork_viewport().h))
                                 .overflow_hidden()
                                 .child(artwork),
                         )
@@ -5471,269 +5565,209 @@ impl Creditia {
                 }
             }
         }
-        if let Some(hit) = &self.hover {
-            let w = 300.;
-            let h = 54. + hit.d.len().min(8) as f32 * 22.;
-            let x = if self.pointer.0 + 20. + w > self.viewport_size.0 {
-                self.pointer.0 - w - 14.
-            } else {
-                self.pointer.0 + 20.
-            }
-            .max(8.);
-            let y = if self.pointer.1 + 20. + h > self.viewport_size.1 {
-                self.pointer.1 - h - 12.
-            } else {
-                self.pointer.1 + 20.
-            }
-            .max(8.);
-            stage = stage.child(
-                div()
-                    .id("evidence-tooltip")
-                    .absolute()
-                    .left(px(x))
-                    .top(px(y))
-                    .w(px(w))
-                    .p_3()
-                    .rounded_lg()
-                    .bg(cx.theme().foreground)
-                    .text_color(cx.theme().background)
-                    .text_sm()
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child(hit.t.clone()))
-                    .children(
-                        hit.d
-                            .iter()
-                            .take(8)
-                            .map(|line| div().mt_1().child(line.clone())),
-                    ),
-            );
+        if self.hover.is_some() {
+            stage = stage.child(self.hover_card(cx));
         }
         stage.into_any_element()
     }
-    fn render_export_dock(&self, cx: &mut Context<Self>) -> AnyElement {
-        let border = cx.theme().border;
-        let mut dock = div()
-            .id("export-dock")
-            .occlude()
-            .h(px(self.dock_height))
-            .overflow_hidden()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .px_5()
-            .py_3()
-            .border_t_1()
-            .border_color(border);
-        if !self.export_open {
-            return div()
-                .h(px(self.dock_height))
-                .flex_shrink_0()
-                .overflow_hidden()
-                .into_any_element();
-        }
-        let formats = self
-            .catalog
-            .as_ref()
-            .and_then(|c| c["formats"].as_array())
-            .cloned()
-            .unwrap_or_default();
-        let mut buttons = div()
-            .id("export-formats")
-            .track_scroll(&self.format_bounds)
-            .flex()
-            .flex_wrap()
-            .gap_1();
-        for (index, format) in formats.iter().enumerate() {
-            let Some(id) = format["id"].as_str() else {
-                continue;
-            };
-            let id = id.to_string();
-            let chosen = self.export_format == id;
-            let drop_format = id.clone();
-            let disabled =
-                id == "gif" && self.selected_piece().is_none_or(|p| p["animated"] != true);
-            buttons = buttons.child(
-                div()
-                    .on_mouse_up(
-                        MouseButton::Left,
-                        cx.listener(move |view, _, window, cx| {
-                            if !disabled
-                                && view
-                                    .drag
-                                    .as_ref()
-                                    .is_some_and(|drag| drag.moved && drag.tile.is_some())
-                            {
-                                if let Some(drag) = view.drag.take() {
-                                    view.selected_tile = drag.tile;
-                                }
-                                view.export_hovered = None;
-                                view.export_format = drop_format.clone();
-                                view.preferences.export_format = drop_format.clone();
-                                view.persist();
-                                view.export_artwork(&ExportArtwork, window, cx);
-                                cx.stop_propagation();
-                            }
-                        }),
-                    )
-                    .child(
-                        Button::new(("format", index))
-                            .ghost()
-                            .label(id.to_uppercase())
-                            .when(chosen || self.export_hovered == Some(index), |button| {
-                                button.bg(cx.theme().muted)
-                            })
-                            .disabled(disabled)
-                            .on_click(cx.listener(move |view, _, _, cx| {
-                                view.export_format = id.clone();
-                                view.preferences.export_format = id.clone();
-                                view.persist();
-                                cx.notify();
-                            })),
-                    ),
-            );
-        }
-        let mut sizes = div()
-            .id("export-sizes")
-            .track_scroll(&self.size_bounds)
-            .flex()
-            .flex_wrap()
-            .gap_1();
-        for (index, size) in self
-            .catalog
-            .as_ref()
-            .and_then(|c| c["sizes"].as_array())
-            .into_iter()
-            .flatten()
-            .enumerate()
-        {
-            let Some(id) = size["id"].as_str() else {
-                continue;
-            };
-            let id = id.to_string();
-            let label = if id == "native" {
-                self.text("原尺寸", "Original").to_string()
+    fn refresh_backdrop(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(pending) = self.backdrop_pending.take() {
+            let mut ready = true;
+            for image in std::iter::once(&pending.image)
+                .chain(pending.background.as_ref())
+                .chain(pending.top.as_ref())
+            {
+                ready &= crate::image_assets::track(image, window, cx).is_some();
+            }
+            if ready {
+                if let Some(old) = self.backdrop_image.replace(pending.image) {
+                    crate::image_assets::release(old, cx);
+                }
+                if let Some(old) =
+                    std::mem::replace(&mut self.backdrop_background, pending.background)
+                {
+                    crate::image_assets::release(old, cx);
+                }
+                if let Some(old) = std::mem::replace(&mut self.backdrop_top, pending.top) {
+                    crate::image_assets::release(old, cx);
+                }
             } else {
-                format!("{} {}×{}", id, size["w"], size["h"])
-            };
-            let chosen = self.export_size == id;
-            sizes = sizes.child(
-                Button::new(("size", index))
-                    .ghost()
-                    .label(label)
-                    .when(chosen, |b| b.bg(cx.theme().muted))
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        view.export_size = id.clone();
-                        view.preferences.export_size = id.clone();
-                        view.persist();
-                        cx.notify();
-                    })),
-            );
+                self.backdrop_pending = Some(pending);
+                window.request_animation_frame();
+                return;
+            }
         }
-        dock = dock
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(buttons)
-                    .child(
-                        Button::new("close-export-dock")
-                            .ghost()
-                            .label("×")
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.export_open = false;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(sizes)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        Button::new("transparent")
-                            .ghost()
-                            .label(if self.transparent {
-                                self.text("透明背景 ✓", "Transparent ✓")
-                            } else {
-                                self.text("透明背景", "Transparent")
-                            })
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.transparent = !view.transparent;
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        Button::new("font-mode")
-                            .ghost()
-                            .disabled(!["svg", "html"].contains(&self.export_format.as_str()))
-                            .label(if self.font_mode == "embed" {
-                                self.text("字体嵌入", "Embed fonts")
-                            } else {
-                                self.text("文字转路径", "Outline fonts")
-                            })
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.font_mode = if view.font_mode == "embed" {
-                                    "outline"
-                                } else {
-                                    "embed"
-                                }
-                                .into();
-                                cx.notify();
-                            })),
-                    )
-                    .child(div().flex_1())
-                    .child(
-                        Button::new("copy-export")
-                            .ghost()
-                            .label(self.text("复制", "Copy"))
-                            .disabled(!self.can_export() || self.operation_busy)
-                            .on_click(cx.listener(|view, _, _, cx| view.copy_export(cx))),
-                    )
-                    .child(
-                        Button::new("save-export")
-                            .primary()
-                            .label(self.text("保存…", "Save…"))
-                            .disabled(!self.can_export() || !self.export_history_writable())
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                view.export_artwork(&ExportArtwork, window, cx)
-                            })),
-                    ),
-            );
-        dock.into_any_element()
+        if self.backdrop_task.is_some() {
+            return;
+        }
+        let size = window.viewport_size();
+        let size = (f32::from(size.width), f32::from(size.height));
+        let visible = Rect {
+            x: 0.,
+            y: 0.,
+            w: size.0,
+            h: size.1,
+        };
+        let mut layers = Vec::new();
+        for (index, tile) in self.tiles.iter().enumerate() {
+            let tile = if self.focused && self.selected_tile == Some(index) {
+                self.focus_placeholder.as_ref().unwrap_or(tile)
+            } else {
+                tile
+            };
+            let rect = if self.focused {
+                self.rects
+                    .get(index)
+                    .copied()
+                    .map(|r| r.transformed(self.saved_viewport.unwrap_or_default()))
+            } else {
+                Some(self.screen_rect(index))
+            };
+            let Some(mut artwork) = rect else { continue };
+            artwork.y += 60.;
+            if !artwork.intersects(visible) {
+                continue;
+            }
+            let Some(image) = tile
+                .image
+                .as_ref()
+                .and_then(|image| crate::image_assets::track(image, window, cx))
+            else {
+                continue;
+            };
+            let rect = if let (Some(region), Some(art)) = (tile.image_region, tile.art.as_deref()) {
+                Rect {
+                    x: artwork.x + region.x / art.w * artwork.w,
+                    y: artwork.y + region.y / art.h * artwork.h,
+                    w: region.w / art.w * artwork.w,
+                    h: region.h / art.h * artwork.h,
+                }
+            } else {
+                artwork
+            };
+            layers.push(crate::material::Layer {
+                image,
+                rect,
+                artwork,
+            });
+        }
+        let mut foreground = Vec::new();
+        if self.focused
+            && (self.export_open
+                || self.panel.is_some()
+                || self.notice.is_some()
+                || self.hover.is_some()
+                || self.error.is_some())
+        {
+            if let Some(index) = self.selected_tile {
+                let mut artwork = self.screen_rect(index);
+                artwork.y += 60.;
+                if let Some(frame) = self.playback.as_ref().and_then(Playback::displayed) {
+                    for (region, image) in &frame.tiles {
+                        let region = region.unwrap_or(Rect {
+                            x: 0.,
+                            y: 0.,
+                            w: frame.art.w,
+                            h: frame.art.h,
+                        });
+                        {
+                            foreground.push(crate::material::Layer {
+                                image: image.clone(),
+                                artwork,
+                                rect: Rect {
+                                    x: artwork.x + region.x / frame.art.w * artwork.w,
+                                    y: artwork.y + region.y / frame.art.h * artwork.h,
+                                    w: region.w / frame.art.w * artwork.w,
+                                    h: region.h / frame.art.h * artwork.h,
+                                },
+                            });
+                        }
+                    }
+                } else if let Some(tile) = self.tiles.get(index) {
+                    if let Some(image) = tile
+                        .image
+                        .as_ref()
+                        .and_then(|image| crate::image_assets::track(image, window, cx))
+                    {
+                        let rect = if let (Some(region), Some(art)) =
+                            (tile.image_region, tile.art.as_deref())
+                        {
+                            Rect {
+                                x: artwork.x + region.x / art.w * artwork.w,
+                                y: artwork.y + region.y / art.h * artwork.h,
+                                w: region.w / art.w * artwork.w,
+                                h: region.h / art.h * artwork.h,
+                            }
+                        } else {
+                            artwork
+                        };
+                        foreground.push(crate::material::Layer {
+                            image,
+                            artwork,
+                            rect,
+                        });
+                    }
+                }
+            }
+        }
+        let scene = crate::material::Scene {
+            size,
+            dark: cx.theme().is_dark(),
+            focused: self.focused,
+            header_fade: self.saved_viewport.unwrap_or(self.viewport).y < 0.
+                || self.preferences.view == "roam",
+            layers,
+            foreground,
+        };
+        let key = scene.key();
+        if self.backdrop_key == Some(key) {
+            return;
+        }
+        let work = cx
+            .background_executor()
+            .spawn(async move { scene.render() });
+        self.backdrop_task = Some(cx.spawn(async move |this, cx| {
+            let result = work.await;
+            let _ = this.update(cx, |view, cx| {
+                view.backdrop_task = None;
+                view.backdrop_key = Some(key);
+                match result {
+                    Ok(image) => {
+                        view.backdrop_pending = Some(image);
+                        view.backdrop_error = None;
+                    }
+                    Err(error) => {
+                        view.backdrop_error = Some(error.clone());
+                        view.error = Some(error);
+                    }
+                }
+                cx.notify();
+            });
+        }));
     }
     fn render_panel(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let panel = self.panel?;
         let title = match panel {
             Panel::Projects => self.text("项目作品库", "Project library"),
             Panel::Styles => self.text("风格", "Styles"),
+            Panel::Layouts => self.text("版式", "Layout"),
             Panel::Pieces => self.text("全部作品", "All artworks"),
-            Panel::Layouts => self.text("版式", "Layouts"),
-            Panel::Diagnostics => self.text("环境检查", "Diagnostics"),
             Panel::Blame => self.text("逐行归因", "Line attribution"),
-            Panel::Exports => self.text("导出任务", "Export tasks"),
+            Panel::Exports => self.text("导出记录", "Export history"),
             Panel::Settings => self.text("设置", "Settings"),
             Panel::Project => self.text("项目设置", "Project settings"),
             Panel::Details => self.text("归因与证据", "Attribution & evidence"),
         };
         let muted = cx.theme().muted_foreground;
-        let mut body = div().flex().flex_col().gap_3();
+        let mut body = div().flex().flex_col().gap(px(6.)).text_size(px(13.));
         match panel {
             Panel::Projects => {
-                body = body.child(
-                    div()
-                        .id("project-search")
-                        .test_support()
-                        .track_focus(&self.search_input.read(cx).focus_handle(cx))
-                        .child(Input::new(&self.search_input)),
-                );
                 let items = self.picker_items(cx);
                 let mut rows = div()
                     .id("project-list")
                     .track_scroll(&self.project_scroll)
                     .overflow_y_scroll()
-                    .max_h(px(380.))
+                    .max_h(px((self.viewport_size.1 + 60.) * 0.52))
                     .flex()
                     .flex_col()
                     .gap_1()
@@ -5746,14 +5780,16 @@ impl Creditia {
                     rows = rows.child(
                         Button::new("all-projects")
                             .ghost()
-                            .label(format!(
+                            .shell_label(format!(
                                 "{} · {}",
                                 self.text("全部项目", "All projects"),
                                 self.projects.len()
                             ))
-                            .when(self.picker_selected.as_deref() == Some("__all__"), |b| {
-                                b.bg(cx.theme().muted)
-                            })
+                            .when(
+                                self.selected.as_deref() == Some("__all__")
+                                    || self.picker_selected.as_deref() == Some("__all__"),
+                                |b| b.bg(Palette::of(cx).selected),
+                            )
                             .on_click(cx.listener(|view, _, _, cx| {
                                 view.panel = None;
                                 view.show_all_projects(cx)
@@ -5772,22 +5808,33 @@ impl Creditia {
                         div()
                             .flex()
                             .items_center()
+                            .min_w_0()
                             .gap_1()
                             .when_some(self.project_marks.get(&project.id), |row, mark| {
-                                row.child(img(mark.image.clone()).w(px(24.)).h(px(24.)))
+                                row.child(img(mark.image.clone()).w(px(18.)).h(px(18.)))
                             })
-                            .rounded_md()
+                            .rounded(px(14.))
+                            .border_1()
+                            .border_color(gpui_kit::transparent_black())
+                            .when(
+                                self.selected.as_ref() == Some(&id)
+                                    || self.picker_selected.as_ref() == Some(&id),
+                                |row| row.bg(Palette::of(cx).selected),
+                            )
                             .when(self.picker_selected.as_ref() == Some(&id), |row| {
-                                row.bg(cx.theme().muted)
+                                row.border_color(Palette::of(cx).ink.opacity(0.2))
                             })
                             .child(
                                 Button::new(("choose-project", index))
+                                    .accessibility_label(project.name.clone())
                                     .ghost()
                                     .flex_1()
-                                    .h(px(58.))
+                                    .min_w_0()
+                                    .h(px(52.))
                                     .child(
                                         div()
                                             .w_full()
+                                            .min_w_0()
                                             .flex()
                                             .flex_col()
                                             .items_start()
@@ -5798,10 +5845,18 @@ impl Creditia {
                                                     .flex()
                                                     .justify_between()
                                                     .gap_3()
-                                                    .child(project.name.clone())
                                                     .child(
-                                                        div().text_xs().text_color(muted).child(
-                                                            if !project.exists {
+                                                        div()
+                                                            .text_size(px(13.))
+                                                            .font_weight(FontWeight::SEMIBOLD)
+                                                            .truncate()
+                                                            .child(project.name.clone()),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(11.))
+                                                            .text_color(muted)
+                                                            .child(if !project.exists {
                                                                 self.text(
                                                                     "目录不在了",
                                                                     "Folder missing",
@@ -5819,16 +5874,17 @@ impl Creditia {
                                                                         )
                                                                     })
                                                                     .unwrap_or_default()
-                                                            },
-                                                        ),
+                                                            }),
                                                     ),
                                             )
                                             .child(
                                                 div()
-                                                    .text_xs()
+                                                    .text_size(px(11.))
                                                     .text_color(muted)
                                                     .truncate()
-                                                    .child(project.path.clone()),
+                                                    .child(crate::material::short_path(
+                                                        &project.path,
+                                                    )),
                                             ),
                                     )
                                     .on_click(cx.listener(move |view, _, _, cx| {
@@ -5840,10 +5896,14 @@ impl Creditia {
                             .child(
                                 Button::new(("project-more", index))
                                     .ghost()
+                                    .w(px(30.))
+                                    .h(px(30.))
+                                    .p_0()
+                                    .flex_shrink_0()
                                     .icon(crate::ui_icons::icon("more"))
                                     .accessibility_label(self.text("更多", "More"))
                                     .on_click(cx.listener(
-                                        move |view, event: &ClickEvent, window, cx| {
+                                        move |view, event: &ClickEvent, _, cx| {
                                             if view
                                                 .project_row_menu
                                                 .as_ref()
@@ -5854,21 +5914,8 @@ impl Creditia {
                                                 let point = event.position();
                                                 let x: f32 = point.x.into();
                                                 let y: f32 = point.y.into();
-                                                let size = window.viewport_size();
-                                                let width: f32 = size.width.into();
-                                                let height: f32 = size.height.into();
-                                                view.project_row_menu = Some((
-                                                    more_id.clone(),
-                                                    (
-                                                        (x - 216.)
-                                                            .clamp(8., (width - 240.).max(8.)),
-                                                        if y + 190. > height - 8. {
-                                                            (y - 190.).max(8.)
-                                                        } else {
-                                                            y + 4.
-                                                        },
-                                                    ),
-                                                ));
+                                                view.project_row_menu =
+                                                    Some((more_id.clone(), (x - 216., y + 4.)));
                                             }
                                             cx.stop_propagation();
                                             cx.notify();
@@ -5905,14 +5952,14 @@ impl Creditia {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .rounded_md()
+                            .rounded(px(14.))
                             .when(self.picker_selected.as_ref() == Some(&key), |row| {
-                                row.bg(cx.theme().muted)
+                                row.bg(Palette::of(cx).selected)
                             })
                             .child(
                                 Button::new(("discovered", index))
                                     .ghost()
-                                    .label(if picked { "✓" } else { "○" })
+                                    .shell_label(if picked { "✓" } else { "○" })
                                     .disabled(self.job_busy)
                                     .on_click(cx.listener(move |view, _, _, cx| {
                                         if let Some(i) = view
@@ -5931,7 +5978,7 @@ impl Creditia {
                                 Button::new(("discover-open", index))
                                     .ghost()
                                     .flex_1()
-                                    .h(px(58.))
+                                    .h(px(52.))
                                     .child(
                                         div()
                                             .w_full()
@@ -5947,14 +5994,14 @@ impl Creditia {
                                                     .child(name)
                                                     .child(
                                                         div()
-                                                            .text_xs()
+                                                            .text_size(px(11.))
                                                             .text_color(muted)
                                                             .child(tools),
                                                     ),
                                             )
                                             .child(
                                                 div()
-                                                    .text_xs()
+                                                    .text_size(px(11.))
                                                     .text_color(muted)
                                                     .truncate()
                                                     .child(path),
@@ -5966,24 +6013,26 @@ impl Creditia {
                             ),
                     );
                 }
-                body = body.child(rows);
+
                 if self.discover_busy {
-                    body = body.child(self.text("正在查找本机项目…", "Finding local projects…"));
+                    rows = rows.child(self.text("正在查找本机项目…", "Finding local projects…"));
                 }
                 if let Some(error) = &self.discovery_error {
-                    body = body.child(div().text_sm().child(error.clone())).child(
-                        Button::new("retry-discovery")
-                            .ghost()
-                            .label(self.text("重新查找", "Try again"))
-                            .on_click(cx.listener(|view, _, _, cx| view.retry_discovery(cx))),
-                    );
+                    rows = rows
+                        .child(div().text_size(px(12.)).child(error.clone()))
+                        .child(
+                            Button::new("retry-discovery")
+                                .ghost()
+                                .shell_label(self.text("重新查找", "Try again"))
+                                .on_click(cx.listener(|view, _, _, cx| view.retry_discovery(cx))),
+                        );
                 } else if items.is_empty() && !self.discover_busy {
-                    body = body.child(self.text("没有匹配的项目", "No matching projects"));
+                    rows = rows.child(self.text("没有匹配的项目", "No matching projects"));
                 }
                 if !self.discovery_selected.is_empty() {
-                    body = body.child(
+                    rows = rows.child(
                         Button::new("add-selected")
-                            .label(format!(
+                            .shell_label(format!(
                                 "{} ({})",
                                 self.text("分析所选项目", "Analyze selected"),
                                 self.discovery_selected.len()
@@ -6008,7 +6057,7 @@ impl Creditia {
                         _ => self.text("等待中", "Queued"),
                     };
                     let retry = path.clone();
-                    body = body.child(
+                    rows = rows.child(
                         div()
                             .flex()
                             .flex_col()
@@ -6018,7 +6067,7 @@ impl Creditia {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(div().flex_1().text_sm().child(format!(
+                                    .child(div().flex_1().text_size(px(12.)).child(format!(
                                             "{} · {}",
                                             Path::new(path)
                                                 .file_name()
@@ -6030,7 +6079,7 @@ impl Creditia {
                                         row.child(
                                             Button::new(("retry-batch", index))
                                                 .ghost()
-                                                .label(self.text("重试", "Retry"))
+                                                .shell_label(self.text("重试", "Retry"))
                                                 .disabled(self.job_busy)
                                                 .on_click(cx.listener(move |view, _, _, cx| {
                                                     view.queue_projects([retry.clone()], cx)
@@ -6040,7 +6089,10 @@ impl Creditia {
                             )
                             .when_some(result["error"].as_str(), |row, error| {
                                 row.child(
-                                    div().text_xs().text_color(muted).child(error.to_string()),
+                                    div()
+                                        .text_size(px(11.))
+                                        .text_color(muted)
+                                        .child(error.to_string()),
                                 )
                             })
                             .children(
@@ -6050,26 +6102,24 @@ impl Creditia {
                                     .flatten()
                                     .filter_map(Value::as_str)
                                     .map(|note| {
-                                        div().text_xs().text_color(muted).child(note.to_string())
+                                        div()
+                                            .text_size(px(11.))
+                                            .text_color(muted)
+                                            .child(note.to_string())
                                     }),
                             ),
                     );
                 }
-                body = body.child(
-                    Button::new("add-project")
-                        .label(self.text("添加文件夹…", "Add folder…"))
-                        .disabled(self.job_busy)
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.open_project(&OpenProject, window, cx)
-                        })),
-                );
+                body = body.child(rows);
             }
             Panel::Styles => {
-                let mut choices = div().flex().flex_wrap().gap_2();
+                let palette = Palette::of(cx);
+                let column_width = (400.0f32.min((self.viewport_size.0 - 40.).max(1.)) - 13.) / 2.;
+                let mut choices = div().flex().flex_wrap().gap(px(1.));
                 for (index, style) in self
                     .catalog
                     .as_ref()
-                    .and_then(|c| c["styles"].as_array())
+                    .and_then(|catalog| catalog["styles"].as_array())
                     .into_iter()
                     .flatten()
                     .enumerate()
@@ -6083,16 +6133,43 @@ impl Creditia {
                     .unwrap_or("")
                     .to_string();
                     if index == 15 {
-                        choices =
-                            choices.child(div().w_full().h(px(1.)).my_2().bg(cx.theme().border));
+                        choices = choices.child(
+                            div()
+                                .w_full()
+                                .h(px(1.))
+                                .mx(px(6.))
+                                .my(px(4.))
+                                .bg(palette.edge),
+                        );
                     }
                     choices = choices.child(
                         Button::new(("style", index))
                             .ghost()
-                            .when_some(style["dot"].as_str(), |button, dot| {
-                                button.child(img(style_dot(dot)).w(px(20.)).h(px(20.)))
+                            .w(px(column_width))
+                            .h(px(34.))
+                            .px(px(10.))
+                            .rounded(px(14.))
+                            .accessibility_label(name.clone())
+                            .when(index == self.style_index, |button| {
+                                button.bg(palette.selected)
                             })
-                            .label(name)
+                            .child(
+                                div()
+                                    .w_full()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(10.))
+                                    .text_size(px(13.))
+                                    .font_weight(if index == self.style_index {
+                                        FontWeight::MEDIUM
+                                    } else {
+                                        FontWeight::NORMAL
+                                    })
+                                    .when_some(style["dot"].as_str(), |row, dot| {
+                                        row.child(img(style_dot(dot)).w(px(18.)).h(px(18.)))
+                                    })
+                                    .child(name),
+                            )
                             .disabled(
                                 self.focused
                                     && self.current_tile().is_some_and(|tile| {
@@ -6103,10 +6180,52 @@ impl Creditia {
                                         })
                                     }),
                             )
-                            .when(index == self.style_index, |b| b.bg(cx.theme().muted))
                             .on_click(
                                 cx.listener(move |view, _, _, cx| view.choose_style(index, cx)),
                             ),
+                    );
+                }
+                body = body.child(choices);
+            }
+            Panel::Layouts => {
+                let palette = Palette::of(cx);
+                let mut choices = div().flex().flex_col().gap(px(2.));
+                let selected = self
+                    .current_tile()
+                    .and_then(|tile| tile.spec.variant.as_deref());
+                for (index, variant) in self
+                    .selected_piece()
+                    .and_then(|piece| piece["variants"].as_array())
+                    .into_iter()
+                    .flatten()
+                    .enumerate()
+                {
+                    let id = variant["id"].as_str().unwrap_or("").to_owned();
+                    let name = variant[if self.preferences.language == Language::En {
+                        "en"
+                    } else {
+                        "name"
+                    }]
+                    .as_str()
+                    .unwrap_or(&id)
+                    .to_owned();
+                    choices = choices.child(
+                        Button::new(("variant", index))
+                            .ghost()
+                            .w_full()
+                            .h(px(34.))
+                            .rounded(px(9.))
+                            .justify_start()
+                            .shell_label(name)
+                            .when(selected == Some(id.as_str()), |button| {
+                                button
+                                    .bg(palette.ink.opacity(0.06))
+                                    .icon(crate::ui_icons::icon("check"))
+                            })
+                            .on_click(cx.listener(move |view, _, window, cx| {
+                                view.choose_variant(id.clone(), cx);
+                                view.close_panel(window, cx);
+                            })),
                     );
                 }
                 body = body.child(choices);
@@ -6130,60 +6249,37 @@ impl Creditia {
                     .unwrap_or(&id)
                     .to_string();
                     choices =
-                        choices.child(Button::new(("piece", index)).ghost().label(name).on_click(
-                            cx.listener(move |view, _, _, cx| view.select_piece(id.clone(), cx)),
-                        ));
+                        choices.child(
+                            Button::new(("piece", index))
+                                .ghost()
+                                .shell_label(name)
+                                .on_click(cx.listener(move |view, _, _, cx| {
+                                    view.select_piece(id.clone(), cx)
+                                })),
+                        );
                 }
                 body = body.child(choices);
             }
-            Panel::Layouts => {
-                for (index, variant) in self
-                    .selected_piece()
-                    .and_then(|p| p["variants"].as_array())
-                    .into_iter()
-                    .flatten()
-                    .enumerate()
-                {
-                    let id = variant["id"].as_str().unwrap_or("").to_string();
-                    let label = variant[if self.preferences.language == Language::En {
-                        "en"
-                    } else {
-                        "name"
-                    }]
-                    .as_str()
-                    .unwrap_or(&id)
-                    .to_string();
-                    let active =
-                        self.current_tile().and_then(|t| t.spec.variant.as_ref()) == Some(&id);
-                    body = body.child(
-                        Button::new(("variant", index))
-                            .ghost()
-                            .label(label)
-                            .when(active, |b| b.bg(cx.theme().muted))
-                            .on_click(cx.listener(move |view, _, _, cx| {
-                                view.choose_variant(id.clone(), cx);
-                                view.panel = None;
-                                cx.notify();
-                            })),
-                    );
-                }
-            }
             Panel::Exports => {
                 if let Some(error) = &self.export_history_error {
-                    body = body.child(div().text_sm().child(error.clone())).child(
-                        Button::new("reload-export-history")
-                            .label(self.text("重新读取导出历史", "Reload export history"))
-                            .disabled(
-                                self.export_queue
-                                    .jobs()
-                                    .iter()
-                                    .any(|job| job.state.pending()),
-                            )
-                            .on_click(cx.listener(|view, _, _, cx| view.reload_export_history(cx))),
-                    );
+                    body = body
+                        .child(div().text_size(px(12.)).child(error.clone()))
+                        .child(
+                            Button::new("reload-export-history")
+                                .shell_label(self.text("重新读取导出历史", "Reload export history"))
+                                .disabled(
+                                    self.export_queue
+                                        .jobs()
+                                        .iter()
+                                        .any(|job| job.state.pending()),
+                                )
+                                .on_click(
+                                    cx.listener(|view, _, _, cx| view.reload_export_history(cx)),
+                                ),
+                        );
                 }
                 if self.export_queue.jobs().is_empty() {
-                    body = body.child(self.text("尚无导出任务", "No export jobs yet"));
+                    body = body.child(self.text("尚无导出记录", "No export history yet"));
                 }
                 for (index, job) in self.export_queue.jobs().iter().enumerate().rev() {
                     let id = job.id;
@@ -6198,13 +6294,18 @@ impl Creditia {
                             self.text("已中断", "Interrupted")
                         }
                     };
-                    let mut row = div()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .child(div().text_sm().child(format!("{} · {}", job.label, state)));
+                    let mut row = div().flex().flex_col().gap_1().child(
+                        div()
+                            .text_size(px(12.))
+                            .child(format!("{} · {}", job.label, state)),
+                    );
                     if let Some(error) = &job.error {
-                        row = row.child(div().text_xs().text_color(muted).child(error.clone()));
+                        row = row.child(
+                            div()
+                                .text_size(px(11.))
+                                .text_color(muted)
+                                .child(error.clone()),
+                        );
                     }
                     let mut actions = div().flex().gap_1();
                     if job.state == crate::export_jobs::State::Saved {
@@ -6212,7 +6313,7 @@ impl Creditia {
                         actions = actions.child(
                             Button::new(("export-reveal", index))
                                 .ghost()
-                                .label(self.text("打开所在位置", "Reveal file"))
+                                .shell_label(self.text("打开所在位置", "Reveal file"))
                                 .on_click(cx.listener(move |_, _, _, cx| cx.reveal_path(&path))),
                         );
                     }
@@ -6226,7 +6327,7 @@ impl Creditia {
                             actions.child(
                                 Button::new(("export-retry", index))
                                     .ghost()
-                                    .label(self.text("重试", "Retry"))
+                                    .shell_label(self.text("重试", "Retry"))
                                     .on_click(cx.listener(move |view, _, _, cx| {
                                         view.retry_export_job(id, cx)
                                     })),
@@ -6236,7 +6337,7 @@ impl Creditia {
                         actions = actions.child(
                             Button::new(("export-cancel", index))
                                 .ghost()
-                                .label(self.text("取消", "Cancel"))
+                                .shell_label(self.text("取消", "Cancel"))
                                 .on_click(cx.listener(move |view, _, _, cx| {
                                     view.cancel_export_job(id, cx)
                                 })),
@@ -6245,7 +6346,7 @@ impl Creditia {
                         actions = actions.child(
                             Button::new(("export-remove", index))
                                 .ghost()
-                                .label(self.text("移除记录", "Remove record"))
+                                .shell_label(self.text("移除记录", "Remove record"))
                                 .disabled(!self.export_history_writable())
                                 .on_click(cx.listener(move |view, _, _, cx| {
                                     view.export_queue.remove(id);
@@ -6259,7 +6360,7 @@ impl Creditia {
             }
             Panel::Blame => {
                 body = body
-                    .child(div().text_sm().text_color(muted).child(self.text(
+                    .child(div().text_size(px(12.)).text_color(muted).child(self.text(
                         "输入仓库中的相对路径与行号。",
                         "Enter a repository-relative file path and line number.",
                     )))
@@ -6267,262 +6368,13 @@ impl Creditia {
                     .child(Input::new(&self.blame_line))
                     .child(
                         Button::new("load-blame")
-                            .label(self.text("追溯这一行", "Trace this line"))
+                            .shell_label(self.text("追溯这一行", "Trace this line"))
                             .disabled(self.operation_busy)
                             .on_click(cx.listener(|view, _, _, cx| view.load_blame(cx))),
                     );
             }
-            Panel::Diagnostics => {
-                if let Some(report) = &self.report {
-                    for (label, value) in
-                        crate::ui_reports::report_rows(report, &self.preferences.language)
-                    {
-                        body = body.child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .child(label),
-                                )
-                                .child(div().text_sm().text_color(muted).child(value)),
-                        );
-                    }
-                } else {
-                    body = body.child(self.text("正在检查…", "Checking environment…"));
-                }
-            }
             Panel::Settings => {
-                if !self.fixture && crate::platform_ui::system_reduced_motion(cx).unwrap_or(false) {
-                    body = body.child(div().text_sm().text_color(muted).child(self.text(
-                        "系统已启用减少动态效果。",
-                        "Reduced motion is enabled by the operating system.",
-                    )));
-                }
-
-                if let Some(error) = &self.migration_error {
-                    body = body.child(div().text_sm().child(error.clone())).child(
-                        Button::new("retry-settings-migration")
-                            .label(if self.migration_busy {
-                                self.text("正在导入…", "Importing…")
-                            } else {
-                                self.text(
-                                    "重新导入原有桌面设置",
-                                    "Import previous desktop settings again",
-                                )
-                            })
-                            .disabled(self.migration_busy)
-                            .on_click(cx.listener(|view, _, _, cx| view.retry_migration(cx))),
-                    );
-                }
-
-                body = body
-                    .child(
-                        Button::new("language")
-                            .ghost()
-                            .label(self.text("语言：中文 → English", "Language: English → 中文"))
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                view.toggle_language(&ToggleLanguage, window, cx)
-                            })),
-                    )
-                    .child(
-                        Button::new("appearance")
-                            .ghost()
-                            .label(format!(
-                                "{}：{:?}",
-                                self.text("外观", "Appearance"),
-                                self.preferences.appearance
-                            ))
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                view.cycle_appearance(&CycleAppearance, window, cx)
-                            })),
-                    )
-                    .child(
-                        Button::new("reduced-motion")
-                            .ghost()
-                            .label(format!(
-                                "{} {}",
-                                self.text("减少动态效果", "Reduced motion"),
-                                if self.preferences.reduced_motion {
-                                    "✓"
-                                } else {
-                                    "○"
-                                }
-                            ))
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                view.toggle_motion(&ToggleMotion, window, cx)
-                            })),
-                    )
-                    .child(
-                        Button::new("names-settings")
-                            .ghost()
-                            .label(format!(
-                                "{} {}",
-                                self.text("显示贡献者姓名", "Contributor names"),
-                                if self.preferences.named { "✓" } else { "○" }
-                            ))
-                            .on_click(cx.listener(|view, _, _, cx| view.set_names(cx))),
-                    )
-                    .child(
-                        Button::new("auto-analyze")
-                            .ghost()
-                            .label(format!(
-                                "{} {}",
-                                self.text(
-                                    "有新提交时自动分析",
-                                    "Analyze new commits automatically"
-                                ),
-                                if self.preferences.auto_analyze {
-                                    "✓"
-                                } else {
-                                    "○"
-                                }
-                            ))
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.preferences.auto_analyze = !view.preferences.auto_analyze;
-                                view.persist();
-                                if let Some(bg) = &view.background {
-                                    bg.refresh();
-                                }
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        div()
-                            .mt_3()
-                            .text_color(muted)
-                            .child(self.text("后台采集", "Background collection")),
-                    );
-                let mut logos = div().flex().flex_wrap().gap_1();
-                for (id, label) in [
-                    ("star", "✳"),
-                    ("star-mono", "✳ Mono"),
-                    ("orb", "Orb"),
-                    ("ring", "Ring"),
-                    ("color", "Color"),
-                    ("mono", "Mono"),
-                ] {
-                    logos = logos.child(
-                        Button::new(id)
-                            .ghost()
-                            .label(label)
-                            .when(self.preferences.logo == id, |b| b.bg(cx.theme().muted))
-                            .on_click(cx.listener(move |view, _, _, cx| {
-                                view.preferences.logo = id.into();
-                                crate::image_assets::release(view.logo_image.clone(), cx);
-                                view.logo_image = logo_image(id);
-                                view.persist();
-                                cx.notify();
-                            })),
-                    );
-                }
-                body = body
-                    .child(div().text_color(muted).child(self.text("标志", "Logo")))
-                    .child(logos);
-                let on = self.collect["on"].as_bool().unwrap_or(false);
-                let agent = self.collect["agent"]["on"].as_bool().unwrap_or(false);
-                let supported = self.collect["agent"]["supported"]
-                    .as_bool()
-                    .unwrap_or(false);
-                let mode = if agent {
-                    "always"
-                } else if on {
-                    "open"
-                } else {
-                    "off"
-                };
-                let mut modes = div().flex().gap_1();
-                for (id, label) in [
-                    ("off", self.text("关闭", "Off")),
-                    ("open", self.text("应用打开时", "While open")),
-                    ("always", self.text("始终采集", "Always")),
-                ] {
-                    modes = modes.child(
-                        Button::new(id)
-                            .ghost()
-                            .label(label)
-                            .when(mode == id, |b| b.bg(cx.theme().muted))
-                            .disabled(self.operation_busy || (id == "always" && !supported))
-                            .on_click(
-                                cx.listener(move |view, _, _, cx| view.set_collection_mode(id, cx)),
-                            ),
-                    );
-                }
-                body = body
-                    .child(modes)
-                    .child(
-                        Button::new("collect-now")
-                            .label(self.text("立即采集", "Collect now"))
-                            .disabled(self.operation_busy)
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.operation(service::collect_now, cx)
-                            })),
-                    )
-                    .child(
-                        Button::new("export-directory")
-                            .ghost()
-                            .label(self.text("更改导出目录…", "Change export directory…"))
-                            .on_click(
-                                cx.listener(|view, _, _, cx| view.choose_export_directory(cx)),
-                            ),
-                    )
-                    .child(
-                        Button::new("open-export-directory")
-                            .ghost()
-                            .label(self.text("打开导出目录", "Open export directory"))
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                match service::export_dir() {
-                                    Ok(path) => cx.reveal_path(&path),
-                                    Err(error) => view.error = Some(error.to_string()),
-                                }
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        Button::new("reset-export-directory")
-                            .ghost()
-                            .label(self.text("恢复默认导出目录", "Reset export directory"))
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.operation(
-                                    || service::reset_export_dir().map(Value::String),
-                                    cx,
-                                )
-                            })),
-                    )
-                    .child(
-                        Button::new("open-library")
-                            .ghost()
-                            .label(self.text("打开本地档案库", "Open local archive library"))
-                            .on_click(cx.listener(|_, _, _, cx| {
-                                cx.reveal_path(Path::new(&service::library_path()))
-                            })),
-                    )
-                    .child(
-                        Button::new("diagnostics")
-                            .ghost()
-                            .label(self.text("环境检查", "Diagnostics"))
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.load_diagnostics(cx);
-                            })),
-                    );
-                for (label, value) in
-                    crate::ui_reports::report_rows(&self.collect, &self.preferences.language)
-                {
-                    body = body.child(
-                        div()
-                            .text_sm()
-                            .text_color(muted)
-                            .child(format!("{label}: {value}")),
-                    );
-                }
-                body = body.child(div().mt_3().text_xs().text_color(muted).child(format!(
-                    "Creditia {} · GPUI Kit\n{}",
-                    env!("CARGO_PKG_VERSION"),
-                    service::library_path()
-                ))).child(div().text_sm().child(self.text("看清 AI 工具在仓库里写了多少，再把它做成 README、发版说明和作品集的署名。", "See what AI tools wrote in your repositories, then create credits for README files, releases and portfolios."))).child(div().text_xs().text_color(muted).child(self.text("只在本机运行，不上传代码或记录。", "Runs on this computer. No code or logs are uploaded.")));
+                body = body.child(self.settings_content(cx));
             }
             Panel::Project => {
                 body = body.child(
@@ -6533,7 +6385,7 @@ impl Creditia {
                             Button::new("analyze")
                                 .ghost()
                                 .icon(crate::ui_icons::icon("refresh"))
-                                .label(self.text("重新分析", "Analyze"))
+                                .shell_label(self.text("重新分析", "Analyze"))
                                 .disabled(
                                     self.job_busy
                                         || self.automatic_job.is_some()
@@ -6554,7 +6406,7 @@ impl Creditia {
                             Button::new("copy")
                                 .ghost()
                                 .icon(crate::ui_icons::icon("copy"))
-                                .label(self.text("复制档案", "Copy archive"))
+                                .shell_label(self.text("复制档案", "Copy archive"))
                                 .disabled(
                                     self.raw.is_none()
                                         || self.settings_id() != self.selected.as_ref(),
@@ -6567,7 +6419,7 @@ impl Creditia {
                             Button::new("details")
                                 .ghost()
                                 .icon(crate::ui_icons::icon("info"))
-                                .label(self.text("证据", "Evidence"))
+                                .shell_label(self.text("证据", "Evidence"))
                                 .disabled(
                                     self.raw.is_none()
                                         || self.settings_id() != self.selected.as_ref(),
@@ -6579,19 +6431,20 @@ impl Creditia {
                 );
                 if let Some(project) = self.settings_current() {
                     body = body
-                        .child(div().text_lg().child(project.name.clone()))
+                        .child(div().text_size(px(15.)).child(project.name.clone()))
                         .child(
                             div()
-                                .text_sm()
+                                .text_size(px(12.))
                                 .text_color(muted)
-                                .child(project.path.clone()),
+                                .child(crate::material::short_path(&project.path)),
                         );
                     if let Some(stamp) = project.last_analyzed {
-                        body = body.child(div().text_sm().text_color(muted).child(format!(
-                            "{} {}",
-                            self.text("上次分析", "Last analyzed"),
-                            project_date(stamp, &self.preferences.language)
-                        )));
+                        body =
+                            body.child(div().text_size(px(12.)).text_color(muted).child(format!(
+                                "{} {}",
+                                self.text("上次分析", "Last analyzed"),
+                                project_date(stamp, &self.preferences.language)
+                            )));
                     }
                 }
                 body = body
@@ -6604,7 +6457,7 @@ impl Creditia {
                     )
                     .child(
                         Button::new("save-display")
-                            .label(
+                            .shell_label(
                                 self.text("保存署名与姓名设置", "Save signature and name settings"),
                             )
                             .disabled(
@@ -6630,7 +6483,7 @@ impl Creditia {
                     auto = auto.child(
                         Button::new(("project-auto", index))
                             .ghost()
-                            .label(label)
+                            .shell_label(label)
                             .when(current_auto == mode, |b| b.bg(cx.theme().muted))
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 if let Some(id) = view.settings_id().cloned() {
@@ -6670,7 +6523,7 @@ impl Creditia {
                     body = body.child(
                         Button::new(which)
                             .ghost()
-                            .label(format!(
+                            .shell_label(format!(
                                 "{} {}",
                                 self.text(zh, en),
                                 if on { "✓" } else { "○" }
@@ -6682,11 +6535,15 @@ impl Creditia {
                     );
                     if let Some(details) = self.settings_data() {
                         if let Some(path) = details["integrations"][which]["path"].as_str() {
-                            body = body
-                                .child(div().text_xs().text_color(muted).child(path.to_string()));
+                            body = body.child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(muted)
+                                    .child(path.to_string()),
+                            );
                         }
                         if which == "release" && known {
-                            body = body.child(div().text_xs().text_color(muted).child(
+                            body = body.child(div().text_size(px(11.)).text_color(muted).child(
                                 if details["integrations"][which]["github"] == true {
                                     self.text("GitHub 发版工作流", "GitHub release workflow")
                                 } else {
@@ -6700,7 +6557,7 @@ impl Creditia {
                     if !details["integrationsError"].is_null() {
                         body = body
                             .child(
-                                div().text_sm().child(
+                                div().text_size(px(12.)).child(
                                     crate::ui_reports::error_text(
                                         &details["integrationsError"],
                                         &self.preferences.language,
@@ -6711,25 +6568,31 @@ impl Creditia {
                             .child(
                                 Button::new("retry-integrations")
                                     .ghost()
-                                    .label(self.text("重新检查接入", "Check integrations again"))
+                                    .shell_label(
+                                        self.text("重新检查接入", "Check integrations again"),
+                                    )
                                     .on_click(cx.listener(|view, _, _, cx| view.fetch_details(cx))),
                             );
                     }
                     if details["integrations"]["release"]["published"] == true {
-                        body = body.child(div().text_sm().text_color(muted).child(self.text(
-                            "仓库中已有发布档案",
-                            "Published archive exists in this repository",
-                        )));
+                        body = body.child(div().text_size(px(12.)).text_color(muted).child(
+                            self.text(
+                                "仓库中已有发布档案",
+                                "Published archive exists in this repository",
+                            ),
+                        ));
                     }
                     if details["integrations"]["release"]["installed"] == true
                         && details["integrations"]["hook"]["installed"] != true
                     {
-                        body = body.child(div().text_sm().text_color(muted).child(self.text(
-                            "提交接入可为之后的发布补充证据",
-                            "Enable commit integration to retain evidence for future releases",
-                        )));
+                        body =
+                            body
+                                .child(div().text_size(px(12.)).text_color(muted).child(self.text(
+                                "提交接入可为之后的发布补充证据",
+                                "Enable commit integration to retain evidence for future releases",
+                            )));
                     }
-                    body = body.child(div().text_sm().text_color(muted).child(format!(
+                    body = body.child(div().text_size(px(12.)).text_color(muted).child(format!(
                         "{} {} · {} {}",
                         self.text("证据", "Evidence"),
                         details["evidence"],
@@ -6756,13 +6619,13 @@ impl Creditia {
                                 .flex()
                                 .items_center()
                                 .gap_2()
-                                .child(div().text_xs().text_color(muted).child(label))
-                                .child(div().flex_1().text_sm().child(path))
+                                .child(div().text_size(px(11.)).text_color(muted).child(label))
+                                .child(div().flex_1().text_size(px(12.)).child(path))
                                 .when(manual, |row| {
                                     row.child(
                                         Button::new(("unlink", index))
                                             .ghost()
-                                            .label(self.text("解除关联", "Unlink"))
+                                            .shell_label(self.text("解除关联", "Unlink"))
                                             .on_click(cx.listener(move |view, _, _, cx| {
                                                 view.unlink_path(unlink.clone(), cx)
                                             })),
@@ -6775,21 +6638,21 @@ impl Creditia {
                     .child(
                         Button::new("evidence-export")
                             .ghost()
-                            .label(self.text("导出证据档案…", "Export evidence archive…"))
+                            .shell_label(self.text("导出证据档案…", "Export evidence archive…"))
                             .disabled(self.operation_busy || self.job_busy)
                             .on_click(cx.listener(|view, _, _, cx| view.export_evidence(cx))),
                     )
                     .child(
                         Button::new("evidence-import")
                             .ghost()
-                            .label(self.text("导入证据档案…", "Import evidence archive…"))
+                            .shell_label(self.text("导入证据档案…", "Import evidence archive…"))
                             .disabled(self.operation_busy || self.job_busy)
                             .on_click(cx.listener(|view, _, _, cx| view.import_evidence(cx))),
                     )
                     .child(
                         Button::new("blame-query")
                             .ghost()
-                            .label(self.text("查询逐行归因…", "Trace a line…"))
+                            .shell_label(self.text("查询逐行归因…", "Trace a line…"))
                             .on_click(cx.listener(|view, _, window, cx| {
                                 if let Some(id) = view.settings_id().cloned() {
                                     if view.selected.as_ref() != Some(&id) {
@@ -6807,14 +6670,14 @@ impl Creditia {
                                 self.operation_busy
                                     || self.settings_current().is_none_or(|p| !p.exists),
                             )
-                            .label(self.text("关联目录…", "Link directory…"))
+                            .shell_label(self.text("关联目录…", "Link directory…"))
                             .on_click(cx.listener(|view, _, _, cx| view.link_folder(cx))),
                     )
                     .child(
                         Button::new("reveal")
                             .ghost()
                             .disabled(self.settings_current().is_none_or(|p| !p.exists))
-                            .label(self.text("打开所在位置", "Reveal folder"))
+                            .shell_label(self.text("打开所在位置", "Reveal folder"))
                             .on_click(cx.listener(|view, _, window, cx| {
                                 view.reveal_project(&RevealProject, window, cx)
                             })),
@@ -6822,7 +6685,7 @@ impl Creditia {
                     .child(
                         Button::new("remove-project")
                             .ghost()
-                            .label(if self.remove_confirm {
+                            .shell_label(if self.remove_confirm {
                                 self.text("确认移除，证据仍保留", "Confirm removal; evidence stays")
                             } else {
                                 self.text(
@@ -6836,10 +6699,10 @@ impl Creditia {
             }
             Panel::Details => {
                 for warning in &self.warnings {
-                    body = body.child(div().text_sm().child(warning.clone()));
+                    body = body.child(div().text_size(px(12.)).child(warning.clone()));
                 }
                 if let Some(raw) = &self.raw {
-                    body = body.child(div().text_sm().text_color(muted).child(format!(
+                    body = body.child(div().text_size(px(12.)).text_color(muted).child(format!(
                         "{} {}",
                         self.text("档案生成于", "Archive generated"),
                         raw["generatedAt"].as_str().unwrap_or("—")
@@ -6860,7 +6723,7 @@ impl Creditia {
                     }
                     body = body.child(
                         Button::new("copy-details")
-                            .label(self.text("复制完整档案", "Copy complete archive"))
+                            .shell_label(self.text("复制完整档案", "Copy complete archive"))
                             .on_click(cx.listener(|view, _, window, cx| {
                                 view.copy_archive(&CopyArchive, window, cx)
                             })),
@@ -6868,9 +6731,39 @@ impl Creditia {
                 }
             }
         }
+        let palette = Palette::of(cx);
         let openness = self.panel_tween.map(Tween::value).unwrap_or(1.);
-        let modal = div()
+        let window_height = self.viewport_size.1 + 60.;
+        let window_width = self.viewport_size.0;
+        let popover = matches!(
+            panel,
+            Panel::Projects | Panel::Styles | Panel::Layouts | Panel::Pieces | Panel::Exports
+        );
+        let desired_width: f32 = match panel {
+            Panel::Projects => 440.,
+            Panel::Styles => 400.,
+            Panel::Layouts => 236.,
+            Panel::Exports => 460.,
+            Panel::Pieces => 400.,
+            Panel::Settings => 720.,
+            _ => 560.,
+        };
+        let width = desired_width.min((window_width - 40.).max(1.));
+        let max_height = match panel {
+            Panel::Styles | Panel::Layouts | Panel::Pieces => {
+                (window_height * 0.7).min(520.).min(window_height - 88.)
+            }
+            Panel::Projects => window_height - 72.,
+            Panel::Exports => window_height - 88.,
+            Panel::Settings => (window_height * 0.86).min(560.),
+            _ => window_height * 0.86,
+        }
+        .max(1.);
+        let mut modal = div()
             .id("panel")
+            .test_support()
+            .track_focus(&self.panel_focus)
+            .relative()
             .occlude()
             .key_context("CreditiaModal")
             .capture_action(
@@ -6890,43 +6783,249 @@ impl Creditia {
                 }),
             )
             .on_click(|_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .opacity(openness)
-            .mt(px((1. - openness) * 16.))
-            .w(px(580.))
-            .max_h(px(680.))
+            .w(px(width))
+            .max_h(px(max_height))
             .flex()
             .flex_col()
-            .p_5()
-            .gap_4()
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_lg()
-            .child(
-                div()
+            .rounded(px(20.))
+            .shadow(palette.shadows())
+            .text_color(palette.ink)
+            .text_size(px(13.))
+            .child(crate::material::surface(
+                self.backdrop_image.clone(),
+                palette.solid,
+                20.,
+                palette,
+            ));
+        if panel == Panel::Settings {
+            let mut navigation = div()
+                .w(px(172.))
+                .flex_shrink_0()
+                .h_full()
+                .px(px(10.))
+                .py(px(18.))
+                .border_r_1()
+                .border_color(palette.edge)
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .child(
+                    div()
+                        .px(px(10.))
+                        .pb(px(12.))
+                        .text_size(px(15.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(title),
+                );
+            for (id, icon, name) in [
+                ("general", "gear", self.text("通用", "General")),
+                ("data", "folder", self.text("数据", "Data")),
+                ("about", "info", self.text("关于", "About")),
+            ] {
+                navigation = navigation.child(
+                    Button::new(SharedString::from(format!("settings-tab-{id}")))
+                        .ghost()
+                        .h(px(34.))
+                        .px(px(10.))
+                        .rounded(px(10.))
+                        .text_color(if self.settings_tab == id {
+                            palette.ink
+                        } else {
+                            palette.soft
+                        })
+                        .when(self.settings_tab == id, |b| b.bg(palette.selected))
+                        .accessibility_label(name)
+                        .child(
+                            div()
+                                .w_full()
+                                .flex()
+                                .items_center()
+                                .gap(px(10.))
+                                .text_size(px(13.))
+                                .font_weight(if self.settings_tab == id {
+                                    FontWeight::MEDIUM
+                                } else {
+                                    FontWeight::NORMAL
+                                })
+                                .child(crate::ui_icons::icon(icon))
+                                .child(name),
+                        )
+                        .on_click(cx.listener(move |view, _, _, cx| {
+                            view.settings_tab = id;
+                            if id == "data" && view.report.is_none() {
+                                view.request_diagnostics(cx);
+                            }
+                            cx.notify();
+                        })),
+                );
+            }
+            modal = modal.h(px(max_height)).child(
+                div().size_full().flex().min_h_0().child(navigation).child(
+                    div()
+                        .id("panel-body")
+                        .test_support()
+                        .flex_1()
+                        .min_w_0()
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        .px(px(24.))
+                        .pt(px(18.))
+                        .pb(px(22.))
+                        .child(body),
+                ),
+            );
+        } else {
+            if !popover {
+                let heading = if panel == Panel::Project {
+                    self.settings_current()
+                        .map(|project| project.name.clone())
+                        .unwrap_or_else(|| title.to_string())
+                } else {
+                    title.to_string()
+                };
+                let mut header = div()
                     .flex()
-                    .justify_between()
                     .items_center()
-                    .child(div().text_lg().child(title))
+                    .gap(px(12.))
+                    .px(px(24.))
+                    .pt(px(20.))
+                    .pb(px(6.))
+                    .flex_shrink_0()
                     .child(
-                        Button::new("panel-close")
-                            .track_focus(&self.panel_close_focus)
-                            .ghost()
-                            .label(self.text("关闭", "Close"))
-                            .on_click(
-                                cx.listener(|view, _, window, cx| view.close_panel(window, cx)),
-                            ),
-                    ),
-            )
-            .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(15.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .truncate()
+                            .child(heading),
+                    );
+                header = header.child(
+                    Button::new("panel-close")
+                        .track_focus(&self.panel_close_focus)
+                        .ghost()
+                        .w(px(34.))
+                        .h(px(34.))
+                        .p_0()
+                        .rounded_full()
+                        .icon(crate::ui_icons::icon("close"))
+                        .accessibility_label(self.text("关闭", "Close"))
+                        .on_click(cx.listener(|view, _, window, cx| view.close_panel(window, cx))),
+                );
+                modal = modal.child(header);
+            }
+            if panel == Panel::Projects {
+                modal = modal.child(
+                    div()
+                        .id("project-search")
+                        .test_support()
+                        .track_focus(&self.search_input.read(cx).focus_handle(cx))
+                        .mx(px(6.))
+                        .px(px(6.))
+                        .border_b_1()
+                        .border_color(palette.edge)
+                        .mb(px(6.))
+                        .child(
+                            Input::new(&self.search_input)
+                                .appearance(false)
+                                .bordered(false)
+                                .focus_bordered(false),
+                        ),
+                );
+            }
+            modal = modal.child(
                 div()
                     .id("panel-body")
                     .test_support()
-                    .overflow_y_scroll()
+                    .when(panel != Panel::Projects, |body| body.overflow_y_scroll())
                     .min_h_0()
+                    .when(matches!(panel, Panel::Styles | Panel::Pieces), |body| {
+                        body.flex_1()
+                    })
+                    .max_h(px((max_height - if popover { 0. } else { 68. }).max(1.)))
+                    .px(px(if popover { 6. } else { 24. }))
+                    .pt(px(if popover { 6. } else { 0. }))
+                    .pb(px(if popover { 6. } else { 22. }))
                     .child(body),
-            )
-            .focus_trap("creditia-panel", &self.panel_focus);
+            );
+            if panel == Panel::Projects {
+                modal = modal.child(
+                    div()
+                        .mx(px(6.))
+                        .pt(px(6.))
+                        .pb(px(6.))
+                        .border_t_1()
+                        .border_color(palette.edge)
+                        .flex_shrink_0()
+                        .child(
+                            Button::new("add-project")
+                                .ghost()
+                                .w_full()
+                                .h(px(34.))
+                                .rounded(px(10.))
+                                .icon(crate::ui_icons::icon("folder"))
+                                .shell_label(self.text("添加文件夹…", "Add folder…"))
+                                .disabled(self.job_busy)
+                                .on_click(cx.listener(|view, _, window, cx| {
+                                    view.open_project(&OpenProject, window, cx)
+                                })),
+                        ),
+                );
+            }
+        }
+        if panel == Panel::Settings {
+            modal = modal.child(
+                Button::new("panel-close")
+                    .track_focus(&self.panel_close_focus)
+                    .ghost()
+                    .absolute()
+                    .top(px(12.))
+                    .right(px(12.))
+                    .w(px(34.))
+                    .h(px(34.))
+                    .p_0()
+                    .rounded_full()
+                    .icon(crate::ui_icons::icon("close"))
+                    .accessibility_label(self.text("关闭", "Close"))
+                    .on_click(cx.listener(|view, _, window, cx| view.close_panel(window, cx))),
+            );
+        }
+        if popover {
+            modal = modal.on_mouse_down_out(cx.listener(
+                move |view, event: &MouseDownEvent, window, cx| {
+                    let triggers: &[&str] = if view.focused {
+                        &["focus-style", "focus-layout"]
+                    } else {
+                        &[
+                            "project-trigger",
+                            "style-trigger",
+                            "pieces-trigger",
+                            "settings-trigger",
+                        ]
+                    };
+                    if triggers
+                        .iter()
+                        .any(|trigger| view.surface_anchors.contains(trigger, event.position))
+                        || (panel == Panel::Projects
+                            && view.project_row_menu.is_some()
+                            && view
+                                .surface_anchors
+                                .contains("project-row-menu", event.position))
+                    {
+                        return;
+                    }
+                    if view.panel == Some(panel) {
+                        view.close_panel(window, cx);
+                        view.drag = None;
+                        cx.stop_propagation();
+                    }
+                },
+            ));
+        } else {
+            modal = modal.mt(px((1. - openness) * 8.));
+        }
         let row_menu = self
             .project_row_menu
             .as_ref()
@@ -6938,72 +7037,96 @@ impl Creditia {
                 let remove = id.clone();
                 let path = project.path.clone();
                 Some(
-                    div()
-                        .id("project-row-menu")
-                        .test_support()
-                        .occlude()
-                        .absolute()
-                        .left(px(position.0))
-                        .top(px(position.1))
-                        .w(px(232.))
-                        .p_2()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .rounded_lg()
-                        .bg(cx.theme().background)
-                        .border_1()
-                        .border_color(cx.theme().border)
-                        .on_click(|_, _, cx| cx.stop_propagation())
+                    anchored()
+                        .anchor(Anchor::TopLeft)
+                        .position(point(px(position.0), px(position.1)))
+                        .snap_to_window_with_margin(px(18.))
                         .child(
-                            Button::new("row-analyze")
-                                .ghost()
-                                .label(self.text("重新分析", "Re-analyze"))
-                                .disabled(
-                                    !project.exists
-                                        || self.job_busy
-                                        || self.automatic_job.is_some(),
+                            div()
+                                .id("project-row-menu")
+                                .child(self.surface_anchors.tracker("project-row-menu"))
+                                .test_support()
+                                .occlude()
+                                .w(px(232.))
+                                .p_2()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .rounded_lg()
+                                .bg(cx.theme().background)
+                                .border_1()
+                                .border_color(cx.theme().border)
+                                .on_click(|_, _, cx| cx.stop_propagation())
+                                .child(
+                                    Button::new("row-analyze")
+                                        .ghost()
+                                        .shell_label(self.text("重新分析", "Re-analyze"))
+                                        .disabled(
+                                            !project.exists
+                                                || self.job_busy
+                                                || self.automatic_job.is_some(),
+                                        )
+                                        .on_click(cx.listener(move |view, _, _, cx| {
+                                            view.project_row_menu = None;
+                                            view.start_job_target(
+                                                None,
+                                                false,
+                                                Some(analyze.clone()),
+                                                cx,
+                                            )
+                                        })),
                                 )
-                                .on_click(cx.listener(move |view, _, _, cx| {
-                                    view.project_row_menu = None;
-                                    view.start_job_target(None, false, Some(analyze.clone()), cx)
-                                })),
+                                .child(
+                                    Button::new("row-reveal")
+                                        .ghost()
+                                        .shell_label(self.text("打开所在位置", "Reveal folder"))
+                                        .disabled(!project.exists)
+                                        .on_click(cx.listener(move |view, _, _, cx| {
+                                            view.project_row_menu = None;
+                                            cx.reveal_path(Path::new(&path));
+                                            cx.notify();
+                                        })),
+                                )
+                                .child(
+                                    Button::new("row-settings")
+                                        .ghost()
+                                        .shell_label(self.text("项目设置…", "Project settings…"))
+                                        .on_click(cx.listener(move |view, _, window, cx| {
+                                            view.open_project_settings(
+                                                settings.clone(),
+                                                false,
+                                                window,
+                                                cx,
+                                            )
+                                        })),
+                                )
+                                .child(
+                                    Button::new("row-remove")
+                                        .ghost()
+                                        .shell_label(
+                                            self.text("从作品库移除…", "Remove from library…"),
+                                        )
+                                        .on_click(cx.listener(move |view, _, window, cx| {
+                                            view.open_project_settings(
+                                                remove.clone(),
+                                                true,
+                                                window,
+                                                cx,
+                                            )
+                                        })),
+                                ),
                         )
-                        .child(
-                            Button::new("row-reveal")
-                                .ghost()
-                                .label(self.text("打开所在位置", "Reveal folder"))
-                                .disabled(!project.exists)
-                                .on_click(cx.listener(move |view, _, _, cx| {
-                                    view.project_row_menu = None;
-                                    cx.reveal_path(Path::new(&path));
-                                    cx.notify();
-                                })),
-                        )
-                        .child(
-                            Button::new("row-settings")
-                                .ghost()
-                                .label(self.text("项目设置…", "Project settings…"))
-                                .on_click(cx.listener(move |view, _, window, cx| {
-                                    view.open_project_settings(settings.clone(), false, window, cx)
-                                })),
-                        )
-                        .child(
-                            Button::new("row-remove")
-                                .ghost()
-                                .label(self.text("从作品库移除…", "Remove from library…"))
-                                .on_click(cx.listener(move |view, _, window, cx| {
-                                    view.open_project_settings(remove.clone(), true, window, cx)
-                                })),
-                        ),
+                        .into_any_element(),
                 )
             });
-        Some(
-            div()
-                .id("panel-backdrop")
-                .absolute()
-                .inset_0()
+        let mut layer = div().id("panel-backdrop").absolute().inset_0();
+        if !popover {
+            layer = layer
                 .occlude()
+                .bg(rgba(0x0000002E))
+                .flex()
+                .items_center()
+                .justify_center()
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(|view, _, _, cx| {
@@ -7012,54 +7135,53 @@ impl Creditia {
                     }),
                 )
                 .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .on_click(cx.listener(|view, _, window, cx| {
-                    if view.project_row_menu.take().is_some() {
-                        cx.notify();
+                .on_click(cx.listener(|view, _, window, cx| view.close_panel(window, cx)));
+        }
+        let modal = if popover {
+            let (anchor, position) = match panel {
+                Panel::Projects => (
+                    Anchor::TopLeft,
+                    point(
+                        self.surface_anchors
+                            .get("project-trigger")
+                            .map(|bounds| bounds.left())
+                            .unwrap_or(px(84.)),
+                        px(54. - (1. - openness) * 6.),
+                    ),
+                ),
+                Panel::Exports => (Anchor::TopRight, point(px(window_width - 16.), px(66.))),
+                Panel::Styles | Panel::Layouts if self.focused => {
+                    let bounds = self.surface_anchors.get(if panel == Panel::Layouts {
+                        "focus-layout"
                     } else {
-                        view.close_panel(window, cx);
-                    }
-                }))
-                .bg(rgba(0x00000066))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(modal)
-                .children(row_menu)
-                .into_any_element(),
-        )
-    }
-    fn choose_export_directory(&mut self, cx: &mut Context<Self>) {
-        let prompt = cx.prompt_for_paths(PathPromptOptions {
-            files: false,
-            directories: true,
-            multiple: false,
-            prompt: Some(self.text("导出目录", "Export directory").into()),
-        });
-        self.dialog_task = Some(cx.spawn(async move |this, cx| {
-            let result = prompt.await;
-            let _ = this.update(cx, |view, cx| {
-                match result {
-                    Ok(Ok(Some(paths))) => {
-                        if let Some(path) = paths.first() {
-                            let path = path.to_string_lossy().into_owned();
-                            view.operation(
-                                move || {
-                                    service::edit_app_settings(|settings| {
-                                        settings["exportDir"] = json!(path)
-                                    })?;
-                                    Ok(Value::Null)
-                                },
-                                cx,
-                            );
-                        }
-                    }
-                    Ok(Ok(None)) => {}
-                    Ok(Err(error)) => view.error = Some(error.to_string()),
-                    Err(error) => view.error = Some(error.to_string()),
+                        "focus-style"
+                    });
+                    (
+                        Anchor::BottomLeft,
+                        point(
+                            px(bounds
+                                .map(|bounds| f32::from(bounds.left()) - 6.)
+                                .unwrap_or((window_width - width) / 2.)),
+                            px(bounds
+                                .map(|bounds| f32::from(bounds.top()) - 12.)
+                                .unwrap_or(window_height - 78.)),
+                        ),
+                    )
                 }
-                cx.notify();
-            });
-        }));
+                _ => (Anchor::BottomLeft, point(px(18.), px(window_height - 68.))),
+            };
+            anchored()
+                .anchor(anchor)
+                .position(position)
+                .snap_to_window_with_margin(px(18.))
+                .child(modal)
+                .into_any_element()
+        } else {
+            modal
+                .focus_trap("creditia-panel", &self.panel_focus)
+                .into_any_element()
+        };
+        Some(layer.child(modal).children(row_menu).into_any_element())
     }
 }
 impl Creditia {
@@ -7075,24 +7197,43 @@ impl Creditia {
             "zoom":self.viewport.zoom,"pan_x":self.viewport.x,"pan_y":self.viewport.y,"tile_count":self.tiles.len(),"style":self.style().map(|style|style["id"].clone()),"global_style":self.preferences.style,
             "language":self.preferences.language.code(),"appearance":self.preferences.appearance,"export_open":self.export_open,"preview_generation":self.preview_generation,"preview_busy":self.preview_busy,"error":self.error,
             "reduced_motion":self.reduced_motion,"preview_style":self.focus_styles.as_ref().is_some_and(|styles|styles.current!=styles.original),"playing":self.playback.as_ref().is_some_and(|p|p.playing&&!p.suspended),"loading":self.loading,
-            "panel":self.panel.map(|p|match p{Panel::Projects=>"projects",Panel::Styles=>"styles",Panel::Pieces=>"pieces",Panel::Layouts=>"layouts",Panel::Diagnostics=>"diagnostics",Panel::Blame=>"blame",Panel::Exports=>"exports",Panel::Settings=>"settings",Panel::Project=>"project",Panel::Details=>"details"}),
+            "panel":self.panel.map(|p|match p{Panel::Projects=>"projects",Panel::Styles=>"styles",Panel::Layouts=>"layouts",Panel::Pieces=>"pieces",Panel::Blame=>"blame",Panel::Exports=>"exports",Panel::Settings=>"settings",Panel::Project=>"project",Panel::Details=>"details"}),
             "project":self.selected,"project_count":self.projects.len(),"project_name":self.raw.as_ref().map(|raw|raw["project"]["name"].clone()),"operation_busy":self.operation_busy,"remove_confirm":self.remove_confirm,"search_query":self.search_query,
             "display_scale":self.display_scale,"picker_selected":self.picker_selected,"settings_project":self.settings_id(),"project_settings_ready":self.settings_data().is_some() && self.sign_loaded_for.as_ref()==self.settings_id(),"project_row_menu":self.project_row_menu.as_ref().map(|(id,_)|id),"hover":self.hover.as_ref().map(|hit|&hit.t),"batch":self.batch_results
         });
-        state["focus_autoplay_pending"] = json!(self.focus_autoplay_pending);
         state["animation_busy"] = json!(self.animation_busy);
+        state["export_format"] = json!(self.export_format);
+        state["panel_closing"] = json!(self.panel_closing);
+        state["drag_active"] = json!(self.drag.is_some());
+        state["export_size"] = json!(self.export_size);
+        state["export_prompt_busy"] = json!(self.export_prompt_busy);
+        state["export_workspace"] = json!(self.export_workspace_open());
+        state["export_formats_open"] = json!(self.export_formats_open);
+        state["failed_export"] = json!(self.failed_export);
+        state["success_notice"] = json!(self.success_notice);
+        state["notice"] = json!(self.notice);
+        state["export_preview"] = self.export_preview.diagnostic();
+        state["can_export"] = json!(self.can_export());
+        state["export_unavailable"] = json!(self.export_unavailable_reason(&self.export_format));
         if let Some(hit) = focused_art.and_then(|art| art.hits.first()) {
             state["first_hit"] = json!({"x":hit.x,"y":hit.y,"w":hit.w,"h":hit.h,"t":hit.t});
+        }
+        if let Some(index) = self.selected_tile {
+            let rect = self.screen_rect(index);
+            state["selected_rect"] = json!({"x":rect.x,"y":rect.y,"w":rect.w,"h":rect.h});
         }
         if self.focused {
             if let Some(index) = self.selected_tile {
                 let r = self.screen_rect(index);
                 state["focused_rect"] = json!({"x":r.x,"y":r.y,"w":r.w,"h":r.h});
+                if let Some(tile) = selected {
+                    state["focused_preview"] = json!({"pixels":tile.pixels,"region":tile.image_region.map(|r| json!({"x":r.x,"y":r.y,"w":r.w,"h":r.h}))});
+                }
             }
         }
         if let Some(play) = &self.playback {
             let displayed = play.displayed();
-            state["animation"] = json!({"epoch":play.epoch,"displayed_epoch":displayed.map(|f|f.epoch),"index":play.index,"requested":play.requested,"playing":play.playing&&!play.suspended,"intent_playing":play.playing,"paused":!play.playing||play.suspended,"suspended":play.suspended,"frame_pixels":displayed.map(|f|f.pixels),"chunks":displayed.map(|f|&f.regions),"resident_frames":play.frames.len()+usize::from(play.previous.is_some()),"resident_bytes":play.frames.values().map(|f|f.decoded_bytes).sum::<usize>()+play.previous.as_ref().map(|f|f.decoded_bytes).unwrap_or(0),"decode_ready":displayed.is_some_and(|f|f.ready),"elapsed_ms":play.elapsed.as_millis(),"timeline":{"duration_ms":play.timeline.duration_ms,"hold_ms":play.timeline.hold_ms,"fps":play.timeline.fps,"repeat":play.timeline.repeat,"frame_count":play.times.len()},"sample_time":play.times.get(play.index)});
+            state["animation"] = json!({"epoch":play.epoch,"displayed_epoch":displayed.map(|f|f.epoch),"index":play.index,"requested":play.requested,"playing":play.playing&&!play.suspended,"intent_playing":play.playing,"ended":play.ended,"paused":!play.playing||play.suspended,"suspended":play.suspended,"frame_pixels":displayed.map(|f|f.pixels),"chunks":displayed.map(|f|&f.regions),"resident_frames":play.frames.len()+usize::from(play.previous.is_some()),"resident_bytes":play.frames.values().map(|f|f.decoded_bytes).sum::<usize>()+play.previous.as_ref().map(|f|f.decoded_bytes).unwrap_or(0),"decode_ready":displayed.is_some_and(|f|f.ready),"painted":displayed.is_some_and(|f|f.painted.get().is_some()),"elapsed_ms":play.elapsed.as_millis(),"timeline":{"duration_ms":play.timeline.duration_ms,"hold_ms":play.timeline.hold_ms,"fps":play.timeline.fps,"repeat":play.timeline.repeat,"frame_count":play.times.len()},"sample_time":play.times.get(play.index)});
         }
         state
     }
@@ -7112,7 +7253,6 @@ impl Render for Creditia {
                 self.stop_playback(cx);
                 self.focus_transition = None;
                 self.panel_tween = None;
-                self.dock_tween = None;
                 if self.panel_closing {
                     self.panel_closing = false;
                     self.panel = None;
@@ -7151,27 +7291,6 @@ impl Render for Creditia {
         {
             window.request_animation_frame();
         }
-        let target = if self.export_open { 148. } else { 0. };
-        if target != self.dock_target {
-            self.dock_target = target;
-            self.dock_tween = (!self.reduced_motion).then_some(Tween {
-                from: self.dock_height,
-                to: target,
-                started: Instant::now(),
-            });
-        }
-        self.dock_height = if let Some(tween) = self.dock_tween {
-            if tween.done() {
-                self.dock_tween = None;
-                target
-            } else {
-                window.request_animation_frame();
-                tween.value()
-            }
-        } else {
-            target
-        };
-        let dock_height = self.dock_height;
         if let Some(tween) = self.panel_tween {
             if tween.done() {
                 self.panel_tween = None;
@@ -7199,20 +7318,6 @@ impl Render for Creditia {
         self.sync_activity(cx);
         let delayed_job = (self.job_busy || self.automatic_job.is_some())
             && self.activity_age() >= Duration::from_secs(2);
-        let status_height = if self.error.is_some()
-            || self.notice.is_some()
-            || delayed_job
-            || self.export_stage.is_some()
-            || self.animation_busy
-            || !self.warnings.is_empty()
-            || matches!(
-                self.pending_analysis["state"].as_str(),
-                Some("interrupted" | "failed" | "cancelled")
-            ) {
-            24.
-        } else {
-            0.
-        };
         if self.reduced_motion || !self.window_visible || !window.is_window_active() {
             self.roam_motion.stop();
         }
@@ -7223,11 +7328,7 @@ impl Render for Creditia {
                 window.request_animation_frame();
             }
         }
-        self.compute_layout(
-            width.max(300.),
-            (height - 60. - status_height - dock_height).max(200.),
-            cx,
-        );
+        self.compute_layout(width.max(300.), (height - 60.).max(1.), cx);
         if !self.fixture {
             if crate::platform_ui::dynamic_logo_supported() {
                 if let Err(error) = self.platform_ui.apply_logo(window, &self.preferences.logo) {
@@ -7272,12 +7373,14 @@ impl Render for Creditia {
         }
         self.prepare_static_images(window, cx);
         self.prepare_focus_preview(window, cx);
-        self.prepare_focus_autoplay(window, cx);
-        let animation_visible = self
-            .selected_tile
-            .is_some_and(|index| self.screen_rect(index).intersects(self.artwork_viewport()));
+        self.refresh_export_preview(window, cx);
+        let playback_context = self.focused || self.export_animation();
+        let animation_visible = (!self.export_workspace_open() || self.export_animation())
+            && self
+                .selected_tile
+                .is_some_and(|index| self.screen_rect(index).intersects(self.artwork_viewport()));
         if animation_visible
-            && self.focused
+            && playback_context
             && self.panel.is_none()
             && window.is_window_active()
             && self.window_visible
@@ -7287,15 +7390,15 @@ impl Render for Creditia {
         if let Some(control) = &self.animation_control {
             control.set_visible(
                 animation_visible
-                    && self.focused
+                    && playback_context
                     && self.panel.is_none()
                     && window.is_window_active()
                     && self.window_visible,
             );
-            control.set_viewport(self.viewport, self.viewport_size, self.display_scale);
+            self.configure_playback_view(control);
         }
         let can_animate = animation_visible
-            && self.focused
+            && playback_context
             && self.panel.is_none()
             && window.is_window_active()
             && self.window_visible
@@ -7312,7 +7415,7 @@ impl Render for Creditia {
                 && !play.suspended
                 && play.started_once
                 && animation_visible
-                && self.focused
+                && playback_context
                 && self.panel.is_none()
                 && window.is_window_active()
                 && self.window_visible
@@ -7370,7 +7473,7 @@ impl Render for Creditia {
             }).collect::<Vec<_>>());
             if let Some(play) = &self.playback {
                 let displayed = play.displayed();
-                state["animation"] = json!({"epoch":play.epoch,"displayed_epoch":displayed.map(|f|f.epoch),"index":play.index,"requested":play.requested,"playing":play.playing&&!play.suspended,"intent_playing":play.playing,"paused":!play.playing||play.suspended,"suspended":play.suspended,"visible":can_animate,"frame_pixels":displayed.map(|f|f.pixels),"chunks":displayed.map(|f|&f.regions),"resident_frames":play.frames.len()+usize::from(play.previous.is_some()),"resident_bytes":play.frames.values().map(|f|f.decoded_bytes).sum::<usize>()+play.previous.as_ref().map(|f|f.decoded_bytes).unwrap_or(0),"decode_ready":displayed.is_some_and(|f|f.ready),"elapsed_ms":play.elapsed.as_millis(),"timeline":{"duration_ms":play.timeline.duration_ms,"hold_ms":play.timeline.hold_ms,"fps":play.timeline.fps,"repeat":play.timeline.repeat,"frame_count":play.times.len()},"sample_time":play.times.get(play.index)});
+                state["animation"] = json!({"epoch":play.epoch,"displayed_epoch":displayed.map(|f|f.epoch),"index":play.index,"requested":play.requested,"playing":play.playing&&!play.suspended,"intent_playing":play.playing,"ended":play.ended,"paused":!play.playing||play.suspended,"suspended":play.suspended,"visible":can_animate,"frame_pixels":displayed.map(|f|f.pixels),"chunks":displayed.map(|f|&f.regions),"resident_frames":play.frames.len()+usize::from(play.previous.is_some()),"resident_bytes":play.frames.values().map(|f|f.decoded_bytes).sum::<usize>()+play.previous.as_ref().map(|f|f.decoded_bytes).unwrap_or(0),"decode_ready":displayed.is_some_and(|f|f.ready),"painted":displayed.is_some_and(|f|f.painted.get().is_some()),"elapsed_ms":play.elapsed.as_millis(),"timeline":{"duration_ms":play.timeline.duration_ms,"hold_ms":play.timeline.hold_ms,"fps":play.timeline.fps,"repeat":play.timeline.repeat,"frame_count":play.times.len()},"sample_time":play.times.get(play.index)});
             }
             let visible = Rect {
                 x: 0.,
@@ -7395,19 +7498,13 @@ impl Render for Creditia {
                 self.telemetry_state = Some(state);
             }
         }
-        let bg = rgb(if cx.theme().is_dark() {
-            0x0A0A0A
-        } else {
-            0xEFEFED
-        });
-        let glass = rgba(if cx.theme().is_dark() {
-            0x1E1E1E8C
-        } else {
-            0xFFFFFF94
-        });
-        let fg = cx.theme().foreground;
-        let muted = cx.theme().muted_foreground;
-        let border = cx.theme().border;
+        let palette = Palette::of(cx);
+        let bg = palette.bg;
+        let fg = palette.ink;
+        let muted = palette.soft;
+        let border = palette.edge;
+        let selected = palette.selected;
+        let glass_shadow = palette.shadows();
         let title = if self.selected.as_deref() == Some("__all__") {
             self.text("全部项目", "All projects").to_string()
         } else {
@@ -7433,11 +7530,20 @@ impl Render for Creditia {
             .to_string();
         let mut tools = div()
             .flex()
+            .flex_shrink_0()
             .items_center()
-            .gap_1()
-            .p_1()
+            .h(px(36.))
+            .gap(px(2.))
+            .p(px(2.))
             .rounded_full()
-            .bg(glass)
+            .relative()
+            .shadow(glass_shadow.clone())
+            .child(crate::material::surface(
+                self.backdrop_image.clone(),
+                palette.glass,
+                18.,
+                palette,
+            ))
             .border_1()
             .border_color(border);
         let group = self.group();
@@ -7461,13 +7567,27 @@ impl Render for Creditia {
             tools = tools.child(
                 Button::new(element)
                     .ghost()
-                    .label(label)
+                    .accessibility_label(label)
                     .h(px(30.))
+                    .px(px(11.))
                     .rounded_full()
-                    .text_size(px(12.))
-                    .when(group == id, |b| b.bg(cx.theme().muted))
+                    .text_color(muted)
+                    .when(group == id, |b| b.bg(selected).text_color(fg))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .font_weight(if group == id {
+                                FontWeight::MEDIUM
+                            } else {
+                                FontWeight::NORMAL
+                            })
+                            .child(label),
+                    )
                     .on_click(cx.listener(move |view, _, _, cx| view.set_group(id, cx))),
             );
+        }
+        if self.has_models != Some(false) {
+            tools = tools.child(div().w(px(1.)).h(px(16.)).mx(px(4.)).bg(border));
         }
         tools = tools
             .child(
@@ -7475,12 +7595,14 @@ impl Render for Creditia {
                     .ghost()
                     .w(px(30.))
                     .h(px(30.))
+                    .p_0()
                     .rounded_full()
+                    .text_color(muted)
                     .icon(crate::ui_icons::icon("wall"))
                     .accessibility_label(self.text("展墙", "Wall"))
                     .tooltip(self.text("展墙", "Wall"))
                     .when(self.preferences.view == "wall" && !self.focused, |b| {
-                        b.bg(cx.theme().muted)
+                        b.bg(selected).text_color(fg)
                     })
                     .on_click(cx.listener(|view, _, _, cx| view.set_view("wall", cx))),
             )
@@ -7489,42 +7611,60 @@ impl Render for Creditia {
                     .ghost()
                     .w(px(30.))
                     .h(px(30.))
+                    .p_0()
                     .rounded_full()
+                    .text_color(muted)
                     .icon(crate::ui_icons::icon("roam"))
                     .accessibility_label(self.text("漫游", "Roam"))
                     .tooltip(self.text("漫游", "Roam"))
                     .when(self.preferences.view == "roam" && !self.focused, |b| {
-                        b.bg(cx.theme().muted)
+                        b.bg(selected).text_color(fg)
                     })
                     .on_click(cx.listener(|view, _, _, cx| view.set_view("roam", cx))),
             )
+            .child(div().w(px(1.)).h(px(16.)).mx(px(4.)).bg(border))
             .child(
-                Button::new("settings")
+                Button::new("toolbar-language")
                     .ghost()
                     .w(px(30.))
                     .h(px(30.))
+                    .p_0()
                     .rounded_full()
-                    .icon(crate::ui_icons::icon("gear"))
-                    .accessibility_label(self.text("设置", "Settings"))
-                    .tooltip(self.text("设置", "Settings"))
+                    .text_color(muted)
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight::NORMAL)
+                            .child(if self.preferences.language == Language::En {
+                                "EN"
+                            } else {
+                                "中"
+                            }),
+                    )
+                    .accessibility_label(self.text("切换到英文", "Switch to Chinese"))
+                    .tooltip(self.text("切换到英文", "Switch to Chinese"))
                     .on_click(cx.listener(|view, _, window, cx| {
-                        view.open_panel(Panel::Settings, window, cx)
+                        view.toggle_language(&ToggleLanguage, window, cx)
                     })),
+            )
+            .child(
+                self.surface_anchors.wrap(
+                    "settings-trigger",
+                    Button::new("settings")
+                        .ghost()
+                        .w(px(30.))
+                        .h(px(30.))
+                        .p_0()
+                        .rounded_full()
+                        .text_color(muted)
+                        .icon(crate::ui_icons::icon("gear"))
+                        .accessibility_label(self.text("设置", "Settings"))
+                        .tooltip(self.text("设置", "Settings"))
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.open_panel(Panel::Settings, window, cx)
+                        })),
+                ),
             );
-        if !self.export_queue.jobs().is_empty() || self.export_history_error.is_some() {
-            tools = tools.child(
-                Button::new("export-history")
-                    .ghost()
-                    .label(format!(
-                        "{} {}",
-                        self.text("任务", "Jobs"),
-                        self.export_queue.jobs().len()
-                    ))
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        view.open_panel(Panel::Exports, window, cx)
-                    })),
-            );
-        }
         let mark = if self.preferences.logo == "star" {
             self.live_mark.render(
                 self.progress.as_ref().and_then(analysis_fraction),
@@ -7535,6 +7675,13 @@ impl Render for Creditia {
                 window,
                 cx,
             )
+        } else if matches!(self.preferences.logo.as_str(), "star-mono" | "mono") {
+            svg()
+                .data(self.logo_image.bytes())
+                .w(px(20.))
+                .h(px(20.))
+                .text_color(palette.ink)
+                .into_any_element()
         } else {
             crate::image_assets::track(&self.logo_image, window, cx);
             img(self.logo_image.clone())
@@ -7551,44 +7698,43 @@ impl Render for Creditia {
             .pl(px(if cfg!(target_os = "macos") { 84. } else { 58. }))
             .pr_4()
             .child(
-                Button::new("project-mark")
-                    .ghost()
-                    .w(px(24.))
-                    .h(px(28.))
-                    .p_0()
-                    .child(mark)
-                    .tooltip(
-                        if self.loading || self.job_busy || self.automatic_job.is_some() {
-                            self.text("分析状态", "Analysis status").to_string()
-                        } else {
-                            self.mark_tooltip.clone()
-                        },
+                self.surface_anchors
+                    .wrap(
+                        "project-trigger",
+                        Button::new("switch-project")
+                            .ghost()
+                            .min_w_0()
+                            .flex_shrink_1()
+                            .h(px(32.))
+                            .pl(px(8.))
+                            .pr(px(10.))
+                            .rounded(px(10.))
+                            .accessibility_label(title.clone())
+                            .tooltip(self.mark_tooltip.clone())
+                            .child(
+                                div()
+                                    .flex()
+                                    .min_w_0()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .text_size(px(15.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(mark)
+                                    .child(div().max_w(px(340.)).min_w_0().truncate().child(title))
+                                    .child(
+                                        crate::ui_icons::icon("updown").text_color(palette.faint),
+                                    ),
+                            )
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.open_panel(Panel::Projects, window, cx)
+                            })),
                     )
-                    .accessibility_label(self.text("项目贡献份额", "Project contribution shares")),
+                    .min_w_0()
+                    .flex_shrink_1(),
             )
-            .child(
-                Button::new("switch-project")
-                    .ghost()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_size(px(15.))
-                    .label(title)
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        view.open_panel(Panel::Projects, window, cx)
-                    })),
-            )
-            .child(
-                Button::new("project-settings")
-                    .ghost()
-                    .icon(crate::ui_icons::icon("more"))
-                    .accessibility_label(self.text("项目设置", "Project settings"))
-                    .tooltip(self.text("项目设置", "Project settings"))
-                    .disabled(
-                        self.selected.is_none() || self.selected.as_deref() == Some("__all__"),
-                    )
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        view.open_panel(Panel::Project, window, cx)
-                    })),
-            )
+            .when(delayed_job, |toolbar| {
+                toolbar.child(self.analysis_progress(cx))
+            })
             .child(div().flex_1())
             .child(tools);
         let toolbar = if self.focused {
@@ -7609,6 +7755,7 @@ impl Render for Creditia {
                 .flex_shrink_0()
                 .flex()
                 .items_center()
+                .gap_2()
                 .pl(px(if cfg!(target_os = "macos") { 94. } else { 60. }))
                 .pr_4()
                 .child(
@@ -7617,12 +7764,18 @@ impl Render for Creditia {
                         .text_size(px(15.))
                         .child(title.to_string()),
                 )
+                .when(delayed_job, |toolbar| {
+                    toolbar.child(self.analysis_progress(cx))
+                })
                 .child(div().flex_1())
                 .child(
                     Button::new("focus-close-top")
                         .ghost()
+                        .w(px(34.))
+                        .h(px(34.))
+                        .p_0()
                         .rounded_full()
-                        .bg(glass)
+                        .bg(palette.glass)
                         .icon(crate::ui_icons::icon("close"))
                         .accessibility_label(self.text("返回展览", "Return to exhibition"))
                         .tooltip(self.text("返回展览", "Return to exhibition"))
@@ -7646,43 +7799,86 @@ impl Render for Creditia {
             .absolute()
             .left_0()
             .right_0()
-            .bottom(px(status_height + dock_height + 16.))
+            .bottom(px(18.))
             .h(px(40.))
             .flex()
             .items_center()
             .gap_1()
-            .px_4()
+            .px(px(18.))
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .p_1()
+                    .h(px(40.))
+                    .p(px(3.))
                     .rounded_full()
-                    .bg(glass)
+                    .relative()
+                    .shadow(glass_shadow)
+                    .child(crate::material::surface(
+                        self.backdrop_image.clone(),
+                        palette.glass,
+                        20.,
+                        palette,
+                    ))
                     .border_1()
                     .border_color(border)
                     .child(
                         Button::new("style-previous")
                             .ghost()
+                            .w(px(30.))
+                            .h(px(32.))
+                            .p_0()
+                            .rounded_full()
+                            .text_color(muted)
                             .icon(crate::ui_icons::icon("prev"))
                             .accessibility_label(self.text("上一种风格", "Previous style"))
                             .tooltip(self.text("上一种风格", "Previous style"))
                             .on_click(cx.listener(|view, _, _, cx| view.step_style(-1, cx))),
                     )
                     .child(
-                        Button::new("styles")
-                            .ghost()
-                            .when_some(style_dot, |button, dot| {
-                                button.child(img(dot).w(px(18.)).h(px(18.)))
-                            })
-                            .label(style_name)
-                            .on_click(cx.listener(|view, _, window, cx| {
-                                view.open_panel(Panel::Styles, window, cx)
-                            })),
+                        self.surface_anchors.wrap(
+                            "style-trigger",
+                            Button::new("styles")
+                                .ghost()
+                                .h(px(32.))
+                                .pl(px(6.))
+                                .pr(px(12.))
+                                .rounded_full()
+                                .accessibility_label(style_name.clone())
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(9.))
+                                        .text_size(px(13.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .when_some(style_dot, |row, dot| {
+                                            row.child(
+                                                div()
+                                                    .w(px(22.))
+                                                    .h(px(22.))
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .child(img(dot).w(px(18.)).h(px(18.))),
+                                            )
+                                        })
+                                        .child(style_name)
+                                        .child(crate::ui_icons::icon("updown").text_color(muted)),
+                                )
+                                .on_click(cx.listener(|view, _, window, cx| {
+                                    view.open_panel(Panel::Styles, window, cx)
+                                })),
+                        ),
                     )
                     .child(
                         Button::new("style-next")
                             .ghost()
+                            .w(px(30.))
+                            .h(px(32.))
+                            .p_0()
+                            .rounded_full()
+                            .text_color(muted)
                             .icon(crate::ui_icons::icon("next"))
                             .accessibility_label(self.text("下一种风格", "Next style"))
                             .tooltip(self.text("下一种风格", "Next style"))
@@ -7690,202 +7886,48 @@ impl Render for Creditia {
                     ),
             )
             .child(
-                Button::new("pieces")
-                    .ghost()
-                    .icon(crate::ui_icons::icon("more"))
-                    .accessibility_label(self.text("作品", "Artworks"))
-                    .tooltip(self.text("作品", "Artworks"))
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        view.open_panel(Panel::Pieces, window, cx)
-                    })),
+                self.surface_anchors.wrap(
+                    "pieces-trigger",
+                    Button::new("pieces")
+                        .ghost()
+                        .icon(crate::ui_icons::icon("more"))
+                        .accessibility_label(self.text("作品", "Artworks"))
+                        .tooltip(self.text("作品", "Artworks"))
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.open_panel(Panel::Pieces, window, cx)
+                        })),
+                ),
             )
             .when(!self.focused, |controls| controls.child(div().flex_1()));
-        if self.focused {
-            controls = controls
-                .justify_center()
-                .child(
-                    Button::new("layouts")
-                        .ghost()
-                        .label(self.text("版式", "Layout"))
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.open_panel(Panel::Layouts, window, cx)
-                        })),
-                )
-                .child(
-                    Button::new("previous-piece")
-                        .ghost()
-                        .icon(crate::ui_icons::icon("prev"))
-                        .accessibility_label(self.text("上一件作品", "Previous artwork"))
-                        .tooltip(self.text("上一件作品", "Previous artwork"))
-                        .on_click(
-                            cx.listener(|view, _, _, cx| view.keyboard_navigation(false, -1, cx)),
-                        ),
-                )
-                .child(
-                    Button::new("next-piece")
-                        .ghost()
-                        .icon(crate::ui_icons::icon("next"))
-                        .accessibility_label(self.text("下一件作品", "Next artwork"))
-                        .tooltip(self.text("下一件作品", "Next artwork"))
-                        .on_click(
-                            cx.listener(|view, _, _, cx| view.keyboard_navigation(false, 1, cx)),
-                        ),
-                )
-                .child(
-                    Button::new("play")
-                        .ghost()
-                        .label(if self.playback.as_ref().is_some_and(|p| p.playing) {
-                            self.text("暂停", "Pause")
-                        } else {
-                            self.text("播放", "Play")
-                        })
-                        .disabled(
-                            self.animation_busy
-                                || self.selected_piece().is_none_or(|p| p["animated"] != true),
-                        )
-                        .on_click(cx.listener(|view, _, _, cx| view.play(false, cx))),
-                )
-                .child(
-                    Button::new("replay")
-                        .ghost()
-                        .icon(crate::ui_icons::icon("refresh"))
-                        .accessibility_label(self.text("重播", "Replay"))
-                        .tooltip(self.text("重播", "Replay"))
-                        .disabled(self.animation_busy)
-                        .on_click(cx.listener(|view, _, _, cx| view.play(true, cx))),
-                )
-                .child(
-                    Button::new("focus-close")
-                        .ghost()
-                        .icon(crate::ui_icons::icon("close"))
-                        .accessibility_label(self.text("返回展览", "Return to exhibition"))
-                        .tooltip(self.text("返回展览", "Return to exhibition"))
-                        .on_click(cx.listener(|view, _, _, cx| {
-                            view.close_focus(cx);
-                        })),
-                );
-        }
-        if self.focused
-            && self
-                .focus_styles
-                .as_ref()
-                .is_some_and(|styles| styles.current != styles.original)
-        {
-            controls = controls.child(
-                Button::new("apply-focus-style")
+        if self.preferences.view == "roam" && !self.focused {
+            controls = controls.child(div().flex_1()).child(
+                Button::new("zoom-reset")
                     .ghost()
-                    .label(self.text("设为全局风格", "Use for all cards"))
-                    .on_click(cx.listener(|view, _, _, cx| view.apply_focus_style(cx))),
+                    .h(px(40.))
+                    .px(px(16.))
+                    .rounded_full()
+                    .bg(palette.glass)
+                    .icon(crate::ui_icons::icon("home"))
+                    .shell_label(self.text("回到原点", "Back to origin"))
+                    .on_click(cx.listener(|view, _, _, cx| view.reset_viewport(cx))),
             );
         }
-        if self.focused || self.preferences.view == "roam" {
-            controls = controls
-                .child(
-                    Button::new("zoom-out")
-                        .ghost()
-                        .label("−")
-                        .on_click(cx.listener(|view, _, _, cx| view.zoom(1. / 1.2, cx))),
-                )
-                .child(
-                    Button::new("zoom-reset")
-                        .ghost()
-                        .label(format!("{}%", (self.viewport.zoom * 100.).round() as i32))
-                        .on_click(cx.listener(|view, _, _, cx| {
-                            view.reset_viewport(cx);
-                        })),
-                )
-                .child(
-                    Button::new("zoom-in")
-                        .ghost()
-                        .label("+")
-                        .on_click(cx.listener(|view, _, _, cx| view.zoom(1.2, cx))),
-                );
-        }
-        let mut status = div()
-            .h(px(status_height))
-            .flex_shrink_0()
-            .flex()
-            .items_center()
-            .gap_2()
-            .px_5()
-            .text_xs()
-            .text_color(muted);
-        if let Some(stage) = self.export_stage {
-            let label = match stage {
-                ExportStage::Rendering => self.text("正在导出…", "Exporting…"),
-                ExportStage::Writing => self.text("正在保存…", "Saving…"),
-            };
-            status = status
-                .child(format!("{} · {}", label, self.export_label))
-                .child(
-                    Button::new("cancel-export")
-                        .ghost()
-                        .label(self.text("取消", "Cancel"))
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.cancel_export(&CancelExport, window, cx)
-                        })),
-                );
-        } else if delayed_job {
-            status = status
-                .child(
-                    self.progress
-                        .as_ref()
-                        .map(|p| progress_text(p, &self.preferences.language))
-                        .unwrap_or_else(|| self.text("正在分析…", "Analyzing…").into()),
-                )
-                .child(
-                    Button::new("cancel-analysis")
-                        .ghost()
-                        .label(self.text("取消", "Cancel"))
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.cancel(&CancelAnalysis, window, cx)
-                        })),
-                );
-        } else if matches!(
-            self.pending_analysis["state"].as_str(),
-            Some("interrupted" | "failed" | "cancelled")
-        ) {
-            status = status
-                .child(self.text("上次任务尚未完成", "The previous task did not finish"))
-                .child(
-                    Button::new("resume-analysis")
-                        .ghost()
-                        .label(self.text("继续分析", "Resume analysis"))
-                        .on_click(
-                            cx.listener(|view, _, _, cx| view.start_job_mode(None, true, cx)),
-                        ),
-                );
-        } else if let Some(error) = &self.error {
-            status = status.child(error.clone()).child(
-                Button::new("retry")
-                    .ghost()
-                    .label(self.text("重试", "Retry"))
-                    .on_click(cx.listener(|view, _, _, cx| {
-                        view.error = None;
-                        view.refresh(cx);
-                    })),
-            );
-        } else if self.animation_busy {
-            status = status.child(self.text("正在准备动画…", "Preparing animation…"));
-        } else if let Some(notice) = &self.notice {
-            status = status.child(notice.clone());
-        }
-        if !self.warnings.is_empty() {
-            status = status.child(
-                Button::new("analysis-warnings")
-                    .ghost()
-                    .label(format!(
-                        "{} ({})",
-                        self.text("分析提示", "Analysis notes"),
-                        self.warnings.len()
-                    ))
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        view.open_panel(Panel::Details, window, cx)
-                    })),
-            );
-        }
+        let controls = if self.focused {
+            self.focus_controls(cx)
+        } else {
+            controls.into_any_element()
+        };
+        self.refresh_backdrop(window, cx);
+        let in_export = self.export_workspace_open();
         let stage = self.render_stage(window, cx);
         let export = self.render_export_dock(cx);
+        let general_feedback = self.general_feedback(cx);
+        let export_feedback = if in_export {
+            None
+        } else {
+            self.export_feedback(cx)
+        };
+
         let modal = self.render_panel(cx);
         let ghost = self
             .drag
@@ -7899,8 +7941,7 @@ impl Render for Creditia {
                     return None;
                 }
                 let source = drag.source?;
-                let in_dock = self.pointer.1 >= self.viewport_size.1;
-                let width = art.w.min(if in_dock { 120. } else { 240. });
+                let width = art.w.min(240.);
                 let height = width * art.h / art.w;
                 let fx = ((drag.start.0 - source.x) / source.w).clamp(0., 1.);
                 let fy = ((drag.start.1 - source.y) / source.h).clamp(0., 1.);
@@ -7924,8 +7965,14 @@ impl Render for Creditia {
             .flex()
             .bg(bg)
             .text_color(fg)
+            .text_size(px(13.))
+            .line_height(relative(1.45))
             .track_focus(&self.focus)
-            .key_context("Creditia")
+            .key_context(if in_export {
+                "CreditiaExport"
+            } else {
+                "Creditia"
+            })
             .on_action(cx.listener(|_, _: &MinimizeWindow, window, _| window.minimize_window()))
             .on_action(cx.listener(|_, _: &FullScreen, window, _| window.toggle_fullscreen()))
             .on_action(cx.listener(Self::open_project))
@@ -7938,10 +7985,14 @@ impl Render for Creditia {
             .on_action(cx.listener(Self::cycle_appearance))
             .on_action(cx.listener(Self::toggle_motion))
             .on_action(cx.listener(|view, _: &ExportArtwork, _, cx| {
-                view.export_open = true;
-                cx.notify();
+                if let Some(index) = view.selected_tile {
+                    view.toggle_export(index, cx);
+                }
             }))
             .on_action(cx.listener(|_, _: &CloseWindow, window, _| window.remove_window()))
+            .on_action(cx.listener(|view, _: &ExportHistory, window, cx| {
+                view.open_panel(Panel::Exports, window, cx);
+            }))
             .on_action(cx.listener(Self::cancel_export))
             .on_action(cx.listener(Self::cancel_current))
             .on_action(cx.listener(|view, _: &SwitchProject, window, cx| {
@@ -7990,17 +8041,7 @@ impl Render for Creditia {
                 MouseButton::Left,
                 cx.listener(|view, event, window, cx| view.pointer_up(event, window, cx)),
             )
-            .child(
-                div()
-                    .size_full()
-                    .flex()
-                    .flex_col()
-                    .min_w_0()
-                    .child(toolbar)
-                    .child(div().flex_1().min_h_0().child(stage))
-                    .child(export)
-                    .child(status),
-            )
+            .child(div().absolute().inset_0().child(stage))
             .child(
                 div()
                     .absolute()
@@ -8014,7 +8055,53 @@ impl Render for Creditia {
                             .object_fit(ObjectFit::Fill),
                     ),
             )
-            .child(controls)
+            .when(
+                !self.focused && (self.viewport.y < 0. || self.preferences.view == "roam"),
+                |root| {
+                    root.children(self.backdrop_top.clone().map(|image| {
+                        div()
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .right_0()
+                            .h(px(88.))
+                            .child(img(image).size_full().object_fit(ObjectFit::Fill))
+                    }))
+                },
+            )
+            .when(true, |root| {
+                root.child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .occlude()
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|view, _, _, cx| {
+                                view.drag = None;
+                                cx.stop_propagation();
+                            }),
+                        )
+                        .child(toolbar),
+                )
+            })
+            .when(!in_export, |root| root.child(controls))
+            .child(export)
+            .child(
+                div()
+                    .absolute()
+                    .top(px(70.))
+                    .left_0()
+                    .right_0()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(8.))
+                    .children(general_feedback)
+                    .children(export_feedback),
+            )
             .children(ghost)
             .children(modal)
     }
@@ -8025,7 +8112,7 @@ fn apply_appearance(appearance: &Appearance, window: &mut Window, cx: &mut App) 
         Appearance::Light => Theme::change(ThemeMode::Light, Some(window), cx),
         Appearance::Dark => Theme::change(ThemeMode::Dark, Some(window), cx),
     }
-    Theme::update(cx, |theme| theme.font_family = "Inter".into());
+    Theme::update(cx, crate::material::configure_theme);
 }
 fn install_menus(language: &Language, cx: &mut App) {
     cx.set_menus(vec![
@@ -8134,6 +8221,8 @@ fn install_menus(language: &Language, cx: &mut App) {
             items: vec![
                 MenuItem::action(language.text("导出作品…", "Export artwork…"), ExportArtwork),
                 MenuItem::action(language.text("取消导出", "Cancel export"), CancelExport),
+                MenuItem::separator(),
+                MenuItem::action(language.text("导出记录…", "Export history…"), ExportHistory),
             ],
         },
     ]);
@@ -8195,6 +8284,10 @@ fn key_bindings(modifier: &str) -> Vec<KeyBinding> {
         KeyBinding::new(shortcut("shift-r"), Refresh, Some("Creditia")),
         KeyBinding::new(shortcut("shift-c"), CopyArchive, Some("Creditia")),
         KeyBinding::new("escape", CancelCurrent, Some("Creditia")),
+        KeyBinding::new("escape", CancelCurrent, Some("CreditiaExport")),
+        KeyBinding::new(shortcut("w"), CloseWindow, Some("CreditiaExport")),
+        KeyBinding::new(shortcut("m"), MinimizeWindow, Some("CreditiaExport")),
+        KeyBinding::new(shortcut("e"), ExportArtwork, Some("CreditiaExport")),
         KeyBinding::new(shortcut("="), ZoomIn, Some("Creditia")),
         KeyBinding::new(shortcut("-"), ZoomOut, Some("Creditia")),
         KeyBinding::new(shortcut("0"), ResetZoom, Some("Creditia")),
@@ -8226,7 +8319,7 @@ pub fn init_fonts(cx: &mut App) -> Result<(), String> {
     cx.text_system()
         .add_fonts(bytes)
         .map_err(|error| error.to_string())?;
-    Theme::update(cx, |theme| theme.font_family = "Inter".into());
+    Theme::update(cx, crate::material::configure_theme);
     Ok(())
 }
 pub fn run() {
@@ -8355,24 +8448,33 @@ fn open_creditia_window(
         WindowOptions {
             titlebar: Some(TitlebarOptions {
                 title: Some("creditia".into()),
-                ..Default::default()
+                // Match the original macOS overlay: controls share the 60 px toolbar.
+                appears_transparent: cfg!(target_os = "macos"),
+                traffic_light_position: cfg!(target_os = "macos").then(|| point(px(22.), px(23.))),
             }),
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
                 None,
-                size(
-                    px(if acceptance { 1360. } else { 1380. }),
-                    px(if acceptance { 880. } else { 900. }),
-                ),
+                size(px(1360.), px(880.)),
                 cx,
             ))),
-            window_min_size: Some(size(px(900.), px(620.))),
+            window_min_size: Some(size(px(760.), px(560.))),
             ..Default::default()
         },
         cx,
         move |window, cx| {
             cx.new(|cx| {
                 let mut view = if let Some(raw) = benchmark {
-                    Creditia::benchmark(raw, window, cx)
+                    Creditia::benchmark(
+                        raw,
+                        Preferences {
+                            language: Language::En,
+                            appearance: Appearance::Light,
+                            named: false,
+                            ..Default::default()
+                        },
+                        window,
+                        cx,
+                    )
                 } else {
                     match fixture {
                         Some(fixture) => {
@@ -8393,7 +8495,7 @@ fn open_creditia_window(
     .expect("Unable to open Creditia");
 }
 
-fn write_performance_event(mut event: Value) {
+pub(crate) fn write_performance_event(mut event: Value) {
     use std::io::Write;
     let Ok(path) =
         std::env::var("CREDITIA_APP_EVENTS").or_else(|_| std::env::var("CREDITIA_PERF_EVENTS"))
@@ -8470,13 +8572,14 @@ fn analysis_fraction(progress: &Value) -> Option<f64> {
 }
 #[cfg(test)]
 mod input_tests {
-    use super::{Playback, Timeline, key_bindings};
+    use super::{Artwork, Playback, PlaybackFrame, Timeline, key_bindings};
     use std::{
         collections::BTreeMap,
+        sync::{Arc, OnceLock},
         time::{Duration, Instant},
     };
     #[test]
-    fn slow_paint_cannot_skip_an_entire_animation_cycle() {
+    fn preview_completes_once_after_the_final_frame_has_painted() {
         let control = crate::animation::PlaybackControl::new();
         let mut play = Playback {
             frames: BTreeMap::new(),
@@ -8488,10 +8591,10 @@ mod input_tests {
                 fps: 20,
                 repeat: true,
             },
-            authored_repeat: true,
             started: Instant::now() - Duration::from_secs(12),
             elapsed: Duration::ZERO,
             playing: true,
+            ended: false,
             suspended: false,
             index: 0,
             requested: 0,
@@ -8500,47 +8603,58 @@ mod input_tests {
         };
         let epoch = control.epoch();
         assert!(!play.tick(&control));
-        assert_eq!(play.requested, crate::animation::MAX_AHEAD);
+        assert_eq!(
+            play.requested, 20,
+            "late rendering requests the current time instead of slowing the clock"
+        );
         assert_eq!(control.epoch(), epoch);
-        play.index = 20;
+        play.frames.insert(
+            20,
+            PlaybackFrame {
+                epoch,
+                index: 20,
+                ready: true,
+                art: Arc::new(Artwork {
+                    w: 1.,
+                    h: 1.,
+                    svg: String::new(),
+                    hits: vec![],
+                    title: String::new(),
+                    bg: String::new(),
+                    motion: None,
+                    font_faces: vec![],
+                }),
+                tiles: vec![],
+                pixels: 1,
+                decoded_bytes: 4,
+                regions: vec![],
+                painted: Arc::new(OnceLock::new()),
+            },
+        );
         play.started = Instant::now() - Duration::from_millis(1201);
-        assert!(!play.tick(&control));
-        assert!(!play.started_once);
-        assert_ne!(control.epoch(), epoch);
-    }
-    #[test]
-    fn one_shot_stops_at_the_final_frame_and_manual_replay_restores_the_authored_loop() {
-        let control = crate::animation::PlaybackControl::new();
-        let epoch = control.epoch();
-        let timeline = Timeline {
-            duration_ms: 1000,
-            hold_ms: 200,
-            fps: 20,
-            repeat: true,
-        };
-        let mut play = Playback::new(timeline.clone(), vec![0., 1.], true, epoch);
-        assert!(!play.timeline.repeat);
-        play.index = 1;
-        play.requested = 1;
-        play.started_once = true;
-        play.started = Instant::now() - Duration::from_millis(1201);
+        assert!(
+            play.tick(&control),
+            "last frame must paint before completing"
+        );
+        assert_eq!(control.epoch(), epoch);
+        play.frames[&20]
+            .painted
+            .set(Instant::now() - Duration::from_millis(201))
+            .unwrap();
         assert!(!play.tick(&control));
         assert!(!play.playing);
-        assert_eq!(play.index, 1);
-        assert_eq!(play.elapsed, Duration::from_millis(1200));
-        assert_eq!(control.epoch(), epoch);
-        play.restart();
-        assert!(play.timeline.repeat);
-        assert!(play.playing);
-        assert_eq!(play.elapsed, Duration::ZERO);
-        assert_eq!(play.requested, 0);
-        let manual = Playback::new(timeline, vec![0., 1.], false, epoch);
-        assert!(manual.timeline.repeat);
+        assert!(play.ended);
+        assert_eq!(play.index, 20);
+        assert_eq!(
+            control.epoch(),
+            epoch,
+            "completion never restarts the producer"
+        );
     }
     #[test]
     fn all_shortcuts_parse_on_both_platform_families() {
         for modifier in ["cmd", "ctrl"] {
-            assert_eq!(key_bindings(modifier).len(), 30);
+            assert_eq!(key_bindings(modifier).len(), 34);
         }
     }
 }
@@ -8561,27 +8675,4 @@ fn project_date(stamp: i64, language: &Language) -> String {
     } else {
         format!("{month}/{day}/{year}")
     }
-}
-
-fn nearest_child(handle: &ScrollHandle, count: usize, x: f32, y: f32) -> Option<usize> {
-    let mut nearest = None;
-    let mut distance = f32::INFINITY;
-    for index in 0..count {
-        let Some(bounds) = handle.bounds_for_item(index) else {
-            continue;
-        };
-        let left: f32 = bounds.origin.x.into();
-        let top: f32 = bounds.origin.y.into();
-        let width: f32 = bounds.size.width.into();
-        let height: f32 = bounds.size.height.into();
-        if x < left - 14. || x > left + width + 14. || y < top - 5. || y > top + height + 5. {
-            continue;
-        }
-        let d = (x - left - width / 2.).abs();
-        if d < distance {
-            nearest = Some(index);
-            distance = d;
-        }
-    }
-    nearest
 }

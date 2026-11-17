@@ -92,6 +92,21 @@ fn retire(decoded: Arc<RenderImage>, cx: &mut App) {
 /// its result retained only until the matching release of the source identity.
 pub fn track(image: &Arc<Image>, window: &mut Window, cx: &mut App) -> Option<Arc<RenderImage>> {
     let decoded = image.clone().get_render_image(window, cx)?;
+    Some(record(image, decoded, cx))
+}
+
+/// Subscribe during element prepaint. `use_asset` requires a rendered entity;
+/// render-time scheduling and diagnostics must use `track` instead.
+pub fn use_image(
+    image: &Arc<Image>,
+    window: &mut Window,
+    cx: &mut App,
+) -> Option<Arc<RenderImage>> {
+    let decoded = image.clone().use_render_image(window, cx)?;
+    Some(record(image, decoded, cx))
+}
+
+fn record(image: &Arc<Image>, decoded: Arc<RenderImage>, cx: &mut App) -> Arc<RenderImage> {
     // Normal repaint stays O(1), without mutating a GPUI global or walking the
     // entire wall. The weak source in the entry prevents pointer reuse.
     if cx.try_global::<Images>().is_some_and(|images| {
@@ -100,12 +115,12 @@ pub fn track(image: &Arc<Image>, window: &mut Window, cx: &mut App) -> Option<Ar
             .get(&(Arc::as_ptr(image) as usize))
             .is_some_and(|entry| entry.decoded.id == decoded.id)
     }) {
-        return Some(decoded);
+        return decoded;
     }
     if let Some(old) = cx.default_global::<Images>().record(image, decoded.clone()) {
         retire(old, cx);
     }
-    Some(decoded)
+    decoded
 }
 
 /// Call only after the UI's last owner of this exact Image Arc is finished.
@@ -118,6 +133,12 @@ pub fn release(image: Arc<Image>, cx: &mut App) {
     if let Some(decoded) = decoded {
         retire(decoded, cx);
     }
+}
+
+/// Playback pixels bypass the encoded-image loader and have one frame owner.
+/// Atlas removal must still wait until the current paint has finished.
+pub fn release_frame(image: Arc<RenderImage>, cx: &mut App) {
+    retire(image, cx);
 }
 
 #[derive(Clone, Copy, Debug, Default)]
