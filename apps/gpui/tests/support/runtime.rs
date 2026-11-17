@@ -628,7 +628,7 @@ fn spatial(h: &mut Harness) {
     h.ready();
     h.shortcut("e");
     assert_eq!(h.state()["export_open"], true);
-    h.update(|window, _, _| assert!(window.find("export-workspace").visible()));
+    h.update(|window, _, _| assert!(window.find("export-dock").visible()));
     h.capture("export-workspace", false);
     h.press("escape");
     assert_eq!(h.state()["export_open"], false);
@@ -759,14 +759,25 @@ fn reviewed_interactions(h: &mut Harness) {
     // outside this input scenario; the test platform waits for their response.
     assert_eq!(h.state()["export_format"], "gif");
     h.focus("badge");
-    h.capture("static-dock", false);
+    // Badge motion now comes from the authored renderer, like the other forms.
+    // Check the real capability instead of treating this piece as static.
+    assert_eq!(
+        h.style("minimal-light")["pieces"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["id"] == "badge")
+            .unwrap()["animated"],
+        true
+    );
+    h.capture("badge-dock", false);
     h.update(|window, _, _| {
-        assert!(window.find("static-artwork").visible());
+        assert!(window.find("play").visible());
         assert!(
             (f32::from(window.find("focus-dock").bounds().size.width) - dock_width).abs() < 0.01
         );
     });
-    assert_eq!(h.state()["can_export"], false);
+    assert_eq!(h.state()["can_export"], true);
     h.click("focus-export");
     assert_eq!(
         h.state()["export_open"],
@@ -777,11 +788,12 @@ fn reviewed_interactions(h: &mut Harness) {
     assert_eq!(
         h.state()["export_open"],
         true,
-        "unsupported GIF must not start an export"
+        "choosing GIF keeps the in-place export open"
     );
-    assert_eq!(h.state()["export_format"], "png");
+    assert_eq!(h.state()["export_format"], "gif");
     h.ready();
-    h.capture("static-export-with-gif-disabled", false);
+    h.capture("badge-export-with-gif-available", false);
+    h.click("export-format");
     h.press("escape");
     assert_eq!(h.state()["export_formats_open"], false);
     assert_eq!(h.state()["export_open"], true);
@@ -818,7 +830,7 @@ fn reviewed_interactions(h: &mut Harness) {
     h.press("escape");
     let state = h.state();
     h.check(
-        "static-label-stable-dock-and-export-entry-with-saved-gif",
+        "animated-badge-stable-dock-and-export-entry-with-saved-gif",
         json!({"state":state,"file_written":false,"initial_export_preference":"gif","system_save_dialog_exercised":false}),
     );
 
