@@ -261,6 +261,7 @@ mod native {
             serde_json::from_slice(&fs::read(fixtures.join("fixture-manifest.json")).unwrap())
                 .unwrap();
         let representative = fixture_manifest["profile"] == "smoke";
+        let selected_case = std::env::var("CREDITIA_VISUAL_CASE").ok();
         let mut cases = vec![];
         for entry in fixture_manifest["files"].as_array().unwrap() {
             for (theme, label) in [(Appearance::Light, "light"), (Appearance::Dark, "dark")] {
@@ -281,6 +282,9 @@ mod native {
                     entry["style"].as_str().unwrap(),
                     entry["language"].as_str().unwrap()
                 );
+                if selected_case.as_ref().is_some_and(|selected| selected != &key) {
+                    continue;
+                }
                 println!("native case: {key}");
                 let input = fixtures.join(entry["path"].as_str().unwrap());
                 let interact = entry["style"] == "minimal-light"
@@ -304,6 +308,9 @@ mod native {
                         continue;
                     }
                     let key = format!("state-{state}-{language}-{label}");
+                    if selected_case.as_ref().is_some_and(|selected| selected != &key) {
+                        continue;
+                    }
                     println!("native case: {key}");
                     let input = fixtures.join(format!("minimal-light-{language}.json"));
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -313,8 +320,17 @@ mod native {
                 }
             }
         }
+        assert!(
+            !cases.is_empty(),
+            "No native cases matched the requested capture"
+        );
         let complete = cases.iter().all(|c| c["status"] == "passed");
-        let report = json!({"schema_version":1,"kind":"native-ui","provenance":{"candidate_sha":std::env::var("GITHUB_SHA").ok(),"environment":{"platform":std::env::consts::OS,"arch":std::env::consts::ARCH,"renderer":if cfg!(target_os="macos"){"Metal"}else{"WGPU"}},"fixture":fixture_manifest["fixture"],"profile":fixture_manifest["profile"]},"cases":cases,"complete":complete});
+        let profile = if selected_case.is_some() {
+            json!("single-case")
+        } else {
+            fixture_manifest["profile"].clone()
+        };
+        let report = json!({"schema_version":1,"kind":"native-ui","provenance":{"candidate_sha":std::env::var("GITHUB_SHA").ok(),"environment":{"platform":std::env::consts::OS,"arch":std::env::consts::ARCH,"renderer":if cfg!(target_os="macos"){"Metal"}else{"WGPU"}},"fixture":fixture_manifest["fixture"],"profile":profile,"selected_case":selected_case},"cases":cases,"complete":complete});
         fs::write(
             output.join("manifest.json"),
             serde_json::to_vec_pretty(&report).unwrap(),

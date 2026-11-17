@@ -40,6 +40,10 @@ creditia-store = { path = "../../crates/store" }
 [features]
 visual-test = ["gpui-kit/test-support"]
 
+[[example]]
+name = "optical-capture"
+required-features = ["visual-test"]
+
 [[test]]
 name = "rendering"
 harness = false
