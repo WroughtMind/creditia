@@ -1,5 +1,4 @@
-//! Shared geometry for the shell's round icon controls. Optical corrections live
-//! inside each SVG; focus, hover and pointer targets stay on the unchanged slot.
+//! Shared controls for the desktop shell and its secondary surfaces.
 use gpui_kit::accesskit::Role;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{ActiveTheme, Disableable, Selectable};
@@ -23,22 +22,18 @@ pub fn icon_button(
         .tooltip(label)
 }
 
-fn row_content(label: SharedString) -> Div {
+fn row_content() -> Div {
+    div().w_full().min_w_0().flex().items_center().gap_2()
+}
+
+fn row_label(label: SharedString) -> Div {
     div()
-        .w_full()
+        .flex_1()
         .min_w_0()
-        .flex()
-        .items_center()
-        .gap_2()
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .text_size(px(14.))
-                .line_height(px(20.))
-                .truncate()
-                .child(label),
-        )
+        .text_size(px(14.))
+        .line_height(px(20.))
+        .truncate()
+        .child(label)
 }
 
 /// Full-row actions keep labels on one reading edge and reserve a fixed icon slot.
@@ -51,14 +46,9 @@ pub fn row_button(id: impl Into<ElementId>, label: impl Into<SharedString>, glyp
         .px_2()
         .accessibility_label(label.clone())
         .child(
-            div()
-                .w_full()
-                .min_w_0()
-                .flex()
-                .items_center()
-                .gap_2()
+            row_content()
                 .child(crate::ui_icons::icon(glyph))
-                .child(row_content(label)),
+                .child(row_label(label)),
         )
 }
 
@@ -77,9 +67,11 @@ pub fn value_button(
         .px_2()
         .accessibility_label(format!("{label}: {value}"))
         .child(
-            row_content(label)
+            row_content()
+                .child(row_label(label))
                 .child(
                     div()
+                        .flex_shrink_0()
                         .text_size(px(13.))
                         .text_color(cx.theme().muted_foreground)
                         .child(value),
@@ -129,7 +121,7 @@ pub fn toggle_button(
         .toggled(checked)
         .disabled(!enabled)
         .accessibility_label(label.clone())
-        .child(row_content(label).child(track))
+        .child(row_content().child(row_label(label)).child(track))
 }
 
 pub fn choice_button(
@@ -148,12 +140,7 @@ pub fn choice_button(
         .accessibility_label(label.clone())
         .tooltip(label.clone())
         .child(
-            div()
-                .w_full()
-                .min_w_0()
-                .flex()
-                .items_center()
-                .gap_2()
+            row_content()
                 .when_some(preview, |row, preview| {
                     row.child(
                         div()
@@ -166,7 +153,7 @@ pub fn choice_button(
                             .child(preview),
                     )
                 })
-                .child(row_content(label))
+                .child(row_label(label))
                 .child(crate::ui_icons::icon("check").opacity(if chosen { 1. } else { 0. })),
         )
 }

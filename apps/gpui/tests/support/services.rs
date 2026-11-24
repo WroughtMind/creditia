@@ -111,7 +111,7 @@ impl Workspace {
         let beta = create(BETA, "Beta Studio", "path-only-second");
         // Seed a real retained evidence row before application workers exist.
         // This is fixture setup, not a substitute for a UI service callback.
-        let seed = Command::new("python")
+        let seed = Command::new("python3")
             .args(["-c", "import sqlite3,sys\nc=sqlite3.connect(sys.argv[1])\nc.execute('insert into evidence(project,rel,key,src,model,session,ts,tab) values(?,?,?,?,?,?,?,?)',(sys.argv[2],'README.md',17,'claude-code','fixture-model','native-fixture-session',1770000000,0))\nc.commit()\nc.close()"])
             .arg(Library::open().unwrap().path()).arg(BETA).output().unwrap();
         assert!(
@@ -302,7 +302,12 @@ impl Harness {
     fn switch(&mut self, id: &str) {
         self.click("switch-project");
         assert_eq!(self.state()["panel"], "projects");
-        self.click(("choose-project", self.project_index(id)));
+        let row = ("choose-project", self.project_index(id));
+        self.update(|window, cx, _| {
+            // The project mark and the text share the same selection target.
+            let height = window.find(row).bounds().size.height;
+            window.click_at(row, point(px(20.), height / 2.), cx);
+        });
         self.ready(id);
     }
     fn scroll_to(&mut self, id: &'static str) {
@@ -360,7 +365,11 @@ impl Harness {
 }
 impl Drop for Harness {
     fn drop(&mut self) {
-        self.close();
+        // A failed GPUI update may already have removed the window. Keep the
+        // original test failure from becoming a second panic during unwinding.
+        if !std::thread::panicking() {
+            self.close();
+        }
     }
 }
 
@@ -512,9 +521,11 @@ fn settings_and_persistence(h: &mut Harness, _: &Workspace) {
     h.snapshot("saved-project-settings");
     h.click("panel-close");
     h.click("settings");
-    h.click("language");
+    h.click("settings-language-zh");
     h.click("appearance");
+    h.click("settings-tab-general");
     h.click("names-settings");
+    h.click("settings-tab-general");
     h.click("ring");
     h.click("auto-analyze");
     h.wait("global default enabled", |_| {
@@ -568,7 +579,9 @@ fn recover_export(h: &mut Harness, workspace: &Workspace) {
     h.open();
     h.ready(BETA);
     assert!(!destination.exists());
-    h.click("export-history");
+    h.update(|window, cx, _| {
+        window.dispatch_action(Box::new(creditia_gpui::app::ExportHistory), cx);
+    });
     h.snapshot("interrupted");
     h.click(("export-retry", 0usize));
     h.wait("retried export saved", |_| {
@@ -582,7 +595,9 @@ fn recover_export(h: &mut Harness, workspace: &Workspace) {
     h.close();
     h.open();
     h.ready(BETA);
-    h.click("export-history");
+    h.update(|window, cx, _| {
+        window.dispatch_action(Box::new(creditia_gpui::app::ExportHistory), cx);
+    });
     h.snapshot("saved-after-reopen");
     let saved = service::load_export_jobs().unwrap();
     let job = &saved["queue"]["jobs"][0];
@@ -591,7 +606,205 @@ fn recover_export(h: &mut Harness, workspace: &Workspace) {
     assert_eq!(fs::read(&destination).unwrap(), bytes);
     h.record("reopened-queue", saved);
     h.feature("new-export-options", "恢复不覆盖错误输入或旧任务", "重新打开保存有中断导出的项目库，显式重试原项目的请求并核对 PNG，再次打开窗口后核对历史和文件");
-    h.click("panel-close");
+    h.press("escape");
+}
+
+fn reopen_interrupted_export(h: &mut Harness, input: Value, destination: PathBuf) {
+    h.close();
+    let mut queue = creditia_gpui::export_jobs::Queue::default();
+    let label = creditia_gpui::export_filename(&input);
+    queue.enqueue(input, destination, label).unwrap();
+    queue.start_next().unwrap();
+    let revision = service::load_export_jobs().unwrap()["revision"]
+        .as_u64()
+        .unwrap();
+    service::save_export_jobs(revision, &queue.snapshot()).unwrap();
+    h.open();
+    h.ready(BETA);
+    h.update(|window, cx, _| {
+        window.dispatch_action(Box::new(creditia_gpui::app::ExportHistory), cx)
+    });
+    h.click(("export-retry", 0usize));
+}
+
+fn export_actions(h: &mut Harness, workspace: &Workspace) {
+    let previous_clipboard = h.cx.update(|cx| cx.read_from_clipboard());
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        // A real renderer result cannot be written through a regular file.
+        let blocker = workspace.root.join("blocked-output");
+        fs::write(&blocker, "Owned fixture, deliberately not a directory").unwrap();
+        let destination = blocker.join("alpha.png");
+        let input = json!({"version":1,"id":"failed-export","op":"export", "raw":service::credits(ALPHA.into()).unwrap(),
+            "format":"png","style":"minimal-light","piece":"asterisk","size":"native","lang":"zh"});
+        let expected_input = input.clone();
+        reopen_interrupted_export(h, input, destination.clone());
+        h.wait("real export fails to write", |_| {
+            service::load_export_jobs().unwrap()["queue"]["jobs"][0]["state"] == "failed"
+        });
+        assert!(!destination.exists());
+        let failed = service::load_export_jobs().unwrap();
+        h.press("escape");
+        h.wait("export history closed", |state| {
+            state["panel"].is_null() && state["panel_closing"] == false
+        });
+        h.update(|window, cx, _| {
+            window.dispatch_action(Box::new(creditia_gpui::app::CopyArchive), cx)
+        });
+        h.wait(
+            "copy feedback appears beside an existing failure",
+            |state| state["success_notice"].is_string(),
+        );
+        h.update(|window, _, _| {
+            assert!(window.find("export-failure").visible());
+            assert!(window.find("success-notice").visible());
+        });
+        h.snapshot("failure-and-copy-feedback");
+        h.cx.advance_clock(Duration::from_secs(3));
+        h.cx.run_until_parked();
+        h.pump();
+        assert!(h.state()["success_notice"].is_null());
+        h.update(|window, _, _| assert!(window.find("export-failure").visible()));
+        fs::remove_file(&blocker).unwrap();
+        fs::create_dir(&blocker).unwrap();
+        h.click("retry-failed-export");
+        h.wait("root retry saves original export", |_| {
+            service::load_export_jobs().unwrap()["queue"]["jobs"][0]["state"] == "saved"
+        });
+        let saved = service::load_export_jobs().unwrap();
+        assert_eq!(saved["queue"]["jobs"][0]["attempt"], 3);
+        for field in ["path", "format", "label"] {
+            assert_eq!(
+                saved["queue"]["jobs"][0][field],
+                failed["queue"]["jobs"][0][field]
+            );
+        }
+        let bytes = fs::read(&destination).unwrap();
+        assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+        let original = creditia_gpui::renderer::request(
+            expected_input,
+            creditia_gpui::renderer::Cancellation::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            bytes,
+            creditia_gpui::renderer::decode_export(&original, "png").unwrap(),
+            "retry used a different artwork input"
+        );
+        let archive = failed["queue"]["jobs"][0]["archive"].as_str().unwrap();
+        assert_eq!(
+            failed["queue"]["archives"][archive]["raw"]["project"]["name"],
+            workspace.alpha.name
+        );
+        assert!(failed["queue"]["jobs"][0]["request"].is_object());
+        assert!(h.state()["failed_export"].is_null());
+        h.snapshot("retry-saved-original-alpha");
+        h.record(
+            "retry-preserved-request",
+            json!({"failed":failed,"saved":saved}),
+        );
+        h.feature("new-export-options", "失败重试绑定原任务", "当前仍是 Beta 项目；先制造原 Alpha 请求的真实写入失败，修正测试目录后点击主界面重试，核对原路径、格式、内容快照和真实 PNG；同时验证复制成功反馈不被旧失败遮盖且会自动收起");
+
+        let fixtures = PathBuf::from(std::env::var("CREDITIA_VISUAL_FIXTURES").unwrap());
+        let fixture: Value =
+            serde_json::from_slice(&fs::read(fixtures.join("minimal-light-en.json")).unwrap())
+                .unwrap();
+        let catalog = &fixture["catalog"];
+        for format in ["md", "txt", "json", "embed"] {
+            h.press("escape");
+            h.shortcut("e");
+            h.click("export-format");
+            h.click(format!("export-format-{format}"));
+            h.wait("text output ready", |state| {
+                state["export_preview"]["text_ready"] == true
+            });
+            h.update(|window, _, _| {
+                assert!(window.find("export-primary").visible());
+                assert!(window.find("export-copy").visible());
+            });
+            h.click("export-copy");
+            let copied = h.cx.update(|cx| {
+                cx.read_from_clipboard()
+                    .and_then(|item| item.text())
+                    .unwrap()
+            });
+            let state = h.state();
+            let styles = catalog["styles"].as_array().unwrap();
+            let si = styles
+                .iter()
+                .position(|style| style["id"] == state["style"])
+                .unwrap();
+            let pieces = styles[si]["pieces"].as_array().unwrap();
+            let pi = pieces
+                .iter()
+                .position(|piece| piece["id"] == state["selected_piece"])
+                .unwrap();
+            let vi = pieces[pi]["variants"]
+                .as_array()
+                .and_then(|variants| {
+                    variants
+                        .iter()
+                        .position(|v| v["id"] == state["selected_variant"])
+                })
+                .unwrap_or(0);
+            let preferences = creditia_gpui::Preferences::read(&service::ui_preferences());
+            let mut input = creditia_gpui::export_with_preferences(
+                &service::credits(BETA.into()).unwrap(),
+                catalog,
+                (si, pi, vi),
+                &preferences,
+                format,
+                "native",
+                false,
+                "outline",
+            )
+            .unwrap();
+            if let Some(sign) = service::config_of(BETA.into()).unwrap()["display"]["sign"].as_str()
+            {
+                input["sign"] = json!(sign);
+            }
+            let filename = creditia_gpui::export_filename(&input);
+            if format == "embed" {
+                assert!(filename.ends_with("-embed.html"));
+            }
+            let destination = workspace.root.join(&filename);
+            reopen_interrupted_export(h, input, destination.clone());
+            h.wait("text file saved", |_| {
+                service::load_export_jobs().unwrap()["queue"]["jobs"][0]["state"] == "saved"
+            });
+            let written = fs::read_to_string(&destination).unwrap();
+            assert_eq!(
+                written, copied,
+                "{format} file differs from the copy action"
+            );
+            if format == "md" {
+                assert!(
+                    written.contains("# Credits")
+                        && written.contains("<!-- creditia:start -->")
+                        && written.contains("<!-- creditia:end -->")
+                );
+            }
+            if format == "json" {
+                assert_eq!(
+                    serde_json::from_str::<Value>(&written).unwrap()["project"]["name"],
+                    "Beta Studio"
+                );
+            }
+            fs::write(h.output.join(&filename), written).unwrap();
+            h.artifacts.push(json!({"path":filename}));
+            h.snapshot(&format!("saved-{format}"));
+        }
+        h.press("escape");
+        h.feature("new-export-options", "文字文件与复制内容一致", "MD、TXT、JSON、嵌入 HTML 分别通过真实导出工作线程存文件，逐字节对照当前作品复制结果；系统保存面板未在本自动化中操作");
+    }));
+    h.cx.update(|cx| {
+        cx.write_to_clipboard(
+            previous_clipboard
+                .unwrap_or_else(|| gpui_kit::ClipboardItem::new_string(String::new())),
+        )
+    });
+    if let Err(error) = result {
+        std::panic::resume_unwind(error);
+    }
 }
 
 fn remove_projects(h: &mut Harness, workspace: &Workspace) {
@@ -679,10 +892,11 @@ pub fn run() {
     let workspace = Workspace::new(&fixture["raw"]);
     let mut cases = vec![];
     let mut h = Harness::new(&output);
-    let scenarios: [(&str, fn(&mut Harness, &Workspace)); 4] = [
+    let scenarios: [(&str, fn(&mut Harness, &Workspace)); 5] = [
         ("services-search", search_and_switch),
         ("services-persistence", settings_and_persistence),
         ("services-export-recovery", recover_export),
+        ("services-export-actions", export_actions),
         ("services-removal", remove_projects),
     ];
     let mut failed = false;

@@ -6,27 +6,29 @@
 
 - 图标保留 16 × 16 的布局框、1.5 的描边和原有图形。仅在 SVG 内移动有偏差的笔画，按钮的焦点、悬停和点击区域随布局框保持稳定。
 - 文件夹、刷新、导出、复制、删除、勾选和成对箭头分别校准。对称图标不追加偏移。不要对整行控件统一做 `translate`。
-- 顶栏和浮动栏的图标按钮统一为 32 × 32；胶囊保留 4 的内边距。缩放加减使用相同描边的矢量图形，百分比按钮固定宽度，避免缩放过程中相邻控件移动。
+- 顶栏和浮动栏的独立图标按钮采用 32 × 32 的点击区域。漫游右下角和作品聚焦顶栏使用同一套缩放控件。百分比按钮固定宽度，点击后回到初始比例和位置。
 - 图标按钮同时提供中文、英文的无障碍名称和悬停说明。文本继续由字体排版，不按单一语言的基线统一平移。
 
 光学修正存放在 `src/ui_icons.rs` 的实际 SVG 中，控件尺寸存放在 `src/ui_controls.rs`。切换主题、禁用、悬停和焦点状态都使用同一图形。
 
 ## App 面板
 
-- 设置使用统一的 40px 整行控件：左侧名称、右侧当前值或开关。开关提供 Switch 角色和开关状态，沿用原有回调及禁用条件；外观值使用当前语言。应用标志显示六个实际资源，缓存图片身份以保证预览能够完成加载。
+- 设置沿用通用、数据、关于三个页面。偏好设置采用 40px 整行控件，左侧显示名称，右侧显示当前值或开关。开关提供 Switch 角色和开关状态。外观值跟随当前语言。应用标志显示六个实际资源，预览在重绘之间复用同一图像。
 - 项目切换的图标纳入整行点击区域，缺少图标时显示文件夹。项目名称允许截断，时间保留固定位置；更多操作具有明确的操作名称。
-- 风格选择保留全部风格，统一预览、名称和勾选位置。布局选择与导出格式、尺寸等选择项同时提供选中状态；导出尺寸使用可读名称，透明背景使用复选框。
-- 项目署名输入增加可见名称，面板动作统一左对齐。弹窗与导出栏使用同一关闭图标按钮。作品渲染器和各风格的作品设计不在这些调整范围内。
+- 风格选择保留全部风格，统一预览、名称和勾选位置。布局选择和导出格式都提供选中状态。导出栏沿用画布内预览，画幅下拉菜单显示名称及各预设的像素尺寸，透明背景使用复选框。
+- 项目署名输入增加可见名称，面板动作左对齐。弹窗与导出栏使用同一关闭图标按钮。
 
-可用现有 fixture 捕获五个实际 App 表面：
+使用现有样本数据捕获设置、项目库、风格、项目设置、导出栏及格式菜单。
 
 ```sh
-cargo run --manifest-path apps/gpui/Cargo.toml --features visual-test \
+npm ci --prefix packages/render
+node packaging/gpui/fixtures.mjs --output evidence/optical-fixtures --profile smoke
+cargo run --manifest-path apps/gpui/Cargo.toml --features visual-test --locked \
   --example optical-capture -- \
   evidence/optical-fixtures/minimal-light-zh.json evidence/app-ui
 ```
 
-程序等待实际预览资源解码，依次点击打开设置、项目库、风格和项目设置，再通过原有快捷键打开导出栏。设置开关同时验证点击以及 Tab 后的 Space 激活。截图覆盖原生像素和这些导航操作，不代表文件导出、持久化和所有交互均已验收。
+程序等待预览解码，通过项目行的更多菜单进入项目设置，通过作品聚焦栏打开导出。交互检查覆盖开关的点击和键盘激活、固定宽度的缩放控件、导出格式、画幅选择和透明背景。服务测试通过点击项目图标切换到对应的档案。
 
 ## 复核方法
 
@@ -39,7 +41,7 @@ node packaging/gpui/optical-review.mjs --baseline origin/main
 
 原生窗口沿用现有的代表性截图和输入验证：
 
-需要单独复核一张图时，增加 `CREDITIA_VISUAL_CASE=minimal-light-zh-dark-wall` 等具体名称。报告会标记为 `single-case`，不代表整套截图检查通过。
+可用 `CREDITIA_VISUAL_CASE=minimal-light-zh-dark-wall` 选取一个场景。该报告的 `profile` 为 `targeted-case`。
 
 ```sh
 node packaging/gpui/fixtures.mjs --output evidence/optical-fixtures --profile smoke

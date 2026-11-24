@@ -1,0 +1,80 @@
+[package]
+edition = "2024"
+rust-version = "1.85.0"
+name = "resvg"
+version = "0.48.1"
+build = false
+exclude = ["tests"]
+autolib = false
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+description = "An SVG rendering library."
+readme = "README.md"
+keywords = [
+    "svg",
+    "render",
+    "raster",
+]
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/linebender/resvg"
+
+[features]
+default = [
+    "svgz",
+    "text",
+    "system-fonts",
+    "memmap-fonts",
+    "raster-images",
+]
+memmap-fonts = ["usvg/memmap-fonts"]
+raster-images = [
+    "gif",
+    "image-webp",
+    "dep:zune-jpeg",
+]
+svgz = ["usvg/svgz"]
+system-fonts = ["usvg/system-fonts"]
+text = ["usvg/text"]
+
+[lib]
+name = "resvg"
+path = "src/lib.rs"
+
+[dependencies.bytemuck]
+version = "1.16"
+
+[dependencies.gif]
+version = "0.14.1"
+optional = true
+
+[dependencies.image-webp]
+version = "0.2.4"
+optional = true
+
+[dependencies.log]
+version = "0.4"
+
+[dependencies.rgb]
+version = "0.8"
+
+[dependencies.svgtypes]
+version = "0.16.1"
+
+[dependencies.tiny-skia]
+version = "0.12.0"
+
+[dependencies.usvg]
+version = "0.48.1"
+default-features = false
+
+[dependencies.zune-jpeg]
+version = "0.5.9"
+optional = true
+
+[dev-dependencies.once_cell]
+version = "1.21"
+
+[dev-dependencies.png]
+version = "0.18.0"

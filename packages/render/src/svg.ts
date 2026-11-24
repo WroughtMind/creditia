@@ -123,7 +123,7 @@ function scriptRuns(str: string, f: FontSpec, size: number, track: number, x0: n
 // ───────────────────────── 场景 ─────────────────────────
 
 /** 悬停提示：k 是贡献方 key，同 key 的区域一起高亮 */
-export interface Tip { k?: string; t: string; d?: string[] }
+export interface Tip { k?: string; t: string; d?: string[]; summary?: string }
 export interface Hit extends Tip { x: number; y: number; w: number; h: number }
 
 /** 已完成缩放、截断及对齐的一行文字度量；仅在调用方临时捕获时保留。 */
