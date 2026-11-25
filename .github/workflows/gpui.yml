@@ -215,7 +215,7 @@ jobs:
         run: npm ci --prefix packages/render
       - name: Validate packaging tools and the shared artwork catalog
         run: |
-          node --test packaging/gpui/package.test.mjs packaging/gpui/mac-icons.test.mjs packaging/gpui/licenses.test.mjs
+          node --test packaging/gpui/package.test.mjs packaging/gpui/mac-icons.test.mjs packaging/gpui/licenses.test.mjs packaging/gpui/installers.test.mjs
           node docs/gpui-migration/capture.mjs --check
       - name: Build and link the native desktop and analysis worker
         run: |
