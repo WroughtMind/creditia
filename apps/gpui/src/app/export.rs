@@ -1,6 +1,18 @@
 //! Export controls replace the bottom dock; the artwork stays on its canvas.
-use super::*;
+
+use super::{CancelExport, Creditia, ExportArtwork, ExportStage, Panel};
+use crate::material::{Palette, ShellLabel};
+use crate::ui_model::Rect;
+use crate::{ExportOptions, Language, export_filename, export_with_preferences, renderer};
+use creditia_desktop_service as service;
+use gpui_kit::TestSupportExt as _;
+use gpui_kit::component::Disableable;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::*;
+use serde_json::{Value, json};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum ExportFormat {
@@ -119,7 +131,7 @@ impl ExportPreview {
     }
 }
 
-pub(super) fn export_text(format: ExportFormat, bytes: Vec<u8>) -> Result<String, String> {
+fn export_text(format: ExportFormat, bytes: Vec<u8>) -> Result<String, String> {
     let text = String::from_utf8(bytes).map_err(|error| error.to_string())?;
     Ok(if format == ExportFormat::Md {
         format!(
@@ -685,6 +697,521 @@ impl Creditia {
             .inset_0()
             .child(stack.children(self.export_feedback(cx)).child(dock))
             .into_any_element()
+    }
+}
+
+impl Creditia {
+    pub(super) fn can_export(&self) -> bool {
+        self.export_unavailable_reason(&self.export_format)
+            .is_none()
+            && !self.export_prompt_busy
+    }
+
+    pub(super) fn export_unavailable_reason(&self, format: &str) -> Option<&'static str> {
+        let Some(tile) = self.current_tile().filter(|_| self.raw.is_some()) else {
+            return Some(self.text("请先选择作品", "Select an artwork first"));
+        };
+        if format == "gif"
+            && self
+                .selected_piece()
+                .is_none_or(|piece| piece["animated"] != true)
+        {
+            return Some(self.text("静态作品不支持 GIF", "Static artwork does not support GIF"));
+        }
+        if !["txt", "md", "json", "embed"].contains(&format) {
+            if tile.error.is_some() {
+                return Some(self.text("作品预览不可用", "Artwork preview is unavailable"));
+            }
+            if tile.art.is_none() {
+                return Some(self.text("作品预览准备中", "Preparing artwork preview"));
+            }
+        }
+        None
+    }
+
+    pub(super) fn can_open_export_for(&self, index: usize) -> bool {
+        self.raw.is_some() && self.tiles.get(index).is_some() && !self.export_prompt_busy
+    }
+
+    pub(super) fn toggle_export(&mut self, index: usize, cx: &mut Context<Self>) {
+        if !self.can_open_export_for(index) {
+            return;
+        }
+        let close = self.export_open && self.selected_tile == Some(index);
+        if close {
+            self.close_export_workspace(cx);
+            return;
+        }
+        if self.selected_tile != Some(index) {
+            self.stop_playback(cx);
+        }
+        self.selected_tile = Some(index);
+        self.roam_motion.stop();
+        self.export_open = true;
+        {
+            if self.playback.as_ref().is_some_and(|play| play.playing) {
+                self.play(false, cx);
+            }
+            self.export_formats_open = false;
+            if self
+                .export_unavailable_reason(&self.export_format)
+                .is_some()
+            {
+                self.export_format =
+                    if self.current_tile().is_some_and(|tile| tile.error.is_some()) {
+                        "md"
+                    } else {
+                        "png"
+                    }
+                    .into();
+            }
+            if !self
+                .catalog
+                .as_ref()
+                .and_then(|c| c["sizes"].as_array())
+                .is_some_and(|sizes| sizes.iter().any(|size| size["id"] == self.export_size))
+            {
+                self.export_size = "native".into();
+            }
+            self.notice = None;
+        }
+        self.hover = None;
+        cx.notify();
+    }
+
+    pub(super) fn export_history_writable(&self) -> bool {
+        self.fixture
+            || (self.export_history_error.is_none()
+                && self
+                    .export_journal
+                    .as_ref()
+                    .is_some_and(|journal| !journal.blocked()))
+    }
+
+    fn export_request(&self) -> Result<Value, String> {
+        self.export_request_format(&self.export_format)
+    }
+
+    fn export_request_format(&self, format: &str) -> Result<Value, String> {
+        let raw = self.raw.as_ref().ok_or("No archive")?;
+        let catalog = self.catalog.as_ref().ok_or("No artwork catalog")?;
+        let tile = self.current_tile().ok_or("No artwork selected")?;
+        let pieces = self
+            .style()
+            .and_then(|s| s["pieces"].as_array())
+            .ok_or("No pieces")?;
+        let piece_index = pieces
+            .iter()
+            .position(|p| p["id"] == tile.spec.piece)
+            .ok_or("No piece")?;
+        let variant_index = pieces[piece_index]["variants"]
+            .as_array()
+            .and_then(|vs| {
+                vs.iter()
+                    .position(|v| v["id"].as_str() == tile.spec.variant.as_deref())
+            })
+            .unwrap_or(0);
+        let mut snapshot = export_with_preferences(
+            raw,
+            catalog,
+            (self.style_index, piece_index, variant_index),
+            &self.preferences,
+            ExportOptions {
+                format,
+                size: &self.export_size,
+                transparent: self.transparent
+                    && ExportFormat::from_id(format).is_some_and(ExportFormat::transparency),
+                font_mode: &self.font_mode,
+            },
+        )?;
+        if !self.all_archives.is_empty() {
+            snapshot["projects"] = json!(self.all_archives.as_ref());
+        }
+        if let Some(blame) = &self.blame {
+            snapshot["blame"] = blame.clone();
+        }
+        if let Some(sign) = self
+            .details
+            .as_ref()
+            .and_then(|d| d["config"]["display"]["sign"].as_str())
+        {
+            snapshot["sign"] = json!(sign);
+        }
+        if let Some(person) = &self.profile_person {
+            snapshot["person"] = json!(person);
+        }
+        Ok(snapshot)
+    }
+
+    pub(super) fn load_export_history(
+        &mut self,
+        result: Result<Value, service::Fail>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.fixture {
+            return;
+        }
+        let snapshot = match result {
+            Ok(value) => value,
+            Err(error) => {
+                self.export_history_error = Some(error.to_string());
+                self.error = Some(error.to_string());
+                return;
+            }
+        };
+        match crate::export_jobs::Queue::from_snapshot(snapshot["queue"].clone()) {
+            Ok(queue) => self.export_queue = queue,
+            Err(error) => {
+                self.export_history_error = Some(error.clone());
+                self.error = Some(error);
+                return;
+            }
+        }
+        self.export_history_error = None;
+        let (tx, rx) = async_channel::bounded(1);
+        self.export_journal = Some(crate::export_jobs::Journal::new(
+            snapshot["revision"].as_u64().unwrap_or(0),
+            Arc::new(move || {
+                let _ = tx.try_send(());
+            }),
+        ));
+        self.export_journal_task = Some(cx.spawn(async move |this, cx| {
+            while rx.recv().await.is_ok() {
+                if this
+                    .update(cx, |view, cx| {
+                        if let Some(error) = view
+                            .export_journal
+                            .as_ref()
+                            .and_then(|journal| journal.take_error())
+                        {
+                            view.export_history_error = Some(error.clone());
+                            view.error = Some(error);
+                            cx.notify();
+                        }
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        }));
+    }
+
+    pub(super) fn reload_export_history(&mut self, cx: &mut Context<Self>) {
+        if self.fixture
+            || self
+                .export_queue
+                .jobs()
+                .iter()
+                .any(|job| job.state.pending())
+        {
+            return;
+        }
+        self.report_task = Some(cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async { service::load_export_jobs() })
+                .await;
+            let _ = this.update(cx, |view, cx| {
+                view.load_export_history(result, cx);
+                cx.notify();
+            });
+        }));
+    }
+
+    pub(super) fn set_collection_mode(&mut self, mode: &str, cx: &mut Context<Self>) {
+        let on = mode != "off";
+        let always = mode == "always";
+        let supported = self.collect["agent"]["supported"]
+            .as_bool()
+            .unwrap_or(false);
+        self.operation(
+            move || {
+                service::set_collect(on)?;
+                if supported {
+                    service::set_collect_agent(always)?;
+                }
+                Ok(service::collect_info())
+            },
+            cx,
+        );
+    }
+
+    fn persist_exports(&self) {
+        if let Some(journal) = &self.export_journal {
+            journal.submit(self.export_queue.clone());
+        }
+    }
+
+    fn export_artwork(&mut self, _: &ExportArtwork, _: &mut Window, cx: &mut Context<Self>) {
+        if !self.can_export() || !self.export_history_writable() {
+            return;
+        }
+        let snapshot = match self.export_request() {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                self.error = Some(error);
+                cx.notify();
+                return;
+            }
+        };
+        let directory = match service::default_export_dir() {
+            Ok(directory) => directory,
+            Err(error) => {
+                self.error = Some(error.to_string());
+                cx.notify();
+                return;
+            }
+        };
+        let filename = export_filename(&snapshot);
+        self.export_formats_open = false;
+        let prompt = cx.prompt_for_new_path(&directory, Some(&filename));
+        self.export_prompt_busy = true;
+        self.export_dialog_task = Some(cx.spawn(async move |this, cx| {
+            let choice = prompt.await;
+            let _ = this.update(cx, |view, cx| {
+                view.export_prompt_busy = false;
+                match choice {
+                    Ok(Ok(Some(_))) if !view.export_history_writable() => {
+                        view.panel = Some(Panel::Exports);
+                    }
+                    Ok(Ok(Some(path))) => match view.export_queue.enqueue(snapshot, path, filename)
+                    {
+                        Ok(_) => {
+                            view.failed_export = None;
+                            view.persist_exports();
+                            view.pump_exports(cx);
+                        }
+                        Err(error) => view.error = Some(error),
+                    },
+                    Ok(Ok(None)) => {}
+                    Ok(Err(error)) => view.error = Some(error.to_string()),
+                    Err(error) => view.error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
+
+    fn pump_exports(&mut self, cx: &mut Context<Self>) {
+        if self.export_active.is_some() {
+            return;
+        }
+        let Some(job) = self.export_queue.start_next() else {
+            return;
+        };
+        let id = job.id;
+        let attempt = job.attempt;
+        self.export_active = Some((id, attempt));
+        self.export_stage = Some(ExportStage::Rendering);
+        self.export_cancel_requested = false;
+        let cancellation = renderer::Cancellation::default();
+        self.export_cancellation = Some(cancellation.clone());
+        self.persist_exports();
+        self.export_task = Some(cx.spawn(async move |this, cx| {
+            let render_cancel = cancellation.clone();
+            let output_path = job.path.clone();
+            let result = cx
+                .background_spawn(async move {
+                    let output = renderer::request(job.renderer_request(), render_cancel)?;
+                    let bytes = renderer::decode_export(&output, &job.format)?;
+                    if job.format == "md" {
+                        export_text(ExportFormat::Md, bytes).map(String::into_bytes)
+                    } else {
+                        Ok(bytes)
+                    }
+                })
+                .await;
+            let result = match result {
+                Ok(bytes) => {
+                    if this
+                        .update(cx, |view, cx| {
+                            if view.export_active != Some((id, attempt)) {
+                                return;
+                            }
+                            view.export_queue.mark_writing(id, attempt);
+                            view.export_stage = Some(ExportStage::Writing);
+                            view.persist_exports();
+                            cx.notify();
+                        })
+                        .is_err()
+                    {
+                        cancellation.cancel();
+                        return;
+                    }
+                    cx.background_spawn(async move {
+                        renderer::write_export(&output_path, &bytes, cancellation)
+                    })
+                    .await
+                }
+                Err(error) => Err(error),
+            };
+            let _ = this.update(cx, |view, cx| {
+                if view.export_active != Some((id, attempt)) {
+                    return;
+                }
+                let cancelled = view.export_cancel_requested && result.is_err();
+                if cancelled {
+                    view.export_queue.finish_cancelled(id, attempt);
+                    view.show_success(view.text("已取消导出", "Export cancelled").into(), cx);
+                } else {
+                    match &result {
+                        Ok(()) => view.show_success(view.text("已保存", "Saved").into(), cx),
+                        Err(_) => view.failed_export = Some(id),
+                    }
+                    view.export_queue.finish(id, attempt, result);
+                }
+                view.export_active = None;
+                view.export_stage = None;
+                view.export_cancellation = None;
+                view.export_cancel_requested = false;
+                view.persist_exports();
+                view.pump_exports(cx);
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
+
+    pub(super) fn retry_export_job(&mut self, id: u64, cx: &mut Context<Self>) {
+        if !self.export_history_writable() {
+            return;
+        }
+        match self.export_queue.retry(id) {
+            Ok(()) => {
+                if self.failed_export == Some(id) {
+                    self.failed_export = None;
+                }
+                self.persist_exports();
+                self.pump_exports(cx);
+            }
+            Err(error) => self.error = Some(error),
+        }
+        cx.notify();
+    }
+
+    fn cancel_export_job(&mut self, id: u64, cx: &mut Context<Self>) {
+        if self.export_active.is_some_and(|active| active.0 == id) {
+            if let Some(cancellation) = &self.export_cancellation {
+                cancellation.cancel();
+                self.export_cancel_requested = true;
+            }
+        } else {
+            self.export_queue.cancel_queued(id);
+            self.persist_exports();
+        }
+        cx.notify();
+    }
+
+    pub(super) fn cancel_export(
+        &mut self,
+        _: &CancelExport,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(cancellation) = &self.export_cancellation {
+            cancellation.cancel();
+            self.export_cancel_requested = true;
+            cx.notify();
+        }
+    }
+
+    pub(super) fn render_export_history(
+        &self,
+        mut body: Div,
+        muted: Hsla,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        if let Some(error) = &self.export_history_error {
+            body = body
+                .child(div().text_size(px(12.)).child(error.clone()))
+                .child(
+                    Button::new("reload-export-history")
+                        .shell_label(self.text("重新读取导出历史", "Reload export history"))
+                        .disabled(
+                            self.export_queue
+                                .jobs()
+                                .iter()
+                                .any(|job| job.state.pending()),
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| view.reload_export_history(cx))),
+                );
+        }
+        if self.export_queue.jobs().is_empty() {
+            body = body.child(self.text("尚无导出记录", "No export history yet"));
+        }
+        for (index, job) in self.export_queue.jobs().iter().enumerate().rev() {
+            let id = job.id;
+            let state = match job.state {
+                crate::export_jobs::State::Queued => self.text("等待", "Queued"),
+                crate::export_jobs::State::Rendering => self.text("正在导出", "Rendering"),
+                crate::export_jobs::State::Writing => self.text("正在保存", "Saving"),
+                crate::export_jobs::State::Saved => self.text("已保存", "Saved"),
+                crate::export_jobs::State::Failed => self.text("失败", "Failed"),
+                crate::export_jobs::State::Cancelled => self.text("已取消", "Cancelled"),
+                crate::export_jobs::State::Interrupted => self.text("已中断", "Interrupted"),
+            };
+            let mut row = div().flex().flex_col().gap_1().child(
+                div()
+                    .text_size(px(12.))
+                    .child(format!("{} · {}", job.label, state)),
+            );
+            if let Some(error) = &job.error {
+                row = row.child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(muted)
+                        .child(error.clone()),
+                );
+            }
+            let mut actions = div().flex().gap_1();
+            if job.state == crate::export_jobs::State::Saved {
+                let path = job.path.clone();
+                actions = actions.child(
+                    Button::new(("export-reveal", index))
+                        .ghost()
+                        .shell_label(self.text("打开所在位置", "Reveal file"))
+                        .on_click(cx.listener(move |_, _, _, cx| cx.reveal_path(&path))),
+                );
+            }
+            if matches!(
+                job.state,
+                crate::export_jobs::State::Failed
+                    | crate::export_jobs::State::Cancelled
+                    | crate::export_jobs::State::Interrupted
+            ) {
+                actions = actions.child(
+                    Button::new(("export-retry", index))
+                        .ghost()
+                        .shell_label(self.text("重试", "Retry"))
+                        .on_click(cx.listener(move |view, _, _, cx| view.retry_export_job(id, cx))),
+                );
+            }
+            if job.state.pending() {
+                actions = actions.child(
+                    Button::new(("export-cancel", index))
+                        .ghost()
+                        .shell_label(self.text("取消", "Cancel"))
+                        .on_click(
+                            cx.listener(move |view, _, _, cx| view.cancel_export_job(id, cx)),
+                        ),
+                );
+            } else {
+                actions = actions.child(
+                    Button::new(("export-remove", index))
+                        .ghost()
+                        .shell_label(self.text("移除记录", "Remove record"))
+                        .disabled(!self.export_history_writable())
+                        .on_click(cx.listener(move |view, _, _, cx| {
+                            view.export_queue.remove(id);
+                            view.persist_exports();
+                            cx.notify();
+                        })),
+                );
+            }
+            body = body.child(row.child(actions));
+        }
+        body
     }
 }
 

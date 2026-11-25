@@ -1,5 +1,20 @@
 //! The original settings information structure, using native controls.
-use super::*;
+
+use super::chrome::{logo_image, style_dot};
+use super::{
+    CancelAnalysis, CancelExport, Creditia, CycleAppearance, ExportStage, Panel, ToggleLanguage,
+    ToggleMotion,
+};
+use crate::material::{Palette, ShellLabel};
+use crate::{Appearance, Language, progress_text};
+use creditia_desktop_service as service;
+use gpui_kit::TestSupportExt as _;
+use gpui_kit::component::Disableable;
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::*;
+use std::path::Path;
+use std::time::Duration;
 
 fn heading(text: &'static str, p: Palette) -> Div {
     div()
@@ -43,6 +58,18 @@ pub(super) fn switch(id: impl Into<ElementId>, on: bool, p: Palette) -> Button {
 }
 
 impl Creditia {
+    pub(super) fn show_success(&mut self, message: String, cx: &mut Context<Self>) {
+        self.success_notice = Some(message);
+        self.success_notice_task = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_secs(3)).await;
+            let _ = this.update(cx, |view, cx| {
+                view.success_notice = None;
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
+
     pub(super) fn feedback_surface(
         &self,
         content: AnyElement,
