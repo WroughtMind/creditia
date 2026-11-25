@@ -1,6 +1,6 @@
 // 官网构建：node site/build.ts [输出目录]
 // 页面上的作品都是渲染器现画的（原版 satori 渲染器和新风格两套），演示用虚构的样例项目；
-// creditia 自己的署名用历史档案。大图是文字已转路径的 SVG，缩略图是 PNG。
+// creditia 自己的署名用仓库里的 credits.json。大图是文字已转路径的 SVG，缩略图是 PNG。
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -26,7 +26,7 @@ rmSync(OUT, { recursive: true, force: true });
 mkdirSync(path.join(OUT, 'assets'), { recursive: true });
 
 const sample = JSON.parse(readFileSync(path.join(ROOT, 'packages/render/fixtures/catnap.json'), 'utf8'));
-const ownPath = path.join(ROOT, 'docs/gpui-migration/credits.json');
+const ownPath = path.join(ROOT, 'credits.json');
 const own = existsSync(ownPath) ? JSON.parse(readFileSync(ownPath, 'utf8')) : null;
 const LANGS = ['zh', 'en'] as const;
 type Lang = (typeof LANGS)[number];
