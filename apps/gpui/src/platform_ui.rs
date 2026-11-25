@@ -66,12 +66,12 @@ pub fn watch_system_motion(cx: &mut App) -> Option<Task<()>> {
                 return None;
             }
         };
-        return Some(cx.spawn(async move |cx| {
+        Some(cx.spawn(async move |cx| {
             let _observer = observer;
             while receive.recv().await.is_ok() {
                 cx.update(refresh_system_motion);
             }
-        }));
+        }))
     }
     #[cfg(target_os = "linux")]
     {
@@ -197,12 +197,12 @@ impl PlatformUi {
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 fn icon_png(id: &str) -> &'static [u8] {
     match id {
-        "star-mono" => include_bytes!("../../desktop/src-tauri/icons/dock/star-mono.png"),
-        "orb" => include_bytes!("../../desktop/src-tauri/icons/dock/orb.png"),
-        "ring" => include_bytes!("../../desktop/src-tauri/icons/dock/ring.png"),
-        "color" => include_bytes!("../../desktop/src-tauri/icons/dock/color.png"),
-        "mono" => include_bytes!("../../desktop/src-tauri/icons/dock/mono.png"),
-        _ => include_bytes!("../../desktop/src-tauri/icons/icon.png"),
+        "star-mono" => include_bytes!("../../../packaging/icons/dock/star-mono.png"),
+        "orb" => include_bytes!("../../../packaging/icons/dock/orb.png"),
+        "ring" => include_bytes!("../../../packaging/icons/dock/ring.png"),
+        "color" => include_bytes!("../../../packaging/icons/dock/color.png"),
+        "mono" => include_bytes!("../../../packaging/icons/dock/mono.png"),
+        _ => include_bytes!("../../../packaging/icons/icon.png"),
     }
 }
 

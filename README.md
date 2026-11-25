@@ -222,8 +222,9 @@ packages/
   cli/        npm 包 creditia：档案、导出、终端名片
   embed/      <creditia-card> 网页组件
 apps/gpui/    GPUI Kit 桌面：展墙、漫游、动画与导出
-apps/desktop/ 原有 Tauri 桌面及一次性设置迁移助手
+packaging/icons/ 桌面和官网共用的图标、macOS 分层图标工具
 site/         官网（build.ts）和这份 README 的图（readme.ts）
+site/app/     官网「浏览器里试用」的 Vite 交互演示
 skills/       给 agent 用的 skill
 spike/        阶段 0 验证工程（保留作记录）
 ```
@@ -240,14 +241,15 @@ npm test --prefix packages/render             # 全部作品、风格、版式�
 npm run gallery --prefix packages/render      # 样张：packages/render/gallery/index.html
 CREDITIA_CORE="$PWD/target/release/creditia-core" cargo run --manifest-path apps/gpui/Cargo.toml
 node --test packaging/gpui/package.test.mjs    # 独立打包与资源校验
+npm ci --prefix site/app && npm run fonts --prefix site/app
 node site/build.ts                            # 官网 → _site/
 node site/readme.ts                           # README 的图 → .github/readme/
 ```
 
 以上命令从仓库根目录运行。GPUI 的系统依赖、Windows 命令和原生截图检查见
 [桌面开发文档](apps/gpui/README.md)；安装、升级和回退见
-[安装说明](packaging/gpui/INSTALL.md)。全量迁移的完成状态由同一提交的
-[验收报告](docs/gpui-migration/README.md)判定，四个平台使用同一候选构建的安装验证结果。
+[安装说明](packaging/gpui/INSTALL.md)。桌面候选的安装、交互和性能验收见
+[发布步骤](packaging/gpui/RELEASE.md)。网页演示可用 `npm run dev --prefix site/app` 单独启动，依赖 `packages/render` 的字体和 Python `fonttools` 生成字体子集。
 
 
 </details>

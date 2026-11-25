@@ -5,12 +5,6 @@ matching Node runtime, the shared artwork renderer, and its fonts. Installing
 Node or downloading fonts is not required. Keep the application and its resources
 together. `package-info.json` records the source commit and every packaged file.
 
-A small legacy helper runs once to read preferences from the original desktop's
-WebView storage under `dev.creditia.app`. It leaves that storage intact for
-rollback. The normal GPUI interface does not run this helper or use a WebView.
-If importing preferences fails, resolve the import error before exporting work
-whose contributor names were previously hidden.
-
 ## Install
 
 - macOS 15 or later: open the DMG and copy `Creditia.app` to Applications. Apple
@@ -24,8 +18,7 @@ whose contributor names were previously hidden.
 - Linux x64: extract the archive and run `./creditia-gpui`. The build baseline is
   Ubuntu 24.04 with Wayland or X11, fontconfig, xkbcommon and a Vulkan driver.
   Install the DEB with `sudo apt install ./creditia-gpui-*.deb` so required system
-  libraries are resolved, including WebKit for the one-time legacy preference
-  importer; it does not install Node globally.
+  libraries are resolved. The DEB includes its own Node runtime.
   The project chooser and Save dialog use xdg-desktop-portal with a FileChooser backend.
   Tarball users need the GTK, GNOME, KDE or XApp portal used by their desktop session.
   The bundled desktop file may be installed into the user's applications folder
@@ -39,17 +32,14 @@ publisher/trust prompt. Developer ID/notarization and Windows code signing are
 optional distribution choices; certificates are not required to build these
 installable packages.
 
-The first launch reuses the existing Creditia library and archives. Preferences
-are versioned separately from the archive data. Keep a backup of the library
-before using a migration candidate with valuable projects.
+The first launch reuses the existing Creditia library, archives and `app.json`
+settings. Keep a backup of the library before upgrading.
 
 ## Upgrade and rollback
 
-The previous Tauri 0.1.0 installers and their checksums are available in
-[Creditia-Tauri-rollback.zip](https://github.com/WroughtMind/creditia/releases/download/gpui-v0.1.0-rc.1/Creditia-Tauri-rollback.zip).
-The archive SHA-256 is `115755b2ad090057b42ce27581bddd97381d576eed65f433b18969b6caa502d9`.
+Previous installers and their checksums are available on the [Releases page](https://github.com/WroughtMind/creditia/releases).
 
-1. Quit both desktop versions and let active analysis/export jobs finish or cancel.
+1. Finish or cancel active analysis and export jobs, then quit Creditia.
 2. Preserve the previous application directory or installer. Do not delete the
    Creditia library, project `.creditia` directories, or evidence database.
 3. Install/extract the new version into a new directory. The resource manifest,

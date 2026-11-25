@@ -40,7 +40,7 @@ export function layout(root, platform) {
   return { app, bin, resources, gui: path.join(bin, `creditia-gpui${platform === 'win32' ? '.exe' : ''}`), core: path.join(bin, `creditia-core${platform === 'win32' ? '.exe' : ''}`), node: path.join(resources, `node${platform === 'win32' ? '.exe' : ''}`), bridge: path.join(resources, 'render', 'tools', 'bridge.mjs') };
 }
 
-export async function stage({ target, output, appBin, coreBin, nodeBin = process.execPath, nodeLicense, nodeProvenance, migrationBin, macIcons, source = repo, platform = process.platform }) {
+export async function stage({ target, output, appBin, coreBin, nodeBin = process.execPath, nodeLicense, nodeProvenance, macIcons, source = repo, platform = process.platform }) {
   if (!safe(target)) throw new Error('Invalid Rust target');
   if(platform==='darwin'&&!macIcons)throw new Error('Mac staging requires --mac-icons with the verified Xcode 26 Icon Composer artifact');
   const root = path.resolve(output, `creditia-gpui-${target}`);
@@ -56,14 +56,6 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
   if (!nodeLicense) throw new Error('Pass --node-license with the license for the bundled Node version');
   await copyFile(nodeLicense, path.join(paths.resources, 'licenses/Node-LICENSE.txt'));
   if (nodeProvenance) await copyFile(nodeProvenance, path.join(paths.resources, 'licenses/Node-provenance.json'));
-  if (migrationBin) {
-    if (platform === 'darwin') {
-      const migrationApp=path.join(paths.resources,'legacy/Creditia Migration.app');
-      await copyFile(migrationBin,path.join(migrationApp,'Contents/MacOS/creditia'),0o755);
-      await fs.writeFile(path.join(migrationApp,'Contents/Info.plist'),`<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>creditia</string><key>CFBundleIdentifier</key><string>dev.creditia.app</string><key>CFBundleName</key><string>Creditia Migration</string><key>CFBundleVersion</key><string>${xml(version)}</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/><key>NSHighResolutionCapable</key><true/><key>NSPrincipalClass</key><string>NSApplication</string></dict></plist>\n`);
-    } else await copyFile(migrationBin,path.join(paths.resources,`legacy/creditia-migrate${platform==='win32'?'.exe':''}`),0o755);
-  }
-
   const render = path.join(source, 'packages/render');
   const destination = path.join(paths.resources, 'render');
   await fs.mkdir(destination, { recursive: true });
@@ -125,7 +117,7 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
     await fs.writeFile(path.join(root, 'creditia.desktop'), '[Desktop Entry]\nType=Application\nName=Creditia\nComment=Your coding agents, in credits\nExec=creditia-gpui\nTerminal=false\nCategories=Development;Graphics;\n');
   }
   const nodeVersion = execFileSync(nodeBin, ['--version'], { encoding: 'utf8' }).trim();
-  const receipt = { schema: 1, product: 'creditia-gpui', version, target, platform, nodeVersion, commit: process.env.GITHUB_SHA ?? null, sourceDateEpoch: process.env.SOURCE_DATE_EPOCH ?? null, legacyMigrationHelper: !!migrationBin, fontFiles, files: [] };
+  const receipt = { schema: 1, product: 'creditia-gpui', version, target, platform, nodeVersion, commit: process.env.GITHUB_SHA ?? null, sourceDateEpoch: process.env.SOURCE_DATE_EPOCH ?? null, fontFiles, files: [] };
   await fs.writeFile(path.join(root, 'package-info.json'), JSON.stringify(receipt, null, 2) + '\n');
   return { root, ...paths };
 }
@@ -206,16 +198,6 @@ export async function smoke(root, fixture, output) {
     await artifact('native-resource-check.txt',execFileSync(paths.gui, ['--check-resources'], { cwd: temporary, env, timeout: 90_000, stdio: 'pipe' }));
     await artifact('package-info.json',await fs.readFile(path.join(root,'package-info.json')));
     report.tests.push({ name: 'native-executable-resource-discovery', status: 'passed' });
-    if(info.legacyMigrationHelper){
-      const helper=info.platform==='darwin'?path.join(paths.resources,'legacy/Creditia Migration.app/Contents/MacOS/creditia'):path.join(paths.resources,`legacy/creditia-migrate${info.platform==='win32'?'.exe':''}`);
-      const command=info.platform==='linux'?'xvfb-run':helper;
-      const args=info.platform==='linux'?['-a','dbus-run-session','--',helper,'--migrate-ui-settings']:['--migrate-ui-settings'];
-      await artifact('legacy-helper-startup.txt',execFileSync(command,args,{cwd:temporary,env,timeout:65_000,stdio:'pipe'}));
-      const migrated=await fs.readFile(path.join(env.CREDITIA_HOME,'app.json'));
-      if(JSON.parse(migrated).ui?.legacyImported!==true)throw new Error('Legacy helper did not complete preference import');
-      await artifact('legacy-helper-imported-settings.json',migrated);
-      report.tests.push({name:'bundled-legacy-helper-embedded-page-and-import',status:'passed'});
-    }
     report.status = 'passed';
     report.acceptance.passed=true;report.complete=true;
   } catch (error) { report.status = 'failed'; report.error = error.message; throw error; }
@@ -233,7 +215,7 @@ async function main(args) {
   if (command === 'stage') {
     const target = opts.target;
     if (!target || !opts.output) throw new Error('stage requires --target and --output');
-    const result = await stage({ target, output: opts.output, appBin: opts['app-bin'] ?? path.join(repo, `apps/gpui/target/${target}/release/creditia-gpui${executable}`), coreBin: opts['core-bin'] ?? path.join(repo, `target/${target}/release/creditia-core${executable}`), nodeBin: opts['node-bin'], nodeLicense: opts['node-license'], nodeProvenance: opts['node-provenance'],migrationBin:opts['migration-bin'],macIcons:opts['mac-icons'] });
+    const result = await stage({ target, output: opts.output, appBin: opts['app-bin'] ?? path.join(repo, `apps/gpui/target/${target}/release/creditia-gpui${executable}`), coreBin: opts['core-bin'] ?? path.join(repo, `target/${target}/release/creditia-core${executable}`), nodeBin: opts['node-bin'], nodeLicense: opts['node-license'], nodeProvenance: opts['node-provenance'],macIcons:opts['mac-icons'] });
     console.log(JSON.stringify(result));
   } else if (command === 'seal') console.log(JSON.stringify(await seal(path.resolve(opts.root))));
   else if (command === 'verify') { const r = await verify(path.resolve(opts.root)); console.log(`verified ${r.files.length} files for ${r.target}`); }

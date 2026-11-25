@@ -1,10 +1,8 @@
 # GPUI candidate releases
 
 `gpui-release.yml` creates a **draft prerelease** from already tested installers.
-It never rebuilds them, updates the main branch, replaces an existing tag, changes
-the Tauri release workflow, or promotes a stable version. No signing certificate
-is required; the candidate's recorded signing policy remains visible in the
-installation guide and release notes.
+It uses the exact installers validated by the candidate workflow. The
+installation guide and release notes record their signing policy.
 
 Both Mac packages use the original five-petal Icon Composer source. Compile it
 once on macOS 26 with `DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer
@@ -20,7 +18,7 @@ template has `enabled:false`, so shipping this workflow does not create a releas
 
 During PR development, ordinary updates run the Linux native contracts and representative views.
 When a commit is ready for candidate validation, add the `gpui-candidate` PR label.
-That label event runs the four packaging lanes and the representative same-host comparison.
+That label event runs the four packaging lanes and the representative native performance scenarios.
 Later commits only request daily checks; remove and reapply the label when the next candidate
 is ready. The workflow dispatch options also support candidate runs and opt-in full regressions.
 
@@ -50,8 +48,8 @@ Use `workflow` entries for `legacy-library`, `analysis-cancel-retry`, `browse-pl
 `long-layout`, `attribution`, `animation` and `high-dpi`. Each entry has an `id`, `status` of
 `accepted`, concrete reviewer `notes`, and an `evidence` array of passed case references
 (`artifact/directory/manifest.json#case`) or validated artifact paths. Record actual observations,
-including the legacy project used, platform-specific dialog/clipboard behavior, export/restart
-outcomes and the same-host CPU, memory and playback findings. Failed or missing evidence blocks
+including the existing project used, platform-specific dialog/clipboard behavior, export/restart
+outcomes and the measured CPU, memory and playback results. Failed or missing evidence blocks
 release. When a Mac runner records that targeted keyboard input is unavailable, run Copy Archive
 and open/cancel the folder picker on the exact installer; record it in `platform_input` with
 the platform as `id` and the same notes, status and evidence fields. The immutable review may
@@ -63,7 +61,7 @@ then downloads each uniquely identified v4 artifact by ID and verifies GitHub's
 archive SHA-256 before safely extracting it. Missing, expired, duplicate or
 unverifiable artifacts fail the job. It recomputes the complete acceptance report
 from raw evidence with `--require-complete`, including all four native platforms,
-the recorded primary-platform journey, five visual samples, installed-runtime checks and a same-host performance comparison.
+the recorded primary-platform journey, five visual samples, installed-runtime checks and native performance measurements.
 
 Each installer must match both its candidate's checksum manifest and the exact
 bytes recorded by the installed-package smoke test. The next job has narrowly

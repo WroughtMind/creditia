@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # hdiutil uses 16 for EBUSY while macOS releases a recently inspected image.
-# Match the bounded 2s/4s detach retry used by Tauri's create-dmg script.
+# Retry detach after two and four seconds if the mounted image is still busy.
 set -u
 dmg_mount=${1:?Usage: detach-dmg.sh <mountpoint>}
 for detach_delay in 0 2 4; do

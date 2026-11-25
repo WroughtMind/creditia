@@ -863,17 +863,6 @@ impl Creditia {
                         .on_click(cx.listener(|view, _, _, cx| view.set_names(cx))),
                     p,
                 ));
-                if let Some(error) = &self.migration_error {
-                    content = content.child(div().mt_3().child(error.clone())).child(
-                        Button::new("retry-settings-migration")
-                            .shell_label(self.text(
-                                "重新导入原有桌面设置",
-                                "Import previous desktop settings again",
-                            ))
-                            .disabled(self.migration_busy)
-                            .on_click(cx.listener(|view, _, _, cx| view.retry_migration(cx))),
-                    );
-                }
             }
             "data" => {
                 content = content

@@ -10,30 +10,30 @@ packages/render/out-v2/
 
 # Rust 工作区
 target/
-apps/desktop/src-tauri/gen/
 
 # Node
 node_modules/
 packages/render/gallery/
 packages/embed/dist/
-apps/desktop/dist/
+site/app/dist/
 
 # 编辑器 / 工具状态
 .cursor/
 .playwright-mcp/
 .playwright-cli/
 
-# App 预览字体子集：npm run fonts 生成
-apps/desktop/src/fonts/
-apps/desktop/tools/icon.png
+# 网页演示字体子集：npm run fonts 生成
+site/app/src/fonts/
 
 # 不进仓库：内部工作文档（AGENTS.md、plans、lessons、验证报告）、带本机路径与个人邮箱的档案、样例项目配置
 AGENTS.md
 /docs/*
 !/docs/adapters/
+!/docs/gpui-migration/
+/docs/gpui-migration/*
+!/docs/gpui-migration/credits.json
 /.creditia/
 spike/projects/
-apps/desktop/src-tauri/binaries/
 dist/
 _site/
 

@@ -154,11 +154,9 @@ def run(args):
         if proc_pid != os.getpid():
             raise RuntimeError("Process IDs and /proc use different namespaces; resource sampling is unavailable in this executor")
     metadata = {"schema_version": 1, "kind": "performance", "scenario": args.scenario, "cache_state": args.cache,
-                "comparison_role": args.comparison_role,
                 "provenance": {"candidate_sha": args.commit, "environment": {"platform": sys.platform,
                     "arch": platform.machine(), "release": platform.release(), "cpu": platform.processor(),
-                    "logical_cpus": os.cpu_count(), "rendering": {key: os.environ.get(key) for key in ["LIBGL_ALWAYS_SOFTWARE", "WEBKIT_DISABLE_COMPOSITING_MODE", "GDK_BACKEND", "WGPU_BACKEND", "VK_ICD_FILENAMES"]}, "machine_id_sha256": hashlib.sha256(platform.node().encode()).hexdigest()},
-                    "measured_commit": args.measured_commit or args.commit,
+                    "logical_cpus": os.cpu_count(), "rendering": {key: os.environ.get(key) for key in ["LIBGL_ALWAYS_SOFTWARE", "WINIT_UNIX_BACKEND", "WGPU_BACKEND", "VK_ICD_FILENAMES"]}, "machine_id_sha256": hashlib.sha256(platform.node().encode()).hexdigest()},
                     "fixture": {"sha256": sha256(fixture), "name": fixture.name},
                     "workload": {"styles": args.styles, "artworks": args.artworks, "window": args.window, "dpi": args.dpi}},
                 "started_at": dt.datetime.now(dt.timezone.utc).isoformat(), "sample_interval_seconds": args.interval,
@@ -295,8 +293,6 @@ def parser():
     p.add_argument("--output", required=True)
     p.add_argument("--fixture", required=True)
     p.add_argument("--commit", required=True)
-    p.add_argument("--measured-commit", help="Commit of the measured binary; --commit identifies the candidate being accepted")
-    p.add_argument("--comparison-role", choices=["baseline", "candidate"], required=True)
     p.add_argument("--scenario", choices=["startup", "scroll", "roam", "zoom", "idle", "hidden-idle", "continuous-zoom"], required=True)
     p.add_argument("--cache", choices=["cold", "warm"], required=True)
     p.add_argument("--styles", type=int, required=True)

@@ -1752,7 +1752,7 @@ async function playFlow(fast) {
   done('flow');
 }
 
-/** App：一块桌面。终端里先 analyze，再从 Dock 打开真的 App（apps/desktop 打包成的网页），换风格、换版式、拖去导出，文件落到桌面上 */
+/** App：一块桌面。终端里先 analyze，再从 Dock 打开 site/app 的交互演示，换风格、换版式、拖去导出，文件落到桌面上。 */
 const DSTEPS = () => (EN_() ? ['Analyze', 'Open App', 'Pick style', 'Adjust layout', 'Drag to desktop', 'Done.'] : ['分析', '打开 App', '选风格', '调排版', '随手一拖', '搞定。']);
 const WP = (dark) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 800' preserveAspectRatio='xMidYMid slice'><defs><linearGradient id='s' x1='0' y1='0' x2='0' y2='1'>${dark ? "<stop offset='0' stop-color='#0B1026'/><stop offset='.55' stop-color='#2A1F4E'/><stop offset='1' stop-color='#5A2E55'/>" : "<stop offset='0' stop-color='#F7E3CC'/><stop offset='.5' stop-color='#F3BE98'/><stop offset='1' stop-color='#E39282'/>"}</linearGradient><radialGradient id='g' cx='.68' cy='.42' r='.4'><stop offset='0' stop-color='${dark ? '#B25E84' : '#FFF4DF'}' stop-opacity='.7'/><stop offset='1' stop-color='${dark ? '#B25E84' : '#FFF4DF'}' stop-opacity='0'/></radialGradient></defs><rect width='1280' height='800' fill='url(#s)'/><rect width='1280' height='800' fill='url(#g)'/>${(dark ? ['#3A2D66', '#2B2556', '#1E1C44', '#131430'] : ['#D88A93', '#B4709A', '#7E5F99', '#4B4D86']).map((c, i) => `<path d='M0 ${440 + i * 85} C 220 ${380 + i * 85} 380 ${520 + i * 80} 640 ${460 + i * 85} S 1060 ${390 + i * 90} 1280 ${450 + i * 80} V800 H0Z' fill='${c}'/>`).join('')}</svg>`)}")`;
 const FOLDER = '<svg viewBox="0 0 64 56"><path d="M4 10a5 5 0 0 1 5-5h15l5 6h26a5 5 0 0 1 5 5v31a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#3E8FE4"/><path d="M4 19a5 5 0 0 1 5-5h46a5 5 0 0 1 5 5v28a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#6CB3F7"/></svg>';

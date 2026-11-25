@@ -1,11 +1,11 @@
 # Motion review tools
 
-Install renderer and desktop dependencies using their package locks. Use Node 22.18+ and install FontTools so `pyftsubset` is on PATH (or set `PYFTSUBSET`). Pillow is used to inspect the actual scroll GIF frames.
+Install renderer and web demo dependencies using their package locks. Use Node 22.18+ and install FontTools so `pyftsubset` is on PATH (or set `PYFTSUBSET`). Pillow is used to inspect the actual scroll GIF frames.
 
 ```sh
 npm --prefix packages/render ci
-npm --prefix apps/desktop ci
-npm --prefix apps/desktop run fonts
+npm --prefix site/app ci
+npm --prefix site/app run fonts
 node packages/render/tools/motion-preview/build.mjs
 node packages/render/tools/motion-preview/verify-matrix.mjs
 ```

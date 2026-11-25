@@ -220,8 +220,9 @@ packages/
   cli/        the creditia npm package: records, export, terminal card
   embed/      <creditia-card> web component
 apps/gpui/    GPUI Kit desktop: wall, roam, animation and export
-apps/desktop/ original Tauri desktop and one-time preference migration helper
+packaging/icons/ shared app and website icons and macOS layered icon tools
 site/         website (build.ts) and the images in this README (readme.ts)
+site/app/     Vite demo for the website's Try in browser section
 skills/       skill for agents
 spike/        phase-0 validation project (kept for the record)
 ```
@@ -238,15 +239,17 @@ npm test --prefix packages/render             # artwork, style and layout contra
 npm run gallery --prefix packages/render      # proof sheet: packages/render/gallery/index.html
 CREDITIA_CORE="$PWD/target/release/creditia-core" cargo run --manifest-path apps/gpui/Cargo.toml
 node --test packaging/gpui/package.test.mjs    # standalone packaging and resource checks
+npm ci --prefix site/app && npm run fonts --prefix site/app
 node site/build.ts                            # website → _site/
 node site/readme.ts                           # README images → .github/readme/
 ```
 
 Run these commands from the repository root. See the [desktop development guide](apps/gpui/README.md)
 for platform dependencies, Windows commands and native screenshot checks, and the
-[installation guide](packaging/gpui/INSTALL.md) for upgrades and rollback. Migration
-completion is determined by the [acceptance report](docs/gpui-migration/README.md)
-for the same build across all four desktop targets.
+[installation guide](packaging/gpui/INSTALL.md) for upgrades and rollback. The
+[release guide](packaging/gpui/RELEASE.md) covers installation, interaction and
+performance checks. Start the demo independently with `npm run dev --prefix site/app`.
+Font subsetting uses the fonts from `packages/render` and Python `fonttools`.
 
 
 </details>

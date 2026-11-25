@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const icons = 'apps/desktop/src-tauri/icons';
+const icons = 'packaging/icons';
 const partialName = 'assetcatalog_generated_info.plist';
 const payload = ['Assets.car', partialName, 'Creditia.icns', 'assets-info.json'];
 const sha = data => createHash('sha256').update(data).digest('hex');
@@ -45,7 +45,7 @@ export async function iconSourceHashes(source) {
 
 function iconMetadata(partial, catalog) {
   // Some actool versions omit CFBundleIconName in the partial plist. In that
-  // case derive it from the compiled stack, as the Tauri bundler does.
+  // case derive it from the compiled stack.
   const stackNames = new Set(catalog.filter(r => r.AssetType === 'IconImageStack').map(r => r.Name));
   const name = partial.CFBundleIconName ?? (stackNames.size === 1 ? [...stackNames][0] : null);
   if (typeof name !== 'string' || !name || !stackNames.has(name)) throw new Error('No matching primary icon stack for partial plist');
@@ -101,9 +101,7 @@ export async function compileMacIcons({output, source = repo}) {
     const input = path.join(tmp,'Icon.icon'), work = path.join(tmp,'out');
     await fs.cp(path.join(source,icons,'Creditia.icon'),input,{recursive:true});
     await fs.mkdir(work);
-    // Same input basename and compiler options as Creditia's pinned Tauri CLI:
-    // https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.12.1/crates/tauri-bundler/src/bundle/macos/icon.rs
-    execFileSync('/bin/sh',[path.join(source,'apps/desktop/tools/macos/actool'), input,
+    execFileSync('/bin/sh',[path.join(source,'packaging/icons/macos/actool'), input,
       '--compile',work,'--output-format','human-readable-text','--notices','--warnings',
       '--output-partial-info-plist',path.join(work,partialName),'--app-icon','Icon',
       '--include-all-app-icons','--accent-color','AccentColor','--enable-on-demand-resources','NO',
@@ -120,7 +118,7 @@ export async function compileMacIcons({output, source = repo}) {
     await fs.mkdir(path.join(check,'Contents'),{recursive:true});
     await writePlist(path.join(check,'Contents/Info.plist'),{});
     await installMacIcons({app:check,assets:work,source});
-    execFileSync(process.execPath,[path.join(source,'apps/desktop/tools/verify-macos-icon.mjs'),check],{stdio:'inherit'});
+    execFileSync(process.execPath,[path.join(source,'packaging/icons/verify-macos-icon.mjs'),check],{stdio:'inherit'});
     for (const name of [...payload,'manifest.json']) await fs.copyFile(path.join(work,name),path.join(output,name));
   } finally { await fs.rm(tmp,{recursive:true,force:true}); }
 }

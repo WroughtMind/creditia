@@ -91,8 +91,14 @@ fn production_frame(request: Value) -> (std::sync::Arc<Artwork>, u32, Vec<u8>) {
                         let from = (row * tile.width * 4) as usize;
                         let to = (((y + row) * pixels + x) * 4) as usize;
                         for (dst, src) in bytes[to..to + (tile.width * 4) as usize]
-                            .chunks_exact_mut(4)
-                            .zip(source[from..from + (tile.width * 4) as usize].chunks_exact(4))
+                            .as_chunks_mut::<4>()
+                            .0
+                            .iter_mut()
+                            .zip(
+                                source[from..from + (tile.width * 4) as usize]
+                                    .as_chunks::<4>()
+                                    .0,
+                            )
                         {
                             dst.copy_from_slice(&[src[2], src[1], src[0], src[3]]);
                         }
@@ -144,7 +150,7 @@ fn compare(left: &resvg::tiny_skia::Pixmap, right: &resvg::tiny_skia::Pixmap) ->
     // Cached offscreen composites quantize premultiplied color separately.
     // Report their measured difference; do not relabel it pixel equivalence
     // or silently apply the font comparison's acceptance threshold here.
-    json!({"pixel_identical":mse==0.,"psnr_db":psnr,"mean_channel_difference":differences.iter().map(|v| f64::from(*v)).sum::<f64>()/differences.len() as f64,"fraction_pixels_over_8":differences.chunks_exact(4).filter(|pixel| pixel.iter().any(|v| *v>8)).count() as f64/(differences.len()/4) as f64,"max_difference":differences.iter().max()})
+    json!({"pixel_identical":mse==0.,"psnr_db":psnr,"mean_channel_difference":differences.iter().map(|v| f64::from(*v)).sum::<f64>()/differences.len() as f64,"fraction_pixels_over_8":differences.as_chunks::<4>().0.iter().filter(|pixel| pixel.iter().any(|v| *v>8)).count() as f64/(differences.len()/4) as f64,"max_difference":differences.iter().max()})
 }
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -228,7 +234,9 @@ fn main() {
             let mean =
                 differences.iter().map(|v| f64::from(*v)).sum::<f64>() / differences.len() as f64;
             let fraction = differences
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .filter(|pixel| pixel.iter().any(|v| *v > 8))
                 .count() as f64
                 / (differences.len() / 4) as f64;

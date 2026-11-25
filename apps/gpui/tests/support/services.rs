@@ -1,7 +1,6 @@
 //! Production project/settings callbacks against a real isolated SQLite library.
 //! The environment is set once, before GPUI starts any threads, and stays fixed
-//! until process exit. Archive input is declared synthetic; no migration or
-//! native file dialog is represented as exercised by this suite.
+//! until process exit. The suite uses synthetic archives and an isolated library.
 use creditia_desktop_service as service;
 use creditia_gpui::app::Creditia;
 use creditia_store::{Library, Project};
@@ -41,7 +40,6 @@ impl Workspace {
         // SAFETY: this function runs before any GPUI context/executor/service
         // worker exists. This process never changes its environment again.
         unsafe { std::env::set_var("CREDITIA_HOME", root.join("library")) };
-        service::import_legacy_preferences(json!({})).unwrap();
         service::patch_ui_preferences(json!({"global":{
             "autoAnalyze":false,"lang":"en","named":false,"appearance":"light",
             "reducedMotion":true,"lastProject":ALPHA,"style":"minimal-light","view":"wall"
@@ -747,10 +745,12 @@ fn export_actions(h: &mut Harness, workspace: &Workspace) {
                 catalog,
                 (si, pi, vi),
                 &preferences,
-                format,
-                "native",
-                false,
-                "outline",
+                creditia_gpui::ExportOptions {
+                    format,
+                    size: "native",
+                    transparent: false,
+                    font_mode: "outline",
+                },
             )
             .unwrap();
             if let Some(sign) = service::config_of(BETA.into()).unwrap()["display"]["sign"].as_str()
@@ -920,7 +920,7 @@ pub fn run() {
     }
     h.close();
     service::cancel_analyze();
-    let manifest = json!({"schema_version":1,"kind":"native-ui","provenance":{"candidate_sha":std::env::var("GITHUB_SHA").ok(),"environment":{"platform":std::env::consts::OS,"arch":std::env::consts::ARCH},"fixture":source["fixture"],"profile":"real-services-isolated-library"},"method":"Real Creditia::new, native pointer/keyboard input, SQLite store, Git repositories, preference writer and shared artwork worker. Synthetic archives; existing-user migration and OS dialogs are not exercised. CREDITIA_HOME stays isolated for this entire process.","workspace":workspace.root,"cases":cases,"complete":!failed});
+    let manifest = json!({"schema_version":1,"kind":"native-ui","provenance":{"candidate_sha":std::env::var("GITHUB_SHA").ok(),"environment":{"platform":std::env::consts::OS,"arch":std::env::consts::ARCH},"fixture":source["fixture"],"profile":"real-services-isolated-library"},"method":"Real Creditia::new, native pointer/keyboard input, SQLite store, Git repositories, preference writer and shared artwork worker. The archives are synthetic. This suite exercises in-app controls. CREDITIA_HOME stays isolated for this entire process.","workspace":workspace.root,"cases":cases,"complete":!failed});
     fs::write(
         output.join("manifest.json"),
         serde_json::to_vec_pretty(&manifest).unwrap(),

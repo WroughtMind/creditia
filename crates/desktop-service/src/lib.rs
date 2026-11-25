@@ -1,4 +1,4 @@
-//! Shared desktop operations used by both the Tauri and GPUI frontends.
+//! Desktop operations used by the GPUI app.
 //!
 //! These functions are blocking. Run discovery, analysis and Git operations on a
 //! background executor. The existing Rust CLI remains the analysis worker, and
@@ -27,10 +27,7 @@ pub use projects::{
     blame, doctor, evidence_archive, import_evidence, project_archives, project_details,
     set_project_config,
 };
-pub use settings::{
-    app_settings, edit_app_settings, import_legacy_preferences, legacy_preferences,
-    migrate_legacy_with_helper, patch_ui_preferences, set_legacy_preference, ui_preferences,
-};
+pub use settings::{app_settings, edit_app_settings, patch_ui_preferences, ui_preferences};
 
 /// 给界面的错误：只带代码和原始细节，文案由界面按当前语言写
 #[derive(serde::Serialize, Debug)]

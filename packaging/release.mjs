@@ -18,10 +18,9 @@ export const apps = [
 export const cores = ['aarch64-apple-darwin', 'x86_64-apple-darwin', 'x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu', 'x86_64-pc-windows-msvc'];
 export const coreFile = target => `creditia-core-${target}${target.includes('windows') ? '.exe' : ''}`;
 export function checkVersion(tag) {
-  for (const file of ['apps/desktop/package.json', 'apps/desktop/src-tauri/tauri.conf.json', 'packages/render/package.json']) {
-    if (JSON.parse(readFileSync(path.join(ROOT, file))).version !== version) throw Error(`Version mismatch: ${file}`);
-  }
-  for (const file of ['Cargo.toml', 'apps/desktop/src-tauri/Cargo.toml', 'apps/gpui/Cargo.toml']) {
+  const renderer = 'packages/render/package.json';
+  if (JSON.parse(readFileSync(path.join(ROOT, renderer))).version !== version) throw Error(`Version mismatch: ${renderer}`);
+  for (const file of ['Cargo.toml', 'apps/gpui/Cargo.toml']) {
     if (/^version = "([^"]+)"/m.exec(readFileSync(path.join(ROOT, file), 'utf8'))?.[1] !== version) throw Error(`Version mismatch: ${file}`);
   }
   if (tag && tag !== `v${version}`) throw Error(`Tag ${tag} does not match v${version}`);

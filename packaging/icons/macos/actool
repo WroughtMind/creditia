@@ -1,0 +1,3 @@
+#!/bin/sh
+# Keep stdin open for actool when invoked by a non-interactive build.
+exec /usr/bin/xcrun actool "$@" < /dev/null

@@ -219,7 +219,10 @@ impl Scene {
         for y in 0..height {
             let from_bottom = self.size.1 - (y as f32 + 0.5) * SAMPLE;
             let fade = (1. - from_bottom / 80.).clamp(0., 1.) * 0.88;
-            for pixel in pixels[y * width * 4..(y + 1) * width * 4].chunks_exact_mut(4) {
+            for pixel in pixels[y * width * 4..(y + 1) * width * 4]
+                .as_chunks_mut::<4>()
+                .0
+            {
                 for c in 0..3 {
                     pixel[c] = (f32::from(pixel[c]) * (1. - fade) + f32::from(base[c]) * fade)
                         .round() as u8;
@@ -227,7 +230,12 @@ impl Scene {
             }
         }
         if let Some(top) = top_pixels {
-            for (pixel, source) in pixels.chunks_exact_mut(4).zip(top.chunks_exact(4)) {
+            for (pixel, source) in pixels
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(top.as_chunks::<4>().0)
+            {
                 let alpha = f32::from(source[3]) / 255.;
                 for c in 0..3 {
                     pixel[c] = (f32::from(pixel[c]) * (1. - alpha) + f32::from(source[c]) * alpha)
@@ -239,7 +247,7 @@ impl Scene {
             gaussian_blur(&mut pixels, width, height, 28. / SAMPLE);
             saturate(&mut pixels, 1.4);
             let background = encode(&pixels, width, height)?;
-            for pixel in pixels.chunks_exact_mut(4) {
+            for pixel in pixels.as_chunks_mut::<4>().0 {
                 for c in 0..3 {
                     pixel[c] =
                         (f32::from(pixel[c]) * 0.28 + f32::from(base[c]) * 0.72).round() as u8;
@@ -296,7 +304,7 @@ fn composite(pixels: &mut [u8], width: usize, height: usize, layers: &[Layer]) {
     }
 }
 fn saturate(pixels: &mut [u8], saturation: f32) {
-    for pixel in pixels.chunks_exact_mut(4) {
+    for pixel in pixels.as_chunks_mut::<4>().0 {
         let luma = 0.2126 * f32::from(pixel[0])
             + 0.7152 * f32::from(pixel[1])
             + 0.0722 * f32::from(pixel[2]);
@@ -325,7 +333,10 @@ fn top_fade_pixels(source: &[u8], width: usize, height: usize, bg: [u8; 4]) -> V
         } else {
             (1. - position) / 0.45
         };
-        for pixel in pixels[y * width * 4..(y + 1) * width * 4].chunks_exact_mut(4) {
+        for pixel in pixels[y * width * 4..(y + 1) * width * 4]
+            .as_chunks_mut::<4>()
+            .0
+        {
             for c in 0..3 {
                 pixel[c] =
                     (f32::from(pixel[c]) * (1. - tint) + f32::from(bg[c]) * tint).round() as u8;
@@ -371,7 +382,7 @@ fn sample_bgra(bytes: &[u8], width: usize, height: usize, x: f32, y: f32) -> [f3
     }
     result
 }
-fn gaussian_blur(pixels: &mut Vec<u8>, width: usize, height: usize, sigma: f32) {
+fn gaussian_blur(pixels: &mut [u8], width: usize, height: usize, sigma: f32) {
     let ideal = (4. * sigma * sigma + 1.).sqrt();
     let lower = (ideal.floor() as i32) | 1;
     let lower = if lower as f32 > ideal {
@@ -592,18 +603,28 @@ pub fn frame_preview(
     painted: Option<Arc<std::sync::OnceLock<std::time::Instant>>>,
     trace: Option<(u64, usize)>,
 ) -> impl IntoElement {
-    canvas(|_, _, _| (), move |bounds, _, window, _| {
-        let image_bounds = Bounds::new(bounds.origin + point(px(rect.x), px(rect.y)), size(px(rect.w), px(rect.h)));
-        if window.paint_image(bounds, image_bounds, corners, image.clone(), 0, false).is_ok() {
-            if let Some(painted) = &painted {
-                if painted.set(std::time::Instant::now()).is_ok() {
-                    if let Some((epoch, index)) = trace {
-                        crate::app::write_performance_event(serde_json::json!({"event":"animation-painted","epoch":epoch,"index":index}));
-                    }
-                }
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, window, _| {
+            let image_bounds = Bounds::new(
+                bounds.origin + point(px(rect.x), px(rect.y)),
+                size(px(rect.w), px(rect.h)),
+            );
+            if window
+                .paint_image(bounds, image_bounds, corners, image.clone(), 0, false)
+                .is_ok()
+                && let Some(painted) = &painted
+                && painted.set(std::time::Instant::now()).is_ok()
+                && let Some((epoch, index)) = trace
+            {
+                crate::app::write_performance_event(
+                    serde_json::json!({"event":"animation-painted","epoch":epoch,"index":index}),
+                );
             }
-        }
-    }).absolute().inset_0()
+        },
+    )
+    .absolute()
+    .inset_0()
 }
 
 pub fn image_corners(region: Rect, width: f32, height: f32) -> Corners<Pixels> {

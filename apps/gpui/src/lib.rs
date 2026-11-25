@@ -247,26 +247,36 @@ pub fn export_snapshot(
     Ok(request)
 }
 
+pub struct ExportOptions<'a> {
+    pub format: &'a str,
+    pub size: &'a str,
+    pub transparent: bool,
+    pub font_mode: &'a str,
+}
+
 pub fn export_with_preferences(
     raw: &Value,
     catalog: &Value,
     selection: (usize, usize, usize),
     preferences: &Preferences,
-    format: &str,
-    size: &str,
-    transparent: bool,
-    font_mode: &str,
+    options: ExportOptions<'_>,
 ) -> Result<Value, String> {
-    let mut request =
-        export_snapshot(raw, catalog, selection, &preferences.language, format, size)?;
+    let mut request = export_snapshot(
+        raw,
+        catalog,
+        selection,
+        &preferences.language,
+        options.format,
+        options.size,
+    )?;
     request["group"] = serde_json::json!(
         preferences
             .project(preferences.last_project.as_deref())
             .group
     );
     request["named"] = serde_json::json!(preferences.named);
-    request["transparent"] = serde_json::json!(transparent);
-    request["fontMode"] = serde_json::json!(font_mode);
+    request["transparent"] = serde_json::json!(options.transparent);
+    request["fontMode"] = serde_json::json!(options.font_mode);
     Ok(request)
 }
 

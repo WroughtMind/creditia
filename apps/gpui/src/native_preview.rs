@@ -34,8 +34,8 @@ static CACHE: OnceLock<Mutex<Cache>> = OnceLock::new();
 // owns two separately bounded lanes for disjoint pieces of one visible frame.
 static RASTER: Mutex<()> = Mutex::new(());
 type FontDatabase = Arc<resvg::usvg::fontdb::Database>;
-static FONTS: OnceLock<Mutex<Option<(Vec<crate::ui_model::FontFace>, FontDatabase)>>> =
-    OnceLock::new();
+type FontCacheEntry = (Vec<crate::ui_model::FontFace>, FontDatabase);
+static FONTS: OnceLock<Mutex<Option<FontCacheEntry>>> = OnceLock::new();
 
 fn artwork_fonts(faces: &[crate::ui_model::FontFace]) -> Result<FontDatabase, String> {
     if faces.is_empty() {
@@ -201,7 +201,7 @@ fn decoded_pixels(pixels: resvg::tiny_skia::Pixmap) -> Arc<gpui_kit::RenderImage
     // tiny-skia is premultiplied RGBA; GPUI's image atlas takes straight BGRA,
     // exactly as its normal PNG decoder does. Preserve translucent artwork.
     let mut bytes = pixels.take_demultiplied();
-    for pixel in bytes.chunks_exact_mut(4) {
+    for pixel in bytes.as_chunks_mut::<4>().0 {
         pixel.swap(0, 2);
     }
     let buffer = image::RgbaImage::from_raw(width, height, bytes).expect("pixmap dimensions");

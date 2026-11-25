@@ -161,7 +161,7 @@ Mac 原生真机性能及最终用户观感仍待验收。普通文本、微小�
 ## 云端继续顺序
 
 1. 检出 `codex/artwork-motion` 最新提交，先读本文件和真实 diff。不要从旧 main 或丢失未追踪模块的快照开始。
-2. Node >=22.18，分别在 `packages/render`、`apps/desktop` 执行 `npm ci`（仓库有锁文件）。运行两处 `npm test`，desktop `npm run build`。记录准确提交和最终结果。
+2. Node >=22.18，分别在 `packages/render`、`site/app` 执行 `npm ci`（仓库有锁文件）。运行两处 `npm test`，`site/app` 的 `npm run build`。记录准确提交和最终结果。
 3. 审查并简化材质/scroll实现，尤其上面的最后新增约束、边界命中、重叠滤镜、长片尾阅读和真实性能。
 4. 执行 `node packages/render/tools/motion-preview/verify-matrix.mjs`。覆盖908组合；615原生组合需使用 classic API 或扩展同一个工具补齐。不要把 Scene 随机ID差异当运动，也不要因静态长卷不变误判。该工具会比较按SVG所需字体加载与全字体结果是否一致；不一致要查原因，不能放宽断言。
 5. 安装 fonttools（提供 pyftsubset），执行 `node packages/render/tools/motion-preview/build.mjs`。输出 `output/playwright/issue116-motion-preview.html`，是字体、worker、WASM内联的单文件。可用 `PYFTSUBSET` 指定可执行文件。预览工具刚整理为跨平台版本，只有语法检查，云端要实际运行确认路径。

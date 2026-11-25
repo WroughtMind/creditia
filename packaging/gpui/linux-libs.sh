@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Native catalog rendering doesn't use WebKit or a desktop session. The build
-# profile additionally compiles the isolated one-time legacy migration helper
-# and operates installed windows. Both load Creditia's bundled Inter/Noto SC.
+# Build and performance profiles add the tools needed to operate native windows.
 set -euo pipefail
 profile=${1:?expected build, catalog or performance}
 case "$profile" in build|catalog|performance) ;; *) exit 2 ;; esac
@@ -14,7 +12,7 @@ for tool in gcc g++ clang cmake pkg-config; do
     if ! command -v "$tool" >/dev/null; then packages+=("$tool"); fi
 done
 if [[ "$profile" != catalog ]]; then
-    packages+=(libwebkit2gtk-4.1-dev xvfb xauth dbus-x11 openbox xdotool xclip xdg-desktop-portal xdg-desktop-portal-gtk imagemagick x11-utils python3)
+    packages+=(xvfb xauth dbus-x11 openbox xdotool xclip xdg-desktop-portal xdg-desktop-portal-gtk imagemagick x11-utils python3)
 fi
 if [[ "$profile" == performance ]]; then
     packages+=(fonts-noto-core fonts-noto-cjk)

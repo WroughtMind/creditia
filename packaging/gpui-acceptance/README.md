@@ -166,56 +166,39 @@ The sampler launches a program directly, observes descendants and retains childr
 after reparenting. It records process identity as well as PID to avoid attributing
 a reused PID to Creditia. It writes raw samples, logs and a summary.
 
-The `gpui-performance.yml` job builds the original Tauri app at the immutable
-baseline and the GPUI candidate, then runs both on one Xvfb/software Vulkan host.
-`instrument-tauri.mjs` records hashes before and after adding fixture access and
-passive state observation to the old build. Original rendering, layout and input
-handlers remain in use. Background collection and project writes are disabled
-for both benchmark constructors. The release app does not include the baseline
-overlay.
+The `gpui-performance.yml` job builds GPUI and measures it on Xvfb with software
+Vulkan. Benchmarks use isolated app profiles and a fixed input archive.
 
-`public-fixture.mjs` analyzes the public pinned Git checkout on a fresh hosted
-runner before instrumentation. It verifies zero local-log sessions, tokens and
-written-line evidence; otherwise it deletes the archive and fails. This is a real
-Git project fixture, not evidence that private agent logs have been verified.
+`public-fixture.mjs` analyzes the pinned public Git checkout on a fresh hosted
+runner. It verifies zero local-log sessions, tokens and written-line evidence.
+If that check fails, it deletes the archive.
 
 ```sh
 dbus-run-session -- xvfb-run -a -s '-screen 0 1600x1000x24' \
   python3 packaging/gpui-acceptance/x11-session.py -- \
-  python3 packaging/gpui-acceptance/compare.py \
+  python3 packaging/gpui-acceptance/benchmark.py \
     --output evidence/performance --fixture evidence/public-creditia.json \
-    --baseline-bin /path/to/original/creditia-app \
-    --candidate-bin /path/to/current/creditia-gpui \
-    --baseline-sha BASELINE_SHA --candidate-sha CANDIDATE_SHA \
-    --baseline-overlay evidence/baseline-overlay.json
+    --candidate-bin /path/to/current/creditia-gpui --candidate-sha CANDIDATE_SHA
 ```
 
-The driver sends actual X11 wheel, keyboard and pointer input and waits for
-observed production UI state changes. It captures real window screenshots. App
-state events and the driver's hash-chained action records are retained alongside
-raw process samples. A lone `scenario-complete` claim without the complete valid
-chain is rejected. Hashes provide artifact integrity, not a security attestation
-against a malicious application or runner.
+The driver sends X11 wheel, keyboard and pointer input and waits for production
+UI state changes. It records real window screenshots, app state events,
+hash-chained action records and raw process samples.
 
-The common scenarios are startup, wall scrolling, roam panning, focus enlargement,
-visible idle and hidden idle, each with cold/warm app profiles. The original app
-has no continuous zoom or artwork playback, so `zoom` explicitly means opening
-and closing its enlarged focus view. GPUI's continuous zoom is an additional
-candidate-only scenario; it must not be presented as a matched old capability.
-Cold means a fresh isolated app profile; the OS page cache is uncontrolled. Warm
-means the same profile after a successful first-viewport launch, with process
-memory reset. Warmup action evidence is retained.
+The full profile covers startup, wall scrolling, roam panning, focus enlargement,
+visible idle and hidden idle with cold and warm app profiles. The delivery
+profile (`--delivery`) runs startup, scrolling, roam and hidden idle from cold
+profiles. Cold uses a fresh profile with the OS page cache in place. Warm uses
+the profile after a successful first-viewport launch and retains the warmup
+evidence.
 
-Both measured process groups include the same driver and its X11 input utilities.
-Startup and idle phase summaries are separate from overall resource summaries.
-Observation latency includes driver polling and is not input-to-photon latency.
-RSS sums may count shared pages more than once; they are not PSS. Short-lived
-children can be missed between samples, making observed CPU a lower bound. GPU
-memory and unmeasured interaction latency stay `null`. The sampler refuses hosts
-whose process IDs and `/proc` use different namespaces. No local values from
-such an executor are accepted.
+The measured process group includes the driver and its X11 input utilities.
+Startup and idle phase summaries are available alongside overall RSS and CPU.
+Observation latency includes driver polling. RSS can count shared pages more
+than once, and short-lived children can exit between samples. GPU memory and
+input-to-presentation latency are unmeasured.
 
-After all 24 measurements finish, seal their behavioral evidence:
+After the measurements finish, seal the evidence:
 
 ```sh
 python3 packaging/gpui-acceptance/performance-evidence.py \
@@ -223,12 +206,9 @@ python3 packaging/gpui-acceptance/performance-evidence.py \
   --output evidence/performance-features
 ```
 
-This rechecks the 12 paired identities, original action chains, captured image
-hashes and raw per-process RSS/CPU arithmetic. It maps only the measured scope to
-the checklist. The combined idle-CPU/hidden-animation item remains incomplete
-until the independent installed animation assertion is also present. GPU
-telemetry stays explicitly unmeasured; it is outside the original RSS/CPU
-comparison requirement.
+Sealing verifies the GPUI binary, host, fixture, workload, action chains, image
+hashes and raw process arithmetic. The idle CPU and hidden-animation checklist
+item also uses the installed-app animation suspension test.
 
 ## Consolidation and review
 
@@ -240,11 +220,10 @@ node packaging/gpui-acceptance/report.mjs \
 The report validates artifact checksums, candidate identity and completion before
 counting evidence. It reports every missing matrix row and does not modify the
 source inventory's acceptance columns. Empty-only renderings remain unresolved.
-Performance results are comparable only when machine/data/workload identities
-match and both workloads actually completed.
+The report lists the verified GPUI measurements by scenario and cache profile.
 
 Delivery requires the four installed package workflows, the primary-platform user journey,
-five representative visual cases and same-host startup, scroll, roam and hidden-idle comparisons.
+five representative visual cases and verified startup, scroll, roam and hidden-idle measurements.
 Each reviewer entry records its observation and references verified evidence for this candidate.
 See [the review format](../gpui/RELEASE.md). The complete artwork and feature tables remain available
 for investigation. Full native, web, artwork and cold/warm matrices run on demand.

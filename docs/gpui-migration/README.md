@@ -9,10 +9,11 @@
 - `CATALOG.md`：可读目录和边界说明。
 - [`CANDIDATE.md`](CANDIDATE.md)：37 组功能的候选实现入口与取得验收结论所需的行为证据。源码导航和候选运行结果分别记录。
 - `matrix.tsv`：逐风格 × 作品 × 版式的验收台账。默认验收状态均为 `pending`。
-- `capture.mjs`：无第三方依赖的提取与漂移检查。源码目录变更后先审查差异，再更新清单。
+- `capture.mjs`：检查 GPUI 使用的共享作品目录、版式、导出和字体清单。
+- `credits.json`：用于官网署名页的历史项目档案，保留分析时的文件路径。
 - [`packaging/gpui-acceptance/`](../../packaging/gpui-acceptance/README.md)：独立基线与候选的全组合渲染对比、原生截图证据校验、整组进程资源采样和验收报告。机器对比、原生交互和视觉审阅分别记录。
 
-在仓库根目录执行 `node docs/gpui-migration/capture.mjs --check` 检查目录语义和源码锚点；它允许实现函数体变化和行号移动，不把这类重构误判为目录增减。执行 `node docs/gpui-migration/capture.mjs --write` 明确更新目录快照、链接和候选源码指纹，并保留未变组合的人工验收栏。更新不会自动证明任何 GPUI 验收项通过，验收证据应另存于 `evidence/` 并在台账中关联。
+从仓库根目录运行 `node docs/gpui-migration/capture.mjs --check` 校验作品目录。作品目录变更后可用 `--write` 更新台账和作品清单，保留原有验收栏和历史桌面记录。
 
 [一页交付说明](reviews/85368f6/Creditia-GPUI-130.pdf)汇总了四平台安装结果、同机性能和回退方法。[本次审阅记录](reviews/85368f6/review.json)列出各项验证使用的窗口、导出和性能样本。
 

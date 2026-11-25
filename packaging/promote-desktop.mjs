@@ -21,7 +21,7 @@ const ref = `refs/tags/${channel.tag}`;
 execFileSync('git', ['fetch','--quiet','origin',ref],{cwd:ROOT});
 const sha = execFileSync('git',['rev-parse','FETCH_HEAD^{commit}'],{cwd:ROOT,encoding:'utf8'}).trim();
 if (sha !== channel.candidate_sha) throw Error('Desktop release tag does not match the reviewed build');
-execFileSync('git',['diff','--exit-code',sha,'HEAD','--','apps/gpui/src','apps/gpui/Cargo.toml','apps/gpui/Cargo.lock','crates','Cargo.toml','Cargo.lock','packages/render','packages/schema','apps/desktop/src-tauri','packaging/gpui/package.mjs','packaging/gpui/installers.mjs','packaging/gpui/licenses.mjs','packaging/gpui/mac-icons.mjs','packaging/gpui/node-runtime.py','packaging/gpui/windows-runtime.mjs','.github/workflows/gpui.yml'],{cwd:ROOT,stdio:'inherit'});
+execFileSync('git',['diff','--exit-code',sha,'HEAD','--','apps/gpui/src','apps/gpui/Cargo.toml','apps/gpui/Cargo.lock','crates','Cargo.toml','Cargo.lock','packages/render','packages/schema','packaging/icons','packaging/gpui/package.mjs','packaging/gpui/installers.mjs','packaging/gpui/licenses.mjs','packaging/gpui/mac-icons.mjs','packaging/gpui/node-runtime.py','packaging/gpui/windows-runtime.mjs','.github/workflows/gpui.yml'],{cwd:ROOT,stdio:'inherit'});
 const temp = mkdtempSync(path.join(tmpdir(),'creditia-desktop-release-'));
 try {
   const names = ['report.json','SHA256SUMS',...apps.map(a => a.file)];

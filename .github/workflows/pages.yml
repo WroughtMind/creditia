@@ -1,4 +1,4 @@
-# 官网：每次推到 main 重新生成（首页的图都是渲染器现画的；creditia 自己的署名页用仓库里的 credits.json），发布到 GitHub Pages
+# 官网：每次推到 main 重新生成作品、交互演示和 creditia 自己的署名页，发布到 GitHub Pages。
 name: pages
 on:
   push:
@@ -25,12 +25,12 @@ jobs:
       - run: pip install fonttools brotli pillow
       - run: npm ci --no-audit --no-fund
         working-directory: packages/render
-      # 首页「桌面 App」那一段里跑的是真的 App 前端（网页版，数据是 catnap 示例）
+      # 首页的交互演示使用 catnap 样例档案。
       - run: npm ci --no-audit --no-fund
-        working-directory: apps/desktop
+        working-directory: site/app
       - name: App 字体子集
         run: npm run fonts
-        working-directory: apps/desktop
+        working-directory: site/app
       - name: 生成官网（首页 + creditia 自己的署名页）
         run: node site/build.ts _site
         env:

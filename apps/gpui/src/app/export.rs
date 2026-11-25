@@ -200,16 +200,16 @@ impl Creditia {
         })
     }
     pub(super) fn configure_playback_view(&self, control: &crate::animation::PlaybackControl) {
-        if self.export_animation() {
-            if let Some(rect) = self.export_frame_rect() {
-                control.set_artwork_view(
-                    rect,
-                    self.artwork_viewport(),
-                    self.viewport_size,
-                    self.display_scale,
-                );
-                return;
-            }
+        if self.export_animation()
+            && let Some(rect) = self.export_frame_rect()
+        {
+            control.set_artwork_view(
+                rect,
+                self.artwork_viewport(),
+                self.viewport_size,
+                self.display_scale,
+            );
+            return;
         }
         control.set_viewport(self.viewport, self.viewport_size, self.display_scale);
     }
@@ -238,7 +238,14 @@ impl Creditia {
                 return;
             };
             self.export_frame_rect()
-                .map(|rect| (rect.w / w * self.display_scale).min(8.).max(0.01))
+                .map(|rect| {
+                    let scale = rect.w / w * self.display_scale;
+                    if scale.is_nan() {
+                        8.
+                    } else {
+                        scale.clamp(0.01, 8.)
+                    }
+                })
                 .unwrap_or(1.)
         } else {
             1.
