@@ -21,7 +21,7 @@
 - `key` 是原 Windows 机器的绝对路径。读取时校验其原生 `workingSpace/<item_id>__<basename>` 结构，再从同一缓存目录的 `db/../workingSpace` 找不可变快照。不会读当前项目文件，也不依赖原机器仍然在线。
 - 前后 MD5 仍逐字节校验。公开仓库中有的快照不匹配数据库摘要，包括换行可能经过 Git 处理的记录；不自动改换行、填正文或放宽摘要校验。
 
-实现：[Lingma reader](crates/adapters/src/lingma.rs)。正常回归新增 Windows 原生 key、`FULL`、`edit`、错误 key 目录等用例，保留缺失/损坏不抹除旧证据、明确拒绝撤销、重复分析和只读验证。
+实现：[Lingma reader](../../crates/adapters/src/lingma.rs)。正常回归新增 Windows 原生 key、`FULL`、`edit`、错误 key 目录等用例，保留缺失/损坏不抹除旧证据、明确拒绝撤销、重复分析和只读验证。
 
 正向验收使用原始条目 `846c1557-ab2b-4bd5-9dac-b96a66be3b98` 和其 `persistent-memory.js` 快照。它是 `ACCEPTED`、`agent`、版本 1、有 `local_id` 的记录；source MD5 为空文件，target MD5 与原始 214 行快照一致。数据库中的 Windows 路径、ID、时间、状态、摘要均未修改。
 
@@ -45,13 +45,13 @@ GitHub 完整远程绑定、session v2、框架工具身份和补丁清单要求
 
 两个旧版目录的原始 `.workflow-data` 位于项目根；它们用于验证编码和排除行为，没有把其布局或 v1 会话混同于当前 `.eve/.workflow-data` / v2 合同。公开代码搜索的 53 个 `turnStep` 结果均来自这两个仓库；没有发现包含所需配套信息的其他公开检查点。
 
-实现：[Eve reader](crates/adapters/src/eve.rs)、[引用图选择性解码](crates/adapters/src/eve_codec.rs)。[受控生成器](crates/adapters/tests/fixtures/eve/generate.mjs)已重新生成正确参数包装，继续调用固定官方补丁执行器和 OTLP/devalue 编码器；正向新建文件/补丁、导出、失败撤销、重复和仓库边界仍通过 CLI 测试。它们与上述真实负向样本分开报告。
+实现：[Eve reader](../../crates/adapters/src/eve.rs)、[引用图选择性解码](../../crates/adapters/src/eve_codec.rs)。[受控生成器](../../crates/adapters/tests/fixtures/eve/generate.mjs)已重新生成正确参数包装，继续调用固定官方补丁执行器和 OTLP/devalue 编码器；正向新建文件/补丁、导出、失败撤销、重复和仓库边界仍通过 CLI 测试。它们与上述真实负向样本分开报告。
 
 ### 继续核查：官方 CI 的真实写入与读回
 
 取得 [Eve 官方运行 40056903264](https://github.com/vercel/eve/actions/runs/40056903264) 的 `eval-artifacts-agent-tools-sandbox-openai-sol` 制品，编号 `12545831396`，源码 `db0ffaf1d8997ee7f396e67ff974945c08c9e6b0`。下载 ZIP 的 SHA256 `3ccee524a117052e57e4fece90fc52ef1189e07c84777d387347b330ff461306` 与 GitHub 元数据一致。整个 workflow 失败，但其中 `sandbox/file-tools` 明确为 `passed`，四项断言均通过，不能把 workflow 总状态当作该条文件操作结果。
 
-原始会话 `wrun_01M5NY0R0ZEY7NE4YWAC0DARDB` 由 Eve 0.83.0 实际运行：框架 `write_file` 在 `/workspace/notes/handoff.txt` 新建单行 `sandbox-file-tools-ok-Q2H`，后续框架 `read_file` 返回完全一致正文。两段原始 OTLP 共 4,867 字节，未修改内容，仅重命名，保存在 [official-ci](crates/adapters/tests/fixtures/eve/official-ci/README.md)。测试固定校验各文件 SHA256，再通过生产解析函数核对新建文件、路径、正文和读回结果；无需联网或私人数据。
+原始会话 `wrun_01M5NY0R0ZEY7NE4YWAC0DARDB` 由 Eve 0.83.0 实际运行：框架 `write_file` 在 `/workspace/notes/handoff.txt` 新建单行 `sandbox-file-tools-ok-Q2H`，后续框架 `read_file` 返回完全一致正文。两段原始 OTLP 共 4,867 字节，未修改内容，仅重命名，保存在 [official-ci](../../crates/adapters/tests/fixtures/eve/official-ci/README.md)。测试固定校验各文件 SHA256，再通过生产解析函数核对新建文件、路径、正文和读回结果；无需联网或私人数据。
 
 这份真实记录还推动了代码修复：durable action 的状态位于 `agent.action.outcome`，旧读取器只检查 `eve.tool.outcome`，会漏掉未伴随 OTLP error code 的拒绝/失败。现在任一原生失败状态都会撤销该调用；[官方 direct invoke 路径](https://github.com/vercel/eve/blob/0a9f8579c822e6d056b3a7e32e2e09425e619f23/packages/eve/src/tracing/eve/invoke-tool-span.ts)仍实际写 `eve.tool.outcome`，所以两者都检查。新增 CLI 场景覆盖 durable failed、durable denied 和 direct denied。
 

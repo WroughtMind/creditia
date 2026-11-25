@@ -35,7 +35,7 @@ evidence=native-write-receipt
 
 关键身份：子会话 `wrun_01M5PY4MVN21ZH8YS1X3T8XJ9Y`，写入调用 `call_b45685d113eb4b1b8d22a6b7372bed39`；Git 保存提交 `8d83c1c33740782bc96047817c256fb26d6ac49b`。该保存提交没有手工填写 agent 署名。
 
-实现位于 [`eve.rs`](crates/adapters/src/eve.rs) 与 [`eve/local.rs`](crates/adapters/src/eve/local.rs)，依次核验：
+实现位于 [`eve.rs`](../../crates/adapters/src/eve.rs) 与 [`eve/local.rs`](../../crates/adapters/src/eve/local.rs)，依次核验：
 
 1. Workflow v2 已完成步骤中的 `eve.bundle`、子 agent node ID 和动态运行版本。
 2. 原生 run 的 `deploymentId`、Eve 版本及该代 `generation.json`，不能用当前清单替代历史清单。
@@ -46,7 +46,7 @@ evidence=native-write-receipt
 
 真实 CLI 两次扫描都得到 **Eve 3 条持久行证据、最终 verified 3 行**，两次结果一致。Workflow、trace、run 与 snapshot JSON 扫描前后摘要一致。其他真实写入走了 shell 或覆盖写，按既有边界没有冒充可核验行。模型保持未知，没有拿测试项目设置反填全部工具记录。
 
-原始成功回执保留在 [`live-local`](crates/adapters/tests/fixtures/eve/live-local)，包含 SHA-256 锁定的写入与回读回归；运行检查点含账户能力和其他上下文，完整数据只留在隔离目录，不提交到仓库。验收结果为 `/private/tmp/creditia-native-live-20261024/eve-acceptance.json`。
+原始成功回执保留在 [`live-local`](../../crates/adapters/tests/fixtures/eve/live-local)，包含 SHA-256 锁定的写入与回读回归；运行检查点含账户能力和其他上下文，完整数据只留在隔离目录，不提交到仓库。验收结果为 `/private/tmp/creditia-native-live-20261024/eve-acceptance.json`。
 
 官方来源：[源码挂载](https://github.com/vercel/eve/blob/3c03b204d0fabb8fc155a93a40ba34d2c51f1628/packages/eve/src/self-modification/filesystem.ts)、[沙箱源码摘要](https://github.com/vercel/eve/blob/3c03b204d0fabb8fc155a93a40ba34d2c51f1628/packages/eve/src/compiler/normalize-sandbox.ts)、[开发代清单重写](https://github.com/vercel/eve/blob/3c03b204d0fabb8fc155a93a40ba34d2c51f1628/packages/eve/src/internal/nitro/dev-runtime-artifacts.ts)。
 
@@ -56,14 +56,14 @@ evidence=native-write-receipt
 
 实际调用官方 `driver.CodexBackend.Open`、`Prompt` 和事件流，工作目录限制在该仓库，沙箱为 workspace-write，模型为 gpt-6-luna。未使用 mock Responses 服务。完成后通过官方 `transcript/codex.Codec.Read` / `Write` 导出同一原生会话到 `inference-export/.codex`。导出不创建 `state_5.sqlite`，这正是旧读取器漏读的入口。
 
-真实会话 ID `01a16ded-6e96-7c92-9d43-831c384b15fc`，原生完成事件为 `CommandExecution`，退出码 0，命令中的字面量 apply_patch heredoc 和回执的目标文件一致。目标文件三行 SHA-256：`2dd7372eaedace4fd87fa46a01d46d668986a86a8d04ceeeec71445ed471d2b5`。原始完成事件摘录保留在 [`inference-live-command.json`](crates/adapters/tests/fixtures/codex/inference-live-command.json)，未包含账户配置或其他开发者上下文。
+真实会话 ID `01a16ded-6e96-7c92-9d43-831c384b15fc`，原生完成事件为 `CommandExecution`，退出码 0，命令中的字面量 apply_patch heredoc 和回执的目标文件一致。目标文件三行 SHA-256：`2dd7372eaedace4fd87fa46a01d46d668986a86a8d04ceeeec71445ed471d2b5`。原始完成事件摘录保留在 [`inference-live-command.json`](../../crates/adapters/tests/fixtures/codex/inference-live-command.json)，未包含账户配置或其他开发者上下文。
 
-[`codex.rs`](crates/adapters/src/codex.rs) 与 [`codex/histories.rs`](crates/adapters/src/codex/histories.rs) 新增：
+[`codex.rs`](../../crates/adapters/src/codex.rs) 与 [`codex/histories.rs`](../../crates/adapters/src/codex/histories.rs) 新增：
 
 - 无索引时从原生 `session_meta` 读取 ID、cwd、时间，逐轮读取模型；不凭目录名填写项目。
 - 同一原生会话从多个目录出现只保留一份，已有完整记录优先于缺失内容的索引。
 - 读取 `patch_apply_end` 的成功更改、配对的原生 apply_patch 回执，以及严格限定的成功命令 heredoc；没有结果、失败、不同目标或未执行的 shell 片段不计。
-- 跨 agent 转换生成的 `originator=agentprotocol` 且没有 CLI 版本的头部不当成 Codex 原生执行。本轮原生实跑时尚未实现 `history_base`；后续分段读取和受控回归见 [2026-10-28 记录](docs/2026-10-28-issue-110-114-115.md)，真实 fork / revert / resume 分段样本已于 2026-10-28 验收，详情见同一记录。
+- 跨 agent 转换生成的 `originator=agentprotocol` 且没有 CLI 版本的头部不当成 Codex 原生执行。本轮原生实跑时尚未实现 `history_base`；后续分段读取和受控回归见 [2026-10-28 记录](../../docs/2026-10-28-issue-110-114-115.md)，真实 fork / revert / resume 分段样本已于 2026-10-28 验收，详情见同一记录。
 - 模型取原生 turn_context，归因始终是实际执行的 Codex，不增加一份 inference.sh 贡献。
 
 只向 Creditia 指定该导出目录，使用独立持久库分析；两次均为 **3 条 Codex / gpt-6-luna 行证据，最终 verified 3 行**。导出没有 SQLite 索引，源历史摘要前后一致。报告为 `/private/tmp/creditia-native-live-20261024/inference-analysis.json`。

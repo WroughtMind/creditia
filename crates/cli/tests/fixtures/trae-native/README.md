@@ -8,7 +8,7 @@ The serializer fields were traced in official TRAE 3.6.2 and checked against
 3.6.4: `chat_message_task.content` contains a TaskContent with `task_id`,
 `user_message_id`, and `messages`; each native task item has
 `message_type: "plan_item"`, and the original `tool_call_info.result` contains
-the status and actual file changes. See the repository's `SUPPORT_TRAE.md`.
+the status and actual file changes. See the repository's [`SUPPORT_TRAE.md`](../../../../../docs/adapters/SUPPORT_TRAE.md).
 
 Both fixtures contain one native session (`native-s`) and one edit of
 `/private/tmp/creditia-trae-native-project/a.rs`. The actual result removes

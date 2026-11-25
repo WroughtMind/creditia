@@ -1,8 +1,8 @@
 # 剩余 31 个 Agent 的逐项核查
 
-> 本页保留前一轮的版本与结论。随后已继续核查下述 18 项并新增 7 个原生读取器；当前统计为 67 个历史入口、3 个宿主、8 个待验证格式，Hero 已补到 55 个标志。请以 [SUPPORT_AGENT18.md](SUPPORT_AGENT18.md) 和 [当前覆盖表](AGENT_SUPPORT.md) 为准。
+> 本页保留前一轮的版本与结论。随后已继续核查下述 18 项并新增 7 个原生读取器；当前统计为 67 个历史入口、3 个宿主、8 个待验证格式，Hero 已补到 55 个标志。请以 [SUPPORT_AGENT18.md](SUPPORT_AGENT18.md) 和 [当前覆盖表](../../AGENT_SUPPORT.md) 为准。
 
-核查日期：2026-10-23。范围是上一版目录中 `history=unconfirmed` 的 31 项，不是新找的 31 个产品。机器可读结果在 [agents.json](packages/schema/agents.json)，`creditia agents` 也会显示逐项发现。
+核查日期：2026-10-23。范围是上一版目录中 `history=unconfirmed` 的 31 项，不是新找的 31 个产品。机器可读结果在 [agents.json](../../packages/schema/agents.json)，`creditia agents` 也会显示逐项发现。
 
 本轮增加 **13 条读取路径**：11 个原生历史读取器、AdaL 官方命令行导出、CodeArts 已知数据库结构的条件读取。连同原有 47 项，目录现有 60 个历史入口；另外 18 项尚无独立逐行读取器。**这不是 60 个产品完整适配或真实账号验收。**
 

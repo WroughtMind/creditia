@@ -20,7 +20,7 @@
 2. [公开原生 session_context 样本](https://github.com/ahmedalbanna/ai-document-qa/blob/1bf1bf6643fed7b34246a83f99f065cc7d4e8544/.rovodev/sessions/wd2c0476-f044-4308-8a0f-e2c6b1b3f8db/session_context.json)：交叉确认磁盘字段、请求/响应、调用参数、工具回执和逐响应模型。另核查 battlefield-of-mind 与 dotfiles-zsh-refactor 的公开原生会话，未将其用户正文带入项目测试。
 3. [官方会话管理说明](https://support.atlassian.com/rovo/docs/manage-sessions-in-rovo-dev-cli/)：确认 `/prune` 删除工具结果的语义，用于持久化合并规则。
 
-实现：[原生读取器](crates/adapters/src/rovodev.rs)。未在本机安装并登录 Rovo Dev 运行真实模型任务。
+实现：[原生读取器](../../crates/adapters/src/rovodev.rs)。未在本机安装并登录 Rovo Dev 运行真实模型任务。
 
 ## 已实现：灵码 2.6.10
 
@@ -37,7 +37,7 @@
 
 证据来自 [Alibaba Cloud 官方 Open VSX 2.6.10 包](https://open-vsx.org/api/Alibaba-Cloud/tongyi-lingma/2.6.10/file/Alibaba-Cloud.tongyi-lingma-2.6.10.vsix) 内 Linux Go 服务与扩展：从 Go 符号、反射结构标签和反汇编核对表字段、plaintext provider、接受动作及 MD5 版本关系。关键函数地址：`GetDatabasePath` 0x14ed740、`GenerateKey` 0x159b440、provider `Get` 0x159b5c0、`acceptWorkingSpaceFile` 0x15c6860、`updateWorkingSpaceFileDiffInfo` 0x15caca0、`getFullContentWithEmptyFile` 0x15cbc00。这些地址仅对应上述安装包。
 
-实现：[原生读取器](crates/adapters/src/lingma.rs)。**本轮没有可用的真实用户 local.db，验证使用按官方存储合同重建的数据库和快照**，不能称为真实灵码账号验收。
+实现：[原生读取器](../../crates/adapters/src/lingma.rs)。**本轮没有可用的真实用户 local.db，验证使用按官方存储合同重建的数据库和快照**，不能称为真实灵码账号验收。
 
 ## 其余四项逐个续查
 
@@ -67,8 +67,8 @@ Eve 的存储编码已进一步定位，仍不能把“知道有这些字段”�
 
 ## Hero 与验证
 
-Hero 新增 **Kode、灵码、Rovo Dev**，共 **74 个真实品牌标志**。Kode 来自 [官方 README 固定版本](https://github.com/shareAI-lab/Kode-CLI/blob/400bbf0449707846465895ef64cfbbd18bea4763/README.md) 所引用的官方横幅：只截取左上角产品标志，保留原件，构建时输出小尺寸 alpha mask，显示随页面单色前景变化。灵码使用官方包内单色 sidebar 标志，Rovo Dev 使用 Atlascode 官方 sidebar 标志。[素材来源](site/assets/agents/SOURCES.md)。
+Hero 新增 **Kode、灵码、Rovo Dev**，共 **74 个真实品牌标志**。Kode 来自 [官方 README 固定版本](https://github.com/shareAI-lab/Kode-CLI/blob/400bbf0449707846465895ef64cfbbd18bea4763/README.md) 所引用的官方横幅：只截取左上角产品标志，保留原件，构建时输出小尺寸 alpha mask，显示随页面单色前景变化。灵码使用官方包内单色 sidebar 标志，Rovo Dev 使用 Atlascode 官方 sidebar 标志。[素材来源](../../site/assets/agents/SOURCES.md)。
 
-[端到端测试](crates/cli/tests/native6/mod.rs) 调用实际 CLI，检查 SQLite 中的持久证据和最终 `credits.json`。覆盖成功、失败、未配对、模型区分、fork 去重、裁剪与损坏保留、明确拒绝撤销、项目边界、人工初始基线、MD5 不匹配、可变引用、只读数据库和缓存。它验证 Creditia 的读取与归因行为，不替代厂商真实账号运行验收。
+[端到端测试](../../crates/cli/tests/native6/mod.rs) 调用实际 CLI，检查 SQLite 中的持久证据和最终 `credits.json`。覆盖成功、失败、未配对、模型区分、fork 去重、裁剪与损坏保留、明确拒绝撤销、项目边界、人工初始基线、MD5 不匹配、可变引用、只读数据库和缓存。它验证 Creditia 的读取与归因行为，不替代厂商真实账号运行验收。
 
 本轮检查结果：Rust 工作区 **329 通过、1 个原有重型实仓库测试忽略**；App Rust **8 通过**；目录渲染 **2 通过**；工作区与 App 严格 Clippy、CLI bundle、网站完整构建通过。浏览器使用隔离 Chromium，确认 1440px 下深浅色与 Kode 悬停，390px 中文页面保留 74 个标志且无横向溢出。Rovo 的 fill 为 none、stroke 为页面前景；Kode 加载约 6 KB 的构建蒙版。未覆盖 Safari、Firefox 或真实触屏。

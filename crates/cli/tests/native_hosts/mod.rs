@@ -1,5 +1,5 @@
 //! Controlled native-format integration tests; live acceptance is documented in
-//! SUPPORT_NATIVE_LIVE.md and uses actual upstream binaries and model calls.
+//! docs/adapters/SUPPORT_NATIVE_LIVE.md and uses actual upstream binaries and model calls.
 use super::*;
 use serde_json::{json, Value};
 

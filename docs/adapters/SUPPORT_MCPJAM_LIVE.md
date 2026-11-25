@@ -2,7 +2,7 @@
 
 剩余实现与验收统一跟踪于 [Issue #110](https://github.com/WroughtMind/creditia/issues/110)，按读取缺口、本地入口验收、账户或样本依赖分别推进；以下已完成结果保持原有范围。
 
-2026-10-28/29 更新：Codex 分段读取已通过真实官方执行器的 fork / revert / resume 验收；MCPJam 官方受管运行时的签名、内容完整性、工作区授权、启动、停止和撤销授权也已通过。详见[实现与验收记录](docs/2026-10-28-issue-110-114-115.md)。下文保留各轮当时的结果，不再代表当前未完成清单。
+2026-10-28/29 更新：Codex 分段读取已通过真实官方执行器的 fork / revert / resume 验收；MCPJam 官方受管运行时的签名、内容完整性、工作区授权、启动、停止和撤销授权也已通过。详见[实现与验收记录](../../docs/2026-10-28-issue-110-114-115.md)。下文保留各轮当时的结果，不再代表当前未完成清单。
 
 本轮使用固定源码 `520eb9aa3c8b7b965d92611c414543c91b04f16e` 与官方 macOS arm64 Codex pack 1.0.3。首次自动下载超时；随后下载同一官方发布文件，通过上游严格 `fromArchive` 路径校验签名、归档摘要和展开内容，未跳过校验。真实桥接进程启动成功，错配授权被拒绝，停止后整个进程树消失，临时测试授权撤销成功。
 
@@ -37,11 +37,11 @@
 
 后台 `exec_command` 的首个回执只有进程编号；最终退出码属于后续 `write_stdin` 调用。现在按原生进程编号把空输入轮询与原命令配对，明确退出 0 后才提取原命令中的行证据，贡献仍归实际执行的 Codex。非零退出、缺少最终回执、无对应进程、stdout 中伪造进程编号均排除；发送交互输入的命令不凭初始命令文本归因。重复扫描不新增贡献，旧缓存会自动刷新。
 
-真实样本是 [`codex-background.jsonl`](crates/adapters/tests/fixtures/mcpjam/codex-background.jsonl)，含成功、退出 9 和未完成三种情况。后两种文件真实存在，仍没有计入成功贡献。回归还验证了可读原生历史失去最终回执时，持久库会撤回旧证据。
+真实样本是 [`codex-background.jsonl`](../../crates/adapters/tests/fixtures/mcpjam/codex-background.jsonl)，含成功、退出 9 和未完成三种情况。后两种文件真实存在，仍没有计入成功贡献。回归还验证了可读原生历史失去最终回执时，持久库会撤回旧证据。
 
 ### 可重复执行的验收
 
-已保存 [`mcpjam.mjs`](crates/adapters/tests/live/mcpjam.mjs)，测试入口不再直接把链接传给 bridge。它构建未修改的官方转换器、bridge 和回环 launcher，从默认链接参数启动，并验证：链接仍存在、获准真实工作区正确、越界链接拒绝、实际写入/回读、后台成功与失败、最终归因、重复扫描以及原始历史只读。启动器完全退出后才开始文件摘要检查，避免原生进程最后刷新历史与扫描重叠。
+已保存 [`mcpjam.mjs`](../../crates/adapters/tests/live/mcpjam.mjs)，测试入口不再直接把链接传给 bridge。它构建未修改的官方转换器、bridge 和回环 launcher，从默认链接参数启动，并验证：链接仍存在、获准真实工作区正确、越界链接拒绝、实际写入/回读、后台成功与失败、最终归因、重复扫描以及原始历史只读。启动器完全退出后才开始文件摘要检查，避免原生进程最后刷新历史与扫描重叠。
 
 需要 MCPJam 官方源码归档或 checkout、隔离的 npm 依赖和 Codex vendor 目录。依赖为 `@ai-sdk/harness@1.0.117`、`@modelcontextprotocol/sdk@1.30.0`、`zod@4.4.3`、`ws@8.22.0`、`esbuild@0.28.2`；vendor 使用官方 `@openai/codex@0.149.1` 或 `0.164.0`。脚本不安装或升级全局软件，输出目录必须是新的。
 
@@ -79,7 +79,7 @@ node crates/adapters/tests/live/mcpjam.mjs "$MCPJAM_SOURCE" "$MCPJAM_DEPS" "$COD
 
 ## 已落实到 Creditia 的读取行为
 
-[`harness_paths.rs`](crates/adapters/src/harness_paths.rs) 统一固定目录发现和真实工作区路径解析。只枚举已知会话层级，不遍历工作区链接或读取 bridge 凭据。
+[`harness_paths.rs`](../../crates/adapters/src/harness_paths.rs) 统一固定目录发现和真实工作区路径解析。只枚举已知会话层级，不遍历工作区链接或读取 bridge 凭据。
 
 ```text
 ~/.mcpjam/harness-local-sessions/<session>/
@@ -92,7 +92,7 @@ Claude 的新增入口接入正式 analyze、discover、doctor；解析记录中
 
 Codex 新增实际遇到的 `Exit code: 0 / Wall time / Output` 包装回执。只接受明确成功状态；非零退出码、仅在输出正文中出现的成功字样、进程未能启动、尚未完成的命令均不能证明成功。同一个调用同时出现在 `patch_apply_end` 和 `response_item` 时，只记一份。此次读取变化会重建旧 Codex 缓存。
 
-原始工具调用和回执的未改写摘录存放在 [`fixtures/mcpjam`](crates/adapters/tests/fixtures/mcpjam/README.md)，包含提取范围和 SHA-256。自动测试只把临时路径绑定到自己的测试仓库；原始完整运行保留在隔离目录。实际运行后的 `creditia-result.json` 保存两次分析、证据数量及来源文件摘要：
+原始工具调用和回执的未改写摘录存放在 [`fixtures/mcpjam`](../../crates/adapters/tests/fixtures/mcpjam/README.md)，包含提取范围和 SHA-256。自动测试只把临时路径绑定到自己的测试仓库；原始完整运行保留在隔离目录。实际运行后的 `creditia-result.json` 保存两次分析、证据数量及来源文件摘要：
 
 - `acceptance/creditia-result.json`：最终 verified 3 行，重复分析一致。持久库另保留一条 shell 命令候选哈希；它不是第四行写入，最终归因仍为 3 行。
 - `claude-acceptance/creditia-result.json`：1 条 Claude 行证据，最终 verified 1 行，重复分析一致。
@@ -108,7 +108,7 @@ Codex 新增实际遇到的 `Exit code: 0 / Wall time / Output` 包装回执。�
 
 ## Hero 与检查
 
-新增 inference.sh 官网三角标志和 MCPJam 官方 MCP/JAM 标志，原始素材保留在 `site/assets/agents`。Hero 仅转换显示颜色为 currentColor，MCPJam 去掉背景底板；[来源及摘要](site/assets/agents/SOURCES.md) 已补齐。总数由 75 增至 **77**，不改变历史支持口径。
+新增 inference.sh 官网三角标志和 MCPJam 官方 MCP/JAM 标志，原始素材保留在 `site/assets/agents`。Hero 仅转换显示颜色为 currentColor，MCPJam 去掉背景底板；[来源及摘要](../../site/assets/agents/SOURCES.md) 已补齐。总数由 75 增至 **77**，不改变历史支持口径。
 
 完整网站构建及下载配置测试通过。独立 Playwright 浏览器使用专用测试资料和 `--password-store=basic --use-mock-keychain`；桌面浅色、手机深色及手机横向标志栏末尾、英文页均检查到两枚标志，前景填充一致，无页面横向溢出。截图保存在 `output/playwright/hero-77-*.png`。
 

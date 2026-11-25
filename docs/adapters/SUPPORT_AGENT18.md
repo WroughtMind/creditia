@@ -80,6 +80,6 @@
 - 失败回执、rejected 快照、uncertain 流水、Zenflow dropped/最终 failed 状态撤销既有证据；坏 JSON、无法匹配的快照保留旧证据。
 - 模块测试另覆盖 UTF-16 编辑范围、Posit 部分失败 patch、engine 镜像、Tinycloud 正文规范化、Zencoder 最终 diff 与缺失调用补充、Sarvam 缺模型留空。
 
-最终全套检查为 392 项通过、1 项原有重型测试忽略；工作区/App Clippy、CLI bundle 与网站构建通过。Hero 已在隔离 Chromium 中检查中英文、1440/390/320px、深浅主题的 55 个标志及提示框；最后的单色标志修正又在 1440/320px 深浅主题复核。未验证真实手机或其他浏览器。详见 [支持范围的验证部分](AGENT_SUPPORT.md#验证范围)。这些是固定版本的格式和集成验证；真实厂商账户、Windows/Linux 实机和已安装 App 均未逐一验收。
+最终全套检查为 392 项通过、1 项原有重型测试忽略；工作区/App Clippy、CLI bundle 与网站构建通过。Hero 已在隔离 Chromium 中检查中英文、1440/390/320px、深浅主题的 55 个标志及提示框；最后的单色标志修正又在 1440/320px 深浅主题复核。未验证真实手机或其他浏览器。详见 [支持范围的验证部分](../../AGENT_SUPPORT.md#验证范围)。这些是固定版本的格式和集成验证；真实厂商账户、Windows/Linux 实机和已安装 App 均未逐一验收。
 
-网站在**原 Hero 图标区**由 40 增至 **55 个真实品牌标志**，新增 15 个：Warp、Augment、Droid、AiderDesk、Deep Agents、Dexto、ForgeCode、Jazz、Pochi、AstrBot、Reasonix、Posit Assistant、Tinycloud、Code Studio、Sarvam Code。来源和裁切/主题处理见 [图标来源](site/assets/agents/SOURCES.md)。编辑器/CLI/地区版同一品牌不重复堆放，图标数量不是完整适配数量。
+网站在**原 Hero 图标区**由 40 增至 **55 个真实品牌标志**，新增 15 个：Warp、Augment、Droid、AiderDesk、Deep Agents、Dexto、ForgeCode、Jazz、Pochi、AstrBot、Reasonix、Posit Assistant、Tinycloud、Code Studio、Sarvam Code。来源和裁切/主题处理见 [图标来源](../../site/assets/agents/SOURCES.md)。编辑器/CLI/地区版同一品牌不重复堆放，图标数量不是完整适配数量。

@@ -1,4 +1,4 @@
-//! AiderDesk v2 context.json + settings.json. Source references: SUPPORT_AGENT31.md.
+//! AiderDesk v2 context.json + settings.json. Source references: docs/adapters/SUPPORT_AGENT31.md.
 use crate::{native_history as n, trace_import as imp, Activity, Health, Stats};
 use creditia_core::model::{FileGroup, PathMap, Src, Store};
 use serde_json::Value;

@@ -28,7 +28,7 @@
 
 按完整仓库、session ID、tool call ID 合并，重复复制轨迹不增加贡献。明确失败撤销对应调用；文件缺失、加密或读取损坏不抹除以前已验证的证据。读取过程不改写原始日志。
 
-实现：[读取器](crates/adapters/src/eve.rs)、[引用图与增量解码](crates/adapters/src/eve_codec.rs)、[CLI 端到端测试](crates/cli/tests/native4/mod.rs)。
+实现：[读取器](../../crates/adapters/src/eve.rs)、[引用图与增量解码](../../crates/adapters/src/eve_codec.rs)、[CLI 端到端测试](../../crates/cli/tests/native4/mod.rs)。
 
 ### Eve 来源与样本性质
 
@@ -42,7 +42,7 @@
 
 本轮使用官方 `devalue 6.0.3`、`@opentelemetry/otlp-transformer 0.214.0` 和上述源码中的 `diffValue` 生成受控记录，并实际调用官方 `applyPatchToSandbox` 写入隔离临时文件，核验其 304 字节正文及返回路径。随后经过真实 Creditia CLI → SQLite 持久证据 → 最终档案检查。
 
-这是**原生执行器、编码器和存储合同的受控验证**。会话、GitHub 上下文、编译清单与输入是测试构造，不是厂商真实账号历史，也没有运行完整 Eve 托管 agent 会话。[样本与可复现生成器](crates/adapters/tests/fixtures/eve/README.md)。
+这是**原生执行器、编码器和存储合同的受控验证**。会话、GitHub 上下文、编译清单与输入是测试构造，不是厂商真实账号历史，也没有运行完整 Eve 托管 agent 会话。[样本与可复现生成器](../../crates/adapters/tests/fixtures/eve/README.md)。
 
 ## 其余三项逐个续查
 

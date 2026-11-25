@@ -1,5 +1,5 @@
 //! Lingma 2.6.10 local.db and workingSpace plaintext snapshots.
-//! Native struct tags, provider and acceptance path: SUPPORT_AGENT6.md.
+//! Native struct tags, provider and acceptance path: docs/adapters/SUPPORT_AGENT6.md.
 use crate::{native_history as n, trace_import as imp, Activity, Health, Stats};
 use creditia_core::model::{FileGroup, PathMap, Src, Store};
 use md5::{Digest, Md5};

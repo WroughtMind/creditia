@@ -134,7 +134,7 @@ jobs:
 
 ## 支持的工具
 
-开发版已登记 **78 个 agent 入口**，全部可按名称使用提交署名、启动身份和 skill 安装指引。其中 **72 个入口已有历史读取实现**（包含有限编辑、会话、导入和条件读取），5 个从实际执行宿主归因，CodeMaker 的原生编辑格式仍未确认。灵码真实历史、Eve 本地源码沙箱及 inference.sh 的 Codex 驱动已完成相应验收；MCPJam 的官方本地启动链与真实执行器已通过脚本模型验收，账户和云端模式另行跟踪。详见 [原生实测](SUPPORT_NATIVE_LIVE.md)、[MCPJam 验收](SUPPORT_MCPJAM_LIVE.md)及[剩余事项](https://github.com/WroughtMind/creditia/issues/110)。这些数字不表示所有版本或账号均已验收。
+开发版已登记 **78 个 agent 入口**，全部可按名称使用提交署名、启动身份和 skill 安装指引。其中 **72 个入口已有历史读取实现**（包含有限编辑、会话、导入和条件读取），5 个从实际执行宿主归因，CodeMaker 的原生编辑格式仍未确认。灵码真实历史、Eve 本地源码沙箱及 inference.sh 的 Codex 驱动已完成相应验收；MCPJam 的官方本地启动链与真实执行器已通过脚本模型验收，账户和云端模式另行跟踪。详见 [原生实测](docs/adapters/SUPPORT_NATIVE_LIVE.md)、[MCPJam 验收](docs/adapters/SUPPORT_MCPJAM_LIVE.md)及[剩余事项](https://github.com/WroughtMind/creditia/issues/110)。这些数字不表示所有版本或账号均已验收。
 
 运行 `creditia agents --json` 查看完整目录；[逐项覆盖表](AGENT_SUPPORT.md)列出全部 78 项，[读取边界](ADAPTERS.md)说明能计算哪些编辑。CLI 和 App 使用同一组读取器。未记录的模型保持未知，提交声明与逐行证据分开计算。
 

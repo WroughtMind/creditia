@@ -1,5 +1,5 @@
 //! Native histories verified from official Cortex 1.0.73, Nova 1.1.54,
-//! Pool 1.0.16 and DimCode 0.5.19 distribution artifacts. See SUPPORT_REMAINING.md.
+//! Pool 1.0.16 and DimCode 0.5.19 distribution artifacts. See docs/adapters/SUPPORT_REMAINING.md.
 use crate::{any_ts, Activity, Health, Stats};
 use creditia_core::{
     model::{fingerprint, FileGroup, PathMap, Src, Store},

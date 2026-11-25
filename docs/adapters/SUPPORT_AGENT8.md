@@ -13,7 +13,7 @@
 | Firebender 1.0.12 | 每个选择项目的 `.idea/firebender/chat_history.db`；schema_info 版本 1 / 2，chat_sessions 与 subagent_conversations；`CREDITIA_FIREBENDER_DIR` 可指定目录或原库 | MessageAdapter 的 assistant tool_calls 与 tool_call_id 配对。仅原生 `Write` 的完整成功回执，核对实际绝对目标、原始写入正文；子 agent 独立会话，fork 共享调用去重，按毫秒更新顺序选择最新回执 | 没有逐消息模型和时间：模型未知，时间是会话快照。排除待执行、失败、IDE 自动缩短全限定名、Edit/API 替换及 shell。worktreePath 优先于数据库所在项目。完整删除/失败快照撤回旧证据，损坏库不伪造撤销 |
 | Moxby Desktop 3.2.0 | Tauri app-data 下 `com.moxby.agent/moxby_chats.db`（开发版 com.moxby.agent.dev）；`MOXBY_STATE_DIR` / `CREDITIA_MOXBY_DIR`；读取 chat_threads、chat_turns、tool_calls、tool_results | 内置 `file_edit` 的执行后结构化结果：status=applied、replaced=1、绝对 path、oldText/newText；用当前 call.result_event_id 精确连接结果，要求 latest_event_id 同一回执、done、未截断及 file.edit.result v1；模型来自对应 turn | 不从输入建议或可变聊天配置猜实际文本/模型。排除陈旧回执、失败、待执行、mod、Claude/Codex CLI 镜像、shell、多处替换。绝对目标由项目路径规则匹配；不从聊天 workspace_id 猜 Git 根目录，因此不提供自动项目发现 |
 
-实现：[Firebender](crates/adapters/src/firebender.rs)、[Moxby](crates/adapters/src/moxby.rs)、[共享注册表](crates/adapters/src/registry.rs)。数据库均以只读事务访问。
+实现：[Firebender](../../crates/adapters/src/firebender.rs)、[Moxby](../../crates/adapters/src/moxby.rs)、[共享注册表](../../crates/adapters/src/registry.rs)。数据库均以只读事务访问。
 
 ## 逐项查证
 
@@ -43,11 +43,11 @@ Moxby 此构建的 Mach-O 函数地址：dispatch_file_edit `0x1015e8060`、tool
 
 ## 验证与 Hero
 
-[native8 集成测试](crates/cli/tests/native8/mod.rs) 从隔离 Git 仓库中的原生数据库运行真实 CLI，检查持久 evidence 和最终 credits.json：Firebender 主会话及子 agent 的 16 行，Moxby 的 8 行；覆盖 fork、毫秒更新顺序、最终失败/删除、错误 JSON 保留旧证据，以及 Moxby 陈旧/截断/跨会话/外部工具回执的排除。每次扫描前后逐字节比较源数据库，确认读取没有改写历史。模型未知时保持未知。
+[native8 集成测试](../../crates/cli/tests/native8/mod.rs) 从隔离 Git 仓库中的原生数据库运行真实 CLI，检查持久 evidence 和最终 credits.json：Firebender 主会话及子 agent 的 16 行，Moxby 的 8 行；覆盖 fork、毫秒更新顺序、最终失败/删除、错误 JSON 保留旧证据，以及 Moxby 陈旧/截断/跨会话/外部工具回执的排除。每次扫描前后逐字节比较源数据库，确认读取没有改写历史。模型未知时保持未知。
 
 当前工作区验证：Rust workspace 324 项通过、1 项忽略；App 8 项、渲染器目录 2 项通过；workspace / App 的 Clippy 严格检查、CLI 打包和站点构建通过。实际 CLI 的 agents 命令能列出两个新入口及其限制。
 
-Hero 原图标区从 55 增至 **71 个真实品牌标志**。新增 AutoHand、Bob、CodeArts、Cortex、fx、iFlow、Kimchi、Mux、Tabnine、Terramind、ZCode、Zenflow、Neovate、AdaL、Firebender、Moxby；所有标志均使用页面的单色前景，含浅色、深色和悬停状态。官方文件保留，显示时处理轮廓、透明度和文字裁切。[全部素材与处理来源](site/assets/agents/SOURCES.md)。Kode 已有读取器，但尚未找到独立官方图标，未拿社区截图或自造字母冒充官方 logo。品牌数与目录入口数统计口径不同。
+Hero 原图标区从 55 增至 **71 个真实品牌标志**。新增 AutoHand、Bob、CodeArts、Cortex、fx、iFlow、Kimchi、Mux、Tabnine、Terramind、ZCode、Zenflow、Neovate、AdaL、Firebender、Moxby；所有标志均使用页面的单色前景，含浅色、深色和悬停状态。官方文件保留，显示时处理轮廓、透明度和文字裁切。[全部素材与处理来源](../../site/assets/agents/SOURCES.md)。Kode 已有读取器，但尚未找到独立官方图标，未拿社区截图或自造字母冒充官方 logo。品牌数与目录入口数统计口径不同。
 
 隔离 Chromium 中完成中英文 × 深浅色 × 1440 / 901 / 900 / 390 / 320px 共 20 组布局检查：71 个标志均保留，无横向溢出和末行提示框裁切。修复短桌面窗口的导航重叠与底部裁切；实际 901 ↔ 900 ↔ 899px 缩放、正常桌面滚动及语言/主题切换通过，返回顶部后标题和动效恢复。尚未覆盖 Safari、Firefox 与真实触屏。
 

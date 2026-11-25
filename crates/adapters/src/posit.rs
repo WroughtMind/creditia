@@ -1,5 +1,5 @@
 //! Posit Assistant's V2 trees and V3 tree + lm-messages.jsonl store.
-//! Contract inspected in the official pa distribution; see SUPPORT_AGENT18.md.
+//! Contract inspected in the official pa distribution; see docs/adapters/SUPPORT_AGENT18.md.
 use crate::{native_history as n, trace_import as imp, Activity, Health, Stats};
 use creditia_core::model::{FileGroup, PathMap, Src, Store};
 use serde_json::Value;

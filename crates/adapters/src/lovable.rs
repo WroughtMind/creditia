@@ -1,4 +1,4 @@
-//! Offline original Lovable trajectory events. See SUPPORT_LOVABLE.md for the
+//! Offline original Lovable trajectory events. See docs/adapters/SUPPORT_LOVABLE.md for the
 //! verified public reducer-to-timeline-to-hunk-viewer chain and remaining limits.
 use crate::trace_import as imp;
 use crate::{added_lines, any_ts, source_dir, Activity, Health, Stats};

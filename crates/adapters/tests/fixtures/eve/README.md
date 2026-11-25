@@ -31,6 +31,6 @@ cargo test -p creditia-cli --test e2e native4
 
 生成器只在临时目录执行已核查的官方补丁函数，不安装或启动 Eve。输出路径记录在终端，正文/轨迹不依赖该随机路径。CLI 测试另外构造最小编译清单与 metadata，并替换 `__EVE_BUNDLE_ROOT__` 为隔离路径；该 metadata 不是实际编译器输出。测试校验其 hash 与回合版本，覆盖被替换的清单和缺失 metadata。
 
-没有使用真实模型或托管沙箱，尚不构成厂商真实账号验收。完整读取条件见 [核查记录](../../../../../SUPPORT_AGENT4.md)。
+没有使用真实模型或托管沙箱，尚不构成厂商真实账号验收。完整读取条件见 [核查记录](../../../../../docs/adapters/SUPPORT_AGENT4.md)。
 
-后续真实样本发现 Workflow 输入还包含 `StepArguments.args` 包装；生成器与样本已纠正。原始公开样本的哈希、可重复验收和限制见 [本轮记录](../../../../../SUPPORT_AGENT3.md)。
+后续真实样本发现 Workflow 输入还包含 `StepArguments.args` 包装；生成器与样本已纠正。原始公开样本的哈希、可重复验收和限制见 [本轮记录](../../../../../docs/adapters/SUPPORT_AGENT3.md)。

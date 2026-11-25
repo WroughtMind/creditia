@@ -1,5 +1,5 @@
 //! Eve local OTLP v4 file receipts joined to native Workflow checkpoints.
-//! A sandbox path/appRoot is not a repository identity. See SUPPORT_AGENT4.md.
+//! A sandbox path/appRoot is not a repository identity. See docs/adapters/SUPPORT_AGENT4.md.
 use crate::{
     eve_codec::{context_after, Graph},
     native_history as n, trace_import as imp, Activity, Health, Stats,
@@ -659,7 +659,7 @@ mod tests {
     }
 
     /// Original public runs, fetched separately to keep user context and
-    /// unrelated runtime credentials out of our repository. See SUPPORT_AGENT3.md.
+    /// unrelated runtime credentials out of our repository. See docs/adapters/SUPPORT_AGENT3.md.
     #[test]
     #[ignore = "requires the pinned public Eve checkpoints and trace export"]
     fn public_native_history_decodes_without_inventing_repository_binding() {
