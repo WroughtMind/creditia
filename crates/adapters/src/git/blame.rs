@@ -403,7 +403,7 @@ impl BlobBatch {
         }
         let mut end = [0];
         self.output.read_exact(&mut end)?;
-        Ok((id == blob && kind == "blob" && end == [b'\n']).then_some(size))
+        Ok((id == blob && kind == "blob" && end == *b"\n").then_some(size))
     }
 }
 
