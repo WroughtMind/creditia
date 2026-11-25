@@ -8,6 +8,11 @@
 
 `creditia agents --json` 返回逐项状态及安装命令；`creditia agents --agent <ID>` 查询单项。表中 ID 用于 `--agent`，内部 harness 是档案里的稳定工具身份。Antigravity 编辑器 / CLI 分开；TRAE / TRAE CN 共用编辑器工具身份，Qoder / Qoder CN 共用 Qoder 工具身份并读取各自目录。安装 skill、设置身份、提交声明、读到会话、确认编辑是不同能力。
 
+- **Tier 1（15 项）** 是旗舰编程工具。持续核对上游版本与格式，维护原生编辑归因和脱敏真实日志回放。
+- **Tier 2（63 项）** 涵盖长尾、云端和社区工具。支持按需 ACP 采集、`creditia stamp`、Git 提交尾注、已支持格式的通用轨迹导入，以及现有尽力维护的社区读取器。账号门槛和未核实的上游格式变更依赖社区 PR 或脱敏样本。
+
+目录 JSON 的 `tier` 字段可用 `creditia agents --tier tier1` 或 `--tier tier2` 筛选，也可以与 `--agent` 一起使用。分级与逐行编辑归因的要求见[适配器维护政策](ADAPTERS.md#维护分级)。
+
 ## 全部入口
 
 所有行均可使用 `creditia stamp --agent <ID>`，提交盖章依赖用户已安装的项目 hook；没有模型记录时不填写模型。路径为各 agent 的项目级 skill 目录，由 Skills 安装器管理。
@@ -120,7 +125,7 @@ ACP 是客户端和 agent 间的通信协议。通用采集器接受全部已登
 
 最新实测及代码实现见 [SUPPORT_NATIVE_LIVE.md](docs/adapters/SUPPORT_NATIVE_LIVE.md)和 [SUPPORT_MCPJAM_LIVE.md](docs/adapters/SUPPORT_MCPJAM_LIVE.md)，剩余执行方式及账户验收在 [Issue #110](https://github.com/WroughtMind/creditia/issues/110) 跟踪。此前调查和灵码真实历史验收保留在 [SUPPORT_AGENT3.md](docs/adapters/SUPPORT_AGENT3.md)，Eve 初始实现见 [SUPPORT_AGENT4.md](docs/adapters/SUPPORT_AGENT4.md)。更早的读取器记录继续保留在 `docs/adapters/SUPPORT_AGENT*.md`。
 
-- **Hermes Agent**：读取 `HERMES_HOME/state.db`（默认 `~/.hermes/state.db`，Creditia 覆盖入口 `CREDITIA_HERMES_AGENT_DIR`），配对 `messages.tool_calls` 和 tool 回执，从成功 `patch` 的实际 diff 与确认目标提取新增行。排除 inactive、继承消息、no-change、失败结果与没有配对调用的回执。会话末尾可变的 model 不用于行归因。官方源码：[状态表](https://github.com/NousResearch/hermes-agent/blob/main/hermes_state_common.py)、[消息](https://github.com/NousResearch/hermes-agent/blob/main/hermes_state_messages.py)、[文件工具](https://github.com/NousResearch/hermes-agent/blob/main/tools/file_tools.py)。
+- **Hermes Agent**：读取 `HERMES_HOME/state.db`（默认 `~/.hermes/state.db`，Creditia 覆盖入口 `CREDITIA_HERMES_AGENT_DIR`），配对 `messages.tool_calls` 和 tool 回执，从成功 `patch` 的实际 diff 与确认目标提取新增行。排除 inactive、继承消息、no-change、失败结果与没有配对调用的回执。会话末尾可变的 model 不用于行归因。官方源码：[状态表](https://github.com/NousResearch/hermes-agent/blob/main/hermes_state_common.py)、[消息](https://github.com/NousResearch/hermes-agent/blob/22fc8098691e9de5f5ee64c23d82078d94e4b122/hermes_state_messages.py)、[文件工具](https://github.com/NousResearch/hermes-agent/blob/main/tools/file_tools.py)。
 - **OpenClaw**：读取 `OPENCLAW_STATE_DIR/agents/*/sessions/openclaw-agent.sqlite` 和旧 session JSONL，默认 `~/.openclaw`（Creditia 覆盖入口 `CREDITIA_OPENCLAW_DIR`）。读取 `transcript_events` 的 JSON / zstd 内容，只使用配对成功 `edit` 回执内的实际 unified patch，模型来自当次 assistant 消息；无差分的旧日志仅提供会话。当前数据库优先于同 agent 的旧 JSONL；排除 ACP-owned 会话、分支继承和 superseded 记录，冲突副本不产生贡献。格式依据 [OpenClaw 源码固定版本](https://github.com/openclaw/openclaw/tree/1197ee98bb5eab98f61befcbeafba382aa382e8b)，包括 `openclaw-agent-schema.sql`、`transcript-payload-read.ts` 与 `sessions/tools/{edit,file-diff}.ts`。
 - **Qoder CN**：增加独立 `~/.qoder-cn/projects/**/*.jsonl`，尊重官方 `QODERCN_CONFIG_DIR`，也提供 `CREDITIA_QODER_CN_DIR`。国际版 `~/.qoder` 仍独立读取。只计算现有 reader 能确认的配对成功编辑；[官方 session 文档](https://docs.qoder.cn/en/cli/sessions)确认目录和环境变量，尚未真实账号运行验收。
 

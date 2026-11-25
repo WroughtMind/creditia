@@ -2,6 +2,17 @@
 
 本页保留 2026-10-19 核查的 73 个工具与读取入口及其证据。当前 78 项公共目录的口径为 **72 个历史入口、5 个执行宿主、1 个未确认格式**，见 [完整覆盖表](AGENT_SUPPORT.md)。两张表不能相加作为产品数量。最新的 Eve 与 inference.sh 真实执行验收、MCPJam 原生执行验收分别见 [SUPPORT_NATIVE_LIVE.md](docs/adapters/SUPPORT_NATIVE_LIVE.md) 与 [SUPPORT_MCPJAM_LIVE.md](docs/adapters/SUPPORT_MCPJAM_LIVE.md)。灵码真实库验收及此前各轮来源保留在 [SUPPORT_AGENT3.md](docs/adapters/SUPPORT_AGENT3.md) 与 `docs/adapters/SUPPORT_AGENT*.md`。
 
+## 维护分级
+
+- **Tier 1（15 个入口）** 是旗舰编程工具。持续跟踪上游版本及原生日志格式，维护成功编辑的逐行归因，用脱敏真实日志做回放回归。样本范围与接入流程见[真实日志回放指南](crates/core/tests/fixtures/real/README.md)。
+- **Tier 2（63 个入口）** 涵盖长尾、云端和社区工具。支持按需采集（`creditia capture`，适用于支持 ACP 的工具）、`creditia stamp`、Git 提交尾注（trailer）、已支持格式的通用轨迹导入和现有尽力维护的社区读取器。遇到上游账号门槛或尚未核实的格式变更，依赖社区提供脱敏样本或 PR。
+
+Tier 1 的公开 ID 为 `antigravity`、`antigravity-cli`、`claude-code`、`cline`、`codex`、`cursor`、`gemini-cli`、`github-copilot`、`kilo`、`opencode`、`qwen-code`、`roo`、`trae`、`windsurf`、`zed`。`github-copilot` 涵盖编辑器与 Copilot CLI。Aider 和 TRAE CLI 有内部读取 ID `aider` 和 `trae`。公共目录中的 `aider-desk`、`trae` 和 `trae-cn` 分别指 AiderDesk、TRAE 编辑器和 TRAE CN 编辑器。
+
+`creditia agents --json` 列出全部入口及其 `tier`，可用 `--tier tier1` 或 `--tier tier2` 筛选。分级记录维护投入，逐行归因仍以可核实的成功编辑为准。各工具的实际读取边界见下表。
+
+## 读取入口
+
 下表区分原生编辑、官方导入、有限 hook、仅会话和 ACP 新会话采集。数量不是独立产品数、市场覆盖率或逐版本验收数。同名产品的不同入口分别核查；表中范围以实际已确认格式为准。
 
 新增读取统一进入 CLI 与 App 共用的项目发现、数据体检、正式分析。doctor 的 `scope` 区分 `edits`、`sessions`、`capture`、`diagnostic`；可读取会话不表示能计算代码贡献。Grok Build、Kimi Code CLI 是工具名，模型另记。

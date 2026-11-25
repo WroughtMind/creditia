@@ -6,6 +6,7 @@
   "agents": [
     {
       "id": "aider-desk",
+      "tier": "tier2",
       "name": "AiderDesk",
       "harness": "aider-desk",
       "skillsDir": ".aider-desk/skills",
@@ -15,6 +16,7 @@
     },
     {
       "id": "amp",
+      "tier": "tier2",
       "name": "Amp",
       "harness": "amp",
       "skillsDir": ".agents/skills",
@@ -22,6 +24,7 @@
     },
     {
       "id": "antigravity",
+      "tier": "tier1",
       "name": "Antigravity",
       "harness": "antigravity-ide",
       "skillsDir": ".agents/skills",
@@ -29,6 +32,7 @@
     },
     {
       "id": "antigravity-cli",
+      "tier": "tier1",
       "name": "Antigravity CLI",
       "harness": "antigravity",
       "skillsDir": ".agents/skills",
@@ -36,6 +40,7 @@
     },
     {
       "id": "astrbot",
+      "tier": "tier2",
       "name": "AstrBot",
       "harness": "astrbot",
       "skillsDir": "data/skills",
@@ -45,6 +50,7 @@
     },
     {
       "id": "autohand-code",
+      "tier": "tier2",
       "name": "Autohand Code CLI",
       "harness": "autohand",
       "skillsDir": ".autohand/skills",
@@ -52,6 +58,7 @@
     },
     {
       "id": "augment",
+      "tier": "tier2",
       "name": "Augment",
       "harness": "auggie",
       "skillsDir": ".augment/skills",
@@ -59,6 +66,7 @@
     },
     {
       "id": "bob",
+      "tier": "tier2",
       "name": "IBM Bob",
       "harness": "bob",
       "skillsDir": ".bob/skills",
@@ -66,6 +74,7 @@
     },
     {
       "id": "claude-code",
+      "tier": "tier1",
       "name": "Claude Code",
       "harness": "claude-code",
       "skillsDir": ".claude/skills",
@@ -73,6 +82,7 @@
     },
     {
       "id": "openclaw",
+      "tier": "tier2",
       "name": "OpenClaw",
       "harness": "openclaw",
       "skillsDir": "skills",
@@ -80,6 +90,7 @@
     },
     {
       "id": "cline",
+      "tier": "tier1",
       "name": "Cline",
       "harness": "cline",
       "skillsDir": ".agents/skills",
@@ -87,6 +98,7 @@
     },
     {
       "id": "codearts-agent",
+      "tier": "tier2",
       "name": "CodeArts Agent",
       "harness": "codearts-agent",
       "skillsDir": ".codeartsdoer/skills",
@@ -96,6 +108,7 @@
     },
     {
       "id": "codebuddy",
+      "tier": "tier2",
       "name": "CodeBuddy",
       "harness": "codebuddy",
       "skillsDir": ".codebuddy/skills",
@@ -103,6 +116,7 @@
     },
     {
       "id": "codemaker",
+      "tier": "tier2",
       "name": "Codemaker",
       "harness": "codemaker",
       "skillsDir": ".codemaker/skills",
@@ -112,6 +126,7 @@
     },
     {
       "id": "codestudio",
+      "tier": "tier2",
       "name": "Code Studio",
       "harness": "codestudio",
       "skillsDir": ".codestudio/skills",
@@ -121,6 +136,7 @@
     },
     {
       "id": "codex",
+      "tier": "tier1",
       "name": "Codex",
       "harness": "codex",
       "skillsDir": ".agents/skills",
@@ -128,6 +144,7 @@
     },
     {
       "id": "command-code",
+      "tier": "tier2",
       "name": "Command Code",
       "harness": "command-code",
       "skillsDir": ".commandcode/skills",
@@ -135,6 +152,7 @@
     },
     {
       "id": "continue",
+      "tier": "tier2",
       "name": "Continue",
       "harness": "continue",
       "skillsDir": ".continue/skills",
@@ -142,6 +160,7 @@
     },
     {
       "id": "cortex",
+      "tier": "tier2",
       "name": "Cortex Code",
       "harness": "cortex-code",
       "skillsDir": ".cortex/skills",
@@ -149,6 +168,7 @@
     },
     {
       "id": "crush",
+      "tier": "tier2",
       "name": "Crush",
       "harness": "crush",
       "skillsDir": ".crush/skills",
@@ -156,6 +176,7 @@
     },
     {
       "id": "cursor",
+      "tier": "tier1",
       "name": "Cursor",
       "harness": "cursor",
       "skillsDir": ".agents/skills",
@@ -163,6 +184,7 @@
     },
     {
       "id": "deepagents",
+      "tier": "tier2",
       "name": "Deep Agents",
       "harness": "deepagents",
       "skillsDir": ".agents/skills",
@@ -172,6 +194,7 @@
     },
     {
       "id": "devin",
+      "tier": "tier2",
       "name": "Devin for Terminal",
       "harness": "devin",
       "skillsDir": ".devin/skills",
@@ -179,6 +202,7 @@
     },
     {
       "id": "dexto",
+      "tier": "tier2",
       "name": "Dexto",
       "harness": "dexto",
       "skillsDir": ".agents/skills",
@@ -188,6 +212,7 @@
     },
     {
       "id": "droid",
+      "tier": "tier2",
       "name": "Droid",
       "harness": "droid",
       "skillsDir": ".agents/skills",
@@ -195,6 +220,7 @@
     },
     {
       "id": "eve",
+      "tier": "tier2",
       "name": "Eve",
       "harness": "eve",
       "skillsDir": "agent/skills",
@@ -204,6 +230,7 @@
     },
     {
       "id": "firebender",
+      "tier": "tier2",
       "name": "Firebender",
       "harness": "firebender",
       "skillsDir": ".agents/skills",
@@ -213,6 +240,7 @@
     },
     {
       "id": "forgecode",
+      "tier": "tier2",
       "name": "ForgeCode",
       "harness": "forgecode",
       "skillsDir": ".forge/skills",
@@ -222,6 +250,7 @@
     },
     {
       "id": "fx",
+      "tier": "tier2",
       "name": "fx",
       "harness": "fx",
       "skillsDir": ".agents/skills",
@@ -231,6 +260,7 @@
     },
     {
       "id": "gemini-cli",
+      "tier": "tier1",
       "name": "Gemini CLI",
       "harness": "gemini",
       "skillsDir": ".agents/skills",
@@ -238,6 +268,7 @@
     },
     {
       "id": "github-copilot",
+      "tier": "tier1",
       "name": "GitHub Copilot",
       "harness": "copilot",
       "skillsDir": ".agents/skills",
@@ -245,6 +276,7 @@
     },
     {
       "id": "goose",
+      "tier": "tier2",
       "name": "Goose",
       "harness": "goose",
       "skillsDir": ".goose/skills",
@@ -252,6 +284,7 @@
     },
     {
       "id": "grok",
+      "tier": "tier2",
       "name": "Grok Build",
       "harness": "grok",
       "skillsDir": ".grok/skills",
@@ -259,6 +292,7 @@
     },
     {
       "id": "hermes-agent",
+      "tier": "tier2",
       "name": "Hermes Agent",
       "harness": "hermes-agent",
       "skillsDir": ".hermes/skills",
@@ -266,6 +300,7 @@
     },
     {
       "id": "inference-sh",
+      "tier": "tier2",
       "name": "inference.sh",
       "harness": "inference-sh",
       "skillsDir": ".inferencesh/skills",
@@ -275,6 +310,7 @@
     },
     {
       "id": "jazz",
+      "tier": "tier2",
       "name": "Jazz",
       "harness": "jazz",
       "skillsDir": ".jazz/skills",
@@ -284,6 +320,7 @@
     },
     {
       "id": "junie",
+      "tier": "tier2",
       "name": "Junie",
       "harness": "junie",
       "skillsDir": ".junie/skills",
@@ -291,6 +328,7 @@
     },
     {
       "id": "iflow-cli",
+      "tier": "tier2",
       "name": "iFlow CLI",
       "harness": "iflow",
       "skillsDir": ".iflow/skills",
@@ -298,6 +336,7 @@
     },
     {
       "id": "kilo",
+      "tier": "tier1",
       "name": "Kilo Code",
       "harness": "kilo",
       "skillsDir": ".agents/skills",
@@ -305,6 +344,7 @@
     },
     {
       "id": "kimchi",
+      "tier": "tier2",
       "name": "Kimchi",
       "harness": "kimchi",
       "skillsDir": ".kimchi/skills",
@@ -312,6 +352,7 @@
     },
     {
       "id": "kimi-code-cli",
+      "tier": "tier2",
       "name": "Kimi Code CLI",
       "harness": "kimi",
       "skillsDir": ".agents/skills",
@@ -319,6 +360,7 @@
     },
     {
       "id": "kiro-cli",
+      "tier": "tier2",
       "name": "Kiro CLI",
       "harness": "kiro",
       "skillsDir": ".kiro/skills",
@@ -326,6 +368,7 @@
     },
     {
       "id": "kode",
+      "tier": "tier2",
       "name": "Kode",
       "harness": "kode",
       "skillsDir": ".kode/skills",
@@ -335,6 +378,7 @@
     },
     {
       "id": "lingma",
+      "tier": "tier2",
       "name": "Lingma",
       "harness": "lingma",
       "skillsDir": ".lingma/skills",
@@ -344,6 +388,7 @@
     },
     {
       "id": "loaf",
+      "tier": "tier2",
       "name": "Loaf",
       "harness": "loaf",
       "skillsDir": ".agents/skills",
@@ -353,6 +398,7 @@
     },
     {
       "id": "mcpjam",
+      "tier": "tier2",
       "name": "MCPJam",
       "harness": "mcpjam",
       "skillsDir": ".mcpjam/skills",
@@ -362,6 +408,7 @@
     },
     {
       "id": "minimax-code",
+      "tier": "tier2",
       "name": "MiniMax Code",
       "harness": "minimax-code",
       "skillsDir": ".minimax/skills",
@@ -369,6 +416,7 @@
     },
     {
       "id": "mistral-vibe",
+      "tier": "tier2",
       "name": "Mistral Vibe",
       "harness": "mistral-vibe",
       "skillsDir": ".vibe/skills",
@@ -376,6 +424,7 @@
     },
     {
       "id": "moxby",
+      "tier": "tier2",
       "name": "Moxby",
       "harness": "moxby",
       "skillsDir": ".moxby/skills",
@@ -385,6 +434,7 @@
     },
     {
       "id": "mux",
+      "tier": "tier2",
       "name": "Mux",
       "harness": "mux",
       "skillsDir": ".mux/skills",
@@ -394,6 +444,7 @@
     },
     {
       "id": "opencode",
+      "tier": "tier1",
       "name": "OpenCode",
       "harness": "opencode",
       "skillsDir": ".agents/skills",
@@ -401,6 +452,7 @@
     },
     {
       "id": "openhands",
+      "tier": "tier2",
       "name": "OpenHands",
       "harness": "openhands",
       "skillsDir": ".openhands/skills",
@@ -408,6 +460,7 @@
     },
     {
       "id": "ona",
+      "tier": "tier2",
       "name": "Ona",
       "harness": "ona",
       "skillsDir": ".ona/skills",
@@ -417,6 +470,7 @@
     },
     {
       "id": "pi",
+      "tier": "tier2",
       "name": "Pi",
       "harness": "pi",
       "skillsDir": ".agents/skills",
@@ -424,6 +478,7 @@
     },
     {
       "id": "posit-assistant",
+      "tier": "tier2",
       "name": "Posit Assistant",
       "harness": "posit-assistant",
       "skillsDir": ".posit/assistant/skills",
@@ -433,6 +488,7 @@
     },
     {
       "id": "qoder",
+      "tier": "tier2",
       "name": "Qoder",
       "harness": "qoder",
       "skillsDir": ".qoder/skills",
@@ -440,6 +496,7 @@
     },
     {
       "id": "qoder-cn",
+      "tier": "tier2",
       "name": "Qoder CN",
       "harness": "qoder",
       "skillsDir": ".qoder/skills",
@@ -447,6 +504,7 @@
     },
     {
       "id": "qwen-code",
+      "tier": "tier1",
       "name": "Qwen Code",
       "harness": "qwen",
       "skillsDir": ".qwen/skills",
@@ -454,6 +512,7 @@
     },
     {
       "id": "replit",
+      "tier": "tier2",
       "name": "Replit",
       "harness": "replit",
       "skillsDir": ".agents/skills",
@@ -461,6 +520,7 @@
     },
     {
       "id": "reasonix",
+      "tier": "tier2",
       "name": "Reasonix",
       "harness": "reasonix",
       "skillsDir": ".reasonix/skills",
@@ -470,6 +530,7 @@
     },
     {
       "id": "rovodev",
+      "tier": "tier2",
       "name": "Rovo Dev",
       "harness": "rovodev",
       "skillsDir": ".rovodev/skills",
@@ -479,6 +540,7 @@
     },
     {
       "id": "roo",
+      "tier": "tier1",
       "name": "Roo Code",
       "harness": "roo",
       "skillsDir": ".roo/skills",
@@ -486,6 +548,7 @@
     },
     {
       "id": "sarvam-code",
+      "tier": "tier2",
       "name": "Sarvam Code",
       "harness": "sarvam-code",
       "skillsDir": ".agents/skills",
@@ -495,6 +558,7 @@
     },
     {
       "id": "tabnine-cli",
+      "tier": "tier2",
       "name": "Tabnine CLI",
       "harness": "tabnine",
       "skillsDir": ".tabnine/agent/skills",
@@ -502,6 +566,7 @@
     },
     {
       "id": "terramind",
+      "tier": "tier2",
       "name": "Terramind",
       "harness": "terramind",
       "skillsDir": ".terramind/skills",
@@ -511,6 +576,7 @@
     },
     {
       "id": "tinycloud",
+      "tier": "tier2",
       "name": "Tinycloud",
       "harness": "tinycloud",
       "skillsDir": ".tinycloud/skills",
@@ -520,6 +586,7 @@
     },
     {
       "id": "trae",
+      "tier": "tier1",
       "name": "Trae",
       "harness": "trae-ide",
       "skillsDir": ".trae/skills",
@@ -527,6 +594,7 @@
     },
     {
       "id": "trae-cn",
+      "tier": "tier2",
       "name": "Trae CN",
       "harness": "trae-ide",
       "skillsDir": ".trae/skills",
@@ -534,6 +602,7 @@
     },
     {
       "id": "warp",
+      "tier": "tier2",
       "name": "Warp",
       "harness": "warp",
       "skillsDir": ".agents/skills",
@@ -541,6 +610,7 @@
     },
     {
       "id": "windsurf",
+      "tier": "tier1",
       "name": "Windsurf",
       "harness": "windsurf",
       "skillsDir": ".windsurf/skills",
@@ -548,6 +618,7 @@
     },
     {
       "id": "zed",
+      "tier": "tier1",
       "name": "Zed",
       "harness": "zed",
       "skillsDir": ".agents/skills",
@@ -555,6 +626,7 @@
     },
     {
       "id": "zcode",
+      "tier": "tier2",
       "name": "ZCode",
       "harness": "zcode",
       "skillsDir": ".zcode/skills",
@@ -562,6 +634,7 @@
     },
     {
       "id": "zencoder",
+      "tier": "tier2",
       "name": "Zencoder",
       "harness": "zencoder",
       "skillsDir": ".zencoder/skills",
@@ -571,6 +644,7 @@
     },
     {
       "id": "zenflow",
+      "tier": "tier2",
       "name": "Zenflow",
       "harness": "zenflow",
       "skillsDir": ".zencoder/skills",
@@ -580,6 +654,7 @@
     },
     {
       "id": "neovate",
+      "tier": "tier2",
       "name": "Neovate",
       "harness": "neovate",
       "skillsDir": ".neovate/skills",
@@ -587,6 +662,7 @@
     },
     {
       "id": "pochi",
+      "tier": "tier2",
       "name": "Pochi",
       "harness": "pochi",
       "skillsDir": ".pochi/skills",
@@ -596,6 +672,7 @@
     },
     {
       "id": "promptscript",
+      "tier": "tier2",
       "name": "PromptScript",
       "harness": "promptscript",
       "skillsDir": ".agents/skills",
@@ -605,6 +682,7 @@
     },
     {
       "id": "adal",
+      "tier": "tier2",
       "name": "AdaL",
       "harness": "adal",
       "skillsDir": ".adal/skills",

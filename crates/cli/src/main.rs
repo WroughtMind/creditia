@@ -73,7 +73,7 @@ const USAGE_ZH: &str = "用法：creditia-core <命令> [选项]
                                    分析并写 .creditia/credits.json（全程本地，不调用任何大模型）
   update    [--repo P]             增量更新（同 analyze）
   collect   [--repo P | --all]     只采集证据进证据库
-  agents    [--agent ID]           全部 agent 的入口、读取范围与 skill 安装命令
+  agents    [--agent ID] [--tier tier1|tier2]  agent 的入口、读取范围与 skill 安装命令
   run       --agent ID -- <命令>   在指定 agent 身份下启动命令（不自动安装 hook）
   doctor                           检查各数据源
   capture   --harness H [--out F] -- <ACP agent 命令> [参数]
@@ -106,7 +106,7 @@ const USAGE_EN: &str = "Usage: creditia-core <command> [options]
                                    analyze and write .creditia/credits.json (all local, never calls a model)
   update    [--repo P]             incremental update (same as analyze)
   collect   [--repo P | --all]     only collect evidence into the library
-  agents    [--agent ID]           agent catalogue, history scope and skill installation
+  agents    [--agent ID] [--tier tier1|tier2]  agent catalogue, history scope and skill installation
   run       --agent ID -- <cmd>    run with an explicit agent identity (no hook installation)
   doctor                           check every data source
   capture   --harness H [--out F] -- <ACP agent command> [args]

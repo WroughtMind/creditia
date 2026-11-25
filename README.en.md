@@ -136,7 +136,10 @@ jobs:
 
 The development build registers **78 agent entries**, all available for commit attribution, launch identity and skill installation guidance. **72 entries have history readers** (including limited edits, metadata, imports and conditional formats), 5 attribute through the actual executing host, and CodeMaker's native edit format remains unconfirmed. Real Lingma history, Eve's local source sandbox and inference.sh's Codex driver have passed their respective acceptance checks. MCPJam's official local launch chain and real executors passed scripted-model checks; account and cloud modes remain separate. See [native acceptance](docs/adapters/SUPPORT_NATIVE_LIVE.md), [MCPJam acceptance](docs/adapters/SUPPORT_MCPJAM_LIVE.md) and [remaining work](https://github.com/WroughtMind/creditia/issues/110). These counts do not mean every version or account has passed runtime validation.
 
-Run `creditia agents --json` for the catalogue. The [complete matrix](AGENT_SUPPORT.en.md) lists all 78 entries; [reader boundaries](ADAPTERS.md) explain which edits can be attributed. CLI and App share the same readers. Missing models remain unknown; commit declarations remain distinct from line evidence.
+- **Tier 1 (15 entries)** covers flagship coding tools, with continuous upstream version and format tracking, native edit attribution, and desensitized real-log replay tests.
+- **Tier 2 (63 entries)** covers long-tail, cloud and community tools, with opt-in ACP capture, `creditia stamp`, Git trailers, generic trace import for supported formats, and existing best-effort readers. Account walls and unverified format changes rely on community PRs or desensitized samples.
+
+Run `creditia agents --json` for the full catalogue, or add `--tier tier1` or `--tier tier2` to filter it. The [complete matrix](AGENT_SUPPORT.en.md) lists all 78 entries. The [reader boundaries](ADAPTERS.md) explain which edits can be attributed. CLI and App share the same readers. Missing models remain unknown. Commit declarations and line evidence are counted separately.
 
 | | Tool | What it reads | Lines | Model |
 |:-:|---|---|:-:|:-:|

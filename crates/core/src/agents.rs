@@ -2,10 +2,18 @@
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentTier {
+    Tier1,
+    Tier2,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Agent {
     pub id: String,
+    pub tier: AgentTier,
     pub name: String,
     pub harness: String,
     pub skills_dir: String,
@@ -62,6 +70,49 @@ mod tests {
             assert!(!a.skills_dir.split('/').any(|p| p == ".."));
         }
     }
+    #[test]
+    fn catalogue_tiers_match_the_flagship_public_ids() {
+        let mut tier1: Vec<_> = all()
+            .iter()
+            .filter(|a| a.tier == AgentTier::Tier1)
+            .map(|a| a.id.as_str())
+            .collect();
+        tier1.sort_unstable();
+        assert_eq!(
+            tier1,
+            [
+                "antigravity",
+                "antigravity-cli",
+                "claude-code",
+                "cline",
+                "codex",
+                "cursor",
+                "gemini-cli",
+                "github-copilot",
+                "kilo",
+                "opencode",
+                "qwen-code",
+                "roo",
+                "trae",
+                "windsurf",
+                "zed",
+            ]
+        );
+        for agent in all() {
+            let value = serde_json::to_value(agent).unwrap();
+            assert!(matches!(value["tier"].as_str(), Some("tier1" | "tier2")));
+        }
+    }
+
+    #[test]
+    fn catalogue_rejects_missing_or_unknown_tiers() {
+        let mut value = serde_json::to_value(by_id("codex").unwrap()).unwrap();
+        value["tier"] = serde_json::json!("tier3");
+        assert!(serde_json::from_value::<Agent>(value.clone()).is_err());
+        value.as_object_mut().unwrap().remove("tier");
+        assert!(serde_json::from_value::<Agent>(value).is_err());
+    }
+
     #[test]
     fn editor_and_cli_names_are_not_interchanged() {
         assert_eq!(by_id("antigravity").unwrap().harness, "antigravity-ide");

@@ -65,7 +65,7 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   analyze   [--repo P] [--github] [--level strict|standard|loose]
   update    [--repo P]              增量更新
   collect   [--repo P | --all]      只采集证据
-  agents    [--agent ID]            全部 agent 的入口与支持范围
+  agents    [--agent ID] [--tier tier1|tier2]  agent 的入口与支持范围
   run       --agent ID -- <命令>    在指定 agent 身份下启动命令
   doctor                            检查各数据源
   capture   --harness H -- <ACP agent 命令> [参数]   按需采集 ACP 成功编辑
@@ -111,7 +111,7 @@ Analysis (Rust core, all local, never calls a model)
   analyze   [--repo P] [--github] [--level strict|standard|loose]
   update    [--repo P]              incremental update
   collect   [--repo P | --all]      only collect evidence
-  agents    [--agent ID]            all agent entry points and support scope
+  agents    [--agent ID] [--tier tier1|tier2]  agent entry points and support scope
   run       --agent ID -- <command> run with an explicit agent identity
   doctor                            check every data source
   capture   --harness H -- <ACP agent command> [args]   opt-in capture of completed ACP edits
