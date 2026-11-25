@@ -184,6 +184,10 @@ pub(crate) fn diff_files(diff: &str) -> Vec<(String, String)> {
 /// Git quotes paths with C escapes, including octal UTF-8 bytes; JSON strings
 /// don't support those octal escapes. Decode only the documented Git form.
 fn git_quoted_path(path: &str) -> Option<String> {
+    String::from_utf8(git_quoted_path_bytes(path)?).ok()
+}
+
+pub(crate) fn git_quoted_path_bytes(path: &str) -> Option<Vec<u8>> {
     let raw = path.strip_prefix('"')?.strip_suffix('"')?.as_bytes();
     let mut out = vec![];
     let mut i = 0;
@@ -221,7 +225,7 @@ fn git_quoted_path(path: &str) -> Option<String> {
         out.push(byte);
         i += 1;
     }
-    String::from_utf8(out).ok()
+    Some(out)
 }
 
 #[allow(clippy::too_many_arguments)] // Same evidence fields as push_text, with a verified cwd for relative paths.

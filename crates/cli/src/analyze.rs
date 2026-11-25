@@ -9,6 +9,8 @@ use creditia_core::util::{date_at, date_local, now_iso, week_at};
 use creditia_store::{cache_dir, load_json, save_json, Library, Project};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fs::File;
+use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -49,9 +51,42 @@ struct CommitCache {
     commits: Vec<Commit>,
     #[serde(default)]
     stamps: HashMap<String, (String, Option<String>)>,
+    /// Paths from the raw history, including deletions and changes with no added lines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    paths: Option<HashSet<String>>,
 }
 
 const COMMIT_CACHE_VERSION: u32 = 7;
+
+fn load_cache<T: serde::de::DeserializeOwned + Default>(path: &Path) -> (T, bool) {
+    let packed = File::open(path).ok()
+        .and_then(|f| zstd::stream::decode_all(f).ok())
+        .and_then(|buf| serde_json::from_slice(&buf).ok());
+    match packed {
+        Some(value) => (value, true),
+        None => (load_json(&path.with_extension("")), false),
+    }
+}
+
+fn save_cache(path: &Path, value: &impl serde::Serialize) -> Result<(), String> {
+    // Serialize and compress into a temporary file before replacing the cache.
+    let temp = path.with_extension(format!("tmp{}", std::process::id()));
+    let write = || -> Result<(), String> {
+        let file = File::create(&temp).map_err(|e| e.to_string())?;
+        let encoder = zstd::stream::write::Encoder::new(file, 1).map_err(|e| e.to_string())?;
+        let mut writer = BufWriter::with_capacity(64 * 1024, encoder);
+        serde_json::to_writer(&mut writer, value).map_err(|e| e.to_string())?;
+        writer.into_inner().map_err(|e| e.to_string())?.finish().map_err(|e| e.to_string())?;
+        std::fs::rename(&temp, path).map_err(|e| e.to_string())
+    };
+    let result = write();
+    if result.is_ok() {
+        let _ = std::fs::remove_file(path.with_extension(""));
+    } else {
+        let _ = std::fs::remove_file(temp);
+    }
+    result
+}
 
 /// 读配置：指定了就用指定的；仓库里有就用仓库的；都没有就现场探测（不落盘）。空着的字段自动补
 pub fn load_config(repo: &Path, override_path: Option<&Path>) -> Config {
@@ -116,7 +151,7 @@ pub fn known_roots(repo: &Path, cfg: &Config, lib: Option<&Library>, project: &s
     v
 }
 
-fn path_map(repo: &Path, head: &str, cfg: &Config, roots: &[String]) -> PathMap {
+fn path_map(repo: &Path, head: &str, cfg: &Config, roots: &[String], history: Option<HashSet<String>>) -> PathMap {
     let mut markers: Vec<String> = cfg.markers.iter().map(|m| m.to_lowercase()).collect();
     for r in roots {
         let m = format!("{}/", r.replace('\\', "/").trim_end_matches('/').to_lowercase());
@@ -124,7 +159,7 @@ fn path_map(repo: &Path, head: &str, cfg: &Config, roots: &[String]) -> PathMap 
             markers.push(m);
         }
     }
-    PathMap { known: ad::git::known_paths(repo, head), markers, excludes: cfg.exclude_markers.iter().map(|m| m.to_lowercase()).collect() }
+    PathMap { known: ad::git::known_paths(repo, head, history), markers, excludes: cfg.exclude_markers.iter().map(|m| m.to_lowercase()).collect() }
 }
 
 fn scan_all(store: &mut Store, pm: &PathMap, roots: &[String], st: &mut ad::Stats) {
@@ -152,7 +187,7 @@ pub fn collect(repo: &Path, lib: &mut Library, config: Option<&Path>) -> Result<
     lib.upsert_project(&proj)?;
     register_paths(lib, &proj.id, repo, None);
     let roots = known_roots(repo, &cfg, Some(lib), &proj.id);
-    let pm = path_map(repo, &head, &cfg, &roots);
+    let pm = path_map(repo, &head, &cfg, &roots, None);
     let cache = cache_dir(&proj.id);
     let mut store: Store = load_json(&cache.join("store.json"));
     if store.version != STORE_VERSION {
@@ -179,10 +214,10 @@ fn tabnine_owners(store: &Store) -> HashSet<String> {
 }
 
 /// 证据：日志（增量扫描）+ 证据库（日志被清理后仍在）
-fn evidence(repo: &Path, cfg: &Config, lib: &mut Library, project: &str, head: &str) -> Result<(Store, ad::Stats), String> {
+fn evidence(repo: &Path, cfg: &Config, lib: &mut Library, project: &str, head: &str, history: Option<HashSet<String>>) -> Result<(Store, ad::Stats), String> {
     let cache = cache_dir(project);
     let roots = known_roots(repo, cfg, Some(lib), project);
-    let pm = path_map(repo, head, cfg, &roots);
+    let pm = path_map(repo, head, cfg, &roots, history);
     let mut store: Store = load_json(&cache.join("store.json"));
     if store.version != STORE_VERSION {
         store = Store { version: STORE_VERSION, ..Default::default() };
@@ -257,7 +292,7 @@ pub fn staged(repo: &Path) -> Result<(Vec<(String, usize)>, usize), String> {
     if total == 0 {
         return Ok((vec![], 0));
     }
-    let (store, _) = evidence(repo, &cfg, &mut lib, &proj.id, &head)?;
+    let (store, _) = evidence(repo, &cfg, &mut lib, &proj.id, &head, None)?;
     let idx = Index::build(&store);
     let sessions: Vec<Session> = store.groups.values().flat_map(|g| g.sessions.clone()).collect();
     let mut eng = Engine::new(&cfg, &idx, &sessions, &[], HashMap::new());
@@ -281,6 +316,15 @@ pub fn staged(repo: &Path) -> Result<(Vec<(String, usize)>, usize), String> {
 
 pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let t0 = Instant::now();
+    let timing = std::env::var_os("CREDITIA_TIMING").is_some_and(|v| v == "1");
+    let mut last = t0;
+    let mut phase = |name| {
+        if timing {
+            let now = Instant::now();
+            eprintln!("@timing phase={name} seconds={:.6}", (now - last).as_secs_f64());
+            last = now;
+        }
+    };
     let mut cfg = load_config(repo, opts.config.as_deref());
     if let Some(lv) = &opts.level {
         cfg.level = lv.clone();
@@ -298,18 +342,37 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
 
     // ---- git：提交（增量）
     let head = analysis_head(repo, &cfg.branch)?;
-    let mut cc: CommitCache = load_json(&cache.join("commits.json"));
+    phase("setup");
+    let commits_path = cache.join("commits.json.zst");
+    let (mut cc, packed): (CommitCache, _) = load_cache(&commits_path);
     if cc.version != COMMIT_CACHE_VERSION {
         cc = CommitCache { version: COMMIT_CACHE_VERSION, ..Default::default() };
     }
-    let base = cc.head.clone().filter(|h| ad::git::git_ok(repo, &["merge-base", "--is-ancestor", h, &head]));
-    let (new_commits, new_stamps) = if let Some(b) = base {
-        if b == head { (vec![], HashMap::new()) } else { ad::git::read_commits(repo, &head, Some(&format!("{b}..{head}"))) }
-    } else {
+    let complete = ad::git::git(repo, &["rev-parse", "--is-shallow-repository"]).trim() == "false";
+    let standard_paths = complete && ad::git::git(repo, &[
+        "config", "--name-only", "--get-regexp", r"^diff\.(renames|renamelimit)$|^log\.(diffmerges|showroot)$",
+    ]).is_empty();
+    let base = cc.head.as_deref().filter(|h| *h == head || ad::git::git_ok(repo, &["merge-base", "--is-ancestor", h, &head]));
+    let mut paths_changed = false;
+    if base.is_none() {
         cc.commits.clear();
         cc.stamps.clear();
-        ad::git::read_commits(repo, &head, None)
+        cc.paths = standard_paths.then(HashSet::new);
+    }
+    if !standard_paths {
+        paths_changed = cc.paths.take().is_some();
+    }
+    let (new_commits, new_stamps) = if base == Some(head.as_str()) {
+        (vec![], HashMap::new())
+    } else {
+        let range = base.map(|b| format!("{b}..{head}"));
+        ad::git::read_history(repo, &head, range.as_deref(), cc.paths.as_mut())?
     };
+    // A legacy cache already has the patches. Fill in its path set once.
+    if standard_paths && cc.paths.is_none() {
+        cc.paths = ad::git::history_paths(repo, &head);
+        paths_changed = cc.paths.is_some();
+    }
     let n_new = new_commits.len();
     cc.commits.extend(new_commits);
     // .gitattributes 里标成生成物、第三方的文件不算谁写的（linguist-generated / linguist-vendored / -diff）
@@ -324,6 +387,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         }
     }
     cc.stamps.extend(new_stamps);
+    let head_changed = cc.head.as_deref() != Some(head.as_str());
     cc.head = Some(head.clone());
     // 时区：你自己的提交里最常见的那个（不看这台电脑：CI 上多半是 UTC）；你没有提交就看全部提交
     let forced_tz = creditia_core::util::forced_offset();
@@ -342,10 +406,13 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
             creditia_core::util::set_offset(tz);
         }
     }
+    phase("history");
     // 读历史是最慢的几步之一：读完先存下，后面被取消也不用重读
-    if n_new > 0 {
-        save_json(&cache.join("commits.json"), &cc)?;
+    if head_changed || paths_changed || !packed || skipped_generated > 0 {
+        save_cache(&commits_path, &cc)?;
     }
+
+    phase("commit_checkpoint");
 
     // ---- PR 元数据（gh 只读；缓存）
     let prs_path = cache.join("prs.json");
@@ -359,12 +426,14 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
             save_json(&prs_path, &prs)?;
         }
     }
-    let (units, parents) = ad::git::units(repo, &head, &prs);
-    let (tags, ver_of) = ad::git::versions(repo, &head, &parents, &cfg.ignore_tags)?;
+    let (units, graph) = ad::git::units(repo, &head, &prs);
+    let (tags, ver_of) = ad::git::versions(repo, &head, &graph, &cfg.ignore_tags)?;
     let recovered = ad::squash::recover(repo, &cache, &cc.commits, &prs, &cfg, opts.github);
 
+    phase("graph");
+
     // ---- 证据：日志（增量）+ 证据库（日志被清理后仍在）
-    let (store, mut st) = evidence(repo, &cfg, &mut lib, &proj.id, &head)?;
+    let (store, mut st) = evidence(repo, &cfg, &mut lib, &proj.id, &head, cc.paths.take())?;
     warnings.extend(st.warnings.clone());
     if !recovered.declarations.is_empty() {
         let pulls = recovered.declarations.len();
@@ -378,10 +447,12 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     let idx = Index::build(&store);
     let sessions: Vec<Session> = store.groups.values().flat_map(|g| g.sessions.clone()).collect();
 
+    phase("evidence");
+
     // ---- 归因
     let mut eng = Engine::new(&cfg, &idx, &sessions, &units, cc.stamps.clone());
     eng.squash_declarations = recovered.declarations;
-    if ad::git::git(repo,&["rev-parse","--is-shallow-repository"]).trim()=="false" {
+    if complete {
         eng.set_history(&cc.commits);
     }
     let mut attrs: HashMap<String, CommitAttr> = HashMap::new();
@@ -397,11 +468,20 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     {
         use creditia_core::engine::{WINDOW_AFTER, WINDOW_BEFORE};
         let mine = cfg.director_emails();
+        // Sorted starts plus the latest end so far let each commit test overlap in O(log n).
+        let mut intervals: Vec<_> = sessions.iter().filter(|s| !s.reviewer).map(|s| (s.start, s.end)).collect();
+        intervals.sort_unstable_by_key(|x| x.0);
+        let mut latest = i64::MIN;
+        for (_, end) in &mut intervals {
+            latest = latest.max(*end);
+            *end = latest;
+        }
         let (mut n, mut lines) = (0usize, 0usize);
         for c in cc.commits.iter().filter(|c| mine.contains(&c.email)) {
             let un = attrs[&c.hash].lines.iter().flatten().filter(|a| a.level == Level::Unattributed).count();
             let (lo, hi) = (c.author_ts.min(c.commit_ts) - WINDOW_BEFORE, c.commit_ts.max(c.author_ts) + WINDOW_AFTER);
-            if un > 0 && !sessions.iter().any(|s| !s.reviewer && s.end >= lo && s.start <= hi) {
+            let starts_before = intervals.partition_point(|&(start, _)| start <= hi);
+            if un > 0 && (starts_before == 0 || intervals[starts_before - 1].1 < lo) {
                 n += 1;
                 lines += un;
             }
@@ -414,25 +494,29 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         }
     }
 
+    phase("attribute");
+
     // ---- 存活代码
     // blame.json、blame2.json 是旧格式的缓存
     for old in ["blame.json", "blame2.json"] {
         let _ = std::fs::remove_file(cache.join(old));
     }
-    let mut bc: HashMap<String, BlameFile> = load_json(&cache.join("blame3.json"));
-    let blame_path = cache.join("blame3.json");
-    let mut blame = ad::git::blame_head(repo, &head, &mut bc, &mut |c| {
-        let _ = save_json(&blame_path, c);
+    let blame_path = cache.join("blame3.json.zst");
+    let (mut bc, packed): (HashMap<String, BlameFile>, _) = load_cache(&blame_path);
+    phase("blame_cache");
+    let head_blame = ad::git::blame_head(repo, &head, &graph, &gen, &mut bc, &mut |c| {
+        let _ = save_cache(&blame_path, c);
     });
-    if !gen.is_empty() {
-        blame.retain(|(p, _)| !gen_hit(p));
-    }
+    let blame = head_blame.files;
+    phase("blame");
     if skipped_generated > 0 {
         st.notes.push(creditia_core::tr!(".gitattributes 标为生成物、第三方的文件改动 {skipped_generated} 处不计入", "{skipped_generated} changes to files marked generated or vendored in .gitattributes are not counted"));
     }
     let commit_by_hash: HashMap<&str, &Commit> = cc.commits.iter().map(|c| (c.hash.as_str(), c)).collect();
     let unattr = eng.reg.unattributed();
     let surv = engine::survival(&blame, &commit_by_hash, &attrs, unattr);
+
+    phase("survival");
 
     // 准确率基准用：逐行归因写到 CREDITIA_DUMP_LINES 指定的文件（含行内容哈希之外的一切，不含代码原文）
     if let Some(p) = std::env::var_os("CREDITIA_DUMP_LINES") {
@@ -456,6 +540,8 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         let _ = std::fs::write(p, json!({ "history": hist, "survival": sv }).to_string());
     }
 
+    phase("dump");
+
     // ---- 逐行溯源
     let mut blame_out = None;
     if let Some((fpath, ln)) = &opts.blame {
@@ -466,7 +552,7 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
                     let a = surv[i + ln - 1];
                     let w = &eng.reg.list[a.who];
                     let c = commit_by_hash.get(b.commit);
-                    let ev = idx.map.get(&(b.rel.to_string(), b.key)).and_then(|v| {
+                    let ev = idx.get(b.rel, b.key).and_then(|v| {
                         let ts = c.map(|c| c.author_ts).unwrap_or(0);
                         v.iter().filter(|e| e.ts <= ts + 3600).max_by_key(|e| e.ts)
                     });
@@ -760,6 +846,8 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         "conflictLines": conflicts,
     });
 
+    phase("summary");
+
     // ---- 写出
     let out = opts.out.clone().unwrap_or(repo.join(".creditia/credits.json"));
     if opts.blame.is_none() {
@@ -769,8 +857,11 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
         std::fs::write(&out, serde_json::to_string(&credits).unwrap()).map_err(|e| creditia_core::tr!("写入 {} 失败：{e}", "couldn't write {}: {e}", out.display()))?;
         lib.save_snapshot(&proj.id, &head, &generated_at, &credits.to_string())?;
     }
-    save_json(&cache.join("commits.json"), &cc)?;
-    save_json(&cache.join("blame3.json"), &bc)?;
+    if head_blame.cache_changed || !packed {
+        save_cache(&blame_path, &bc)?;
+    }
+
+    phase("write");
 
     // 终端里的一行 tier
     // 分母是全部新增行：工具、贡献者（别人的提交）、未确认加起来 100%（同作品里的份额口径）
@@ -789,5 +880,9 @@ pub fn run(repo: &Path, opts: &Opts) -> Result<Report, String> {
     gl.sort_by_key(|g| std::cmp::Reverse(g.1));
     let all: usize = gl.iter().map(|(_, n)| *n).sum();
     let tier = gl.iter().map(|(k, n)| format!("{k} {:.1}%", *n as f64 / all.max(1) as f64 * 100.0)).collect::<Vec<_>>().join(" · ");
-    Ok(Report { name: cfg.name.clone(), head, commits: cc.commits.len(), new_commits: n_new, units: unit_json.len(), lines: total_lines, secs: t0.elapsed().as_secs_f64(), out, tier, notes: st.notes, warnings, blame: blame_out })
+    let secs = t0.elapsed().as_secs_f64();
+    if timing {
+        eprintln!("@timing phase=total seconds={secs:.6}");
+    }
+    Ok(Report { name: cfg.name.clone(), head, commits: cc.commits.len(), new_commits: n_new, units: unit_json.len(), lines: total_lines, secs, out, tier, notes: st.notes, warnings, blame: blame_out })
 }

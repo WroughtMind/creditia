@@ -345,18 +345,45 @@ pub fn fingerprint(path: &std::path::Path) -> (u64, u64) {
 
 /// 匹配用的内存索引
 pub struct Index {
-    pub map: HashMap<(String, u32), Vec<Ev>>,
+    paths: HashMap<String, u32>,
+    pub(crate) map: HashMap<(u32, u32), IndexedEvents>,
+    pub(crate) event_count: usize,
+}
+
+#[derive(Default)]
+pub(crate) struct IndexedEvents {
+    pub events: Vec<Ev>,
+    pub offset: usize,
 }
 
 impl Index {
     pub fn build(store: &Store) -> Index {
-        let mut map: HashMap<(String, u32), Vec<Ev>> = HashMap::new();
-        for g in store.groups.values() {
-            for e in &g.evs {
-                map.entry((e.rel.clone(), e.key)).or_default().push(e.clone());
-            }
+        let mut paths = HashMap::new();
+        let mut map = HashMap::<_, IndexedEvents>::new();
+        for e in store.groups.values().flat_map(|g| &g.evs) {
+            let file = if let Some(&id) = paths.get(e.rel.as_str()) {
+                id
+            } else {
+                let id = paths.len().try_into().expect("too many evidence paths");
+                paths.insert(e.rel.clone(), id);
+                id
+            };
+            map.entry((file, e.key)).or_default().events.push(e.clone());
         }
-        Index { map }
+        let mut event_count = 0;
+        for group in map.values_mut() {
+            group.offset = event_count;
+            event_count += group.events.len();
+        }
+        Index { paths, map, event_count }
+    }
+
+    pub(crate) fn file_id(&self, rel: &str) -> Option<u32> {
+        self.paths.get(rel).copied()
+    }
+
+    pub fn get(&self, rel: &str, key: u32) -> Option<&[Ev]> {
+        Some(&self.map.get(&(self.file_id(rel)?, key))?.events)
     }
 }
 

@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::hash::short_key;
-use crate::model::{canonical_harness, Attr, BlameFile, Commit, CommitAttr, Index, Level, LineDeclaration, Registry, Session, Src, Unit, JOIN_WINDOWS};
+use crate::model::{canonical_harness, Attr, BlameFile, Commit, CommitAttr, Ev, Index, Level, LineDeclaration, Registry, Session, Src, Unit, JOIN_WINDOWS};
 use std::collections::{HashMap, HashSet};
 
 pub const WINDOW_BEFORE: i64 = 14 * 86400;
@@ -38,12 +38,13 @@ pub struct Engine<'a> {
     /// still means recovery succeeded but none of its declarations locate lines.
     pub squash_declarations: HashMap<String, Vec<LineDeclaration>>,
     /// 已被提交认领过的证据（与 idx.map 里的 Vec 一一对应）
-    used: HashMap<(String, u32), Vec<bool>>,
+    used: Vec<bool>,
+    line_agents: HashMap<(&'static str, &'a str), usize>,
     /// 主导者的 GitHub 账号名：同一个账号的几种 noreply 邮箱（`123+login@…`、`login@…`）都是他
     director_logins: HashSet<String>,
     /// Untimed successful edits can only match keys added exactly once in a
     /// complete Git history. Staged-only attribution never enables this fallback.
-    untimed_unique: HashSet<(String,u32)>,
+    untimed_unique: HashSet<(u32, u32)>,
 }
 
 impl<'a> Engine<'a> {
@@ -67,19 +68,29 @@ impl<'a> Engine<'a> {
             }
         }
         let director_logins = cfg.director_emails().iter().filter_map(|e| gh_login(e)).map(String::from).collect();
-        Engine { cfg, strictness: Strictness::parse(&cfg.level), idx, sessions, reg, director_emails, director_logins, unit_branch, stamps, squash_declarations: HashMap::new(), used: HashMap::new(), untimed_unique: HashSet::new() }
+        Engine { cfg, strictness: Strictness::parse(&cfg.level), idx, sessions, reg, director_emails, director_logins, unit_branch, stamps, squash_declarations: HashMap::new(), used: vec![false; idx.event_count], line_agents: HashMap::new(), untimed_unique: HashSet::new() }
     }
 
     fn is_director(&self, email: &str) -> bool {
         self.director_emails.contains(email) || gh_login(email).is_some_and(|l| self.director_logins.contains(l))
     }
 
-    pub fn set_history(&mut self, commits:&[Commit]) {
-        let mut occurrences:HashMap<(String,u32),usize>=HashMap::new();
-        for f in commits.iter().flat_map(|c|&c.files) {
-            for &key in f.keys.iter().filter(|&&key|key!=0) {*occurrences.entry((f.rel.clone(),key)).or_default()+=1;}
+    pub fn set_history(&mut self, commits: &[Commit]) {
+        let mut occurrences: HashMap<_, u8> = self.idx.map.iter()
+            .filter(|(_, group)| group.events.iter().any(|e| e.ts == 0))
+            .map(|(&key, _)| (key, 0))
+            .collect();
+        if !occurrences.is_empty() {
+            for f in commits.iter().flat_map(|c| &c.files) {
+                let Some(file) = self.idx.file_id(&f.rel) else { continue };
+                for &key in f.keys.iter().filter(|&&key| key != 0) {
+                    if let Some(count) = occurrences.get_mut(&(file, key)) {
+                        *count = (*count + 1).min(2);
+                    }
+                }
+            }
         }
-        self.untimed_unique=occurrences.into_iter().filter_map(|(id,n)|(n==1).then_some(id)).collect();
+        self.untimed_unique = occurrences.into_iter().filter_map(|(id, n)| (n == 1).then_some(id)).collect();
     }
 
     fn director(&self) -> usize {
@@ -106,28 +117,33 @@ impl<'a> Engine<'a> {
         let mut hits: HashMap<&'static str, usize> = HashMap::new();
         let mut conflicts = 0;
         let mut tab_lines = 0;
-        let mut lines: Vec<Vec<Option<Attr>>> = vec![];
+        let mut lines: Vec<Vec<Option<Attr>>> = Vec::with_capacity(c.files.len());
         // 每条逐行证据记下是哪个工具、哪个模型，改动块推断用
-        let mut ev_of: Vec<Vec<Option<(&'static str, String)>>> = vec![];
+        let mut ev_of: Vec<Vec<Option<(&'static str, &str)>>> = Vec::with_capacity(c.files.len());
+        let paths: Vec<_> = c.files.iter().map(|f| self.idx.file_id(&f.rel)).collect();
         // 第一轮：逐行查证据。同一条证据（一次写入的一行）只认领一次：
         // 人后来又敲了一行一模一样的 `return Ok(());`，不能再算给当初写它的 agent
-        for f in &c.files {
-            let mut fl = vec![];
-            let mut el = vec![];
-            let ranges = hunk_ranges(f);
+        for (f, &path) in c.files.iter().zip(&paths) {
+            let Some(path) = path else {
+                lines.push(vec![None; f.keys.len()]);
+                ev_of.push(Vec::new());
+                continue;
+            };
+            let mut fl = Vec::with_capacity(f.keys.len());
+            let mut el = vec![None; f.keys.len()];
+            let ranges: Vec<_> = hunk_ranges(f).collect();
             for (i, &k) in f.keys.iter().enumerate() {
-                el.push(None);
                 if k == 0 {
                     // 短行：按同一改动块里它上面、下面最近的长行定位，对上了就跟那次写入走
                     let (s, e) = ranges.iter().copied().find(|&(s, e)| s <= i && i < e).unwrap_or((0, f.keys.len()));
                     let sh = f.short.get(i).copied().unwrap_or(0);
                     let up = (s..i).rev().find(|&j| f.keys[j] != 0).map(|j| (j, 'v', (j + 1..=i).filter(|&x| f.keys[x] == 0).count()));
                     let down = (i + 1..e).find(|&j| f.keys[j] != 0).map(|j| (j, '^', (i..j).filter(|&x| f.keys[x] == 0).count()));
-                    let hit = if sh == 0 { None } else { [up, down].into_iter().flatten().find_map(|(j, d, ord)| self.take(&f.rel, short_key(&f.rel, f.keys[j], d, ord, sh), lo, hi, c.author_ts).map(|(b, _)| b)) };
-                    fl.push(hit.filter(|b| !b.tab).map(|b| Attr { who: self.reg.agent(b.src.harness(), Some(&b.model)), level: Level::Verified }));
+                    let hit = if sh == 0 { None } else { [up, down].into_iter().flatten().find_map(|(j, d, ord)| self.take(path, short_key(&f.rel, f.keys[j], d, ord, sh), lo, hi, c.author_ts).map(|(b, _)| b)) };
+                    fl.push(hit.filter(|b| !b.tab).map(|b| Attr { who: self.line_agent(b), level: Level::Verified }));
                     continue;
                 }
-                let Some((best, multi)) = self.take(&f.rel, k, lo, hi, c.author_ts) else {
+                let Some((best, multi)) = self.take(path, k, lo, hi, c.author_ts) else {
                     fl.push(None);
                     continue;
                 };
@@ -140,8 +156,8 @@ impl<'a> Engine<'a> {
                     continue;
                 }
                 *hits.entry(best.src.harness()).or_default() += 1;
-                let who = self.reg.agent(best.src.harness(), Some(&best.model));
-                *el.last_mut().unwrap() = Some((best.src.harness(), best.model.clone()));
+                let who = self.line_agent(best);
+                el[i] = Some((best.src.harness(), best.model.as_str()));
                 fl.push(Some(Attr { who, level: Level::Verified }));
             }
             lines.push(fl);
@@ -149,6 +165,7 @@ impl<'a> Engine<'a> {
         }
         // 第一轮补充：格式化拆行。没对上的连续 2~4 行拼回一行，正好是 agent 一次写入里的一行，就是那次写的
         for (fi, f) in c.files.iter().enumerate() {
+            let Some(path) = paths[fi] else { continue };
             if f.joins.len() != f.keys.len() * JOIN_WINDOWS {
                 continue;
             }
@@ -164,16 +181,16 @@ impl<'a> Engine<'a> {
                         if key == 0 {
                             continue;
                         }
-                        if let Some((b, multi)) = self.take(&f.rel, key, lo, hi, c.author_ts) {
+                        if let Some((b, multi)) = self.take(path, key, lo, hi, c.author_ts) {
                             if b.tab {
                                 continue;
                             }
                             conflicts += multi as usize;
-                            let who = self.reg.agent(b.src.harness(), Some(&b.model));
+                            let who = self.line_agent(b);
                             for j in i..i + w {
                                 lines[fi][j] = Some(Attr { who, level: Level::Verified });
                                 if f.keys[j] != 0 {
-                                    ev_of[fi][j] = Some((b.src.harness(), b.model.clone()));
+                                    ev_of[fi][j] = Some((b.src.harness(), &b.model));
                                     *hits.entry(b.src.harness()).or_default() += 1;
                                 }
                             }
@@ -188,7 +205,8 @@ impl<'a> Engine<'a> {
         // 第一轮补充：两周以前的写入（写完很久才提交、分支放了很久）。只用还没被别的提交认领的证据，
         // 而且要连着的两行在同一次写入里也是紧挨着的（证据记着下一行是哪行）：单独一行常见代码对上了可能是巧合
         for (fi, f) in c.files.iter().enumerate() {
-            let mut old: Vec<Option<crate::model::Ev>> = vec![None; f.keys.len()];
+            let Some(path) = paths[fi] else { continue };
+            let mut old: Vec<Option<&Ev>> = vec![None; f.keys.len()];
             for (s, e) in hunk_ranges(f) {
                 let long: Vec<usize> = (s..e).filter(|&i| f.keys[i] != 0).collect();
                 for p in long.windows(2) {
@@ -197,22 +215,26 @@ impl<'a> Engine<'a> {
                     if lines[fi][b].is_some() {
                         continue;
                     }
-                    let got = if let Some(ea) = old[a].clone().filter(|ea| ea.next == kb) {
+                    let got = if let Some(ea) = old[a].filter(|ea| ea.next == kb) {
                         // 接着上一对：同一次写入的下一行
-                        self.take_old(&f.rel, kb, lo, |x| x.src == ea.src && x.session == ea.session).map(|eb| (None, eb))
+                        self.take_old(path, kb, lo, |x| x.src == ea.src && x.session == ea.session).map(|eb| (None, eb))
                     } else if lines[fi][a].is_none() {
-                        let bs = self.old_sessions(&f.rel, kb, lo);
-                        self.take_old(&f.rel, ka, lo, |x| x.next == kb && bs.iter().any(|(s, id)| *s == x.src && *id == x.session))
-                            .and_then(|ea| self.take_old(&f.rel, kb, lo, |x| x.src == ea.src && x.session == ea.session).map(|eb| (Some(ea), eb)))
+                        let first = self.pick_old(path, ka, lo, |x| {
+                            x.next == kb && self.old_sessions(path, kb, lo).any(|b| b.src == x.src && b.session == x.session)
+                        });
+                        first.and_then(|(i, ea)| {
+                            self.claim(i, ea);
+                            self.take_old(path, kb, lo, |x| x.src == ea.src && x.session == ea.session).map(|eb| (Some(ea), eb))
+                        })
                     } else {
                         None
                     };
                     let Some((ea, eb)) = got else { continue };
                     for (i, ev) in [(a, ea), (b, Some(eb))] {
                         let Some(ev) = ev else { continue };
-                        let who = self.reg.agent(ev.src.harness(), Some(&ev.model));
+                        let who = self.line_agent(ev);
                         lines[fi][i] = Some(Attr { who, level: Level::Verified });
-                        ev_of[fi][i] = Some((ev.src.harness(), ev.model.clone()));
+                        ev_of[fi][i] = Some((ev.src.harness(), &ev.model));
                         *hits.entry(ev.src.harness()).or_default() += 1;
                         old[i] = Some(ev);
                     }
@@ -229,10 +251,14 @@ impl<'a> Engine<'a> {
         let declared_h = declared.as_ref().map(|d| self.reg.list[d.0.who].harness.clone());
         if self.strictness != Strictness::Strict {
             for (fi, f) in c.files.iter().enumerate() {
-                let inserted = self.inserted(f, &ev_of[fi]);
+                let Some(path) = paths[fi] else { continue };
+                if ev_of[fi].iter().all(Option::is_none) {
+                    continue;
+                }
+                let inserted = self.inserted(path, f, &ev_of[fi]);
                 for (s, e) in hunk_ranges(f) {
                     let long = (s..e).filter(|&i| f.keys[i] != 0).count();
-                    let evs: Vec<&(&'static str, String)> = (s..e).filter_map(|i| ev_of[fi][i].as_ref()).collect();
+                    let evs: Vec<_> = (s..e).filter_map(|i| ev_of[fi][i]).collect();
                     if evs.is_empty() || evs.len() * 2 < long || (s..e).all(|i| f.keys[i] == 0 || lines[fi][i].is_some()) {
                         continue;
                     }
@@ -249,7 +275,7 @@ impl<'a> Engine<'a> {
                     }
                     let mut by_m: HashMap<&str, usize> = HashMap::new();
                     for (_, m) in evs.iter().filter(|(x, _)| *x == h) {
-                        *by_m.entry(m.as_str()).or_default() += 1;
+                        *by_m.entry(m).or_default() += 1;
                     }
                     let (&m, &mn) = by_m.iter().max_by_key(|(m, n)| (**n, std::cmp::Reverse(**m))).unwrap();
                     let who = self.reg.agent(h, (mn * 5 >= n * 4).then_some(m));
@@ -431,50 +457,74 @@ impl<'a> Engine<'a> {
     }
 
     /// 取一条还没被认领、时间在窗口里的证据：时间最接近提交的那条。返回它和「候选里是否有不止一个工具」
-    fn take(&mut self, rel: &str, key: u32, lo: i64, hi: i64, at: i64) -> Option<(crate::model::Ev, bool)> {
-        let id = (rel.to_string(), key);
-        let all = self.idx.map.get(&id)?;
-        let used = self.used.entry(id).or_insert_with(|| vec![false; all.len()]);
-        let mut cands: Vec<usize> = (0..all.len()).filter(|&i| all[i].ts>0 && all[i].ts >= lo && all[i].ts <= hi && !used[i]).collect();
-        if cands.is_empty() && self.untimed_unique.contains(&(rel.to_string(),key)) {
-            cands=(0..all.len()).filter(|&i|all[i].ts==0&&!used[i]).collect();
+    fn take(&mut self, path: u32, key: u32, lo: i64, hi: i64, at: i64) -> Option<(&'a Ev, bool)> {
+        let group = self.idx.map.get(&(path, key))?;
+        let available = || group.events.iter().enumerate().filter(|(i, _)| !self.used[group.offset + i]);
+        let mut best = None;
+        let mut distance = i64::MAX;
+        let mut first_src = None;
+        let mut multi = false;
+        for (i, e) in available().filter(|(_, e)| e.ts > 0 && (lo..=hi).contains(&e.ts)) {
+            let d = (at - e.ts).abs();
+            if best.is_none() || d < distance {
+                best = Some((i, e));
+                distance = d;
+            }
+            multi |= *first_src.get_or_insert(e.src) != e.src;
+        }
+        if best.is_none() && self.untimed_unique.contains(&(path, key)) {
+            let mut untimed = available().filter(|(_, e)| e.ts == 0);
+            let first = untimed.next()?;
             // Missing time cannot resolve competing tools or models. Keep such
             // lines unattributed instead of choosing by hash-map iteration order.
-            if cands.iter().map(|&i|(all[i].src,all[i].model.as_str())).collect::<HashSet<_>>().len()>1 {return None;}
+            if untimed.any(|(_, e)| e.src != first.1.src || e.model != first.1.model) {
+                return None;
+            }
+            best = Some(first);
         }
-        let bi = *cands.iter().min_by_key(|&&i| (at - all[i].ts).abs())?;
-        let multi = cands.iter().map(|&i| all[i].src).collect::<HashSet<Src>>().len() > 1;
+        let (i, e) = best?;
+        self.claim(group.offset + i, e);
+        Some((e, multi))
+    }
+
+    fn claim(&mut self, i: usize, e: &Ev) {
         // Only Cursor's static editor line table is reusable. Cursor CLI and
         // host/protocol tool calls carry individual successful writes.
-        if all[bi].src != Src::Cursor || all[bi].single_use {
-            used[bi] = true;
+        if e.src != Src::Cursor || e.single_use {
+            self.used[i] = true;
         }
-        Some((all[bi].clone(), multi))
+    }
+
+    fn line_agent(&mut self, e: &'a Ev) -> usize {
+        let harness = e.src.harness();
+        *self.line_agents.entry((harness, e.model.as_str())).or_insert_with(|| self.reg.agent(harness, Some(&e.model)))
     }
 
     /// `before` 以前、还没被认领的一行证据里，`want` 挑中的最晚的那条，认领掉
-    fn take_old(&mut self, rel: &str, key: u32, before: i64, want: impl Fn(&crate::model::Ev) -> bool) -> Option<crate::model::Ev> {
-        let id = (rel.to_string(), key);
-        let all = self.idx.map.get(&id)?;
-        let used = self.used.entry(id).or_insert_with(|| vec![false; all.len()]);
-        let bi = (0..all.len()).filter(|&i| !used[i] && !all[i].tab && all[i].ts > 0 && all[i].ts < before && want(&all[i])).max_by_key(|&i| all[i].ts)?;
-        if all[bi].src != Src::Cursor || all[bi].single_use {
-            used[bi] = true;
-        }
-        Some(all[bi].clone())
+    fn take_old(&mut self, path: u32, key: u32, before: i64, want: impl Fn(&Ev) -> bool) -> Option<&'a Ev> {
+        let (i, e) = self.pick_old(path, key, before, want)?;
+        self.claim(i, e);
+        Some(e)
+    }
+
+    fn pick_old(&self, path: u32, key: u32, before: i64, want: impl Fn(&Ev) -> bool) -> Option<(usize, &'a Ev)> {
+        self.old_events(path, key, before).filter(|(_, e)| want(e)).max_by_key(|(_, e)| e.ts)
     }
 
     /// `before` 以前、还没被认领的这一行证据出自哪些写入（工具、会话）
-    fn old_sessions(&self, rel: &str, key: u32, before: i64) -> Vec<(Src, String)> {
-        let id = (rel.to_string(), key);
-        let Some(all) = self.idx.map.get(&id) else { return vec![] };
-        let used = self.used.get(&id);
-        (0..all.len()).filter(|&i| !used.is_some_and(|u| u[i]) && !all[i].tab && all[i].ts > 0 && all[i].ts < before).map(|i| (all[i].src, all[i].session.clone())).collect()
+    fn old_sessions(&self, path: u32, key: u32, before: i64) -> impl Iterator<Item = &'a Ev> + '_ {
+        self.old_events(path, key, before).map(|(_, e)| e)
+    }
+
+    fn old_events(&self, path: u32, key: u32, before: i64) -> impl Iterator<Item = (usize, &'a Ev)> + '_ {
+        self.idx.map.get(&(path, key)).into_iter().flat_map(|group| {
+            group.events.iter().enumerate().map(|(i, e)| (group.offset + i, e))
+        }).filter(move |(i, e)| !self.used[*i] && !e.tab && e.ts > 0 && e.ts < before)
     }
 
     /// 夹在两行逐行证据之间、自己没有证据的行，而那两行在同一个工具的某次写入里本来是紧挨着的：
     /// 这几行是后来插进去的，不是那次写入写的，不能被改动块推断带走。返回每一行是否是这样插进去的
-    fn inserted(&self, f: &crate::model::FileAdd, ev: &[Option<(&'static str, String)>]) -> Vec<bool> {
+    fn inserted(&self, path: u32, f: &crate::model::FileAdd, ev: &[Option<(&'static str, &str)>]) -> Vec<bool> {
         let n = f.keys.len();
         let mut out = vec![false; n];
         for (s, e) in hunk_ranges(f) {
@@ -489,7 +539,7 @@ impl<'a> Engine<'a> {
                 if i > 0 && j < long.len() {
                     let (a, b) = (long[i - 1], long[j]);
                     let h = ev[a].as_ref().map(|x| x.0);
-                    let adjacent = self.idx.map.get(&(f.rel.clone(), f.keys[a])).is_some_and(|all| all.iter().any(|x| x.next == f.keys[b] && Some(x.src.harness()) == h));
+                    let adjacent = self.idx.map.get(&(path, f.keys[a])).is_some_and(|group| group.events.iter().any(|x| x.next == f.keys[b] && Some(x.src.harness()) == h));
                     if adjacent {
                         for &k in &long[i..j] {
                             out[k] = true;
@@ -615,14 +665,13 @@ fn assisted_by(v: &str) -> Option<(String, Option<String>)> {
 }
 
 /// 一个文件的新增行按改动块切开：[(起, 止)]。没记改动块的（旧缓存）整个文件算一块
-fn hunk_ranges(f: &crate::model::FileAdd) -> Vec<(usize, usize)> {
+fn hunk_ranges(f: &crate::model::FileAdd) -> impl Iterator<Item = (usize, usize)> + '_ {
     let n = f.keys.len();
-    let mut starts: Vec<usize> = f.hunks.iter().map(|&s| s as usize).filter(|&s| s < n).collect();
-    if starts.first() != Some(&0) {
-        starts.insert(0, 0);
-    }
-    starts.dedup();
-    starts.iter().enumerate().map(|(i, &s)| (s, starts.get(i + 1).copied().unwrap_or(n))).filter(|(s, e)| s < e).collect()
+    let mut start = 0;
+    f.hunks.iter().map(|&s| s as usize).filter(move |&s| s < n).chain(std::iter::once(n)).filter_map(move |end| {
+        let s = std::mem::replace(&mut start, end);
+        (s < end).then_some((s, end))
+    })
 }
 
 /// 人的贡献者 id：邮箱（小写）的 FNV 哈希，十六进制 10 位。同一邮箱永远得到同一个 id，但看不出邮箱
@@ -761,16 +810,20 @@ mod tests {
         let cfg=cfg();
         let ev=|src,model:&str,ts|Ev{rel:"a.rs".into(),key:1,src,model:model.into(),session:"s".into(),ts,tab:false,next:0,single_use:true};
         let mut c=commit("me@x.com",vec![1]);c.author_ts=1_780_000_000;c.commit_ts=c.author_ts;
-        let mut idx=Index{map:[(("a.rs".into(),1),vec![ev(Src::SweAgent,"swe-model",0)])].into_iter().collect()};
+        let mut store = Store::default();
+        store.groups.entry("edits".into()).or_default().evs.push(ev(Src::SweAgent, "swe-model", 0));
+        let idx = Index::build(&store);
         let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());
         assert!(engine.attribute(&c).hits.is_empty(),"staged-only callers have no complete history");
         engine.set_history(&[c.clone()]);assert_eq!(engine.attribute(&c).hits.get("swe-agent"),Some(&1));
         let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());engine.set_history(&[c.clone(),c.clone()]);
         assert!(engine.attribute(&c).hits.is_empty(),"repeated historical additions need a real timestamp");
-        idx.map.get_mut(&("a.rs".into(),1)).unwrap().push(ev(Src::Devin,"",0));
+        store.groups.get_mut("edits").unwrap().evs.push(ev(Src::Devin, "", 0));
+        let idx = Index::build(&store);
         let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());engine.set_history(&[c.clone()]);
         assert!(engine.attribute(&c).hits.is_empty(),"undated competing tools stay unknown");
-        idx.map.get_mut(&("a.rs".into(),1)).unwrap().push(ev(Src::Codex,"known-time",c.author_ts-1));
+        store.groups.get_mut("edits").unwrap().evs.push(ev(Src::Codex, "known-time", c.author_ts - 1));
+        let idx = Index::build(&store);
         let mut engine=Engine::new(&cfg,&idx,&[],&[],HashMap::new());engine.set_history(&[c.clone()]);
         assert_eq!(engine.attribute(&c).hits.get("codex"),Some(&1),"dated evidence takes precedence");
     }
