@@ -55,13 +55,9 @@ async function backend(root, protocol) {
   const require = createRequire(path.join(root, 'packages/render/package.json'));
   const raster = value => value.includes('<text') ? svg.raster : classic.raster;
   const fontRoot = path.dirname(require.resolve('@expo-google-fonts/noto-sans-sc/package.json'));
-  const files = [];
-  function walk(dir) { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(p);
-    else if (/\.(ttf|otf)$/.test(entry.name)) files.push({ path: path.relative(path.dirname(fontRoot), p), sha256: fileHash(p) });
-  } }
-  walk(path.dirname(fontRoot));
+  // Compare only fonts the renderer can select. Unused npm weights may be
+  // pruned on one checkout while the other still installs the full families.
+  const files = svg.fontFiles().map(p => ({ path: path.relative(path.dirname(fontRoot), p), sha256: fileHash(p) }));
   files.sort((a, b) => a.path.localeCompare(b.path));
   return { svg, classic, exports, native, raster, fonts: files, fontHash: sha256(stable(files)),
     resvgVersion: require('@resvg/resvg-js/package.json').version };

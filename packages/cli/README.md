@@ -12,6 +12,8 @@ alias creditia='node ~/projects/creditia/packages/cli/bin/creditia.mjs'
 
 找核心二进制的顺序：`CREDITIA_CORE` 环境变量 → 仓库 `target/release|debug` → 包内 `bin/<platform>-<arch>/` → `PATH`。
 
+构建 npm 包前，先在仓库根目录运行 `npm ci --prefix packages/render` 和 `npm ci --prefix packages/cli`。CLI 构建会从渲染器的锁定依赖复制 Noto Sans SC、Noto Serif SC 和 Shippori Mincho B1 所需的完整字体文件与许可证，随 npm 包一起提供。安装后可离线渲染。
+
 ## 命令
 
 ```

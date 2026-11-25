@@ -1,6 +1,6 @@
 // 作品共用：参数、文案、人的部分。
 import type { Model, Agent } from '../data.ts';
-import { fmt, compact, tipOf, nameOf } from '../data.ts';
+import { fmt, compact, tipOf, nameOf, handFacts } from '../data.ts';
 import type { Style } from '../style.ts';
 import { Scene, measure, mix } from '../svg.ts';
 import type { Box } from '../style.ts';
@@ -31,16 +31,6 @@ export const tip = tipOf;
 /** 模型名一行：最多三个。按模型分组时这一行本身就是模型，写它用的工具 */
 export const modelLine = (a: Agent, n = 3) => a.model ? a.toolName : a.models.slice(0, n).map((x) => x.name).join(' · ') + (a.models.length > n ? ` +${a.models.length - n}` : '');
 
-/** 人做了什么：只写数字。v 是数字，k 是放在数字下面的短标签，text 是放进一句话里的说法 */
-export function handFacts(m: Model): { v: string; k: string; text: string }[] {
-  // 署名只写 AI：人这一侧的数字不进作品
-  if (!m.showHand) return [];
-  const h = m.hand;
-  const out: { v: string; k: string; text: string }[] = [];
-  if (h.prompts) out.push({ v: fmt(h.prompts), k: T(m, '条提示词', 'prompts'), text: T(m, `${fmt(h.prompts)} 条提示词`, `${fmt(h.prompts)} prompts`) });
-  if (h.reviews) out.push({ v: fmt(h.reviews), k: T(m, '次审阅', 'reviews'), text: T(m, `审阅 ${fmt(h.reviews)} 次`, `${fmt(h.reviews)} reviews`) });
-  return out;
-}
 export function handLine(m: Model): string {
   return handFacts(m).map((f) => f.text).join(' · ');
 }
@@ -51,7 +41,7 @@ export const handTip = (m: Model) => ({ k: 'human', t: T(m, '开发者', 'Develo
 
 export const range = (m: Model) => (m.range.from ? `${m.range.from.replaceAll('-', '.')} — ${m.range.to.replaceAll('-', '.')}` : '');
 export const summary = (m: Model) => T(m, `${fmt(m.commits)} 次提交 · ${fmt(m.linesAdded)} 行${m.spanDays ? ` · ${m.spanDays} 天` : ''}`, `${fmt(m.commits)} commits · ${fmt(m.linesAdded)} lines${m.spanDays ? ` · ${m.spanDays} days` : ''}`);
-export { fmt, compact, nameOf };
+export { fmt, compact, nameOf, handFacts };
 
 /** 画布：底图铺满，卡片面避开风格的保留边距。innerH 是内容区高度。
  *  fixed：画幅是定死的（分享图 1200×630 这类平台尺寸），底板不加高，内容区照旧收进框线里 */

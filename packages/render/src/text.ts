@@ -1,8 +1,7 @@
 // 文本产物：CREDITS.md 区块、版本说明、PR 评论、终端名片、嵌入代码。都读同一个模型。
 import type { Model } from './data.ts';
-import { fmt, pct, pct0, compact, nameOf, modelName } from './data.ts';
-import { handFacts } from './pieces/common.ts';
-import { BRAND } from './style.ts';
+import { fmt, pct, pct0, compact, nameOf, modelName, handFacts } from './data.ts';
+import { BRAND } from './agent-brands.ts';
 
 export const MARK_START = '<!-- creditia:start -->';
 export const MARK_END = '<!-- creditia:end -->';

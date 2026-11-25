@@ -14,6 +14,8 @@ import { hitsOf, type Seen } from './hits.ts';
 import { portableFontFamilies } from '../fonts.ts';
 
 export type Satori = (tree: any, o: { width: number; height: number; fonts: any[]; onNodeDetected?: (n: any) => void; embedFont?: boolean }) => Promise<string>;
+type FontSource = any[] | ((tree: any) => any[]);
+const resolveFonts = (source: FontSource, tree: any) => typeof source === 'function' ? source(tree) : source;
 
 /** 同一页面会内联多张 satori 出的 SVG，它们的 clipPath/mask id 都是 satori_ 开头，会互相顶掉；每张换成独有前缀 */
 let seq = 0;
@@ -168,7 +170,7 @@ export const variantsOf = (id: string): string[] => {
 };
 export const defaultVariant = (id: string, t: Theme): string | undefined => FORMS[id]?.def?.(t) ?? (BRIDGED_LAYOUTS[id] ? 'original' : undefined);
 
-export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, satori: Satori, fonts: any[]): Promise<Art | null> {
+export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, satori: Satori, fontSource: FontSource): Promise<Art | null> {
   const title = `${m.project || 'credits'} · ${pieceName(id, ctx.lang, m.raw)}`;
   // 原版没有的作品、追加的新风格版式：按这个主题的颜色、字体、框线用新风格的画法画
   if (isBridged(id, ctx.variant)) return bridgeArt(id, m, t, ctx);
@@ -187,6 +189,7 @@ export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, sator
   }
   if (ctx.fontMode === 'embed') { const draw = satori; satori = (tree, options) => draw(tree, { ...options, embedFont: false }); }
   if (ctx.lang === 'en') enTree(out.tree);
+  const fonts = resolveFonts(fontSource, out.tree);
   const seen: Seen[] = [];
   const svg = tidy(await fitted(out, satori, fonts, seen), out.w, out.h);
   if (t.family === 'terminal') placeTerminalCursors(terminalCursorTargets(out.tree), seen);
@@ -198,18 +201,19 @@ export async function classicArt(id: string, m: Model, t: Theme, ctx: Ctx, sator
 export const animatedClassic = (id: string) => id === 'badge' || !!FORMS[id] || BRIDGED.includes(id);
 
 /** Sample the already fitted semantic groups at the requested times. */
-export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, satori: Satori, fonts: any[], n = 24, times?: readonly number[]): Promise<Art[]> {
+export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, satori: Satori, fontSource: FontSource, n = 24, times?: readonly number[]): Promise<Art[]> {
   if (isBridged(id, ctx.variant)) return bridgeFrames(id, m, t, ctx, n, times);
   const samples = times ?? Array.from({ length: n + 1 }, (_, i) => i / n);
   const frameDelay = motionDuration(id, ctx.variant, t.id) / n;
   if (id === 'badge') {
-    const still = (await classicArt(id, m, t, ctx, satori, fonts))!;
+    const still = (await classicArt(id, m, t, ctx, satori, fontSource))!;
     return samples.map(k => ({ ...still, svg: portableFontFamilies(ctx.lang === 'en' ? enSvg(badge(m, t, k)) : badge(m, t, k)), frameDelay }));
   }
   const f = FORMS[id];
   if (!f) return [];
   if (ctx.fontMode === 'embed') { const draw = satori; satori = (tree, options) => draw(tree, { ...options, embedFont: false }); }
   const key = layoutKey(id, m, t, ctx);
+  let fonts: any[] | undefined;
   let layout = layouts.get(key);
   if (layout) { layouts.delete(key); layouts.set(key, layout); }
   else {
@@ -220,6 +224,7 @@ export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, sa
       delete out.tree.props.style.backgroundImage;
     }
     if (ctx.lang === 'en') enTree(out.tree);
+    fonts = resolveFonts(fontSource, out.tree);
     const groups = t.family === 'terminal' ? terminalCursorTargets(out.tree) : [];
     const positions: Seen[] = [];
     await fitted(out, satori, fonts, groups.length ? positions : undefined);
@@ -230,6 +235,7 @@ export async function classicFrames(id: string, m: Model, t: Theme, ctx: Ctx, sa
   const frames: Art[] = [];
   for (const k of samples) {
     const tree = JSON.parse(layout.tree);
+    fonts ??= resolveFonts(fontSource, tree);
     animate(tree, k, t);
     const svg = tidy(await satori(tree, { width: layout.w, height: layout.h, fonts }), layout.w, layout.h);
     frames.push({ w: layout.w, h: layout.h, svg, hits: [], bg: ctx.transparent ? 'transparent' : t.bg, title, frameDelay, selection: { style: t.id, piece: id, lang: ctx.lang, variant: ctx.variant ?? defaultVariant(id, t) } });

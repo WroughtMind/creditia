@@ -1,8 +1,40 @@
 // 文本形式：CREDITS.md 的标记区间合并、版本段落
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { creditsBlock, mergeCreditsMd, MARK_START, MARK_END } from '../../render/src/text.ts';
 import { buildModel } from '../../render/src/data.ts';
+
+test('help and doc work without graphic engines or font assets', () => {
+  const guard = `
+    import { registerHooks } from 'node:module';
+    registerHooks({
+      resolve(specifier, context, next) {
+        if (/^(satori|@resvg\\/resvg-js|@expo-google-fonts)(\\/|$)/.test(specifier)
+          || /(?:metrics\\.json|\\.ttf|\\.otf)$/.test(specifier)) {
+          throw new Error('Unexpected font or graphics import: ' + specifier);
+        }
+        return next(specifier, context);
+      }
+    });
+  `;
+  const bin = fileURLToPath(new URL('../bin/creditia.mjs', import.meta.url));
+  const fixture = fileURLToPath(new URL('../../render/fixtures/catnap.json', import.meta.url));
+  const cwd = mkdtempSync(path.join(tmpdir(), 'creditia-text-cli-'));
+  const run = (...args: string[]) => execFileSync(process.execPath,
+    ['--import', `data:text/javascript,${encodeURIComponent(guard)}`, bin, ...args], { cwd, encoding: 'utf8' });
+  try {
+    assert.match(run('--help'), /creditia </);
+    run('doc', '--credits', fixture, '--out', 'CREDITS.md');
+    assert.ok(readFileSync(path.join(cwd, 'CREDITS.md'), 'utf8').includes(MARK_START));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
 
 function fakeModel() {
   return buildModel({

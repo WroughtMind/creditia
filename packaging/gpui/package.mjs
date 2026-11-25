@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { installMacIcons } from './mac-icons.mjs';
+import { copyRuntimeFonts } from '../../packages/render/tools/font-assets.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -66,40 +67,15 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
   await fs.cp(path.join(source, 'packages/schema'), path.join(paths.resources, 'schema'), { recursive: true });
   // Dependencies are copied from npm ci on the target platform, including its
   // matching resvg native addon. Keep all runtime/license files; avoid test data.
+  const fontsSource = path.join(render, 'node_modules/@expo-google-fonts');
   await fs.cp(path.join(render, 'node_modules'), path.join(destination, 'node_modules'), {
     recursive: true, dereference: true,
-    filter: from => !from.split(path.sep).some(part => ['.bin', '.cache', '.git'].includes(part)),
+    filter: from => from !== fontsSource && !from.split(path.sep).some(part => ['.bin', '.cache', '.git'].includes(part)),
   });
   // Google-font packages contain many unused weights. Retain exactly the faces
   // named by both renderer registries, plus package metadata and font licenses.
-  const { FONTS } = await import(pathToFileURL(path.join(render, 'src/fonts.ts')));
-  const { CLASSIC_FONTS } = await import(pathToFileURL(path.join(render, 'src/classic/fonts.ts')));
-  const required = new Map();
-  for (const font of [...FONTS, ...CLASSIC_FONTS]) {
-    if (!required.has(font.pkg)) required.set(font.pkg, new Set());
-    required.get(font.pkg).add(font.dir);
-  }
   const fontsRoot = path.join(destination, 'node_modules/@expo-google-fonts');
-  const fontFiles = [];
-  const retainedFaces = new Set();
-  for (const entry of await fs.readdir(fontsRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const pkgRoot = path.join(fontsRoot, entry.name), faces = required.get(entry.name);
-    if (!faces) { await fs.rm(pkgRoot, { recursive: true }); continue; }
-    for (const child of await fs.readdir(pkgRoot, { withFileTypes: true })) {
-      if (child.isDirectory() && !faces.has(child.name)) await fs.rm(path.join(pkgRoot, child.name), { recursive: true });
-      else if (child.isFile() && child.name!=='package.json' && !/^(license|ofl|fontlog|copying|notice)([._-]|$)/i.test(child.name)) await fs.rm(path.join(pkgRoot,child.name));
-    }
-    for (const face of faces) {
-      const names = await fs.readdir(path.join(pkgRoot, face));
-      const ttf = names.find(name => name.endsWith('.ttf'));
-      if (!ttf) throw new Error(`Required font is missing: ${entry.name}/${face}`);
-      for(const name of names)if(!/\.(ttf|otf)$/i.test(name)&&!/^(license|ofl|fontlog|copying|notice)([._-]|$)/i.test(name))await fs.rm(path.join(pkgRoot,face,name),{recursive:true,force:true});
-      fontFiles.push(path.relative(root, path.join(pkgRoot, face, ttf)).split(path.sep).join('/'));
-      retainedFaces.add(`${entry.name}/${face}`);
-    }
-  }
-  for(const [pkg,faces] of required)for(const face of faces)if(!retainedFaces.has(`${pkg}/${face}`))throw new Error(`Required font package or face is missing: ${pkg}/${face}`);
+  const fontFiles = (await copyRuntimeFonts(render, fontsRoot)).map(file => path.relative(root, file).split(path.sep).join('/'));
   const licenseCandidates = ['LICENSE', 'LICENSE.md'];
   for (const name of licenseCandidates) {
     try { await copyFile(path.join(source, name), path.join(paths.resources, `licenses/Creditia-${name}`)); break; }
