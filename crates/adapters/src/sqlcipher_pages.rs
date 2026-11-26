@@ -1,4 +1,4 @@
-//! Strict, read-only SQLCipher 4 default-format snapshots; see SUPPORT_SQLCIPHER.md.
+//! Strict, read-only SQLCipher 4 default-format snapshots; see docs/adapters/SUPPORT_SQLCIPHER.md.
 use aes::Aes256;
 use cbc::cipher::{block_padding::NoPadding, BlockDecryptMut, KeyIvInit};
 use hmac::{Hmac, Mac};

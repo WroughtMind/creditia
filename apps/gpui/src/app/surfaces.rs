@@ -1,5 +1,23 @@
 //! The original settings information structure, using native controls.
-use super::*;
+
+use super::chrome::{logo_image, style_dot};
+use super::{
+    CancelAnalysis, CancelExport, Creditia, CycleAppearance, ExportStage, Panel, ToggleLanguage,
+    ToggleMotion,
+};
+use crate::material::{Palette, ShellLabel};
+use crate::ui_controls::{icon_button, row_button, toggle_button, value_button};
+use crate::{Appearance, Language, progress_text};
+use creditia_desktop_service as service;
+use gpui_kit::TestSupportExt as _;
+use gpui_kit::component::Disableable;
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::*;
+use std::collections::BTreeMap;
+use std::path::Path;
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 
 fn heading(text: &'static str, p: Palette) -> Div {
     div()
@@ -32,7 +50,7 @@ const APP_LOGOS: [(&str, &str, &str); 6] = [
 ];
 
 fn logo_preview(id: &str) -> Arc<Image> {
-    static PREVIEWS: std::sync::OnceLock<BTreeMap<&str, Arc<Image>>> = std::sync::OnceLock::new();
+    static PREVIEWS: OnceLock<BTreeMap<&str, Arc<Image>>> = OnceLock::new();
     PREVIEWS.get_or_init(|| {
         APP_LOGOS
             .into_iter()
@@ -43,6 +61,18 @@ fn logo_preview(id: &str) -> Arc<Image> {
 }
 
 impl Creditia {
+    pub(super) fn show_success(&mut self, message: String, cx: &mut Context<Self>) {
+        self.success_notice = Some(message);
+        self.success_notice_task = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_secs(3)).await;
+            let _ = this.update(cx, |view, cx| {
+                view.success_notice = None;
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
+
     pub(super) fn feedback_surface(
         &self,
         content: AnyElement,
@@ -928,20 +958,6 @@ impl Creditia {
                         )
                         .on_click(cx.listener(|view, _, _, cx| view.set_names(cx))),
                     );
-                if let Some(error) = &self.migration_error {
-                    content = content.child(div().mt_3().child(error.clone())).child(
-                        row_button(
-                            "retry-settings-migration",
-                            self.text(
-                                "重新导入原有桌面设置",
-                                "Import previous desktop settings again",
-                            ),
-                            "refresh",
-                        )
-                        .disabled(self.migration_busy)
-                        .on_click(cx.listener(|view, _, _, cx| view.retry_migration(cx))),
-                    );
-                }
             }
             "data" => {
                 content = content

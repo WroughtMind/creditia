@@ -1,3 +1,0 @@
-#!/bin/sh
-# Tauri's Node CLI can inherit a close-on-exec stdin; Apple tools need it open.
-exec /usr/bin/xcrun actool "$@" < /dev/null

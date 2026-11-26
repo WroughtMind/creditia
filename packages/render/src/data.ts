@@ -411,6 +411,19 @@ export function buildModel(c: any, opt: Partial<Options> = {}): Model {
 // ───────────────────────── 格式化 ─────────────────────────
 
 export const fmt = (x: number) => Math.round(x).toLocaleString('en-US');
+
+/** 人做了什么：只写数字。v 是数字，k 是放在数字下面的短标签，text 是放进一句话里的说法 */
+export function handFacts(m: Model): { v: string; k: string; text: string }[] {
+  // 署名只写 AI：人这一侧的数字不进作品
+  if (!m.showHand) return [];
+  const T = (z: string, e: string) => m.lang === 'zh' ? z : e;
+  const h = m.hand;
+  const out: { v: string; k: string; text: string }[] = [];
+  if (h.prompts) out.push({ v: fmt(h.prompts), k: T('条提示词', 'prompts'), text: T(`${fmt(h.prompts)} 条提示词`, `${fmt(h.prompts)} prompts`) });
+  if (h.reviews) out.push({ v: fmt(h.reviews), k: T('次审阅', 'reviews'), text: T(`审阅 ${fmt(h.reviews)} 次`, `${fmt(h.reviews)} reviews`) });
+  return out;
+}
+
 export const pct = (p: number) => (p > 0 && p < 0.1 ? '<0.1%' : `${p.toFixed(1)}%`);
 export const pct0 = (p: number) => (p > 0 && p < 1 ? '<1%' : `${Math.round(p)}%`);
 export function compact(x: number) {

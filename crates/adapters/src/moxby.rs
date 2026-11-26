@@ -1,5 +1,5 @@
 //! Moxby Desktop 3.2.0's native file_edit receipts in moxby_chats.db.
-//! Pinned schema, dispatch and derivation evidence: SUPPORT_AGENT8.md.
+//! Pinned schema, dispatch and derivation evidence: docs/adapters/SUPPORT_AGENT8.md.
 use crate::{native_history as n, trace_import as imp, Activity, Health, Stats};
 use creditia_core::model::{FileGroup, PathMap, Src, Store};
 use serde_json::Value;

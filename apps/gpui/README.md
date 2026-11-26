@@ -1,10 +1,10 @@
 # Creditia GPUI desktop
 
-GPUI is the default Creditia desktop. It uses the Rust analysis service and the same artwork renderer as the CLI and web embed. [Download installers and read the test results](https://github.com/WroughtMind/creditia/releases/tag/gpui-v0.1.0-rc.1), or see the [installation and rollback guide](../../packaging/gpui/INSTALL.md).
+GPUI is Creditia's desktop app. It uses the Rust analysis service and shares its artwork renderer with the CLI, web embed and the [website demo](../../site/app/). [Download installers and read the test results](https://github.com/WroughtMind/creditia/releases/tag/gpui-v0.1.0-rc.1), or see the [installation and rollback guide](../../packaging/gpui/INSTALL.md).
 
 ## Run from source
 
-Use Rust 1.92 or later and the [GPUI Kit platform prerequisites](https://gpui-kit.com/docs/installation/).
+Use stable Rust and the [GPUI Kit platform prerequisites](https://gpui-kit.com/docs/installation/).
 The Kit baseline is macOS 15+, Windows 10 with MSVC, and Linux with Wayland/X11
 and a Vulkan driver. The CI Linux distribution is Ubuntu 24.04. Both Mac
 architectures have their own build and package. Windows execution tests use the
@@ -28,9 +28,8 @@ does not depend on a source checkout, a globally installed Node, or remote fonts
 
 ## Runtime boundaries
 
-- The Rust service owns project libraries, analysis, cancellation, preferences,
-  settings and background work; both desktop clients use the same archive and
-  evidence formats.
+- The Rust service owns project libraries, analysis, cancellation, preferences
+  and background work. GPUI reads and writes the existing `app.json` settings.
 - The shared renderer owns layout, style, artwork data, hover regions and
   animation/export definitions. A persistent preview service reuses assets;
   exports have an independent cancelable execution path.
@@ -51,8 +50,6 @@ does not depend on a source checkout, a globally installed Node, or remote fonts
   each have a separate 64 MiB cache; layer caches share 48 MiB and the player's
   retained frames have a separate 64 MiB budget. These are component budgets,
   not a limit on total process memory.
-- Legacy WebView preferences are read by the bundled one-time helper under the
-  original application identity. Old storage is retained for rollback.
 
 ## Verify locally
 
@@ -60,7 +57,7 @@ For shell geometry and clear/blurred icon comparisons, see [optical alignment](O
 
 ```sh
 cargo test --manifest-path apps/gpui/Cargo.toml --lib --bins --locked
-node --test packaging/gpui/package.test.mjs
+node --test packaging/gpui/package.test.mjs packaging/gpui/mac-icons.test.mjs
 node docs/gpui-migration/capture.mjs --check
 ```
 
@@ -198,6 +195,5 @@ Published desktop packages follow the existing distribution policy: macOS signat
 unsigned. The installation guide documents the corresponding OS trust prompts.
 Developer ID/notarization and Windows code signing can be configured separately;
 their absence does not prevent generating or installing these packages.
-Final cutover requires the complete migration report,
-including actual package installation, native interactions and process-tree
-performance on the supported systems.
+The release report records installation, native interaction and process-tree
+performance measurements from the candidate workflows.

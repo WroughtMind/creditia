@@ -6,23 +6,23 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const source = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(source, '../../../..');
-const { build } = await import(pathToFileURL(root + '/apps/desktop/node_modules/vite/dist/node/index.js'));
+const { build } = await import(pathToFileURL(root + '/site/app/node_modules/vite/dist/node/index.js'));
 const dir = root + '/output/playwright/.motion-preview-cache';
 fs.mkdirSync(dir, { recursive: true });
 const out = root + '/output/playwright/issue116-motion-preview.html';
-const manifest = JSON.parse(fs.readFileSync(root + '/apps/desktop/src/fonts/manifest.json', 'utf8'));
+const manifest = JSON.parse(fs.readFileSync(root + '/site/app/src/fonts/manifest.json', 'utf8'));
 function texts(folder) { return fs.readdirSync(folder, { withFileTypes: true }).flatMap(e => e.isDirectory() ? texts(path.join(folder, e.name)) : /\.(ts|json)$/.test(e.name) ? [fs.readFileSync(path.join(folder, e.name), 'utf8')] : []); }
 const characters = [...new Set((texts(root + '/packages/render/src').join('') + fs.readFileSync(root + '/packages/render/fixtures/catnap.json', 'utf8')).split(''))].join('');
 fs.writeFileSync(dir + '/characters.txt', characters);
 fs.mkdirSync(dir + '/fonts', { recursive: true });
 const fontHash = createHash('sha256').update('typographic-family-v1').update(characters).update(JSON.stringify(manifest));
-for (const f of manifest) fontHash.update(fs.readFileSync(root + '/apps/desktop/src/fonts/' + f.file));
+for (const f of manifest) fontHash.update(fs.readFileSync(root + '/site/app/src/fonts/' + f.file));
 const signature = fontHash.digest('hex');
 const cached = fs.existsSync(dir + '/font-signature') && fs.readFileSync(dir + '/font-signature', 'utf8') === signature;
 async function subset(f) {
   const target = dir + '/fonts/' + f.file;
   if (!cached || !fs.existsSync(target)) await new Promise((resolve, reject) => {
-    const child = spawn(process.env.PYFTSUBSET || 'pyftsubset', [root + '/apps/desktop/src/fonts/' + f.file, '--text-file=' + dir + '/characters.txt', '--output-file=' + target, '--layout-features=*', '--no-hinting', '--name-IDs=1,2,4,6,16,17', '--name-legacy', '--notdef-glyph', '--notdef-outline', '--recommended-glyphs'], { stdio: ['ignore', 'ignore', 'pipe'] });
+    const child = spawn(process.env.PYFTSUBSET || 'pyftsubset', [root + '/site/app/src/fonts/' + f.file, '--text-file=' + dir + '/characters.txt', '--output-file=' + target, '--layout-features=*', '--no-hinting', '--name-IDs=1,2,4,6,16,17', '--name-legacy', '--notdef-glyph', '--notdef-outline', '--recommended-glyphs'], { stdio: ['ignore', 'ignore', 'pipe'] });
     child.on('error', reject);
     let error = ''; child.stderr.on('data', s => error += s); child.on('close', code => code === 0 ? resolve() : reject(new Error(f.file + ': ' + error)));
   });

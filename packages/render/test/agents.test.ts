@@ -12,6 +12,7 @@ import { mark } from '../src/classic/ui.ts';
 
 test('every catalogue entry reaches both renderers under its canonical tool identity', async () => {
   for (const agent of catalogue.agents) {
+    assert.ok(agent.tier === 'tier1' || agent.tier === 'tier2', agent.id);
     const key = agent.harness;
     const raw = { project: { name: 'Agent rendering fixture' }, contributors: [{ id: `a:${key}`, kind: 'agent', harness: key, roles: ['author'] }], breakdown: [{ contributor: `a:${key}`, linesAdded: 20, linesSurviving: 20 }], totals: { linesAdded: 20, linesSurviving: 20 } };
     const modern = buildModel(raw, { group: 'tool' });

@@ -6,10 +6,10 @@ use serde_json::Value;
 pub fn analysis_warnings(result: &Value) -> Vec<String> {
     fn collect(value: &Value, rows: &mut Vec<String>) {
         for warning in value["warnings"].as_array().into_iter().flatten() {
-            if let Some(text) = warning.as_str().filter(|text| !text.trim().is_empty()) {
-                if !rows.iter().any(|row| row == text) {
-                    rows.push(text.to_owned());
-                }
+            if let Some(text) = warning.as_str().filter(|text| !text.trim().is_empty())
+                && !rows.iter().any(|row| row == text)
+            {
+                rows.push(text.to_owned());
             }
         }
         // add_project wraps the core result, while collect --all returns one
@@ -72,18 +72,6 @@ fn failure_parts(code: &str, detail: Option<&str>, language: &Language) -> Strin
         "no_interrupted_task" => Some((
             "没有可继续的中断任务",
             "No interrupted task is available to resume",
-        )),
-        "migration_helper_missing" => Some((
-            "找不到旧设置导入组件，请使用完整安装包",
-            "The settings importer is missing; use a complete app package",
-        )),
-        "migration_timeout" => Some((
-            "旧设置导入超时，可以重试",
-            "Importing previous settings timed out; you can retry",
-        )),
-        "migration_failed" => Some((
-            "旧设置尚未导入，原有设置已保留",
-            "Previous settings have not been imported; the originals are preserved",
         )),
         "export_history_invalid" => Some((
             "导出历史格式无效，原文件已保留",

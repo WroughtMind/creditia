@@ -1,5 +1,5 @@
 //! Read the JSON parts of Workflow's devalue graph without reviving streams,
-//! classes, functions or encryption keys. Pinned upstream contracts: SUPPORT_AGENT4.md.
+//! classes, functions or encryption keys. Pinned upstream contracts: docs/adapters/SUPPORT_AGENT4.md.
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde_json::{Map, Value};
 use std::{collections::HashSet, io::Read};

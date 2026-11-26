@@ -1,6 +1,6 @@
 //! Firebender 1.0.12's project-local SQLite history (schema 1/2).
 //! SQL, MessageAdapter and Write's completed receipt were recovered from the
-//! official JetBrains package. See SUPPORT_AGENT8.md for the pinned evidence.
+//! official JetBrains package. See docs/adapters/SUPPORT_AGENT8.md for the pinned evidence.
 use crate::{native_history as n, trace_import as imp, Activity, Health, Stats};
 use creditia_core::model::{FileGroup, PathMap, Src, Store};
 use rusqlite::{Connection, OpenFlags};

@@ -9,6 +9,7 @@
     "node": ">=22.18"
   },
   "scripts": {
+    "postinstall": "node tools/prune-fonts.mjs",
     "bridge": "node tools/bridge.mjs",
     "gallery": "node src/gallery.ts fixtures/catnap.json gallery",
     "test": "node --test test/*.test.ts",

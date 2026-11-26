@@ -207,6 +207,12 @@ impl Default for LiveMark {
         Self::new()
     }
 }
+pub struct MarkStatus {
+    pub progress: Option<f64>,
+    pub busy: bool,
+    pub error: bool,
+}
+
 impl LiveMark {
     pub fn new() -> Self {
         Self {
@@ -226,14 +232,13 @@ impl LiveMark {
             return;
         }
         self.project_identity = identity;
-        if let Some(mark) = mark {
-            if !self
+        if let Some(mark) = mark
+            && !self
                 .projects
                 .iter()
                 .any(|old| old.mark.identity == mark.identity)
-            {
-                self.projects.push(ProjectTransition::new(mark));
-            }
+        {
+            self.projects.push(ProjectTransition::new(mark));
         }
         // Consecutive selections can interrupt a fade. Keep the visible layers,
         // but bound the number of retiring sets during very fast navigation.
@@ -256,14 +261,17 @@ impl LiveMark {
 
     pub fn render(
         &mut self,
-        progress: Option<f64>,
-        busy: bool,
-        error: bool,
+        status: MarkStatus,
         reduced_motion: bool,
         size: f32,
         window: &mut Window,
         cx: &mut App,
     ) -> AnyElement {
+        let MarkStatus {
+            progress,
+            busy,
+            error,
+        } = status;
         let now = Instant::now();
         let active = window.is_window_active();
         let dt = self.last_frame.map_or(0., |previous| {

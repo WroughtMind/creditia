@@ -1,4 +1,4 @@
-//! Shapes reconstructed from the pinned official distributions in SUPPORT_AGENT18.md.
+//! Shapes reconstructed from the pinned official distributions in docs/adapters/SUPPORT_AGENT18.md.
 //! No real model invocation is claimed: exercise the binary, durable store and final credits.
 use super::*;
 use serde_json::{json, Value};

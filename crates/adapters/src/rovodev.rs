@@ -1,5 +1,5 @@
 //! Rovo Dev session_context.json, checked against native samples and the
-//! bundled Nautilus file tools. See SUPPORT_AGENT6.md for the exact sources.
+//! bundled Nautilus file tools. See docs/adapters/SUPPORT_AGENT6.md for the exact sources.
 use crate::{native_history as n, trace_import as imp, Activity, Health, Stats};
 use creditia_core::model::{FileGroup, PathMap, Src, Store};
 use serde_json::Value;

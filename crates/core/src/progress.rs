@@ -25,6 +25,10 @@ pub fn init() {
     MODE.store(m, Ordering::Relaxed);
 }
 
+pub fn enabled() -> bool {
+    matches!(MODE.load(Ordering::Relaxed), 1 | 2)
+}
+
 fn label(stage: &str) -> String {
     match stage {
         "history" => crate::tr!("读提交历史", "reading history"),

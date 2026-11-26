@@ -5,27 +5,43 @@ matching Node runtime, the shared artwork renderer, and its fonts. Installing
 Node or downloading fonts is not required. Keep the application and its resources
 together. `package-info.json` records the source commit and every packaged file.
 
-A small legacy helper runs once to read preferences from the original desktop's
-WebView storage under `dev.creditia.app`. It leaves that storage intact for
-rollback. The normal GPUI interface does not run this helper or use a WebView.
-If importing preferences fails, resolve the import error before exporting work
-whose contributor names were previously hidden.
-
 ## Install
 
-- macOS 15 or later: open the DMG and copy `Creditia.app` to Applications. Apple
-  Silicon and Intel packages are separate. Builds use the repository's existing
-  ad-hoc signing policy and are not notarized. After verifying the download and
-  trying to open it, macOS may require **System Settings → Privacy & Security →
-  Open Anyway** for this app. See [Apple's installation guidance](https://support.apple.com/102445).
-- Windows 10 or later, x64: run the installer, or extract the complete portable
-  ZIP to a writable location and run `creditia-gpui.exe`. The `resources` folder
-  and `creditia-core.exe` must remain beside the application.
+- **macOS 15 or later.** Choose the Apple Silicon or Intel build. Open the DMG
+  and drag `Creditia.app` into Applications. These builds are ad-hoc signed and
+  have not been notarized by Apple. If macOS blocks first launch, verify the
+  download and try opening Creditia from Applications once. Then go to
+  **System Settings → Privacy & Security → Open Anyway** and confirm.
+  [Apple's installation guidance](https://support.apple.com/102445)
+
+  **macOS 15 或更新版本。** 选择对应芯片的安装包，打开 DMG，将 `Creditia.app` 拖入「应用程序」。
+  此版本未经 Apple 公证。若已核对下载来源与校验值，且 macOS 提示无法验证或已损坏，
+  先从「应用程序」尝试打开一次，再到**系统设置 → 隐私与安全性 → 仍要打开**并确认。
+
+  You can also copy the command below into Terminal and then open Creditia from
+  Applications. DMG users can copy it from `首次打开说明 - First Launch.txt`.
+  也可以在「终端」运行下方命令，再从「应用程序」打开 Creditia。DMG 内的首次打开说明可直接复制命令。
+
+  ```sh
+  xattr -dr com.apple.quarantine /Applications/Creditia.app
+  ```
+
+- **Windows 10 or later, x64.** Run the unsigned installer. If the verified
+  download triggers a SmartScreen **Windows protected your PC** prompt, choose
+  **More info → Run anyway**. At the end of setup, you can select **Launch
+  Creditia**. For the portable ZIP, extract the entire archive to a writable
+  location and run `creditia-gpui.exe`. Keep `resources` and
+  `creditia-core.exe` beside the app in either installation.
+
+  **Windows 10 或更新版本，x64。** 运行未签名的安装程序。确认下载来源与校验值后，
+  若 SmartScreen 提示「Windows 已保护你的电脑」，请选择**更多信息 → 仍要运行**。
+  安装完成后可以勾选「打开 Creditia」。使用便携 ZIP 时，完整解压到可写目录，
+  再运行 `creditia-gpui.exe`。请将 `resources` 文件夹和 `creditia-core.exe` 与应用保留在同一目录。
+
 - Linux x64: extract the archive and run `./creditia-gpui`. The build baseline is
   Ubuntu 24.04 with Wayland or X11, fontconfig, xkbcommon and a Vulkan driver.
   Install the DEB with `sudo apt install ./creditia-gpui-*.deb` so required system
-  libraries are resolved, including WebKit for the one-time legacy preference
-  importer; it does not install Node globally.
+  libraries are resolved. The DEB includes its own Node runtime.
   The project chooser and Save dialog use xdg-desktop-portal with a FileChooser backend.
   Tarball users need the GTK, GNOME, KDE or XApp portal used by their desktop session.
   The bundled desktop file may be installed into the user's applications folder
@@ -34,22 +50,18 @@ whose contributor names were previously hidden.
 These are the GPUI Kit platform minimums, not a claim that every OS version has
 been tested. The automated runners are macOS 15 on both architectures, Windows
 Server 2022 x64, and Ubuntu 24.04 x64; their actual versions and execution evidence
-travel with the build. Windows packages are unsigned and may show the system's
-publisher/trust prompt. Developer ID/notarization and Windows code signing are
+travel with the build. Developer ID/notarization and Windows code signing are
 optional distribution choices; certificates are not required to build these
 installable packages.
 
-The first launch reuses the existing Creditia library and archives. Preferences
-are versioned separately from the archive data. Keep a backup of the library
-before using a migration candidate with valuable projects.
+The first launch reuses the existing Creditia library, archives and `app.json`
+settings. Keep a backup of the library before upgrading.
 
 ## Upgrade and rollback
 
-The previous Tauri 0.1.0 installers and their checksums are available in
-[Creditia-Tauri-rollback.zip](https://github.com/WroughtMind/creditia/releases/download/gpui-v0.1.0-rc.1/Creditia-Tauri-rollback.zip).
-The archive SHA-256 is `115755b2ad090057b42ce27581bddd97381d576eed65f433b18969b6caa502d9`.
+Previous installers and their checksums are available on the [Releases page](https://github.com/WroughtMind/creditia/releases).
 
-1. Quit both desktop versions and let active analysis/export jobs finish or cancel.
+1. Finish or cancel active analysis and export jobs, then quit Creditia.
 2. Preserve the previous application directory or installer. Do not delete the
    Creditia library, project `.creditia` directories, or evidence database.
 3. Install/extract the new version into a new directory. The resource manifest,

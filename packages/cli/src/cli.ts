@@ -2,29 +2,18 @@
 // 所有命令非交互、支持 --json，方便 agent 代人调用。
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { deflateSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { art, frames as classicFrames, animatedClassic, buildModel, FORMS, themeById, raster, type Model, type Theme } from '../../render/src/classic/index.ts';
-import { ORDERED_THEMES, themeDot, themeName, themeNote, pieceName, pieceQ, variantName } from '../../render/src/classic/catalog.ts';
-import { makeExporter, sized, SIZES, FORMATS, type Art } from '../../render/src/export.ts';
+import { buildModel, type Model } from '../../render/src/classic/data.ts';
+import { buildModel as buildTextModel } from '../../render/src/data.ts';
 import { creditsBlock, mergeCreditsMd, releaseNotes, prComment, commitsComment, mergeMarked, fetchSegs, stampedComment, shieldsBadge, badgeShares, stampedBadgeShares, type Stamped, type View } from '../../render/src/text.ts';
-import { BRAND } from '../../render/src/style.ts';
+import { BRAND } from '../../render/src/agent-brands.ts';
 import { check, redact, CATS, CAT_NAMES, RISK_NAMES, type Cat } from './privacy.ts';
 import { mergeCredits } from '../../render/src/merge.ts';
-import * as V2 from '../../render/src/index.ts';
-import { BRIDGED } from '../../render/src/classic/bridge.ts';
-import { variantsOf } from '../../render/src/classic/art.ts';
-import { renderRequest } from '../../render/src/native-protocol.ts';
+import type { Look } from './graphics.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../..');
-const deflate = (d: Uint8Array) => new Uint8Array(deflateSync(d));
-// 原版作品的文字已经是路径，栅格化不需要字体；新风格的作品要带字体。
-// 原版主题里借新风格画的作品（河流、留存……）还是 <text>，按内容挑
-const pick = (svg: string) => (svg.includes('<text') ? V2.raster : raster);
-const ex = makeExporter({ png: (s, w) => pick(s).png(s, w), rgba: (s, w) => pick(s).rgba(s, w), flat: (s) => pick(s).flat(s) }, deflate);
-const exV2 = makeExporter(V2.raster, deflate);
 
 // ───────────────────────── 参数 ─────────────────────────
 const SWITCHES = new Set(['json', 'fresh', 'force', 'github', 'all', 'yes', 'list', 'no-color', 'refresh', 'check', 'all-projects', 'no-names', 'transparent', 'reduced-motion']);
@@ -65,7 +54,7 @@ const USAGE_ZH = `用法：creditia <命令> [选项]
   analyze   [--repo P] [--github] [--level strict|standard|loose]
   update    [--repo P]              增量更新
   collect   [--repo P | --all]      只采集证据
-  agents    [--agent ID]            全部 agent 的入口与支持范围
+  agents    [--agent ID] [--tier tier1|tier2]  agent 的入口与支持范围
   run       --agent ID -- <命令>    在指定 agent 身份下启动命令
   doctor                            检查各数据源
   capture   --harness H -- <ACP agent 命令> [参数]   按需采集 ACP 成功编辑
@@ -111,7 +100,7 @@ Analysis (Rust core, all local, never calls a model)
   analyze   [--repo P] [--github] [--level strict|standard|loose]
   update    [--repo P]              incremental update
   collect   [--repo P | --all]      only collect evidence
-  agents    [--agent ID]            all agent entry points and support scope
+  agents    [--agent ID] [--tier tier1|tier2]  agent entry points and support scope
   run       --agent ID -- <command> run with an explicit agent identity
   doctor                            check every data source
   capture   --harness H -- <ACP agent command> [args]   opt-in capture of completed ACP edits
@@ -269,45 +258,20 @@ function releaseRange(repo: string, tag: string): string[] {
   return [prev ? `${prev}..${end}` : end];
 }
 
-/** 能出图的作品：需要额外数据的（个人履历、逐行溯源）不在这里 */
-const PIECE_IDS = [...Object.keys(FORMS).filter((id) => id !== 'profile' && id !== 'blame'), 'badge', ...BRIDGED];
-/** 新风格里和原版重名、或者原版已经有对应的，用原版 */
-const V2_SKIP = new Set(['minimal', 'noir', 'glass', 'cinema', 'terminal']);
-const V2_STYLES = V2.STYLES.filter((s) => !V2_SKIP.has(s.id));
-/** 风格：原版主题（Theme）或新风格（Style） */
-type Look = { kind: 'classic'; t: Theme } | { kind: 'v2'; s: (typeof V2.STYLES)[number] };
-function lookOf(id?: string): Look {
-  const t = themeById(id ?? 'minimal-light');
-  if (t) return { kind: 'classic', t };
-  const s = V2_STYLES.find((x) => x.id === id);
-  if (s) return { kind: 'v2', s };
-  return die(L(`未知风格：${id}；creditia export --list 查看`, `unknown style: ${id}; see creditia export --list`));
-}
+type Graphics = typeof import('./graphics.ts');
+const lookOf = (graphics: Graphics, id?: string) => graphics.findLook(id)
+  ?? die(L(`未知风格：${id}；creditia export --list 查看`, `unknown style: ${id}; see creditia export --list`));
 const lookId = (l: Look) => (l.kind === 'classic' ? l.t.id : l.s.id);
-const lookName = (l: Look, lang: 'zh' | 'en') => (l.kind === 'classic' ? themeName(l.t, lang) : lang === 'zh' ? l.s.name : l.s.en);
+const lookName = ({ themeName }: Graphics, l: Look, lang: 'zh' | 'en') => (l.kind === 'classic' ? themeName(l.t, lang) : lang === 'zh' ? l.s.name : l.s.en);
 const lookBg = (l: Look) => (l.kind === 'classic' ? l.t.bg : l.s.c.bg);
 const lookDark = (l: Look) => (l.kind === 'classic' ? l.t.dark : !!l.s.dark);
-const lookDot = (l: Look) => (l.kind === 'classic' ? themeDot(l.t) : l.s.dot());
-const exOf = (l: Look) => (l.kind === 'classic' ? ex : exV2);
-/** 新风格的 hand 只写人这一侧的数字，作品里不再写人 */
-const V2_PIECES = Object.keys(V2.PIECES).filter((id) => id !== 'hand');
-const piecesOf = (l: Look) => (l.kind === 'classic' ? PIECE_IDS : V2_PIECES);
-const LOOKS: Look[] = [...ORDERED_THEMES.map((t) => ({ kind: 'classic' as const, t })), ...V2_STYLES.map((s) => ({ kind: 'v2' as const, s }))];
-async function artOf(id: string, raw: any, l: Look, variant?: string): Promise<Art | null> {
-  if (l.kind === 'classic') return art(id, buildModel(raw, { director: false, lang: LANG(), named: !on.has('no-names'), group: GROUP() }), l.t, ctxOf(variant));
-  return V2.art(id, V2.buildModel(raw, { lang: LANG(), named: !on.has('no-names'), sign: '', group: GROUP() }), l.s, { variant });
-}
-const ctxOf = (variant?: string) => ({ lang: LANG(), variant });
-/** 动画帧；不会动的作品返回 null */
-async function framesOf(id: string, raw: any, l: Look, variant: string | undefined, n: number): Promise<Art[] | null> {
-  if (l.kind === 'v2') return V2.PIECES[id]?.animated ? V2.frames(id, V2.buildModel(raw, { lang: LANG(), named: !on.has('no-names'), sign: '', group: GROUP() }), l.s, { variant }, n) : null;
-  return animatedClassic(id) ? classicFrames(id, buildModel(raw, { director: false, lang: LANG(), named: !on.has('no-names'), group: GROUP() }), l.t, ctxOf(variant), n) : null;
-}
+const lookDot = ({ themeDot }: Graphics, l: Look) => (l.kind === 'classic' ? themeDot(l.t) : l.s.dot());
+const modelOptions = () => ({ lang: LANG(), named: !on.has('no-names'), group: GROUP() });
 /** 文字类输出（CREDITS.md、发版说明、PR 评论、终端名片）用新模型：带模型名、好读的模型名 */
-const textModel = (raw: any) => V2.buildModel(raw, { lang: LANG(), named: !on.has('no-names'), sign: '', group: GROUP() });
+const textModel = (raw: any) => buildTextModel(raw, { ...modelOptions(), sign: '' });
 function modelOf(repo: string, refresh = false): { m: Model; raw: any } {
   const raw = loadCredits(repo, refresh);
-  const m = buildModel(raw, { director: false, lang: LANG(), named: !on.has('no-names'), group: GROUP() });
+  const m = buildModel(raw, { director: false, ...modelOptions() });
   return { m, raw };
 }
 function write(out: string | undefined, data: string | Uint8Array) {
@@ -398,11 +362,12 @@ async function main() {
 
 const FORMAT_EN: Record<string, string> = { png: 'social posts, chats, documents', svg: 'README, web pages, lossless scaling', pdf: 'print, résumés, portfolios', gif: 'animated: bars grow, credits roll', html: 'single file, hover for details, works offline', md: 'CREDITS.md block' };
 
-function listAll() {
+function listAll(graphics: Graphics) {
+  const { PIECE_IDS, PIECES, LOOKS, FORMATS, SIZES, pieceName, pieceQ, variantsOf, animatedClassic, themeNote, variantName } = graphics;
   const lang = LANG();
   const pieces = PIECE_IDS.map((id) => ({ id, name: pieceName(id, lang), question: pieceQ(id, lang), variants: variantsOf(id), animated: animatedClassic(id) }));
-  const v2pieces = Object.entries(V2.PIECES).filter(([id]) => id !== 'hand').map(([id, p]) => ({ id, name: lang === 'en' ? p.en : p.name, question: lang === 'en' ? p.qEn : p.q, variants: p.variants ?? [], animated: !!p.animated }));
-  const styles = LOOKS.map((l) => ({ id: lookId(l), name: lookName(l, 'zh'), en: lookName(l, 'en'), renderer: l.kind, note: l.kind === 'classic' ? themeNote(l.t, lang) : lang === 'en' ? l.s.noteEn : l.s.note }));
+  const v2pieces = Object.entries(PIECES).filter(([id]) => id !== 'hand').map(([id, p]) => ({ id, name: lang === 'en' ? p.en : p.name, question: lang === 'en' ? p.qEn : p.q, variants: p.variants ?? [], animated: !!p.animated }));
+  const styles = LOOKS.map((l) => ({ id: lookId(l), name: lookName(graphics, l, 'zh'), en: lookName(graphics, l, 'en'), renderer: l.kind, note: l.kind === 'classic' ? themeNote(l.t, lang) : lang === 'en' ? l.s.noteEn : l.s.note }));
   const formats = FORMATS.filter((f) => f.id !== 'embed').map((f) => ({ ...f, note: lang === 'en' ? FORMAT_EN[f.id] ?? f.note : f.note }));
   if (json) return console.log(JSON.stringify({ pieces, v2pieces, styles, formats: [...formats.map((f) => f.id), 'json'], sizes: SIZES.map((s) => s.id) }));
   const nameOf = (s: (typeof styles)[number]) => (lang === 'en' ? s.en : s.name);
@@ -417,14 +382,15 @@ function listAll() {
 }
 
 async function exportCmd() {
-  if (on.has('list')) return listAll();
+  const graphics = await import('./graphics.ts');
+  if (on.has('list')) return listAll(graphics);
   const repo = repoOf(), piece = flags.piece ?? flags.form ?? 'tier';
-  const look = lookOf(flags.style ?? flags.theme);
+  const look = lookOf(graphics, flags.style ?? flags.theme);
   const format = flags.format ?? (flags.out ? path.extname(flags.out).slice(1) : 'svg');
   const { raw } = modelOf(repo, on.has('refresh'));
-  if (!['json', 'md', 'txt', 'embed'].includes(format) && !piecesOf(look).includes(piece)) die(L(`该风格不支持卡片 ${piece}；可通过 creditia export --list 查看`, `this style has no card ${piece}; see creditia export --list`));
+  if (!['json', 'md', 'txt', 'embed'].includes(format) && !graphics.piecesOf(look).includes(piece)) die(L(`该风格不支持卡片 ${piece}；可通过 creditia export --list 查看`, `this style has no card ${piece}; see creditia export --list`));
   const by = ['md', 'txt'].includes(format) ? VIEW(textModel(raw)) : undefined;
-  const response = await renderRequest({
+  const response = await graphics.renderRequest({
     version: 1, id: 'cli-export', op: 'export', raw, style: lookId(look), renderer: look.kind === 'v2' ? 'svg' : 'classic',
     piece, ...(flags.variant ? { variant: flags.variant } : {}), lang: LANG(), group: GROUP(), named: !on.has('no-names'),
     format, size: flags.size ?? 'native', fontMode: flags['font-mode'] ?? 'outline', transparent: on.has('transparent'), reducedMotion: on.has('reduced-motion'),
@@ -440,19 +406,14 @@ async function exportCmd() {
 const boardIds = (l: Look) => (l.kind === 'classic'
   ? ['share', 'tier', 'people', 'asterisk', 'roll', 'receipt', 'donut', 'ribbon', 'stream', 'waffle', 'mosaic', 'versions', 'area', 'lanes', 'clock', 'settle', 'survival', 'evidence', 'areas', 'codemap', 'calendar']
   : ['share', 'tier', 'people', 'asterisk', 'roll', 'receipt', 'donut', 'stream', 'survival', 'evidence', 'versions', 'areas', 'lanes', 'clock', 'mosaic', 'codemap', 'calendar']);
-async function artsOf(ids: string[], raw: any, l: Look): Promise<Art[]> {
-  const out: Art[] = [];
-  for (const id of ids) if (piecesOf(l).includes(id)) { const a = await artOf(id, raw, l); if (a) out.push(a); }
-  return out;
-}
-
 /** 一页放下全部作品：可交互、可离线，适合放进项目官网的 /credits */
 async function boardCmd() {
+  const graphics = await import('./graphics.ts');
   const repo = repoOf();
-  const look = lookOf(flags.style);
+  const look = lookOf(graphics, flags.style);
   const { m, raw } = modelOf(repo, on.has('refresh'));
-  const arts = await artsOf((flags.pieces ?? boardIds(look).join(',')).split(','), raw, look);
-  write(flags.out ?? path.join(repo, 'credits.html'), exOf(look).html(arts, { title: `${m.project} · credits`, lang: LANG(), bg: lookBg(look), note: m.project }));
+  const arts = await graphics.artsOf((flags.pieces ?? boardIds(look).join(',')).split(','), raw, look, modelOptions());
+  write(flags.out ?? path.join(repo, 'credits.html'), graphics.exOf(look).html(arts, { title: `${m.project} · credits`, lang: LANG(), bg: lookBg(look), note: m.project }));
 }
 
 /** 公开档案：从本机分析结果复制到仓库根目录，并列出将公开的内容让人确认 */
@@ -508,6 +469,8 @@ async function publishCmd() {
 
 /** 小网站：首页是默认风格的全部作品，每种风格一页（四件代表作），顶部一排风格圆点 */
 async function siteCmd() {
+  const graphics = await import('./graphics.ts');
+  const { LOOKS, artsOf, exOf } = graphics;
   const repo = repoOf();
   const { m, raw: full } = modelOf(repo, on.has('refresh'));
   // 网站也是公开的：--hide 和 publish 一样；有看起来不该公开的内容时提醒（CI 里跑，不拦）
@@ -515,12 +478,12 @@ async function siteCmd() {
   for (const r of check(raw).risks) console.error(L(`注意：${CAT_NAMES[r.cat][0]}里有${RISK_NAMES[r.kind][0]}：${r.text}`, `note: ${CAT_NAMES[r.cat][1]} contain a ${RISK_NAMES[r.kind][1]}: ${r.text}`));
   const out = flags.out ?? path.join(repo, '_credits');
   mkdirSync(out, { recursive: true });
-  const main = lookOf(flags.style);
+  const main = lookOf(graphics, flags.style);
   const lang = LANG();
-  const nav = (cur: string) => `<nav style="position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:14px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)">${LOOKS.map((l) => `<a href="${lookId(l) === lookId(main) ? 'index' : lookId(l)}.html" title="${lookName(l, lang)}" style="display:block;width:22px;height:22px;border-radius:99px;${lookId(l) === cur ? 'outline:2px solid currentColor;outline-offset:3px' : ''}"><svg viewBox="0 0 24 24" width="22" height="22">${lookDot(l)}</svg></a>`).join('')}</nav>`;
+  const nav = (cur: string) => `<nav style="position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:14px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)">${LOOKS.map((l) => `<a href="${lookId(l) === lookId(main) ? 'index' : lookId(l)}.html" title="${lookName(graphics, l, lang)}" style="display:block;width:22px;height:22px;border-radius:99px;${lookId(l) === cur ? 'outline:2px solid currentColor;outline-offset:3px' : ''}"><svg viewBox="0 0 24 24" width="22" height="22">${lookDot(graphics, l)}</svg></a>`).join('')}</nav>`;
   const page = async (l: Look, ids: string[]) => {
-    const arts = await artsOf(ids, raw, l);
-    return exOf(l).html(arts, { title: `${m.project} · credits · ${lookName(l, lang)}`, lang, bg: lookBg(l), note: `${m.project} · ${lookName(l, lang)}` }).replace('<body', `<body style="color:${lookDark(l) ? '#eee' : '#111'}"`).replace(/(<body[^>]*>)/, `$1${nav(lookId(l))}`);
+    const arts = await artsOf(ids, raw, l, modelOptions());
+    return exOf(l).html(arts, { title: `${m.project} · credits · ${lookName(graphics, l, lang)}`, lang, bg: lookBg(l), note: `${m.project} · ${lookName(graphics, l, lang)}` }).replace('<body', `<body style="color:${lookDark(l) ? '#eee' : '#111'}"`).replace(/(<body[^>]*>)/, `$1${nav(lookId(l))}`);
   };
   writeFileSync(path.join(out, 'index.html'), await page(main, boardIds(main)));
   // 动态徽章：README 里用 https://img.shields.io/endpoint?url=<网站地址>/badge.json

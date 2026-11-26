@@ -113,10 +113,10 @@ impl From<String> for Failure {
 fn resource_roots(executable: &Path) -> Vec<PathBuf> {
     let directory = executable.parent().unwrap_or_else(|| Path::new("."));
     let mut roots = Vec::new();
-    if directory.file_name().is_some_and(|name| name == "MacOS") {
-        if let Some(contents) = directory.parent() {
-            roots.push(contents.join("Resources"));
-        }
+    if directory.file_name().is_some_and(|name| name == "MacOS")
+        && let Some(contents) = directory.parent()
+    {
+        roots.push(contents.join("Resources"));
     }
     roots.push(directory.join("resources"));
     roots
@@ -136,10 +136,10 @@ pub fn ui_font_files() -> Result<Vec<PathBuf>, String> {
     let executable = std::env::current_exe()
         .map_err(|error| format!("Cannot locate application fonts: {error}"))?;
     let mut roots = Vec::new();
-    if let Some(bridge) = std::env::var_os("CREDITIA_RENDER_BRIDGE").map(PathBuf::from) {
-        if let Some(root) = bridge.parent().and_then(Path::parent) {
-            roots.push(root.to_path_buf());
-        }
+    if let Some(bridge) = std::env::var_os("CREDITIA_RENDER_BRIDGE").map(PathBuf::from)
+        && let Some(root) = bridge.parent().and_then(Path::parent)
+    {
+        roots.push(root.to_path_buf());
     }
     roots.extend(
         resource_roots(&executable)
@@ -668,10 +668,8 @@ impl Session {
                     return Err(Failure::Transport("Renderer closed its pipes".into()));
                 }
             }
-            if written {
-                if let Some(bytes) = response {
-                    return decode_response(&bytes, &id, &mut self.rss_bytes);
-                }
+            if written && let Some(bytes) = response {
+                return decode_response(&bytes, &id, &mut self.rss_bytes);
             }
         }
     }
@@ -803,16 +801,14 @@ impl Session {
             .expect("validated request")
             .remove("id");
         let key = serde_json::to_vec(&key_value).map_err(|error| error.to_string())?;
-        if cacheable {
-            if let Some(index) = self.results.iter().position(|entry| entry.key == key) {
-                if cancellation.cancelled() {
-                    return Err(Failure::Transport("Renderer request cancelled".into()));
-                }
-                let entry = self.results.remove(index).expect("matched result");
-                let result = entry.value.clone();
-                self.results.push_back(entry);
-                return Ok(result);
+        if cacheable && let Some(index) = self.results.iter().position(|entry| entry.key == key) {
+            if cancellation.cancelled() {
+                return Err(Failure::Transport("Renderer request cancelled".into()));
             }
+            let entry = self.results.remove(index).expect("matched result");
+            let result = entry.value.clone();
+            self.results.push_back(entry);
+            return Ok(result);
         }
         let value = self.exchange(input, cancellation, deadline)?;
         if cacheable {
@@ -1003,11 +999,11 @@ pub fn write_export(path: &Path, bytes: &[u8], cancellation: Cancellation) -> Re
         .map_err(|error| format!("Unable to flush export: {error}"))?;
     // Preserve the destination's access permissions when replacing a regular
     // file. A new Unix export starts private; its directory controls Windows ACLs.
-    if let Ok(metadata) = fs::symlink_metadata(path) {
-        if metadata.is_file() {
-            file.set_permissions(metadata.permissions())
-                .map_err(|error| format!("Unable to preserve export permissions: {error}"))?;
-        }
+    if let Ok(metadata) = fs::symlink_metadata(path)
+        && metadata.is_file()
+    {
+        file.set_permissions(metadata.permissions())
+            .map_err(|error| format!("Unable to preserve export permissions: {error}"))?;
     }
     file.sync_all()
         .map_err(|error| format!("Unable to sync export: {error}"))?;
@@ -1582,7 +1578,7 @@ for await (const line of createInterface({input:process.stdin})) {
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(path, b"fixture font").unwrap();
         }
-        assert!(ui_font_files_in(&[root.clone()]).is_err());
+        assert!(ui_font_files_in(std::slice::from_ref(&root)).is_err());
         let final_font = fonts.join(UI_FONTS[3]);
         fs::create_dir_all(final_font.parent().unwrap()).unwrap();
         fs::write(final_font, b"fixture font").unwrap();

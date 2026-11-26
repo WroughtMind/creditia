@@ -1,4 +1,4 @@
-//! Native persistence fixtures follow the pinned serializers in SUPPORT_AGENT31.md.
+//! Native persistence fixtures follow the pinned serializers in docs/adapters/SUPPORT_AGENT31.md.
 //! Exercise the real binary, SQLite evidence store and final credits, not parser counts alone.
 use super::*;
 use serde_json::{json, Value};

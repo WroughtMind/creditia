@@ -1,5 +1,5 @@
 //! Imports original cloud-client response recordings; no network requests or inferred snapshots.
-//! Replit contract checked from the current public client; see SUPPORT_CLOUD_NATIVE.md.
+//! Replit contract checked from the current public client; see docs/adapters/SUPPORT_CLOUD_NATIVE.md.
 use crate::trace_import as imp;
 use crate::{any_ts, source_dir, Activity, Health, Stats};
 use base64::{engine::general_purpose::STANDARD, Engine};

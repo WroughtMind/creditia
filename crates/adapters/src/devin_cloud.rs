@@ -1,7 +1,7 @@
 //! Offline Devin cloud ACP session-update reader. The web client replays history
 //! through WebSocket `_cognition.ai/session/loadPage` responses, `session/update`
 //! notifications and `_cognition.ai/session_update_batch` batches; every shape
-//! below is that native envelope, never a re-derived export. See SUPPORT_DEVIN.md.
+//! below is that native envelope, never a re-derived export. See docs/adapters/SUPPORT_DEVIN.md.
 use crate::trace_import as imp;
 use crate::{added_lines, any_ts, source_dir, Activity, Health, Stats};
 use creditia_core::{

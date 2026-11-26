@@ -1,4 +1,4 @@
-//! Contract tests independent of either UI toolkit.
+//! Contract tests independent of the UI toolkit.
 use creditia_desktop_service as service;
 use creditia_store::{Library, Project};
 use serde_json::json;
@@ -11,8 +11,6 @@ struct Fixture {
     root: PathBuf,
     previous_home: Option<std::ffi::OsString>,
     previous_core: Option<std::ffi::OsString>,
-    previous_helper: Option<std::ffi::OsString>,
-    previous_test_runner: Option<std::ffi::OsString>,
 }
 impl Fixture {
     fn new(name: &str) -> Self {
@@ -22,15 +20,11 @@ impl Fixture {
         std::fs::create_dir_all(&root).unwrap();
         let previous_home = std::env::var_os("CREDITIA_HOME");
         let previous_core = std::env::var_os("CREDITIA_CORE");
-        let previous_helper = std::env::var_os("CREDITIA_MIGRATION_HELPER");
-        let previous_test_runner = std::env::var_os("CREDITIA_SERVICE_TEST_RUNNER");
         std::env::set_var("CREDITIA_HOME", root.join("library"));
         Self {
             root,
             previous_home,
             previous_core,
-            previous_helper,
-            previous_test_runner,
         }
     }
     fn project(&self) -> Project {
@@ -61,8 +55,6 @@ impl Drop for Fixture {
         for (key, previous) in [
             ("CREDITIA_HOME", &self.previous_home),
             ("CREDITIA_CORE", &self.previous_core),
-            ("CREDITIA_MIGRATION_HELPER", &self.previous_helper),
-            ("CREDITIA_SERVICE_TEST_RUNNER", &self.previous_test_runner),
         ] {
             match previous {
                 Some(value) => std::env::set_var(key, value),
@@ -328,46 +320,60 @@ exit 2
 }
 
 #[test]
-fn legacy_preferences_round_trip_preserves_privacy_and_newer_edits() {
+fn app_json_preferences_preserve_existing_settings_and_unknown_fields() {
     let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
-    let _fixture = Fixture::new("preference-migration");
+    let _fixture = Fixture::new("app-preferences");
+    let directory = creditia_store::data_dir();
+    std::fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("app.json");
+    std::fs::write(
+        &path,
+        br#"{
+            "unknown": {"keep": 7},
+            "gpui": {"language":"en", "appearance":"dark", "reducedMotion":true, "lastProject":"project.with.dot"},
+            "logo": "ring"
+        }"#,
+    )
+    .unwrap();
+    let prefs = service::ui_preferences();
+    assert_eq!(prefs["global"]["lang"], "en");
+    assert_eq!(prefs["global"]["appearance"], "dark");
+    assert_eq!(prefs["global"]["reducedMotion"], true);
+    assert_eq!(prefs["global"]["lastProject"], "project.with.dot");
+    assert_eq!(prefs["global"]["logo"], "ring");
+    assert_eq!(prefs["global"]["named"], false);
+
     service::edit_app_settings(|settings| {
-        settings["unknown"] = json!({"keep": 7});
-        settings["gpui"] = json!({"language":"en","reducedMotion":true});
+        settings["ui"] = json!({
+            "version": 1, "legacyImported": true,
+            "global": {"named":false,"lang":"zh","style":"ink","exportFormat":"svg","exportSize":"wide"},
+            "projects": {"project.with.dot":{"group":"model","autoAnalyze":false}},
+            "legacy": {"creditia.custom-pref":"retained"}
+        });
     })
     .unwrap();
-    let projected = service::import_legacy_preferences(json!({
-        "creditia.names":"off", "creditia.lang":"zh", "creditia.theme":"ink",
-        "creditia.group.project.with.dot":"model", "creditia.autofresh.project.with.dot":"off",
-        "creditia.custom-pref":"retained"
-    }))
-    .unwrap();
-    assert_eq!(projected["creditia.names"], "off");
     let prefs = service::ui_preferences();
     assert_eq!(prefs["global"]["named"], false);
+    assert_eq!(prefs["global"]["lang"], "zh");
     assert_eq!(prefs["global"]["style"], "ink");
+    assert_eq!(prefs["global"]["exportFormat"], "svg");
+    assert_eq!(prefs["global"]["exportSize"], "wide");
     assert_eq!(prefs["global"]["reducedMotion"], true);
     assert_eq!(prefs["projects"]["project.with.dot"]["group"], "model");
     assert_eq!(prefs["projects"]["project.with.dot"]["autoAnalyze"], false);
-    assert_eq!(service::app_settings()["unknown"]["keep"], 7);
 
-    service::patch_ui_preferences(json!({"global":{"style":"bauhaus","lang":"en"},"projects":{"project.with.dot":{"autoAnalyze":null}}})).unwrap();
-    let again = service::import_legacy_preferences(
-        json!({"creditia.theme":"ink","creditia.lang":"zh","creditia.names":"on"}),
-    )
+    service::patch_ui_preferences(json!({
+        "global":{"style":"bauhaus","lang":"en","named":true},
+        "projects":{"project.with.dot":{"autoAnalyze":null}}
+    }))
     .unwrap();
-    assert_eq!(
-        again["creditia.theme"], "bauhaus",
-        "reopening legacy client cannot overwrite GPUI edits"
-    );
-    assert_eq!(again["creditia.lang"], "en");
-    assert!(
-        again.get("creditia.autofresh.project.with.dot").is_none(),
-        "inherit clears stale override in legacy projection"
-    );
-    assert_eq!(again["creditia.custom-pref"], "retained");
-    service::set_legacy_preference("creditia.names".into(), "on".into()).unwrap();
-    assert_eq!(service::ui_preferences()["global"]["named"], true);
+    let prefs = service::ui_preferences();
+    assert_eq!(prefs["global"]["style"], "bauhaus");
+    assert_eq!(prefs["global"]["lang"], "en");
+    assert_eq!(prefs["projects"]["project.with.dot"]["group"], "model");
+    assert!(prefs["projects"]["project.with.dot"]["autoAnalyze"].is_null());
+    assert_eq!(prefs["legacy"]["creditia.custom-pref"], "retained");
+    assert_eq!(service::app_settings()["unknown"]["keep"], 7);
     assert!(service::patch_ui_preferences(json!({"global":{"named":"false"}})).is_err());
     assert_eq!(service::ui_preferences()["global"]["named"], true);
 }
@@ -396,12 +402,6 @@ fn corrupted_settings_are_not_overwritten_and_future_versions_are_preserved() {
         "preferences_version"
     );
     assert_eq!(
-        service::import_legacy_preferences(json!({"creditia.names":"on"}))
-            .unwrap_err()
-            .code,
-        "preferences_version"
-    );
-    assert_eq!(
         std::fs::read(&path).unwrap(),
         future,
         "unsupported versions are not rewritten"
@@ -418,7 +418,7 @@ fn corrupted_settings_are_not_overwritten_and_future_versions_are_preserved() {
         )
         .unwrap();
         let before = std::fs::read(&path).unwrap();
-        assert!(service::import_legacy_preferences(json!({"creditia.names":"on"})).is_err());
+        assert!(service::patch_ui_preferences(json!({"global":{"named":true}})).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), before);
     }
 }
@@ -477,78 +477,6 @@ fn concurrent_desktop_processes_merge_settings_without_partial_json() {
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
     assert_eq!(service::app_settings()["counter"], 100);
-}
-
-#[cfg(unix)]
-#[test]
-fn migration_child_process() {
-    match std::env::var("CREDITIA_SERVICE_TEST_MIGRATOR").as_deref() {
-        Ok("launch") => {
-            service::migrate_legacy_with_helper().unwrap();
-        }
-        Ok("import") => {
-            // Give the other desktop time to contend for the migration lease.
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            service::import_legacy_preferences(
-                json!({"creditia.names":"off","creditia.group.original.project":"model"}),
-            )
-            .unwrap();
-            service::edit_app_settings(|settings| {
-                settings["helperRuns"] = json!(settings["helperRuns"].as_u64().unwrap_or(0) + 1)
-            })
-            .unwrap();
-        }
-        _ => {}
-    }
-}
-
-#[cfg(unix)]
-#[test]
-fn simultaneous_desktops_run_one_migration_helper_and_failed_import_keeps_privacy() {
-    use std::os::unix::fs::PermissionsExt;
-    let _env = ENV.lock().unwrap_or_else(|e| e.into_inner());
-    let fixture = Fixture::new("migration-processes");
-    let helper = fixture.root.join("migration-helper");
-    std::fs::write(&helper, "#!/bin/sh\n[ \"$1\" = --migrate-ui-settings ] || exit 9\nCREDITIA_SERVICE_TEST_MIGRATOR=import exec \"$CREDITIA_SERVICE_TEST_RUNNER\" --exact migration_child_process\n").unwrap();
-    std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755)).unwrap();
-    std::env::set_var("CREDITIA_MIGRATION_HELPER", &helper);
-    std::env::set_var(
-        "CREDITIA_SERVICE_TEST_RUNNER",
-        std::env::current_exe().unwrap(),
-    );
-    let mut desktops = (0..2)
-        .map(|_| {
-            std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["--exact", "migration_child_process"])
-                .env("CREDITIA_SERVICE_TEST_MIGRATOR", "launch")
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .unwrap()
-        })
-        .collect::<Vec<_>>();
-    for desktop in &mut desktops {
-        assert!(desktop.wait().unwrap().success());
-    }
-    assert_eq!(service::app_settings()["helperRuns"], 1);
-    assert_eq!(service::ui_preferences()["global"]["named"], false);
-    assert_eq!(
-        service::ui_preferences()["projects"]["original.project"]["group"],
-        "model"
-    );
-
-    std::fs::write(
-        creditia_store::data_dir().join("app.json"),
-        r#"{"keep":"original"}"#,
-    )
-    .unwrap();
-    std::fs::write(&helper, "#!/bin/sh\nexit 1\n").unwrap();
-    assert_eq!(
-        service::migrate_legacy_with_helper().unwrap_err().code,
-        "migration_failed"
-    );
-    assert_eq!(service::ui_preferences()["global"]["named"], false);
-    assert_eq!(service::app_settings(), json!({"keep":"original"}));
 }
 
 #[cfg(unix)]
@@ -719,7 +647,9 @@ fn explicit_background_cancel_waits_for_a_new_head_despite_forced_refresh() {
             }
         }
     };
-    let generation = wait_for("analysis-progress")["generation"].as_u64().unwrap();
+    let generation = wait_for("analysis-progress")["generation"]
+        .as_u64()
+        .unwrap();
     assert!(!background.cancel_analysis(&project.id, generation.wrapping_sub(1)));
     assert!(!background.cancel_analysis("different-project", generation));
     assert!(background.cancel_analysis(&project.id, generation));

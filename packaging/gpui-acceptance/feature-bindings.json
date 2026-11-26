@@ -30,16 +30,16 @@
       "feature_id": "grouping",
       "check": "逐项目记住偏好",
       "required_tests": [
-        "legacy_preferences_round_trip_preserves_privacy_and_newer_edits"
+        "app_json_preferences_preserve_existing_settings_and_unknown_fields"
       ],
-      "behavior": "Persists a model-group preference under a project ID containing dots and reads the same per-project value after migration."
+      "behavior": "Reads and preserves a model-group preference under a project ID containing dots in app.json."
     },
     {
       "feature_id": "settings-general",
       "check": "偏好持久化",
       "required_tests": [
         "settings_and_project_display_preserve_existing_fields",
-        "legacy_preferences_round_trip_preserves_privacy_and_newer_edits",
+        "app_json_preferences_preserve_existing_settings_and_unknown_fields",
         "concurrent_desktop_processes_merge_settings_without_partial_json"
       ],
       "behavior": "Writes and rereads application/project preferences, preserves unknown fields and privacy, and verifies four real processes merge100 updates without partial JSON."

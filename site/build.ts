@@ -26,7 +26,8 @@ rmSync(OUT, { recursive: true, force: true });
 mkdirSync(path.join(OUT, 'assets'), { recursive: true });
 
 const sample = JSON.parse(readFileSync(path.join(ROOT, 'packages/render/fixtures/catnap.json'), 'utf8'));
-const own = existsSync(path.join(ROOT, 'credits.json')) ? JSON.parse(readFileSync(path.join(ROOT, 'credits.json'), 'utf8')) : null;
+const ownPath = path.join(ROOT, 'credits.json');
+const own = existsSync(ownPath) ? JSON.parse(readFileSync(ownPath, 'utf8')) : null;
 const LANGS = ['zh', 'en'] as const;
 type Lang = (typeof LANGS)[number];
 
@@ -34,18 +35,18 @@ type Lang = (typeof LANGS)[number];
 // 本地预览内存紧时可以设 SKIP_SELF_PAGE=1 跳过这一步
 if (own && !process.env.SKIP_SELF_PAGE) {
   for (const lang of LANGS) {
-    const r = spawnSync(process.execPath, [path.join(ROOT, 'packages/cli/bin/creditia.mjs'), 'site', '--credits', path.join(ROOT, 'credits.json'), '--style', 'minimal', '--lang', lang, '--out', path.join(OUT, lang === 'zh' ? 'self' : 'self/en')], { stdio: 'inherit' });
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'packages/cli/src/cli.ts'), 'site', '--credits', ownPath, '--style', 'minimal', '--lang', lang, '--out', path.join(OUT, lang === 'zh' ? 'self' : 'self/en')], { stdio: 'inherit' });
     if (r.status !== 0) throw new Error('creditia site 失败');
   }
   console.log('✓ self page');
 }
 
-// 官网上的真 App：apps/desktop 的界面按网页打包，放进「桌面」演示里，用样例项目的档案。
-// 需要 apps/desktop 装好依赖并生成过字体（npm ci && npm run fonts）；本地不想打包可以设 SKIP_APP=1
-const DESK = path.join(ROOT, 'apps/desktop');
-const hasApp = !process.env.SKIP_APP && existsSync(path.join(DESK, 'node_modules/vite')) && existsSync(path.join(DESK, 'src/fonts/manifest.json'));
+// 「桌面」区域嵌入独立的网页演示，使用样例项目的档案。
+// 需要在 site/app 安装依赖并生成字体（npm ci && npm run fonts），也可以用 SKIP_APP=1 跳过。
+const DEMO_APP = path.join(import.meta.dirname, 'app');
+const hasApp = !process.env.SKIP_APP && existsSync(path.join(DEMO_APP, 'node_modules/vite')) && existsSync(path.join(DEMO_APP, 'src/fonts/manifest.json'));
 if (hasApp) {
-  const r = spawnSync(process.execPath, [path.join(DESK, 'node_modules/vite/bin/vite.js'), 'build', '--base', './', '--outDir', path.join(OUT, 'app'), '--emptyOutDir', '--logLevel', 'warn'], { cwd: DESK, stdio: 'inherit' });
+  const r = spawnSync(process.execPath, [path.join(DEMO_APP, 'node_modules/vite/bin/vite.js'), 'build', '--base', './', '--outDir', path.join(OUT, 'app'), '--emptyOutDir', '--logLevel', 'warn'], { cwd: DEMO_APP, stdio: 'inherit' });
   if (r.status !== 0) throw new Error('App 网页版打包失败');
   const demo = {
     projects: [{ id: 'catnap', name: 'catnap', path: '~/code/catnap', paths: ['~/code/catnap'], lastAnalyzed: Math.floor(Date.now() / 1000), evidence: 18234, exists: true, hasCredits: true }],
@@ -54,7 +55,7 @@ if (hasApp) {
   };
   const f = path.join(OUT, 'app/index.html');
   writeFileSync(f, readFileSync(f, 'utf8').replace('<head>', `<head>\n<script>window.__CREDITIA_DEMO__ = ${JSON.stringify(demo)};</script>`));
-  cpSync(path.join(DESK, 'src-tauri/icons/128x128@2x.png'), path.join(OUT, 'assets/app-icon.png'));
+  cpSync(path.join(ROOT, 'packaging/icons/128x128@2x.png'), path.join(OUT, 'assets/app-icon.png'));
   console.log('✓ app');
 }
 

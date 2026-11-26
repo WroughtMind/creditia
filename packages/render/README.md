@@ -13,6 +13,8 @@ node src/gallery.ts my/credits.json out ink,cinema   # 指定档案、输出目�
 
 需要 Node ≥ 22.18（直接运行 .ts）。
 
+安装后会从渲染器自己的 `node_modules` 移除未使用的字重和预览图。两套渲染器的字体清单决定 GPUI 所带的 71 个字面，文件名和目录也用于原生渲染。包括 Noto Sans SC、Noto Serif SC 和日文展示字体在内，保留的字体文件均为原始完整文件，供中英文界面中出现的项目名、作者名、PR 标题和提交说明使用。
+
 ```ts
 import { buildModel, styleById, art, frames, exporter } from '@creditia/render/src/index.ts';
 const m = buildModel(credits, { lang: 'zh' });   // named: false 不写其他贡献者的名字

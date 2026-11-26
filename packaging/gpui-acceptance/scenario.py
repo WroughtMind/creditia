@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """Drive real Linux app windows through X11 input and verify observed UI state.
 
-Run under resources.py. Both applications must be instrumented to emit passive
-CREDITIA_APP_EVENTS telemetry. This driver never calls production view functions
-or injects synthetic DOM input. Its own process overhead is included in both
-whole-tree measurements. Event hashes prove artifact integrity, not authenticity
-against a malicious app or CI host.
+Run under resources.py. The driver observes CREDITIA_APP_EVENTS telemetry and
+sends X11 input. Its own process overhead is included in the measurements.
 """
 import argparse
 import hashlib
 import json
 import os
 import pathlib
-import signal
 import subprocess
 import sys
 import time
+
+DELIVERY_SCENARIOS = ("startup", "scroll", "roam", "hidden-idle")
+SCENARIOS = ("startup", "scroll", "roam", "zoom", "idle", "hidden-idle")
 
 
 def canonical(value):
@@ -67,9 +66,9 @@ def run(args):
     app_events = event_path.with_name("application-events.jsonl")
     journal = Journal(event_path)
     started = time.monotonic()
-    env = dict(os.environ, CREDITIA_APP_EVENTS=str(app_events), CREDITIA_ACCEPTANCE_ARCHIVE=str(fixture), CREDITIA_ACCEPTANCE_MODE="1")
+    env = dict(os.environ, CREDITIA_APP_EVENTS=str(app_events))
     process = subprocess.Popen(command, env=env)
-    journal.write("launch", application=args.application, scenario=args.scenario, cache_state=args.cache,
+    journal.write("launch", scenario=args.scenario, cache_state=args.cache,
                   fixture_sha256=hashlib.sha256(fixture.read_bytes()).hexdigest(),
                   driver_sha256=hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest(),
                   workload="focus-enlargement" if args.scenario == "zoom" else args.scenario)
@@ -187,8 +186,7 @@ def run(args):
             for step in range(4):
                 action(f"roam-pan-{step}", lambda: xdo("click", "--repeat", 5, "--delay", 70, 5 if step % 2 == 0 else 4), moved)
         elif args.scenario == "zoom":
-            # Old Creditia has no continuous zoom. Both real apps open the same
-            # selected artwork in their enlarged focus view, then close it.
+            # Open and close the enlarged focus view.
             for step in range(3):
                 state = observed()[-1]["state"]
                 point = state.get("first_tile")
@@ -221,7 +219,7 @@ def run(args):
                         return
                     time.sleep(.1)
                 raise TimeoutError(f"Window manager did not observe {label}: {after}")
-            # Minimized applications intentionally stop drawing/requestAnimationFrame;
+            # Minimized windows intentionally stop drawing;
             # waiting for render-time telemetry here would reject correct pausing.
             window_action("hide-window", lambda: xdo("windowminimize", window), lambda s: s["iconic"] or not s["mapped"])
             journal.write("idle-start", seconds=args.idle_seconds)
@@ -233,8 +231,6 @@ def run(args):
             window_action("restore-window", lambda: xdo("windowactivate", "--sync", window),
                           lambda s: s["mapped"] and not s["iconic"])
         elif args.scenario == "continuous-zoom":
-            if args.application != "gpui":
-                raise ValueError("The baseline has no continuous zoom; do not invent a comparable workload")
             for step in range(4):
                 action(f"continuous-zoom-{step}", lambda: xdo("key", "--clearmodifiers", "ctrl+equal" if step % 2 == 0 else "ctrl+minus"),
                        lambda b, s: s.get("zoom") != b.get("zoom"))
@@ -258,9 +254,8 @@ def run(args):
 
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--application", choices=["tauri", "gpui"], required=True)
     p.add_argument("--fixture", required=True)
-    p.add_argument("--scenario", choices=["startup", "scroll", "roam", "zoom", "idle", "hidden-idle", "continuous-zoom"], required=True)
+    p.add_argument("--scenario", choices=(*SCENARIOS, "continuous-zoom"), required=True)
     p.add_argument("--cache", choices=["cold", "warm"], required=True)
     p.add_argument("--ready-timeout", type=float, default=90)
     p.add_argument("--idle-seconds", type=float, default=12)

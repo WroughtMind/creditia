@@ -26,7 +26,7 @@ impl ShadowRows {
         let mut bytes = rows.capacity() * size_of::<Vec<Span>>();
         for line in pixels.data().chunks_exact(pixels.width() as usize * 4) {
             let mut row: Vec<Span> = Vec::new();
-            for (index, color) in line.chunks_exact(4).enumerate() {
+            for (index, &color) in line.as_chunks::<4>().0.iter().enumerate() {
                 if color[3] == 0 {
                     continue;
                 }
@@ -40,7 +40,7 @@ impl ShadowRows {
                     row.push(Span {
                         x,
                         end: x + 1,
-                        rgba: color.try_into().unwrap(),
+                        rgba: color,
                     });
                 }
             }
@@ -65,8 +65,9 @@ impl ShadowRows {
                 if start >= end {
                     continue;
                 }
-                for pixel in
-                    line[((start - x) * 4) as usize..((end - x) * 4) as usize].chunks_exact_mut(4)
+                for pixel in line[((start - x) * 4) as usize..((end - x) * 4) as usize]
+                    .as_chunks_mut::<4>()
+                    .0
                 {
                     pixel.copy_from_slice(&run.rgba);
                 }
@@ -81,7 +82,10 @@ impl ShadowRows {
             .zip(output.data_mut().chunks_exact_mut(stride))
         {
             for run in row {
-                for pixel in line[run.x as usize * 4..run.end as usize * 4].chunks_exact_mut(4) {
+                for pixel in line[run.x as usize * 4..run.end as usize * 4]
+                    .as_chunks_mut::<4>()
+                    .0
+                {
                     composite_pixel(pixel, &run.rgba);
                 }
             }
@@ -157,8 +161,10 @@ fn composite_cached(output: &mut tiny_skia::Pixmap, source: &tiny_skia::Pixmap) 
     );
     for (dst, src) in output
         .data_mut()
-        .chunks_exact_mut(4)
-        .zip(source.data().chunks_exact(4))
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(source.data().as_chunks::<4>().0)
     {
         composite_pixel(dst, src);
     }
@@ -198,8 +204,10 @@ fn layers(svg: &str) -> Option<Vec<Layer>> {
     if svg.len() > 2 * 1024 * 1024 || !svg.contains("url(#") {
         return None;
     }
-    let mut opts = roxmltree::ParsingOptions::default();
-    opts.nodes_limit = 100_000;
+    let opts = roxmltree::ParsingOptions {
+        nodes_limit: 100_000,
+        ..Default::default()
+    };
     let doc = roxmltree::Document::parse_with_options(svg, opts).ok()?;
     let root = doc.root_element();
     if root.tag_name().name() != "svg"
@@ -224,10 +232,10 @@ fn layers(svg: &str) -> Option<Vec<Layer>> {
     {
         defs.push_str(&svg[child.range()]);
         for node in child.descendants().filter(|c| c.is_element()) {
-            if let Some(id) = node.attribute("id") {
-                if ids.insert(id, node).is_some() {
-                    return None;
-                }
+            if let Some(id) = node.attribute("id")
+                && ids.insert(id, node).is_some()
+            {
+                return None;
             }
         }
     }
@@ -782,7 +790,13 @@ mod tests {
     #[test]
     fn aligned_cache_compositing_matches_the_image_shader() {
         let mut source = tiny_skia::Pixmap::new(256, 1).unwrap();
-        for (alpha, pixel) in source.data_mut().chunks_exact_mut(4).enumerate() {
+        for (alpha, pixel) in source
+            .data_mut()
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .enumerate()
+        {
             pixel.copy_from_slice(&[
                 (alpha / 2) as u8,
                 (alpha / 3) as u8,
@@ -972,7 +986,7 @@ mod tests {
             let mut tile = tiny_skia::Pixmap::new(80, 36).unwrap();
             let tf = tiny_skia::Transform::from_row(2.5, 0., 0., 2.5, -(x as f32), -(y as f32));
             assert!(cache.crop_shadow(xml, &tree, tf, &mut tile, &usvg::Options::default()));
-            for (row, actual) in tile.data().chunks_exact(80 * 4).enumerate() {
+            for (row, actual) in tile.data().as_chunks::<{ 80 * 4 }>().0.iter().enumerate() {
                 let start = ((y + row) * 240 + x) * 4;
                 assert_eq!(actual, &full.data()[start..start + 80 * 4]);
             }

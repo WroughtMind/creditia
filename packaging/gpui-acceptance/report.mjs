@@ -132,18 +132,14 @@ const artwork = [...expected].map(([key, row]) => {
     exports_checked: evidence.some(e => e.exports === 'matched'), evidence };
 });
 const nativeFailures = native.flatMap(m => m.cases.filter(c => c.status !== 'passed').map(c => ({ manifest: m.manifest, key: c.key, status: c.status })));
-const performanceComparisons = [];
-const comparisonScenarios = ['startup', 'scroll', 'roam', 'zoom', 'idle', 'hidden-idle'];
-for (const current of performance.filter(p => p.comparison_role === 'candidate' && comparisonScenarios.includes(p.scenario))) {
-  const key = p => stable({ environment: p.provenance.environment, fixture: p.provenance.fixture.sha256,
-    workload: p.provenance.workload, scenario: p.scenario, cache: p.cache_state });
-  const before = performance.find(p => p.comparison_role === 'baseline' && key(p) === key(current));
-  performanceComparisons.push(before && before.workload_verified && current.workload_verified && before.screenshot_content_verified && current.screenshot_content_verified ? {
-    scenario: current.scenario, cache_state: current.cache_state, status: 'comparable', baseline: before.manifest, candidate: current.manifest,
-    rss_peak_bytes: [before.summary.rss_peak_bytes, current.summary.rss_peak_bytes],
-    cpu_p50_percent_one_core: [before.summary.cpu_p50_percent_one_core, current.summary.cpu_p50_percent_one_core],
-  } : { scenario: current.scenario, cache_state: current.cache_state, status: before ? 'missing_workload_evidence' : 'missing_identical_baseline', candidate: current.manifest });
-}
+const performanceMeasurements = performance.map(p => ({
+  manifest: p.manifest, scenario: p.scenario, cache_state: p.cache_state,
+  verified: p.workload_verified === true && p.event_chain_verified === true &&
+    p.screenshot_content_verified === true && p.exit_code === 0 && p.remaining_processes_at_end === 0,
+  rss_peak_bytes: p.summary?.rss_peak_bytes,
+  cpu_p50_percent_one_core: p.summary?.cpu_p50_percent_one_core,
+  startup_seconds: p.phase_summary?.startup?.duration_seconds,
+}));
 const reviewPath = options['review'] ?? options['manual-review'];
 const manual = reviewPath ? JSON.parse(fs.readFileSync(reviewPath, 'utf8')) : null;
 if (manual && manual.candidate_sha !== options['candidate-sha']) failures.push({ manifest: reviewPath, error: 'Recorded review candidate differs' });
@@ -189,8 +185,8 @@ const browserCatalogPassed = new Set(browserCatalog.flatMap(m => m.cases.filter(
 const browserCatalogComplete = [...expected.keys()].every(key => browserCatalogPassed.has(key));
 const featureFailures = featureCoverage.flatMap(f => f.checks.filter(c => c.status === 'failed'));
 const requiredPerformance = ['startup', 'scroll', 'roam', 'hidden-idle'];
-const performanceComplete = requiredPerformance.every(scenario => performanceComparisons.some(p =>
-  p.scenario === scenario && p.status === 'comparable'));
+const performanceComplete = requiredPerformance.every(scenario => performanceMeasurements.some(p =>
+  p.scenario === scenario && p.verified));
 const packageFormats = { 'darwin-arm64': ['zip', 'dmg'], 'darwin-x64': ['zip', 'dmg'],
   'win32-x64': ['zip', 'nsis'], 'linux-x64': ['tar', 'deb'] };
 function installedWorkflow(p) {
@@ -217,13 +213,13 @@ const report = { schema_version: 1, candidate_sha: options['candidate-sha'], gen
   release_ready: releaseReady, evidence_manifests: manifests, invalid_evidence: failures,
   real_project_visual_sample: realVisualInput, feature_coverage: featureCoverage, features_complete: featuresComplete,
   artwork_summary: countBy(artwork, r => r.status), artwork, native, native_platforms_complete: nativePlatformsComplete, browser_catalog: { complete: browserCatalogComplete, passed_rows: browserCatalogPassed.size, manifests: browserCatalog }, native_catalog: { complete: nativeCatalogComplete, passed_rows: nativeCatalogPassed.size, manifests: nativeCatalog }, native_failures: nativeFailures, feature_failures: featureFailures,
-  performance_comparisons: performanceComparisons, additional_performance: performance.filter(p => !comparisonScenarios.includes(p.scenario)).map(p => ({ manifest: p.manifest, scenario: p.scenario, verified: p.workload_verified })), package_platforms: packages.map(p => ({ platform: p.platform, acceptance: p.acceptance, installed_workflow: Boolean(installedWorkflow(p)), manifest: p.manifest })),
+  performance_measurements: performanceMeasurements, package_platforms: packages.map(p => ({ platform: p.platform, acceptance: p.acceptance, installed_workflow: Boolean(installedWorkflow(p)), manifest: p.manifest })),
   recorded_review: { status: manual ? manualComplete ? 'complete' : 'incomplete' : 'not_provided', reviewed_artworks: manual?.visuals?.length ?? 0,
     reviewed_features: featureEntries.size, executable_feature_checks: featureChecks.length, platform: manual?.platform, workflow: manual?.workflow, visuals: manual?.visuals, source: reviewPath ?? null },
   limitations: ['Machine rendering matches do not verify native UI placement or interaction.',
     'Empty outputs require a data-rich fixture before a combination can be accepted.',
     'Named visual/interaction reviews cover the primary user journey and five representative visual cases. Full catalog rows are tracked separately.',
-    'Performance is compared only for matching machine, data, workload, scenario and cache labels.'] };
+    'Performance results describe the measured GPUI build, host, fixture and workload.'] };
 fs.mkdirSync(output, { recursive: true });
 fs.writeFileSync(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
 const md = [`# Creditia GPUI acceptance`, '', `Candidate: \`${report.candidate_sha}\``, '',
@@ -236,7 +232,7 @@ const md = [`# Creditia GPUI acceptance`, '', `Candidate: \`${report.candidate_s
   '## Delivery checks and inventory', '',
   `- Invalid or incomplete evidence: ${failures.length}.`, `- Native UI cases not passed: ${nativeFailures.length}.`,
   `- Feature inventory checks without a pass (includes optional checks): ${featureCoverage.reduce((n, feature) => n + feature.checks.filter(c => c.status !== 'passed').length, 0)}.`,
-  `- Matched baseline/candidate performance scenarios: ${performanceComparisons.filter(p => p.status === 'comparable').length}.`,
+  `- Verified native performance measurements: ${performanceMeasurements.filter(p => p.verified).length}.`,
   `- Recorded visual/interaction review: ${manual ? 'provided; see report.json for candidate and gate checks' : 'not provided'}.`, '',
   ...report.limitations.map(l => `- ${l}`), '',
   ...(failures.length ? ['## Evidence errors', '', ...failures.map(f => `- ${f.manifest}: ${f.error}`), ''] : []),

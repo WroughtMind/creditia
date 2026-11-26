@@ -1,6 +1,6 @@
 //! Offline Bolt HAR reader. A saved server merge and exact before/after bodies,
 //! rather than the chat's reloaded `complete` status, establish a write.
-//! See SUPPORT_BOLT.md for the public shipping-client contract and limitations.
+//! See docs/adapters/SUPPORT_BOLT.md for the public shipping-client contract and limitations.
 use crate::trace_import as imp;
 use crate::{added_lines, source_dir, Activity, Health, Stats};
 use base64::{engine::general_purpose::STANDARD, Engine};

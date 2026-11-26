@@ -1,6 +1,17 @@
 # Agent 读取范围（开发版本）
 
-本页保留 2026-10-19 核查的 73 个工具与读取入口及其证据。当前 78 项公共目录的口径为 **72 个历史入口、5 个执行宿主、1 个未确认格式**，见 [完整覆盖表](AGENT_SUPPORT.md)。两张表不能相加作为产品数量。最新的 Eve 与 inference.sh 真实执行验收、MCPJam 原生执行验收分别见 [SUPPORT_NATIVE_LIVE.md](SUPPORT_NATIVE_LIVE.md) 与 [SUPPORT_MCPJAM_LIVE.md](SUPPORT_MCPJAM_LIVE.md)。灵码真实库验收及此前各轮来源保留在 [SUPPORT_AGENT3.md](SUPPORT_AGENT3.md) 与 `SUPPORT_AGENT*.md`。
+本页保留 2026-10-19 核查的 73 个工具与读取入口及其证据。当前 78 项公共目录的口径为 **72 个历史入口、5 个执行宿主、1 个未确认格式**，见 [完整覆盖表](AGENT_SUPPORT.md)。两张表不能相加作为产品数量。最新的 Eve 与 inference.sh 真实执行验收、MCPJam 原生执行验收分别见 [SUPPORT_NATIVE_LIVE.md](docs/adapters/SUPPORT_NATIVE_LIVE.md) 与 [SUPPORT_MCPJAM_LIVE.md](docs/adapters/SUPPORT_MCPJAM_LIVE.md)。灵码真实库验收及此前各轮来源保留在 [SUPPORT_AGENT3.md](docs/adapters/SUPPORT_AGENT3.md) 与 `docs/adapters/SUPPORT_AGENT*.md`。
+
+## 维护分级
+
+- **Tier 1（15 个入口）** 是旗舰编程工具。持续跟踪上游版本及原生日志格式，维护成功编辑的逐行归因，用脱敏真实日志做回放回归。样本范围与接入流程见[真实日志回放指南](crates/core/tests/fixtures/real/README.md)。
+- **Tier 2（63 个入口）** 涵盖长尾、云端和社区工具。支持按需采集（`creditia capture`，适用于支持 ACP 的工具）、`creditia stamp`、Git 提交尾注（trailer）、已支持格式的通用轨迹导入和现有尽力维护的社区读取器。遇到上游账号门槛或尚未核实的格式变更，依赖社区提供脱敏样本或 PR。
+
+Tier 1 的公开 ID 为 `antigravity`、`antigravity-cli`、`claude-code`、`cline`、`codex`、`cursor`、`gemini-cli`、`github-copilot`、`kilo`、`opencode`、`qwen-code`、`roo`、`trae`、`windsurf`、`zed`。`github-copilot` 涵盖编辑器与 Copilot CLI。Aider 和 TRAE CLI 有内部读取 ID `aider` 和 `trae`。公共目录中的 `aider-desk`、`trae` 和 `trae-cn` 分别指 AiderDesk、TRAE 编辑器和 TRAE CN 编辑器。
+
+`creditia agents --json` 列出全部入口及其 `tier`，可用 `--tier tier1` 或 `--tier tier2` 筛选。分级记录维护投入，逐行归因仍以可核实的成功编辑为准。各工具的实际读取边界见下表。
+
+## 读取入口
 
 下表区分原生编辑、官方导入、有限 hook、仅会话和 ACP 新会话采集。数量不是独立产品数、市场覆盖率或逐版本验收数。同名产品的不同入口分别核查；表中范围以实际已确认格式为准。
 
@@ -10,8 +21,8 @@
 
 | 工具 / 入口 | harness | 读取范围 | 边界 |
 |---|---|---|---|
-| Claude Code | `claude-code` | 原生编辑及 MCPJam 执行历史 | 自动发现 MCPJam 隔离 home 的原生 JSONL；成功回执、路径链接、跨目录去重与子 agent 分离均经过验收，见 [记录](SUPPORT_MCPJAM_LIVE.md)。 |
-| Codex | `codex` | 原生编辑及执行宿主历史 | SQLite 索引可选；读取原生 rollout、成功 patch 和严格的命令写入回执，自动发现 MCPJam 独立 Codex home；inference.sh 官方驱动/导出已真实验收，见 [记录](SUPPORT_NATIVE_LIVE.md)。 |
+| Claude Code | `claude-code` | 原生编辑及 MCPJam 执行历史 | 自动发现 MCPJam 隔离 home 的原生 JSONL；成功回执、路径链接、跨目录去重与子 agent 分离均经过验收，见 [记录](docs/adapters/SUPPORT_MCPJAM_LIVE.md)。 |
+| Codex | `codex` | 原生编辑及执行宿主历史 | SQLite 索引可选；读取原生 rollout、成功 patch 和严格的命令写入回执，自动发现 MCPJam 独立 Codex home；inference.sh 官方驱动/导出已真实验收，见 [记录](docs/adapters/SUPPORT_NATIVE_LIVE.md)。 |
 | Cursor 编辑器 | `cursor` | 已有读取 | 现有范围见 [归因说明](ATTRIBUTION.md)，本次未逐版本重新验收。 |
 | Grok Build | `grok` | 已有读取 | 现有范围见 [归因说明](ATTRIBUTION.md)，本次未逐版本重新验收。 |
 | Kimi Code CLI | `kimi` | 已有读取 | 现有范围见 [归因说明](ATTRIBUTION.md)，本次未逐版本重新验收。 |
@@ -62,7 +73,7 @@
 | v0 | `v0` | 仅会话 | v2 usage/时间与可定位项目；file-edit 无正文，不冒充逐行证据。 |
 | Warp Agent | `warp` | 原生编辑 | SQLite task protobuf / ConversationData；配对成功差分，排除人工修改与撤销；Oz 元数据另读。 |
 | Windsurf Cascade | `windsurf` | 官方导入编辑 | 已有 post_write_code hook / done transcript；原生 pb 未解码。 |
-| TRAE 编辑器 | `trae-ide` | 原生编辑 | 只读解密 SQLCipher，读取 task 原始 success 回执的实际前后差分；归档/删除/失败不计，执行模型未知。3.6.2 与 3.6.4 协议已静态对照，加密测试库已通过 CLI 归因；真实账号另验。见 [TRAE 说明](SUPPORT_TRAE.md)。 |
+| TRAE 编辑器 | `trae-ide` | 原生编辑 | 只读解密 SQLCipher，读取 task 原始 success 回执的实际前后差分；归档/删除/失败不计，执行模型未知。3.6.2 与 3.6.4 协议已静态对照，加密测试库已通过 CLI 归因；真实账号另验。见 [TRAE 说明](docs/adapters/SUPPORT_TRAE.md)。 |
 | Antigravity 编辑器 | `antigravity-ide` | 原生编辑 | 完整 trajectory SQLite/protobuf 成功 ActionResultEdit；逐生成模型，摘要仅补缺。 |
 | DeepSeek Harness（DSH） | `dsh` | 原生编辑 | v0–v4、zstd、canonical generation；成功回执与实际前后差分。 |
 | Cortex Code | `cortex-code` | 原生编辑 + ACP | 快照/增量日志；嵌套调用与明确成功回执；编辑模型未知。 |
@@ -120,7 +131,7 @@ creditia capture --harness cortex-code -- cortex acp serve
 | sigit | `sigit`（注册表入口本身即 ACP） |
 | stakpak | `stakpak acp` |
 
-这是已实现的通用协议路径及官方启动映射，尚未逐家启动模型做真实交互验收。开启后才有采集记录；它不补造旧历史。原生历史、导出与采集的具体证据分别见 [本地 CLI 与编辑器](SUPPORT_LOCAL.md)、[Pi / Muse / T3 等会话](SUPPORT_SESSIONS.md)、[长尾原生格式](SUPPORT_LONGTAIL.md)、[最后五家发行物核实](SUPPORT_REMAINING.md)、[云端 / 轨迹 / DSH](SUPPORT_CLOUD.md)、[当前云端客户端契约](SUPPORT_CLOUD_NATIVE.md)、[Bolt 保存链](SUPPORT_BOLT.md)、[Lovable 链路](SUPPORT_LOVABLE.md)、[Devin ACP 协议](SUPPORT_DEVIN.md)、[SQLCipher 解密器](SUPPORT_SQLCIPHER.md)。
+这是已实现的通用协议路径及官方启动映射，尚未逐家启动模型做真实交互验收。开启后才有采集记录；它不补造旧历史。原生历史、导出与采集的具体证据分别见 [本地 CLI 与编辑器](docs/adapters/SUPPORT_LOCAL.md)、[Pi / Muse / T3 等会话](docs/adapters/SUPPORT_SESSIONS.md)、[长尾原生格式](docs/adapters/SUPPORT_LONGTAIL.md)、[最后五家发行物核实](docs/adapters/SUPPORT_REMAINING.md)、[云端 / 轨迹 / DSH](docs/adapters/SUPPORT_CLOUD.md)、[当前云端客户端契约](docs/adapters/SUPPORT_CLOUD_NATIVE.md)、[Bolt 保存链](docs/adapters/SUPPORT_BOLT.md)、[Lovable 链路](docs/adapters/SUPPORT_LOVABLE.md)、[Devin ACP 协议](docs/adapters/SUPPORT_DEVIN.md)、[SQLCipher 解密器](docs/adapters/SUPPORT_SQLCIPHER.md)。
 
 ## 时间与去重
 
@@ -138,6 +149,6 @@ Tabnine 原生会话映射只改变已确认的执行者归属，底层 OpenCode
 
 本次完整验证：Rust 250 项通过、1 项保留既有忽略状态；展示/命令行/App 前端 46 项通过。工作区严格 Clippy 检查、CLI 优化构建及包装构建、桌面前端构建、桌面原生编译检查均通过。Tabnine 的实际 CLI 回归覆盖新增映射、清空映射、删除缓存后的作品库恢复，始终保留单份原生模型与 token。Bolt/Lovable/Devin 的测试为契约推导的构造 fixture，真实账户捕获与全平台验收未做。
 
-本机只读验证：ZCode 388 个会话、18,884 条行哈希、0 警告；DSH 37 份压缩会话、4,038 条行哈希；Cursor CLI 33 个可读库中匹配 1 会话、2,342 条行哈希，3 个库的警告保留；Antigravity 5 个原生会话、221 条行哈希，全部保留逐生成模型，无警告。计数是数据读取证据，不是准确率，也没有把用户原文复制进测试。[Antigravity 原生格式与验证](SUPPORT_ANTIGRAVITY.md)。
+本机只读验证：ZCode 388 个会话、18,884 条行哈希、0 警告；DSH 37 份压缩会话、4,038 条行哈希；Cursor CLI 33 个可读库中匹配 1 会话、2,342 条行哈希，3 个库的警告保留；Antigravity 5 个原生会话、221 条行哈希，全部保留逐生成模型，无警告。计数是数据读取证据，不是准确率，也没有把用户原文复制进测试。[Antigravity 原生格式与验证](docs/adapters/SUPPORT_ANTIGRAVITY.md)。
 
 未完成各产品当前版本的全平台运行验收；没有相应账户的云端入口未作现场验证。本次不发布、不替换已安装 App。

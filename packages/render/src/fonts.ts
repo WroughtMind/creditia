@@ -79,12 +79,16 @@ export function portableFontFamilies(svg: string): string {
 // CSS weight matching is directional (600 prefers 700 before 500; 400 prefers
 // 500 before 300). A numeric nearest-weight sort subtly changes native output
 // when moving from all installed faces to just the faces needed by a picture.
-export function matchingFace(family: string, weight: number, italic: boolean): FontFace | undefined {
+export function closestFace<T extends Pick<FontFace, 'weight' | 'italic'>>(faces: T[], weight: number, italic = false): T | undefined {
   const rank = (w: number) => weight >= 400 && weight <= 500
     ? w >= weight && w <= 500 ? w - weight : w < weight ? 1000 + weight - w : 2000 + w - weight
     : weight < 400 ? w <= weight ? weight - w : 1000 + w - weight
     : w >= weight ? w - weight : 1000 + weight - w;
-  return facesOf(family).sort((a, b) => Number(!!a.italic !== italic) - Number(!!b.italic !== italic) || rank(a.weight) - rank(b.weight))[0];
+  return [...faces].sort((a, b) => Number(!!a.italic !== italic) - Number(!!b.italic !== italic) || rank(a.weight) - rank(b.weight))[0];
+}
+
+export function matchingFace(family: string, weight: number, italic: boolean): FontFace | undefined {
+  return closestFace(facesOf(family), weight, italic);
 }
 
 /** Font faces actually referenced by text, including inherited tspan attributes. */

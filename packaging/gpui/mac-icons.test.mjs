@@ -19,7 +19,7 @@ async function fixture(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(),'creditia-mac-icon-test-'));
   t.after(() => fs.rm(dir,{recursive:true,force:true}));
   const app = path.join(dir,'Creditia.app'), source = path.join(dir,'source'), assets = path.join(dir,'compiled');
-  const icons = path.join(source,'apps/desktop/src-tauri/icons');
+  const icons = path.join(source,'packaging/icons');
   await fs.mkdir(path.join(app,'Contents'),{recursive:true});
   await fs.mkdir(path.join(icons,'Creditia.icon/Assets'),{recursive:true});
   await fs.mkdir(assets);

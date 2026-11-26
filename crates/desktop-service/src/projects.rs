@@ -143,7 +143,7 @@ pub fn set_project_config(project_id: String, patch: Value) -> Res<Value> {
         }
         if display
             .get("sign")
-            .is_some_and(|value| !value.as_str().is_some_and(|s| s.chars().count() <= 256))
+            .is_some_and(|value| value.as_str().is_none_or(|s| s.chars().count() > 256))
         {
             return Err(Fail::with("config_invalid", "sign"));
         }

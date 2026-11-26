@@ -1,4 +1,4 @@
-//! Reconstructed fixtures from the native formats cited in SUPPORT_AGENT6.md.
+//! Reconstructed fixtures from the native formats cited in docs/adapters/SUPPORT_AGENT6.md.
 //! Runs the actual CLI and checks durable evidence and final credits.
 use super::*;
 use serde_json::{json, Value};
@@ -281,7 +281,7 @@ fn lingma_acceptance_requires_matching_native_content_versions() {
 }
 
 /// Optional acceptance against the byte-identical public native database.
-/// Download instructions and SHA256s: SUPPORT_AGENT3.md. No chat text is read.
+/// Download instructions and SHA256s: docs/adapters/SUPPORT_AGENT3.md. No chat text is read.
 #[test]
 #[ignore = "requires the pinned public Lingma database and workingSpace files"]
 fn lingma_public_native_history_acceptance() {

@@ -40,9 +40,9 @@ pub fn load_export_jobs() -> Res<Value> {
 fn save_in(directory: &Path, expected_revision: u64, queue: &Value) -> Res<u64> {
     if queue["schema"] != 2
         || !queue["archives"].is_object()
-        || !queue["jobs"]
+        || queue["jobs"]
             .as_array()
-            .is_some_and(|jobs| jobs.len() <= 64)
+            .is_none_or(|jobs| jobs.len() > 64)
     {
         return Err(Fail::new("export_history_invalid"));
     }

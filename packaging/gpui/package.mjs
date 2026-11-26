@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { installMacIcons } from './mac-icons.mjs';
+import { copyRuntimeFonts } from '../../packages/render/tools/font-assets.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -40,7 +41,7 @@ export function layout(root, platform) {
   return { app, bin, resources, gui: path.join(bin, `creditia-gpui${platform === 'win32' ? '.exe' : ''}`), core: path.join(bin, `creditia-core${platform === 'win32' ? '.exe' : ''}`), node: path.join(resources, `node${platform === 'win32' ? '.exe' : ''}`), bridge: path.join(resources, 'render', 'tools', 'bridge.mjs') };
 }
 
-export async function stage({ target, output, appBin, coreBin, nodeBin = process.execPath, nodeLicense, nodeProvenance, migrationBin, macIcons, source = repo, platform = process.platform }) {
+export async function stage({ target, output, appBin, coreBin, nodeBin = process.execPath, nodeLicense, nodeProvenance, macIcons, source = repo, platform = process.platform }) {
   if (!safe(target)) throw new Error('Invalid Rust target');
   if(platform==='darwin'&&!macIcons)throw new Error('Mac staging requires --mac-icons with the verified Xcode 26 Icon Composer artifact');
   const root = path.resolve(output, `creditia-gpui-${target}`);
@@ -56,14 +57,6 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
   if (!nodeLicense) throw new Error('Pass --node-license with the license for the bundled Node version');
   await copyFile(nodeLicense, path.join(paths.resources, 'licenses/Node-LICENSE.txt'));
   if (nodeProvenance) await copyFile(nodeProvenance, path.join(paths.resources, 'licenses/Node-provenance.json'));
-  if (migrationBin) {
-    if (platform === 'darwin') {
-      const migrationApp=path.join(paths.resources,'legacy/Creditia Migration.app');
-      await copyFile(migrationBin,path.join(migrationApp,'Contents/MacOS/creditia'),0o755);
-      await fs.writeFile(path.join(migrationApp,'Contents/Info.plist'),`<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>creditia</string><key>CFBundleIdentifier</key><string>dev.creditia.app</string><key>CFBundleName</key><string>Creditia Migration</string><key>CFBundleVersion</key><string>${xml(version)}</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/><key>NSHighResolutionCapable</key><true/><key>NSPrincipalClass</key><string>NSApplication</string></dict></plist>\n`);
-    } else await copyFile(migrationBin,path.join(paths.resources,`legacy/creditia-migrate${platform==='win32'?'.exe':''}`),0o755);
-  }
-
   const render = path.join(source, 'packages/render');
   const destination = path.join(paths.resources, 'render');
   await fs.mkdir(destination, { recursive: true });
@@ -74,40 +67,15 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
   await fs.cp(path.join(source, 'packages/schema'), path.join(paths.resources, 'schema'), { recursive: true });
   // Dependencies are copied from npm ci on the target platform, including its
   // matching resvg native addon. Keep all runtime/license files; avoid test data.
+  const fontsSource = path.join(render, 'node_modules/@expo-google-fonts');
   await fs.cp(path.join(render, 'node_modules'), path.join(destination, 'node_modules'), {
     recursive: true, dereference: true,
-    filter: from => !from.split(path.sep).some(part => ['.bin', '.cache', '.git'].includes(part)),
+    filter: from => from !== fontsSource && !from.split(path.sep).some(part => ['.bin', '.cache', '.git'].includes(part)),
   });
   // Google-font packages contain many unused weights. Retain exactly the faces
   // named by both renderer registries, plus package metadata and font licenses.
-  const { FONTS } = await import(pathToFileURL(path.join(render, 'src/fonts.ts')));
-  const { CLASSIC_FONTS } = await import(pathToFileURL(path.join(render, 'src/classic/fonts.ts')));
-  const required = new Map();
-  for (const font of [...FONTS, ...CLASSIC_FONTS]) {
-    if (!required.has(font.pkg)) required.set(font.pkg, new Set());
-    required.get(font.pkg).add(font.dir);
-  }
   const fontsRoot = path.join(destination, 'node_modules/@expo-google-fonts');
-  const fontFiles = [];
-  const retainedFaces = new Set();
-  for (const entry of await fs.readdir(fontsRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const pkgRoot = path.join(fontsRoot, entry.name), faces = required.get(entry.name);
-    if (!faces) { await fs.rm(pkgRoot, { recursive: true }); continue; }
-    for (const child of await fs.readdir(pkgRoot, { withFileTypes: true })) {
-      if (child.isDirectory() && !faces.has(child.name)) await fs.rm(path.join(pkgRoot, child.name), { recursive: true });
-      else if (child.isFile() && child.name!=='package.json' && !/^(license|ofl|fontlog|copying|notice)([._-]|$)/i.test(child.name)) await fs.rm(path.join(pkgRoot,child.name));
-    }
-    for (const face of faces) {
-      const names = await fs.readdir(path.join(pkgRoot, face));
-      const ttf = names.find(name => name.endsWith('.ttf'));
-      if (!ttf) throw new Error(`Required font is missing: ${entry.name}/${face}`);
-      for(const name of names)if(!/\.(ttf|otf)$/i.test(name)&&!/^(license|ofl|fontlog|copying|notice)([._-]|$)/i.test(name))await fs.rm(path.join(pkgRoot,face,name),{recursive:true,force:true});
-      fontFiles.push(path.relative(root, path.join(pkgRoot, face, ttf)).split(path.sep).join('/'));
-      retainedFaces.add(`${entry.name}/${face}`);
-    }
-  }
-  for(const [pkg,faces] of required)for(const face of faces)if(!retainedFaces.has(`${pkg}/${face}`))throw new Error(`Required font package or face is missing: ${pkg}/${face}`);
+  const fontFiles = (await copyRuntimeFonts(render, fontsRoot)).map(file => path.relative(root, file).split(path.sep).join('/'));
   const licenseCandidates = ['LICENSE', 'LICENSE.md'];
   for (const name of licenseCandidates) {
     try { await copyFile(path.join(source, name), path.join(paths.resources, `licenses/Creditia-${name}`)); break; }
@@ -125,7 +93,7 @@ export async function stage({ target, output, appBin, coreBin, nodeBin = process
     await fs.writeFile(path.join(root, 'creditia.desktop'), '[Desktop Entry]\nType=Application\nName=Creditia\nComment=Your coding agents, in credits\nExec=creditia-gpui\nTerminal=false\nCategories=Development;Graphics;\n');
   }
   const nodeVersion = execFileSync(nodeBin, ['--version'], { encoding: 'utf8' }).trim();
-  const receipt = { schema: 1, product: 'creditia-gpui', version, target, platform, nodeVersion, commit: process.env.GITHUB_SHA ?? null, sourceDateEpoch: process.env.SOURCE_DATE_EPOCH ?? null, legacyMigrationHelper: !!migrationBin, fontFiles, files: [] };
+  const receipt = { schema: 1, product: 'creditia-gpui', version, target, platform, nodeVersion, commit: process.env.GITHUB_SHA ?? null, sourceDateEpoch: process.env.SOURCE_DATE_EPOCH ?? null, fontFiles, files: [] };
   await fs.writeFile(path.join(root, 'package-info.json'), JSON.stringify(receipt, null, 2) + '\n');
   return { root, ...paths };
 }
@@ -206,16 +174,6 @@ export async function smoke(root, fixture, output) {
     await artifact('native-resource-check.txt',execFileSync(paths.gui, ['--check-resources'], { cwd: temporary, env, timeout: 90_000, stdio: 'pipe' }));
     await artifact('package-info.json',await fs.readFile(path.join(root,'package-info.json')));
     report.tests.push({ name: 'native-executable-resource-discovery', status: 'passed' });
-    if(info.legacyMigrationHelper){
-      const helper=info.platform==='darwin'?path.join(paths.resources,'legacy/Creditia Migration.app/Contents/MacOS/creditia'):path.join(paths.resources,`legacy/creditia-migrate${info.platform==='win32'?'.exe':''}`);
-      const command=info.platform==='linux'?'xvfb-run':helper;
-      const args=info.platform==='linux'?['-a','dbus-run-session','--',helper,'--migrate-ui-settings']:['--migrate-ui-settings'];
-      await artifact('legacy-helper-startup.txt',execFileSync(command,args,{cwd:temporary,env,timeout:65_000,stdio:'pipe'}));
-      const migrated=await fs.readFile(path.join(env.CREDITIA_HOME,'app.json'));
-      if(JSON.parse(migrated).ui?.legacyImported!==true)throw new Error('Legacy helper did not complete preference import');
-      await artifact('legacy-helper-imported-settings.json',migrated);
-      report.tests.push({name:'bundled-legacy-helper-embedded-page-and-import',status:'passed'});
-    }
     report.status = 'passed';
     report.acceptance.passed=true;report.complete=true;
   } catch (error) { report.status = 'failed'; report.error = error.message; throw error; }
@@ -233,7 +191,7 @@ async function main(args) {
   if (command === 'stage') {
     const target = opts.target;
     if (!target || !opts.output) throw new Error('stage requires --target and --output');
-    const result = await stage({ target, output: opts.output, appBin: opts['app-bin'] ?? path.join(repo, `apps/gpui/target/${target}/release/creditia-gpui${executable}`), coreBin: opts['core-bin'] ?? path.join(repo, `target/${target}/release/creditia-core${executable}`), nodeBin: opts['node-bin'], nodeLicense: opts['node-license'], nodeProvenance: opts['node-provenance'],migrationBin:opts['migration-bin'],macIcons:opts['mac-icons'] });
+    const result = await stage({ target, output: opts.output, appBin: opts['app-bin'] ?? path.join(repo, `apps/gpui/target/${target}/release/creditia-gpui${executable}`), coreBin: opts['core-bin'] ?? path.join(repo, `target/${target}/release/creditia-core${executable}`), nodeBin: opts['node-bin'], nodeLicense: opts['node-license'], nodeProvenance: opts['node-provenance'],macIcons:opts['mac-icons'] });
     console.log(JSON.stringify(result));
   } else if (command === 'seal') console.log(JSON.stringify(await seal(path.resolve(opts.root))));
   else if (command === 'verify') { const r = await verify(path.resolve(opts.root)); console.log(`verified ${r.files.length} files for ${r.target}`); }

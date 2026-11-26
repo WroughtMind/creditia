@@ -38,7 +38,7 @@ Names and marks belong to their respective owners. Source licensing and trademar
 | `zcode.png` | [Official source](https://zcode.z.ai/favicon-192x192.png?v=20260707-transparent) | Original official asset; theme foreground |
 | `zenflow.svg` | [Official source](https://download.zencoder.ai/zenflowapp/latest/linux-x64/Zenflow.deb) | Zenflow 2.5.3 package: resources/frontend/zenflow-logo-small.svg |
 | `firebender.svg` | [Official source](https://plugins.jetbrains.com/files/25224/1109733/Firebender-1.0.12.zip) | Firebender 1.0.12 JAR: META-INF/pluginIcon.svg |
-| `moxby.png` | [Official source](https://moxby.com/install) | Official Chrome 3.2.0 CRX: icons/128.png; package hash in SUPPORT_AGENT8.md |
+| `moxby.png` | [Official source](https://moxby.com/install) | Official Chrome 3.2.0 CRX: icons/128.png; package hash in [SUPPORT_AGENT8.md](../../../docs/adapters/SUPPORT_AGENT8.md) |
 | `kode-header.png` | [Official source](https://github.com/shareAI-lab/Kode-CLI/blob/400bbf0449707846465895ef64cfbbd18bea4763/README.md) | Official README image [original](https://github.com/user-attachments/assets/c1751e92-94dc-4e4a-9558-8cd2d058c1a1); crop viewBox 40 50 94 100 from the 1982 × 958 banner; white-alpha threshold, painted with currentColor |
 | `lingma.svg` | [Official source](https://open-vsx.org/api/Alibaba-Cloud/tongyi-lingma/2.6.10/file/Alibaba-Cloud.tongyi-lingma-2.6.10.vsix) | Official 2.6.10 package: extension/media/logo-sidebar.svg; original white silhouette as alpha mask |
 | `rovodev.svg` | [Official source](https://github.com/atlassian/atlascode/blob/7ef48ac216e6ecb8da95ef5af92a94e5fea23f2d/resources/rovodev-sidebar-icon.svg) | Official Atlascode sidebar mark; outline painted with currentColor |

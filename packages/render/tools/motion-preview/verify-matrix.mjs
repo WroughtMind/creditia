@@ -27,7 +27,7 @@ const modelOptions = { lang: 'zh', sign: '', named: true };
 const m = buildModel(raw, modelOptions), cm = classic.buildModel(raw, { lang: 'zh', director: false, named: true });
 const allFiles = fontFiles();
 const subsetDir = argument('--font-directory');
-const manifest = subsetDir ? JSON.parse(readFileSync(root + '/apps/desktop/src/fonts/manifest.json', 'utf8')) : [];
+const manifest = subsetDir ? JSON.parse(readFileSync(root + '/site/app/src/fonts/manifest.json', 'utf8')) : [];
 const hash = data => createHash('sha256').update(data).digest('hex');
 const norm = svg => svg.replace(/\bc[0-9a-z]+-/g, 'scene-').replace(/\bs[0-9a-z]+_/g, 'satori_');
 const filesCache = new Map();
