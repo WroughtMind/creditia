@@ -31,7 +31,7 @@ test('the DMG background is a valid PNG matching the Finder window bounds', asyn
   assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
   assert.equal(png.toString('ascii', 12, 16), 'IHDR');
   const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
-  assert.deepEqual([width, height], [720, 480]);
+  assert.deepEqual([width, height], [760, 520]);
   assert.deepEqual([width, height], [dmgWindow.width, dmgWindow.height]);
   assert.deepEqual([...png.subarray(24, 29)], [8, 6, 0, 0, 0]);
   const data = [];

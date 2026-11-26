@@ -3,13 +3,13 @@ import path from 'node:path';
 
 export const dmgVolumeName = 'Creditia GPUI';
 export const firstLaunchGuideName = '首次打开说明 - First Launch.txt';
-export const dmgWindow = { left: 144, top: 120, width: 720, height: 480, iconSize: 64, textSize: 12 };
+export const dmgWindow = { left: 144, top: 120, width: 760, height: 520, iconSize: 64, textSize: 12 };
 export const dmgIconPositions = {
-  'Creditia.app': [176, 62],
-  'Applications': [544, 62],
-  [firstLaunchGuideName]: [360, 153],
-  'INSTALL.md': [144, 153],
-  'package-info.json': [576, 153],
+  'Creditia.app': [196, 102],
+  'Applications': [564, 102],
+  'INSTALL.md': [184, 235],
+  [firstLaunchGuideName]: [380, 235],
+  'package-info.json': [576, 235],
 };
 
 const backgroundDirectory = '.background';
