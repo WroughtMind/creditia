@@ -2,13 +2,15 @@
 
 use super::{CancelExport, Creditia, ExportArtwork, ExportStage, Panel};
 use crate::material::{Palette, ShellLabel};
+use crate::ui_controls::icon_button;
 use crate::ui_model::Rect;
 use crate::{ExportOptions, Language, export_filename, export_with_preferences, renderer};
 use creditia_desktop_service as service;
 use gpui_kit::TestSupportExt as _;
-use gpui_kit::component::Disableable;
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
+use gpui_kit::component::{Disableable, Selectable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use serde_json::{Value, json};
@@ -334,17 +336,16 @@ impl Creditia {
             });
         }));
     }
-    fn export_size_label(&self, id: &str) -> String {
+    fn export_size_name<'a>(&self, id: &'a str) -> &'a str {
         match id {
             "native" => self.text("原尺寸", "Original size"),
-            "og" => self.text("链接预览", "Link preview"),
-            "square" => self.text("方图", "Square"),
-            "portrait" => self.text("竖图", "Portrait"),
-            "story" => self.text("竖屏", "Story"),
+            "og" => self.text("横版", "Landscape"),
+            "square" => self.text("方形", "Square"),
+            "portrait" => self.text("竖版", "Portrait"),
+            "story" => self.text("长图", "Story"),
             "a4" => "A4",
             _ => id,
         }
-        .to_owned()
     }
     pub(super) fn render_export_dock(&self, cx: &mut Context<Self>) -> AnyElement {
         if !self.export_workspace_open() {
@@ -382,35 +383,32 @@ impl Creditia {
                 p,
             ))
             .child(
-                Button::new("export-back")
-                    .ghost()
-                    .w(px(30.))
-                    .h(px(34.))
-                    .p_0()
-                    .rounded_full()
-                    .icon(crate::ui_icons::icon("close"))
-                    .accessibility_label(self.text("收起导出", "Close export"))
-                    .tooltip(self.text("收起导出", "Close export"))
-                    .on_click(cx.listener(|view, _, _, cx| view.close_export_workspace(cx))),
+                icon_button(
+                    "export-back",
+                    "close",
+                    self.text("收起导出", "Close export"),
+                )
+                .on_click(cx.listener(|view, _, _, cx| view.close_export_workspace(cx))),
             )
             .child(
                 Button::new("export-format")
                     .ghost()
+                    .w(px(98.))
                     .h(px(34.))
-                    .px(px(8.))
+                    .p_0()
                     .rounded(px(10.))
-                    .accessibility_label(self.text("选择格式", "Choose format"))
+                    .accessibility_label(format!(
+                        "{} ({})",
+                        self.text("选择格式", "Choose format"),
+                        format.label(en),
+                    ))
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(px(6.))
                             .child(crate::ui_icons::icon(format.icon()))
-                            .child(if format == ExportFormat::Md {
-                                "MD".into()
-                            } else {
-                                format.id().to_uppercase()
-                            })
+                            .child(format.id().to_ascii_uppercase())
                             .child(crate::ui_icons::icon("down").size(px(10.))),
                     )
                     .disabled(self.export_prompt_busy)
@@ -424,16 +422,24 @@ impl Creditia {
                 .catalog
                 .as_ref()
                 .and_then(|catalog| catalog["sizes"].as_array())
-                .cloned()
-                .unwrap_or_default()
-                .iter()
+                .into_iter()
+                .flatten()
                 .filter_map(|size| {
-                    size["id"]
-                        .as_str()
-                        .map(|id| (id.to_owned(), self.export_size_label(id)))
+                    let id = size["id"].as_str()?;
+                    let name = self.export_size_name(id);
+                    let label = match (size["w"].as_u64(), size["h"].as_u64()) {
+                        (Some(w), Some(h)) if w > 0 && h > 0 => format!("{name} · {w}×{h}"),
+                        _ => name.to_owned(),
+                    };
+                    Some((id.to_owned(), label))
                 })
                 .collect::<Vec<_>>();
             let selected = self.export_size.clone();
+            let selected_size = choices
+                .iter()
+                .find(|(id, _)| id == &selected)
+                .map(|(_, label)| label.clone())
+                .unwrap_or_else(|| self.export_size_name(&selected).to_owned());
             let entity = cx.entity().downgrade();
             dock = dock.child(
                 Button::new("export-size")
@@ -442,14 +448,17 @@ impl Creditia {
                     .px(px(8.))
                     .rounded(px(10.))
                     .disabled(self.export_prompt_busy)
-                    .accessibility_label(self.text("画幅", "Canvas size"))
+                    .accessibility_label(format!(
+                        "{} ({selected_size})",
+                        self.text("画幅", "Canvas size")
+                    ))
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(px(7.))
                             .text_size(px(12.))
-                            .child(self.export_size_label(&self.export_size))
+                            .child(selected_size)
                             .child(crate::ui_icons::icon("down").size(px(10.))),
                     )
                     .dropdown_menu_with_anchor(Anchor::BottomRight, move |mut menu, _, _| {
@@ -477,24 +486,17 @@ impl Creditia {
             }
             if format.transparency() {
                 dock = dock.child(
-                    Button::new("transparent")
-                        .ghost()
-                        .h(px(34.))
-                        .px(px(8.))
-                        .rounded(px(10.))
-                        .when(self.transparent, |b| b.bg(p.selected))
-                        .toggled(self.transparent)
+                    Checkbox::new("transparent")
+                        .h(px(32.))
+                        .px(px(6.))
+                        .items_center()
+                        .checked(self.transparent)
                         .disabled(self.export_prompt_busy)
-                        .icon(crate::ui_icons::icon(if self.transparent {
-                            "check"
-                        } else {
-                            "transparent"
-                        }))
-                        .shell_label(self.text("透明", "Transparent"))
+                        .label(self.text("透明", "Transparent"))
                         .accessibility_label(self.text("透明背景", "Transparent background"))
                         .tooltip(self.text("透明背景", "Transparent background"))
-                        .on_click(cx.listener(|view, _, _, cx| {
-                            view.transparent = !view.transparent;
+                        .on_change(cx.listener(|view, checked: &bool, _, cx| {
+                            view.transparent = *checked;
                             cx.notify();
                         })),
                 );
@@ -543,40 +545,31 @@ impl Creditia {
                 self.text("继续播放", "Continue playback")
             };
             dock = dock.child(
-                Button::new("export-play")
-                    .ghost()
-                    .w(px(34.))
-                    .h(px(34.))
-                    .p_0()
-                    .rounded(px(10.))
-                    .icon(crate::ui_icons::icon(if playing {
+                icon_button(
+                    "export-play",
+                    if playing {
                         "pause"
                     } else if ended {
                         "replay"
                     } else {
                         "play"
-                    }))
-                    .accessibility_label(label)
-                    .tooltip(if self.reduced_motion {
-                        self.text("已减少动态效果", "Reduced motion is enabled")
-                    } else {
-                        label
-                    })
-                    .disabled(self.animation_busy || self.reduced_motion)
-                    .on_click(cx.listener(|view, _, _, cx| view.play(false, cx))),
+                    },
+                    label,
+                )
+                .rounded(px(10.))
+                .tooltip(if self.reduced_motion {
+                    self.text("已减少动态效果", "Reduced motion is enabled")
+                } else {
+                    label
+                })
+                .disabled(self.animation_busy || self.reduced_motion)
+                .on_click(cx.listener(|view, _, _, cx| view.play(false, cx))),
             );
         }
         if !format.visual() {
             dock = dock.child(
-                Button::new("export-copy")
-                    .ghost()
-                    .w(px(34.))
-                    .h(px(34.))
-                    .p_0()
+                icon_button("export-copy", "copy", self.text("复制", "Copy"))
                     .rounded(px(10.))
-                    .icon(crate::ui_icons::icon("copy"))
-                    .accessibility_label(self.text("复制", "Copy"))
-                    .tooltip(self.text("复制", "Copy"))
                     .disabled(self.export_preview.text.is_none() || self.export_prompt_busy)
                     .on_click(cx.listener(|view, _, _, cx| {
                         if let Some(text) = &view.export_preview.text {
@@ -642,6 +635,8 @@ impl Creditia {
                             .h(px(56.))
                             .p_0()
                             .rounded(px(10.))
+                            .selected(format == choice)
+                            .toggled(format == choice)
                             .when(format == choice, |b| b.bg(p.selected))
                             .disabled(reason.is_some() || self.export_prompt_busy)
                             .accessibility_label(choice.label(en))
@@ -654,11 +649,7 @@ impl Creditia {
                                     .gap(px(4.))
                                     .text_size(px(11.))
                                     .child(crate::ui_icons::icon(choice.icon()))
-                                    .child(if choice == ExportFormat::Md {
-                                        "MD".into()
-                                    } else {
-                                        choice.id().to_uppercase()
-                                    }),
+                                    .child(choice.id().to_ascii_uppercase()),
                             )
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 view.choose_export_format(choice, cx)

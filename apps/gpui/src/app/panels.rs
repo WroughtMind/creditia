@@ -1,6 +1,7 @@
 use super::chrome::style_dot;
 use super::{CopyArchive, Creditia, OpenProject, Panel, Tween};
 use crate::material::{Palette, ShellLabel};
+use crate::ui_controls::{choice_button, icon_button, row_button};
 use crate::{Language, Project};
 use creditia_desktop_service as service;
 use gpui_kit::TestSupportExt as _;
@@ -254,6 +255,26 @@ impl Creditia {
         }
     }
 
+    #[cfg(feature = "visual-test")]
+    pub fn fixture_panel_images_ready(&self, window: &mut Window, cx: &mut App) -> bool {
+        match self.panel {
+            Some(Panel::Settings) => self.settings_previews_ready(window, cx),
+            Some(Panel::Styles) => self
+                .catalog
+                .as_ref()
+                .and_then(|catalog| catalog["styles"].as_array())
+                .into_iter()
+                .flatten()
+                .filter_map(|style| style["dot"].as_str())
+                .all(|dot| style_dot(dot).get_render_image(window, cx).is_some()),
+            Some(Panel::Projects) => self
+                .project_marks
+                .values()
+                .all(|mark| mark.image.clone().get_render_image(window, cx).is_some()),
+            _ => true,
+        }
+    }
+
     pub(super) fn render_panel(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let panel = self.panel?;
         let title = match panel {
@@ -392,15 +413,8 @@ impl Creditia {
                             .child(heading),
                     );
                 header = header.child(
-                    Button::new("panel-close")
+                    icon_button("panel-close", "close", self.text("关闭", "Close"))
                         .track_focus(&self.panel_close_focus)
-                        .ghost()
-                        .w(px(34.))
-                        .h(px(34.))
-                        .p_0()
-                        .rounded_full()
-                        .icon(crate::ui_icons::icon("close"))
-                        .accessibility_label(self.text("关闭", "Close"))
                         .on_click(cx.listener(|view, _, window, cx| view.close_panel(window, cx))),
                 );
                 modal = modal.child(header);
@@ -449,35 +463,27 @@ impl Creditia {
                         .border_color(palette.edge)
                         .flex_shrink_0()
                         .child(
-                            Button::new("add-project")
-                                .ghost()
-                                .w_full()
-                                .h(px(34.))
-                                .rounded(px(10.))
-                                .icon(crate::ui_icons::icon("folder"))
-                                .shell_label(self.text("添加文件夹…", "Add folder…"))
-                                .disabled(self.job_busy)
-                                .on_click(cx.listener(|view, _, window, cx| {
-                                    view.open_project(&OpenProject, window, cx)
-                                })),
+                            row_button(
+                                "add-project",
+                                self.text("添加文件夹…", "Add folder…"),
+                                "addFolder",
+                            )
+                            .rounded(px(10.))
+                            .disabled(self.job_busy)
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.open_project(&OpenProject, window, cx)
+                            })),
                         ),
                 );
             }
         }
         if panel == Panel::Settings {
             modal = modal.child(
-                Button::new("panel-close")
+                icon_button("panel-close", "close", self.text("关闭", "Close"))
                     .track_focus(&self.panel_close_focus)
-                    .ghost()
                     .absolute()
                     .top(px(12.))
                     .right(px(12.))
-                    .w(px(34.))
-                    .h(px(34.))
-                    .p_0()
-                    .rounded_full()
-                    .icon(crate::ui_icons::icon("close"))
-                    .accessibility_label(self.text("关闭", "Close"))
                     .on_click(cx.listener(|view, _, window, cx| view.close_panel(window, cx))),
             );
         }
@@ -611,34 +617,16 @@ impl Creditia {
                         .bg(palette.edge),
                 );
             }
+            let preview = style["dot"]
+                .as_str()
+                .map(|dot| img(style_dot(dot)).w(px(18.)).h(px(18.)).into_any_element())
+                .unwrap_or_else(|| div().into_any_element());
             choices = choices.child(
-                Button::new(("style", index))
-                    .ghost()
+                choice_button(("style", index), name, index == self.style_index, Some(preview))
                     .w(px(column_width))
-                    .h(px(34.))
-                    .px(px(10.))
-                    .rounded(px(14.))
-                    .accessibility_label(name.clone())
-                    .when(index == self.style_index, |button| {
-                        button.bg(palette.selected)
-                    })
-                    .child(
-                        div()
-                            .w_full()
-                            .flex()
-                            .items_center()
-                            .gap(px(10.))
-                            .text_size(px(13.))
-                            .font_weight(if index == self.style_index {
-                                FontWeight::MEDIUM
-                            } else {
-                                FontWeight::NORMAL
-                            })
-                            .when_some(style["dot"].as_str(), |row, dot| {
-                                row.child(img(style_dot(dot)).w(px(18.)).h(px(18.)))
-                            })
-                            .child(name),
-                    )
+                    .flex_shrink_0()
+                    .rounded(px(10.))
+                    .when(index == self.style_index, |button| button.bg(palette.selected))
                     .disabled(
                         self.focused
                             && self.current_tile().is_some_and(|tile| {
@@ -676,18 +664,10 @@ impl Creditia {
             .unwrap_or(&id)
             .to_owned();
             choices = choices.child(
-                Button::new(("variant", index))
-                    .ghost()
+                choice_button(("variant", index), name, selected == Some(id.as_str()), None)
                     .w_full()
-                    .h(px(34.))
                     .rounded(px(9.))
-                    .justify_start()
-                    .shell_label(name)
-                    .when(selected == Some(id.as_str()), |button| {
-                        button
-                            .bg(palette.ink.opacity(0.06))
-                            .icon(crate::ui_icons::icon("check"))
-                    })
+                    .when(selected == Some(id.as_str()), |button| button.bg(palette.selected))
                     .on_click(cx.listener(move |view, _, window, cx| {
                         view.choose_variant(id.clone(), cx);
                         view.close_panel(window, cx);
@@ -817,6 +797,7 @@ impl Creditia {
                         palette.soft
                     })
                     .when(self.settings_tab == id, |b| b.bg(palette.selected))
+                    .toggled(self.settings_tab == id)
                     .accessibility_label(name)
                     .child(
                         div()

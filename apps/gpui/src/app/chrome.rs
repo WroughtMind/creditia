@@ -7,11 +7,12 @@ use super::{
     Wall, ZoomIn, ZoomOut, write_performance_event,
 };
 use crate::live_mark::MarkStatus;
-use crate::material::{Palette, ShellLabel};
+use crate::material::Palette;
+use crate::ui_controls::icon_button;
 use crate::{Appearance, Language, Preferences, renderer};
 use creditia_desktop_service as service;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Theme, ThemeMode};
+use gpui_kit::component::{Selectable, Theme, ThemeMode};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use serde_json::{Value, json};
@@ -346,18 +347,17 @@ impl Creditia {
                     toolbar.child(self.analysis_progress(cx))
                 })
                 .child(div().flex_1())
+                .when(!self.export_workspace_open(), |toolbar| {
+                    toolbar.child(self.zoom_controls(cx))
+                })
                 .child(
-                    Button::new("focus-close-top")
-                        .ghost()
-                        .w(px(34.))
-                        .h(px(34.))
-                        .p_0()
-                        .rounded_full()
-                        .bg(palette.glass)
-                        .icon(crate::ui_icons::icon("close"))
-                        .accessibility_label(self.text("返回展览", "Return to exhibition"))
-                        .tooltip(self.text("返回展览", "Return to exhibition"))
-                        .on_click(cx.listener(|view, _, _, cx| view.close_focus(cx))),
+                    icon_button(
+                        "focus-close-top",
+                        "close",
+                        self.text("返回展览", "Return to exhibition"),
+                    )
+                    .bg(palette.glass)
+                    .on_click(cx.listener(|view, _, _, cx| view.close_focus(cx))),
                 )
                 .into_any_element()
         } else {
@@ -381,16 +381,16 @@ impl Creditia {
             .flex()
             .flex_shrink_0()
             .items_center()
-            .h(px(36.))
+            .h(px(40.))
             .gap(px(2.))
-            .p(px(2.))
+            .p(px(3.))
             .rounded_full()
             .relative()
             .shadow(glass_shadow)
             .child(crate::material::surface(
                 self.backdrop_image.clone(),
                 palette.glass,
-                18.,
+                20.,
                 palette,
             ))
             .border_1()
@@ -417,10 +417,12 @@ impl Creditia {
                 Button::new(element)
                     .ghost()
                     .accessibility_label(label)
-                    .h(px(30.))
+                    .h(px(32.))
                     .px(px(11.))
                     .rounded_full()
                     .text_color(muted)
+                    .selected(group == id)
+                    .toggled(group == id)
                     .when(group == id, |b| b.bg(selected).text_color(fg))
                     .child(
                         div()
@@ -440,32 +442,18 @@ impl Creditia {
         }
         tools = tools
             .child(
-                Button::new("wall")
-                    .ghost()
-                    .w(px(30.))
-                    .h(px(30.))
-                    .p_0()
-                    .rounded_full()
+                icon_button("wall", "wall", self.text("展墙", "Wall"))
                     .text_color(muted)
-                    .icon(crate::ui_icons::icon("wall"))
-                    .accessibility_label(self.text("展墙", "Wall"))
-                    .tooltip(self.text("展墙", "Wall"))
+                    .toggled(self.preferences.view == "wall" && !self.focused)
                     .when(self.preferences.view == "wall" && !self.focused, |b| {
                         b.bg(selected).text_color(fg)
                     })
                     .on_click(cx.listener(|view, _, _, cx| view.set_view("wall", cx))),
             )
             .child(
-                Button::new("roam")
-                    .ghost()
-                    .w(px(30.))
-                    .h(px(30.))
-                    .p_0()
-                    .rounded_full()
+                icon_button("roam", "roam", self.text("漫游", "Roam"))
                     .text_color(muted)
-                    .icon(crate::ui_icons::icon("roam"))
-                    .accessibility_label(self.text("漫游", "Roam"))
-                    .tooltip(self.text("漫游", "Roam"))
+                    .toggled(self.preferences.view == "roam" && !self.focused)
                     .when(self.preferences.view == "roam" && !self.focused, |b| {
                         b.bg(selected).text_color(fg)
                     })
@@ -475,8 +463,8 @@ impl Creditia {
             .child(
                 Button::new("toolbar-language")
                     .ghost()
-                    .w(px(30.))
-                    .h(px(30.))
+                    .w(px(32.))
+                    .h(px(32.))
                     .p_0()
                     .rounded_full()
                     .text_color(muted)
@@ -499,16 +487,8 @@ impl Creditia {
             .child(
                 self.surface_anchors.wrap(
                     "settings-trigger",
-                    Button::new("settings")
-                        .ghost()
-                        .w(px(30.))
-                        .h(px(30.))
-                        .p_0()
-                        .rounded_full()
+                    icon_button("settings", "gear", self.text("设置", "Settings"))
                         .text_color(muted)
-                        .icon(crate::ui_icons::icon("gear"))
-                        .accessibility_label(self.text("设置", "Settings"))
-                        .tooltip(self.text("设置", "Settings"))
                         .on_click(cx.listener(|view, _, window, cx| {
                             view.open_panel(Panel::Settings, window, cx)
                         })),
@@ -565,17 +545,13 @@ impl Creditia {
                     .border_1()
                     .border_color(border)
                     .child(
-                        Button::new("style-previous")
-                            .ghost()
-                            .w(px(30.))
-                            .h(px(32.))
-                            .p_0()
-                            .rounded_full()
-                            .text_color(muted)
-                            .icon(crate::ui_icons::icon("prev"))
-                            .accessibility_label(self.text("上一种风格", "Previous style"))
-                            .tooltip(self.text("上一种风格", "Previous style"))
-                            .on_click(cx.listener(|view, _, _, cx| view.step_style(-1, cx))),
+                        icon_button(
+                            "style-previous",
+                            "prev",
+                            self.text("上一种风格", "Previous style"),
+                        )
+                        .text_color(muted)
+                        .on_click(cx.listener(|view, _, _, cx| view.step_style(-1, cx))),
                     )
                     .child(
                         self.surface_anchors.wrap(
@@ -614,45 +590,19 @@ impl Creditia {
                         ),
                     )
                     .child(
-                        Button::new("style-next")
-                            .ghost()
-                            .w(px(30.))
-                            .h(px(32.))
-                            .p_0()
-                            .rounded_full()
+                        icon_button("style-next", "next", self.text("下一种风格", "Next style"))
                             .text_color(muted)
-                            .icon(crate::ui_icons::icon("next"))
-                            .accessibility_label(self.text("下一种风格", "Next style"))
-                            .tooltip(self.text("下一种风格", "Next style"))
                             .on_click(cx.listener(|view, _, _, cx| view.step_style(1, cx))),
                     ),
             )
-            .child(
-                self.surface_anchors.wrap(
-                    "pieces-trigger",
-                    Button::new("pieces")
-                        .ghost()
-                        .icon(crate::ui_icons::icon("more"))
-                        .accessibility_label(self.text("作品", "Artworks"))
-                        .tooltip(self.text("作品", "Artworks"))
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.open_panel(Panel::Pieces, window, cx)
-                        })),
+            .child(self.surface_anchors.wrap(
+                "pieces-trigger",
+                icon_button("pieces", "more", self.text("作品", "Artworks")).on_click(
+                    cx.listener(|view, _, window, cx| view.open_panel(Panel::Pieces, window, cx)),
                 ),
-            )
-            .when(!self.focused, |controls| controls.child(div().flex_1()));
+            ));
         if self.preferences.view == "roam" && !self.focused {
-            controls = controls.child(div().flex_1()).child(
-                Button::new("zoom-reset")
-                    .ghost()
-                    .h(px(40.))
-                    .px(px(16.))
-                    .rounded_full()
-                    .bg(palette.glass)
-                    .icon(crate::ui_icons::icon("home"))
-                    .shell_label(self.text("回到原点", "Back to origin"))
-                    .on_click(cx.listener(|view, _, _, cx| view.reset_viewport(cx))),
-            );
+            controls = controls.child(div().flex_1()).child(self.zoom_controls(cx));
         }
         if self.focused {
             self.focus_controls(cx)

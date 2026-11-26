@@ -300,7 +300,12 @@ impl Harness {
     fn switch(&mut self, id: &str) {
         self.click("switch-project");
         assert_eq!(self.state()["panel"], "projects");
-        self.click(("choose-project", self.project_index(id)));
+        let row = ("choose-project", self.project_index(id));
+        self.update(|window, cx, _| {
+            // The project mark and the text share the same selection target.
+            let height = window.find(row).bounds().size.height;
+            window.click_at(row, point(px(20.), height / 2.), cx);
+        });
         self.ready(id);
     }
     fn scroll_to(&mut self, id: &'static str) {

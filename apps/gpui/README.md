@@ -53,6 +53,8 @@ does not depend on a source checkout, a globally installed Node, or remote fonts
 
 ## Verify locally
 
+For shell geometry and clear/blurred icon comparisons, see [optical alignment](OPTICAL_ALIGNMENT.md).
+
 ```sh
 cargo test --manifest-path apps/gpui/Cargo.toml --lib --bins --locked
 node --test packaging/gpui/package.test.mjs packaging/gpui/mac-icons.test.mjs

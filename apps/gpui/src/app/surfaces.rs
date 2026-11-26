@@ -6,6 +6,7 @@ use super::{
     ToggleMotion,
 };
 use crate::material::{Palette, ShellLabel};
+use crate::ui_controls::{icon_button, row_button, toggle_button, value_button};
 use crate::{Appearance, Language, progress_text};
 use creditia_desktop_service as service;
 use gpui_kit::TestSupportExt as _;
@@ -13,7 +14,9 @@ use gpui_kit::component::Disableable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 fn heading(text: &'static str, p: Palette) -> Div {
@@ -37,24 +40,24 @@ fn row(label: &'static str, control: impl IntoElement, p: Palette) -> Div {
         .child(div().flex_1().min_w_0())
         .child(control)
 }
-pub(super) fn switch(id: impl Into<ElementId>, on: bool, p: Palette) -> Button {
-    Button::new(id)
-        .ghost()
-        .w(px(32.))
-        .h(px(20.))
-        .p_0()
-        .rounded_full()
-        .bg(if on { p.ink } else { p.ink.opacity(0.18) })
-        .child(
-            div()
-                .absolute()
-                .top(px(3.))
-                .left(px(if on { 15. } else { 3. }))
-                .w(px(14.))
-                .h(px(14.))
-                .rounded_full()
-                .bg(if on { p.bg } else { rgb(0xFFFFFF).into() }),
-        )
+const APP_LOGOS: [(&str, &str, &str); 6] = [
+    ("star", "多彩星标", "Color star"),
+    ("star-mono", "单色星标", "Mono star"),
+    ("orb", "光球", "Orb"),
+    ("ring", "圆环", "Ring"),
+    ("color", "彩色", "Color"),
+    ("mono", "单色", "Mono"),
+];
+
+fn logo_preview(id: &str) -> Arc<Image> {
+    static PREVIEWS: OnceLock<BTreeMap<&str, Arc<Image>>> = OnceLock::new();
+    PREVIEWS.get_or_init(|| {
+        APP_LOGOS
+            .into_iter()
+            .map(|(id, _, _)| (id, logo_image(id)))
+            .collect()
+    })[id]
+        .clone()
 }
 
 impl Creditia {
@@ -421,6 +424,53 @@ impl Creditia {
             .child(card)
             .into_any_element()
     }
+    pub(super) fn zoom_controls(&self, cx: &mut Context<Self>) -> Div {
+        let p = Palette::of(cx);
+        let percent = format!("{}%", (self.viewport.zoom * 100.).round() as i32);
+        let reset = if self.focused {
+            self.text("重置缩放", "Reset zoom")
+        } else {
+            self.text("回到原点", "Back to origin")
+        };
+        div()
+            .relative()
+            .flex()
+            .flex_shrink_0()
+            .items_center()
+            .h(px(40.))
+            .p(px(3.))
+            .rounded_full()
+            .border_1()
+            .border_color(p.edge)
+            .shadow(p.shadows())
+            .child(crate::material::surface(
+                self.backdrop_image.clone(),
+                p.glass,
+                20.,
+                p,
+            ))
+            .child(
+                icon_button("zoom-out", "zoomOut", self.text("缩小", "Zoom out"))
+                    .on_click(cx.listener(|view, _, _, cx| view.zoom(1. / 1.2, cx))),
+            )
+            .child(
+                Button::new("zoom-reset")
+                    .ghost()
+                    .w(px(64.))
+                    .h(px(32.))
+                    .p_0()
+                    .rounded_full()
+                    .shell_label(percent.clone())
+                    .accessibility_label(format!("{reset} ({percent})"))
+                    .tooltip(reset)
+                    .on_click(cx.listener(|view, _, _, cx| view.reset_viewport(cx))),
+            )
+            .child(
+                icon_button("zoom-in", "zoomIn", self.text("放大", "Zoom in"))
+                    .on_click(cx.listener(|view, _, _, cx| view.zoom(1.2, cx))),
+            )
+    }
+
     pub(super) fn focus_controls(&self, cx: &mut Context<Self>) -> AnyElement {
         let p = Palette::of(cx);
         let piece = self.selected_piece();
@@ -535,16 +585,13 @@ impl Creditia {
             .is_some_and(|styles| styles.current != styles.original)
         {
             editing = editing.child(
-                Button::new("apply-focus-style")
-                    .ghost()
-                    .w(px(36.))
-                    .h(px(36.))
-                    .p_0()
-                    .rounded(px(10.))
-                    .icon(crate::ui_icons::icon("check"))
-                    .accessibility_label(self.text("设为全局风格", "Use for all cards"))
-                    .tooltip(self.text("设为全局风格", "Use for all cards"))
-                    .on_click(cx.listener(|view, _, _, cx| view.apply_focus_style(cx))),
+                icon_button(
+                    "apply-focus-style",
+                    "check",
+                    self.text("设为全局风格", "Use for all cards"),
+                )
+                .rounded(px(10.))
+                .on_click(cx.listener(|view, _, _, cx| view.apply_focus_style(cx))),
             );
         }
         let mut playback = div()
@@ -575,23 +622,20 @@ impl Creditia {
                 self.text("播放一次", "Play once")
             };
             playback = playback.child(
-                Button::new("play")
-                    .ghost()
-                    .w(px(36.))
-                    .h(px(36.))
-                    .p_0()
-                    .rounded(px(10.))
-                    .icon(crate::ui_icons::icon(if playing {
+                icon_button(
+                    "play",
+                    if playing {
                         "pause"
                     } else if ended {
                         "replay"
                     } else {
                         "play"
-                    }))
-                    .accessibility_label(name)
-                    .tooltip(name)
-                    .disabled(self.animation_busy)
-                    .on_click(cx.listener(|view, _, _, cx| view.play(false, cx))),
+                    },
+                    name,
+                )
+                .rounded(px(10.))
+                .disabled(self.animation_busy)
+                .on_click(cx.listener(|view, _, _, cx| view.play(false, cx))),
             );
             if let Some(play) = &self.playback {
                 let progress = (play.elapsed.as_secs_f32() * 1000.
@@ -663,26 +707,23 @@ impl Creditia {
             .child(
                 self.surface_anchors.wrap(
                     "focus-export",
-                    Button::new("focus-export")
-                        .ghost()
-                        .w(px(36.))
-                        .h(px(36.))
-                        .p_0()
-                        .rounded(px(10.))
-                        .bg(p.ink)
-                        .text_color(p.bg)
-                        .icon(crate::ui_icons::icon("export"))
-                        .accessibility_label(self.text("导出作品", "Export artwork"))
-                        .tooltip(self.text("导出作品", "Export artwork"))
-                        .disabled(
-                            self.selected_tile
-                                .is_none_or(|index| !self.can_open_export_for(index)),
-                        )
-                        .on_click(cx.listener(|view, _, _, cx| {
-                            if let Some(index) = view.selected_tile {
-                                view.toggle_export(index, cx);
-                            }
-                        })),
+                    icon_button(
+                        "focus-export",
+                        "export",
+                        self.text("导出作品", "Export artwork"),
+                    )
+                    .rounded(px(10.))
+                    .bg(p.ink)
+                    .text_color(p.bg)
+                    .disabled(
+                        self.selected_tile
+                            .is_none_or(|index| !self.can_open_export_for(index)),
+                    )
+                    .on_click(cx.listener(|view, _, _, cx| {
+                        if let Some(index) = view.selected_tile {
+                            view.toggle_export(index, cx);
+                        }
+                    })),
                 ),
             );
         let mut root = div().absolute().inset_0().child(
@@ -717,6 +758,9 @@ impl Creditia {
                 .top(px((self.viewport_size.1 + 60.) / 2. - 20.))
                 .w(px(40.))
                 .h(px(40.))
+                .flex()
+                .items_center()
+                .justify_center()
                 .rounded_full()
                 .shadow(p.shadows());
             nav = if left {
@@ -733,22 +777,28 @@ impl Creditia {
                         p,
                     ))
                     .child(
-                        Button::new(id)
-                            .ghost()
-                            .w(px(40.))
-                            .h(px(40.))
-                            .p_0()
-                            .rounded_full()
-                            .icon(crate::ui_icons::icon(if left { "prev" } else { "next" }))
-                            .accessibility_label(name)
-                            .on_click(cx.listener(move |view, _, _, cx| {
+                        icon_button(id, if left { "prev" } else { "next" }, name).on_click(
+                            cx.listener(move |view, _, _, cx| {
                                 view.keyboard_navigation(false, direction, cx)
-                            })),
+                            }),
+                        ),
                     ),
                 );
             }
         }
         root.into_any_element()
+    }
+
+    #[cfg(feature = "visual-test")]
+    pub(super) fn settings_previews_ready(&self, window: &mut Window, cx: &mut App) -> bool {
+        match self.settings_tab {
+            "general" => APP_LOGOS
+                .into_iter()
+                .filter(|(id, _, _)| !matches!(*id, "star-mono" | "mono"))
+                .all(|(id, _, _)| logo_preview(id).get_render_image(window, cx).is_some()),
+            "about" => logo_preview("star").get_render_image(window, cx).is_some(),
+            _ => true,
+        }
     }
 
     pub(super) fn settings_content(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -779,6 +829,7 @@ impl Creditia {
                             .px(px(10.))
                             .rounded_full()
                             .shell_label(name)
+                            .toggled(chosen)
                             .when(chosen, |b| b.bg(p.ink).text_color(p.bg))
                             .on_click(cx.listener(move |view, _, window, cx| {
                                 if view.preferences.language != language {
@@ -791,14 +842,10 @@ impl Creditia {
                     .child(heading(self.text("通用", "General"), p))
                     .child(row(self.text("语言", "Language"), languages, p));
                 let mut logos = div().flex().flex_wrap().gap(px(8.));
-                for (id, name) in [
-                    ("star", "多彩星标 / Color star"),
-                    ("star-mono", "单色星标 / Mono star"),
-                    ("orb", "光球 / Orb"),
-                    ("ring", "圆环 / Ring"),
-                    ("color", "彩色 / Color"),
-                    ("mono", "单色 / Mono"),
-                ] {
+                for (id, zh, en) in APP_LOGOS {
+                    let name = self.text(zh, en);
+                    let selected = self.preferences.logo == id;
+                    let preview = logo_preview(id);
                     logos = logos.child(
                         div()
                             .relative()
@@ -810,7 +857,7 @@ impl Creditia {
                                 linear_color_stop(rgb(0x2A2A2A), 0.),
                                 linear_color_stop(rgb(0x050505), 1.),
                             ))
-                            .shadow(if self.preferences.logo == id {
+                            .shadow(if selected {
                                 vec![
                                     BoxShadow::new(px(0.), px(0.), p.ink).spread_radius(px(3.5)),
                                     BoxShadow::new(px(0.), px(0.), p.bg).spread_radius(px(2.)),
@@ -827,14 +874,15 @@ impl Creditia {
                                     .rounded(px(10.))
                                     .accessibility_label(name)
                                     .tooltip(name)
+                                    .toggled(selected)
                                     .child(if matches!(id, "star-mono" | "mono") {
                                         svg()
-                                            .data(logo_image(id).bytes())
+                                            .data(preview.bytes())
                                             .size(px(24.))
                                             .text_color(rgb(0xF4F4F2))
                                             .into_any_element()
                                     } else {
-                                        img(logo_image(id)).w(px(24.)).h(px(24.)).into_any_element()
+                                        img(preview).w(px(24.)).h(px(24.)).into_any_element()
                                     })
                                     .on_click(cx.listener(move |view, _, _, cx| {
                                         view.preferences.logo = id.into();
@@ -847,49 +895,69 @@ impl Creditia {
                     );
                 }
                 content = content.child(row(self.text("程序坞图标", "App icon"), logos, p));
-                content = content.child(row(
-                    self.text("外观", "Appearance"),
-                    Button::new("appearance")
-                        .ghost()
-                        .h(px(26.))
-                        .rounded_full()
-                        .bg(p.glass)
-                        .shell_label(match self.preferences.appearance {
-                            Appearance::System => self.text("跟随系统", "System"),
-                            Appearance::Light => self.text("浅色", "Light"),
-                            Appearance::Dark => self.text("深色", "Dark"),
-                        })
+                content = content
+                    .child(
+                        value_button(
+                            "appearance",
+                            self.text("外观", "Appearance"),
+                            match self.preferences.appearance {
+                                Appearance::System => self.text("跟随系统", "System"),
+                                Appearance::Light => self.text("浅色", "Light"),
+                                Appearance::Dark => self.text("深色", "Dark"),
+                            },
+                            cx,
+                        )
                         .on_click(cx.listener(|view, _, window, cx| {
                             view.cycle_appearance(&CycleAppearance, window, cx)
                         })),
-                    p,
-                ));
-                content = content.child(row(
-                    self.text("减少动态效果", "Reduce motion"),
-                    switch("reduced-motion", self.preferences.reduced_motion, p)
-                        .accessibility_label(self.text("减少动态效果", "Reduce motion"))
+                    )
+                    .child(
+                        toggle_button(
+                            "reduced-motion",
+                            self.text("减少动态效果", "Reduce motion"),
+                            self.preferences.reduced_motion,
+                            true,
+                            cx,
+                        )
                         .on_click(cx.listener(|view, _, window, cx| {
                             view.toggle_motion(&ToggleMotion, window, cx)
                         })),
-                    p,
-                ));
-                content = content.child(div().flex().items_center().gap(px(16.)).py(px(10.)).border_b_1().border_color(p.edge)
-                    .child(div().flex_1().min_w_0().child(div().font_weight(FontWeight::MEDIUM).child(self.text("有新提交时自动跟上", "Catch up on new commits")))
-                        .child(div().mt(px(2.)).text_size(px(12.)).text_color(p.soft).child(self.text("仓库里有了新提交，就在后台增量分析一次。每个项目可以在项目设置里单独改。", "Analyze new commits in the background. Each project can override this in its settings."))))
-                    .child(switch("auto-analyze", self.preferences.auto_analyze, p).accessibility_label(self.text("有新提交时自动跟上", "Catch up on new commits"))
+                    )
+                    .child(
+                        toggle_button(
+                            "auto-analyze",
+                            self.text("有新提交时自动跟上", "Catch up on new commits"),
+                            self.preferences.auto_analyze,
+                            true,
+                            cx,
+                        )
                         .on_click(cx.listener(|view, _, _, cx| {
-                            view.preferences.auto_analyze = !view.preferences.auto_analyze; view.persist();
-                            if let Some(background) = &view.background { background.refresh(); } cx.notify();
-                        }))));
-                content = content.child(row(
-                    self.text("写其他贡献者的名字", "Show contributor names"),
-                    switch("names-settings", self.preferences.named, p)
-                        .accessibility_label(
+                            view.preferences.auto_analyze = !view.preferences.auto_analyze;
+                            view.persist();
+                            if let Some(background) = &view.background {
+                                background.refresh();
+                            }
+                            cx.notify();
+                        })),
+                    )
+                    .child(
+                        div().px_2().pb_2().text_size(px(12.)).text_color(p.soft).child(
+                            self.text(
+                                "仓库里有了新提交，就在后台增量分析一次。每个项目可以在项目设置里单独改。",
+                                "Analyze new commits in the background. Each project can override this in its settings.",
+                            ),
+                        ),
+                    )
+                    .child(
+                        toggle_button(
+                            "names-settings",
                             self.text("写其他贡献者的名字", "Show contributor names"),
+                            self.preferences.named,
+                            true,
+                            cx,
                         )
                         .on_click(cx.listener(|view, _, _, cx| view.set_names(cx))),
-                    p,
-                ));
+                    );
             }
             "data" => {
                 content = content
@@ -960,6 +1028,7 @@ impl Creditia {
                             .px(px(9.))
                             .rounded_full()
                             .shell_label(label)
+                            .toggled(mode == id)
                             .when(mode == id, |b| b.bg(p.ink).text_color(p.bg))
                             .disabled(self.operation_busy)
                             .on_click(
@@ -988,13 +1057,7 @@ impl Creditia {
                     );
                 }
                 content = content.child(
-                    Button::new("collect-now")
-                        .ghost()
-                        .h(px(26.))
-                        .self_start()
-                        .rounded_full()
-                        .bg(p.glass)
-                        .shell_label(self.text("立即备份", "Back up now"))
+                    row_button("collect-now", self.text("立即备份", "Back up now"), "copy")
                         .disabled(self.operation_busy)
                         .on_click(
                             cx.listener(|view, _, _, cx| view.operation(service::collect_now, cx)),
@@ -1020,18 +1083,17 @@ impl Creditia {
                     }
                 }
                 content = content.child(
-                    Button::new("diagnostics")
-                        .ghost()
-                        .h(px(28.))
-                        .self_start()
-                        .rounded_full()
-                        .shell_label(self.text("检查数据源", "Check data sources"))
-                        .on_click(cx.listener(|view, _, _, cx| view.request_diagnostics(cx))),
+                    row_button(
+                        "diagnostics",
+                        self.text("检查数据源", "Check data sources"),
+                        "info",
+                    )
+                    .on_click(cx.listener(|view, _, _, cx| view.request_diagnostics(cx))),
                 );
             }
             _ => {
                 content = content.items_center().text_center().pt(px(40.))
-                    .child(img(logo_image("star")).w(px(56.)).h(px(56.)).mb(px(14.)))
+                    .child(img(logo_preview("star")).w(px(56.)).h(px(56.)).mb(px(14.)))
                     .child(div().text_size(px(20.)).font_weight(FontWeight::SEMIBOLD).child("creditia"))
                     .child(div().mt(px(4.)).text_size(px(12.)).text_color(p.faint).child(format!("{} {}", self.text("版本", "Version"), env!("CARGO_PKG_VERSION"))))
                     .child(div().mt(px(14.)).max_w(px(380.)).text_size(px(12.)).text_color(p.soft).child(self.text("看清每个 AI 工具在你的仓库里写了多少，再把它做成能放进 README、发版说明和作品集的署名。", "See how much each AI tool wrote in your repos, then turn it into credits for your README, releases and portfolio.")))

@@ -783,12 +783,14 @@ impl Creditia {
             Viewport::default()
         };
         let smooth = self.preferences.view == "roam" && !self.focused && !self.reduced_motion;
-        if !self.roam_motion.glide_to(
+        if self.roam_motion.glide_to(
             self.motion_clock.elapsed(),
             (self.viewport.x, self.viewport.y),
             (target.x, target.y),
             smooth,
         ) {
+            self.viewport.zoom = target.zoom;
+        } else {
             self.viewport = target;
         }
         cx.notify();
